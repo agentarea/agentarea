@@ -256,6 +256,87 @@ def test_a_permanent_failure_is_written_to_the_resource_status(monkeypatch):
     assert "SECRET_MANAGER_ENCRYPTION_KEY" in patch.status["message"]
 
 
+def test_a_cross_namespace_secret_ref_is_rejected_without_reading_it(monkeypatch):
+    """apiKeySecretRef only ever resolves in the CR's own namespace.
+
+    The operator's Secrets RBAC is scoped there for the same reason: reading a
+    Secret on a CR author's behalf into a namespace they may not have Secrets
+    access to is a confused-deputy read. A ref naming a different namespace is
+    refused outright, not silently narrowed to the CR's own namespace.
+    """
+    read_secret = Mock(side_effect=AssertionError("must not read a cross-namespace secret"))
+    monkeypatch.setattr(handler, "read_secret", read_secret)
+
+    patch = _Patch()
+    handler.on_provider_config_change(
+        spec={
+            "providerKey": "openai",
+            "name": "OpenAI",
+            "apiKeySecretRef": {"name": "s", "key": "api-key", "namespace": "other-ns"},
+        },
+        meta={"name": "kimi"},
+        status={},
+        namespace="agentarea",
+        patch=patch,
+    )
+
+    read_secret.assert_not_called()
+    assert patch.status["phase"] == "Error"
+    assert "other-ns" in patch.status["message"]
+    assert "agentarea" in patch.status["message"]
+
+
+def test_a_same_namespace_secret_ref_namespace_is_accepted(monkeypatch):
+    import kopf
+    import pytest
+
+    monkeypatch.setattr(handler, "read_secret", lambda *a, **k: API_KEY)
+
+    def refuse(*_args, **_kwargs):
+        raise kopf.PermanentError("SECRET_MANAGER_ENCRYPTION_KEY is not set")
+
+    monkeypatch.setattr(handler, "sync_provider_config", refuse)
+
+    patch = _Patch()
+    with pytest.raises(kopf.PermanentError):
+        handler.on_provider_config_change(
+            spec={
+                "providerKey": "openai",
+                "name": "OpenAI",
+                "apiKeySecretRef": {"name": "s", "key": "api-key", "namespace": "agentarea"},
+            },
+            meta={"name": "kimi"},
+            status={},
+            namespace="agentarea",
+            patch=patch,
+        )
+
+    # Reached sync_provider_config (and its PermanentError), proving the ref
+    # was accepted rather than rejected as cross-namespace.
+    assert "SECRET_MANAGER_ENCRYPTION_KEY" in patch.status["message"]
+
+
+def test_periodic_rediscovery_rejects_a_cross_namespace_secret_ref(monkeypatch):
+    read_secret = Mock(side_effect=AssertionError("must not read a cross-namespace secret"))
+    monkeypatch.setattr(handler, "read_secret", read_secret)
+
+    patch = _Patch()
+    handler.periodic_rediscovery(
+        spec={
+            "discoverModels": True,
+            "apiKeySecretRef": {"name": "s", "key": "api-key", "namespace": "other-ns"},
+        },
+        meta={"name": "kimi"},
+        namespace="agentarea",
+        patch=patch,
+        status={},
+    )
+
+    read_secret.assert_not_called()
+    assert patch.status["phase"] == "Error"
+    assert "other-ns" in patch.status["message"]
+
+
 def _as_context(value):
     """Wrap a value so `with x.begin() as v` yields it."""
     ctx = Mock()

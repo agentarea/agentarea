@@ -38,7 +38,7 @@ spec:
                   description: "Custom API endpoint URL (optional for most providers)"
                 apiKeySecretRef:
                   type: object
-                  description: "Reference to a Kubernetes Secret containing the API key"
+                  description: "Reference to a Kubernetes Secret containing the API key. Always resolved in this resource's own namespace."
                   required:
                     - name
                     - key
@@ -49,6 +49,9 @@ spec:
                     key:
                       type: string
                       description: "Key within the Secret"
+                    namespace:
+                      type: string
+                      description: "Must equal this resource's own namespace if set. A different value is rejected: the operator never reads a Secret across namespaces on a CR author's behalf."
                 discoverModels:
                   type: boolean
                   default: false

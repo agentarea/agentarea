@@ -10,6 +10,7 @@ written against the Python platform are fed the same way here.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -40,18 +41,29 @@ VALID_TYPES = (
 # ── Source fetching ──
 
 
-def fetch_source(source_type: str, location: str, configmap_body: str | None = None) -> Any:
+def fetch_source(
+    source_type: str,
+    location: str,
+    configmap_body: str | None = None,
+    expected_sha256: str | None = None,
+) -> Any:
     """Return parsed JSON/YAML from a source.
 
     source_type:
       - "url":       location is http(s) URL
       - "file":      location is a filesystem path
       - "configMap": configmap_body already holds the raw text
+
+    When expected_sha256 is set, the raw payload's digest is checked before
+    parsing; a mismatch raises rather than importing unverified content. This
+    is not a substitute for signature verification (no key holder is
+    authenticated) — it only pins a catalog reference to a byte-for-byte
+    payload the CR author chose.
     """
     if source_type == "configMap":
         if configmap_body is None:
             raise ValueError("configMap source requires configmap_body")
-        raw = configmap_body
+        raw_bytes = configmap_body.encode("utf-8")
     elif source_type == "url":
         req = urllib.request.Request(  # noqa: S310
             location,
@@ -61,13 +73,22 @@ def fetch_source(source_type: str, location: str, configmap_body: str | None = N
             },
         )
         with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
-            raw = resp.read().decode("utf-8")
+            raw_bytes = resp.read()
     elif source_type == "file":
-        with open(location) as f:
-            raw = f.read()
+        with open(location, "rb") as f:
+            raw_bytes = f.read()
     else:
         raise ValueError(f"Unknown source type: {source_type}")
 
+    if expected_sha256:
+        actual_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+        if actual_sha256.lower() != expected_sha256.lower():
+            raise ValueError(
+                f"Catalog source digest mismatch: expected sha256:{expected_sha256}, "
+                f"got sha256:{actual_sha256}"
+            )
+
+    raw = raw_bytes.decode("utf-8")
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
@@ -456,6 +477,7 @@ def reconcile(
     source_location: str,
     configmap_body: str | None,
     workspace_id: str,
+    expected_sha256: str | None = None,
 ) -> dict[str, int]:
     """Fetch catalog source and upsert registry + items + target entities.
 
@@ -465,7 +487,7 @@ def reconcile(
     if registry_type not in VALID_TYPES:
         raise ValueError(f"Unknown registry type: {registry_type}")
 
-    data = fetch_source(source_type, source_location, configmap_body)
+    data = fetch_source(source_type, source_location, configmap_body, expected_sha256)
     parsed = parse_source(registry_type, data)
     logger.info("Parsed %d items for %s (%s)", len(parsed), cr_name, registry_type)
 

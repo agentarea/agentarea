@@ -131,6 +131,26 @@ def store_api_key(conn, workspace_id: str, secret_name: str, api_key: str) -> st
     return str(row[0])
 
 
+def _cross_namespace_secret_ref_error(secret_ref: dict, namespace: str) -> str | None:
+    """Return an error message if the ref names a namespace other than the CR's own.
+
+    ``apiKeySecretRef`` only ever resolves in the CR's own namespace, and the
+    operator's Secrets RBAC is scoped there for the same reason: reading a
+    Secret on a CR author's behalf into a namespace they may not themselves
+    have Secrets access to is a confused-deputy read, not a legitimate use
+    case. A mismatched ``namespace`` fails loudly here rather than being
+    silently narrowed to the CR's own namespace.
+    """
+    ref_namespace = secret_ref.get("namespace")
+    if ref_namespace and ref_namespace != namespace:
+        return (
+            f"apiKeySecretRef.namespace '{ref_namespace}' does not match this "
+            f"resource's own namespace '{namespace}'; cross-namespace secret "
+            "references are not allowed"
+        )
+    return None
+
+
 def read_secret(namespace: str, secret_name: str, secret_key: str) -> str:
     """Read a value from a Kubernetes Secret."""
     v1 = k8s_client.CoreV1Api()
@@ -506,6 +526,12 @@ def on_provider_config_change(spec, meta, status, namespace, patch, **_):
         patch.status["message"] = "apiKeySecretRef is required"
         return
 
+    ns_error = _cross_namespace_secret_ref_error(secret_ref, namespace)
+    if ns_error:
+        patch.status["phase"] = "Error"
+        patch.status["message"] = ns_error
+        return
+
     try:
         api_key = read_secret(namespace, secret_ref["name"], secret_ref["key"])
     except Exception as e:
@@ -580,6 +606,12 @@ def periodic_rediscovery(spec, meta, namespace, patch, **_):
     if not secret_ref:
         return
 
+    ns_error = _cross_namespace_secret_ref_error(secret_ref, namespace)
+    if ns_error:
+        patch.status["phase"] = "Error"
+        patch.status["message"] = ns_error
+        return
+
     try:
         api_key = read_secret(namespace, secret_ref["name"], secret_ref["key"])
         config_id, model_count = sync_provider_config(spec, api_key, cr_name)
@@ -604,20 +636,23 @@ def _read_configmap(namespace: str, name: str, key: str) -> str:
     return data[key]
 
 
-def _resolve_source(spec: dict, namespace: str) -> tuple[str, str, str | None]:
-    """Return (source_type, location_or_empty, configmap_body)."""
+def _resolve_source(
+    spec: dict, namespace: str
+) -> tuple[str, str, str | None, str | None]:
+    """Return (source_type, location_or_empty, configmap_body, expected_sha256)."""
     source = spec.get("source") or {}
     source_type = source.get("type")
+    expected_sha256 = source.get("sha256")
     if source_type == "url":
         url = source.get("url")
         if not url:
             raise kopf.PermanentError("source.url required when source.type=url")
-        return "url", url, None
+        return "url", url, None, expected_sha256
     if source_type == "file":
         path = source.get("url")
         if not path:
             raise kopf.PermanentError("source.url required when source.type=file")
-        return "file", path, None
+        return "file", path, None, expected_sha256
     if source_type == "configMap":
         ref = source.get("configMapRef") or {}
         cm_name = ref.get("name")
@@ -627,7 +662,7 @@ def _resolve_source(spec: dict, namespace: str) -> tuple[str, str, str | None]:
                 "configMapRef.name and configMapRef.key required when source.type=configMap"
             )
         body = _read_configmap(namespace, cm_name, cm_key)
-        return "configMap", f"configMap:{cm_name}/{cm_key}", body
+        return "configMap", f"configMap:{cm_name}/{cm_key}", body, expected_sha256
     raise kopf.PermanentError(f"Unknown source.type: {source_type}")
 
 
@@ -636,7 +671,7 @@ def _sync_registrysync(spec: dict, cr_name: str, namespace: str) -> dict:
 
     registry_type = spec["type"]
     workspace_id = spec.get("workspaceId", PLATFORM_WORKSPACE_ID)
-    source_type, location, configmap_body = _resolve_source(spec, namespace)
+    source_type, location, configmap_body, expected_sha256 = _resolve_source(spec, namespace)
     with engine.begin() as conn:
         return rs_reconcile(
             conn,
@@ -646,6 +681,7 @@ def _sync_registrysync(spec: dict, cr_name: str, namespace: str) -> dict:
             source_location=location,
             configmap_body=configmap_body,
             workspace_id=workspace_id,
+            expected_sha256=expected_sha256,
         )
 
 
