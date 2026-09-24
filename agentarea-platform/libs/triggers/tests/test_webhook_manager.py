@@ -1,5 +1,8 @@
 """Unit tests for WebhookManager."""
 
+import hashlib
+import hmac
+import json
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -14,6 +17,17 @@ from agentarea_triggers.webhook_manager import (
     WebhookRequestData,
     WebhookValidationResult,
 )
+from agentarea_triggers.webhook_verification import channel_credential_secret_name
+
+
+class _FakeSecretReader:
+    """In-memory SecretReader stand-in, keyed by secret name."""
+
+    def __init__(self, values: dict[str, str] | None = None):
+        self._values = dict(values or {})
+
+    async def get_secret(self, name: str) -> str | None:
+        return self._values.get(name)
 
 
 class MockWebhookExecutionCallback(WebhookExecutionCallback):
@@ -421,6 +435,139 @@ class TestDefaultWebhookManager:
             webhook_id=trigger.webhook_id,
             method="POST",
             headers={"content-type": "application/json", "x-webhook-signature": sig},
+            body={"test": "data"},
+            query_params={},
+            raw_body=raw,
+        )
+
+        assert response["status_code"] == 200
+        mock_execution_callback.execute_webhook_trigger.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_handle_webhook_rejects_signed_type_with_no_resolvable_secret(
+        self, webhook_manager, mock_execution_callback
+    ):
+        """A github trigger with no signing secret anywhere is rejected outright.
+
+        github has a registered signature scheme; unlike generic/unconfigured
+        types, "no secret configured" must not be treated as "verification not
+        enabled" — the webhook manager here has no secret_reader wired at all.
+        """
+        trigger = WebhookTrigger(
+            id=uuid4(),
+            name="Unconfigured GitHub Webhook",
+            description="",
+            agent_id=uuid4(),
+            webhook_id="github_unconfigured",
+            allowed_methods=["POST"],
+            webhook_type=WebhookType.GITHUB,
+            created_by="test_user",
+            is_active=True,
+        )
+        await webhook_manager.register_webhook(trigger)
+
+        response = await webhook_manager.handle_webhook_request(
+            webhook_id=trigger.webhook_id,
+            method="POST",
+            headers={"content-type": "application/json"},
+            body={"test": "data"},
+            query_params={},
+            raw_body=b'{"test": "data"}',
+        )
+
+        assert response["status_code"] != 200
+        mock_execution_callback.execute_webhook_trigger.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handle_webhook_rejects_bad_signature_from_secret_store(
+        self, mock_execution_callback
+    ):
+        """A signing secret stored the way the UI stores it rejects a bad signature."""
+        secret = "store-secret"  # noqa: S105
+        trigger = WebhookTrigger(
+            id=uuid4(),
+            name="GitHub Webhook",
+            description="",
+            agent_id=uuid4(),
+            webhook_id="github_store_bad_sig",
+            allowed_methods=["POST"],
+            webhook_type=WebhookType.GITHUB,
+            created_by="test_user",
+            is_active=True,
+        )
+        secret_reader = _FakeSecretReader(
+            {
+                channel_credential_secret_name("github", trigger.id): json.dumps(
+                    {"webhook_secret": secret}
+                )
+            }
+        )
+        manager = DefaultWebhookManager(
+            execution_callback=mock_execution_callback,
+            event_broker=None,
+            base_url="/webhooks",
+            secret_reader=secret_reader,
+        )
+        await manager.register_webhook(trigger)
+
+        response = await manager.handle_webhook_request(
+            webhook_id=trigger.webhook_id,
+            method="POST",
+            headers={"content-type": "application/json", "X-Hub-Signature-256": "sha256=deadbeef"},
+            body={"test": "data"},
+            query_params={},
+            raw_body=b'{"test": "data"}',
+        )
+
+        assert response["status_code"] != 200
+        mock_execution_callback.execute_webhook_trigger.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handle_webhook_accepts_good_signature_from_secret_store(
+        self, mock_execution_callback
+    ):
+        """A signing secret stored the way the UI stores it accepts a valid signature."""
+        secret = "store-secret"  # noqa: S105
+        raw = b'{"test": "data"}'
+        sig = "sha256=" + hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+
+        trigger = WebhookTrigger(
+            id=uuid4(),
+            name="GitHub Webhook",
+            description="",
+            agent_id=uuid4(),
+            webhook_id="github_store_good_sig",
+            allowed_methods=["POST"],
+            webhook_type=WebhookType.GITHUB,
+            created_by="test_user",
+            is_active=True,
+        )
+        secret_reader = _FakeSecretReader(
+            {
+                channel_credential_secret_name("github", trigger.id): json.dumps(
+                    {"webhook_secret": secret}
+                )
+            }
+        )
+        manager = DefaultWebhookManager(
+            execution_callback=mock_execution_callback,
+            event_broker=None,
+            base_url="/webhooks",
+            secret_reader=secret_reader,
+        )
+        mock_execution_callback.execute_webhook_trigger.return_value = TriggerExecution(
+            id=uuid4(),
+            trigger_id=trigger.id,
+            executed_at=datetime.utcnow(),
+            status=ExecutionStatus.SUCCESS,
+            execution_time_ms=100,
+        )
+        await manager.register_webhook(trigger)
+
+        response = await manager.handle_webhook_request(
+            webhook_id=trigger.webhook_id,
+            method="POST",
+            headers={"content-type": "application/json", "X-Hub-Signature-256": sig},
             body={"test": "data"},
             query_params={},
             raw_body=raw,

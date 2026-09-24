@@ -5,8 +5,12 @@ different webhook types, validation, rate limiting, and error handling.
 """
 
 import asyncio
+import hashlib
+import hmac
+import json
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
+from urllib.parse import urlencode
 from uuid import uuid4
 
 import pytest
@@ -123,9 +127,11 @@ class TestWebhookHTTPIntegration:
             headers = dict(request.headers)
             query_params = dict(request.query_params)
 
-            # Decode the body the way the real endpoint (api/v1/webhooks.py)
-            # does, so form-encoded payloads such as Slack slash commands reach
-            # the parser as a dict.
+            # Read the raw bytes first (like api/v1/webhooks.py) so signature
+            # verification sees exactly what was sent, then decode the body the
+            # way the real endpoint does, so form-encoded payloads such as
+            # Slack slash commands reach the parser as a dict.
+            raw_body = await request.body()
             content_type = headers.get("content-type", "").lower()
             try:
                 if "application/json" in content_type:
@@ -133,14 +139,13 @@ class TestWebhookHTTPIntegration:
                 elif "application/x-www-form-urlencoded" in content_type:
                     body = dict(await request.form())
                 else:
-                    body_bytes = await request.body()
-                    body = body_bytes.decode("utf-8") if body_bytes else ""
+                    body = raw_body.decode("utf-8") if raw_body else ""
             except Exception:
                 body = {}
 
             # Process webhook
             response = await webhook_manager.handle_webhook_request(
-                webhook_id, method, headers, body, query_params
+                webhook_id, method, headers, body, query_params, raw_body=raw_body
             )
 
             return JSONResponse(content=response["body"], status_code=response["status_code"])
@@ -292,6 +297,10 @@ class TestWebhookHTTPIntegration:
         self, webhook_client, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test GitHub webhook with push event."""
+        # A GitHub trigger has a registered signature scheme, so an unresolvable
+        # secret now fails closed; a real webhook_secret + matching signature is
+        # required for the request to reach the parser under test.
+        secret = "github-webhook-secret"  # noqa: S105
         # Create GitHub webhook trigger
         trigger_data = TriggerCreate(
             name="GitHub Push Webhook",
@@ -306,7 +315,7 @@ class TestWebhookHTTPIntegration:
                 "action": "deploy",
                 "environment": "staging",
             },
-            validation_rules={"required_headers": ["X-GitHub-Event"]},
+            validation_rules={"required_headers": ["X-GitHub-Event"], "webhook_secret": secret},
             created_by="test_user",
             workspace_id="webhook-test-workspace",
         )
@@ -335,16 +344,18 @@ class TestWebhookHTTPIntegration:
                 }
             ],
         }
+        raw_body = json.dumps(github_payload).encode("utf-8")
+        signature = "sha256=" + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
 
         # Send GitHub webhook request
         response = webhook_client.post(
             f"/webhooks/{webhook_id}",
-            json=github_payload,
+            content=raw_body,
             headers={
                 "Content-Type": "application/json",
                 "X-GitHub-Event": "push",
                 "X-GitHub-Delivery": "12345-67890",
-                "X-Hub-Signature-256": "sha256=dummy_signature",
+                "X-Hub-Signature-256": signature,
                 "User-Agent": "GitHub-Hookshot/abc123",
             },
         )
@@ -372,6 +383,9 @@ class TestWebhookHTTPIntegration:
         self, webhook_client, trigger_service, sample_agent_id
     ):
         """Test GitHub webhook with validation failure."""
+        # A valid signature is required to reach the (separate) header
+        # validation this test targets — github fails closed without one.
+        secret = "github-webhook-secret"  # noqa: S105
         # Create GitHub webhook trigger with validation
         trigger_data = TriggerCreate(
             name="GitHub Webhook with Validation",
@@ -379,7 +393,10 @@ class TestWebhookHTTPIntegration:
             trigger_type=TriggerType.WEBHOOK,
             webhook_id=str(uuid4()),
             webhook_type=WebhookType.GITHUB,
-            validation_rules={"required_headers": ["X-GitHub-Event", "X-GitHub-Delivery"]},
+            validation_rules={
+                "required_headers": ["X-GitHub-Event", "X-GitHub-Delivery"],
+                "webhook_secret": secret,
+            },
             created_by="test_user",
             workspace_id="webhook-test-workspace",
         )
@@ -388,12 +405,15 @@ class TestWebhookHTTPIntegration:
         webhook_id = trigger.webhook_id
 
         # Send request missing required header
+        raw_body = json.dumps({"ref": "refs/heads/main"}).encode("utf-8")
+        signature = "sha256=" + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
         response = webhook_client.post(
             f"/webhooks/{webhook_id}",
-            json={"ref": "refs/heads/main"},
+            content=raw_body,
             headers={
                 "Content-Type": "application/json",
                 "X-GitHub-Event": "push",
+                "X-Hub-Signature-256": signature,
                 # Missing X-GitHub-Delivery header
             },
         )
@@ -409,6 +429,10 @@ class TestWebhookHTTPIntegration:
         self, webhook_client, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test Slack webhook with slash command."""
+        # Slack has a registered signature scheme, so a real signing_secret
+        # plus a matching X-Slack-Signature are required to get past the
+        # (now fail-closed) verification step.
+        secret = "slack-signing-secret"  # noqa: S105
         # Create Slack webhook trigger
         trigger_data = TriggerCreate(
             name="Slack Slash Command",
@@ -419,6 +443,7 @@ class TestWebhookHTTPIntegration:
             webhook_type=WebhookType.SLACK,
             allowed_methods=["POST"],
             task_parameters={"platform": "slack", "response_type": "ephemeral"},
+            validation_rules={"signing_secret": secret},
             created_by="test_user",
             workspace_id="webhook-test-workspace",
         )
@@ -440,14 +465,24 @@ class TestWebhookHTTPIntegration:
             "response_url": "https://hooks.slack.com/commands/1234/5678",
             "trigger_id": "13345224609.738474920.8088930838d88f008e0",
         }
+        # Encode the body ourselves so the exact bytes signed match the exact
+        # bytes sent (letting httpx encode `data=` would leave that implicit).
+        raw_body = urlencode(slack_payload).encode("utf-8")
+        timestamp = str(int(datetime.now().timestamp()))
+        sig_basestring = f"v0:{timestamp}:{raw_body.decode()}"
+        signature = (
+            "v0=" + hmac.new(secret.encode(), sig_basestring.encode(), hashlib.sha256).hexdigest()
+        )
 
         # Send Slack webhook request
         response = webhook_client.post(
             f"/webhooks/{webhook_id}",
-            data=slack_payload,  # Form data
+            content=raw_body,
             headers={
                 "Content-Type": "application/x-www-form-urlencoded",
                 "User-Agent": "Slackbot 1.0 (+https://api.slack.com/robots)",
+                "X-Slack-Signature": signature,
+                "X-Slack-Request-Timestamp": timestamp,
             },
         )
 
