@@ -12,6 +12,7 @@ from importlib import import_module
 from typing import Any
 
 import httpx
+from agentarea_wallet.domain.enums import SETTLED_PAYMENT_STATUSES, settlement_status
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +168,11 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                 self._retry_request(request, retry_headers)
             )
             success = 200 <= retry_response.status_code < 300
-            if success:
+            tx_hash = self._x402_tx_hash(retry_response)
+            if (
+                settlement_status(request_succeeded=success, tx_hash=tx_hash)
+                in SETTLED_PAYMENT_STATUSES
+            ):
                 self._budget_remaining -= amount
             await self._notify(
                 self._payment_result(
@@ -178,7 +183,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                     request=request,
                     idempotency_key=idempotency_key,
                     response=retry_response,
-                    tx_hash=self._x402_tx_hash(retry_response),
+                    tx_hash=tx_hash,
                     protocol_metadata={
                         "network": str(getattr(requirement, "network", "") or ""),
                         "scheme": str(getattr(requirement, "scheme", "") or "exact"),
@@ -281,7 +286,11 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                 self._retry_request(request, retry_headers)
             )
             success = 200 <= retry_response.status_code < 300
-            if success:
+            tx_hash = self._mpp_tx_hash(retry_response)
+            if (
+                settlement_status(request_succeeded=success, tx_hash=tx_hash)
+                in SETTLED_PAYMENT_STATUSES
+            ):
                 self._budget_remaining -= amount
             await self._notify(
                 self._payment_result(
@@ -292,7 +301,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                     request=request,
                     idempotency_key=idempotency_key,
                     response=retry_response,
-                    tx_hash=self._mpp_tx_hash(retry_response),
+                    tx_hash=tx_hash,
                     protocol_metadata={"payment_method": "charge"},
                     error=None if success else f"MPP retry failed: {retry_response.status_code}",
                 )

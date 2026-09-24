@@ -7,7 +7,9 @@ the settled payment instead of paying again.
 """
 
 import asyncio
+import base64
 import dataclasses
+import json
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -196,6 +198,86 @@ async def test_retried_mcp_call_does_not_pay_again(monkeypatch, activity_fns, wa
     assert retried.service_cost == 0.0
     assert retried.payment["already_settled"] is True
     assert retried.payment["idempotency_key"] == wallet_service.records[0].idempotency_key
+
+
+class SettledThenFailedServer(PaidServer):
+    """Settles the payment, then fails the paid request itself."""
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        if "PAYMENT-SIGNATURE" in request.headers:
+            self.paid_requests += 1
+            receipt = base64.b64encode(json.dumps({"txHash": "0xsettled"}).encode()).decode()
+            return httpx.Response(
+                502, headers={"PAYMENT-RESPONSE": receipt}, content=b"upstream", request=request
+            )
+        return await super().handle_async_request(request)
+
+
+@pytest.mark.asyncio
+async def test_payment_that_settled_before_the_request_failed_is_spent(
+    monkeypatch, activity_fns, wallet_service
+):
+    ctx, execute_mcp_tool_activity = activity_fns
+    server = SettledThenFailedServer()
+
+    class FakeX402Client:
+        async def create_payment_payload(self, payment_required):
+            return {"signed": True}
+
+    class FakeHTTPClient:
+        def __init__(self, client):
+            pass
+
+        def get_payment_required_response(self, get_header, body):
+            return SimpleNamespace(
+                accepts=[
+                    SimpleNamespace(
+                        pay_to="0xrecipient",
+                        network="eip155:84532",
+                        scheme="exact",
+                        get_amount=lambda: "250000",
+                    )
+                ]
+            )
+
+        def encode_payment_signature_header(self, payment_payload):
+            return {"PAYMENT-SIGNATURE": "signed"}
+
+    from agentarea_payment.x402_client import X402PaymentClient
+
+    monkeypatch.setattr(X402PaymentClient, "_get_client", lambda self: FakeX402Client())
+    monkeypatch.setattr(
+        mcp_payment_httpx,
+        "import_module",
+        lambda name: SimpleNamespace(x402HTTPClient=FakeHTTPClient),
+    )
+    monkeypatch.setattr(mcp_payment_httpx.httpx, "AsyncHTTPTransport", lambda: server)
+
+    async def execute_tool(instance_id, raw_name, tool_args, httpx_client_factory):
+        async with httpx_client_factory() as client:
+            response = await client.post(PAID_URL, json=tool_args)
+        return {"success": response.status_code == 200, "result": response.text}
+
+    instance = SimpleNamespace(id=uuid4(), name="Paid MCP", json_spec=None)
+    mcp_service = ctx.get_mcp_server_instance_service.return_value
+    mcp_service.get = AsyncMock(return_value=instance)
+    mcp_service.execute_tool = execute_tool
+
+    request = _request(
+        mcp_route=McpToolRoute(
+            instance_id=str(instance.id), raw_name="search", attachment_ref=str(instance.id)
+        ),
+        tools=[{"type": "mcp", "name": str(instance.id)}],
+    )
+    retried = await _run_with_one_retry(execute_mcp_tool_activity, request)
+
+    assert server.paid_requests == 1
+    [record] = wallet_service.records
+    assert record.status == "completed"
+    assert record.tx_hash == "0xsettled"
+    assert record.amount_usd == 0.25
+    assert "502" in record.error_message
+    assert retried.payment["already_settled"] is True
 
 
 @pytest.mark.asyncio

@@ -44,6 +44,7 @@ from agentarea_common.auth.tool_authorization import (
 )
 from agentarea_common.events.contract import LLM_FAILED, canonical_type
 from agentarea_common.money import ZERO, to_money
+from agentarea_wallet.domain.enums import settlement_status
 from prometheus_client import Counter
 
 # Third-party imports
@@ -1161,7 +1162,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         tool_name=tool_name,
                         tool_call_id=request.tool_call_id or "",
                         idempotency_key=idempotency_key,
-                        status="completed" if result.get("success") else "failed",
+                        status=settlement_status(
+                            request_succeeded=bool(result.get("success")),
+                            tx_hash=result.get("tx_hash"),
+                        ),
                         error_message=result.get("error"),
                         protocol_metadata=result.get("protocol_metadata"),
                     )

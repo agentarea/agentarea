@@ -906,12 +906,15 @@ jobs:
         #
         # The wallet suite: a retried paid tool must not settle twice, and the
         # partial unique index that forbids it exists only in the migrated schema.
+        # The ledger suite: a payment that settled before its request failed
+        # still counts against the service budget.
         run: |
           uv run python -m pytest -v \
             libs/secrets/tests/test_catalog_service.py \
             libs/llm/tests/test_provider_secret_lifecycle_db.py \
             libs/common/tests/test_audit_append_only_db.py \
-            libs/wallet/tests/test_payment_idempotency_db.py
+            libs/wallet/tests/test_payment_idempotency_db.py \
+            libs/wallet/tests/test_payment_ledger_db.py
 
       # The MCP demand gateway's lifecycle rules run against this schema in
       # production, but they live in Go SQL and no other job has a migrated

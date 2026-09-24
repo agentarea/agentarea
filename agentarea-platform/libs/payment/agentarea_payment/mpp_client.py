@@ -185,6 +185,7 @@ class MPPPaymentClient:
                     protocol="mpp",
                     amount_usd=amount,
                     recipient=recipient,
+                    tx_hash=tx_hash,
                     error=f"MPP retry failed with status {response.status_code}",
                     response_status=response.status_code,
                 )
