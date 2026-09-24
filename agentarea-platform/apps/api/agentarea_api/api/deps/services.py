@@ -515,6 +515,7 @@ async def get_webhook_manager(
         event_broker=event_broker,
         base_url=settings.triggers.WEBHOOK_BASE_URL,
         trigger_service=trigger_service,
+        secret_reader=secret_manager,
     )
 
 
@@ -603,6 +604,7 @@ async def get_public_webhook_manager(
                     event_broker=self._event_broker,
                     base_url=self._settings.triggers.WEBHOOK_BASE_URL,
                     trigger_service=svc,
+                    secret_reader=sec_manager,
                 )
                 # Pre-register the trigger so the manager doesn't need another lookup.
                 # Re-read through the workspace-scoped repository: the unscoped

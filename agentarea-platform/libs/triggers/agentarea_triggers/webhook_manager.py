@@ -1,11 +1,13 @@
 """Webhook manager for handling webhook triggers."""
 
+from __future__ import annotations
+
 import json
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import yaml
@@ -20,6 +22,9 @@ from .logging_utils import (
     set_correlation_id,
 )
 from .webhook_verification import verify_webhook_signature
+
+if TYPE_CHECKING:
+    from .channels.secret_reader import SecretReader
 
 logger = TriggerLogger(__name__)
 
@@ -149,14 +154,22 @@ class DefaultWebhookManager(WebhookManager):
     def __init__(
         self,
         execution_callback: WebhookExecutionCallback,
+        *,
+        secret_reader: SecretReader,
         event_broker: EventBroker | None = None,
         base_url: str = "/webhooks",
         trigger_service: Any = None,
     ):
+        # secret_reader is required, not `| None`: it is what resolves signing
+        # secrets for signature verification, and an optional security
+        # dependency is how that verification went unread from the secret
+        # store in the first place. Callers with nothing real to wire in
+        # (tests) must construct a fake reader explicitly.
         self.execution_callback = execution_callback
         self.event_broker = event_broker
         self.base_url = base_url.rstrip("/")
         self.trigger_service = trigger_service
+        self.secret_reader = secret_reader
         self._registered_webhooks: dict[str, WebhookTrigger] = {}
         self._load_provider_config()
 
@@ -299,13 +312,16 @@ class DefaultWebhookManager(WebhookManager):
                 return await self.get_webhook_response(False, f"Method {method} not allowed")
 
             # Verify cryptographic signature when a signing secret is configured.
-            # None => not enabled (proceed); False => configured but invalid (reject).
-            signature_result = verify_webhook_signature(
+            # None => not enabled (proceed); False => configured but invalid,
+            # or required (a registered signature scheme) and unresolved (reject).
+            signature_result = await verify_webhook_signature(
                 trigger.webhook_type,
                 trigger.validation_rules,
                 trigger.webhook_config,
                 headers,
                 raw_body,
+                secret_reader=self.secret_reader,
+                trigger_id=trigger.id,
             )
             if signature_result is False:
                 logger.warning(

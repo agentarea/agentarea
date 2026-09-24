@@ -15,23 +15,30 @@ from agentarea_triggers.webhook_manager import (
 
 class MockWebhookExecutionCallback(WebhookExecutionCallback):
     """Mock webhook execution callback for testing."""
+
     def __init__(self):
         self.execute_webhook_trigger = AsyncMock()
 
     async def execute_webhook_trigger(self, webhook_id: str, request_data: dict):
         return await self.execute_webhook_trigger(webhook_id, request_data)
 
+
 @pytest.fixture
 def mock_execution_callback():
     """Create a mock webhook execution callback."""
     return MockWebhookExecutionCallback()
 
+
 @pytest.fixture
-def webhook_manager(mock_execution_callback):
+def webhook_manager(mock_execution_callback, fake_secret_reader):
     """Create a DefaultWebhookManager instance for testing."""
     return DefaultWebhookManager(
-        execution_callback=mock_execution_callback, event_broker=None, base_url="/webhooks"
+        execution_callback=mock_execution_callback,
+        event_broker=None,
+        base_url="/webhooks",
+        secret_reader=fake_secret_reader,
     )
+
 
 @pytest.mark.asyncio
 async def test_parse_linear_webhook(webhook_manager):
@@ -78,6 +85,7 @@ async def test_parse_linear_webhook(webhook_manager):
     assert parsed_data["linear_url"] == "https://linear.app/test/issue/TEST-123/test-issue"
     assert parsed_data["raw_data"] == linear_payload
 
+
 @pytest.mark.asyncio
 async def test_parse_discord_webhook(webhook_manager):
     """Test parsing Discord webhook data."""
@@ -116,6 +124,7 @@ async def test_parse_discord_webhook(webhook_manager):
     assert parsed_data["discord_author"] == "testuser"
     assert parsed_data["discord_content"] == "Hello world"
     assert parsed_data["raw_data"] == discord_payload
+
 
 @pytest.mark.asyncio
 async def test_parse_github_webhook(webhook_manager):
@@ -160,6 +169,7 @@ async def test_parse_github_webhook(webhook_manager):
     assert parsed_data["sender"]["login"] == "testuser"
     assert parsed_data["action"] == "opened"
     assert parsed_data["raw_data"] == github_payload
+
 
 @pytest.mark.asyncio
 async def test_parse_slack_webhook(webhook_manager):

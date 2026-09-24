@@ -11,9 +11,12 @@ from agentarea_triggers.webhook_manager import DefaultWebhookManager, WebhookReq
 
 
 @pytest.fixture
-def webhook_manager():
+def webhook_manager(fake_secret_reader):
     return DefaultWebhookManager(
-        execution_callback=AsyncMock(), event_broker=None, base_url="/webhooks"
+        execution_callback=AsyncMock(),
+        event_broker=None,
+        base_url="/webhooks",
+        secret_reader=fake_secret_reader,
     )
 
 

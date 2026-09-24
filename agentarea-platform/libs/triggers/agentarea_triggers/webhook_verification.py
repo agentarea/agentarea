@@ -4,11 +4,18 @@ Provides pluggable signature verification for incoming webhook requests.
 Each channel type has its own verification strategy.
 """
 
+from __future__ import annotations
+
 import hashlib
 import hmac
+import json
 import logging
 import time
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .channels.secret_reader import SecretReader
 
 logger = logging.getLogger(__name__)
 
@@ -341,16 +348,38 @@ def get_verifier(webhook_type: str) -> SignatureVerifier | None:
     return None
 
 
-def resolve_signing_secret(
+def channel_credential_secret_name(channel_type: str, trigger_id: Any) -> str:
+    """Secret-store key holding a trigger's channel credentials.
+
+    This is the one place that knows the format
+    (``channel_cred:{channel_type}:{trigger_id}``); the trigger create/update
+    endpoints (the writer) and this module's secret resolution (the reader)
+    both call it, so the two can never drift apart.
+    """
+    return f"channel_cred:{channel_type}:{trigger_id}"
+
+
+async def resolve_signing_secret(
     webhook_type: str,
     validation_rules: dict | None,
     webhook_config: dict | None,
+    secret_reader: SecretReader,
+    trigger_id: Any,
 ) -> str | None:
     """Resolve the configured signing secret for a webhook type.
 
     Looks up the type's secret key (e.g. ``signing_secret`` / ``webhook_secret``)
-    in ``validation_rules`` first, then ``webhook_config``. Returns None when no
-    secret is configured (signature verification not enabled for this trigger).
+    in ``validation_rules`` first, then ``webhook_config``, then the secret
+    store, under the same ``channel_cred:{type}:{trigger_id}`` key the trigger
+    create/update endpoints write channel credentials to (see
+    ``channel_credential_secret_name``). That entry is a JSON object of
+    credential fields; only the signing key is read out of it.
+
+    ``secret_reader`` is required, not optional: a security dependency that
+    could silently be omitted is how the store went unread in the first
+    place. Callers with nothing real to pass (tests) must construct a fake
+    reader explicitly. Returns None when no secret is configured anywhere
+    (signature verification not enabled for this trigger).
     """
     key = SIGNING_SECRET_KEYS.get(webhook_type)
     if not key:
@@ -360,31 +389,78 @@ def resolve_signing_secret(
             value = source.get(key)
             if value:
                 return str(value)
-    return None
+
+    secret_name = channel_credential_secret_name(webhook_type, trigger_id)
+    try:
+        raw = await secret_reader.get_secret(secret_name)
+    except Exception:
+        # Log only non-sensitive lookup facts: never the secret name (it
+        # embeds the trigger id, but is also the exact string handed to the
+        # secret backend) or anything derived from the credential itself.
+        logger.exception(
+            "Failed to read channel credentials for webhook_type=%s trigger_id=%s",
+            webhook_type,
+            trigger_id,
+        )
+        return None
+    if not raw:
+        return None
+    try:
+        credentials = json.loads(raw)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Stored channel credentials for webhook_type=%s trigger_id=%s are not valid JSON",
+            webhook_type,
+            trigger_id,
+        )
+        return None
+    if not isinstance(credentials, dict):
+        return None
+    value = credentials.get(key)
+    return str(value) if value else None
 
 
-def verify_webhook_signature(
+async def verify_webhook_signature(
     webhook_type: str | None,
     validation_rules: dict | None,
     webhook_config: dict | None,
     headers: dict[str, str],
     body: bytes | str | None,
+    secret_reader: SecretReader,
+    trigger_id: Any,
 ) -> bool | None:
     """Verify an incoming webhook's signature against the configured secret.
 
     Returns:
         True  -- a signing secret is configured and the signature is valid.
         False -- a signing secret is configured but verification failed
-                 (bad signature, missing headers, or no raw body to verify).
-        None  -- no signing secret configured / no verifier for this type:
-                 signature verification is not enabled, caller may proceed.
+                 (bad signature, missing headers, or no raw body to verify),
+                 OR the webhook type has a registered signature scheme
+                 (``VERIFIER_REGISTRY``) and no secret resolves at all — such
+                 a trigger is fail-closed rather than treated as unsigned.
+        None  -- no signing secret configured and no verification scheme is
+                 expected for this type: signature verification is not
+                 enabled, caller may proceed.
+
+    ``secret_reader``/``trigger_id`` are required (see ``resolve_signing_secret``):
+    there is no "no reader" branch here for the secret-store lookup to
+    silently skip.
 
     The signature MUST be computed over the exact raw request body. Callers
     must pass the unparsed bytes, never a re-serialized dict.
     """
     wt = (webhook_type or "generic").lower()
-    secret = resolve_signing_secret(wt, validation_rules, webhook_config)
+    secret = await resolve_signing_secret(
+        wt, validation_rules, webhook_config, secret_reader, trigger_id
+    )
     if not secret:
+        if wt in VERIFIER_REGISTRY:
+            logger.warning(
+                "webhook_type=%s has a registered signature scheme but no signing "
+                "secret resolved; rejecting request (fail closed)",
+                wt,
+            )
+            return False
         return None
 
     if body is None:
