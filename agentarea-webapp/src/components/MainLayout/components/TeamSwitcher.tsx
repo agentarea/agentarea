@@ -4,6 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -20,21 +21,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { resetCurrencyCache } from "@/hooks/useCurrency";
+import { cn } from "@/lib/utils";
 import {
   createWorkspaceAction,
   switchWorkspaceAction,
 } from "@/lib/workspace-actions";
 import type { Workspace } from "@/lib/workspaces";
-import { cn } from "@/lib/utils";
 
 function WorkspaceIcon({
   workspace,
@@ -79,6 +80,10 @@ export function TeamSwitcher({
         setError(result.error);
         return;
       }
+      // A different workspace can bill in a different currency; router.refresh()
+      // re-fetches Server Component data but does not unmount already-mounted
+      // Client Components, so their cached currency needs an explicit kick.
+      resetCurrencyCache();
       router.refresh();
     });
   };
@@ -93,6 +98,9 @@ export function TeamSwitcher({
       }
       setName("");
       setCreateOpen(false);
+      // Creating a workspace also makes it the active one (see setActiveSlug
+      // in workspace-actions.ts) — same staleness risk as switchTo above.
+      resetCurrencyCache();
       router.refresh();
     });
   };

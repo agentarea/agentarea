@@ -442,7 +442,7 @@
     "table": {
       "time": "Time",
       "protocol": "Protocol",
-      "amount": "Amount",
+      "amount": "Amount (USD)",
       "recipient": "Recipient",
       "tool": "Tool",
       "txHash": "Tx Hash",
