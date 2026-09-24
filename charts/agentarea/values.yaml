@@ -596,6 +596,24 @@ mcpManager:
     type: ClusterIP
     port: 80
 
+  # Dedicated service account for the manager control plane. Kept separate
+  # from the shared app service account (serviceAccount above, which carries
+  # no Kubernetes RBAC) so only this component's pods are bound to the
+  # namespaced Role that manages MCP instance/sandbox pods, services,
+  # configmaps, secrets and deployments.
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+
+  # Scratch /tmp for artifact/upload spool files under readOnlyRootFilesystem
+  # (os.CreateTemp("", ...) in internal/artifactstore, internal/api and
+  # internal/sandboxruntime). Bounded so concurrent uploads/downloads can't
+  # exhaust node ephemeral storage; raise it if artifacts routinely approach
+  # this size.
+  tmpVolume:
+    sizeLimit: 1Gi
+
   # Serverless MCP instances: a container-backed instance is started on its
   # first call and reclaimed once it has gone idle, instead of running from
   # creation until it is deleted.
@@ -988,6 +1006,24 @@ mcpSandboxRunner:
   image:
     repository: "" # Defaults to mcpManager.image.repository
     tag: ""        # Defaults to mcpManager.image.tag
+
+  # Dedicated service account, separate from mcp-manager's. The runner drives
+  # the same Kubernetes backend/warm-pool client and so is bound to the same
+  # namespaced Role, but as its own identity: revocable, auditable and
+  # rotatable independently of the manager control plane.
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+
+  # Scratch /tmp for sandbox file upload spool files under
+  # readOnlyRootFilesystem (os.CreateTemp("", ...) in
+  # internal/sandboxruntime/manager.go SandboxFileUpload). Smaller than
+  # mcp-manager's: the runner only ever spools one sandbox file at a time,
+  # bounded by sandboxRuntime.workspace.maxFileBytes.
+  tmpVolume:
+    sizeLimit: 512Mi
+
   consumerGroup: agentarea-sandbox-runners
   batchSize: 1
   resources:

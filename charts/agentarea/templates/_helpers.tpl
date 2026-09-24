@@ -333,6 +333,34 @@ Create the name of the MCP runtime service account.
 {{- end }}
 
 {{/*
+Create the name of the mcp-manager control-plane service account. Separate
+from the shared app service account (which carries no Kubernetes RBAC) and
+from the mcp-runtime service account (bound to spawned instance/sandbox pods,
+not to the manager itself).
+*/}}
+{{- define "agentarea.mcpManagerServiceAccountName" -}}
+{{- if .Values.mcpManager.serviceAccount.create }}
+{{- default (printf "%s-mcp-manager" (include "agentarea.fullname" .)) .Values.mcpManager.serviceAccount.name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- default "default" .Values.mcpManager.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
+{{/*
+Create the name of the sandbox-runner service account. Kept separate from
+mcp-manager's so the two Kubernetes-API-driving components can be scoped,
+audited and rotated independently even though they are bound to the same
+namespaced Role today.
+*/}}
+{{- define "agentarea.sandboxRunnerServiceAccountName" -}}
+{{- if .Values.mcpSandboxRunner.serviceAccount.create }}
+{{- default (printf "%s-sandbox-runner" (include "agentarea.fullname" .)) .Values.mcpSandboxRunner.serviceAccount.name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- default "default" .Values.mcpSandboxRunner.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
+{{/*
 Which backend the manager drives.
 
 "dataplane" hands MCP containers to a remote host running the same binary in
