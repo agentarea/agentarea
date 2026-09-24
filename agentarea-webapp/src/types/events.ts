@@ -2,6 +2,7 @@ import type {
   TaskEvent as ApiTaskEvent,
   TaskEventResponse as ApiTaskEventResponse,
 } from "@/api/client/types.gen";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 
 // Base types from API schema
 export type TaskEvent = ApiTaskEvent;
@@ -325,7 +326,9 @@ export const EVENT_TYPE_CONFIG: Record<
 // Utility functions
 export const mapSSEToDisplayEvent = (
   sseEvent: SSEMessage,
-  id?: string
+  id?: string,
+  currency: string = DEFAULT_CURRENCY,
+  locale: string = "en"
 ): DisplayEvent => {
   // Map event names to our internal event types - handle both PascalCase and snake_case
   const eventTypeMap: Record<string, WorkflowEventType> = {
@@ -429,7 +432,7 @@ export const mapSSEToDisplayEvent = (
   } else if (eventData.messages_compacted) {
     description = `${config?.title}: ${eventData.messages_compacted} messages summarized, ~${eventData.tokens_saved || 0} tokens saved`;
   } else if (eventData.cost) {
-    description = `${config?.title} (Cost: $${Number(eventData.cost).toFixed(4)})`;
+    description = `${config?.title} (Cost: ${formatMoney(Number(eventData.cost), currency, locale)})`;
   } else if (eventData.iteration) {
     description = `${config?.title} ${eventData.iteration}`;
   }

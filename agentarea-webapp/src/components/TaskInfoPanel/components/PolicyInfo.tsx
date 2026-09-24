@@ -1,24 +1,25 @@
 import { useTranslations } from "next-intl";
-import {
-  Coins,
-  Hash,
-  ShieldCheck,
-  UserCheck,
-  Wrench,
-} from "lucide-react";
+import { Coins, Hash, ShieldCheck, UserCheck, Wrench } from "lucide-react";
 import FormError from "@/components/FormError";
+import { formatMoney } from "@/lib/money";
 import type { EffectivePolicy, Money } from "@/types/policies";
 import Section from "./Section";
 
 interface PolicyInfoProps {
   policy?: EffectivePolicy | null;
   error?: string | null;
+  currency?: string | null;
+  locale?: string;
 }
 
-function money(v: Money | null | undefined): string | null {
+function money(
+  v: Money | null | undefined,
+  currency: string | null,
+  locale: string
+): string | null {
   if (v == null) return null;
   const n = Number(v);
-  return Number.isNaN(n) ? null : `$${n.toFixed(2)}`;
+  return Number.isNaN(n) ? null : formatMoney(n, currency, locale);
 }
 
 function Row({
@@ -59,7 +60,12 @@ function Chips({ items }: { items: string[] }) {
 }
 
 /** Governance policy snapshot resolved for the task (budget gauge is separate). */
-export default function PolicyInfo({ policy, error }: PolicyInfoProps) {
+export default function PolicyInfo({
+  policy,
+  error,
+  currency = null,
+  locale = "en",
+}: PolicyInfoProps) {
   const t = useTranslations("TaskInfoPanel");
 
   if (error) {
@@ -72,8 +78,16 @@ export default function PolicyInfo({ policy, error }: PolicyInfoProps) {
 
   if (!policy) return null;
 
-  const monthlyCap = money(policy.budget?.monthly_spend_cap_usd);
-  const serviceBudget = money(policy.budget?.service_budget_usd);
+  const monthlyCap = money(
+    policy.budget?.monthly_spend_cap_usd,
+    currency,
+    locale
+  );
+  const serviceBudget = money(
+    policy.budget?.service_budget_usd,
+    currency,
+    locale
+  );
 
   const allowed = policy.tools?.allowed;
   const denied = policy.tools?.denied ?? [];
@@ -86,7 +100,8 @@ export default function PolicyInfo({ policy, error }: PolicyInfoProps) {
   const requiresApproval = policy.approval?.requires_human_approval;
   const approvers = policy.approval?.approvers ?? [];
 
-  const promptInjection = policy.content_safety?.prompt_injection_detection_enabled;
+  const promptInjection =
+    policy.content_safety?.prompt_injection_detection_enabled;
   const outputSanitizer = policy.content_safety?.output_sanitizer_enabled;
   const hasContentSafety = promptInjection != null || outputSanitizer != null;
 
@@ -109,7 +124,10 @@ export default function PolicyInfo({ policy, error }: PolicyInfoProps) {
   }
 
   return (
-    <Section title={t("policy")} contentClassName="text-xs divide-y divide-border/50">
+    <Section
+      title={t("policy")}
+      contentClassName="text-xs divide-y divide-border/50"
+    >
       {hasTools && (
         <Row
           icon={Wrench}
@@ -117,7 +135,9 @@ export default function PolicyInfo({ policy, error }: PolicyInfoProps) {
           value={
             <div className="space-y-1">
               {allowed == null ? (
-                <span className="text-muted-foreground">{t("policyAllTools")}</span>
+                <span className="text-muted-foreground">
+                  {t("policyAllTools")}
+                </span>
               ) : allowed.length > 0 ? (
                 <div className="flex items-center justify-end gap-1.5">
                   <span className="text-[10px] text-green-600 dark:text-green-500">
@@ -144,11 +164,16 @@ export default function PolicyInfo({ policy, error }: PolicyInfoProps) {
           icon={UserCheck}
           label={t("policyApproval")}
           value={
-            <span className={requiresApproval ? "text-foreground" : "text-muted-foreground"}>
+            <span
+              className={
+                requiresApproval ? "text-foreground" : "text-muted-foreground"
+              }
+            >
               {requiresApproval ? t("policyRequired") : t("policyNotRequired")}
               {requiresApproval && approvers.length > 0 && (
                 <span className="text-muted-foreground">
-                  {" "}· {approvers.length}
+                  {" "}
+                  · {approvers.length}
                 </span>
               )}
             </span>
@@ -179,7 +204,11 @@ export default function PolicyInfo({ policy, error }: PolicyInfoProps) {
       )}
 
       {serviceBudget != null && (
-        <Row icon={Coins} label={t("policyServiceBudget")} value={serviceBudget} />
+        <Row
+          icon={Coins}
+          label={t("policyServiceBudget")}
+          value={serviceBudget}
+        />
       )}
 
       {hasContentSafety && (
@@ -191,7 +220,13 @@ export default function PolicyInfo({ policy, error }: PolicyInfoProps) {
               {promptInjection != null && (
                 <div>
                   {t("policyPromptInjection")}:{" "}
-                  <span className={promptInjection ? "text-green-600 dark:text-green-500" : "text-muted-foreground"}>
+                  <span
+                    className={
+                      promptInjection
+                        ? "text-green-600 dark:text-green-500"
+                        : "text-muted-foreground"
+                    }
+                  >
                     {promptInjection ? t("policyOn") : t("policyOff")}
                   </span>
                 </div>
@@ -199,7 +234,13 @@ export default function PolicyInfo({ policy, error }: PolicyInfoProps) {
               {outputSanitizer != null && (
                 <div>
                   {t("policyOutputSanitizer")}:{" "}
-                  <span className={outputSanitizer ? "text-green-600 dark:text-green-500" : "text-muted-foreground"}>
+                  <span
+                    className={
+                      outputSanitizer
+                        ? "text-green-600 dark:text-green-500"
+                        : "text-muted-foreground"
+                    }
+                  >
                     {outputSanitizer ? t("policyOn") : t("policyOff")}
                   </span>
                 </div>

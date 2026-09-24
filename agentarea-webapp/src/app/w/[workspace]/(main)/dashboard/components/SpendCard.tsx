@@ -3,16 +3,10 @@ import { Wallet } from "lucide-react";
 import { BoardSectionHeader } from "@/components/board";
 import { computeDelta, DeltaBadge } from "@/components/charts/Sparkline";
 import { SpendTrendChart } from "@/components/charts/SpendTrendChart";
-import { cn } from "@/lib/utils";
+import { useCurrency } from "@/hooks/useCurrency";
 import type { DailySpendPoint, DashboardSpend } from "@/lib/api-dashboard";
-
-const fmt = (v: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-    maximumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-  }).format(v);
+import { formatMoney } from "@/lib/money";
+import { cn } from "@/lib/utils";
 
 function barTone(pct: number) {
   if (pct >= 100) return "bg-[color:var(--status-danger)]";
@@ -37,6 +31,8 @@ export function SpendCard({
 }) {
   const t = useTranslations("DashboardPage");
   const locale = useLocale();
+  const { currency } = useCurrency();
+  const fmt = (v: number) => formatMoney(v, currency, locale);
   const hasCap = spend.cap_usd !== null;
   const pct = spend.pct_of_cap ?? 0;
 
@@ -52,7 +48,9 @@ export function SpendCard({
         meta={t("monthToDate")}
       />
 
-      <div className={cn("flex items-start gap-3.5", compact ? "mt-1" : "mt-1.5")}>
+      <div
+        className={cn("flex items-start gap-3.5", compact ? "mt-1" : "mt-1.5")}
+      >
         <div>
           <div
             className={cn(
@@ -78,7 +76,9 @@ export function SpendCard({
         </div>
 
         <div className={cn("ml-auto text-right", compact ? "pt-0" : "pt-0.5")}>
-          <div className="text-[11.5px] text-muted-foreground">{t("today")}</div>
+          <div className="text-[11.5px] text-muted-foreground">
+            {t("today")}
+          </div>
           <div className="mt-0.5 text-[15px] font-semibold tabular-nums">
             {fmt(spend.today_usd)}
           </div>
@@ -115,15 +115,14 @@ export function SpendCard({
       <div
         className={cn(
           "-mx-6",
-          compact
-            ? "mt-1 h-[188px]"
-            : "mt-2.5 min-h-[96px] flex-1"
+          compact ? "mt-1 h-[188px]" : "mt-2.5 min-h-[96px] flex-1"
         )}
       >
         <SpendTrendChart
           data={trend}
           height={compact ? 188 : 190}
           locale={locale}
+          currency={currency}
           seriesLabel={t("spend")}
           cumulativeLabel={t("cumulative")}
         />

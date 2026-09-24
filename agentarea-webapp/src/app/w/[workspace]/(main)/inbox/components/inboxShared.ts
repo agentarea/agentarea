@@ -1,6 +1,7 @@
 import type { useFormatter } from "next-intl";
 import type { GetInboxItemsV1InboxGetData } from "@/api/client";
 import type { TaskWithAgent } from "@/lib/api";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 
 export const FILTER_KEYS = [
   "all",
@@ -75,6 +76,10 @@ export function formatRelative(
   return Number.isNaN(date.getTime()) ? "" : format.relativeTime(date, now);
 }
 
-export function fmtCost(cost?: number | null): string {
-  return cost == null ? "—" : `$${Number(cost).toFixed(4)}`;
+export function fmtCost(
+  cost?: number | null,
+  currency: string = DEFAULT_CURRENCY,
+  locale: string = "en"
+): string {
+  return cost == null ? "—" : formatMoney(Number(cost), currency, locale);
 }

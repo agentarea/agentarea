@@ -160,3 +160,23 @@ export function updateWorkspaceSettings(monthly_cap_usd: number | null) {
     body: JSON.stringify({ monthly_cap_usd }),
   });
 }
+
+/**
+ * The workspace's billing currency (C2, `GET /v1/pricing/currency`). Every
+ * caller of this must default to "USD" rather than surface an error — a
+ * failed lookup must not block money from rendering, and mislabeling a USD
+ * number as another currency would be worse than a wrong-but-plausible
+ * default.
+ */
+export async function getPricingCurrency(): Promise<{ currency: string }> {
+  try {
+    const res = await authedFetch("/v1/pricing/currency");
+    if (!res.ok) return { currency: "USD" };
+    const data = await res.json();
+    return {
+      currency: typeof data?.currency === "string" ? data.currency : "USD",
+    };
+  } catch {
+    return { currency: "USD" };
+  }
+}

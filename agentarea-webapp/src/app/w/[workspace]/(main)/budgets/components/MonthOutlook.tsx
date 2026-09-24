@@ -1,15 +1,9 @@
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Gauge, Info } from "lucide-react";
 import { BoardSectionHeader } from "@/components/board";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
-
-const fmt = (v: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-    maximumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-  }).format(v);
 
 function OutlookRow({
   label,
@@ -64,8 +58,12 @@ export function MonthOutlook({
   runRateDays: number;
 }) {
   const t = useTranslations("BudgetsPage");
+  const locale = useLocale();
+  const { currency } = useCurrency();
+  const fmt = (v: number) => formatMoney(v, currency, locale);
 
-  const projectedPct = cap && cap > 0 && projected != null ? (projected / cap) * 100 : null;
+  const projectedPct =
+    cap && cap > 0 && projected != null ? (projected / cap) * 100 : null;
 
   const hint =
     cap == null
@@ -87,11 +85,7 @@ export function MonthOutlook({
       />
 
       <div className="mt-2.5 flex flex-col sm:mt-3.5">
-        <OutlookRow
-          label={t("today")}
-          sub={t("todaySub")}
-          value={fmt(today)}
-        />
+        <OutlookRow label={t("today")} sub={t("todaySub")} value={fmt(today)} />
         <OutlookRow
           label={t("projectedEom")}
           sub={t("projectedSub", { days: runRateDays })}

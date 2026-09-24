@@ -1,3 +1,4 @@
+import { DEFAULT_CURRENCY } from "@/lib/money";
 import type {
   Policy,
   PolicyDocument,
@@ -20,11 +21,20 @@ const STAGE = {
   custom: "Custom enforcement",
 } as const;
 
-function fmtMoney(value: unknown): string {
+function fmtMoney(
+  value: unknown,
+  currency: string = DEFAULT_CURRENCY,
+  locale: string = "en"
+): string {
   if (value === null || value === undefined) return "";
   const n = typeof value === "number" ? value : Number(value);
-  if (Number.isNaN(n)) return `$${String(value)}`;
-  return `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  if (Number.isNaN(n)) return String(value);
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(n);
 }
 
 function fmtNum(value: unknown): string {
@@ -61,7 +71,9 @@ function str(value: unknown): string | undefined {
  * previewed EffectivePolicy. An empty result means no restrictions.
  */
 export function documentToRules(
-  doc: PolicyDocument | null | undefined
+  doc: PolicyDocument | null | undefined,
+  currency: string = DEFAULT_CURRENCY,
+  locale: string = "en"
 ): PolicyRule[] {
   if (!doc) return [];
   const rules: PolicyRule[] = [];
@@ -73,7 +85,7 @@ export function documentToRules(
         effect: "cap",
         category: "Budget",
         label: "Monthly budget",
-        value: fmtMoney(b.monthly_spend_cap_usd),
+        value: fmtMoney(b.monthly_spend_cap_usd, currency, locale),
         stage: STAGE.beforeLlmOrTool,
       });
     if (b.run_budget_usd != null)
@@ -81,7 +93,7 @@ export function documentToRules(
         effect: "cap",
         category: "Budget",
         label: "Per-task budget",
-        value: fmtMoney(b.run_budget_usd),
+        value: fmtMoney(b.run_budget_usd, currency, locale),
         stage: STAGE.beforeLlmOrTool,
       });
     if (b.service_budget_usd != null)
@@ -89,7 +101,7 @@ export function documentToRules(
         effect: "cap",
         category: "Budget",
         label: "Per-service budget",
-        value: fmtMoney(b.service_budget_usd),
+        value: fmtMoney(b.service_budget_usd, currency, locale),
         stage: STAGE.beforeLlmOrTool,
       });
   }
@@ -250,7 +262,9 @@ const STAGE_BY_DIMENSION: Record<MatrixDimensionKey, string> = {
 // Build a human-readable label + value for a single rule.
 function describeRule(
   policy: Policy,
-  dimension: MatrixDimensionKey
+  dimension: MatrixDimensionKey,
+  currency: string,
+  locale: string
 ): {
   label: string;
   value: string;
@@ -258,7 +272,7 @@ function describeRule(
   const p = isPlainObject(policy.params) ? policy.params : {};
 
   if (dimension === "budget") {
-    const amount = fmtMoney(p.amount_usd);
+    const amount = fmtMoney(p.amount_usd, currency, locale);
     if (policy.target === "spend") {
       const period = str(p.period);
       const label = period === "run" ? "Per-task budget" : "Monthly budget";
@@ -330,9 +344,13 @@ function describeRule(
 }
 
 // Decompose a single backend Policy into the UI rule row shown in the drawer.
-export function policyToRule(policy: Policy): PolicyRule {
+export function policyToRule(
+  policy: Policy,
+  currency: string = DEFAULT_CURRENCY,
+  locale: string = "en"
+): PolicyRule {
   const dimension = ruleDimension(policy);
-  const { label, value } = describeRule(policy, dimension);
+  const { label, value } = describeRule(policy, dimension, currency, locale);
   return {
     id: policy.id,
     effect: policy.effect,
@@ -387,17 +405,21 @@ export interface PolicyMatrix {
   customCount: number;
 }
 
-function fmtBudgetCompact(value: unknown): string {
+function fmtBudgetCompact(
+  value: unknown,
+  currency: string = DEFAULT_CURRENCY,
+  locale: string = "en"
+): string {
   if (value === null || value === undefined) return "";
   const n = typeof value === "number" ? value : Number(value);
   if (Number.isNaN(n)) return String(value);
-  // Whole dollars without cents read cleaner for caps like "$100".
-  return Number.isInteger(n)
-    ? `$${n.toLocaleString("en-US")}`
-    : `$${n.toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })}`;
+  // Whole units without cents read cleaner for caps like "$100".
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(n);
 }
 
 function fmtTokensCompact(value: unknown): string {
@@ -425,7 +447,11 @@ function emptyDimensions(): MatrixDimensions {
 // Roll a subject's rules up into the compact dimension cells. Only enabled
 // rules contribute to the at-a-glance cells; disabled rules still appear in the
 // drawer (via `rules`). Resilient to malformed params — never throws.
-function buildDimensions(rules: Policy[]): {
+function buildDimensions(
+  rules: Policy[],
+  currency: string,
+  locale: string
+): {
   dimensions: MatrixDimensions;
   customCount: number;
 } {
@@ -453,10 +479,12 @@ function buildDimensions(rules: Policy[]): {
       if (policy.target === "spend") {
         const period = str(p.period);
         budgetParts.push(
-          `${fmtBudgetCompact(p.amount_usd)}/${period === "run" ? "run" : "mo"}`
+          `${fmtBudgetCompact(p.amount_usd, currency, locale)}/${period === "run" ? "run" : "mo"}`
         );
       } else {
-        budgetParts.push(`${fmtBudgetCompact(p.amount_usd)}/svc`);
+        budgetParts.push(
+          `${fmtBudgetCompact(p.amount_usd, currency, locale)}/svc`
+        );
       }
     } else if (dimension === "tokens") {
       const max = p.max_tokens ?? p.max_tokens_per_call;
@@ -520,7 +548,9 @@ const WORKSPACE_SUBJECT_KEY = "__workspace__";
  */
 export function policiesToMatrix(
   policies: Policy[],
-  agents: AgentLike[]
+  agents: AgentLike[],
+  currency: string = DEFAULT_CURRENCY,
+  locale: string = "en"
 ): PolicyMatrix {
   const agentNameById = new Map(agents.map((a) => [a.id, a.name]));
 
@@ -556,7 +586,11 @@ export function policiesToMatrix(
   ): MatrixSubject => {
     const isWorkspace = type === "workspace";
     const enabledRules = rules.filter((r) => r.enabled);
-    const { dimensions, customCount } = buildDimensions(enabledRules);
+    const { dimensions, customCount } = buildDimensions(
+      enabledRules,
+      currency,
+      locale
+    );
     const subjectName = isWorkspace
       ? "Workspace"
       : type === "agent"
@@ -573,7 +607,7 @@ export function policiesToMatrix(
       enabled: enabledRules.length > 0,
       dimensions,
       customCount,
-      rules: rules.map(policyToRule),
+      rules: rules.map((rule) => policyToRule(rule, currency, locale)),
       hasActiveRule: enabledRules.length > 0,
     };
   };

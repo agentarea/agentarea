@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AlertTriangle, CheckCircle2, DollarSign, Gauge } from "lucide-react";
 import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import FormLabel from "@/components/FormLabel/FormLabel";
@@ -9,18 +9,12 @@ import { Button } from "@/components/ui/button";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { Input } from "@/components/ui/input";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import { useCurrency } from "@/hooks/useCurrency";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage } from "@/lib/api-errors";
+import { formatMoney } from "@/lib/money";
 import { updateWorkspaceSettingsAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
-
-const fmt = (v: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-    maximumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-  }).format(v);
 
 function parseCap(value: string, invalidMsg: string) {
   const trimmed = value.trim();
@@ -58,6 +52,9 @@ export function BudgetCapPanel({
   const t = useTranslations("BudgetsPage");
   const router = useWorkspaceRouter();
   const { canAdminister } = useViewerCapabilities();
+  const locale = useLocale();
+  const { currency } = useCurrency();
+  const fmt = (v: number) => formatMoney(v, currency, locale);
   const [cap, setCap] = useState(initialCap);
   const [capInput, setCapInput] = useState(
     initialCap == null ? "" : String(initialCap)
@@ -131,7 +128,7 @@ export function BudgetCapPanel({
           icon={DollarSign}
           className="text-[12px] font-semibold text-foreground/80"
         >
-          {t("capField")}
+          {t("capField", { currency: currency ?? "¤" })}
         </FormLabel>
         <div className="flex flex-col gap-2.5 sm:flex-row">
           <Input

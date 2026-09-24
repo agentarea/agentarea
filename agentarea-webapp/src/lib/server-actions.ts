@@ -126,7 +126,10 @@ import {
   updateSkill,
   workspaceFileHistory,
 } from "@/lib/api";
-import { updateWorkspaceSettings } from "@/lib/api-dashboard";
+import {
+  getPricingCurrency,
+  updateWorkspaceSettings,
+} from "@/lib/api-dashboard";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { getViewerCapabilities } from "@/lib/workspace-context";
 import { requestWorkspacePath, workspaceFetch } from "@/lib/workspace-request";
@@ -1051,4 +1054,12 @@ export async function updateWorkspaceSettingsAction(
     console.error("Failed to update workspace settings", err);
     return { data: undefined, error: formatApiError(err), status: undefined };
   }
+}
+
+// Never assume USD: a failed lookup returns { data: null, error } instead of
+// silently defaulting — useCurrency() must render "currency unknown", not USD.
+export async function getPricingCurrencyAction() {
+  const result = await getPricingCurrency();
+  if (!result.ok) return { data: null, error: "Currency unavailable" };
+  return { data: { currency: result.currency }, error: null };
 }

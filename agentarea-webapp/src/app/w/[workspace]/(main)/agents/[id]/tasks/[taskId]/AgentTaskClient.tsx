@@ -7,6 +7,7 @@ import AgentChat from "@/components/Chat/AgentChat";
 import { TaskStatus } from "@/components/TaskStatus";
 import { Button } from "@/components/ui/button";
 import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
+import { useCurrency } from "@/hooks/useCurrency";
 import {
   cancelTask,
   changeTaskModel,
@@ -51,6 +52,7 @@ interface Props {
 }
 
 export default function AgentTaskClient({ agent, taskId, task }: Props) {
+  const { currency } = useCurrency();
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [modelInstances, setModelInstances] = useState<ModelInstanceResponse[]>(
@@ -297,7 +299,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-gray-700 dark:text-gray-200">
-                Budget top-up (USD, optional)
+                Budget top-up ({currency}, optional)
                 <input
                   className="block h-9 w-44 rounded-md border border-gray-300 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
                   min="0.01"
