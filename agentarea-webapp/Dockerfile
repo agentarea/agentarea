@@ -8,7 +8,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Copy package files
-COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* .npmrc* ./
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* .npmrc* .pnpmfile.cjs ./
 COPY packages/ ./packages/
 
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \

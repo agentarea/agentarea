@@ -5,6 +5,7 @@ discovery activity, connection validation) captures identical fields. Keeping
 this in one place is why annotations don't silently get dropped again.
 """
 
+from collections.abc import Mapping
 from typing import Any
 
 
@@ -17,13 +18,17 @@ def serialize_mcp_tool(tool: Any) -> dict[str, Any]:
     for security decisions. We persist them purely as informational metadata so
     the UI can offer an initial safety labeling that a user can review.
 
-    None-valued hints are dropped so the stored blob only carries what the
-    server actually set.
+    Only the MCP Apps ``ui`` metadata is retained from the tool's ``_meta``.
+    The SDK exposes that field as ``meta``; older payloads may use the flat
+    ``ui/resourceUri`` key, which is folded into ``ui.resourceUri``.
+
+    None-valued hints are dropped so the stored blob only carries what
+    the server actually set.
     """
     out: dict[str, Any] = {
         "name": tool.name,
         "description": getattr(tool, "description", None) or "",
-        "inputSchema": getattr(tool, "inputSchema", None) or {},
+        "inputSchema": getattr(tool, "input_schema", None) or {},
     }
 
     title = getattr(tool, "title", None)
@@ -40,5 +45,14 @@ def serialize_mcp_tool(tool: Any) -> dict[str, Any]:
             ann = {}
         if ann:
             out["annotations"] = ann
+
+    metadata = getattr(tool, "meta", None)
+    if isinstance(metadata, Mapping):
+        ui = metadata.get("ui")
+        normalized_ui = dict(ui) if isinstance(ui, Mapping) else {}
+        if "resourceUri" not in normalized_ui and "ui/resourceUri" in metadata:
+            normalized_ui["resourceUri"] = metadata["ui/resourceUri"]
+        if normalized_ui:
+            out["_meta"] = {"ui": normalized_ui}
 
     return out

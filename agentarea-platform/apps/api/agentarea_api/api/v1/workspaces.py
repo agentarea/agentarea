@@ -113,6 +113,21 @@ class CreateWorkspaceBody(BaseModel):
     name: str = Field(min_length=1, max_length=255)
 
 
+async def list_reachable_workspaces(
+    user: UserContext, service: WorkspaceService
+) -> list[Workspace]:
+    """Every workspace *user* can reach: personal (provisioned on first call) + joined."""
+    graph = get_workspace_membership_graph()
+    member_workspace_ids = (
+        await list_workspace_ids_for_member(graph, user.user_id) if graph is not None else []
+    )
+    return await service.list_for_user(
+        user.user_id,
+        email=user.email,
+        member_workspace_ids=member_workspace_ids,
+    )
+
+
 router = APIRouter(tags=["workspaces"])
 
 
@@ -176,15 +191,7 @@ async def list_workspaces(
     new user always gets at least one entry. Baseline governance policies are
     seeded by the workspace-creation hook (see ``get_workspace_service``).
     """
-    graph = get_workspace_membership_graph()
-    member_workspace_ids = (
-        await list_workspace_ids_for_member(graph, user.user_id) if graph is not None else []
-    )
-    workspaces = await service.list_for_user(
-        user.user_id,
-        email=user.email,
-        member_workspace_ids=member_workspace_ids,
-    )
+    workspaces = await list_reachable_workspaces(user, service)
     return [
         WorkspaceResponse(id=w.id, slug=w.slug, name=w.name, owner_user_id=w.owner_user_id)
         for w in workspaces

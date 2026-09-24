@@ -8,6 +8,8 @@ import pytest
 
 from tests.e2e.api.conftest import create_agent
 
+A2A_HEADERS = {"A2A-Version": "1.0"}
+
 
 def _a2a_rpc(
     client: httpx.Client,
@@ -25,8 +27,19 @@ def _a2a_rpc(
     return client.post(
         f"/v1/agents/{agent_id}/a2a/rpc",
         json=payload,
+        headers=A2A_HEADERS,
         timeout=30.0,
     )
+
+
+def _message(text: str) -> dict:
+    return {
+        "message": {
+            "messageId": uuid.uuid4().hex,
+            "role": "ROLE_USER",
+            "parts": [{"text": text}],
+        }
+    }
 
 
 def _a2a_well_known(client: httpx.Client, agent_id: str) -> httpx.Response:
@@ -40,7 +53,7 @@ def _extract_task_id(rpc_response: httpx.Response) -> str:
     body = rpc_response.json()
     assert body.get("error") is None, f"RPC error: {body.get('error')}"
     assert "result" in body, f"Missing result: {body}"
-    task = body["result"]
+    task = body["result"]["task"]
     assert "id" in task, f"Missing task id: {task}"
     return task["id"]
 
@@ -56,15 +69,12 @@ def _poll_a2a_task(
     deadline = time.time() + timeout
     last: dict = {}
     while time.time() < deadline:
-        resp = _a2a_rpc(
-            client, agent_id, "tasks/get", {"id": task_id}
-        )
-        assert resp.status_code == 200, f"tasks/get failed: {resp.text[:200]}"
+        resp = _a2a_rpc(client, agent_id, "GetTask", {"id": task_id})
+        assert resp.status_code == 200, f"GetTask failed: {resp.text[:200]}"
         body = resp.json()
-        assert body.get("error") is None, f"tasks/get error: {body.get('error')}"
+        assert body.get("error") is None, f"GetTask error: {body.get('error')}"
         last = body["result"]
-        state = last.get("status", {}).get("state", "").lower()
-        if state in {s.lower() for s in target_states}:
+        if last.get("status", {}).get("state") in target_states:
             return last
         time.sleep(poll)
     raise AssertionError(
@@ -88,8 +98,8 @@ def test_a2a_well_known_returns_valid_agent_card(
     card = resp.json()
 
     assert card["name"] == "a2a-discover"
-    assert "url" in card, f"Missing url in agent card: {card}"
-    assert "/a2a/rpc" in card["url"], f"Expected A2A RPC url, got {card['url']}"
+    rpc_url = card["supportedInterfaces"][0]["url"]
+    assert rpc_url.endswith(f"/v1/agents/{agent_id}/a2a/rpc"), rpc_url
     assert card["capabilities"]["streaming"] is True
 
 
@@ -105,23 +115,21 @@ def test_a2a_rpc_url_from_agent_card_is_reachable(
     )
 
     card = _a2a_well_known(alice_client, agent_id).raise_for_status().json()
-    rpc_url = card["url"]
-
-    if rpc_url.startswith("/api/"):
-        rpc_url = rpc_url[4:]
+    rpc_path = httpx.URL(card["supportedInterfaces"][0]["url"]).path
 
     resp = alice_client.post(
-        rpc_url,
+        rpc_path,
         json={
             "jsonrpc": "2.0",
             "id": "probe",
-            "method": "agent/authenticatedExtendedCard",
+            "method": "GetExtendedAgentCard",
             "params": {},
         },
+        headers=A2A_HEADERS,
         timeout=10.0,
     )
     assert resp.status_code == 200, (
-        f"Agent card URL {rpc_url} returned {resp.status_code}: {resp.text[:200]}"
+        f"Agent card URL {rpc_path} returned {resp.status_code}: {resp.text[:200]}"
     )
     body = resp.json()
     assert body.get("error") is None, f"RPC error on agent card URL: {body}"
@@ -142,24 +150,26 @@ def test_a2a_tasks_send_creates_and_executes_task(
     send_resp = _a2a_rpc(
         alice_client,
         agent_id,
-        "tasks/send",
-        {"message": {"role": "user", "parts": [{"kind": "text", "text": "Reply with the word: omega"}]}},
+        "SendMessage",
+        _message("Reply with the word: omega"),
     )
     task_id = _extract_task_id(send_resp)
 
     task = _poll_a2a_task(
-        alice_client, agent_id, task_id, {"completed", "failed"}, timeout=90.0
+        alice_client,
+        agent_id,
+        task_id,
+        {"TASK_STATE_COMPLETED", "TASK_STATE_FAILED"},
+        timeout=90.0,
     )
-    assert task["status"]["state"] == "completed", (
+    assert task["status"]["state"] == "TASK_STATE_COMPLETED", (
         f"task failed: {task.get('status', {})}"
     )
 
 
 @pytest.mark.integration
 @pytest.mark.slow
-def test_a2a_message_send_also_creates_task(
-    alice_client: httpx.Client, llm_model: str
-) -> None:
+def test_a2a_message_send_also_creates_task(alice_client: httpx.Client, llm_model: str) -> None:
     agent_id = create_agent(
         alice_client,
         llm_model,
@@ -170,15 +180,19 @@ def test_a2a_message_send_also_creates_task(
     send_resp = _a2a_rpc(
         alice_client,
         agent_id,
-        "message/send",
-        {"message": {"role": "user", "parts": [{"kind": "text", "text": "Reply with the word: alpha"}]}},
+        "SendMessage",
+        _message("Reply with the word: alpha"),
     )
     task_id = _extract_task_id(send_resp)
 
     task = _poll_a2a_task(
-        alice_client, agent_id, task_id, {"completed", "failed"}, timeout=90.0
+        alice_client,
+        agent_id,
+        task_id,
+        {"TASK_STATE_COMPLETED", "TASK_STATE_FAILED"},
+        timeout=90.0,
     )
-    assert task["status"]["state"] == "completed"
+    assert task["status"]["state"] == "TASK_STATE_COMPLETED"
 
 
 @pytest.mark.integration
@@ -201,31 +215,26 @@ def test_a2a_tasks_cancel_terminates_running_task(
     send_resp = _a2a_rpc(
         alice_client,
         agent_id,
-        "tasks/send",
-        {"message": {"role": "user", "parts": [{"kind": "text", "text": "Create the five step files now."}]}},
+        "SendMessage",
+        _message("Create the five step files now."),
     )
     task_id = _extract_task_id(send_resp)
 
     time.sleep(1.0)
 
-    cancel_resp = _a2a_rpc(
-        alice_client, agent_id, "tasks/cancel", {"id": task_id}
-    )
+    cancel_resp = _a2a_rpc(alice_client, agent_id, "CancelTask", {"id": task_id})
     assert cancel_resp.status_code == 200, cancel_resp.text[:200]
     body = cancel_resp.json()
     assert body.get("error") is None, f"cancel error: {body.get('error')}"
 
-    task = _poll_a2a_task(
-        alice_client, agent_id, task_id, {"canceled", "failed", "completed"}, timeout=30.0
-    )
-    assert task["status"]["state"] in ("canceled", "failed", "completed")
+    terminal = {"TASK_STATE_CANCELED", "TASK_STATE_FAILED", "TASK_STATE_COMPLETED"}
+    task = _poll_a2a_task(alice_client, agent_id, task_id, terminal, timeout=30.0)
+    assert task["status"]["state"] in terminal
 
 
 @pytest.mark.integration
 @pytest.mark.slow
-def test_a2a_message_stream_returns_sse(
-    alice_client: httpx.Client, llm_model: str
-) -> None:
+def test_a2a_message_stream_returns_sse(alice_client: httpx.Client, llm_model: str) -> None:
     agent_id = create_agent(
         alice_client,
         llm_model,
@@ -236,23 +245,20 @@ def test_a2a_message_stream_returns_sse(
     payload = {
         "jsonrpc": "2.0",
         "id": "stream-1",
-        "method": "message/stream",
-        "params": {
-            "message": {"role": "user", "parts": [{"kind": "text", "text": "Reply with the word: stream"}]}
-        },
+        "method": "SendStreamingMessage",
+        "params": _message("Reply with the word: stream"),
     }
 
     with alice_client.stream(
         "POST",
         f"/v1/agents/{agent_id}/a2a/rpc",
         json=payload,
+        headers=A2A_HEADERS,
         timeout=120.0,
     ) as response:
         assert response.status_code == 200
         content_type = response.headers.get("content-type", "")
-        assert "text/event-stream" in content_type, (
-            f"Expected SSE, got content-type={content_type}"
-        )
+        assert "text/event-stream" in content_type, f"Expected SSE, got content-type={content_type}"
 
 
 @pytest.mark.integration
@@ -263,8 +269,8 @@ def test_a2a_tasks_send_to_missing_agent_returns_error(
     resp = _a2a_rpc(
         alice_client,
         fake_agent_id,
-        "tasks/send",
-        {"message": {"role": "user", "parts": [{"text": "Hello"}]}},
+        "SendMessage",
+        _message("Hello"),
     )
     assert resp.status_code == 404, (
         f"Expected 404 for missing agent, got {resp.status_code}: {resp.text[:200]}"
@@ -282,9 +288,7 @@ def test_a2a_invalid_method_returns_jsonrpc_error(
         instruction="ok.",
     )
 
-    resp = _a2a_rpc(
-        alice_client, agent_id, "invalid/method", {}
-    )
+    resp = _a2a_rpc(alice_client, agent_id, "invalid/method", {})
     assert resp.status_code in (200, 403), resp.text[:200]
     if resp.status_code == 200:
         body = resp.json()
@@ -306,6 +310,7 @@ def test_a2a_malformed_jsonrpc_returns_parse_error(
     resp = alice_client.post(
         f"/v1/agents/{agent_id}/a2a/rpc",
         content='{"jsonrpc": "2.0", "id": "x", "method": }',
+        headers=A2A_HEADERS,
         timeout=10.0,
     )
     assert resp.status_code in (200, 403), resp.text[:200]
@@ -331,12 +336,12 @@ def test_a2a_tasks_get_cross_workspace_blocked(
     send_resp = _a2a_rpc(
         alice_client,
         agent_id,
-        "tasks/send",
-        {"message": {"role": "user", "parts": [{"kind": "text", "text": "ok"}]}},
+        "SendMessage",
+        _message("ok"),
     )
     task_id = _extract_task_id(send_resp)
 
-    cross = _a2a_rpc(bob_client, agent_id, "tasks/get", {"id": task_id})
+    cross = _a2a_rpc(bob_client, agent_id, "GetTask", {"id": task_id})
     if cross.status_code == 404:
         return
     assert cross.status_code == 200, cross.text[:200]

@@ -100,7 +100,6 @@ _GATE_MARKERS: dict[str, str] = {
     "test_real_workflow_infrastructure": "requires_llm",
     "test_real_workflow_with_mocked_db": "requires_llm",
     "test_sdk_temporal_integration": "requires_llm",
-    "test_a2a_task_execution_comprehensive": "requires_llm",
     # need object storage
     "test_artifact_service": "requires_s3",
     # need Docker / live MCP containers

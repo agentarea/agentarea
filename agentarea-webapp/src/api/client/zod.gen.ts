@@ -77,44 +77,6 @@ export const zAddSkillRequest = z.object({
 });
 
 /**
- * AgentAuthentication
- */
-export const zAgentAuthentication = z.object({
-  credentials: z.string().nullish(),
-  schemes: z.array(z.string()),
-});
-
-/**
- * AgentCapabilities
- */
-export const zAgentCapabilities = z.object({
-  extendedAgentCard: z.boolean().optional().default(false),
-  extensions: z.array(z.record(z.unknown())).nullish(),
-  pushNotifications: z.boolean().optional().default(false),
-  streaming: z.boolean().optional().default(false),
-});
-
-/**
- * AgentInterface
- *
- * A2A v1.0.0 AgentInterface — a (url, protocolBinding, protocolVersion) tuple.
- */
-export const zAgentInterface = z.object({
-  protocolBinding: z.string().optional().default("JSONRPC"),
-  protocolVersion: z.string().optional().default("1.0"),
-  tenant: z.string().nullish(),
-  url: z.string(),
-});
-
-/**
- * AgentProvider
- */
-export const zAgentProvider = z.object({
-  organization: z.string(),
-  url: z.string().nullish(),
-});
-
-/**
  * AgentRow
  */
 export const zAgentRow = z.object({
@@ -126,45 +88,6 @@ export const zAgentRow = z.object({
   recent_task_names: z.array(z.string()),
   tasks_done_today: z.number().int(),
   tasks_failed_today: z.number().int(),
-});
-
-/**
- * AgentSkill
- */
-export const zAgentSkill = z.object({
-  description: z.string().nullish(),
-  examples: z.array(z.string()).nullish(),
-  id: z.string(),
-  inputModes: z.array(z.string()).nullish(),
-  name: z.string(),
-  outputModes: z.array(z.string()).nullish(),
-  securityRequirements: z.array(z.record(z.array(z.string()))).nullish(),
-  tags: z.array(z.string()).nullish(),
-});
-
-/**
- * AgentCard
- */
-export const zAgentCard = z.object({
-  authentication: zAgentAuthentication.nullish(),
-  capabilities: zAgentCapabilities,
-  defaultInputModes: z
-    .array(z.string())
-    .optional()
-    .default(["text/plain", "application/json"]),
-  defaultOutputModes: z
-    .array(z.string())
-    .optional()
-    .default(["text/plain", "application/json"]),
-  description: z.string().nullish(),
-  documentationUrl: z.string().nullish(),
-  name: z.string(),
-  provider: zAgentProvider.nullish(),
-  security: z.array(z.record(z.array(z.string()))).nullish(),
-  securitySchemes: z.record(z.unknown()).nullish(),
-  skills: z.array(zAgentSkill),
-  supportedInterfaces: z.array(zAgentInterface),
-  version: z.string().optional().default("1.0.0"),
 });
 
 /**
@@ -1143,9 +1066,10 @@ export const zMcpoAuthPreflightResponse = z.object({
   authorization_endpoint: z.string().nullish(),
   connected: z.boolean(),
   detail: z.string().optional().default(""),
-  instance_id: z.string().uuid(),
+  instance_id: z.string().uuid().nullish(),
   issuer: z.string().nullish(),
   scopes: z.array(z.string()).optional(),
+  server_id: z.string().uuid().nullish(),
   status: z.enum(["ready", "oauth_app_required", "unsupported"]),
 });
 
@@ -3657,12 +3581,6 @@ export const zGetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetPath 
     agent_id: z.string().uuid(),
   });
 
-/**
- * Successful Response
- */
-export const zGetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponse =
-  zAgentCard;
-
 export const zHandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostPath = z.object({
   agent_id: z.string().uuid(),
 });
@@ -3670,12 +3588,6 @@ export const zHandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostPath = z.object({
 export const zGetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetPath = z.object({
   agent_id: z.string().uuid(),
 });
-
-/**
- * Successful Response
- */
-export const zGetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponse =
-  zAgentCard;
 
 export const zInstallAgentV1AgentsAgentIdInstallPostPath = z.object({
   agent_id: z.string(),
@@ -4437,7 +4349,8 @@ export const zOauthCallbackV1McpOauthCallbackGetQuery = z.object({
 });
 
 export const zOauthPreflightV1McpOauthPreflightGetQuery = z.object({
-  instance_id: z.string().uuid(),
+  instance_id: z.string().uuid().nullish(),
+  server_id: z.string().uuid().nullish(),
 });
 
 /**

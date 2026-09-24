@@ -1,16 +1,57 @@
 """Tests for A2AAgentTool."""
 
 import json
-from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from a2a.types import Artifact, Message, Part, Role, Task, TaskState, TaskStatus
+from google.protobuf.json_format import MessageToDict
 
+from agentarea_agents_sdk.tools import a2a_agent_tool
 from agentarea_agents_sdk.tools.a2a_agent_tool import (
     A2AAgentTool,
     _sanitize_tool_name,
 )
 from agentarea_agents_sdk.tools.base_tool import ToolExecutionError
+
+A2A_URL = "http://localhost:9000/a2a/rpc"
+
+
+def _task(state: TaskState.ValueType, *texts: str, task_id: str = "task-1") -> dict:
+    task = Task(id=task_id, context_id="ctx", status=TaskStatus(state=state))
+    if texts:
+        task.artifacts.append(Artifact(artifact_id="a", parts=[Part(text=t) for t in texts]))
+    return MessageToDict(task)
+
+
+def _result(request: httpx.Request, result: dict) -> httpx.Response:
+    return httpx.Response(
+        200, json={"jsonrpc": "2.0", "id": json.loads(request.content)["id"], "result": result}
+    )
+
+
+def _transport(*replies):
+    """A mock A2A endpoint answering each JSON-RPC call with the next reply.
+
+    A reply is a callable ``(request) -> httpx.Response``; ``seen`` records the
+    requests in order.
+    """
+    seen: list[httpx.Request] = []
+    queue = list(replies)
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return queue.pop(0)(request)
+
+    return httpx.MockTransport(handle), seen
+
+
+def _send_result(state=TaskState.TASK_STATE_COMPLETED, *texts: str):
+    return lambda request: _result(request, {"task": _task(state, *texts)})
+
+
+def _get_result(state=TaskState.TASK_STATE_COMPLETED, *texts: str):
+    return lambda request: _result(request, _task(state, *texts))
 
 
 class TestSanitizeToolName:
@@ -46,7 +87,7 @@ class TestA2AAgentToolProperties:
         self.tool = A2AAgentTool(
             agent_name="researcher",
             agent_description="Searches the web for information.",
-            a2a_url="http://localhost:9000/a2a/rpc",
+            a2a_url=A2A_URL,
         )
 
     def test_name(self):
@@ -70,172 +111,155 @@ class TestA2AAgentToolProperties:
         assert "parameters" in defn["function"]
 
 
+def _tool(transport, **kwargs) -> A2AAgentTool:
+    return A2AAgentTool(
+        agent_name="researcher",
+        agent_description="Searches the web.",
+        a2a_url=A2A_URL,
+        http_transport=transport,
+        **kwargs,
+    )
+
+
 class TestA2AAgentToolExecute:
     """Tests for A2AAgentTool.execute()."""
 
-    def setup_method(self):
-        self.tool = A2AAgentTool(
-            agent_name="researcher",
-            agent_description="Searches the web.",
-            a2a_url="http://localhost:9000/a2a/rpc",
-            auth_token="test-token",
-        )
-
     @pytest.mark.asyncio
     async def test_execute_success(self):
-        rpc_response = {
-            "jsonrpc": "2.0",
-            "id": "abc",
-            "result": {
-                "id": "task-1",
-                "status": {"state": "completed"},
-                "artifacts": [
-                    {
-                        "parts": [
-                            {"text": "The answer is 42."},
-                        ]
-                    }
-                ],
-            },
-        }
-        mock_response = httpx.Response(200, json=rpc_response)
+        transport, _ = _transport(_send_result(TaskState.TASK_STATE_COMPLETED, "The answer is 42."))
 
-        with patch(
-            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
-        ) as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=mock_response)
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = await self.tool.execute(message="What is the meaning of life?")
+        result = await _tool(transport).execute(message="What is the meaning of life?")
 
         assert result["success"] is True
         assert result["result"] == "The answer is 42."
         assert result["task_id"] == "task-1"
-        assert result["task_state"] == "completed"
+        assert result["task_state"] == "TASK_STATE_COMPLETED"
         assert result["error"] is None
 
     @pytest.mark.asyncio
-    async def test_execute_sends_auth_header(self):
-        rpc_response = {
-            "jsonrpc": "2.0",
-            "id": "abc",
-            "result": {"id": "t1", "status": {"state": "completed"}, "artifacts": []},
-        }
-        mock_response = httpx.Response(200, json=rpc_response)
+    async def test_execute_sends_a_v1_send_message_with_bearer(self):
+        transport, seen = _transport(_send_result())
 
-        with patch(
-            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
-        ) as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=mock_response)
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
+        await _tool(transport, auth_token="test-token").execute(message="hello")
 
-            await self.tool.execute(message="hello")
+        [request] = seen
+        assert str(request.url) == A2A_URL
+        assert request.headers["Authorization"] == "Bearer test-token"
+        assert request.headers["A2A-Version"] == "1.0"
+        body = json.loads(request.content)
+        assert body["method"] == "SendMessage"
+        message = body["params"]["message"]
+        assert message["role"] == "ROLE_USER"
+        assert message["messageId"]
+        assert message["parts"] == [{"text": "hello"}]
+        assert body["params"]["configuration"]["returnImmediately"] is True
 
-            call_kwargs = mock_client.post.call_args
-            headers = call_kwargs.kwargs.get("headers") or call_kwargs[1].get("headers")
-            assert headers["Authorization"] == "Bearer test-token"
+    @pytest.mark.asyncio
+    async def test_execute_polls_until_the_task_is_terminal(self, monkeypatch):
+        monkeypatch.setattr(a2a_agent_tool, "_POLL_INTERVAL", 0.0)
+        transport, seen = _transport(
+            _send_result(TaskState.TASK_STATE_SUBMITTED),
+            _get_result(TaskState.TASK_STATE_WORKING),
+            _get_result(TaskState.TASK_STATE_COMPLETED, "done"),
+        )
+
+        result = await _tool(transport).execute(message="hello")
+
+        assert [json.loads(r.content)["method"] for r in seen] == [
+            "SendMessage",
+            "GetTask",
+            "GetTask",
+        ]
+        assert json.loads(seen[1].content)["params"] == {"id": "task-1"}
+        assert result["result"] == "done"
+        assert result["task_state"] == "TASK_STATE_COMPLETED"
+
+    @pytest.mark.asyncio
+    async def test_execute_returns_a_direct_message_reply(self):
+        reply = Message(message_id="m", role=Role.ROLE_AGENT, parts=[Part(text="hi there")])
+        transport, _ = _transport(
+            lambda request: _result(request, {"message": MessageToDict(reply)})
+        )
+
+        result = await _tool(transport).execute(message="hello")
+
+        assert result["success"] is True
+        assert result["result"] == "hi there"
 
     @pytest.mark.asyncio
     async def test_execute_rpc_error(self):
-        rpc_response = {
-            "jsonrpc": "2.0",
-            "id": "abc",
-            "error": {"code": -32000, "message": "Agent busy"},
-        }
-        mock_response = httpx.Response(200, json=rpc_response)
+        transport, _ = _transport(
+            lambda request: httpx.Response(
+                200,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": json.loads(request.content)["id"],
+                    "error": {"code": -32000, "message": "Agent busy"},
+                },
+            )
+        )
 
-        with patch(
-            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
-        ) as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=mock_response)
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = await self.tool.execute(message="hello")
+        result = await _tool(transport).execute(message="hello")
 
         assert result["success"] is False
-        assert result["error"] == "Agent busy"
+        assert "Agent busy" in result["error"]
 
     @pytest.mark.asyncio
     async def test_execute_http_error(self):
-        mock_response = httpx.Response(500)
+        transport, _ = _transport(lambda request: httpx.Response(500))
 
-        with patch(
-            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
-        ) as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=mock_response)
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            with pytest.raises(ToolExecutionError, match="HTTP 500"):
-                await self.tool.execute(message="hello")
+        with pytest.raises(ToolExecutionError, match="HTTP 500"):
+            await _tool(transport).execute(message="hello")
 
     @pytest.mark.asyncio
     async def test_execute_paid_a2a_retries_via_payment_handler(self):
-        paid_rpc_response = {
-            "jsonrpc": "2.0",
-            "id": "abc",
-            "result": {
-                "id": "paid-task",
-                "status": {"state": "completed"},
-                "artifacts": [{"parts": [{"text": "paid result"}]}],
-            },
-        }
         payment_calls = []
 
         async def payment_handler(**kwargs):
             payment_calls.append(kwargs)
+            body = kwargs["request_body"]
             return {
                 "success": True,
                 "protocol": "mpp",
                 "amount_usd": 0.25,
                 "recipient": "merchant",
                 "response_status": 200,
-                "response_body": json.dumps(paid_rpc_response),
+                "response_body": json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": body["id"],
+                        "result": {
+                            "task": _task(
+                                TaskState.TASK_STATE_COMPLETED, "paid result", task_id="paid-task"
+                            )
+                        },
+                    }
+                ),
                 "protocol_metadata": {"payment_method": "charge"},
             }
 
-        tool = A2AAgentTool(
-            agent_name="researcher",
-            agent_description="Searches the web.",
-            a2a_url="http://localhost:9000/a2a/rpc",
-            auth_token="test-token",
-            payment_handler=payment_handler,
-        )
-        mock_response = httpx.Response(
-            402,
-            headers={"WWW-Authenticate": "Payment test-challenge"},
-            text="payment required",
+        transport, _ = _transport(
+            lambda request: httpx.Response(
+                402, headers={"WWW-Authenticate": "Payment test-challenge"}, text="payment required"
+            )
         )
 
-        with patch(
-            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
-        ) as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=mock_response)
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = await tool.execute(message="hello")
+        result = await _tool(
+            transport, auth_token="test-token", payment_handler=payment_handler
+        ).execute(message="hello")
 
         assert result["success"] is True
         assert result["result"] == "paid result"
         assert result["payment"]["protocol"] == "mpp"
         assert result["payment"]["amount_usd"] == 0.25
-        assert payment_calls[0]["response_status"] == 402
-        assert payment_calls[0]["tool_name"] == "delegate_to_researcher"
-        assert payment_calls[0]["request_body"]["method"] == "SendMessage"
+        [call] = payment_calls
+        assert call["response_status"] == 402
+        assert call["response_body"] == "payment required"
+        assert call["response_headers"]["www-authenticate"] == "Payment test-challenge"
+        assert call["tool_name"] == "delegate_to_researcher"
+        assert call["request_body"]["method"] == "SendMessage"
+        assert call["request_headers"]["authorization"] == "Bearer test-token"
+        assert "content-length" not in call["request_headers"]
 
     @pytest.mark.asyncio
     async def test_execute_paid_a2a_surfaces_payment_failure(self):
@@ -248,44 +272,27 @@ class TestA2AAgentToolExecute:
                 "error": "Payment exceeds budget",
             }
 
-        tool = A2AAgentTool(
-            agent_name="researcher",
-            agent_description="Searches the web.",
-            a2a_url="http://localhost:9000/a2a/rpc",
-            payment_handler=payment_handler,
+        transport, _ = _transport(
+            lambda request: httpx.Response(402, headers={"PAYMENT-REQUIRED": "{}"})
         )
-        mock_response = httpx.Response(402, headers={"PAYMENT-REQUIRED": "{}"})
 
-        with patch(
-            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
-        ) as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=mock_response)
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            with pytest.raises(ToolExecutionError, match="Payment exceeds budget"):
-                await tool.execute(message="hello")
+        with pytest.raises(ToolExecutionError, match="Payment exceeds budget"):
+            await _tool(transport, payment_handler=payment_handler).execute(message="hello")
 
     @pytest.mark.asyncio
     async def test_execute_timeout(self):
-        with patch(
-            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
-        ) as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(side_effect=httpx.TimeoutException("timed out"))
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
+        def timeout(request):
+            raise httpx.ReadTimeout("timed out", request=request)
 
-            with pytest.raises(ToolExecutionError, match="timed out"):
-                await self.tool.execute(message="hello")
+        transport, _ = _transport(timeout)
+
+        with pytest.raises(ToolExecutionError, match="timed out"):
+            await _tool(transport).execute(message="hello")
 
     @pytest.mark.asyncio
     async def test_execute_empty_message_raises(self):
         with pytest.raises(ToolExecutionError, match="message is required"):
-            await self.tool.execute(message="")
+            await _tool(None).execute(message="")
 
 
 class TestExtractTaskResult:
@@ -299,39 +306,33 @@ class TestExtractTaskResult:
         )
 
     def test_extract_text_artifacts(self):
-        task = {
-            "artifacts": [
-                {"parts": [{"text": "line1"}]},
-                {"parts": [{"text": "line2"}]},
+        task = Task(
+            artifacts=[
+                Artifact(artifact_id="1", parts=[Part(text="line1")]),
+                Artifact(artifact_id="2", parts=[Part(text="line2")]),
             ]
-        }
+        )
         assert self.tool._extract_task_result(task) == "line1\nline2"
 
     def test_extract_data_artifact(self):
-        task = {
-            "artifacts": [
-                {"parts": [{"data": {"key": "val"}}]},
-            ]
-        }
-        result = self.tool._extract_task_result(task)
-        assert json.loads(result) == {"key": "val"}
+        part = Part()
+        part.data.struct_value.update({"key": "val"})
+        task = Task(artifacts=[Artifact(artifact_id="1", parts=[part])])
+
+        assert json.loads(self.tool._extract_task_result(task)) == {"key": "val"}
 
     def test_fallback_to_status_message(self):
-        task = {
-            "artifacts": [],
-            "status": {
-                "state": "completed",
-                "message": {
-                    "parts": [{"text": "Done via status"}],
-                },
-            },
-        }
+        task = Task(
+            status=TaskStatus(
+                state=TaskState.TASK_STATE_COMPLETED,
+                message=Message(parts=[Part(text="Done via status")]),
+            )
+        )
         assert self.tool._extract_task_result(task) == "Done via status"
 
     def test_no_output(self):
-        task = {}
-        assert self.tool._extract_task_result(task) == "(No output from agent)"
+        assert self.tool._extract_task_result(Task()) == "(No output from agent)"
 
     def test_empty_artifacts_no_status(self):
-        task = {"artifacts": [], "status": {"state": "completed"}}
+        task = Task(status=TaskStatus(state=TaskState.TASK_STATE_COMPLETED))
         assert self.tool._extract_task_result(task) == "(No output from agent)"

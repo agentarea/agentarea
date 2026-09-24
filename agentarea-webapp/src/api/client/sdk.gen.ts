@@ -1800,7 +1800,7 @@ export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGet = <
 /**
  * Handle Agent Jsonrpc
  *
- * Handle A2A JSON-RPC requests with comprehensive error handling and validation.
+ * Serve one A2A JSON-RPC call (plain JSON, or SSE for the streaming methods).
  */
 export const handleAgentJsonrpcV1AgentsAgentIdA2aRpcPost = <
   ThrowOnError extends boolean = false,
@@ -1833,7 +1833,7 @@ export const handleAgentJsonrpcV1AgentsAgentIdA2aRpcPost = <
 /**
  * Get Agent Well Known
  *
- * Get current agent discovery information with proper validation and error handling.
+ * The agent card, also served at ``.well-known/agent-card.json``.
  */
 export const getAgentWellKnownV1AgentsAgentIdA2aWellKnownGet = <
   ThrowOnError extends boolean = false,
@@ -4380,21 +4380,22 @@ export const oauthCallbackV1McpOauthCallbackGet = <
 /**
  * Oauth Preflight
  *
- * Report whether this instance can be authorized, and with what.
+ * Report whether a connection can be authorized, and with what.
  *
- * Every outcome is a 200: "this server has no OAuth" is an answer the UI
- * renders, not a failure it has to decode from an error response.
+ * Takes an existing instance, or a catalog spec so the create page can ask
+ * before it creates anything. Every outcome is a 200: "this server has no
+ * OAuth" is an answer the UI renders, not a failure it has to decode.
  */
 export const oauthPreflightV1McpOauthPreflightGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<OauthPreflightV1McpOauthPreflightGetData, ThrowOnError>
+  options?: Options<OauthPreflightV1McpOauthPreflightGetData, ThrowOnError>
 ): RequestResult<
   OauthPreflightV1McpOauthPreflightGetResponses,
   OauthPreflightV1McpOauthPreflightGetErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).get<
+  (options?.client ?? client).get<
     OauthPreflightV1McpOauthPreflightGetResponses,
     OauthPreflightV1McpOauthPreflightGetErrors,
     ThrowOnError

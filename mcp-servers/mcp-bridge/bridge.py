@@ -29,6 +29,11 @@ log = logging.getLogger("mcp-bridge")
 
 # How long to wait for a response from the child process (seconds)
 REQUEST_TIMEOUT = float(os.environ.get("MCP_BRIDGE_TIMEOUT", "30"))
+# The bridge serves HTTP as soon as the child is spawned, but `npx -y`/`uvx`
+# fetch the package first, so on a fresh container the child's first reply
+# includes that install. Until the child has said anything, requests wait this
+# long instead; answering them with a timeout would fail every cold start.
+STARTUP_TIMEOUT = float(os.environ.get("MCP_BRIDGE_STARTUP_TIMEOUT", "300"))
 
 
 class StdioBridge:
@@ -47,6 +52,7 @@ class StdioBridge:
         self._write_lock = asyncio.Lock()
         self._reader_task: asyncio.Task | None = None
         self._healthy = False
+        self._child_started = False
 
     async def start(self):
         log.info("Spawning: %s %s", self.command, " ".join(self.args))
@@ -88,6 +94,7 @@ class StdioBridge:
             except json.JSONDecodeError:
                 log.debug("Non-JSON stdout: %s", line[:200])
                 continue
+            self._child_started = True
             internal_id = msg.get("id")
             if internal_id is not None and str(internal_id) in self._pending:
                 original_id, future = self._pending[str(internal_id)]
@@ -137,7 +144,8 @@ class StdioBridge:
 
         if future is not None and internal_id is not None:
             try:
-                return await asyncio.wait_for(future, timeout=REQUEST_TIMEOUT)
+                timeout = REQUEST_TIMEOUT if self._child_started else STARTUP_TIMEOUT
+                return await asyncio.wait_for(future, timeout=timeout)
             except asyncio.TimeoutError:
                 log.error("Timeout waiting for response to request id=%s", original_id)
                 return {
@@ -167,6 +175,24 @@ class StdioBridge:
 # stdio server, so all HTTP requests share the same logical MCP session.
 SESSION_ID = str(uuid.uuid4())
 
+# The bridge speaks the 2025 handshake protocol, and so does every stdio child
+# it wraps. Clients negotiating protocol 2026-07-28 in `auto` mode probe with
+# `server/discover` first; some stdio servers exit on any request that arrives
+# before `initialize`, so the probe must never reach the child. "Method not
+# found" is the answer that makes such clients fall back to the handshake.
+DISCOVER_METHOD = "server/discover"
+
+
+def discover_refusal(message: object) -> dict | None:
+    """The bridge's own answer to a `server/discover` request, or None."""
+    if isinstance(message, dict) and message.get("method") == DISCOVER_METHOD and "id" in message:
+        return {
+            "jsonrpc": "2.0",
+            "id": message["id"],
+            "error": {"code": -32601, "message": f"Method not found: {DISCOVER_METHOD}"},
+        }
+    return None
+
 
 async def handle_mcp_post(request: web.Request) -> web.Response:
     """Handle POST /mcp — streamable-http JSON-RPC endpoint."""
@@ -190,7 +216,7 @@ async def handle_mcp_post(request: web.Request) -> web.Response:
     if isinstance(body, list):
         responses = []
         for msg in body:
-            resp = await bridge.send(msg)
+            resp = discover_refusal(msg) or await bridge.send(msg)
             if resp:  # Skip empty (notification) responses
                 responses.append(resp)
         return web.json_response(
@@ -198,7 +224,7 @@ async def handle_mcp_post(request: web.Request) -> web.Response:
             headers={"Mcp-Session-Id": SESSION_ID},
         )
 
-    response = await bridge.send(body)
+    response = discover_refusal(body) or await bridge.send(body)
 
     # For notifications (no id), return 202 Accepted
     if not response:

@@ -800,3 +800,68 @@ class TestExchangeCode:
         )
 
         assert "client_secret=shh" in captured["body"]
+
+
+# ---------------------------------------------------------------------------
+# Capability assessment — the one answer to "can this server be authorized?"
+# ---------------------------------------------------------------------------
+
+
+def _google_as(**overrides):
+    return AuthServerMetadata(
+        issuer="https://accounts.google.com",
+        authorization_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
+        token_endpoint="https://oauth2.googleapis.com/token",  # noqa: S106
+        scopes_supported=["https://www.googleapis.com/auth/gmail.modify"],
+        **overrides,
+    )
+
+
+@pytest.mark.asyncio
+class TestAssess:
+    async def test_no_dcr_means_the_workspace_brings_an_oauth_app(self, monkeypatch):
+        async def discover(_self, _url):
+            return _google_as()
+
+        monkeypatch.setattr(MCPOAuthClientService, "discover_auth_server", discover)
+
+        capability = await MCPOAuthClientService().assess("https://gmailmcp.googleapis.com/mcp/v1")
+
+        assert capability.status == "oauth_app_required"
+        assert "accounts.google.com" in capability.detail
+        assert capability.metadata is not None
+        assert capability.advertises_oauth is True
+
+    async def test_dcr_means_connect_can_run_on_its_own(self, monkeypatch):
+        async def discover(_self, _url):
+            return _google_as(registration_endpoint="https://as.example.com/register")
+
+        monkeypatch.setattr(MCPOAuthClientService, "discover_auth_server", discover)
+
+        capability = await MCPOAuthClientService().assess("https://mcp.example.com/mcp")
+
+        assert capability.status == "ready"
+        assert capability.detail == ""
+
+    async def test_no_discovery_is_an_answer_not_an_error(self, monkeypatch):
+        async def discover(_self, _url):
+            raise MCPOAuthDiscoveryError("no protected-resource metadata")
+
+        monkeypatch.setattr(MCPOAuthClientService, "discover_auth_server", discover)
+
+        capability = await MCPOAuthClientService().assess("https://open.example.com/mcp")
+
+        assert capability.status == "unsupported"
+        assert capability.detail == "no protected-resource metadata"
+        assert capability.advertises_oauth is False
+
+    async def test_an_unreachable_server_is_unsupported_too(self, monkeypatch):
+        async def discover(_self, _url):
+            raise httpx.ConnectError("boom")
+
+        monkeypatch.setattr(MCPOAuthClientService, "discover_auth_server", discover)
+
+        capability = await MCPOAuthClientService().assess("https://down.example.com/mcp")
+
+        assert capability.status == "unsupported"
+        assert "boom" in capability.detail

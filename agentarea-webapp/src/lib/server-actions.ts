@@ -618,15 +618,25 @@ export async function listWorkspaceSecretsAction(): Promise<SecretResponse[]> {
   return zListSecretsV1SecretsGetResponse.parse(data);
 }
 
-export async function mcpOAuthPreflightAction(instanceId: string) {
+/**
+ * Ask how a connection can be authorized: an existing instance, or a catalog
+ * spec before any instance is created for it.
+ */
+export async function mcpOAuthPreflightAction(
+  target: { instance_id: string } | { server_id: string }
+) {
+  const [key, id] =
+    "instance_id" in target
+      ? (["instance_id", target.instance_id] as const)
+      : (["server_id", target.server_id] as const);
   // Validate UUID to prevent SSRF/path injection in downstream fetch URL
-  if (!isUUID(instanceId)) {
-    return { data: null, error: "Invalid instance ID" };
+  if (!isUUID(id)) {
+    return { data: null, error: "Invalid ID" };
   }
 
   const base = new URL(env.API_URL);
   base.pathname = "/v1/mcp-oauth/preflight";
-  base.search = new URLSearchParams({ instance_id: instanceId }).toString();
+  base.search = new URLSearchParams({ [key]: id }).toString();
 
   const res = await workspaceFetch(base.href, { method: "GET" });
   if (!res.ok) {

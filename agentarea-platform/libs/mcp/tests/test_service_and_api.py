@@ -120,6 +120,7 @@ def _make_service(
     svc.env_service.set_instance_environment = AsyncMock()
     svc.env_service.get_instance_environment = AsyncMock(return_value={})
     svc.db = MagicMock()
+    svc.era_verdict_store = None
 
     server_spec = MagicMock()
     server_spec.id = "test-spec-id"
@@ -776,9 +777,7 @@ class TestServiceDiscoverAndStoreTools:
         result = await svc.discover_and_store_tools(inst.id)
 
         assert result["tools"] == fresh_tools
-        svc.repository.session.refresh.assert_awaited_once_with(
-            inst, attribute_names=["tools"]
-        )
+        svc.repository.session.refresh.assert_awaited_once_with(inst, attribute_names=["tools"])
 
 
 # ---------------------------------------------------------------------------
@@ -901,9 +900,14 @@ class TestServiceExecuteTool:
             tool_args,
             httpx_client_factory=None,
             transport=None,
+            verdict_key=None,
+            verdict_store=None,
         ):
             captured["factory"] = httpx_client_factory
-            return MagicMock(content=[MagicMock(type="text", text="ok")], isError=False)
+            return MagicMock(
+                content=[MagicMock(type="text", text="ok")],
+                is_error=False,
+            )
 
         svc._call_tool_via_mcp = fake_call_tool_via_mcp
 

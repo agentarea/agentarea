@@ -13,16 +13,11 @@ import logging
 from uuid import UUID
 
 from agentarea_agents.domain.models import Agent
+from agentarea_api.api.v1.a2a_card import agent_card_json, build_agent_card, get_base_url
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config.database import get_read_db_session
-from agentarea_common.utils.types import (
-    AgentCapabilities,
-    AgentCard,
-    AgentInterface,
-    AgentProvider,
-    AgentSkill,
-)
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,73 +27,29 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def get_base_url(request: Request) -> str:
-    """Get base URL from request."""
-    return f"{request.url.scheme}://{request.url.netloc}"
-
-
 async def get_public_agent(agent_id: UUID, session: AsyncSession) -> Agent | None:
     """Read an agent for public discovery without requiring workspace auth."""
     result = await session.execute(select(Agent).where(Agent.id == agent_id))
     return result.scalar_one_or_none()
 
 
-async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> AgentCard:
-    """Create A2A AgentCard for specific agent."""
-    # Advertise A2UI extension if agent supports it
-    extensions = None
-    if getattr(agent, "a2ui_enabled", False):
-        extensions = [
-            {
-                "uri": "https://a2ui.org/a2a-extension/a2ui/v0.9",
-                "params": {
-                    "supportedCatalogIds": [
-                        "https://a2ui.org/specification/v0_9/basic_catalog.json"
-                    ],
-                },
-            }
-        ]
-
-    rpc_url = f"{base_url}/v1/agents/{agent_id}/a2a/rpc"
-    return AgentCard(
-        name=agent.name,
-        description=agent.description or f"AI agent {agent.name}",
-        supportedInterfaces=[
-            AgentInterface(url=rpc_url, protocolBinding="JSONRPC", protocolVersion="1.0")
-        ],
-        version="1.0.0",
-        documentationUrl=f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json",
-        capabilities=AgentCapabilities(
-            streaming=True,
-            pushNotifications=True,
-            extendedAgentCard=True,
-            extensions=extensions,
-        ),
-        provider=AgentProvider(organization="AgentArea", url=base_url),
-        defaultInputModes=["text/plain", "application/json"],
-        defaultOutputModes=["text/plain", "application/json"],
-        securitySchemes={
-            "bearer": {
-                "type": "http",
-                "scheme": "bearer",
-            }
-        },
-        security=[{"bearer": []}],
-        skills=[
-            AgentSkill(
-                id="text-processing",
-                name="Text Processing",
-                description=f"Process and respond to text messages using {agent.name}",
-                tags=["text", "chat"],
-                inputModes=["text/plain"],
-                outputModes=["text/plain"],
-            )
-        ],
+async def public_agent_card_response(
+    agent_id: UUID, request: Request, db_session: AsyncSession
+) -> JSONResponse:
+    """The agent's public A2A card as protocol JSON; 404 when the agent is unknown."""
+    agent = await get_public_agent(agent_id, db_session)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+    card = build_agent_card(
+        agent, base_url=get_base_url(request), agent_id=agent_id, extended=False
     )
+    logger.info(f"Agent well-known discovery: {agent.name} ({agent_id})")
+    return JSONResponse(agent_card_json(card))
 
 
 @router.get(
     "/.well-known/agent-card.json",
+    response_model=None,
     dependencies=[
         unrestricted("public agent discovery document, served unauthenticated by design")
     ],
@@ -107,7 +58,7 @@ async def get_agent_well_known_card(
     agent_id: UUID,
     request: Request,
     db_session: AsyncSession = Depends(get_read_db_session),
-) -> AgentCard:
+) -> JSONResponse:
     """Agent-specific well-known discovery endpoint.
 
     Returns the agent card for this specific agent, at
@@ -117,25 +68,7 @@ async def get_agent_well_known_card(
     Later, this can be proxied to subdomains:
     - agent1.domain.com/.well-known/agent-card.json -> /v1/agents/{id}/.well-known/agent-card.json
     """
-    try:
-        # Get the specific agent
-        agent = await get_public_agent(agent_id, db_session)
-        if not agent:
-            raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
-
-        base_url = get_base_url(request)
-
-        # Create agent card for this specific agent
-        agent_card = await create_agent_card_for_agent(agent, base_url, agent_id)
-
-        logger.info(f"Agent well-known discovery: {agent.name} ({agent_id})")
-        return agent_card
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in agent well-known discovery for {agent_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Agent discovery failed") from e
+    return await public_agent_card_response(agent_id, request, db_session)
 
 
 @router.get(

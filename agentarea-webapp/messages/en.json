@@ -176,6 +176,7 @@
     "build": "Build",
     "govern": "Govern",
     "connections": "Connections",
+    "apps": "Apps",
     "clients": "Harnesses",
     "explore": "Catalog",
     "providers": "Providers",
@@ -647,15 +648,12 @@
         "manualTab": "Manual",
         "authorization": "Authorization",
         "oauthDetected": "OAuth detected",
-        "authorizeOAuth": "Authorize with OAuth",
         "haveCredentials": "Have credentials? Enter manually instead",
         "openEndpoint": "This server does not require authorization.",
         "toolsFound": "{count} tools found",
         "encryptionNote": "Credentials are encrypted at rest and scoped to this workspace.",
         "connectionFailed": "Connection failed",
-        "createFailed": "Failed to create connection",
-        "oauthDiscoveryFailed": "OAuth discovery failed — this server may not support OAuth",
-        "oauthStartFailed": "Failed to start OAuth flow"
+        "createFailed": "Failed to create connection"
       }
     },
     "instanceForm": {
@@ -2259,5 +2257,23 @@
       "trigger": "Trigger",
       "agent": "Agent wallet"
     }
+  },
+  "AppsPage": {
+    "title": "Apps",
+    "description": "Interactive interfaces from your MCP connections.",
+    "connection": "Connection",
+    "open": "Open app",
+    "emptyTitle": "No MCP Apps available",
+    "emptyDescription": "Connect an MCP server that exposes an interactive app to see it here.",
+    "connectAction": "Browse connections",
+    "needsInput": "This app needs input",
+    "needsInputDescription": "This app requires values before it can be launched. Input forms are not available here yet.",
+    "loading": "Loading app…",
+    "configurationError": "Apps sandbox is not configured for this deployment.",
+    "resourceError": "The app resource could not be loaded.",
+    "toolError": "The app tool call failed.",
+    "iframeTitle": "MCP App",
+    "closePanel": "Close panel",
+    "openAppError": "Could not open this app."
   }
 }

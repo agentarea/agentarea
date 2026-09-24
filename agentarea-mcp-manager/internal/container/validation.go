@@ -100,9 +100,13 @@ func (v *ContainerValidator) ValidateContainerImage(ctx context.Context, imageNa
 	return result, nil
 }
 
-// imageExistsLocally checks if an image exists in the local registry
+// imageExistsLocally checks if an image exists in the local image store.
+// `image inspect` is the check both Docker and Podman accept; `image exists`
+// is Podman-only, and under Docker it failed for every image, so a locally
+// built image was reported missing and then refused because it cannot be
+// pulled.
 func (v *ContainerValidator) imageExistsLocally(ctx context.Context, imageName string) (bool, error) {
-	cmd := exec.CommandContext(ctx, v.runtime, "image", "exists", imageName)
+	cmd := exec.CommandContext(ctx, v.runtime, "image", "inspect", "--format", "{{.Id}}", imageName)
 	err := cmd.Run()
 	return err == nil, nil
 }

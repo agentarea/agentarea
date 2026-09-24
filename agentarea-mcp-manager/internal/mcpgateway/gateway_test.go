@@ -3,6 +3,7 @@ package mcpgateway
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -151,6 +152,42 @@ func TestGatewayAuthenticatesStartsAndObservesWholeRequest(t *testing.T) {
 	}
 }
 
+func TestGatewayUsageIncludesMCPRoutingHeaders(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer upstream.Close()
+
+	instanceID := "8ca9f331-9cc9-4a51-9933-27d7bb73860b"
+	instance := &models.MCPServerInstance{
+		InstanceID:  instanceID,
+		WorkspaceID: "ws-usage",
+	}
+	gateway := testGateway(t, &gatewayRepositoryStub{instance: instance}, &runtimeStub{endpoint: upstream.URL})
+	recorder := &usageRecorderStub{}
+	gateway.SetUsageRecorder(recorder)
+	request := httptest.NewRequest(http.MethodPost, "/mcp/"+instanceID+"/mcp", strings.NewReader("{}"))
+	request.Header.Set("X-AgentArea-Manager-Authorization", "Bearer "+testGatewaySecret)
+	request.Header.Set("Mcp-Method", "tools/call")
+	request.Header.Set("Mcp-Name", "get_weather")
+
+	gateway.ServeHTTP(httptest.NewRecorder(), request)
+
+	events := recorder.snapshot()
+	if len(events) != 2 {
+		t.Fatalf("usage events = %d, want started and completed", len(events))
+	}
+	for _, event := range events {
+		var data map[string]any
+		if err := json.Unmarshal(event.Data, &data); err != nil {
+			t.Fatal(err)
+		}
+		if data["mcp_method"] != "tools/call" || data["mcp_name"] != "get_weather" {
+			t.Fatalf("%s payload = %+v", event.Kind, data)
+		}
+	}
+}
+
 func TestGatewayRejectsMissingCredentialBeforeLifecycle(t *testing.T) {
 	repository := &gatewayRepositoryStub{}
 	runtime := &runtimeStub{}
@@ -201,6 +238,11 @@ func TestGatewayAnswersAConcurrentStartAsRetryable(t *testing.T) {
 	}
 	if recorder.Header().Get("Retry-After") == "" {
 		t.Error("no Retry-After: the caller is being asked to retry without being told when")
+	}
+	// Clients repeat a request only when the gateway itself says it was never
+	// forwarded; a 503 from the workload carries no such promise.
+	if recorder.Header().Get(StartingHeader) != "1" {
+		t.Errorf("%s = %q, want \"1\" on the gateway's own starting answer", StartingHeader, recorder.Header().Get(StartingHeader))
 	}
 	// The other caller owns this start; touching the runtime or the failure
 	// counter here would report a cold start that never happened.

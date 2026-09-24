@@ -9,7 +9,7 @@ related:
   - /guides/tasks/attach-files
   - /guides/tasks/cancel-and-retry
   - /concepts/execution/durable-execution
-last_updated: 2026-07-29
+last_updated: 2026-09-25
 ---
 
 Do this when you want an agent to run once against a prompt you supply. Do not
@@ -111,27 +111,34 @@ workflow is dispatched, with `status` set to `running`.
   </Step>
 
   <Step title="Option D — A2A JSON-RPC">
-    The endpoint is `POST /v1/agents/{agent_id}/a2a/rpc`. Method names are
-    PascalCase — `SendMessage`, not `message/send`. A slash-style method returns
-    "method not found".
+    The endpoint is `POST /v1/agents/{agent_id}/a2a/rpc`, speaking A2A v1.0.
+    Method names are PascalCase — `SendMessage`, not `message/send`. A
+    slash-style method returns "method not found", and a request without the
+    `A2A-Version: 1.0` header is refused with `-32009`.
 
     ```bash
     curl -X POST \
       "$AGENTAREA_URL/v1/agents/$AGENT_ID/a2a/rpc" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
+      -H "A2A-Version: 1.0" \
       -d '{
         "jsonrpc": "2.0",
         "id": "1",
         "method": "SendMessage",
         "params": {
           "message": {
-            "role": "USER",
+            "messageId": "msg-1",
+            "role": "ROLE_USER",
             "parts": [{"text": "Summarise the latest release notes."}]
           }
         }
       }'
     ```
+
+    The result is `{"task": {...}}`. Any A2A v1 client works too — for example
+    the official `a2a-sdk`, pointed at the agent card at
+    `/v1/agents/{agent_id}/.well-known/agent-card.json`.
 
     `SendMessage` returns as soon as the task is submitted. Use
     `SendStreamingMessage` for a live SSE stream, or `GetTask` to poll.

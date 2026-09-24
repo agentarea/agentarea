@@ -33,6 +33,9 @@ export const proxy = async (request: Request) => {
   // Authorization can never diverge into a "zombie logged-in" state.
   const nextReq = request as NextRequest;
   const pathname = nextReq.nextUrl.pathname;
+  if (pathname === "/app-sandbox") {
+    return NextResponse.next();
+  }
   if (isProtectedRoute(pathname)) {
     const alive = await hasLiveSession(nextReq.headers.get("cookie"), {
       orySdkUrl: env.ORY_SDK_URL,

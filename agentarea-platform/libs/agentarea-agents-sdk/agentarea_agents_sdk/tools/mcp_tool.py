@@ -6,6 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from .base_tool import BaseTool, ToolExecutionError
+from .mcp_app_ui import is_visible_to_model
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,9 @@ class MCPToolFactory:
                     # Expected fields: name, description, parameters/schema
                     name = t.get("name") if isinstance(t, dict) else None
                     if not name:
+                        continue
+                    if not is_visible_to_model(t):
+                        logger.debug("Skipping app-only MCP tool %s", name)
                         continue
                     description = t.get("description") or f"MCP tool: {name}"
                     # Support different schema keys

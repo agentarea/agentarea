@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_api.api.v1.a2a_auth import A2AAuthContext
-from agentarea_api.api.v1.agents_a2a import log_a2a_operation
+from agentarea_api.api.v1.a2a_request_handler import log_a2a_operation
 
 
 class TestA2ALogging:
@@ -141,8 +141,8 @@ class TestA2ALogging:
 
     def test_a2a_metadata_in_task_creation(self):
         """Test that A2A metadata is properly included in task creation."""
-        from agentarea_api.api.v1.agents_a2a import convert_a2a_message_to_task
-        from agentarea_common.utils.types import Message, MessageSendParams, TextPart
+        from a2a.types import Message, Part, Role
+        from agentarea_api.api.v1.a2a_mapping import build_agent_task
 
         # Setup
         agent_id = uuid4()
@@ -155,15 +155,17 @@ class TestA2ALogging:
             metadata={"user_agent": "test-client", "client_ip": "127.0.0.1"},
         )
 
-        message = Message(role="USER", parts=[TextPart(text="Test message")])
-        message_params = MessageSendParams(message=message)
+        message = Message(message_id="m-1", role=Role.ROLE_USER, parts=[Part(text="Test message")])
 
-        # Create task with A2A metadata
-        task = convert_a2a_message_to_task(
-            message_params=message_params,
+        # Create task with A2A metadata; client metadata cannot overwrite provenance
+        task = build_agent_task(
+            message=message,
+            metadata={"requires_human_approval": True, "source": "spoofed"},
             agent_id=agent_id,
-            auth_context=auth_context,
-            a2a_method="SendMessage",
+            auth=auth_context,
+            user_id="test-user",
+            workspace_id="test-workspace",
+            method="SendMessage",
             request_id="test-request-123",
         )
 
@@ -172,6 +174,7 @@ class TestA2ALogging:
         metadata = task.metadata
 
         # Check core A2A metadata
+        assert metadata["requires_human_approval"] is True
         assert metadata["source"] == "a2a"
         assert metadata["a2a_method"] == "SendMessage"
         assert metadata["a2a_request_id"] == "test-request-123"
@@ -251,9 +254,7 @@ class TestA2ALogging:
         }
 
         # Mock the event broker and repository
-        with patch(
-            "agentarea_execution.activities.dependencies.ActivityContext"
-        ) as mock_context:
+        with patch("agentarea_execution.activities.dependencies.ActivityContext") as mock_context:
             mock_context_instance = MagicMock()
             mock_context.return_value.__aenter__.return_value = mock_context_instance
             mock_context.return_value.__aexit__.return_value = None

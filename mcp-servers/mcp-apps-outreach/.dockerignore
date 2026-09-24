@@ -1,0 +1,4 @@
+*
+!dist/server.js
+!dist/app/*.html
+!data/outreach.json

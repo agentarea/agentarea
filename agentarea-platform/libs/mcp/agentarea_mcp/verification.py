@@ -200,63 +200,27 @@ def mcp_transport_candidates(
 
 
 async def _list_tools(
-    endpoint_url: str, headers: dict | None = None, transport: str | None = None
+    endpoint_url: str,
+    headers: dict | None = None,
+    transport: str | None = None,
+    *,
+    verdict_key: str | None = None,
+    verdict_store=None,
 ) -> list[dict]:
-    """Connect to running MCP server and list tools.
-
-    Transport selection is delegated to :func:`mcp_transport_candidates`; a
-    declared ``transport`` is honored exactly (no probing).
-
-    Raises on any connection or protocol error — caller handles retries.
-    """
-    from mcp import ClientSession
+    """Connect to an MCP server and list tools through the shared v2 client."""
+    from agentarea_mcp.application.mcp_client import connected_mcp_client
 
     custom_headers = dict(headers) if headers else None
-    timeout_seconds = float(_LIST_TOOLS_ATTEMPT_TIMEOUT)
-
-    streamable_urls, sse_url = mcp_transport_candidates(endpoint_url, transport)
-
-    result = None
-    last_streamable_err: BaseException | None = None
-    for streamable_url in streamable_urls:
-        try:
-            from mcp.client.streamable_http import streamablehttp_client
-
-            async with streamablehttp_client(
-                streamable_url,
-                timeout=timeout_seconds,
-                headers=custom_headers,
-            ) as (read_stream, write_stream, _):
-                async with ClientSession(read_stream, write_stream) as sess:
-                    await sess.initialize()
-                    result = await sess.list_tools()
-            break
-        except Exception as transport_err:
-            last_streamable_err = transport_err
-            logger.debug(
-                "Streamable HTTP failed for %s (%s), trying next transport",
-                streamable_url,
-                transport_err,
-            )
-
-    if result is None and sse_url is not None:
-        from mcp.client.sse import sse_client
-
-        async with sse_client(
-            sse_url,
-            timeout=timeout_seconds,
-            headers=custom_headers,
-        ) as (read_stream, write_stream):
-            async with ClientSession(read_stream, write_stream) as sess:
-                await sess.initialize()
-                result = await sess.list_tools()
-
-    if result is None:
-        # Declared streamable-http with no SSE fallback and it failed — surface
-        # the real transport error rather than a confusing None.
-        raise last_streamable_err or RuntimeError(f"No usable MCP transport for {endpoint_url}")
-
-    return [serialize_mcp_tool(t) for t in result.tools]
+    async with connected_mcp_client(
+        endpoint_url,
+        custom_headers,
+        float(_LIST_TOOLS_ATTEMPT_TIMEOUT),
+        transport=transport,
+        verdict_key=verdict_key,
+        verdict_store=verdict_store,
+    ) as client:
+        result = await client.list_tools()
+    return [serialize_mcp_tool(tool) for tool in result.tools]
 
 
 def _in_progress_is_stale(verification: dict) -> bool:
@@ -406,6 +370,16 @@ async def verify(
             remote_transport = "streamable-http"
         else:
             remote_transport = declared_remote_transport(runtime_instance.json_spec)
+        verdict_store = None
+        verdict_key = None
+        if _list_tools_fn is None:
+            from agentarea_mcp.application.mcp_client import (
+                mcp_verdict_key,
+                shared_era_verdict_store,
+            )
+
+            verdict_key = mcp_verdict_key(instance_id, runtime_instance.json_spec)
+            verdict_store = shared_era_verdict_store()
         deadline = asyncio.get_event_loop().time() + _SAFETY_DEADLINE
         last_error: BaseException | None = None
 
@@ -413,7 +387,13 @@ async def verify(
             try:
                 async with asyncio.timeout(_LIST_TOOLS_ATTEMPT_TIMEOUT):
                     if _list_tools_fn is None:
-                        tools = await _list_tools(endpoint_url, headers or None, remote_transport)
+                        tools = await _list_tools(
+                            endpoint_url,
+                            headers or None,
+                            remote_transport,
+                            verdict_key=verdict_key,
+                            verdict_store=verdict_store,
+                        )
                     else:
                         tools = await _list_tools_fn(endpoint_url, headers or None)
 

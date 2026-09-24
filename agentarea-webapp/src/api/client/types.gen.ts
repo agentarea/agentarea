@@ -171,97 +171,6 @@ export type AddSkillRequest = {
 };
 
 /**
- * AgentAuthentication
- */
-export type AgentAuthentication = {
-  /**
-   * Credentials
-   */
-  credentials?: string | null;
-  /**
-   * Schemes
-   */
-  schemes: Array<string>;
-};
-
-/**
- * AgentCapabilities
- */
-export type AgentCapabilities = {
-  /**
-   * Extendedagentcard
-   */
-  extendedAgentCard?: boolean;
-  /**
-   * Extensions
-   */
-  extensions?: Array<{
-    [key: string]: unknown;
-  }> | null;
-  /**
-   * Pushnotifications
-   */
-  pushNotifications?: boolean;
-  /**
-   * Streaming
-   */
-  streaming?: boolean;
-};
-
-/**
- * AgentCard
- */
-export type AgentCard = {
-  authentication?: AgentAuthentication | null;
-  capabilities: AgentCapabilities;
-  /**
-   * Defaultinputmodes
-   */
-  defaultInputModes?: Array<string>;
-  /**
-   * Defaultoutputmodes
-   */
-  defaultOutputModes?: Array<string>;
-  /**
-   * Description
-   */
-  description?: string | null;
-  /**
-   * Documentationurl
-   */
-  documentationUrl?: string | null;
-  /**
-   * Name
-   */
-  name: string;
-  provider?: AgentProvider | null;
-  /**
-   * Security
-   */
-  security?: Array<{
-    [key: string]: Array<string>;
-  }> | null;
-  /**
-   * Securityschemes
-   */
-  securitySchemes?: {
-    [key: string]: unknown;
-  } | null;
-  /**
-   * Skills
-   */
-  skills: Array<AgentSkill>;
-  /**
-   * Supportedinterfaces
-   */
-  supportedInterfaces: Array<AgentInterface>;
-  /**
-   * Version
-   */
-  version?: string;
-};
-
-/**
  * AgentCreate
  *
  * Payload for creating an agent.
@@ -337,30 +246,6 @@ export type AgentCreate = {
 };
 
 /**
- * AgentInterface
- *
- * A2A v1.0.0 AgentInterface — a (url, protocolBinding, protocolVersion) tuple.
- */
-export type AgentInterface = {
-  /**
-   * Protocolbinding
-   */
-  protocolBinding?: string;
-  /**
-   * Protocolversion
-   */
-  protocolVersion?: string;
-  /**
-   * Tenant
-   */
-  tenant?: string | null;
-  /**
-   * Url
-   */
-  url: string;
-};
-
-/**
  * AgentOverviewResponse
  */
 export type AgentOverviewResponse = {
@@ -396,20 +281,6 @@ export type AgentOverviewResponse = {
    * Upcoming
    */
   upcoming: Array<UpcomingItem>;
-};
-
-/**
- * AgentProvider
- */
-export type AgentProvider = {
-  /**
-   * Organization
-   */
-  organization: string;
-  /**
-   * Url
-   */
-  url?: string | null;
 };
 
 /**
@@ -524,46 +395,6 @@ export type AgentRow = {
    * Tasks Failed Today
    */
   tasks_failed_today: number;
-};
-
-/**
- * AgentSkill
- */
-export type AgentSkill = {
-  /**
-   * Description
-   */
-  description?: string | null;
-  /**
-   * Examples
-   */
-  examples?: Array<string> | null;
-  /**
-   * Id
-   */
-  id: string;
-  /**
-   * Inputmodes
-   */
-  inputModes?: Array<string> | null;
-  /**
-   * Name
-   */
-  name: string;
-  /**
-   * Outputmodes
-   */
-  outputModes?: Array<string> | null;
-  /**
-   * Securityrequirements
-   */
-  securityRequirements?: Array<{
-    [key: string]: Array<string>;
-  }> | null;
-  /**
-   * Tags
-   */
-  tags?: Array<string> | null;
 };
 
 /**
@@ -3096,7 +2927,7 @@ export type McpoAuthPreflightResponse = {
   /**
    * Instance Id
    */
-  instance_id: string;
+  instance_id?: string | null;
   /**
    * Issuer
    */
@@ -3105,6 +2936,10 @@ export type McpoAuthPreflightResponse = {
    * Scopes
    */
   scopes?: Array<string>;
+  /**
+   * Server Id
+   */
+  server_id?: string | null;
   /**
    * Status
    */
@@ -8785,11 +8620,8 @@ export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetRespons
     /**
      * Successful Response
      */
-    200: AgentCard;
+    200: unknown;
   };
-
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponse =
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses[keyof GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses];
 
 export type HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostData = {
   body?: never;
@@ -8846,11 +8678,8 @@ export type GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponses = {
   /**
    * Successful Response
    */
-  200: AgentCard;
+  200: unknown;
 };
-
-export type GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponse =
-  GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponses[keyof GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponses];
 
 export type InstallAgentV1AgentsAgentIdInstallPostData = {
   body?: never;
@@ -11400,13 +11229,19 @@ export type OauthCallbackV1McpOauthCallbackGetResponses = {
 export type OauthPreflightV1McpOauthPreflightGetData = {
   body?: never;
   path?: never;
-  query: {
+  query?: {
     /**
      * Instance Id
      *
      * MCP instance to inspect
      */
-    instance_id: string;
+    instance_id?: string | null;
+    /**
+     * Server Id
+     *
+     * Catalog spec to inspect before any instance exists
+     */
+    server_id?: string | null;
   };
   url: "/v1/mcp-oauth/preflight";
 };

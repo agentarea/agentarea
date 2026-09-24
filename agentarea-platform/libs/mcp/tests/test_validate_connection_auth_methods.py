@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from agentarea_mcp.application.oauth_client_service import OAuthCapability
 from agentarea_mcp.application.service import MCPServerInstanceService
 
 URL = "https://8.8.8.8/mcp"
@@ -40,26 +41,42 @@ def _client_returning(status_code: int, headers: dict[str, str] | None = None):
     return patch("agentarea_mcp.application.service.httpx.AsyncClient", return_value=client)
 
 
+def _oauth(status: str):
+    """Patch the one OAuth classifier the detector reads."""
+    oauth = MagicMock()
+    oauth.assess = AsyncMock(return_value=OAuthCapability(status=status))  # type: ignore[arg-type]
+    return patch("agentarea_mcp.application.service.MCPOAuthClientService", return_value=oauth)
+
+
 class TestDetectAuthMethods:
     @pytest.mark.asyncio
     async def test_open_endpoint(self):
-        with _client_returning(200):
+        with _client_returning(200), _oauth("unsupported"):
             assert await _service()._detect_auth_methods(URL) == ["none"]
 
     @pytest.mark.asyncio
     async def test_oauth_when_discovery_succeeds(self):
-        oauth = MagicMock()
-        oauth.discover_auth_server = AsyncMock(return_value=MagicMock())
         with (
             _client_returning(401, {"www-authenticate": 'Bearer resource_metadata="https://x"'}),
-            patch("agentarea_mcp.application.service.MCPOAuthClientService", return_value=oauth),
+            _oauth("ready"),
         ):
             methods = await _service()._detect_auth_methods(URL)
         assert methods == ["oauth", "credentials"]
 
     @pytest.mark.asyncio
+    async def test_oauth_is_read_from_metadata_not_from_the_get_status(self):
+        """Gmail's MCP is POST-only (405 on GET) and lists tools without a token,
+        yet publishes RFC 9728 metadata and rejects every tool call without one.
+        A status-code classifier called it open; the metadata says otherwise."""
+        with _client_returning(405), _oauth("oauth_app_required") as oauth_cls:
+            methods = await _service()._detect_auth_methods(URL)
+
+        assert methods == ["oauth", "credentials"]
+        oauth_cls.return_value.assess.assert_awaited_once_with(URL)
+
+    @pytest.mark.asyncio
     async def test_credentials_when_no_bearer_challenge(self):
-        with _client_returning(403):
+        with _client_returning(403), _oauth("unsupported"):
             assert await _service()._detect_auth_methods(URL) == ["credentials"]
 
     @pytest.mark.asyncio
@@ -68,7 +85,10 @@ class TestDetectAuthMethods:
         client.get = AsyncMock(side_effect=httpx.ConnectError("boom"))
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=None)
-        with patch("agentarea_mcp.application.service.httpx.AsyncClient", return_value=client):
+        with (
+            patch("agentarea_mcp.application.service.httpx.AsyncClient", return_value=client),
+            _oauth("unsupported"),
+        ):
             assert await _service()._detect_auth_methods(URL) == []
 
 
@@ -126,6 +146,65 @@ class TestValidateConnectionReportsAuthMethods:
         assert result["valid"] is False
         assert "auth_methods" not in result
         assert "Connection failed" in result["errors"][0]
+
+
+class TestOpenListingStillReportsOAuth:
+    """A server that lists tools without a token can still require one to call them."""
+
+    @pytest.mark.asyncio
+    async def test_successful_listing_carries_oauth_methods(self):
+        service = _service()
+        with (
+            patch.object(
+                service,
+                "_list_tools_via_mcp",
+                new=AsyncMock(return_value=MagicMock(tools=[])),
+            ),
+            patch.object(
+                service,
+                "_detect_auth_methods",
+                new=AsyncMock(return_value=["oauth", "credentials"]),
+            ),
+        ):
+            result = await service.validate_connection(url=URL, server_id=SERVER_ID)
+
+        assert result["valid"] is True
+        assert result["auth_methods"] == ["oauth", "credentials"]
+
+    @pytest.mark.asyncio
+    async def test_successful_listing_of_an_open_server_stays_plain(self):
+        service = _service()
+        with (
+            patch.object(
+                service,
+                "_list_tools_via_mcp",
+                new=AsyncMock(return_value=MagicMock(tools=[])),
+            ),
+            patch.object(service, "_detect_auth_methods", new=AsyncMock(return_value=["none"])),
+        ):
+            result = await service.validate_connection(url=URL, server_id=SERVER_ID)
+
+        assert result["valid"] is True
+        assert "auth_methods" not in result
+
+    @pytest.mark.asyncio
+    async def test_validating_entered_credentials_skips_detection(self):
+        """Once the user has typed a header in, the question is whether it works."""
+        service = _service()
+        with (
+            patch.object(
+                service,
+                "_list_tools_via_mcp",
+                new=AsyncMock(return_value=MagicMock(tools=[])),
+            ),
+            patch.object(service, "_detect_auth_methods", new=AsyncMock()) as detect,
+        ):
+            result = await service.validate_connection(
+                url=URL, headers={"Authorization": "Bearer t"}, server_id=SERVER_ID
+            )
+
+        assert result["valid"] is True
+        detect.assert_not_awaited()
 
 
 class TestDetectionIsScopedToCatalogSpecs:

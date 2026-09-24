@@ -14,3 +14,12 @@ export const KRATOS_WHOAMI_TIMEOUT_MS =
 
 export const SERVER_API_TIMEOUT_MS =
   Number(process.env.SERVER_API_TIMEOUT_MS) || 8000;
+
+/**
+ * MCP App resource reads and tool calls reach an MCP workload that serverless
+ * mode may have reclaimed. The first call after an idle period waits for it to
+ * start — an npx server downloads and boots its package — which takes far
+ * longer than a plain API read.
+ */
+export const MCP_APP_TIMEOUT_MS =
+  Number(process.env.MCP_APP_TIMEOUT_MS) || 120_000;

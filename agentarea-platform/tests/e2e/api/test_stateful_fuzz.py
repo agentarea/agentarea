@@ -18,6 +18,7 @@ import pytest
 import schemathesis
 from hypothesis import HealthCheck, settings
 from schemathesis.checks import not_a_server_error
+from schemathesis.core.errors import LoaderError
 
 from tests.e2e.api.conftest import (
     API_URL,
@@ -59,7 +60,7 @@ try:
             r"|^/v1/agents$"
         ),
     )
-except httpx.HTTPError as exc:
+except (httpx.HTTPError, LoaderError) as exc:
     pytest.skip(
         f"Live API stack unreachable ({type(exc).__name__}): {exc}. "
         "Start it with `make up-dev`, or set FUZZ_JWT to skip the Kratos bootstrap.",

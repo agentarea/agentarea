@@ -624,6 +624,10 @@ class TaskService(BaseTaskService):
             # Fallback for repositories that don't support workspace scoping
             return await self.list_tasks(agent_id=agent_id, limit=limit, offset=offset)
 
+    async def count_agent_tasks(self, agent_id: UUID) -> int:
+        """Count the workspace's tasks for an agent, matching ``get_agent_tasks``."""
+        return await self.task_repository.count(agent_id=agent_id)
+
     async def get_task_status(self, task_id: UUID) -> str | None:
         """Get task status."""
         task = await self.get_task(task_id)

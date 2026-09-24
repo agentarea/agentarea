@@ -4,7 +4,6 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.events.base_events import DomainEvent
-from agentarea_common.utils.types import Artifact
 
 
 @dataclass
@@ -25,7 +24,7 @@ class TaskUpdated(DomainEvent):
 
     task_id: str
     status: str
-    artifacts: list[Artifact] = field(default_factory=list)
+    artifacts: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -46,7 +45,7 @@ class TaskCompleted(DomainEvent):
 
     task_id: str
     result: dict[str, Any] = field(default_factory=dict)
-    artifacts: list[Artifact] = field(default_factory=list)
+    artifacts: list[dict[str, Any]] = field(default_factory=list)
     execution_time: float | None = None
 
 
@@ -84,7 +83,7 @@ class TaskArtifactAdded(DomainEvent):
     """Event emitted when an artifact is added to a task."""
 
     task_id: str
-    artifact: Artifact
+    artifact: dict[str, Any]
     artifact_type: str | None = None
 
 

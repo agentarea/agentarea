@@ -3,7 +3,6 @@
 import inspect
 
 import pytest
-
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
 
 
@@ -143,15 +142,15 @@ class _FakeCache:
         self.store: dict[str, list] = {}
         self.writes = 0
 
-    async def get(self, instance_id):
-        return self.store.get(instance_id)
+    async def get(self, cache_key):
+        return self.store.get(cache_key)
 
-    async def set(self, instance_id, tools):
-        self.store[instance_id] = tools
+    async def set(self, cache_key, tools, *, ttl_ms=None):
+        self.store[cache_key] = tools
         self.writes += 1
 
-    async def invalidate(self, instance_id):
-        self.store.pop(instance_id, None)
+    async def invalidate(self, cache_key):
+        self.store.pop(cache_key, None)
 
 
 def _counting_upstream(proxy, monkeypatch, delay=0.0):
@@ -169,19 +168,23 @@ def _counting_upstream(proxy, monkeypatch, delay=0.0):
     return calls
 
 
+@pytest.mark.asyncio
 async def test_a_miss_dials_upstream_and_fills_the_cache(monkeypatch):
+    member = AggregatedMember(mcp_instance_id="1", namespace_prefix="tg")
     cache = _FakeCache()
-    proxy = _proxy([AggregatedMember(mcp_instance_id="1", namespace_prefix="tg")], cache=cache)
+    proxy = _proxy([member], cache=cache)
     calls = _counting_upstream(proxy, monkeypatch)
 
     assert [t["name"] for t in await proxy.list_namespaced_tools()] == ["tg__t"]
     assert calls["n"] == 1
-    assert cache.store["1"]
+    assert cache.store[proxy._cache_key(member, "http://mcp-x:8000", {})]
 
 
+@pytest.mark.asyncio
 async def test_a_hit_does_not_dial_upstream(monkeypatch):
+    member = AggregatedMember(mcp_instance_id="1", namespace_prefix="tg")
     cache = _FakeCache()
-    proxy = _proxy([AggregatedMember(mcp_instance_id="1", namespace_prefix="tg")], cache=cache)
+    proxy = _proxy([member], cache=cache)
     calls = _counting_upstream(proxy, monkeypatch)
 
     await proxy.list_namespaced_tools()
@@ -195,8 +198,9 @@ async def test_concurrent_misses_dial_upstream_once(monkeypatch):
     # round trip and piles concurrent sessions onto the same upstream.
     import asyncio
 
+    member = AggregatedMember(mcp_instance_id="1", namespace_prefix="tg")
     cache = _FakeCache()
-    proxy = _proxy([AggregatedMember(mcp_instance_id="1", namespace_prefix="tg")], cache=cache)
+    proxy = _proxy([member], cache=cache)
     calls = _counting_upstream(proxy, monkeypatch, delay=0.05)
 
     await asyncio.gather(*(proxy.list_namespaced_tools() for _ in range(4)))
@@ -207,17 +211,18 @@ async def test_concurrent_misses_dial_upstream_once(monkeypatch):
 async def test_a_failed_tool_call_drops_the_cached_list(monkeypatch):
     # The upstream never tells us its tools changed; a call that fails is the
     # only signal we get that our cached view of it may be wrong.
-    cache = _FakeCache()
     member = AggregatedMember(mcp_instance_id="1", namespace_prefix="tg")
+    cache = _FakeCache()
     proxy = _proxy([member], cache=cache)
-    cache.store["1"] = [{"name": "t", "description": "", "inputSchema": {}}]
+    cache.store[proxy._cache_key(member, "http://mcp-x:8000", {})] = [
+        {"name": "t", "description": "", "inputSchema": {}}
+    ]
 
     async def failing_call(_member, _tool, _args):
         raise RuntimeError("Unknown tool: t")
 
     monkeypatch.setattr(proxy, "_call_member_tool", failing_call)
-
     with pytest.raises(RuntimeError):
         await proxy.call_namespaced_tool("tg__t", {})
 
-    assert "1" not in cache.store
+    assert proxy._cache_key(member, "http://mcp-x:8000", {}) not in cache.store

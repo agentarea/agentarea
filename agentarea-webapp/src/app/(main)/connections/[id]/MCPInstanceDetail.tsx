@@ -421,7 +421,7 @@ export default function MCPInstanceDetail({
                   </p>
                 )}
                 <OAuthConnectPanel
-                  instanceId={instance.id}
+                  target={{ kind: "instance", instanceId: instance.id }}
                   isUrlType={isUrlType}
                   onStateChange={setOauthState}
                 />

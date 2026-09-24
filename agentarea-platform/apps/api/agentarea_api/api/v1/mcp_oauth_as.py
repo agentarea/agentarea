@@ -24,6 +24,7 @@ import re
 from urllib.parse import urlparse
 
 import httpx
+from agentarea_agents_sdk.mcp_server.auth import WORKSPACE_REFERENCE_PATTERN
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config import get_settings
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -89,19 +90,22 @@ async def _hydra_discovery() -> dict | None:
 # to be reachable at the path-suffixed location as well as at the root one.
 _PROTECTED_RESOURCE_PATHS = ("mcp", "client-mcp")
 
-# ``/client-mcp/{client_id}`` is a protected resource in its own right: the
-# bundle a harness talks to is per client, and RFC 9728 §3.3 makes the client
-# verify that the document's ``resource`` matches the URL it is calling. Serving
-# only the bare ``client-mcp`` prefix fails that check.
-_CLIENT_MCP_INSTANCE = re.compile(
-    r"^client-mcp/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
-    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+_UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+
+# Per-URL resources. RFC 9728 §3.3 makes the client verify that the document's
+# ``resource`` matches the URL it is calling, so each of these has to be served
+# at its own path rather than answered by its prefix:
+#   mcp/w/{workspace}      the platform tools pinned to one workspace (slug or id)
+#   mcp/clients/{client}   the bundle a harness talks to
+#   client-mcp/{client}    that bundle's previous address
+_PER_URL_RESOURCE = re.compile(
+    rf"mcp/w/(?:{WORKSPACE_REFERENCE_PATTERN.pattern})|(?:mcp/clients|client-mcp)/{_UUID}"
 )
 
 
 def _is_protected_resource(resource_path: str) -> bool:
     return resource_path in _PROTECTED_RESOURCE_PATHS or bool(
-        _CLIENT_MCP_INSTANCE.match(resource_path)
+        _PER_URL_RESOURCE.fullmatch(resource_path)
     )
 
 

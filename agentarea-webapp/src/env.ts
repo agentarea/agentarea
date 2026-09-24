@@ -7,6 +7,8 @@ export const env = createEnv({
     ORY_SDK_URL: z.string().url(),
     ORY_BROWSER_URL: z.string().url().optional(),
     API_URL: z.string().url(),
+    APPS_SANDBOX_ORIGIN: z.string().url(),
+    WEBAPP_PUBLIC_ORIGIN: z.string().url(),
   },
   client: {},
   runtimeEnv: {
@@ -14,6 +16,8 @@ export const env = createEnv({
     ORY_SDK_URL: process.env.ORY_SDK_URL,
     ORY_BROWSER_URL: process.env.ORY_BROWSER_URL,
     API_URL: process.env.API_URL,
+    APPS_SANDBOX_ORIGIN: process.env.APPS_SANDBOX_ORIGIN,
+    WEBAPP_PUBLIC_ORIGIN: process.env.WEBAPP_PUBLIC_ORIGIN,
   },
   skipValidation: true,
 });
