@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def payment_idempotency_key(call_ref: str, sequence: int) -> str:
+    """Key one paid request of a tool call so every retry of the activity derives the same key.
+
+    ``sequence`` is the request's position among the 402 challenges handled during the
+    call. Hex keeps it inside x402's payment-identifier alphabet and length.
+    """
+    return hashlib.sha256(f"{call_ref}:{sequence}".encode()).hexdigest()
 
 
 async def handle_402_payment(
@@ -18,6 +28,7 @@ async def handle_402_payment(
     response_body: str | bytes,
     wallet_config: dict[str, Any],
     budget_remaining: float,
+    idempotency_key: str,
 ) -> dict[str, Any] | None:
     """Attempt to handle a 402 response by paying via x402 or MPP.
 
@@ -36,6 +47,7 @@ async def handle_402_payment(
             - x402_private_key: decrypted private key (if x402)
             - mpp_tempo_key: decrypted tempo key (if mpp)
         budget_remaining: Remaining service budget in USD
+        idempotency_key: Key of this paid request, forwarded to protocols that accept one
 
     Returns:
         Dict with payment result info, or None if payment not possible.
@@ -66,6 +78,7 @@ async def handle_402_payment(
             mpp_config=wallet_config.get("mpp_config"),
             x402_private_key=wallet_config.get("x402_private_key"),
             mpp_tempo_key=wallet_config.get("mpp_tempo_key"),
+            idempotency_key=idempotency_key,
         )
 
         result = await client.handle_402(

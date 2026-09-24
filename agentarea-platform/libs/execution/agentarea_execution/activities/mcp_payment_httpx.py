@@ -16,12 +16,15 @@ import httpx
 logger = logging.getLogger(__name__)
 
 PaymentCallback = Callable[[dict[str, Any]], Awaitable[None] | None]
+SettledPaymentLookup = Callable[[str], Awaitable[dict[str, Any] | None]]
 
 
 def create_payment_httpx_client_factory(
     *,
     wallet_config: dict[str, Any],
     budget_remaining: float,
+    next_idempotency_key: Callable[[], str],
+    find_settled_payment: SettledPaymentLookup,
     on_payment: PaymentCallback | None = None,
 ):
     """Create an MCP-compatible httpx client factory with payment retry support."""
@@ -36,6 +39,8 @@ def create_payment_httpx_client_factory(
             "transport": AgentAreaPaymentTransport(
                 wallet_config=wallet_config,
                 budget_remaining=budget_remaining,
+                next_idempotency_key=next_idempotency_key,
+                find_settled_payment=find_settled_payment,
                 on_payment=on_payment,
             ),
         }
@@ -60,11 +65,15 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         *,
         wallet_config: dict[str, Any],
         budget_remaining: float,
+        next_idempotency_key: Callable[[], str],
+        find_settled_payment: SettledPaymentLookup,
         on_payment: PaymentCallback | None = None,
         inner: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._wallet_config = wallet_config
         self._budget_remaining = float(budget_remaining)
+        self._next_idempotency_key = next_idempotency_key
+        self._find_settled_payment = find_settled_payment
         self._on_payment = on_payment
         self._inner = inner or httpx.AsyncHTTPTransport()
 
@@ -76,11 +85,16 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         await response.aread()
         headers = dict(response.headers)
         protocol = self._detect_protocol(headers)
+        if protocol is None:
+            return response
+        idempotency_key = self._next_idempotency_key()
+        settled = await self._find_settled_payment(idempotency_key)
+        if settled is not None:
+            await self._notify(settled)
+            return response
         if protocol == "x402":
-            return await self._handle_x402(request, response)
-        if protocol == "mpp":
-            return await self._handle_mpp(request, response)
-        return response
+            return await self._handle_x402(request, response, idempotency_key)
+        return await self._handle_mpp(request, response, idempotency_key)
 
     async def aclose(self) -> None:
         await self._inner.aclose()
@@ -96,7 +110,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         return None
 
     async def _handle_x402(
-        self, request: httpx.Request, response: httpx.Response
+        self, request: httpx.Request, response: httpx.Response, idempotency_key: str
     ) -> httpx.Response:
         if self._wallet_config.get("wallet_type") not in {"x402", "dual"}:
             return response
@@ -113,6 +127,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                 network=x402_config.get("network", "eip155:8453"),
                 facilitator_url=x402_config.get("facilitator_url", "https://x402.org/facilitator"),
                 signer_type=x402_config.get("signer_type", "evm"),
+                payment_identifier=idempotency_key,
             )._get_client()
             http_client_cls = import_module("x402.http").x402HTTPClient
             http_client = http_client_cls(client)
@@ -134,6 +149,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                         amount_usd=amount,
                         recipient=recipient,
                         request=request,
+                        idempotency_key=idempotency_key,
                         error=(
                             f"Payment ${amount:.4f} exceeds remaining budget "
                             f"${self._budget_remaining:.2f}"
@@ -160,6 +176,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                     amount_usd=amount,
                     recipient=recipient,
                     request=request,
+                    idempotency_key=idempotency_key,
                     response=retry_response,
                     tx_hash=self._x402_tx_hash(retry_response),
                     protocol_metadata={
@@ -181,12 +198,15 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                     amount_usd=0,
                     recipient="",
                     request=request,
+                    idempotency_key=idempotency_key,
                     error=str(e),
                 )
             )
             return response
 
-    async def _handle_mpp(self, request: httpx.Request, response: httpx.Response) -> httpx.Response:
+    async def _handle_mpp(
+        self, request: httpx.Request, response: httpx.Response, idempotency_key: str
+    ) -> httpx.Response:
         if self._wallet_config.get("wallet_type") not in {"mpp", "dual"}:
             return response
         tempo_key = self._wallet_config.get("mpp_tempo_key")
@@ -245,6 +265,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                         amount_usd=amount,
                         recipient=recipient,
                         request=request,
+                        idempotency_key=idempotency_key,
                         error=(
                             f"Payment ${amount:.4f} exceeds remaining budget "
                             f"${self._budget_remaining:.2f}"
@@ -269,6 +290,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                     amount_usd=amount,
                     recipient=recipient,
                     request=request,
+                    idempotency_key=idempotency_key,
                     response=retry_response,
                     tx_hash=self._mpp_tx_hash(retry_response),
                     protocol_metadata={"payment_method": "charge"},
@@ -285,6 +307,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                     amount_usd=0,
                     recipient="",
                     request=request,
+                    idempotency_key=idempotency_key,
                     error=str(e),
                 )
             )
@@ -391,6 +414,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         amount_usd: float,
         recipient: str,
         request: httpx.Request,
+        idempotency_key: str,
         response: httpx.Response | None = None,
         tx_hash: str | None = None,
         protocol_metadata: dict[str, Any] | None = None,
@@ -407,4 +431,5 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
             "protocol_metadata": protocol_metadata or {},
             "url": str(request.url),
             "method": request.method,
+            "idempotency_key": idempotency_key,
         }

@@ -131,6 +131,17 @@ class PaymentRecordRepository(WorkspaceScopedRepository[PaymentRecord]):
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
+    async def get_settled_by_idempotency_key(self, idempotency_key: str) -> PaymentRecord | None:
+        """Return the completed payment recorded under this key, if any."""
+        query = (
+            select(PaymentRecord)
+            .where(PaymentRecord.idempotency_key == idempotency_key)
+            .where(PaymentRecord.status == "completed")
+            .where(self._get_workspace_filter())
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def sum_by_execution(self, agent_id: str, execution_id: str) -> float:
         """Return total amount_usd spent by an agent within an execution.
 

@@ -296,6 +296,7 @@ async def exhaust_one_wallet(
             recipient="0x000seed",
             tool_name="seed-tool",
             tool_call_id=f"call-{uuid4().hex[:8]}",
+            idempotency_key=f"seed:{uuid4().hex}",
             status="completed",
         )
     )

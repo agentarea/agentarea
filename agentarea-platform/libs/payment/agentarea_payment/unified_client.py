@@ -21,6 +21,7 @@ class UnifiedPaymentClient:
         mpp_config: dict[str, Any] | None = None,
         x402_private_key: str | None = None,
         mpp_tempo_key: str | None = None,
+        idempotency_key: str | None = None,
     ):
         self._wallet_type = wallet_type
         self._x402_config = x402_config or {}
@@ -39,6 +40,7 @@ class UnifiedPaymentClient:
                     "facilitator_url", "https://x402.org/facilitator"
                 ),
                 signer_type=self._x402_config.get("signer_type", "evm"),
+                payment_identifier=idempotency_key,
             )
 
         # Initialize MPP client if configured

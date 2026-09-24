@@ -1,6 +1,7 @@
 """Tests for MCP payment-aware HTTPX factory."""
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -14,6 +15,8 @@ async def test_payment_httpx_factory_uses_agentarea_payment_transport():
     factory = create_payment_httpx_client_factory(
         wallet_config={"wallet_type": "dual"},
         budget_remaining=1.0,
+        next_idempotency_key=lambda: "key-1",
+        find_settled_payment=AsyncMock(return_value=None),
     )
 
     client = factory(headers={"X-Test": "1"}, timeout=httpx.Timeout(5.0))
@@ -95,6 +98,8 @@ async def test_x402_transport_retries_and_reports_payment(monkeypatch):
             "x402_config": {"network": "eip155:84532"},
         },
         budget_remaining=1.0,
+        next_idempotency_key=lambda: "key-1",
+        find_settled_payment=AsyncMock(return_value=None),
         on_payment=payments.append,
         inner=inner,
     )
@@ -117,6 +122,7 @@ async def test_x402_transport_retries_and_reports_payment(monkeypatch):
             "protocol_metadata": {"network": "eip155:84532", "scheme": "exact"},
             "url": "https://paid.example/mcp",
             "method": "GET",
+            "idempotency_key": "key-1",
         }
     ]
 
@@ -182,6 +188,8 @@ async def test_mpp_transport_retries_and_reports_payment(monkeypatch):
     transport = AgentAreaPaymentTransport(
         wallet_config={"wallet_type": "mpp", "mpp_tempo_key": "tempo-key"},
         budget_remaining=1.0,
+        next_idempotency_key=lambda: "key-1",
+        find_settled_payment=AsyncMock(return_value=None),
         on_payment=payments.append,
         inner=inner,
     )
@@ -196,3 +204,29 @@ async def test_mpp_transport_retries_and_reports_payment(monkeypatch):
     assert payments[0]["protocol"] == "mpp"
     assert payments[0]["amount_usd"] == 0.5
     assert payments[0]["recipient"] == "tempo-recipient"
+
+
+@pytest.mark.asyncio
+async def test_settled_request_is_not_paid_again():
+    settled = {"success": False, "already_settled": True, "idempotency_key": "key-1"}
+    find_settled = AsyncMock(return_value=settled)
+    inner = SequenceTransport(
+        [httpx.Response(402, headers={"PAYMENT-REQUIRED": "challenge"}, content=b"{}")]
+    )
+    payments = []
+    transport = AgentAreaPaymentTransport(
+        wallet_config={"wallet_type": "x402", "x402_private_key": "0xkey"},
+        budget_remaining=1.0,
+        next_idempotency_key=lambda: "key-1",
+        find_settled_payment=find_settled,
+        on_payment=payments.append,
+        inner=inner,
+    )
+
+    async with httpx.AsyncClient(transport=transport) as client:
+        response = await client.get("https://paid.example/mcp")
+
+    assert response.status_code == 402
+    assert len(inner.requests) == 1
+    find_settled.assert_awaited_once_with("key-1")
+    assert payments == [settled]
