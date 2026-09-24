@@ -72,15 +72,19 @@ class ProviderCostPricing:
         return provider_cost_usd
 
 
-def resolve_customer_pricing() -> CustomerPricing:
-    """Build the active pricing from the registry, falling back to the default.
+class CustomerPricingUnavailableError(RuntimeError):
+    """An installed customer_pricing extension could not be resolved."""
 
-    A failing factory must not take the process down with it: the registry is
-    populated by scanning installed packages, so a broken extension is a
-    deployment problem, and refusing to start turns "amounts are in USD" into
-    "nothing runs". It is logged at error because the fallback is not harmless —
-    amounts are then provider USD cost on a deployment whose customers pay in
-    something else — and that has to be visible, not discovered from an invoice.
+
+def resolve_customer_pricing() -> CustomerPricing:
+    """Build the active pricing from the registry.
+
+    With no extension registered, the OSS default applies. With one registered,
+    it must resolve or nothing is priced: a process that fell back to the USD
+    default here would write provider USD into the same totals and budgets that
+    its sibling pods are writing billing currency into, and nothing downstream
+    can tell the two apart. Raising instead makes the process fail at startup,
+    where the orchestrator restarts it and the failure is loud.
     """
     factory = ExtensionRegistry.get_factory(CUSTOMER_PRICING_EXTENSION)
     if factory is None:
@@ -89,19 +93,16 @@ def resolve_customer_pricing() -> CustomerPricing:
 
     try:
         pricing = factory()
-    except Exception:
-        logger.exception(
-            "customer_pricing extension failed to load; falling back to provider cost in USD"
-        )
-        return ProviderCostPricing()
+    except Exception as error:
+        raise CustomerPricingUnavailableError(
+            f"customer_pricing extension failed to load: {error}"
+        ) from error
 
     if not isinstance(pricing, CustomerPricing):
-        logger.error(
-            "customer_pricing extension returned %s, which is not a CustomerPricing; "
-            "falling back to provider cost in USD",
-            type(pricing).__name__,
+        raise CustomerPricingUnavailableError(
+            f"customer_pricing extension returned {type(pricing).__name__}, "
+            "which is not a CustomerPricing"
         )
-        return ProviderCostPricing()
 
     logger.info("Customer pricing from extension: %s", type(pricing).__name__)
     return pricing
@@ -119,7 +120,8 @@ def get_customer_pricing() -> CustomerPricing:
     which happen after startup has discovered extensions.
 
     Cached because it is resolved per call site on the hot path, and because
-    one process has to price every call the same way.
+    one process has to price every call the same way. A failed resolution raises
+    and is not cached, so the next use tries again.
     """
     return resolve_customer_pricing()
 
@@ -140,14 +142,15 @@ async def price_llm_call(
     converts again. Two paths converting differently, or one not converting at
     all, would sum RUB and USD into one total.
 
-    A pricing failure fails the call rather than falling back to the USD provider
+    A pricing failure — including an installed extension that cannot be
+    resolved — fails the call rather than falling back to the USD provider
     cost: that number would be read as billing currency by every budget and total
     after this, so an outage would mis-charge silently. The message marks it an
     accounting error, which the activity layer does not retry — a retry would pay
     the provider again for a call that was already answered.
     """
-    active = pricing or get_customer_pricing()
     try:
+        active = pricing or get_customer_pricing()
         return to_money(
             await active.price_llm_call(
                 model_instance_id=model_instance_id,
