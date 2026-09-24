@@ -36,7 +36,12 @@ from agentarea_common.config.app import get_app_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.utils.types import UtcDatetime
-from agentarea_secrets.catalog_service import SecretCatalogService, SecretNotFoundError
+from agentarea_secrets.catalog_service import (
+    ManagedSecretError,
+    SecretAccessDeniedError,
+    SecretCatalogService,
+    SecretNotFoundError,
+)
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
@@ -462,17 +467,19 @@ async def _resolve_channel_credentials(
             ) from exc
 
         try:
-            secret = await secret_catalog.get(secret_id)
+            secret = await secret_catalog.get_for_use(secret_id)
         except SecretNotFoundError as exc:
             raise HTTPException(
                 status_code=422,
                 detail="Selected channel credential secret is not available in this workspace.",
             ) from exc
-        if secret.owner_type is not None:
+        except ManagedSecretError as exc:
             raise HTTPException(
                 status_code=422,
                 detail="Selected channel credential must be a user-owned workspace secret.",
-            )
+            ) from exc
+        except SecretAccessDeniedError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         try:
             value = await secret_manager.get_secret(secret.secret_name)
         except Exception:

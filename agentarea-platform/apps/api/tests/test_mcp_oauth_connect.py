@@ -10,12 +10,16 @@ from agentarea_api.api.v1.mcp_oauth_connect import (
     _instance_detail_url,
     _resolve_instance_remote_url,
 )
+from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import register_singleton
 from agentarea_common.testing.flows import MainFlow
 from agentarea_mcp.application.oauth_client_service import (
     AuthServerMetadata,
     MCPOAuthDiscoveryError,
 )
+from agentarea_secrets.catalog_service import SecretCatalogService
 from fastapi import HTTPException
 
 
@@ -293,7 +297,7 @@ async def test_authorize_with_a_custom_oauth_app_keeps_the_secret_out_of_state(
         )
     )
     secret_catalog = SimpleNamespace(
-        get=AsyncMock(side_effect=[client_id_secret, client_secret_secret]),
+        get_for_use=AsyncMock(side_effect=[client_id_secret, client_secret_secret]),
         add_reference=AsyncMock(),
     )
     stored_state = AsyncMock()
@@ -363,6 +367,60 @@ async def test_authorize_with_a_custom_oauth_app_keeps_the_secret_out_of_state(
     assert "client_secret" not in state_payload
     assert state_payload["auth_config_id"] == str(auth_config_id)
     assert state_payload["instance_id"] == str(instance.id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
+async def test_authorize_refuses_another_members_secret_as_the_client_id(monkeypatch):
+    """The client ID is echoed back inside the authorize URL, so selecting
+    someone else's secret here would hand its plaintext to the caller."""
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+    instance = _patch_instance_lookup(monkeypatch)
+    _patch_discovery(monkeypatch, _google_metadata())
+    auth_create = AsyncMock()
+
+    class _AuthService:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        create = auth_create
+
+    member_b = UserContext(user_id="member-b", workspace_id="ws", admin_workspaces=[])
+    secret = SimpleNamespace(
+        id=uuid4(),
+        secret_name="member_a_stripe_key",  # noqa: S106  # pragma: allowlist secret
+        owner_type=None,
+        owner_id=None,
+        created_by="member-a",
+    )
+    session = AsyncMock()
+    session.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: secret)
+    workspace_manager = SimpleNamespace(get_secret=AsyncMock(return_value="sk-live-member-a"))
+    stored_state = AsyncMock()
+    monkeypatch.setattr(mcp_oauth_connect, "MCPAuthService", _AuthService)
+    monkeypatch.setattr(
+        mcp_oauth_connect, "get_real_secret_manager", lambda **_kwargs: workspace_manager
+    )
+    monkeypatch.setattr(mcp_oauth_connect, "_store_state", stored_state)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await mcp_oauth_connect.oauth_authorize(
+            MCPOAuthAuthorizeRequest(
+                instance_id=instance.id,
+                credential_mode="custom",
+                client_id_secret_id=secret.id,
+                client_secret="typed-secret",  # noqa: S106  # pragma: allowlist secret
+            ),
+            member_b,
+            AsyncMock(),
+            SecretCatalogService(session, member_b, workspace_manager),
+        )
+
+    assert exc_info.value.status_code == 403
+    assert "sk-live-member-a" not in str(exc_info.value.detail)
+    workspace_manager.get_secret.assert_not_awaited()
+    auth_create.assert_not_awaited()
+    stored_state.assert_not_awaited()
 
 
 @pytest.mark.asyncio
