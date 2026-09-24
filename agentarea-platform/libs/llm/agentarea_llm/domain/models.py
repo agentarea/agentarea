@@ -126,7 +126,12 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
 
     __tablename__ = "model_specs"
     __table_args__ = (
-        UniqueConstraint("provider_spec_id", "model_name", name="uq_model_specs_provider_model"),
+        UniqueConstraint(
+            "workspace_id",
+            "provider_spec_id",
+            "model_name",
+            name="uq_model_specs_workspace_provider_model",
+        ),
     )
 
     provider_spec_id: Mapped[str] = mapped_column(

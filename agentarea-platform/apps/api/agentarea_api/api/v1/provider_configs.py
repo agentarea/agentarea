@@ -6,6 +6,7 @@ from uuid import UUID
 
 from agentarea_api.api.deps.services import (  # type: ignore
     get_model_spec_repository,
+    get_model_spec_service,
     get_provider_service,
 )
 from agentarea_api.api.v1._provider_icons import build_provider_icon_url
@@ -14,6 +15,7 @@ from agentarea_common.auth.route_authz import requires_workspace_admin, unrestri
 from agentarea_common.config import get_settings
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.model_discovery_service import DiscoveredModel, ModelDiscoveryService
+from agentarea_llm.application.model_spec_service import ModelSpecService
 from agentarea_llm.application.provider_service import ProviderService  # type: ignore
 from agentarea_llm.domain.models import MANAGED_BY_PLATFORM, ProviderConfig  # type: ignore
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
@@ -364,17 +366,20 @@ def _require_any_usable_model(
 @router.post(
     "/discover-preview",
     response_model=DiscoverPreviewResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_workspace_admin()],
 )
 async def discover_models_preview(
     data: DiscoverPreviewRequest,
     user_context: UserContextDep,
     provider_service: ProviderService = Depends(get_provider_service),
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
+    model_spec_service: ModelSpecService = Depends(get_model_spec_service),
 ):
-    """Discover models from a provider API using the provided API key, without requiring a saved config."""
+    """Discover models from a provider API using the provided API key, without requiring a saved config.
+
+    Not a dry run: the discovered specs, prices included, are persisted so the
+    caller can pick models by id. That makes it a price write.
+    """
     provider_spec = await provider_service.get_provider_spec_by_key(data.provider_key)
     if not provider_spec:
         raise HTTPException(status_code=404, detail=f"Provider '{data.provider_key}' not found")
@@ -410,7 +415,7 @@ async def discover_models_preview(
         )
         is_new = existing is None
 
-        spec = await model_spec_repo.upsert_by_provider_and_model_kwargs(
+        spec = await model_spec_service.upsert(
             provider_spec_id=provider_spec_id,
             model_name=model.model_name,
             display_name=model.display_name or model.model_name,
@@ -554,15 +559,14 @@ class DiscoveryResponse(BaseModel):
 @router.post(
     "/{config_id}/discover",
     response_model=DiscoveryResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_workspace_admin()],
 )
 async def discover_models(
     config_id: UUID,
     user_context: UserContextDep,
     provider_service: ProviderService = Depends(get_provider_service),
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
+    model_spec_service: ModelSpecService = Depends(get_model_spec_service),
 ):
     """Discover available models from the provider API and sync to model specs."""
     config = await provider_service.get_provider_config(config_id)
@@ -619,7 +623,7 @@ async def discover_models(
         )
         is_new = existing is None
 
-        await model_spec_repo.upsert_by_provider_and_model_kwargs(
+        await model_spec_service.upsert(
             provider_spec_id=provider_spec_id,
             model_name=model.model_name,
             display_name=model.display_name or model.model_name,

@@ -394,19 +394,17 @@ def _upsert_model_spec_and_instance(
     ms_row = conn.execute(
         text(
             "SELECT id FROM model_specs "
-            "WHERE provider_spec_id = :spec_id AND model_name = :mn"
+            "WHERE provider_spec_id = :spec_id AND model_name = :mn "
+            "AND workspace_id = :ws"
         ),
-        {"spec_id": provider_spec_id, "mn": model_name},
+        {"spec_id": provider_spec_id, "mn": model_name, "ws": workspace_id},
     ).fetchone()
 
     if ms_row:
         model_spec_id = str(ms_row[0])
-        # Only our own rows are updated.
-        #
-        # uq_model_specs_provider_model is (provider_spec_id, model_name) without
-        # workspace_id, so this lookup can return a spec a tenant created first for
-        # the same model. Overwriting it would silently reprice their own usage and
-        # rename it in their own list. The instance below simply points at it.
+        # Only our own rows are updated, and the lookup only finds our own:
+        # uq_model_specs_workspace_provider_model is per workspace, so a tenant's
+        # spec for the same model is theirs to price, and ours is not theirs.
         #
         # COALESCE so a resource that omits a price leaves the existing one rather
         # than clearing it — unsetting a cost per token makes the model unrunnable,

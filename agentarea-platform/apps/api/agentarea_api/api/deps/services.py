@@ -21,6 +21,7 @@ from agentarea_common.config.database import get_db_session
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_llm.application.model_spec_service import ModelSpecService
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
@@ -398,6 +399,12 @@ async def get_model_spec_repository(
 ) -> ModelSpecRepository:
     """Get a ModelSpecRepository instance for the current request."""
     return ModelSpecRepository(db_session, user_context)
+
+
+async def get_model_spec_service(
+    model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
+) -> ModelSpecService:
+    return ModelSpecService(model_spec_repo)
 
 
 # Trigger Service dependencies
