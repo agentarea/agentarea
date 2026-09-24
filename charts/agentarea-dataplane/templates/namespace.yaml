@@ -3,5 +3,5 @@
 {{- if .Values.sandboxes.enabled }}
 {{- $s := .Values.sandboxes }}
 ---
-{{ include "dataplane.workloadNamespace" (dict "root" . "namespace" $s.namespace "create" $s.createNamespace "podSecurity" $s.podSecurity) }}
+{{ include "dataplane.workloadNamespace" (dict "root" . "namespace" $s.namespace "create" $s.createNamespace "podSecurity" $s.podSecurity "keep" true) }}
 {{- end }}

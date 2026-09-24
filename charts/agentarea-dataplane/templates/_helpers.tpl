@@ -73,6 +73,12 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
 {{- if and .Values.exposure.hostNetwork.enabled (eq (int $s.server.port) (int .Values.dataPlane.port)) -}}
 {{- fail "sandboxes.server.port equals dataPlane.port: on the host network both bind the same address" -}}
 {{- end -}}
+{{- if and .Values.exposure.hostNetwork.enabled $s.networkPolicy.enabled (not $s.networkPolicy.ingressFromCIDRs) -}}
+{{- fail "sandboxes.networkPolicy.ingressFromCIDRs is empty with exposure.hostNetwork: an ingress rule with no source admits every source; list the node address and the pod bridge gateway" -}}
+{{- end -}}
+{{- if has $s.namespace (list .Release.Namespace .Values.workloads.namespace "kube-system" "kube-public" "default") -}}
+{{- fail (printf "sandboxes.namespace %q is shared with other workloads: sandbox confinement and the server's Role would apply to them" $s.namespace) -}}
+{{- end -}}
 {{- $controller := index .Values "opensandbox-controller" -}}
 {{- if and $controller.enabled (ne $controller.namespaceOverride .Release.Namespace) -}}
 {{- fail (printf "opensandbox-controller.namespaceOverride is %q but the release namespace is %q: the controller would land in a namespace nothing creates" $controller.namespaceOverride .Release.Namespace) -}}
@@ -96,8 +102,14 @@ the value to fix. Called from the Deployment so every render passes through it.
 {{- if not .Values.workloads.runtimeClassName -}}
 {{- fail "workloads.runtimeClassName is empty: MCP servers are untrusted code and must run under a sandboxing RuntimeClass" -}}
 {{- end -}}
+{{- if has .Values.workloads.namespace (list .Release.Namespace "kube-system" "kube-public" "default") -}}
+{{- fail (printf "workloads.namespace %q is shared with other workloads: MCP server confinement and the data plane's Role would apply to them" .Values.workloads.namespace) -}}
+{{- end -}}
 {{- if and .Values.exposure.hostNetwork.enabled (not .Values.exposure.hostNetwork.bindAddress) -}}
 {{- fail "exposure.hostNetwork.bindAddress is empty: on the host network the API must bind one address, not every interface the node has" -}}
+{{- end -}}
+{{- if and .Values.exposure.hostNetwork.enabled .Values.workloads.networkPolicy.enabled (not .Values.workloads.networkPolicy.ingressFromCIDRs) -}}
+{{- fail "workloads.networkPolicy.ingressFromCIDRs is empty with exposure.hostNetwork: an ingress rule with no source admits every source; list the node address and the pod bridge gateway" -}}
 {{- end -}}
 {{- end -}}
 

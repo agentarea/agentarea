@@ -5,6 +5,7 @@ sandboxes. Each is called once per workload namespace with a dict:
   namespace   the workload namespace
   create      render the Namespace itself
   podSecurity {enforce, warn}
+  keep        leave the Namespace behind when the release drops it
 */}}
 {{- define "dataplane.workloadNamespace" -}}
 {{- if .create }}
@@ -12,6 +13,12 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: {{ .namespace }}
+  {{- if .keep }}
+  annotations:
+    # Workloads here may carry finalizers only their controller clears; deleting
+    # the namespace with the controller in one upgrade would leave it Terminating.
+    helm.sh/resource-policy: keep
+  {{- end }}
   labels:
     {{- include "dataplane.labels" .root | nindent 4 }}
     pod-security.kubernetes.io/enforce: {{ .podSecurity.enforce }}
