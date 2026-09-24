@@ -70,6 +70,7 @@ def service() -> WorkspaceInvitationService:
 def memberships():
     memberships = MagicMock()
     memberships.record = AsyncMock()
+    memberships.has_record = AsyncMock(return_value=True)
     return memberships
 
 
@@ -250,3 +251,33 @@ async def test_accepting_an_accepted_invitation_again_grants_nothing(
     assert response.status_code == 200, response.text
     assert response.json()["workspace_id"] == WORKSPACE_ID
     memberships.record.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_retry_after_the_graph_failed_grants_membership(service, make_client, memberships):
+    """The invitation is committed as accepted before the grant; a failed grant must be retryable."""
+    from agentarea_common.rebac.openfga_client import OpenFGAUnavailableError
+
+    recorded: set[tuple[str, str]] = set()
+    outcomes = [OpenFGAUnavailableError("down"), None]
+
+    async def record(*, workspace_id, user_id, invitation_id):
+        outcome = outcomes.pop(0)
+        if outcome is not None:
+            raise outcome
+        recorded.add((workspace_id, user_id))
+
+    async def has_record(workspace_id, user_id):
+        return (workspace_id, user_id) in recorded
+
+    memberships.record = AsyncMock(side_effect=record)
+    memberships.has_record = AsyncMock(side_effect=has_record)
+    token = await _invite(service)
+    client = make_client("misha@agentarea.ai")
+
+    first = await client.post("/v1/invitations/accept", json={"token": token})
+    retry = await client.post("/v1/invitations/accept", json={"token": token})
+
+    assert first.status_code == 503, first.text
+    assert retry.status_code == 200, retry.text
+    assert recorded == {(WORKSPACE_ID, INVITEE)}

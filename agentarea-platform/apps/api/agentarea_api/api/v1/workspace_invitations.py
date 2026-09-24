@@ -438,6 +438,12 @@ async def accept_invitation(
 
     An invitation sent to an email address is only accepted by the account
     signed in under that address. Idempotent for the same acceptor.
+
+    The invitation is committed as accepted before membership is granted, so
+    the acceptor's retry grants it while they hold no membership record: a
+    graph outage on the first call must not leave them permanently outside.
+    A removed member's replay is refused before this, because removal revokes
+    the invitation they joined through.
     """
     try:
         invitation, accepted_now = await service.accept(
@@ -446,7 +452,7 @@ async def accept_invitation(
     except INVITATION_ERRORS as exc:
         _raise_invitation_error(exc)
 
-    if accepted_now:
+    if accepted_now or not await memberships.has_record(invitation.workspace_id, user.user_id):
         try:
             await memberships.record(
                 workspace_id=invitation.workspace_id,

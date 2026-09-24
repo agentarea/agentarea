@@ -250,6 +250,10 @@ class WorkspaceMembershipService:
             )
         )
 
+    async def has_record(self, workspace_id: str, user_id: str) -> bool:
+        """Whether ``record`` completed: its row is written only after the grant."""
+        return await self.membership_repo.get(workspace_id, user_id) is not None
+
     async def list_members(self, workspace_id: str) -> list[WorkspaceMemberView]:
         member_ids = await list_workspace_member_ids(self.graph, workspace_id)
         rows = {
