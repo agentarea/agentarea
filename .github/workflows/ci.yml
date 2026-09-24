@@ -598,6 +598,47 @@ jobs:
         working-directory: agentarea-webapp
         run: pnpm run build
 
+  webapp-test:
+    runs-on: ubuntu-latest
+    needs: [changes, webapp-lint]
+    # Always run when: called as reusable workflow, on main, on release PRs, or if webapp changes detected
+    if: |
+      always() && !cancelled() && needs.webapp-lint.result == 'success' && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.webapp == 'true'
+      )
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 9
+
+      - name: Cache pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: 'agentarea-webapp/pnpm-lock.yaml'
+
+      - name: Install dependencies
+        working-directory: agentarea-webapp
+        run: pnpm install --frozen-lockfile
+
+      # vitest.config.ts scopes `include` to src/**, which already excludes the
+      # vendored packages/elements-react and packages/nextjs (upstream Ory code).
+      - name: Run unit tests
+        working-directory: agentarea-webapp
+        run: pnpm run test
+
   cli-test:
     runs-on: ubuntu-latest
     needs: changes
@@ -717,6 +758,42 @@ jobs:
       DOCKER_REGISTRY_MIRROR_PATH: ${{ secrets.DOCKER_REGISTRY_MIRROR_PATH }}
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
+
+  # Only the DB-gated tests/test_provider_config_sql_db.py runs today, inside
+  # migrations-gate (it needs the real migrated schema). These are the other
+  # two suites, which mock everything out and need no database.
+  operator-test:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: |
+      always() && !cancelled() && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.operator == 'true'
+      )
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        with:
+          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+          version: "0.8.22"
+          enable-cache: true
+          cache-dependency-glob: "agentarea-operator/pyproject.toml"
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        working-directory: agentarea-operator
+        run: uv sync --group dev
+
+      - name: Run tests
+        working-directory: agentarea-operator
+        run: uv run python -m pytest tests/ -v
 
   # Migration safety gate: a broken or conflicting migration is a top cause of
   # prod incidents. Prove migrations apply cleanly on a fresh DB, that there is
@@ -884,9 +961,11 @@ jobs:
       - migrations-gate
       - webapp-lint
       - webapp-build
+      - webapp-test
       - cli-test
       - mcp-manager-lint-test
       - events-lint-test
+      - operator-test
       - docker-api
       - docker-worker
       - docker-frontend
