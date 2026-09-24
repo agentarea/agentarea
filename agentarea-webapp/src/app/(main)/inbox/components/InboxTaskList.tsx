@@ -58,23 +58,22 @@ export function InboxTaskList({
             ? "Waiting for approval"
             : resultPreview(task);
 
+        // Same row as the Skills list: the shared InteractiveListRow with its
+        // own dividers, hover hatch and indicator, not a restyled card.
         return (
           <InteractiveListRow
             key={id}
             onClick={() => onSelect(id)}
             selected={isSelected}
-            className="mx-1 my-px items-start rounded-lg px-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:px-4 [&>span[aria-hidden]]:hidden"
-            dividerClassName=""
-            selectedClassName="bg-muted/75 dark:bg-zinc-800/80"
-            showIndicator={false}
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            contentClassName="gap-3"
             start={
-              <span className="relative h-9 w-9 shrink-0">
+              <span className="relative">
                 <AgentAvatar
                   agent={{
                     id: task.agent_id || task.agent_name || id,
                     name: task.agent_name || "Unknown agent",
                   }}
-                  size="md"
                 />
                 {pending && (
                   <button
@@ -101,14 +100,16 @@ export function InboxTaskList({
                 )}
               </span>
             }
+            endClassName="flex-col items-end gap-1"
             end={
-              <span className="flex shrink-0 flex-col items-end gap-1 text-right">
+              <>
                 <TaskStatus status={status} caption="never" />
-                <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+                <span className="whitespace-nowrap text-[11.5px] text-muted-foreground/80">
                   {formatRelative(task.created_at)}
                 </span>
-              </span>
+              </>
             }
+            hoverActionsClassName="bg-gradient-to-l from-muted/60 via-muted/60 to-transparent dark:from-zinc-800/50 dark:via-zinc-800/50"
             hoverActions={
               pending ? (
                 <>
@@ -132,19 +133,21 @@ export function InboxTaskList({
               ) : null
             }
           >
-            <div className="min-w-0 flex-1 pt-px">
-              <p className="truncate text-[13px] font-semibold leading-5">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-medium text-foreground">
                 {task.description || "Untitled task"}
               </p>
-              <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11.5px] text-muted-foreground">
-                <span className="truncate font-medium text-foreground/75">
+              <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground">
+                <span className="truncate text-foreground/75">
                   {task.agent_name || "Unknown agent"}
                 </span>
                 <span
                   aria-hidden
                   className="h-[3px] w-[3px] shrink-0 rounded-full bg-muted-foreground/50"
                 />
-                <span className="truncate">{actionPreview}</span>
+                <span className="truncate text-[11px] font-light text-muted-foreground/70">
+                  {actionPreview}
+                </span>
               </div>
             </div>
           </InteractiveListRow>

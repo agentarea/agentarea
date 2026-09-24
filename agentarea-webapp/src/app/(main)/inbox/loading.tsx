@@ -20,17 +20,20 @@ export default function InboxLoading() {
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
-            className="flex items-start gap-3 border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-700"
+            className="flex items-center gap-3 border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-700"
           >
-            <Skeleton className="mt-1 h-4 w-4 shrink-0 rounded-full" />
+            <Skeleton className="h-6 w-6 shrink-0 rounded-[7px]" />
             <div className="min-w-0 flex-1 space-y-1.5">
-              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-3.5 w-2/3" />
               <div className="flex items-center gap-2">
                 <Skeleton className="h-3 w-24" />
                 <Skeleton className="h-3 w-16" />
               </div>
             </div>
-            <Skeleton className="h-3 w-[62px] shrink-0" />
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <Skeleton className="h-3.5 w-3.5 rounded-full" />
+              <Skeleton className="h-3 w-[62px]" />
+            </div>
           </div>
         ))}
       </div>
