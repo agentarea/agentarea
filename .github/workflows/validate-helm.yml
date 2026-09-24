@@ -136,7 +136,7 @@ jobs:
         run: scripts/test-no-duplicate-env-helm.sh
 
       - name: Lint data-plane chart
-        run: helm lint charts/agentarea-dataplane --set dataPlane.id=ci --set dataPlane.auth.existingSecret=ci
+        run: helm lint charts/agentarea-dataplane --set dataPlane.id=ci --set dataPlane.auth.existingSecret=ci  # pragma: allowlist secret
 
       - name: Verify data-plane chart guards
         run: scripts/test-dataplane-helm.sh
