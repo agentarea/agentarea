@@ -95,6 +95,8 @@ from ..models import (
     MaterializeSkillFilesRequest,
     MaterializeSkillFilesResult,
     MCPToolRequest,
+    MonthlySpendCapRequest,
+    MonthlySpendCapResult,
     ReadOutputRequest,
     ReadOutputResult,
     RecallHistoryRequest,
@@ -141,6 +143,8 @@ GOVERNANCE_VERDICT_PATCH = "governance-verdict-to-hitl-v1"
 THINKING_ONLY_REPLY_PATCH = "thinking-only-reply-is-empty-v1"
 APPROVAL_RESPONSE_ONCE_PATCH = "approval-response-once-v1"
 DELEGATION_ON_OWN_QUEUE_PATCH = "delegation-on-own-task-queue-v1"
+MONTHLY_CAP_AT_START_PATCH = "monthly-cap-at-start"
+MONTHLY_CAP_FAILURE_REASON = "monthly_spend_cap_exceeded"
 LEGACY_DELEGATION_TASK_QUEUE = "agent-tasks"
 
 
@@ -253,6 +257,7 @@ class AgentExecutionWorkflow:
         self._continuation_message: str | None = None
         self._continuation_count = 0
         self._delegated_cost: Money = ZERO
+        self._monthly_cap_message: str | None = None
         # Old histories retain their recorded command sequence.
         self._interaction_contract_enabled = True
 
@@ -1696,6 +1701,7 @@ class AgentExecutionWorkflow:
         workflow.logger.info("Starting main execution loop")
 
         self.state.status = ExecutionStatus.EXECUTING
+        await self._check_monthly_spend_cap()
 
         while True:
             # Increment iteration count
@@ -1710,6 +1716,7 @@ class AgentExecutionWorkflow:
                 # Decrement since we didn't actually execute this iteration
                 self.state.current_iteration -= 1
                 if failure_reason and await self._await_continuation(failure_reason, reason):
+                    await self._check_monthly_spend_cap()
                     continue
                 self._record_unsuccessful_termination(failure_reason, reason)
                 break
@@ -1726,6 +1733,7 @@ class AgentExecutionWorkflow:
                     f"Budget exceeded (${self._budget.cost:.2f}/${self._budget.budget_limit:.2f})"
                 )
                 if await self._await_continuation("budget_exceeded", reason):
+                    await self._check_monthly_spend_cap()
                     continue
                 self._record_unsuccessful_termination("budget_exceeded", reason)
                 break
@@ -1749,6 +1757,7 @@ class AgentExecutionWorkflow:
                 # If we got a new message, continue the loop
                 if not self._awaiting_input:
                     self._reset_for_follow_up()
+                    await self._check_monthly_spend_cap()
                     continue
                 # Timed out — exit the loop
                 break
@@ -1760,6 +1769,7 @@ class AgentExecutionWorkflow:
                     f"Stopping execution after iteration {self.state.current_iteration}: {reason}"
                 )
                 if failure_reason and await self._await_continuation(failure_reason, reason):
+                    await self._check_monthly_spend_cap()
                     continue
                 self._record_unsuccessful_termination(failure_reason, reason)
                 break
@@ -1772,8 +1782,40 @@ class AgentExecutionWorkflow:
             # Check for pause
             if self._paused:
                 await workflow.wait_condition(lambda: not self._paused)
+                await self._check_monthly_spend_cap()
 
         return {"iterations_completed": self.state.current_iteration}
+
+    async def _check_monthly_spend_cap(self) -> None:
+        """Stop the run when the workspace's month-to-date spend reached its cap.
+
+        Submission already refused a capped workspace, but a scheduled, resumed
+        or continued run executes later, so current spend is read again here.
+        """
+        if not workflow.patched(MONTHLY_CAP_AT_START_PATCH):
+            return
+        budget = effective_policy_from_json(self.state.effective_policy).budget
+        cap = budget.monthly_spend_cap_usd if budget else None
+        if cap is None:
+            return
+        result: MonthlySpendCapResult = await workflow.execute_activity(
+            Activities.CHECK_MONTHLY_SPEND_CAP,
+            args=[
+                MonthlySpendCapRequest(
+                    workspace_id=self.state.workspace_id,
+                    cap_usd=cap,
+                    user_context_data=self.state.user_context_data,
+                )
+            ],
+            result_type=MonthlySpendCapResult,
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+        )
+        if result.exceeded:
+            self._monthly_cap_message = (
+                f"Workspace monthly spend cap reached "
+                f"(${result.month_to_date_usd:.2f}/${result.cap_usd:.2f})"
+            )
 
     def _is_delegation_child(self) -> bool:
         """True iff this workflow was spawned via parent's delegation tool.
@@ -1786,6 +1828,8 @@ class AgentExecutionWorkflow:
 
     async def _await_continuation(self, failure_reason: str, message: str) -> bool:
         """Idle durably until the user grants resources or the window expires."""
+        if failure_reason == MONTHLY_CAP_FAILURE_REASON:
+            return False
         if (
             self._interaction_contract_enabled
             and self.state.interaction_capabilities.channel == "none"
@@ -1932,6 +1976,9 @@ class AgentExecutionWorkflow:
         if self.state.success:
             workflow.logger.info("Goal achieved - terminating workflow")
             return False, None, "Goal achieved successfully"
+
+        if self._monthly_cap_message:
+            return False, MONTHLY_CAP_FAILURE_REASON, self._monthly_cap_message
 
         # Check maximum iterations
         if self.state.goal is None:
@@ -3373,6 +3420,8 @@ class AgentExecutionWorkflow:
         await workflow.wait_condition(lambda: escalation.resolved)
 
         approved = escalation.approved
+        if approved:
+            await self._check_monthly_spend_cap()
         one_response = workflow.patched(APPROVAL_RESPONSE_ONCE_PATCH)
         if one_response:
             self._events.add_event(
@@ -3452,6 +3501,9 @@ class AgentExecutionWorkflow:
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
                 retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
+        if approved and self._monthly_cap_message:
+            await self._deny_tool_call(tool_call, tool_name, self._monthly_cap_message)
+            return False
         return bool(approved)
 
     async def _gate_tool_call(self, tool_call: ToolCall) -> bool:
@@ -3468,6 +3520,10 @@ class AgentExecutionWorkflow:
             tool_args = json.loads(tool_call.function["arguments"])
         except (json.JSONDecodeError, KeyError):
             tool_args = {}
+
+        if self._monthly_cap_message:
+            await self._deny_tool_call(tool_call, tool_name, self._monthly_cap_message)
+            return False
 
         # The model may only call what it was offered: a name it invented, recalled
         # from earlier context, or read in a skill never reaches an executor.
