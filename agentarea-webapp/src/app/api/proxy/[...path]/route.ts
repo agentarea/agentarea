@@ -3,6 +3,7 @@ import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
 import { WORKSPACE_REFERENCE_HEADER } from "@/lib/workspaces";
+import { buildProxyResponseHeaders } from "./response-headers";
 
 /**
  * API Proxy Route Handler
@@ -68,13 +69,22 @@ async function handleRequest(
       body,
     });
 
-    // Non-JSON responses (file streaming, images, PDFs, etc.):
-    // forward body and Content-Type directly so the browser can render them.
+    // Non-JSON responses (file streaming, images, PDFs, etc.): forward the
+    // body and the safe response headers so the browser can render them.
+    // This proxy runs on the webapp's own origin, so Content-Disposition and
+    // nosniff are never left to the backend alone — see issue #483.
     const backendContentType = response.headers.get("content-type") || "";
     if (!backendContentType.includes("application/json")) {
       return new NextResponse(response.body, {
         status: response.status,
-        headers: { "content-type": backendContentType },
+        headers: buildProxyResponseHeaders({
+          contentType: response.headers.get("content-type"),
+          contentDisposition: response.headers.get("content-disposition"),
+          contentLength: response.headers.get("content-length"),
+          etag: response.headers.get("etag"),
+          cacheControl: response.headers.get("cache-control"),
+          lastModified: response.headers.get("last-modified"),
+        }),
       });
     }
 

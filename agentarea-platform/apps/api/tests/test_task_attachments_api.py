@@ -22,6 +22,7 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_api.api.v1 import agents_tasks, files
+from agentarea_common.artifacts import attachment_content_disposition
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_governance.domain.policies import PolicyValidationError
@@ -113,7 +114,7 @@ def _install_attachment_fakes(monkeypatch, *, heads, order, attached, deleted):
 
 
 def test_unicode_attachment_download_header_has_safe_fallback_and_utf8_name():
-    value = agents_tasks._attachment_content_disposition("отчёт 2026.xlsx")
+    value = attachment_content_disposition("отчёт 2026.xlsx", fallback="artifact.bin")
 
     assert value.startswith('attachment; filename="2026.xlsx"')
     assert "filename*=UTF-8''%D0%BE%D1%82%D1%87" in value

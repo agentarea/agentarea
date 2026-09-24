@@ -110,6 +110,29 @@ async def test_workspace_download_streams_regular_artifact_without_buffering(mon
 
 
 @pytest.mark.asyncio
+async def test_workspace_download_sets_nosniff_and_forces_attachment_for_html(
+    monkeypatch,
+) -> None:
+    """A workspace file with an HTML content type must never render inline.
+
+    An agent or a workspace member controls both the file's bytes and its
+    declared content type, so a stored HTML file must always download as an
+    attachment with nosniff set — see issue #483.
+    """
+    artifact_service = SimpleNamespace(
+        stream=AsyncMock(return_value=(_chunks(b"<script>evil()</script>"), "text/html", 24))
+    )
+    monkeypatch.setattr(files, "_get_artifact_service", lambda: artifact_service)
+
+    response = await files.stream_workspace_file(
+        "shared/page.html", SimpleNamespace(workspace_id="ws-1")
+    )
+
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["content-disposition"].startswith("attachment;")
+
+
+@pytest.mark.asyncio
 async def test_workspace_download_rejects_legacy_task_path(monkeypatch) -> None:
     artifact_service = SimpleNamespace(stream=AsyncMock())
     monkeypatch.setattr(files, "_get_artifact_service", lambda: artifact_service)
@@ -202,6 +225,76 @@ async def test_task_artifact_download_reads_explicit_artifact_from_manager(
     )
     assert response.headers["content-length"] == "13"
     manager_client.aclose.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_task_artifact_download_forces_attachment_for_html_even_when_manager_says_inline(
+    monkeypatch,
+) -> None:
+    """A malicious agent artifact must never render as HTML on our origin.
+
+    The sandbox manager is an upstream service; its own Content-Disposition
+    must never be trusted for content types a browser will execute — see
+    issue #483.
+    """
+    task_id = uuid4()
+    agent_id = uuid4()
+    task_service = SimpleNamespace(
+        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id))
+    )
+    manager_client = SimpleNamespace(aclose=AsyncMock())
+    manager_response = httpx.Response(
+        200,
+        content=b"<script>alert(document.cookie)</script>",
+        headers={
+            "content-type": "text/html",
+            "content-disposition": "inline",
+        },
+    )
+    manager_stream = AsyncMock(return_value=(manager_client, manager_response))
+    monkeypatch.setattr(agents_tasks, "_sandbox_manager_stream", manager_stream)
+    artifact_id = "art_0123456789abcdef0123456789abcdef"
+
+    response = await agents_tasks.download_task_artifact(
+        agent_id,
+        task_id,
+        artifact_id,
+        SimpleNamespace(workspace_id="ws-1"),
+        task_service,
+    )
+
+    assert response.headers["content-disposition"].startswith("attachment;")
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
+@pytest.mark.asyncio
+async def test_live_sandbox_file_read_sets_nosniff_and_keeps_content_disposition(
+    monkeypatch,
+) -> None:
+    task_id = uuid4()
+    agent_id = uuid4()
+    task_service = SimpleNamespace(
+        get_task=AsyncMock(return_value=SimpleNamespace(agent_id=agent_id))
+    )
+    manager_client = SimpleNamespace(aclose=AsyncMock())
+    manager_response = httpx.Response(
+        200,
+        content=b"hello",
+        headers={"content-length": "5"},
+    )
+    manager_stream = AsyncMock(return_value=(manager_client, manager_response))
+    monkeypatch.setattr(agents_tasks, "_sandbox_manager_stream", manager_stream)
+
+    response = await agents_tasks.read_task_sandbox_file(
+        agent_id,
+        task_id,
+        "reports/output.txt",
+        SimpleNamespace(workspace_id="ws-1"),
+        task_service,
+    )
+
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["content-disposition"].startswith("attachment;")
 
 
 @pytest.mark.asyncio
