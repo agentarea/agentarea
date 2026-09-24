@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 import packageJson from "./package.json";
 import path from "path";
+import { CONTENT_SECURITY_POLICY } from "./src/lib/csp";
 import "./src/env";
 
 const nextConfig: NextConfig = {
@@ -27,17 +28,14 @@ const nextConfig: NextConfig = {
     ];
   },
   async headers() {
-    // Content-Security-Policy is NOT set here: this webapp is configured at
-    // runtime (window.__ENV__, one built image for every environment), so an
-    // origin-bearing header baked in at build time would carry whatever the
-    // build machine's env happened to be, not the deployment's. It is set
-    // per-request in src/proxy.ts instead, from the same runtime env
-    // src/env.ts already reads. X-Content-Type-Options carries no such
-    // origin, so it is safe to bake in here.
+    // Baseline security headers — see issue #483.
     return [
       {
         source: "/(.*)",
-        headers: [{ key: "X-Content-Type-Options", value: "nosniff" }],
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Content-Security-Policy", value: CONTENT_SECURITY_POLICY },
+        ],
       },
     ];
   },
