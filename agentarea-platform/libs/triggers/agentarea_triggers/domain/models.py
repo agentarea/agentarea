@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+from agentarea_common.channel_origin import reject_channel_origin
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from .enums import ExecutionStatus, TriggerType, WebhookType
@@ -244,6 +245,8 @@ class TriggerCreate(BaseModel):
     webhook_config: dict[str, Any] | None = None
     event_types: list[str] = Field(default_factory=list)
 
+    _reject_channel_origin = field_validator("task_parameters")(reject_channel_origin)
+
     @model_validator(mode="after")
     def validate_trigger_type_fields(self) -> "TriggerCreate":
         """Validate that required fields are present for each trigger type."""
@@ -259,6 +262,8 @@ class TriggerCreate(BaseModel):
 
 class TriggerUpdate(BaseModel):
     """Model for updating an existing trigger."""
+
+    _reject_channel_origin = field_validator("task_parameters")(reject_channel_origin)
 
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, max_length=1000)

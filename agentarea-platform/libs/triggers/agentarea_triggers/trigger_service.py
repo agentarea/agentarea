@@ -15,6 +15,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.audit import audited
+from agentarea_common.channel_origin import CHANNEL_ORIGIN_PARAMETER
 from agentarea_common.events.base_events import EventEnvelope
 from agentarea_common.events.broker import EventBroker
 
@@ -1316,8 +1317,11 @@ class TriggerService:
         Returns:
             Task parameters
         """
-        # Start with trigger's task parameters
+        # Start with trigger's task parameters. A channel_origin stored there
+        # predates the create/update check; only _build_channel_origin below
+        # may name the trigger replies are sent through.
         params = dict(trigger.task_parameters)
+        params.pop(CHANNEL_ORIGIN_PARAMETER, None)
 
         # Add trigger metadata
         params.update(

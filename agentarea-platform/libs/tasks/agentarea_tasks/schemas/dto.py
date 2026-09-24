@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.channel_origin import reject_channel_origin
 from agentarea_governance.domain.policies import PolicyDocument
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -72,9 +73,9 @@ class RunCreate(BaseModel):
         default_factory=dict,
         description=(
             "Free-form task parameters. Recognized keys: "
-            "``channel_origin`` (routes follow-ups to an existing workflow), "
             "``model_override`` (per-run model id), and any agent-specific "
-            "context the workflow should see."
+            "context the workflow should see. ``channel_origin`` is reserved "
+            "for runs a channel trigger starts and is rejected."
         ),
     )
     execution: RunExecutionConfig | None = Field(
@@ -106,3 +107,4 @@ class RunCreate(BaseModel):
     )
 
     _validate_scheduled_at = field_validator("scheduled_at")(require_future_instant)
+    _reject_channel_origin = field_validator("parameters")(reject_channel_origin)

@@ -20,6 +20,11 @@ from agentarea_triggers.channels.exceptions import FatalError, RetryableError
 
 pytestmark = pytest.mark.asyncio
 
+
+async def _origin_allowed(_channel_config: dict) -> bool:
+    return True
+
+
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 
@@ -80,6 +85,7 @@ async def test_success_path_acks_and_delivers(broker, dedup, streams):
     adapter = FakeAdapter()
     emitter = ChannelDeliveryEmitter(broker, stream=streams["stream"])
     consumer = ChannelDeliveryConsumer(
+        origin_guard=_origin_allowed,
         broker=broker,
         dedup=dedup,
         adapter_resolver=lambda _t: adapter,
@@ -112,6 +118,7 @@ async def test_retryable_error_leaves_message_for_redelivery(broker, dedup, stre
 
     emitter = ChannelDeliveryEmitter(broker, stream=streams["stream"])
     consumer = ChannelDeliveryConsumer(
+        origin_guard=_origin_allowed,
         broker=broker,
         dedup=dedup,
         adapter_resolver=lambda _t: adapter,
@@ -142,6 +149,7 @@ async def test_fatal_error_dead_letters_and_acks(broker, dedup, streams):
 
     emitter = ChannelDeliveryEmitter(broker, stream=streams["stream"])
     consumer = ChannelDeliveryConsumer(
+        origin_guard=_origin_allowed,
         broker=broker,
         dedup=dedup,
         adapter_resolver=lambda _t: adapter,
@@ -164,6 +172,7 @@ async def test_fatal_error_dead_letters_and_acks(broker, dedup, streams):
 
     # DLQ now holds the entry — check via direct XLEN on the test DLQ stream.
     import redis.asyncio as redis
+
     client = redis.from_url(REDIS_URL, decode_responses=True)
     try:
         assert await client.xlen(streams["dlq"]) >= 1
@@ -175,6 +184,7 @@ async def test_duplicate_dedup_key_only_sends_once(broker, dedup, streams):
     adapter = FakeAdapter()
     emitter = ChannelDeliveryEmitter(broker, stream=streams["stream"])
     consumer = ChannelDeliveryConsumer(
+        origin_guard=_origin_allowed,
         broker=broker,
         dedup=dedup,
         adapter_resolver=lambda _t: adapter,
@@ -222,6 +232,7 @@ async def test_retryable_error_releases_dedup_key(broker, dedup, streams):
 
     emitter = ChannelDeliveryEmitter(broker, stream=streams["stream"])
     consumer = ChannelDeliveryConsumer(
+        origin_guard=_origin_allowed,
         broker=broker,
         dedup=dedup,
         adapter_resolver=lambda _t: adapter,
@@ -257,6 +268,7 @@ async def test_unknown_channel_type_releases_for_redelivery(broker, dedup, strea
     """
     emitter = ChannelDeliveryEmitter(broker, stream=streams["stream"])
     consumer = ChannelDeliveryConsumer(
+        origin_guard=_origin_allowed,
         broker=broker,
         dedup=dedup,
         adapter_resolver=lambda _t: None,  # always None → unknown channel
@@ -279,6 +291,7 @@ async def test_unknown_channel_type_releases_for_redelivery(broker, dedup, strea
 
     # DLQ stays empty — message is still pending for redelivery.
     import redis.asyncio as redis
+
     client = redis.from_url(REDIS_URL, decode_responses=True)
     try:
         assert await client.xlen(streams["dlq"]) == 0
@@ -352,6 +365,7 @@ async def test_delivery_count_cap_dead_letters_poison():
 
     stub = _StubBroker(poison)
     consumer = ChannelDeliveryConsumer(
+        origin_guard=_origin_allowed,
         broker=stub,
         dedup=_StubDedup(),
         adapter_resolver=_adapter_resolver,
