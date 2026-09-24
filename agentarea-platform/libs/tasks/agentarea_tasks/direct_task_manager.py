@@ -12,6 +12,8 @@ import logging
 from typing import Any, cast
 from uuid import UUID, uuid4
 
+from agentarea_common.constants import MANAGED_BY_PLATFORM
+from agentarea_common.extensions.customer_pricing import price_llm_call
 from agentarea_common.money import ZERO, serialize_money, to_money
 from agentarea_governance.domain.policies import effective_policy_from_json
 from agentarea_governance.domain.tool_calls import metered_tool_call_count
@@ -83,7 +85,13 @@ class DirectTaskManager(BaseTaskManager):
                 raise ValueError("effective runtime policy is incomplete")
 
             # Resolve agent config from DB — same chain as build_agent_config_activity
-            llm, instruction, skills_data = await self._resolve_agent(task)
+            (
+                llm,
+                instruction,
+                skills_data,
+                model_instance_id,
+                platform_funded,
+            ) = await self._resolve_agent(task)
 
             # Run agent loop
             from agentarea_agents_sdk.models.llm_model import LLMRequest
@@ -156,7 +164,13 @@ class DirectTaskManager(BaseTaskManager):
                 tokens_used += response.usage.total_tokens
                 if tokens_used > max_tokens_total:
                     raise RuntimeError(f"token budget exceeded: {tokens_used}/{max_tokens_total}")
-                cost_used += to_money(response.cost)
+                cost_used += await price_llm_call(
+                    model_instance_id=model_instance_id,
+                    platform_funded=platform_funded,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    provider_cost_usd=to_money(response.cost),
+                )
                 if cost_used > to_money(run_budget):
                     raise RuntimeError(f"run budget exceeded: ${cost_used}/${to_money(run_budget)}")
 
@@ -285,7 +299,8 @@ class DirectTaskManager(BaseTaskManager):
     async def _resolve_agent(self, task: AgentTask):
         """Resolve agent config from DB — same chain as build_agent_config_activity.
 
-        Returns (LLMModel, instruction, skills_data).
+        Returns (LLMModel, instruction, skills_data, model_instance_id, platform_funded);
+        the last two are what customer pricing needs to price each call.
         """
         from agentarea_agents_sdk.models.llm_model import LLMModel
         from agentarea_common.auth.context import UserContext
@@ -359,7 +374,8 @@ class DirectTaskManager(BaseTaskManager):
         )
 
         await session.close()
-        return llm, instruction, skills_data
+        platform_funded = model_instance.provider_config.managed_by == MANAGED_BY_PLATFORM
+        return llm, instruction, skills_data, str(model_instance.id), platform_funded
 
     # --- BaseTaskManager interface ---
 

@@ -8,13 +8,14 @@ related:
   - /concepts/governance/policy-engine
   - /concepts/governance/tool-authorization
   - /concepts/governance/audit
-last_updated: 2026-07-29
+last_updated: 2026-09-24
 ---
 
 An agent loop can spend money without bound. Each iteration makes an LLM call,
 each call costs, and a loop that fails to converge repeats until something stops
-it. AgentArea bounds three separate currencies: inference cost in USD, service
-cost in USD for payments an agent makes on your behalf, and tokens.
+it. AgentArea bounds three separate currencies: inference cost in the billing
+currency (see [Currency](#currency)), service cost in USD for payments an agent
+makes on your behalf, and tokens.
 
 Every ceiling is a policy dimension, resolved through the same
 [monotonic merge](/concepts/governance/policy-engine) as everything else, so a
@@ -51,6 +52,18 @@ skipped and logged rather than treated as zero.
 
 The default baseline for a new workspace is 500.00 USD per month, 50.00 USD per
 run, 20,000,000 total tokens and 100,000 tokens per call.
+
+### Currency
+
+Inference amounts — task costs, `monthly_spend_cap_usd` and `run_budget_usd` —
+are in the deployment's billing currency, despite the `_usd` suffix. The suffix
+is kept for API compatibility. The platform converts each LLM call once, when
+the call returns, through the `customer_pricing` extension, and every total and
+budget check after that reads the converted amount. Without the extension the
+billing currency is USD and the amount is the provider cost, so an OSS
+deployment behaves as the field names say. `GET /v1/pricing/currency` returns
+the code. Service spend is outside this: it stays in USD, because the payments
+it bounds are made in USD.
 
 ## Where each is enforced
 
