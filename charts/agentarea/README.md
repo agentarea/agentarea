@@ -84,6 +84,7 @@ The following table lists configurable parameters of the chart and their default
 | global.database.connectionTimeout | string | `"30s"` |  |
 | global.database.migrations.runAtStartup | bool | `true` |  |
 | global.database.migrations.initializationTimeout | string | `"300s"` |  |
+| global.database.migrations.command | list | `["agentarea-api","migrate"]` | Command the migration job runs in the API image, from /app/apps/api. An installed extension can name its own command, which must also run the core migrations. |
 | global.redis.host | string | `""` |  |
 | global.redis.port | int | `6379` |  |
 | global.redis.url | string | `""` |  |

@@ -89,6 +89,10 @@ global:
     migrations:
       runAtStartup: true
       initializationTimeout: 300s
+      # -- Command the migration job runs in the API image, from /app/apps/api.
+      # An installed extension can name its own command, which must also run the
+      # core migrations.
+      command: ["agentarea-api", "migrate"]
 
   # Redis client configuration consumed by AgentArea services.
   #
