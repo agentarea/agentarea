@@ -1654,11 +1654,10 @@ export const getInboxItemsV1InboxGet = <ThrowOnError extends boolean = false>(op
  * An invitation sent to an email address is only accepted by the account
  * signed in under that address. Idempotent for the same acceptor.
  *
- * The invitation is committed as accepted before membership is granted, so
- * the acceptor's retry grants it while they hold no membership record: a
- * graph outage on the first call must not leave them permanently outside.
- * A removed member's replay is refused before this, because removal revokes
- * the invitation they joined through.
+ * The invitation is committed as accepted before membership is granted, and
+ * it grants membership only until that grant is recorded: a graph outage on
+ * the first call is retried, a replay of a used link grants nothing, and a
+ * removal racing the accept wins.
  */
 export const acceptInvitationV1InvitationsAcceptPost = <ThrowOnError extends boolean = false>(options: Options<AcceptInvitationV1InvitationsAcceptPostData, ThrowOnError>): RequestResult<AcceptInvitationV1InvitationsAcceptPostResponses, AcceptInvitationV1InvitationsAcceptPostErrors, ThrowOnError> => (options.client ?? client).post<AcceptInvitationV1InvitationsAcceptPostResponses, AcceptInvitationV1InvitationsAcceptPostErrors, ThrowOnError>({
     security: [{

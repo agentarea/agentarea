@@ -18488,7 +18488,7 @@
     },
     "/v1/invitations/accept": {
       "post": {
-        "description": "Accept an invitation as the authenticated user.\n\nAn invitation sent to an email address is only accepted by the account\nsigned in under that address. Idempotent for the same acceptor.\n\nThe invitation is committed as accepted before membership is granted, so\nthe acceptor's retry grants it while they hold no membership record: a\ngraph outage on the first call must not leave them permanently outside.\nA removed member's replay is refused before this, because removal revokes\nthe invitation they joined through.",
+        "description": "Accept an invitation as the authenticated user.\n\nAn invitation sent to an email address is only accepted by the account\nsigned in under that address. Idempotent for the same acceptor.\n\nThe invitation is committed as accepted before membership is granted, and\nit grants membership only until that grant is recorded: a graph outage on\nthe first call is retried, a replay of a used link grants nothing, and a\nremoval racing the accept wins.",
         "operationId": "accept_invitation_v1_invitations_accept_post",
         "requestBody": {
           "content": {
