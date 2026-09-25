@@ -7,7 +7,7 @@ their accepted invitation stayed redeemable, so replaying the old link
 re-recorded membership.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -387,18 +387,30 @@ def _grant_member(graph) -> None:
     )
 
 
-async def test_a_graph_failure_during_removal_is_finished_by_the_relay(session_factory, graph):
+async def test_a_graph_outage_longer_than_the_retry_budget_still_ends_revoked(
+    session_factory, graph
+):
     _grant_member(graph)
     down = _graph_down(graph)
 
     async with session_factory() as session:
-        await _memberships(session, graph).remove(
+        revoked = await _memberships(session, graph).remove(
             workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER
         )
-    assert len(_member_tuples(graph)) == 2, "the graph was down; nothing was revoked yet"
+    assert revoked is False, "the graph was down; the removal must not claim to be done"
+    assert len(_member_tuples(graph)) == 2
 
-    relay = _relay(session_factory, graph)
-    assert await relay.process_batch() == 0
+    now = [datetime(2026, 9, 25, 12, 0)]
+    relay = OutboxRelay(
+        session_factory=session_factory,
+        event_broker=_NoBroadcast(),
+        max_attempts=10,
+        handlers={MEMBERSHIP_ENDED: membership_removal_handler(graph)},
+        clock=lambda: now[0],
+    )
+    for _ in range(25):
+        assert await relay.process_batch() == 0
+        now[0] += timedelta(minutes=6)
     down.clear()
     assert await relay.process_batch() == 1
 
@@ -407,11 +419,21 @@ async def test_a_graph_failure_during_removal_is_finished_by_the_relay(session_f
     assert await relay.process_batch() == 0, "the revocation is done once, not re-queued"
 
 
+async def test_a_removal_the_graph_accepted_reports_itself_done(session_factory, graph):
+    async with session_factory() as session:
+        revoked = await _memberships(session, graph).remove(
+            workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER
+        )
+
+    assert revoked is True
+    assert _member_tuples(graph) == []
+
+
 async def test_removal_is_idempotent(session_factory, graph):
     _grant_member(graph)
     for _ in range(2):
         async with session_factory() as session:
-            await _memberships(session, graph).remove(
+            assert await _memberships(session, graph).remove(
                 workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER
             )
     relay = _relay(session_factory, graph)

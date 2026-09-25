@@ -296,7 +296,13 @@ class WorkspaceMembershipService:
         workspace_id: str,
         target_user_id: str,
         actor_user_id: str,
-    ) -> None:
+    ) -> bool:
+        """End a membership. Returns whether the graph has let go of it yet.
+
+        ``False`` means the membership is over in the database and the graph
+        revocation is queued: the member keeps graph access until the outbox
+        relay completes it, so callers must not report them as gone.
+        """
         owner_user_id = await self.owner_user_id(workspace_id)
 
         if target_user_id == owner_user_id:
@@ -326,6 +332,8 @@ class WorkspaceMembershipService:
                 workspace_id,
                 exc_info=True,
             )
+            return False
+        return True
 
     async def finish_removal(self, workspace_id: str, user_id: str) -> None:
         """Take an ended membership's grants out of the graph. Idempotent.

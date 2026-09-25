@@ -38,3 +38,4 @@ class EventOutbox(BaseModel, WorkspaceScopedMixin):
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

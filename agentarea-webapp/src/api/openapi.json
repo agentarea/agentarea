@@ -5891,6 +5891,19 @@
         "title": "McpToolSettings",
         "type": "object"
       },
+      "MemberRemovalPendingResponse": {
+        "description": "The membership has ended; its graph access is still being revoked.",
+        "properties": {
+          "status": {
+            "const": "revocation_pending",
+            "default": "revocation_pending",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "MemberRemovalPendingResponse",
+        "type": "object"
+      },
       "MemberResponse": {
         "properties": {
           "display_name": {
@@ -28319,7 +28332,7 @@
     },
     "/v1/workspaces/{workspace_id}/members/{user_id}": {
       "delete": {
-        "description": "Remove a member from the workspace.\n\nThe owner keeps their access until ownership moves, and the last member\ncannot leave \u2014 either would strand the workspace and everything in it.",
+        "description": "Remove a member from the workspace.\n\nThe owner keeps their access until ownership moves, and the last member\ncannot leave \u2014 either would strand the workspace and everything in it.\n202 means the membership has ended but the member still has access until\nthe revocation, which is retried until it succeeds, reaches the graph.",
         "operationId": "remove_member_v1_workspaces__workspace_id__members__user_id__delete",
         "parameters": [
           {
@@ -28342,6 +28355,16 @@
           }
         ],
         "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberRemovalPendingResponse"
+                }
+              }
+            },
+            "description": "Membership ended; graph access is still being revoked"
+          },
           "204": {
             "description": "Successful Response"
           },

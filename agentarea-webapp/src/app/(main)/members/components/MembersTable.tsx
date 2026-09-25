@@ -131,13 +131,22 @@ function MemberRowActions({
       });
       return;
     }
-    if (isSelf) {
+    if (res.pending) {
+      toast(t("removalInProgress"), {
+        description: isSelf
+          ? t("leaveInProgressText")
+          : t("removalInProgressText", { member: label }),
+      });
+    } else if (isSelf) {
       toast.success(t("youLeft"));
-      router.push("/");
     } else {
       toast.success(t("memberRemoved"), {
         description: t("memberRemovedText", { member: label }),
       });
+    }
+    if (isSelf) {
+      router.push("/");
+    } else {
       startTransition(() => router.refresh());
     }
   };

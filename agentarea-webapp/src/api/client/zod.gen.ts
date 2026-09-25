@@ -1295,6 +1295,18 @@ export const zMcpToolConfigOutput = z.object({
 });
 
 /**
+ * MemberRemovalPendingResponse
+ *
+ * The membership has ended; its graph access is still being revoked.
+ */
+export const zMemberRemovalPendingResponse = z.object({
+  status: z
+    .literal("revocation_pending")
+    .optional()
+    .default("revocation_pending"),
+});
+
+/**
  * MemberResponse
  */
 export const zMemberResponse = z.object({
@@ -6010,11 +6022,8 @@ export const zRemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeletePath =
     user_id: z.string(),
   });
 
-/**
- * Successful Response
- */
 export const zRemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponse =
-  z.void();
+  z.union([zMemberRemovalPendingResponse, z.void()]);
 
 /**
  * Response Webhook Health Check Webhooks Health Get

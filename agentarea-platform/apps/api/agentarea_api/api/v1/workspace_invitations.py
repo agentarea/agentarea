@@ -7,7 +7,7 @@ invitation state.
 
 import logging
 from collections.abc import AsyncGenerator
-from typing import Annotated, NoReturn
+from typing import Annotated, Literal, NoReturn
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from agentarea_common.auth.dependencies import UserContextDep
@@ -54,6 +54,7 @@ from agentarea_common.workspaces.memberships import (
     list_workspace_member_ids,
 )
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -154,6 +155,12 @@ class AcceptInvitationResponse(BaseModel):
     workspace_id: str
     user_id: str
     invitation_id: UUID
+
+
+class MemberRemovalPendingResponse(BaseModel):
+    """The membership has ended; its graph access is still being revoked."""
+
+    status: Literal["revocation_pending"] = "revocation_pending"
 
 
 class MemberResponse(BaseModel):
@@ -499,6 +506,12 @@ async def list_members(
 @router.delete(
     "/workspaces/{workspace_id}/members/{user_id}",
     status_code=204,
+    responses={
+        202: {
+            "model": MemberRemovalPendingResponse,
+            "description": "Membership ended; graph access is still being revoked",
+        }
+    },
     dependencies=[enforced_in_handler("owner-only, enforced by MembershipService.remove")],
 )
 async def remove_member(
@@ -511,10 +524,12 @@ async def remove_member(
 
     The owner keeps their access until ownership moves, and the last member
     cannot leave — either would strand the workspace and everything in it.
+    202 means the membership has ended but the member still has access until
+    the revocation, which is retried until it succeeds, reaches the graph.
     """
     _ensure_workspace_access(user, workspace_id)
     try:
-        await memberships.remove(
+        revoked = await memberships.remove(
             workspace_id=workspace_id,
             target_user_id=user_id,
             actor_user_id=user.user_id,
@@ -526,3 +541,5 @@ async def remove_member(
     except GRAPH_ERRORS as exc:
         logger.exception("Failed to revoke workspace membership")
         _raise_membership_graph_unavailable(exc)
+    if not revoked:
+        return JSONResponse(status_code=202, content=MemberRemovalPendingResponse().model_dump())

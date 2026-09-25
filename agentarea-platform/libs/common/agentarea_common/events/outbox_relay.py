@@ -15,8 +15,12 @@ table for inspection; they are never silently dropped.
 
 A row whose type has a handler is performed here instead of published: an
 effect outside Postgres that must follow a committed change (taking a removed
-member's access out of the graph) gets the same at-least-once delivery, retries
-and give-up logging as an event. Handlers therefore have to be idempotent.
+member's access out of the graph) gets the same at-least-once delivery as an
+event, so handlers have to be idempotent. Unlike an event it never gives up: an
+outage longer than ``max_attempts`` would otherwise leave the effect undone for
+good. It retries with exponential backoff instead, capped at
+``retry_cap_seconds``, and is reported at ERROR once, when it has failed
+``alert_after_attempts`` times.
 """
 
 from __future__ import annotations
@@ -24,12 +28,14 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Mapping
+from datetime import UTC, datetime, timedelta
 
 from agentarea_common.auth.context import ServicePrincipal
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .base_events import EventEnvelope
 from .broker import EventBroker
+from .outbox_orm import EventOutbox
 from .outbox_repository import OutboxRepository
 
 logger = logging.getLogger(__name__)
@@ -44,6 +50,10 @@ _RELAY_CONTEXT = ServicePrincipal(
 OutboxHandler = Callable[[AsyncSession, EventEnvelope], Awaitable[None]]
 
 
+def _utcnow() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
 class OutboxRelay:
     """Publishes outbox rows to the broker on a bounded interval."""
 
@@ -56,10 +66,18 @@ class OutboxRelay:
         batch_size: int = 100,
         max_attempts: int = 10,
         handlers: Mapping[str, OutboxHandler] | None = None,
+        retry_base_seconds: float = 1.0,
+        retry_cap_seconds: float = 300.0,
+        alert_after_attempts: int = 20,
+        clock: Callable[[], datetime] = _utcnow,
     ) -> None:
         self._session_factory = session_factory
         self._event_broker = event_broker
         self._handlers = dict(handlers or {})
+        self._retry_base = retry_base_seconds
+        self._retry_cap = retry_cap_seconds
+        self._alert_after = alert_after_attempts
+        self._clock = clock
         self._interval = interval_seconds
         self._batch_size = batch_size
         self._max_attempts = max_attempts
@@ -112,18 +130,25 @@ class OutboxRelay:
         published = 0
         async with self._session_factory() as session:
             repo = OutboxRepository(session, _RELAY_CONTEXT)
+            now = self._clock()
             rows = await repo.fetch_unpublished(
-                limit=self._batch_size, max_attempts=self._max_attempts
+                limit=self._batch_size,
+                max_attempts=self._max_attempts,
+                now=now,
+                unbounded_types=self._handlers.keys(),
             )
             for row in rows:
+                handler = self._handlers.get(row.event_type)
                 try:
                     envelope = EventEnvelope.from_dict(row.payload)
-                    handler = self._handlers.get(row.event_type)
                     if handler is None:
                         await self._event_broker.publish(envelope)
                     else:
                         await handler(session, envelope)
                 except Exception as exc:
+                    if handler is not None:
+                        await self._retry_later(repo, row, exc, now)
+                        continue
                     logger.error(
                         "OutboxRelay failed to publish event %s (type=%s): %s",
                         row.event_id,
@@ -146,3 +171,29 @@ class OutboxRelay:
                     published += 1
             await session.commit()
         return published
+
+    async def _retry_later(
+        self, repo: OutboxRepository, row: EventOutbox, exc: Exception, now: datetime
+    ) -> None:
+        attempts = row.attempts + 1
+        delay = min(self._retry_base * 2 ** min(attempts - 1, 30), self._retry_cap)
+        await repo.mark_failed(row.id, str(exc), retry_at=now + timedelta(seconds=delay))
+        if attempts == self._alert_after:
+            logger.error(
+                "OutboxRelay still failing %s (type=%s) after %d attempts; "
+                "retrying every %ds until it succeeds",
+                row.event_id,
+                row.event_type,
+                attempts,
+                self._retry_cap,
+                exc_info=exc,
+            )
+            return
+        logger.warning(
+            "OutboxRelay attempt %d of %s (type=%s) failed; retrying in %ds",
+            attempts,
+            row.event_id,
+            row.event_type,
+            delay,
+            exc_info=exc,
+        )
