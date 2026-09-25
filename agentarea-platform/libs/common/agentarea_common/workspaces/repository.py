@@ -12,6 +12,7 @@ Both repositories accept ``UserContext`` per project convention but
 use it only for explicit policy checks inside the calling service.
 """
 
+from collections.abc import Collection
 from datetime import datetime
 from uuid import UUID
 
@@ -136,13 +137,17 @@ class WorkspaceMembershipRepository:
         )
         return list(result.scalars().all())
 
-    async def end(self, workspace_id: str, user_id: str, *, ended_by: str) -> None:
+    async def end(
+        self, workspace_id: str, user_id: str, *, ended_by: str, emails: Collection[str]
+    ) -> None:
         """Drop the row and every credential that could bring the user back.
 
         The invitation they joined through is revoked so replaying it is refused,
-        and their API keys for the workspace are deactivated. ``api_keys`` is
-        owned by the MCP domain, which depends on this library, so it is named
-        as a bare table rather than imported.
+        and so is every pending invitation addressed to them: to ``emails`` or
+        to an address they already joined through. Open links name nobody and
+        stay open. Their API keys for the workspace are deactivated.
+        ``api_keys`` is owned by the MCP domain, which depends on this library,
+        so it is named as a bare table rather than imported.
 
         The graph revocation is queued in the same transaction, so a removal
         that commits always reaches the graph, whatever happens to the caller's
@@ -153,6 +158,26 @@ class WorkspaceMembershipRepository:
             .where(WorkspaceMembership.workspace_id == workspace_id)
             .where(WorkspaceMembership.user_id == user_id)
         )
+        joined_through = (
+            await self.session.execute(
+                select(WorkspaceInvitation.email)
+                .where(WorkspaceInvitation.workspace_id == workspace_id)
+                .where(WorkspaceInvitation.accepted_by_user_id == user_id)
+                .where(WorkspaceInvitation.email.is_not(None))
+            )
+        ).scalars()
+        addresses = {_address(email) for email in (*emails, *joined_through) if email}
+        pending = (
+            await self.session.execute(
+                select(WorkspaceInvitation)
+                .where(WorkspaceInvitation.workspace_id == workspace_id)
+                .where(WorkspaceInvitation.status == INVITATION_STATUS_PENDING)
+                .where(WorkspaceInvitation.email.is_not(None))
+            )
+        ).scalars()
+        for invitation in pending:
+            if invitation.email is not None and _address(invitation.email) in addresses:
+                invitation.status = INVITATION_STATUS_REVOKED
         await self.session.execute(
             update(WorkspaceInvitation)
             .where(WorkspaceInvitation.workspace_id == workspace_id)
@@ -179,6 +204,10 @@ class WorkspaceMembershipRepository:
             aggregate_type="workspace_membership",
         )
         await self.session.commit()
+
+
+def _address(email: str) -> str:
+    return email.strip().casefold()
 
 
 class WorkspaceRepository:

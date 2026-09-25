@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.authorization import assert_workspace_admin_of
 from ..auth.context import UserContext
+from ..auth.identity_directory import IdentityDirectory
 from ..events.base_events import EventEnvelope
 from ..events.outbox_relay import OutboxHandler
 from ..rebac import KetoError, OpenFGAError
@@ -228,10 +229,14 @@ class WorkspaceMembershipService:
         membership_repo: WorkspaceMembershipRepository,
         workspace_repo: WorkspaceRepository,
         graph: MembershipGraph,
+        identities: IdentityDirectory | None,
     ) -> None:
         self.membership_repo = membership_repo
         self.workspace_repo = workspace_repo
         self.graph = graph
+        # Where a removed member's pending invitations were sent. None when the
+        # deployment resolves no identities (KRATOS_ADMIN_URL unset).
+        self.identities = identities
 
     async def record(
         self,
@@ -322,7 +327,12 @@ class WorkspaceMembershipService:
         # then finds it revoked and takes its own grant back. The same commit
         # queues the revocation for the outbox relay, so this attempt only makes
         # the common case immediate; if it fails, the relay finishes the job.
-        await self.membership_repo.end(workspace_id, target_user_id, ended_by=actor_user_id)
+        await self.membership_repo.end(
+            workspace_id,
+            target_user_id,
+            ended_by=actor_user_id,
+            emails=await self._emails_of(target_user_id),
+        )
         try:
             await self.finish_removal(workspace_id, target_user_id)
         except (KetoError, OpenFGAError):
@@ -334,6 +344,21 @@ class WorkspaceMembershipService:
             )
             return False
         return True
+
+    async def _emails_of(self, user_id: str) -> list[str]:
+        identity = (
+            (await self.identities.resolve([user_id])).get(user_id)
+            if self.identities is not None
+            else None
+        )
+        if identity is None or not identity.email:
+            logger.warning(
+                "no email resolved for %s; only invitations they joined through are "
+                "matched when revoking the pending ones addressed to them",
+                user_id,
+            )
+            return []
+        return [identity.email]
 
     async def finish_removal(self, workspace_id: str, user_id: str) -> None:
         """Take an ended membership's grants out of the graph. Idempotent.
@@ -365,6 +390,7 @@ def membership_removal_handler(graph: MembershipGraph) -> OutboxHandler:
             membership_repo=WorkspaceMembershipRepository(session),
             workspace_repo=WorkspaceRepository(session),
             graph=graph,
+            identities=None,
         )
         await service.finish_removal(envelope.data["workspace_id"], envelope.data["user_id"])
 

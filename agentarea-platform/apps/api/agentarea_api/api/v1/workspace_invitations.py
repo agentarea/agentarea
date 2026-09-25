@@ -89,6 +89,7 @@ def get_membership_service(session: SessionDep) -> WorkspaceMembershipService:
         membership_repo=WorkspaceMembershipRepository(session),
         workspace_repo=WorkspaceRepository(session),
         graph=graph,
+        identities=get_identity_directory(),
     )
 
 

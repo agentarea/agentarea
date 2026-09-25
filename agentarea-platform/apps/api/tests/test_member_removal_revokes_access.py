@@ -15,6 +15,7 @@ import pytest
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import _validate_api_key
+from agentarea_common.auth.identity_directory import IdentityRecord
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.base.models import BaseModel
 from agentarea_common.di.container import register_singleton
@@ -28,6 +29,7 @@ from agentarea_common.rebac import (
 )
 from agentarea_common.workspaces import (
     INVITATION_STATUS_ACCEPTED,
+    INVITATION_STATUS_PENDING,
     INVITATION_STATUS_REVOKED,
     MEMBERSHIP_ENDED,
     InvitationRevoked,
@@ -156,11 +158,27 @@ async def _authenticate(raw_key: str):
     return await _validate_api_key(raw_key, MagicMock())
 
 
-def _memberships(session, graph) -> WorkspaceMembershipService:
+class FakeDirectory:
+    def __init__(self, emails: dict[str, str]) -> None:
+        self.emails = emails
+
+    async def resolve(self, user_ids):
+        return {
+            uid: IdentityRecord(user_id=uid, email=self.emails[uid], display_name=None)
+            for uid in user_ids
+            if uid in self.emails
+        }
+
+
+MEMBER_EMAIL = "member@example.com"
+
+
+def _memberships(session, graph, identities=None) -> WorkspaceMembershipService:
     return WorkspaceMembershipService(
         membership_repo=WorkspaceMembershipRepository(session),
         workspace_repo=WorkspaceRepository(session),
         graph=graph,
+        identities=identities,
     )
 
 
@@ -259,11 +277,15 @@ def _member_tuples(graph) -> list[RelationTuple]:
     return [t for t in graph.tuples if t.subject_id == f"User:{MEMBER}"]
 
 
-async def _invite(session) -> tuple[WorkspaceInvitationService, WorkspaceInvitation, str]:
+async def _invite(
+    session, email: str | None = None
+) -> tuple[WorkspaceInvitationService, WorkspaceInvitation, str]:
     register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
     owner = UserContext(user_id=OWNER, workspace_id=WORKSPACE, admin_workspaces=[WORKSPACE])
     invitations = WorkspaceInvitationService(WorkspaceInvitationRepository(session))
-    invitation, token = await invitations.create_invitation(actor=owner, workspace_id=WORKSPACE)
+    invitation, token = await invitations.create_invitation(
+        actor=owner, workspace_id=WORKSPACE, email=email
+    )
     return invitations, invitation, token
 
 
@@ -492,3 +514,55 @@ async def test_a_removal_racing_the_accept_wins_even_when_the_graph_fails(sessio
         stored = (await session.execute(select(WorkspaceInvitation))).scalar_one()
     assert stored.status == INVITATION_STATUS_REVOKED
     assert stored.membership_granted_at is None
+
+
+async def _statuses(session_factory) -> dict[str | None, str]:
+    async with session_factory() as session:
+        rows = (await session.execute(select(WorkspaceInvitation))).scalars().all()
+    return {row.email: row.status for row in rows}
+
+
+async def test_a_pending_invitation_to_the_members_email_cannot_bring_them_back(
+    session_factory, graph
+):
+    async with session_factory() as session:
+        invitations, _, token = await _invite(session, email=MEMBER_EMAIL.upper())
+        await _memberships(session, graph, FakeDirectory({MEMBER: MEMBER_EMAIL})).remove(
+            workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER
+        )
+
+        with pytest.raises(InvitationRevoked):
+            await invitations.accept(token=token, user_id=MEMBER, user_email=MEMBER_EMAIL)
+
+    assert await _statuses(session_factory) == {MEMBER_EMAIL.upper(): INVITATION_STATUS_REVOKED}
+
+
+async def test_an_address_the_member_joined_through_is_closed_without_the_directory(
+    session_factory, graph
+):
+    async with session_factory() as session:
+        invitations, joined, token = await _invite(session, email=MEMBER_EMAIL)
+        accepted, _ = await invitations.accept(token=token, user_id=MEMBER, user_email=MEMBER_EMAIL)
+        await _memberships(session, graph).admit(accepted, MEMBER)
+        _, _, second = await _invite(session, email=f" {MEMBER_EMAIL} ")
+
+        await _memberships(session, graph).remove(
+            workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER
+        )
+
+        with pytest.raises(InvitationRevoked):
+            await invitations.accept(token=second, user_id=MEMBER, user_email=MEMBER_EMAIL)
+
+
+async def test_other_pending_invitations_stay_open(session_factory, graph):
+    async with session_factory() as session:
+        await _invite(session, email="someone-else@example.com")
+        await _invite(session)
+        await _memberships(session, graph, FakeDirectory({MEMBER: MEMBER_EMAIL})).remove(
+            workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER
+        )
+
+    assert await _statuses(session_factory) == {
+        "someone-else@example.com": INVITATION_STATUS_PENDING,
+        None: INVITATION_STATUS_PENDING,
+    }

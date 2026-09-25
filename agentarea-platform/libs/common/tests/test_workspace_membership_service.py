@@ -101,7 +101,7 @@ class FakeMembershipRepository:
     async def list_for_workspace(self, workspace_id: str) -> list[WorkspaceMembership]:
         return [r for r in self.rows if r.workspace_id == workspace_id]
 
-    async def end(self, workspace_id: str, user_id: str, *, ended_by: str) -> None:
+    async def end(self, workspace_id: str, user_id: str, *, ended_by: str, emails) -> None:
         row = await self.get(workspace_id, user_id)
         if row is not None:
             self.rows.remove(row)
@@ -137,6 +137,7 @@ def _service(
         membership_repo=memberships or FakeMembershipRepository(),
         workspace_repo=FakeWorkspaceRepository(workspace if workspace else _workspace()),
         graph=graph or FakeGraph([OWNER, MEMBER]),
+        identities=None,
     )
 
 
@@ -252,6 +253,7 @@ async def test_leaving_a_personal_workspace_is_rejected():
         membership_repo=FakeMembershipRepository(),
         workspace_repo=FakeWorkspaceRepository(None),
         graph=graph,
+        identities=None,
     )
 
     with pytest.raises(OwnerRemovalRejected):
