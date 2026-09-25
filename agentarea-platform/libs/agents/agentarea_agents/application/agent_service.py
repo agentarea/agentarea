@@ -13,6 +13,7 @@ from agentarea_llm.infrastructure.model_instance_repository import ModelInstance
 
 from agentarea_agents.application.approval_sync import (
     approval_targets_from_tools,
+    assert_no_policy_approval_unticked,
     strip_confirmation_flags,
     sync_agent_approval_rules,
 )
@@ -356,6 +357,14 @@ class AgentService(BaseCrudService[Agent]):
         await self._check_write_access(agent)
 
         patch = payload.model_dump(exclude_unset=True)
+        tools_edited = "tools" in patch and payload.tools is not None
+        if tools_edited:
+            await assert_no_policy_approval_unticked(
+                self.repository_factory.session,
+                self.repository_factory.user_context,
+                agent.id,
+                [t.model_dump(exclude_none=True) for t in (payload.tools or [])],
+            )
 
         if "name" in patch:
             agent.name = patch["name"]
@@ -367,7 +376,6 @@ class AgentService(BaseCrudService[Agent]):
             agent.instruction = patch["instruction"]
         if "model_id" in patch:
             agent.model_id = await self._validate_model_id(patch["model_id"])
-        tools_edited = "tools" in patch and payload.tools is not None
         approval_targets: set[str] = set()
         if tools_edited:
             dumped = [t.model_dump(exclude_none=True) for t in (payload.tools or [])]

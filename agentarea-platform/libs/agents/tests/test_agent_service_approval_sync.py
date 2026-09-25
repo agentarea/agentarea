@@ -183,8 +183,7 @@ async def test_fork_catalog_agent_strips_and_syncs(session_factory):
         assert agent.tools[0]["settings"].get("requires_user_confirmation") is None
 
 
-async def test_a_members_tool_edit_leaves_an_admins_approval_rule_alone(session_factory):
-    """The toggle owns the rules it wrote; a rule an admin wrote in Policies is not its."""
+async def _agent_with_admin_rule(session, member):
     from agentarea_common.auth.authorization import AuthorizationService
     from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
     from agentarea_common.di.container import register_singleton
@@ -193,29 +192,64 @@ async def test_a_members_tool_edit_leaves_an_admins_approval_rule_alone(session_
 
     register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
     admin = UserContext(user_id="user-admin", workspace_id="ws-a", admin_workspaces=["ws-a"])
+    agent = await _service(session, member).create_agent(
+        AgentCreate(name="Shared", model_id=None, tools=[_code_tool("agentarea/shell", True)])
+    )
+    await GovernancePolicyService(RepositoryFactory(session, admin)).create_rule(
+        rule=PolicyRule(
+            subject_type=PolicySubjectType.AGENT,
+            subject_id=str(agent.id),
+            target="tool:files",
+            effect=PolicyEffect.APPROVAL,
+        ),
+        subject_id=str(agent.id),
+    )
+    return agent
+
+
+async def test_unticking_an_approval_a_policy_enforces_is_refused_not_ignored(session_factory):
+    """The PATCH used to answer 200 and the tick came back on the next read."""
+    from agentarea_agents.application.approval_sync import ApprovalEnforcedByPolicyError
+
     member = UserContext(user_id="user-member", workspace_id="ws-a", admin_workspaces=[])
     async with session_factory() as session:
-        agent = await _service(session, member).create_agent(
-            AgentCreate(name="Shared", model_id=None, tools=[_code_tool("agentarea/shell", True)])
-        )
-        await GovernancePolicyService(RepositoryFactory(session, admin)).create_rule(
-            rule=PolicyRule(
-                subject_type=PolicySubjectType.AGENT,
-                subject_id=str(agent.id),
-                target="tool:files",
-                effect=PolicyEffect.APPROVAL,
-            ),
-            subject_id=str(agent.id),
-        )
+        agent = await _agent_with_admin_rule(session, member)
+
+        with pytest.raises(ApprovalEnforcedByPolicyError) as refused:
+            await _service(session, member).update_agent(
+                agent.id,
+                AgentUpdate(
+                    name="Renamed",
+                    tools=[
+                        _code_tool("agentarea/shell", False),
+                        _code_tool("agentarea/files", False),
+                    ],
+                ),
+            )
+
+        assert refused.value.targets == {"tool:files"}
+        assert {r.target for r in await _rules(session, member, agent.id)} == {
+            "tool:shell",
+            "tool:files",
+        }
+        assert (await _service(session, member).get(agent.id)).name == "Shared"
+
+
+async def test_a_members_tool_edit_leaves_an_admins_approval_rule_alone(session_factory):
+    """The toggle owns the rules it wrote; a rule an admin wrote in Policies is not its."""
+    member = UserContext(user_id="user-member", workspace_id="ws-a", admin_workspaces=[])
+    async with session_factory() as session:
+        agent = await _agent_with_admin_rule(session, member)
 
         await _service(session, member).update_agent(
             agent.id,
             AgentUpdate(
                 tools=[
                     _code_tool("agentarea/shell", False),
-                    _code_tool("agentarea/files", False),
+                    _code_tool("agentarea/files", True),
                 ]
             ),
         )
 
-        assert {r.target for r in await _rules(session, member, agent.id)} == {"tool:files"}
+        rules = await _rules(session, member, agent.id)
+        assert [(r.target, r.managed_by) for r in rules] == [("tool:files", None)]

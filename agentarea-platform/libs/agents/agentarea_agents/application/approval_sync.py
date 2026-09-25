@@ -36,6 +36,22 @@ from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+class ApprovalEnforcedByPolicyError(Exception):
+    """An agent edit unticks an approval that a workspace policy rule enforces.
+
+    The toggle only removes rules it wrote. Answering the edit as if it had
+    worked leaves the tick coming back on the next read, so it is refused.
+    """
+
+    def __init__(self, targets: set[str]) -> None:
+        self.targets = targets
+        names = ", ".join(sorted(target.removeprefix("tool:") for target in targets))
+        super().__init__(
+            f"Approval for {names} is enforced by a workspace policy; "
+            "change it on the Policies page."
+        )
+
+
 def _llm_facing_name(tool_name: str) -> str:
     """Collapse a code toolset namespace to the name the model actually calls."""
     return tool_name.rsplit("/", 1)[-1]
@@ -62,6 +78,49 @@ def approval_targets_from_tools(tools: list[dict]) -> set[str]:
             if name:
                 targets.add(f"tool:{_llm_facing_name(name)}")
     return targets
+
+
+def unticked_targets(tools: list[dict]) -> set[str]:
+    """Rule targets of the listed tools that the config leaves without approval."""
+    targets: set[str] = set()
+    for tool in tools:
+        settings = tool.get("settings") or {}
+        if tool.get("type") == "mcp":
+            server_ref = tool.get("name")
+            for perm in settings.get("allowed_tools") or []:
+                if not isinstance(perm, dict) or perm.get("requires_user_confirmation"):
+                    continue
+                name = perm.get("tool_name")
+                if name and server_ref:
+                    targets.update({_mcp_target(server_ref, name), f"tool:{name}"})
+        elif not settings.get("requires_user_confirmation"):
+            name = tool.get("name")
+            if name:
+                targets.add(f"tool:{_llm_facing_name(name)}")
+    return targets
+
+
+async def assert_no_policy_approval_unticked(
+    session: AsyncSession,
+    user_context: UserContext,
+    agent_id: UUID,
+    tools: list[dict],
+) -> None:
+    """Refuse an edit that unticks an approval a policy rule (not the toggle) enforces.
+
+    Raises:
+        ApprovalEnforcedByPolicyError: naming the enforced targets.
+    """
+    rules = await PolicyRuleRepository(session, user_context).list_rules(
+        subject_type=PolicySubjectType.AGENT,
+        subject_id=str(agent_id),
+        effect=PolicyEffect.APPROVAL,
+        enabled=True,
+    )
+    enforced = {rule.target for rule in rules if rule.managed_by is None}
+    conflicts = enforced & unticked_targets(tools)
+    if conflicts:
+        raise ApprovalEnforcedByPolicyError(conflicts)
 
 
 def strip_confirmation_flags(tools: list[dict]) -> list[dict]:
