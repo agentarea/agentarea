@@ -40,7 +40,14 @@ async def test_a_bundle_on_an_allowlisted_address_is_fetched():
 
 
 def test_the_policy_is_the_deployments(monkeypatch):
+    from agentarea_common.config import get_settings
+
     monkeypatch.setenv("OUTBOUND_PRIVATE_ALLOWLIST", "127.0.0.0/8")
     monkeypatch.delenv("ALLOW_PRIVATE_URLS", raising=False)
+    get_settings.cache_clear()
+    try:
+        policy = OutboundPolicy.from_env()
+    finally:
+        get_settings.cache_clear()
 
-    assert validate_url("http://127.0.0.1/", policy=OutboundPolicy.from_env()) == ["127.0.0.1"]
+    assert validate_url("http://127.0.0.1/", policy=policy) == ["127.0.0.1"]

@@ -147,7 +147,7 @@ class SafeMCPTransport(httpx2.AsyncBaseTransport):
         policy: OutboundPolicy,
         *,
         resolve: Resolver = resolve_host,
-        inner: Callable[[], httpx2.AsyncBaseTransport] | None = None,
+        inner: Callable[..., httpx2.AsyncBaseTransport] | None = None,
     ) -> None:
         self._sender = PinnedSender(
             httpx2, policy, error=UnsafeMCPDestinationError, resolve=resolve, inner=inner

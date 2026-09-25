@@ -15,8 +15,11 @@ import agentarea_agents_sdk.tools.openapi_tool as mod
 
 @pytest.mark.asyncio
 async def test_a_base_url_that_passed_the_precheck_is_still_not_dialed_privately(monkeypatch):
+    from agentarea_common.config import get_settings
+
     monkeypatch.delenv("ALLOW_PRIVATE_URLS", raising=False)
     monkeypatch.delenv("OUTBOUND_PRIVATE_ALLOWLIST", raising=False)
+    get_settings.cache_clear()
     connection = SimpleNamespace(
         id=uuid4(),
         name="api",

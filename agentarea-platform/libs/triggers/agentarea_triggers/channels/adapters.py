@@ -374,7 +374,11 @@ def make_a2a_webhook_sender(
 
     async def _send(channel_config: dict[str, Any], message: str) -> None:
         from agentarea_common.utils.a2a_push import push_token_secret_name
-        from agentarea_common.utils.url_safety import UnsafeUrlError, safe_async_client
+        from agentarea_common.utils.url_safety import (
+            OutboundPolicy,
+            UnsafeUrlError,
+            safe_async_client,
+        )
 
         url = channel_config.get("url")
         if not url or not message:
@@ -389,7 +393,9 @@ def make_a2a_webhook_sender(
                 headers["X-A2A-Notification-Token"] = token
 
         try:
-            async with safe_async_client(timeout=30.0) as client:
+            # The URL is an A2A client's, not a member's: the deployment's
+            # private allowances for member endpoints do not extend to it.
+            async with safe_async_client(policy=OutboundPolicy(), timeout=30.0) as client:
                 resp = await client.post(url, content=message, headers=headers)
         except UnsafeUrlError as e:
             # Misconfigured/hostile target — do not retry.

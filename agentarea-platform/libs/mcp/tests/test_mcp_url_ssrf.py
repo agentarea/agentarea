@@ -19,8 +19,46 @@ from agentarea_mcp.application import mcp_client
 from agentarea_mcp.application.mcp_client import SafeMCPTransport, pinned_client_factory
 from agentarea_mcp.application.service import MCPServerInstanceService
 from agentarea_mcp.application.validation_service import MCPValidationError
+from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
 
-from .test_verification import _make_db_mock, _make_instance
+
+class _Session:
+    """Answers verify()'s two reads: the locked instance, then its server spec."""
+
+    def __init__(self, instance, server) -> None:
+        self._rows = [instance, server]
+
+    @asynccontextmanager
+    async def begin(self):
+        yield
+
+    async def execute(self, _stmt):
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = self._rows.pop(0) if self._rows else None
+        return result
+
+    async def flush(self):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return False
+
+
+def _url_instance_db(endpoint_url: str):
+    instance = MagicMock(
+        id=uuid.uuid4(),
+        json_spec={},
+        verification=dict(DEFAULT_VERIFICATION),
+        last_dispatch=None,
+        tools=None,
+        server_spec_id="spec",
+    )
+    server = MagicMock(remote_url=endpoint_url, json_spec={}, cmd=None, docker_image_url=None)
+    session = _Session(instance, server)
+    return instance, MagicMock(async_session_factory=lambda: session)
 
 
 def _resolver(table: dict[str, list[str]]):
@@ -32,8 +70,13 @@ def _resolver(table: dict[str, list[str]]):
 
 @pytest.fixture(autouse=True)
 def _closed_policy(monkeypatch):
+    from agentarea_common.config import get_settings
+
     monkeypatch.delenv("ALLOW_PRIVATE_URLS", raising=False)
     monkeypatch.delenv("OUTBOUND_PRIVATE_ALLOWLIST", raising=False)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.mark.asyncio
@@ -89,9 +132,7 @@ async def test_a_public_mcp_host_is_dialed_at_its_vetted_address():
 
 @pytest.mark.asyncio
 async def test_verify_refuses_a_private_endpoint_and_reports_it_generically():
-    inst = _make_instance("url")
-    inst.json_spec = {"type": "url", "endpoint_url": "http://10.0.0.5:6379/mcp"}
-    db_mock = _make_db_mock(inst)
+    inst, db_mock = _url_instance_db("http://10.0.0.5:6379/mcp")
 
     with (
         patch("agentarea_mcp.verification.get_database", return_value=db_mock),

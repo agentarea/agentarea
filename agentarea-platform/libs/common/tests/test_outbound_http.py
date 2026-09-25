@@ -2,6 +2,7 @@
 
 import httpx
 import pytest
+from agentarea_common.config import get_settings
 from agentarea_common.utils.url_safety import (
     OutboundPolicy,
     SafeOutboundTransport,
@@ -142,12 +143,89 @@ async def test_the_allowlist_does_not_open_other_private_destinations():
             await client.get("http://meta.example.com/")
 
 
-def test_the_allowlist_is_read_from_settings(monkeypatch):
+@pytest.fixture
+def fresh_settings():
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+def test_the_allowlist_is_read_from_settings(monkeypatch, fresh_settings):
     monkeypatch.setenv("OUTBOUND_PRIVATE_ALLOWLIST", " localhost , 10.43.0.0/16 ,")
 
     policy = OutboundPolicy.from_env()
 
     assert policy.private_allowlist == ("localhost", "10.43.0.0/16")
+
+
+def test_the_policy_comes_from_the_cached_settings(monkeypatch, fresh_settings):
+    monkeypatch.setenv("OUTBOUND_PRIVATE_ALLOWLIST", "localhost")
+    first = OutboundPolicy.from_env()
+    monkeypatch.setenv("OUTBOUND_PRIVATE_ALLOWLIST", "nas.lan")
+
+    assert OutboundPolicy.from_env() == first
+
+
+@pytest.fixture
+def no_env_proxy(monkeypatch):
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"):
+        monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv(name.lower(), raising=False)
+
+
+def _recording_transport(table, pools: list[tuple[str | None, list[httpx.Request]]]):
+    def make_pool(proxy: str | None = None) -> httpx.MockTransport:
+        seen: list[httpx.Request] = []
+        pools.append((proxy, seen))
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(200)
+
+        return httpx.MockTransport(handler)
+
+    return SafeOutboundTransport(policy=OutboundPolicy(), resolve=_resolver(table), inner=make_pool)
+
+
+async def test_a_proxied_destination_is_vetted_then_sent_by_name_through_the_proxy(
+    monkeypatch, no_env_proxy
+):
+    monkeypatch.setenv("HTTPS_PROXY", "http://egress.corp:3128")
+    pools: list[tuple[str | None, list[httpx.Request]]] = []
+    transport = _recording_transport({"api.example.com": ["93.184.216.34"]}, pools)
+
+    async with httpx.AsyncClient(transport=transport) as client:
+        await client.get("https://api.example.com/v1")
+
+    ((proxy, seen),) = pools
+    assert proxy == "http://egress.corp:3128"
+    assert seen[0].url.host == "api.example.com"
+
+
+async def test_a_proxied_destination_resolving_private_is_still_refused(monkeypatch, no_env_proxy):
+    monkeypatch.setenv("HTTPS_PROXY", "http://egress.corp:3128")
+    pools: list[tuple[str | None, list[httpx.Request]]] = []
+    transport = _recording_transport({"internal.example.com": ["10.0.0.9"]}, pools)
+
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(UnsafeUrlError):
+            await client.get("https://internal.example.com/")
+
+    assert pools == []
+
+
+async def test_no_proxy_keeps_the_direct_pinned_connection(monkeypatch, no_env_proxy):
+    monkeypatch.setenv("HTTPS_PROXY", "http://egress.corp:3128")
+    monkeypatch.setenv("NO_PROXY", "api.example.com")
+    pools: list[tuple[str | None, list[httpx.Request]]] = []
+    transport = _recording_transport({"api.example.com": ["93.184.216.34"]}, pools)
+
+    async with httpx.AsyncClient(transport=transport) as client:
+        await client.get("https://api.example.com/v1")
+
+    ((proxy, seen),) = pools
+    assert proxy is None
+    assert seen[0].url.host == "93.184.216.34"
 
 
 async def test_two_names_on_one_address_never_share_a_connection_pool():

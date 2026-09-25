@@ -21,6 +21,7 @@ import asyncio
 import fnmatch
 import ipaddress
 import socket
+import urllib.request
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
@@ -179,12 +180,12 @@ class OutboundPolicy:
 
     @classmethod
     def from_env(cls) -> "OutboundPolicy":
-        from agentarea_common.config.app import AppSettings
-        from agentarea_common.config.mcp import MCPSettings
+        from agentarea_common.config import get_settings
 
-        raw = AppSettings().OUTBOUND_PRIVATE_ALLOWLIST
+        settings = get_settings()
+        raw = settings.app.OUTBOUND_PRIVATE_ALLOWLIST
         return cls(
-            allow_private=MCPSettings().ALLOW_PRIVATE_URLS,
+            allow_private=settings.mcp.ALLOW_PRIVATE_URLS,
             private_allowlist=tuple(e.strip() for e in raw.split(",") if e.strip()),
         )
 
@@ -197,6 +198,19 @@ class OutboundPolicy:
 
 
 Resolver = Callable[[str, int], Awaitable[list[str]]]
+
+
+def env_proxy_for(scheme: str, host: str) -> str | None:
+    """The proxy ``HTTP(S)_PROXY``/``ALL_PROXY`` send this request through, if any.
+
+    ``NO_PROXY`` is honored, as the clients these transports replaced did.
+    """
+    proxies = urllib.request.getproxies_environment()
+    # proxy_bypass_environment exists at runtime but is missing from typeshed.
+    bypass = getattr(urllib.request, "proxy_bypass_environment")  # noqa: B009
+    if not proxies or bypass(host, proxies):
+        return None
+    return proxies.get(scheme) or proxies.get("all")
 
 
 async def resolve_host(host: str, port: int) -> list[str]:
@@ -220,6 +234,10 @@ class PinnedSender:
     connections by the address it connects to, so two names served from one
     address would otherwise share a TLS connection, and the second name's
     certificate would never be checked.
+
+    When the environment routes the request through a forward proxy, the name
+    is still resolved and vetted here, but the request goes to the proxy by
+    name: the proxy resolves it again, so pinning is then the proxy's job.
     """
 
     def __init__(
@@ -229,19 +247,22 @@ class PinnedSender:
         *,
         error: Callable[..., Exception],
         resolve: Resolver = resolve_host,
-        inner: Callable[[], Any] | None = None,
+        inner: Callable[..., Any] | None = None,
     ) -> None:
         self._lib = lib
         self._policy = policy
         self._error = error
         self._resolve = resolve
-        self._new_pool = inner or (lambda: lib.AsyncHTTPTransport(trust_env=False))
-        self._pools: dict[str, Any] = {}
+        self._new_pool = inner or (
+            lambda proxy=None: lib.AsyncHTTPTransport(trust_env=False, proxy=proxy)
+        )
+        self._pools: dict[tuple[str, str | None], Any] = {}
 
-    def _pool_for(self, host: str) -> Any:
-        pool = self._pools.get(host)
+    def _pool_for(self, host: str, proxy: str | None) -> Any:
+        pool = self._pools.get((host, proxy))
         if pool is None:
-            pool = self._pools[host] = self._new_pool()
+            pool = self._new_pool(proxy=proxy) if proxy else self._new_pool()
+            self._pools[(host, proxy)] = pool
         return pool
 
     async def send(self, request: Any) -> Any:
@@ -270,6 +291,10 @@ class PinnedSender:
                     request=request,
                 )
 
+        proxy = env_proxy_for(url.scheme, host)
+        if proxy is not None:
+            return await self._pool_for(host, proxy).handle_async_request(request)
+
         extensions: dict[str, Any] = dict(request.extensions)
         if url.scheme == "https" and str(addresses[0]) != host:
             extensions.setdefault("sni_hostname", host)
@@ -280,7 +305,7 @@ class PinnedSender:
             stream=request.stream,
             extensions=extensions,
         )
-        return await self._pool_for(host).handle_async_request(pinned)
+        return await self._pool_for(host, None).handle_async_request(pinned)
 
     async def aclose(self) -> None:
         pools, self._pools = list(self._pools.values()), {}
@@ -300,7 +325,7 @@ class SafeOutboundTransport(httpx.AsyncBaseTransport):
         policy: OutboundPolicy,
         *,
         resolve: Resolver = resolve_host,
-        inner: Callable[[], httpx.AsyncBaseTransport] | None = None,
+        inner: Callable[..., httpx.AsyncBaseTransport] | None = None,
     ) -> None:
         self._sender = PinnedSender(
             httpx, policy, error=UnsafeDestinationError, resolve=resolve, inner=inner
