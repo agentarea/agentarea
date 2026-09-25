@@ -46,6 +46,7 @@ def _build_membership_service(session) -> WorkspaceMembershipService:
         membership_repo=WorkspaceMembershipRepository(session),
         workspace_repo=WorkspaceRepository(session),
         graph=graph,
+        identities=get_identity_directory(),
     )
 
 
@@ -169,11 +170,19 @@ class MembersToolset(Toolset):
         """
         async with platform_context() as (session, user_ctx, _repo, _broker, _secret):
             try:
-                await _build_membership_service(session).remove(
+                revoked = await _build_membership_service(session).remove(
                     workspace_id=user_ctx.workspace_id,
                     target_user_id=user_id,
                     actor_user_id=user_ctx.user_id,
                 )
             except MembershipRemovalRejected as exc:
                 return json.dumps({"error": str(exc)})
+            if not revoked:
+                return json.dumps(
+                    {
+                        "status": "revocation_pending",
+                        "user_id": user_id,
+                        "detail": "The membership has ended; its access is still being revoked.",
+                    }
+                )
             return json.dumps({"removed": True, "user_id": user_id})

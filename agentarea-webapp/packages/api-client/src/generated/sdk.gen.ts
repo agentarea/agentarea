@@ -4804,6 +4804,8 @@ export const listMembersV1WorkspacesWorkspaceIdMembersGet = <ThrowOnError extend
  *
  * The owner keeps their access until ownership moves, and the last member
  * cannot leave — either would strand the workspace and everything in it.
+ * 202 means the membership has ended but the member still has access until
+ * the revocation, which is retried until it succeeds, reaches the graph.
  */
 export const removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete = <ThrowOnError extends boolean = false>(options: Options<RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteData, ThrowOnError>): RequestResult<RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponses, RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors, ThrowOnError> => (options.client ?? client).delete<RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponses, RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors, ThrowOnError>({
     security: [{

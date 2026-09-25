@@ -58,5 +58,6 @@ export async function removeMemberAction(userId: string) {
     revalidatePath("/", "layout");
   }
 
-  return { ok: true };
+  // 202: the membership has ended but its access is still being revoked.
+  return { ok: true, pending: result.status === 202 };
 }

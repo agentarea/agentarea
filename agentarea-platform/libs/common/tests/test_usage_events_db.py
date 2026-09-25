@@ -96,7 +96,12 @@ async def test_raw_facts_cannot_be_rewritten_or_deleted(session):
 
 async def test_usage_endpoint_paginates_raw_facts_without_tenant_override(session):
     from agentarea_api.api.v1.usage import router
+    from agentarea_common.auth.authorization import AuthorizationService
     from agentarea_common.auth.dependencies import get_user_context
+    from agentarea_common.auth.workspace_authorization import (
+        WorkspaceScopedAuthorizationService,
+    )
+    from agentarea_common.di.container import register_singleton
     from agentarea_common.config.database import get_db_session
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
@@ -107,8 +112,9 @@ async def test_usage_endpoint_paginates_raw_facts_without_tenant_override(sessio
     last = await insert_fact(session, workspace)
     app = FastAPI()
     app.include_router(router, prefix="/v1")
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
     app.dependency_overrides[get_user_context] = lambda: UserContext(
-        user_id="usage-reader", workspace_id=workspace
+        user_id="usage-reader", workspace_id=workspace, admin_workspaces=[workspace]
     )
     app.dependency_overrides[get_db_session] = lambda: session
 

@@ -3326,6 +3326,17 @@ export type McpToolSettings = {
     requires_user_confirmation?: boolean | null;
 };
 /**
+ * MemberRemovalPendingResponse
+ *
+ * The membership has ended; its graph access is still being revoked.
+ */
+export type MemberRemovalPendingResponse = {
+    /**
+     * Status
+     */
+    status?: 'revocation_pending';
+};
+/**
  * MemberResponse
  */
 export type MemberResponse = {
@@ -14420,6 +14431,10 @@ export type RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors = {
 };
 export type RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteError = RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors[keyof RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors];
 export type RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponses = {
+    /**
+     * Membership ended; graph access is still being revoked
+     */
+    202: MemberRemovalPendingResponse;
     /**
      * Successful Response
      */

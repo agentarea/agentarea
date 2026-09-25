@@ -1316,6 +1316,7 @@ export type {
   McpToolConfigOutput,
   McpToolPermission,
   McpToolSettings,
+  MemberRemovalPendingResponse,
   MemberResponse,
   ModelInstanceBulkCreateRequest,
   ModelInstanceBulkCreateResponse,

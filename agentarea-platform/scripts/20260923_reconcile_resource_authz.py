@@ -21,6 +21,16 @@ plainly visible in the product:
    writes ``project:<ws>-root#reader``. Members who joined before that have the
    membership tuple and no role.
 
+With ``--revoke-ended-memberships`` it also goes the other way, and deletes:
+
+3. **Grants an ended membership left behind.** Removal ends the membership row
+   first and the graph second; until the graph step was queued in the outbox, a
+   failed graph call left ``Workspace#members`` and the root ``reader`` role in
+   place. Those tuples are dropped for every user with no membership row who does
+   not own the workspace. Members admitted before membership rows were written
+   have no row either, which is why this runs only when asked for: check the
+   ``--dry-run`` output first.
+
 Which tables to walk is read off the models themselves (``__graph_resource__``),
 so this stays in step with the runtime instead of repeating a list that rots.
 """
@@ -30,6 +40,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 
 from agentarea_agents.domain.models import Agent  # noqa: F401  -- registers the mapper
 from agentarea_agents.domain.skill_models import Skill  # noqa: F401
@@ -58,6 +69,7 @@ class _Writer:
         self._client = client
         self._dry_run = dry_run
         self.written = 0
+        self.deleted = 0
 
     async def ensure(self, relationship: RelationTuple) -> None:
         if self._dry_run:
@@ -73,6 +85,13 @@ class _Writer:
                 return
             logger.exception("write failed for %s", relationship)
             raise
+
+    async def remove(self, relationship: RelationTuple) -> None:
+        if self._dry_run:
+            logger.info("would delete %s", relationship)
+        else:
+            await self._client.delete_tuple(relationship)
+        self.deleted += 1
 
 
 async def _reconcile_resources(writer: _Writer, rows, workspace_owners: dict[str, str]) -> None:
@@ -157,10 +176,57 @@ async def _reconcile_member_roles(writer: _Writer, client: OpenFGAClient) -> int
     return seen
 
 
+async def _revoke_ended_memberships(
+    writer: _Writer,
+    client: OpenFGAClient,
+    *,
+    load_members: Callable[[str], Awaitable[set[str]]],
+    owners: dict[str, str],
+) -> int:
+    """Delete the member grants of every user whose membership has ended.
+
+    ``load_members`` reads a workspace's membership rows. It is called per
+    workspace right before that workspace's tuples are deleted, so a member
+    admitted while the run is under way keeps their grants. A workspace with no
+    row in ``owners`` is a personal one, owned by the user sharing its id.
+    """
+    root_suffix = root_project_id("")
+    grants = await client.query_all_tuples(RelationQuery(namespace="Workspace", relation="members"))
+    grants += [
+        t
+        for t in await client.query_all_tuples(
+            RelationQuery(namespace="project", relation="reader")
+        )
+        if t.object.endswith(root_suffix)
+    ]
+    by_workspace: dict[str, list[tuple[str, RelationTuple]]] = {}
+    for grant in grants:
+        if not grant.subject_id or not grant.subject_id.startswith("User:"):
+            continue
+        user_id = grant.subject_id.removeprefix("User:")
+        workspace_id = (
+            grant.object.removesuffix(root_suffix) if grant.namespace == "project" else grant.object
+        )
+        if owners.get(workspace_id, workspace_id) == user_id:
+            continue
+        by_workspace.setdefault(workspace_id, []).append((user_id, grant))
+    for workspace_id, candidates in by_workspace.items():
+        members = await load_members(workspace_id)
+        for user_id, grant in candidates:
+            if user_id not in members:
+                await writer.remove(grant)
+    return writer.deleted
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--dry-run", action="store_true", help="report what would be written, write nothing"
+    )
+    parser.add_argument(
+        "--revoke-ended-memberships",
+        action="store_true",
+        help="also delete member grants of users with no membership row (owners excepted)",
     )
     args = parser.parse_args()
 
@@ -202,6 +268,28 @@ async def main() -> None:
 
         await _reconcile_workspace_admins(writer, workspace_owners)
         logger.info("reconciled admin projections for %d workspaces", len(workspace_owners))
+
+        if args.revoke_ended_memberships:
+
+            async def load_members(workspace_id: str) -> set[str]:
+                async with database.async_session_factory() as session:
+                    rows = await session.execute(
+                        text(
+                            "SELECT user_id FROM workspace_memberships "
+                            "WHERE workspace_id = :workspace_id"
+                        ),
+                        {"workspace_id": workspace_id},
+                    )
+                    return {str(user_id) for user_id in rows.scalars()}
+
+            revoked = await _revoke_ended_memberships(
+                writer, client, load_members=load_members, owners=workspace_owners
+            )
+            logger.info(
+                "%s %d grants of ended memberships",
+                "would delete" if args.dry_run else "deleted",
+                revoked,
+            )
 
         members = await _reconcile_member_roles(writer, client)
         logger.info("reconciled baseline roles for %d workspace memberships", members)
