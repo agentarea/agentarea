@@ -62,9 +62,9 @@ Request → Find Warm Pod → Assign → Activate → Route Ready
 ## COMMANDS
 
 ```bash
+make check                  # build + test + golangci-lint (the CI job); fails if the pinned linter is missing
 go build ./...              # Build all
 go test ./...               # Test all
-golangci-lint run           # Lint
 docker build -t agentarea/mcp-manager:latest .
 ```
 

@@ -87,8 +87,7 @@ jobs:
         run: uv sync --all-extras --group dev
 
       - name: Collect integration tests (import check)
-        working-directory: ./agentarea-platform
-        run: uv run python -m pytest tests/integration/ --collect-only -q
+        run: make -C agentarea-platform collect-integration
 
   # Quick smoke test - validates core services can start
   smoke-test:
@@ -141,22 +140,6 @@ jobs:
         working-directory: ./agentarea-platform
         run: uv sync --all-extras --group dev
 
-      - name: Run database migrations
-        working-directory: ./agentarea-platform
-        run: |
-          cd apps/api
-          uv run --package agentarea-api agentarea-api migrate
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-
-      - name: Smoke test - Repository layer
-        working-directory: ./agentarea-platform
-        run: |
-          uv run pytest tests/integration/repositories/ -v --tb=short -x
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-          REDIS_URL: ${{ env.REDIS_URL }}
-
       - name: Start Temporal dev server (SQLite)
         run: |
           curl -sSf https://temporal.download/cli.sh | sh
@@ -174,13 +157,8 @@ jobs:
           done
           echo "Temporal dev server failed to start:" >&2; cat /tmp/temporal-dev.log >&2; exit 1
 
-      - name: Smoke test - Temporal workflows
-        working-directory: ./agentarea-platform
-        run: |
-          uv run pytest tests/integration/test_temporal_workflow.py -v --tb=short
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-          TEMPORAL_HOST: ${{ env.TEMPORAL_HOST }}
+      - name: Smoke test - migrations, repository layer, Temporal workflows
+        run: make -C agentarea-platform test-integration
 
   # Full integration tests with all services
   integration-tests:
@@ -238,14 +216,6 @@ jobs:
         working-directory: ./agentarea-platform
         run: uv sync --all-extras --group dev
 
-      - name: Run database migrations
-        working-directory: ./agentarea-platform
-        run: |
-          cd apps/api
-          uv run --package agentarea-api agentarea-api migrate
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-
       - name: Start Temporal dev server (SQLite)
         run: |
           curl -sSf https://temporal.download/cli.sh | sh
@@ -263,19 +233,11 @@ jobs:
           done
           echo "Temporal dev server failed to start:" >&2; cat /tmp/temporal-dev.log >&2; exit 1
 
+      # Migrations, then the core pool: deterministic tests needing only
+      # postgres + valkey + Temporal. External-dependency tests are tagged by
+      # tests/integration/conftest.py and deselected by the target.
       - name: Run integration tests
-        working-directory: ./agentarea-platform
-        # Core pool only: deterministic tests that need just postgres + valkey +
-        # the time-skipping Temporal env. External-dependency tests are tagged by
-        # tests/integration/conftest.py and deselected here; run them in a
-        # dedicated job with a real LLM / Docker / object store / API server.
-        run: |
-          uv run pytest tests/integration/ -v --tb=short \
-            -m "not slow and not requires_llm and not requires_docker and not requires_server and not requires_s3 and not perf"
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-          REDIS_URL: ${{ env.REDIS_URL }}
-          TEMPORAL_HOST: ${{ env.TEMPORAL_HOST }}
+        run: make -C agentarea-platform test-integration-core
 
       - name: Upload test results
         if: always()
@@ -473,28 +435,14 @@ jobs:
         working-directory: ./agentarea-platform
         run: uv sync --all-extras --group dev
 
+      # Fails when both modules skip at import (unreachable stack) instead
+      # of passing on an empty run.
       - name: Run OpenAPI + stateful fuzz
-        working-directory: ./agentarea-platform
-        env:
-          API_URL: http://localhost:8000
-          KRATOS_ADMIN_URL: http://localhost:4434
-          KRATOS_PUBLIC_URL: http://localhost:4433
-        run: |
-          # -rs prints why a module skipped. Both fuzz modules skip themselves
-          # at import when the stack is unreachable, and pytest then exits 5
-          # ("no tests collected") — which reads as an unexplained failure.
-          set +e
-          uv run python -m pytest \
-            tests/e2e/api/test_openapi_fuzz.py \
-            tests/e2e/api/test_stateful_fuzz.py \
-            -m "" -p no:cacheprovider -o addopts="" --tb=short -rs
-          status=$?
-          set -e
-          if [ "$status" -eq 5 ]; then
-            echo "::error::The fuzz suite collected nothing: both modules skipped at import (reason above). A silently skipped fuzz suite is indistinguishable from no coverage, so this is a failure, not a pass."
-            exit 1
-          fi
-          exit $status
+        run: >-
+          make -C agentarea-platform test-api-fuzz
+          API_URL=http://localhost:8000
+          KRATOS_ADMIN_URL=http://localhost:4434
+          KRATOS_PUBLIC_URL=http://localhost:4433
 
       - name: Stack logs (always)
         if: always()

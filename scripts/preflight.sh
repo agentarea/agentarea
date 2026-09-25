@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # preflight.sh — run the same checks CI runs, locally, before pushing.
 #
+# Stacks call the same entrypoints CI does (make check / pnpm run check*).
 # Mirrors:
-#   .github/workflows/ci.yml             (Python lint+tests, Go lint+tests, webapp lint+build)
+#   .github/workflows/ci.yml             (platform, Go, webapp)
 #   .github/workflows/schema-check.yml   (backend -> openapi.json -> docs drift)
 #   .github/workflows/frontend-integration.yml (elements-react build + webapp build)
 #   .github/workflows/check-helm-docs.yml (Helm chart README)
@@ -28,89 +29,37 @@ fail() { printf '\033[31m✗ %s\033[0m\n' "$1"; exit 1; }
 # Track tool availability
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# ── 1. Python lint + tests (agentarea-platform) ─────────────────────────────
-# Matches CI: `ruff check` + `ruff format --check` + pytest. Pyright is
-# declared in pyproject but NOT enforced by CI; it lights up 400+ pre-existing
-# triggers/webhook errors. Run it manually if you care:
-#   ( cd agentarea-platform && uv run --with pyright pyright )
+# ── 1. Platform (lint + tests + migration heads) ────────────────────────────
 if ! should_skip python; then
-  step "Python lint (ruff check + format)"
-  ( cd agentarea-platform && uv run ruff check . )         || fail "ruff check failed"
-  ( cd agentarea-platform && uv run ruff format --check . ) || fail "ruff format failed (run: uv run ruff format .)"
-  ok "Python lint"
-
-  step "Python tests (unit + functional, mirrors CI)"
-  # Mirrors ci.yml: integration tests are excluded by CI too
-  ( cd agentarea-platform && uv run pytest tests/unit tests/functional -m "not integration" -q ) \
-    || fail "pytest failed"
-  ok "Python tests"
+  step "Platform check (make -C agentarea-platform check)"
+  make -C agentarea-platform check || fail "platform check failed"
+  ok "Platform"
 fi
 
-# ── 2. Go lint + tests (agentarea-mcp-manager) ──────────────────────────────
+# ── 2. Go (build + tests + golangci-lint) ───────────────────────────────────
 if ! should_skip go; then
-  step "Go build + vet"
-  ( cd agentarea-mcp-manager && go build ./... ) || fail "go build failed"
-  ( cd agentarea-mcp-manager && go vet ./... )   || fail "go vet failed"
-  ok "Go build + vet"
-
-  if have golangci-lint; then
-    step "Go lint (golangci-lint)"
-    ( cd agentarea-mcp-manager && golangci-lint run ./... ) || fail "golangci-lint failed"
-    ok "golangci-lint"
-  else
-    printf '\033[33m⚠ golangci-lint not installed — skipping (install: brew install golangci-lint)\033[0m\n'
-  fi
-
-  step "Go tests"
-  ( cd agentarea-mcp-manager && go test -count=1 ./... ) || fail "go test failed"
-  ok "Go tests"
+  step "Go check (mcp-manager, event-service)"
+  make -C agentarea-mcp-manager check   || fail "mcp-manager check failed"
+  make -C agentarea-event-service check || fail "event-service check failed"
+  ok "Go"
 fi
 
 # ── 3. Schema drift (FastAPI -> openapi.json -> docs copy) ──────────────────
 if ! should_skip schema; then
   step "OpenAPI schema drift"
-  TMP=$(mktemp -d)
-  trap 'rm -rf "$TMP"' EXIT
-  ( cd agentarea-platform && uv run python ../scripts/export-openapi.py -o "$TMP/openapi.json" ) \
-    || fail "OpenAPI export failed"
-  jq -S . agentarea-webapp/src/api/openapi.json > "$TMP/committed.json" \
-    || fail "could not normalize committed openapi.json"
-  jq -S . "$TMP/openapi.json" > "$TMP/exported.json" \
-    || fail "could not normalize exported OpenAPI schema"
-  if ! diff -q "$TMP/committed.json" "$TMP/exported.json" >/dev/null 2>&1; then
-    diff -u "$TMP/committed.json" "$TMP/exported.json" | head -100
-    fail "openapi.json is out of date — run: cd agentarea-webapp && pnpm generate:api"
-  fi
-  jq -S . docs/api-reference/openapi.json > "$TMP/docs.json" \
-    || fail "could not normalize docs OpenAPI schema"
-  if ! diff -q "$TMP/committed.json" "$TMP/docs.json" >/dev/null 2>&1; then
-    diff -u "$TMP/committed.json" "$TMP/docs.json" | head -50
-    fail "docs OpenAPI copy is out of date — run: cd docs && npm run sync:openapi"
-  fi
+  bash scripts/check-openapi-drift.sh || fail "OpenAPI schema drift"
   ok "Schema drift"
 fi
 
-# ── 3b. Webapp lint + build (mirrors webapp-lint, webapp-build, frontend-integration) ──
+# ── 3b. Webapp (lint, types, tests, client drift, build) ────────────────────
 if ! should_skip webapp; then
-  if have pnpm; then
-    step "Webapp lint (pnpm run lint)"
-    ( cd agentarea-webapp && pnpm install --frozen-lockfile >/dev/null ) \
-      || fail "pnpm install failed"
-    ( cd agentarea-webapp && pnpm run lint ) || fail "webapp lint failed"
-    ok "Webapp lint"
-
-    step "Webapp packages build (elements-react)"
-    ( cd agentarea-webapp/packages/elements-react && npm run build >/dev/null ) \
-      || fail "elements-react build failed"
-    ok "elements-react"
-
-    step "Webapp build (pnpm run build, includes type-check)"
-    ( cd agentarea-webapp && pnpm run build >/dev/null ) \
-      || fail "webapp build failed (type errors block CI even though type-check is warn-only)"
-    ok "Webapp build"
-  else
-    printf '\033[33m⚠ pnpm not installed — skipping webapp build (install: npm i -g pnpm@9)\033[0m\n'
-  fi
+  have pnpm || fail "pnpm is required (install: npm i -g pnpm@9) or SKIP=webapp"
+  step "Webapp check"
+  ( cd agentarea-webapp && pnpm install --frozen-lockfile >/dev/null ) \
+    || fail "pnpm install failed"
+  pnpm -C agentarea-webapp run check             || fail "webapp check failed"
+  pnpm -C agentarea-webapp run check:integration || fail "webapp build checks failed"
+  ok "Webapp"
 fi
 
 # ── 4. Env templates (Helm config drift) ────────────────────────────────────

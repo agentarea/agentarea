@@ -75,9 +75,14 @@ The `permissions` selector wiring lives in `apps/api/.../main.py` and `apps/work
 make install        # uv venv + sync all
 make run-api        # uvicorn on :8000
 make run-worker     # Temporal worker
-make test           # pytest unit/functional
-uv run pytest tests/integration/ -v  # integration tests
+make check          # lint + test + migrations-heads: what CI's platform jobs run
+make lint           # ruff check + ruff format --check + pyright
+make test           # hermetic pytest gate (-m "not integration")
+make check-db       # alembic roundtrip + schema-backed suites; needs POSTGRES_* (root: make db-test-up)
+make test-integration-core  # integration pool (Postgres + Valkey + Temporal)
 ```
+
+A new schema-backed suite goes in `scripts/check-db.sh`, nowhere else.
 
 ## ALEMBIC MIGRATIONS
 

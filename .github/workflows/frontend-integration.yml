@@ -41,41 +41,10 @@ jobs:
         working-directory: agentarea-webapp
         run: pnpm install --frozen-lockfile
 
-      - name: Check generated API client is in sync with openapi.json
-        working-directory: agentarea-webapp
-        run: |
-          # Regenerate the hey-api client from the committed spec and fail if the
-          # committed output is stale. (Whether openapi.json itself matches the
-          # backend is verified by the OpenAPI Drift Check workflow.)
-          pnpm generate:client
-          if ! git diff --exit-code -- src/api/client; then
-            echo "::error::Generated API client is out of date with src/api/openapi.json."
-            echo "Run 'pnpm generate:client' (or 'pnpm generate:api') and commit the result."
-            exit 1
-          fi
-
-      - name: Build packages
-        working-directory: agentarea-webapp
-        run: |
-          # Build internal packages first
-          cd packages/elements-react && npm run build
-
-      - name: Type check
-        working-directory: agentarea-webapp
-        run: pnpm run type-check
-
-      - name: Build application
-        working-directory: agentarea-webapp
-        run: pnpm run build
-
-      - name: Test build output
-        working-directory: agentarea-webapp
-        run: |
-          # Verify the build output has no critical errors
-          if grep -r --exclude-dir=node_modules "Element type is invalid" .next/ 2>/dev/null; then
-            echo "ERROR: Found React element errors in build output"
-            exit 1
-          fi
+      # Generated client matches openapi.json, elements-react builds, types
+      # check, and the production build has no invalid-element errors.
+      - name: Client drift, packages, type check, build
+        run: pnpm -C agentarea-webapp run check:integration
 
   # Optional: Visual regression with Playwright
   visual-test:
