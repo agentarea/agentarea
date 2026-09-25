@@ -91,27 +91,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate dev secrets and assert JWKS/config/auth permissions
-        run: |
-          set -euo pipefail
-          ./scripts/gen-dev-secrets.sh --force
-
-          jwks_file=config/auth/kratos/jwks.json
-          mode=$(stat -c '%a' "$jwks_file")
-          echo "$jwks_file mode: $mode"
-          other_bit=$(( 8#$mode % 8 ))
-          if [ $(( other_bit & 4 )) -eq 0 ]; then
-            echo "::error::$jwks_file is not world-readable (mode $mode)."
-            exit 1
-          fi
-
-          auth_dir=config/auth
-          auth_mode=$(stat -c '%a' "$auth_dir")
-          echo "$auth_dir mode: $auth_mode"
-          if [ "$auth_mode" != "700" ]; then
-            echo "::error::$auth_dir must be 700 (host-private), got $auth_mode."
-            exit 1
-          fi
+      - name: JWKS/config/auth permissions
+        run: make check-jwks-perms
 
   platform-lint:
     runs-on: ubuntu-latest

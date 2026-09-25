@@ -1,4 +1,4 @@
-.PHONY: help check check-backend check-frontend check-db db-test-up db-test-down \
+.PHONY: help check check-backend check-frontend check-db check-jwks-perms db-test-up db-test-down \
 	frontend-dev docs-dev \
 	agentarea-platform-api agentarea-platform-worker agentarea-platform-test \
 	agentarea-platform-lint agentarea-platform-format agentarea-platform-sync \
@@ -23,7 +23,7 @@ help: ## Display this help message
 
 ##@ Checks (the same entrypoints CI runs)
 
-check: check-backend check-frontend ## Every non-DB check across all stacks
+check: check-backend check-frontend check-jwks-perms ## Every non-DB check across all stacks
 	@echo "$(GREEN)All checks passed$(NC)"
 
 check-backend: ## Platform + openapi drift, MCP manager, event service, operator
@@ -40,6 +40,9 @@ check-frontend: ## Webapp (lint, types, tests, client drift, build) + CLI
 
 check-db: ## Migrations roundtrip + schema-backed suites (needs POSTGRES_*; see db-test-up)
 	$(MAKE) -C agentarea-platform check-db
+
+check-jwks-perms: ## Kratos JWKS stays container-readable, config/auth host-private (#481)
+	@bash scripts/check-jwks-perms.sh
 
 DB_TEST_CONTAINER := agentarea-check-db
 DB_TEST_PORT ?= 55432
