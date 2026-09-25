@@ -41,7 +41,8 @@ function truncateAddress(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-function formatAmount(value: number): string {
+function formatAmount(amount: string): string {
+  const value = Number(amount);
   if (value >= 1) {
     return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
@@ -132,7 +133,7 @@ export function PaymentHistoryTable({ agentId }: PaymentHistoryTableProps) {
       accessor: "amount_usd",
       headerClassName: "text-right",
       cellClassName: "text-right",
-      render: (value: number) => (
+      render: (value: string) => (
         <span className="font-semibold text-foreground">
           {formatAmount(value)}
         </span>

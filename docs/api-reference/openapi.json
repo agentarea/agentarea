@@ -2862,9 +2862,18 @@
             "type": "string"
           },
           "service_budget_usd": {
-            "default": 0.0,
-            "title": "Service Budget Usd",
-            "type": "number"
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Service Budget Usd"
           },
           "wallet_type": {
             "title": "Wallet Type",
@@ -3031,7 +3040,7 @@
           "input_cost_per_token": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -3062,7 +3071,7 @@
           "output_cost_per_token": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -3188,7 +3197,7 @@
           "input_cost_per_token": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -3219,7 +3228,7 @@
           "output_cost_per_token": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -3797,8 +3806,17 @@
       "FundWalletRequest": {
         "properties": {
           "service_budget_usd": {
-            "title": "Service Budget Usd",
-            "type": "number"
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Service Budget Usd"
           }
         },
         "required": [
@@ -5663,9 +5681,17 @@
             "title": "Rpc Url"
           },
           "session_budget_usd": {
-            "default": 10.0,
-            "title": "Session Budget Usd",
-            "type": "number"
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Session Budget Usd"
           },
           "stripe_profile_id": {
             "anyOf": [
@@ -5679,6 +5705,9 @@
             "title": "Stripe Profile Id"
           }
         },
+        "required": [
+          "session_budget_usd"
+        ],
         "title": "MPPConfigSchema",
         "type": "object"
       },
@@ -6219,7 +6248,7 @@
           "cost": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -6332,9 +6361,17 @@
             "type": "string"
           },
           "input_cost_per_token": {
-            "minimum": 0.0,
-            "title": "Input Cost Per Token",
-            "type": "number"
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Input Cost Per Token"
           },
           "is_active": {
             "default": true,
@@ -6358,9 +6395,17 @@
             "type": "string"
           },
           "output_cost_per_token": {
-            "minimum": 0.0,
-            "title": "Output Cost Per Token",
-            "type": "number"
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Output Cost Per Token"
           },
           "provider_spec_id": {
             "format": "uuid",
@@ -6429,8 +6474,16 @@
           "input_cost_per_token": {
             "anyOf": [
               {
-                "minimum": 0.0,
-                "type": "number"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0"
               },
               {
                 "type": "null"
@@ -6464,8 +6517,16 @@
           "output_cost_per_token": {
             "anyOf": [
               {
-                "minimum": 0.0,
-                "type": "number"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0"
               },
               {
                 "type": "null"
@@ -7384,7 +7445,7 @@
           },
           "amount_usd": {
             "title": "Amount Usd",
-            "type": "number"
+            "type": "string"
           },
           "created_at": {
             "anyOf": [
@@ -12384,7 +12445,16 @@
           "service_budget_usd": {
             "anyOf": [
               {
-                "type": "number"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0"
               },
               {
                 "type": "null"
@@ -12617,7 +12687,7 @@
         "properties": {
           "remaining": {
             "title": "Remaining",
-            "type": "number"
+            "type": "string"
           },
           "service_budget_period": {
             "title": "Service Budget Period",
@@ -12625,11 +12695,11 @@
           },
           "service_budget_usd": {
             "title": "Service Budget Usd",
-            "type": "number"
+            "type": "string"
           },
           "total_spent_current_period": {
             "title": "Total Spent Current Period",
-            "type": "number"
+            "type": "string"
           }
         },
         "required": [
@@ -12748,7 +12818,7 @@
           },
           "service_budget_usd": {
             "title": "Service Budget Usd",
-            "type": "number"
+            "type": "string"
           },
           "status": {
             "title": "Status",
@@ -13042,7 +13112,7 @@
           "input_cost_per_token": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -13072,7 +13142,7 @@
           "output_cost_per_token": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -13194,7 +13264,7 @@
           "input_cost_per_token": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -13224,7 +13294,7 @@
           "output_cost_per_token": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"

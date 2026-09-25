@@ -1,5 +1,7 @@
 """Integration tests for 402 payment interception handler."""
 
+from decimal import Decimal
+
 import pytest
 
 from agentarea_execution.activities.payment_handler import handle_402_payment
@@ -17,7 +19,7 @@ class TestHandle402Payment:
             response_headers={},
             response_body="",
             wallet_config={},
-            budget_remaining=5.0,
+            budget_remaining=Decimal("5.0"),
             idempotency_key="key-1",
         )
         assert result is None
@@ -33,7 +35,7 @@ class TestHandle402Payment:
             response_headers={"PAYMENT-REQUIRED": "data"},
             response_body="",
             wallet_config={},
-            budget_remaining=5.0,
+            budget_remaining=Decimal("5.0"),
             idempotency_key="key-1",
         )
         assert result is None
@@ -49,7 +51,7 @@ class TestHandle402Payment:
             response_headers={"PAYMENT-REQUIRED": "data"},
             response_body="",
             wallet_config={"wallet_type": "x402"},
-            budget_remaining=0.0,
+            budget_remaining=Decimal("0.0"),
             idempotency_key="key-1",
         )
         assert result is not None
@@ -73,7 +75,7 @@ class TestHandle402Payment:
                 "x402_config": {"network": "eip155:8453"},
                 "x402_private_key": "0xfakekey",
             },
-            budget_remaining=5.0,
+            budget_remaining=Decimal("5.0"),
             idempotency_key="key-1",
         )
         assert result is not None

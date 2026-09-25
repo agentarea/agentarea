@@ -9,7 +9,7 @@ from uuid import UUID
 from agentarea_agents_sdk import LLMModel, LLMRequest, LLMResponse
 from agentarea_common.auth.context import UserContext
 from agentarea_common.constants import MANAGED_BY_PLATFORM
-from agentarea_common.money import to_money
+from agentarea_common.money import to_money, to_optional_money
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
 
@@ -221,8 +221,8 @@ class LLMExecutionService:
                 model_name=str(model_name),
                 api_key=api_key,
                 endpoint_url=endpoint_url,
-                input_cost_per_token=input_cost_per_token,
-                output_cost_per_token=output_cost_per_token,
+                input_cost_per_token=to_optional_money(input_cost_per_token),
+                output_cost_per_token=to_optional_money(output_cost_per_token),
             )
             llm_request = LLMRequest(
                 messages=request.messages,

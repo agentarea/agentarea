@@ -3,6 +3,7 @@ from uuid import UUID
 from agentarea_api.api.deps.services import get_model_spec_repository, get_model_spec_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import requires_workspace_admin, unrestricted
+from agentarea_common.money import ZERO, Money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.model_spec_service import ModelSpecService
 from agentarea_llm.domain.models import ModelSpec
@@ -22,8 +23,8 @@ class ModelSpecCreate(BaseModel):
     description: str | None = None
     context_window: int = Field(gt=0)
     max_output_tokens: int | None = Field(default=None, gt=0)
-    input_cost_per_token: float = Field(ge=0)
-    output_cost_per_token: float = Field(ge=0)
+    input_cost_per_token: Money = Field(ge=ZERO)
+    output_cost_per_token: Money = Field(ge=ZERO)
     default_context_strategy: str | None = None  # Auto-inferred from model_name if None
     is_active: bool = True
 
@@ -33,8 +34,8 @@ class ModelSpecUpdate(BaseModel):
     description: str | None = None
     context_window: int | None = Field(default=None, gt=0)
     max_output_tokens: int | None = Field(default=None, gt=0)
-    input_cost_per_token: float | None = Field(default=None, ge=0)
-    output_cost_per_token: float | None = Field(default=None, ge=0)
+    input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
+    output_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     default_context_strategy: str | None = None
     is_active: bool | None = None
 
@@ -47,8 +48,8 @@ class ModelSpecResponse(BaseModel):
     description: str | None
     context_window: int
     max_output_tokens: int | None = None
-    input_cost_per_token: float | None = None
-    output_cost_per_token: float | None = None
+    input_cost_per_token: Money | None = None
+    output_cost_per_token: Money | None = None
     supports_function_calling: bool | None = False
     supports_vision: bool | None = False
     supports_reasoning: bool | None = False

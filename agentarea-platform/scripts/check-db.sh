@@ -33,14 +33,17 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #   audit: append-only is a trigger refusing UPDATE/DELETE. This connects as a
 #     superuser, so a grant-based rule would pass here while enforcing nothing.
 #   wallet idempotency: a partial unique index forbids settling a retry twice.
-#   wallet ledger: a payment settled before its request failed still counts.
-PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL)
+#   wallet ledger: a payment settled before its request failed still counts,
+#     and ledger sums are exact because money columns are numeric.
+#   model prices: a per-token price survives the numeric column exactly.
+PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
   libs/llm/tests/test_provider_secret_lifecycle_db.py
   libs/common/tests/test_audit_append_only_db.py
   libs/wallet/tests/test_payment_idempotency_db.py
   libs/wallet/tests/test_payment_ledger_db.py
+  libs/llm/tests/test_model_spec_price_precision_db.py
 )
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, and the secret

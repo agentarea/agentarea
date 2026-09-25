@@ -614,11 +614,11 @@ export const zDiscoverPreviewModelResponse = z.object({
   description: z.string().nullish(),
   display_name: z.string(),
   id: z.string(),
-  input_cost_per_token: z.number().nullish(),
+  input_cost_per_token: z.string().nullish(),
   is_new: z.boolean().optional().default(false),
   max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().nullish(),
+  output_cost_per_token: z.string().nullish(),
   supports_function_calling: z.boolean().optional().default(false),
   supports_reasoning: z.boolean().optional().default(false),
   supports_vision: z.boolean().optional().default(false),
@@ -640,11 +640,11 @@ export const zDiscoveredModelResponse = z.object({
   context_window: z.number().int(),
   description: z.string().nullish(),
   display_name: z.string(),
-  input_cost_per_token: z.number().nullish(),
+  input_cost_per_token: z.string().nullish(),
   is_new: z.boolean().optional().default(false),
   max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().nullish(),
+  output_cost_per_token: z.string().nullish(),
   supports_function_calling: z.boolean().optional().default(false),
   supports_reasoning: z.boolean().optional().default(false),
   supports_vision: z.boolean().optional().default(false),
@@ -772,7 +772,10 @@ export const zFailedTaskBlocker = z.object({
  * FundWalletRequest
  */
 export const zFundWalletRequest = z.object({
-  service_budget_usd: z.number(),
+  service_budget_usd: z.union([
+    z.number().gte(0),
+    z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  ]),
 });
 
 /**
@@ -1217,7 +1220,10 @@ export const zMppConfigSchema = z.object({
   payment_method_types: z.array(z.string()).optional(),
   recipient: z.string().nullish(),
   rpc_url: z.string().nullish(),
-  session_budget_usd: z.number().optional().default(10),
+  session_budget_usd: z.union([
+    z.number().gte(0),
+    z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  ]),
   stripe_profile_id: z.string().nullish(),
 });
 
@@ -1373,7 +1379,7 @@ export const zModelInstanceTestRequest = z.object({
  * ModelInstanceTestResponse
  */
 export const zModelInstanceTestResponse = z.object({
-  cost: z.number().nullish(),
+  cost: z.string().nullish(),
   error_type: z.string().nullish(),
   message: z.string(),
   model_name: z.string().nullish(),
@@ -1391,11 +1397,17 @@ export const zModelSpecCreate = z.object({
   default_context_strategy: z.string().nullish(),
   description: z.string().nullish(),
   display_name: z.string(),
-  input_cost_per_token: z.number().gte(0),
+  input_cost_per_token: z.union([
+    z.number().gte(0),
+    z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  ]),
   is_active: z.boolean().optional().default(true),
   max_output_tokens: z.number().int().gt(0).nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().gte(0),
+  output_cost_per_token: z.union([
+    z.number().gte(0),
+    z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  ]),
   provider_spec_id: z.string().uuid(),
 });
 
@@ -1407,10 +1419,14 @@ export const zModelSpecUpdate = z.object({
   default_context_strategy: z.string().nullish(),
   description: z.string().nullish(),
   display_name: z.string().nullish(),
-  input_cost_per_token: z.number().gte(0).nullish(),
+  input_cost_per_token: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
   is_active: z.boolean().nullish(),
   max_output_tokens: z.number().int().gt(0).nullish(),
-  output_cost_per_token: z.number().gte(0).nullish(),
+  output_cost_per_token: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
 });
 
 /**
@@ -1725,7 +1741,7 @@ export const zPaginatedResponseMcpServerResponse = z.object({
  */
 export const zPaymentRecordResponse = z.object({
   agent_id: z.string(),
-  amount_usd: z.number(),
+  amount_usd: z.string(),
   created_at: z.string().nullish(),
   error_message: z.string().nullish(),
   execution_id: z.string(),
@@ -3175,10 +3191,10 @@ export const zHttpValidationError = z.object({
  * WalletBalanceResponse
  */
 export const zWalletBalanceResponse = z.object({
-  remaining: z.number(),
+  remaining: z.string(),
   service_budget_period: z.string(),
-  service_budget_usd: z.number(),
-  total_spent_current_period: z.number(),
+  service_budget_usd: z.string(),
+  total_spent_current_period: z.string(),
 });
 
 /**
@@ -3229,7 +3245,7 @@ export const zWalletResponse = z.object({
   id: z.string(),
   mpp_config: z.record(z.unknown()).nullish(),
   service_budget_period: z.string(),
-  service_budget_usd: z.number(),
+  service_budget_usd: z.string(),
   status: z.string(),
   updated_at: z.string().nullish(),
   wallet_type: z.string(),
@@ -3313,7 +3329,13 @@ export const zCreateWalletRequest = z.object({
   credentials: zWalletCredentialsSchema.nullish(),
   mpp_config: zMppConfigSchema.nullish(),
   service_budget_period: z.string().optional().default("execution"),
-  service_budget_usd: z.number().optional().default(0),
+  service_budget_usd: z
+    .union([
+      z.number().gte(0),
+      z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+    ])
+    .optional()
+    .default("0"),
   wallet_type: z.string(),
   x402_config: zX402ConfigSchema.nullish(),
 });
@@ -3325,7 +3347,9 @@ export const zUpdateWalletRequest = z.object({
   credentials: zWalletCredentialsSchema.nullish(),
   mpp_config: zMppConfigSchema.nullish(),
   service_budget_period: z.string().nullish(),
-  service_budget_usd: z.number().nullish(),
+  service_budget_usd: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
   status: z.string().nullish(),
   wallet_type: z.string().nullish(),
   x402_config: zX402ConfigSchema.nullish(),
@@ -3349,11 +3373,11 @@ export const zAgentareaApiApiV1ModelSpecsModelSpecResponse = z.object({
   description: z.string().nullable(),
   display_name: z.string(),
   id: z.string(),
-  input_cost_per_token: z.number().nullish(),
+  input_cost_per_token: z.string().nullish(),
   is_active: z.boolean(),
   max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().nullish(),
+  output_cost_per_token: z.string().nullish(),
   provider_key: z.string().nullish(),
   provider_name: z.string().nullish(),
   provider_spec_id: z.string(),
@@ -3372,11 +3396,11 @@ export const zAgentareaApiApiV1ProviderSpecsModelSpecResponse = z.object({
   description: z.string().nullable(),
   display_name: z.string(),
   id: z.string(),
-  input_cost_per_token: z.number().nullish(),
+  input_cost_per_token: z.string().nullish(),
   is_active: z.boolean(),
   max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().nullish(),
+  output_cost_per_token: z.string().nullish(),
   provider_spec_id: z.string(),
   supports_function_calling: z.boolean().nullish().default(false),
   supports_reasoning: z.boolean().nullish().default(false),

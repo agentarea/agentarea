@@ -138,7 +138,7 @@ The registered set today is: `CostBudgetGuard` (priority 100, pre-LLM and
 pre-tool), `ServiceBudgetGuard` (105, pre-tool), `TokenBudgetGuard` (110,
 pre-LLM), `PromptInjectionDetector` (300, pre-LLM), `OutputSanitizer` (300,
 post-LLM and post-tool), `MCPToolSecurityScanner` (300, tool discovery),
-`SemanticGuard` (400, pre-tool), and the two observers at 800 and 810 on every
+`SemanticGuard` (400, pre-tool), and the metrics observer at 800 on every
 phase. Enterprise builds can inject an entitlement guard at 120 through the
 extension registry.
 
@@ -200,10 +200,8 @@ precisely because that limit is felt — see below.
   lists disagree with the real registrations for `semantic_guard`,
   `prompt_injection_detector`, `output_sanitizer` and `mcp_tool_scanner`. Treat
   it as a diagram, never as evidence that a control is running.
-- **The observers record nothing outside the process.** `MetricsObserver`
-  increments an in-memory dictionary that nothing exports, and `AuditObserver` is
-  constructed without an event sink, so it logs at debug level and publishes
-  nothing. The `SecurityFinding` event type is defined and never emitted by any
+- **The observer records nothing outside the process.** `MetricsObserver`
+  increments an in-memory dictionary that nothing exports. The `SecurityFinding` event type is defined and never emitted by any
   interceptor. Governance decisions are observable through task events and
   application logs, not through these.
 - **Two phases have no interceptors.** `pre_delegation` and `post_delegation`

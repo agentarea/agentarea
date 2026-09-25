@@ -9,6 +9,7 @@ from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.money import Money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
@@ -50,7 +51,7 @@ class ModelInstanceTestResponse(BaseModel):
     error_type: str | None = None
     provider_type: str | None = None
     model_name: str | None = None
-    cost: float | None = None
+    cost: Money | None = None
     tokens_used: int | None = None
 
 

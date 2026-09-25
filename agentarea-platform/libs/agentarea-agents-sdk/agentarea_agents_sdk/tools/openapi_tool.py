@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from collections.abc import Awaitable, Callable
+from decimal import Decimal
 from typing import Any
 from urllib.parse import quote
 from uuid import UUID
@@ -291,7 +292,7 @@ class OpenAPITool(BaseTool):
                 "tool_name": self.name,
                 "status_code": status_code,
                 "payment": payment_result,
-                "service_cost": 0.0,
+                "service_cost": "0",
             }
 
         # Coerce successful response to string
@@ -341,11 +342,11 @@ class OpenAPITool(BaseTool):
             "error": None,
             "tool_name": self.name,
             "status_code": status_code,
-            "service_cost": 0.0,
+            "service_cost": "0",
         }
         if payment_result:
             result["payment"] = payment_result
-            result["service_cost"] = float(payment_result.get("amount_usd") or 0.0)
+            result["service_cost"] = str(Decimal(str(payment_result.get("amount_usd") or 0)))
         return result
 
 

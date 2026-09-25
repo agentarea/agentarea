@@ -19,6 +19,7 @@ from agentarea_common.auth.route_authz import (
     enforced_in_handler,
     requires_workspace_admin,
 )
+from agentarea_common.money import ZERO, Money
 from agentarea_common.utils.types import UtcDatetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -42,7 +43,7 @@ class X402ConfigSchema(BaseModel):
 
 class MPPConfigSchema(BaseModel):
     payment_method_types: list[str] = Field(default_factory=lambda: ["charge"])
-    session_budget_usd: float = 10.0
+    session_budget_usd: Money = Field(ge=ZERO)
     stripe_profile_id: str | None = None
     chain_id: int | None = None
     rpc_url: str | None = None
@@ -61,7 +62,7 @@ class CreateWalletRequest(BaseModel):
     x402_config: X402ConfigSchema | None = None
     mpp_config: MPPConfigSchema | None = None
     credentials: WalletCredentialsSchema | None = None
-    service_budget_usd: float = 0.0
+    service_budget_usd: Money = Field(default=ZERO, ge=ZERO)
     service_budget_period: str = "execution"  # "execution", "daily", "monthly"
 
 
@@ -70,13 +71,13 @@ class UpdateWalletRequest(BaseModel):
     x402_config: X402ConfigSchema | None = None
     mpp_config: MPPConfigSchema | None = None
     credentials: WalletCredentialsSchema | None = None
-    service_budget_usd: float | None = None
+    service_budget_usd: Money | None = Field(default=None, ge=ZERO)
     service_budget_period: str | None = None
     status: str | None = None
 
 
 class FundWalletRequest(BaseModel):
-    service_budget_usd: float
+    service_budget_usd: Money = Field(ge=ZERO)
 
 
 class WalletResponse(BaseModel):
@@ -86,7 +87,7 @@ class WalletResponse(BaseModel):
     x402_config: dict[str, Any] | None = None
     mpp_config: dict[str, Any] | None = None
     has_credentials: bool = False
-    service_budget_usd: float
+    service_budget_usd: Money
     service_budget_period: str
     status: str
     created_at: UtcDatetime | None = None
@@ -96,10 +97,10 @@ class WalletResponse(BaseModel):
 
 
 class WalletBalanceResponse(BaseModel):
-    service_budget_usd: float
+    service_budget_usd: Money
     service_budget_period: str
-    total_spent_current_period: float
-    remaining: float
+    total_spent_current_period: Money
+    remaining: Money
 
 
 class PaymentRecordResponse(BaseModel):
@@ -107,7 +108,7 @@ class PaymentRecordResponse(BaseModel):
     agent_id: str
     execution_id: str
     protocol: str
-    amount_usd: float
+    amount_usd: Money
     recipient: str
     tx_hash: str | None = None
     tool_name: str
@@ -190,7 +191,7 @@ async def create_wallet(
             agent_id=str(agent_id),
             wallet_type=request.wallet_type,
             x402_config=request.x402_config.model_dump() if request.x402_config else None,
-            mpp_config=request.mpp_config.model_dump() if request.mpp_config else None,
+            mpp_config=request.mpp_config.model_dump(mode="json") if request.mpp_config else None,
             credentials=request.credentials.model_dump(exclude_none=True)
             if request.credentials
             else None,
@@ -253,12 +254,8 @@ async def update_wallet(
                 if isinstance(updates["x402_config"], dict)
                 else updates["x402_config"].model_dump()
             )
-        if "mpp_config" in updates and updates["mpp_config"] is not None:
-            updates["mpp_config"] = (
-                updates["mpp_config"]
-                if isinstance(updates["mpp_config"], dict)
-                else updates["mpp_config"].model_dump()
-            )
+        if request.mpp_config is not None:
+            updates["mpp_config"] = request.mpp_config.model_dump(mode="json")
 
         wallet = await wallet_service.update_wallet(
             agent_id=str(agent_id),
@@ -309,7 +306,7 @@ async def get_wallet_balance(
     try:
         wallet = await wallet_service.get_wallet(str(agent_id))
         spent = await wallet_service.get_total_spent_current_period(str(agent_id))
-        remaining = max(0.0, wallet.service_budget_usd - spent)
+        remaining = max(ZERO, wallet.service_budget_usd - spent)
 
         return WalletBalanceResponse(
             service_budget_usd=wallet.service_budget_usd,

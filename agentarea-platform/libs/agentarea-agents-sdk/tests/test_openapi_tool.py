@@ -284,7 +284,7 @@ class TestOpenAPIToolExecuteHappyPath:
         assert result["success"] is True
         assert result["status_code"] == 200
         assert result["result"] == '{"paid": true}'
-        assert result["service_cost"] == 0.01
+        assert result["service_cost"] == "0.01"
         assert result["payment"]["protocol"] == "x402"
 
     @pytest.mark.asyncio

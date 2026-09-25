@@ -10,6 +10,7 @@ import asyncio
 import base64
 import dataclasses
 import json
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -46,7 +47,7 @@ class FakeWalletService:
         return {"x402_private_key": "0xkey", "mpp_tempo_key": "tempo-key"}  # pragma: allowlist secret
 
     async def get_service_budget_remaining(self, agent_id, execution_id):
-        return 5.0
+        return Decimal("5")
 
     async def record_payment(self, **kwargs):
         record = SimpleNamespace(**kwargs)

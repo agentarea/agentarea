@@ -1,5 +1,7 @@
 """Tests for typed governance policy resolution."""
 
+from decimal import Decimal
+
 import pytest
 from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationAction,
@@ -273,32 +275,32 @@ def test_effective_policy_serializes_money_as_json_string():
     assert effective.to_json_dict()["budget"]["run_budget_usd"] == "1.25"
 
 
-def test_to_execution_state_emits_floats_for_money():
+def test_to_execution_state_emits_decimals_for_money():
     effective = PolicyResolver().resolve(
         [PolicyDocument(budget=BudgetPolicy(run_budget_usd="10.00", service_budget_usd="5.00"))]
     )
 
     state = effective.to_execution_state()
 
-    assert state["budget_usd"] == 10.0
-    assert isinstance(state["budget_usd"], float)
-    assert state["service_budget_usd"] == 5.0
-    assert isinstance(state["service_budget_usd"], float)
+    assert state["budget_usd"] == Decimal("10.00")
+    assert isinstance(state["budget_usd"], Decimal)
+    assert state["service_budget_usd"] == Decimal("5.00")
+    assert isinstance(state["service_budget_usd"], Decimal)
 
 
-def test_to_execution_state_merges_runtime_counters_as_floats():
+def test_to_execution_state_merges_runtime_counters_as_decimals():
     effective = PolicyResolver().resolve(
         [PolicyDocument(budget=BudgetPolicy(run_budget_usd="10.00"))]
     )
 
     state = effective.to_execution_state(
-        {"cost_used": "3.50", "service_cost_used": "1.00", "tokens_used": 1200}
+        {"cost_used": "3.50", "service_cost_used": 0.1, "tokens_used": 1200}
     )
 
-    assert state["cost_used"] == 3.5
-    assert isinstance(state["cost_used"], float)
-    assert state["service_cost_used"] == 1.0
-    assert isinstance(state["service_cost_used"], float)
+    assert state["cost_used"] == Decimal("3.50")
+    assert isinstance(state["cost_used"], Decimal)
+    assert state["service_cost_used"] == Decimal("0.1")
+    assert isinstance(state["service_cost_used"], Decimal)
     assert state["tokens_used"] == 1200
 
 

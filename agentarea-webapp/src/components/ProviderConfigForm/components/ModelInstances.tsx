@@ -75,9 +75,9 @@ export default function ModelInstances({
     return tokens.toLocaleString();
   };
 
-  const formatCostPerMillion = (costPerToken?: number | null) => {
+  const formatCostPerMillion = (costPerToken?: string | null) => {
     if (costPerToken == null) return "-";
-    return `$${(costPerToken * 1_000_000).toFixed(2)}`;
+    return `$${(Number(costPerToken) * 1_000_000).toFixed(2)}`;
   };
 
   const providerKey: string | undefined = selectedProvider?.provider_key;

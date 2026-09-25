@@ -3,6 +3,7 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.constants import PLATFORM_WORKSPACE_ID
+from agentarea_common.money import to_optional_money
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -34,8 +35,8 @@ def _project_catalog_model_spec(item: CatalogModelSpecItem) -> ModelSpec:
         description=item.description if item.description is not None else spec.get("description"),
         context_window=spec["context_window"],
         max_output_tokens=spec.get("max_output_tokens"),
-        input_cost_per_token=spec.get("input_cost_per_token"),
-        output_cost_per_token=spec.get("output_cost_per_token"),
+        input_cost_per_token=to_optional_money(spec.get("input_cost_per_token")),
+        output_cost_per_token=to_optional_money(spec.get("output_cost_per_token")),
         supports_function_calling=spec.get("supports_function_calling", False),
         is_active=spec.get("is_active", True),
     )

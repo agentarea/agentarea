@@ -1,5 +1,7 @@
 """Provider discovery must preserve unknown runtime metadata as unknown."""
 
+from decimal import Decimal
+
 from agentarea_llm.application.model_discovery_service import ModelDiscoveryService
 
 
@@ -34,8 +36,8 @@ def test_discovery_parses_explicit_runtime_metadata():
     model = models[0]
     assert model.context_window == 128_000
     assert model.max_output_tokens == 8192
-    assert model.input_cost_per_token == 0.000001
-    assert model.output_cost_per_token == 0.000002
+    assert model.input_cost_per_token == Decimal("0.000001")
+    assert model.output_cost_per_token == Decimal("0.000002")
 
 
 async def test_a_member_endpoint_at_the_metadata_address_is_never_fetched(caplog):

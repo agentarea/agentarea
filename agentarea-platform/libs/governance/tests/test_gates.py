@@ -1,5 +1,6 @@
 """Tests for gate interceptors."""
 
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -60,6 +61,24 @@ class TestCostBudgetGuard:
         ctx = _ctx(execution_state={"budget_usd": 10.0, "cost_used": 12.0})
         result = await guard.execute(ctx)
         assert result.action == InterceptorAction.DENY
+
+
+    @pytest.mark.asyncio
+    async def test_decimal_state_denies_at_exact_exhaustion(self):
+        guard = CostBudgetGuard()
+        spent = Decimal("0.7") + Decimal("0.1")
+        ctx = _ctx(execution_state={"budget_usd": Decimal("0.8"), "cost_used": spent})
+        result = await guard.execute(ctx)
+        assert result.action == InterceptorAction.DENY
+        assert result.metadata == {"cost_used": "0.8", "budget_usd": "0.8"}
+
+    @pytest.mark.asyncio
+    async def test_serialized_money_state_is_compared_as_money(self):
+        guard = CostBudgetGuard(warning_threshold=0.8)
+        ctx = _ctx(execution_state={"budget_usd": "10.00", "cost_used": "8.50"})
+        result = await guard.execute(ctx)
+        assert result.action == InterceptorAction.WARN
+        assert "85%" in result.reason
 
 
 class TestTokenBudgetGuard:
@@ -130,8 +149,18 @@ class TestServiceBudgetGuard:
         result = await guard.execute(ctx)
         assert result.action == InterceptorAction.DENY
         assert "exhausted" in result.reason
-        assert result.metadata["service_cost_used"] == 5.0
-        assert result.metadata["service_budget_usd"] == 5.0
+        assert result.metadata["service_cost_used"] == "5.0"
+        assert result.metadata["service_budget_usd"] == "5.0"
+
+    @pytest.mark.asyncio
+    async def test_decimal_state_denies_at_exact_exhaustion(self):
+        guard = ServiceBudgetGuard()
+        spent = Decimal("0.7") + Decimal("0.1")
+        ctx = _ctx(
+            execution_state={"service_budget_usd": Decimal("0.8"), "service_cost_used": spent}
+        )
+        result = await guard.execute(ctx)
+        assert result.action == InterceptorAction.DENY
 
     @pytest.mark.asyncio
     async def test_over_budget(self):

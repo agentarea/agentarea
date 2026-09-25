@@ -8,10 +8,12 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from decimal import Decimal
 from importlib import import_module
 from typing import Any
 
 import httpx
+from agentarea_common.money import ZERO, serialize_money
 from agentarea_wallet.domain.enums import SETTLED_PAYMENT_STATUSES, settlement_status
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,7 @@ SettledPaymentLookup = Callable[[str], Awaitable[dict[str, Any] | None]]
 def create_payment_httpx_client_factory(
     *,
     wallet_config: dict[str, Any],
-    budget_remaining: float,
+    budget_remaining: Decimal,
     next_idempotency_key: Callable[[], str],
     find_settled_payment: SettledPaymentLookup,
     on_payment: PaymentCallback | None = None,
@@ -67,14 +69,14 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         self,
         *,
         wallet_config: dict[str, Any],
-        budget_remaining: float,
+        budget_remaining: Decimal,
         next_idempotency_key: Callable[[], str],
         find_settled_payment: SettledPaymentLookup,
         on_payment: PaymentCallback | None = None,
         inner: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._wallet_config = wallet_config
-        self._budget_remaining = float(budget_remaining)
+        self._budget_remaining = budget_remaining
         self._next_idempotency_key = next_idempotency_key
         self._find_settled_payment = find_settled_payment
         self._on_payment = on_payment
@@ -202,7 +204,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                 self._payment_result(
                     protocol="x402",
                     success=False,
-                    amount_usd=0,
+                    amount_usd=ZERO,
                     recipient="",
                     request=request,
                     idempotency_key=idempotency_key,
@@ -315,7 +317,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                 self._payment_result(
                     protocol="mpp",
                     success=False,
-                    amount_usd=0,
+                    amount_usd=ZERO,
                     recipient="",
                     request=request,
                     idempotency_key=idempotency_key,
@@ -344,17 +346,17 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         return accepts[0]
 
     @staticmethod
-    def _x402_amount_usd(requirement: Any) -> float:
+    def _x402_amount_usd(requirement: Any) -> Decimal:
         if hasattr(requirement, "get_amount"):
-            return float(requirement.get_amount() or 0) / 1_000_000
+            return Decimal(str(requirement.get_amount() or 0)) / 1_000_000
         amount = getattr(requirement, "amount", None) or getattr(
             requirement, "max_amount_required", 0
         )
-        return float(amount or 0) / 1_000_000
+        return Decimal(str(amount or 0)) / 1_000_000
 
     @staticmethod
-    def _mpp_amount_usd(raw_amount: Any, decimals: int) -> float:
-        return float(raw_amount or 0) / (10**decimals)
+    def _mpp_amount_usd(raw_amount: Any, decimals: int) -> Decimal:
+        return Decimal(str(raw_amount or 0)) / (Decimal(10) ** decimals)
 
     @staticmethod
     def _retry_request(
@@ -422,7 +424,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         *,
         protocol: str,
         success: bool,
-        amount_usd: float,
+        amount_usd: Decimal,
         recipient: str,
         request: httpx.Request,
         idempotency_key: str,
@@ -434,7 +436,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         return {
             "success": success,
             "protocol": protocol,
-            "amount_usd": amount_usd,
+            "amount_usd": serialize_money(amount_usd),
             "recipient": recipient,
             "tx_hash": tx_hash,
             "response_status": response.status_code if response else None,

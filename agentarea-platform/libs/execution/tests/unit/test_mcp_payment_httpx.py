@@ -1,5 +1,6 @@
 """Tests for MCP payment-aware HTTPX factory."""
 
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -14,7 +15,7 @@ from agentarea_execution.activities.mcp_payment_httpx import (
 async def test_payment_httpx_factory_uses_agentarea_payment_transport():
     factory = create_payment_httpx_client_factory(
         wallet_config={"wallet_type": "dual"},
-        budget_remaining=1.0,
+        budget_remaining=Decimal("1"),
         next_idempotency_key=lambda: "key-1",
         find_settled_payment=AsyncMock(return_value=None),
     )
@@ -97,7 +98,7 @@ async def test_x402_transport_retries_and_reports_payment(monkeypatch):
             "x402_private_key": "0xkey",
             "x402_config": {"network": "eip155:84532"},
         },
-        budget_remaining=1.0,
+        budget_remaining=Decimal("1"),
         next_idempotency_key=lambda: "key-1",
         find_settled_payment=AsyncMock(return_value=None),
         on_payment=payments.append,
@@ -114,7 +115,7 @@ async def test_x402_transport_retries_and_reports_payment(monkeypatch):
         {
             "success": True,
             "protocol": "x402",
-            "amount_usd": 0.25,
+            "amount_usd": "0.25",
             "recipient": "0xrecipient",
             "tx_hash": None,
             "response_status": 200,
@@ -187,7 +188,7 @@ async def test_mpp_transport_retries_and_reports_payment(monkeypatch):
     payments = []
     transport = AgentAreaPaymentTransport(
         wallet_config={"wallet_type": "mpp", "mpp_tempo_key": "tempo-key"},
-        budget_remaining=1.0,
+        budget_remaining=Decimal("1"),
         next_idempotency_key=lambda: "key-1",
         find_settled_payment=AsyncMock(return_value=None),
         on_payment=payments.append,
@@ -202,7 +203,7 @@ async def test_mpp_transport_retries_and_reports_payment(monkeypatch):
     assert inner.requests[1].headers["Authorization"] == "Payment credential"
     assert payments[0]["success"] is True
     assert payments[0]["protocol"] == "mpp"
-    assert payments[0]["amount_usd"] == 0.5
+    assert payments[0]["amount_usd"] == "0.5"
     assert payments[0]["recipient"] == "tempo-recipient"
 
 
@@ -216,7 +217,7 @@ async def test_settled_request_is_not_paid_again():
     payments = []
     transport = AgentAreaPaymentTransport(
         wallet_config={"wallet_type": "x402", "x402_private_key": "0xkey"},
-        budget_remaining=1.0,
+        budget_remaining=Decimal("1"),
         next_idempotency_key=lambda: "key-1",
         find_settled_payment=find_settled,
         on_payment=payments.append,
@@ -230,3 +231,63 @@ async def test_settled_request_is_not_paid_again():
     assert len(inner.requests) == 1
     find_settled.assert_awaited_once_with("key-1")
     assert payments == [settled]
+
+
+@pytest.mark.asyncio
+async def test_budget_is_spent_down_exactly(monkeypatch):
+    """Three dimes fit a thirty-cent budget; float subtraction leaves 0.09999999999999998."""
+    from agentarea_payment.x402_client import X402PaymentClient
+
+    class FakeHTTPClient:
+        def __init__(self, client):
+            self.client = client
+
+        def get_payment_required_response(self, get_header, body):
+            return SimpleNamespace(
+                accepts=[
+                    SimpleNamespace(
+                        pay_to="0xrecipient",
+                        network="eip155:84532",
+                        scheme="exact",
+                        get_amount=lambda: "100000",
+                    )
+                ]
+            )
+
+        def encode_payment_signature_header(self, payment_payload):
+            return {"PAYMENT-SIGNATURE": "signed"}
+
+    class FakeX402Client:
+        async def create_payment_payload(self, payment_required):
+            return {"signed": True}
+
+    monkeypatch.setattr(X402PaymentClient, "_get_client", lambda self: FakeX402Client())
+    monkeypatch.setattr(
+        "agentarea_execution.activities.mcp_payment_httpx.import_module",
+        lambda name: SimpleNamespace(x402HTTPClient=FakeHTTPClient),
+    )
+
+    paid = httpx.Response(200, headers={"PAYMENT-RESPONSE": "e30="}, content=b"ok")
+    challenge = httpx.Response(402, headers={"PAYMENT-REQUIRED": "challenge"}, content=b"{}")
+    inner = SequenceTransport([challenge, paid] * 3)
+    keys = iter(["key-1", "key-2", "key-3"])
+    payments = []
+    transport = AgentAreaPaymentTransport(
+        wallet_config={
+            "wallet_type": "x402",
+            "x402_private_key": "0xkey",
+            "x402_config": {"network": "eip155:84532"},
+        },
+        budget_remaining=Decimal("0.3"),
+        next_idempotency_key=lambda: next(keys),
+        find_settled_payment=AsyncMock(return_value=None),
+        on_payment=payments.append,
+        inner=inner,
+    )
+
+    async with httpx.AsyncClient(transport=transport) as client:
+        statuses = [(await client.get("https://paid.example/mcp")).status_code for _ in range(3)]
+
+    assert statuses == [200, 200, 200]
+    assert [p["amount_usd"] for p in payments] == ["0.1", "0.1", "0.1"]
+    assert all(p["success"] for p in payments)
