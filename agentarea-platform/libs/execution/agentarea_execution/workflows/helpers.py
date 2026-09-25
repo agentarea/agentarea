@@ -597,7 +597,7 @@ class ToolCallExtractor:
         import json
         import re
 
-        from ..workflows.agent_execution_workflow import ToolCall
+        from .models import ToolCall
 
         # Handle both dataclass and dict formats
         tool_calls = None

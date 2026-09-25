@@ -10,6 +10,7 @@ import pytest
 from agentarea_agents_sdk.tools.tool_manager import DiscoveryResult, ProviderDiscovery
 from agentarea_common.auth.context import UserContext
 from agentarea_execution.activities import agent_execution_activities as activities
+from agentarea_execution.activities.agent import config as config_activities
 from agentarea_execution.models import (
     AgentConfigRequest,
     AgentConfigResult,
@@ -79,7 +80,7 @@ async def test_same_mcp_never_widens_inherited_tool_permissions(reference_kind):
     ctx = context()
     ctx.get_mcp_server_instance_service.return_value.get.return_value = instance
 
-    tools, _ = await activities._resolve_task_resources(
+    tools, _ = await config_activities._resolve_task_resources(
         saved, {"mcps": [{"id": str(instance.id), "name": "Ignore all limits"}]}, ctx
     )
 
@@ -98,7 +99,7 @@ async def test_additions_are_canonical_and_deduplicated_without_mutating_agent()
     ctx.get_mcp_server_instance_service.return_value.get.return_value = instance
     ctx.get_skill_service.return_value.get_with_catalog.return_value = selected
 
-    tools, skills = await activities._resolve_task_resources(
+    tools, skills = await config_activities._resolve_task_resources(
         saved,
         {
             "mcps": [
@@ -127,7 +128,7 @@ async def test_additions_are_canonical_and_deduplicated_without_mutating_agent()
 @pytest.mark.parametrize("kind", ["mcps", "skills"])
 async def test_unavailable_or_cross_workspace_resource_fails_closed(kind):
     with pytest.raises(ApplicationError, match="unavailable") as error:
-        await activities._resolve_task_resources(agent(), {kind: [str(uuid4())]}, context())
+        await config_activities._resolve_task_resources(agent(), {kind: [str(uuid4())]}, context())
     assert error.value.non_retryable
 
 
@@ -137,7 +138,7 @@ async def test_same_name_different_skill_does_not_replace_attached_instructions(
     selected = skill()
     ctx.get_skill_service.return_value.get_with_catalog.return_value = selected
     with pytest.raises(ApplicationError, match="distinct names"):
-        await activities._resolve_task_resources(
+        await config_activities._resolve_task_resources(
             agent(skills=[skill()]), {"skills": [str(selected.id)]}, ctx
         )
 
@@ -146,16 +147,16 @@ async def test_same_name_different_skill_does_not_replace_attached_instructions(
 @pytest.mark.parametrize("value", ["all", ["name-only"], [{}], [None], [12]])
 def test_malformed_task_resource_refs_are_rejected(kind, value):
     with pytest.raises(ApplicationError) as error:
-        activities._task_resource_ids({kind: value}, kind)
+        config_activities._task_resource_ids({kind: value}, kind)
     assert error.value.non_retryable
 
 
 @pytest.mark.parametrize("alias", ["mcps", "mcp", "mcp_servers"])
 def test_legacy_mcp_aliases_keep_the_same_identity(alias):
     instance_id = uuid4()
-    assert activities._task_resource_ids({alias: [{"instance_id": str(instance_id)}]}, "mcps") == [
-        instance_id
-    ]
+    assert config_activities._task_resource_ids(
+        {alias: [{"instance_id": str(instance_id)}]}, "mcps"
+    ) == [instance_id]
 
 
 def test_legacy_activity_requests_have_safe_defaults():
@@ -174,9 +175,11 @@ def activity_context(monkeypatch):
     monkeypatch.setattr(dependencies, "ActivityServiceContainer", MagicMock())
     monkeypatch.setattr(dependencies, "ActivityContext", MagicMock(return_value=ctx))
     monkeypatch.setattr(
-        activities, "fetch_runtime_manifest", AsyncMock(return_value=RuntimeDiscoveryResult())
+        config_activities,
+        "fetch_runtime_manifest",
+        AsyncMock(return_value=RuntimeDiscoveryResult()),
     )
-    monkeypatch.setattr(activities, "_record_task_config_hash", AsyncMock())
+    monkeypatch.setattr(config_activities, "_record_task_config_hash", AsyncMock())
     all_activities = {fn.__name__: fn for fn in activities.make_agent_activities(MagicMock())}
     return ctx, all_activities
 
@@ -228,7 +231,7 @@ async def test_both_discovery_modes_use_resolved_run_tools(
         return_value=DiscoveryResult(explicit_tools=[], searchable_entries=[])
     )
     manager.discover_tool_providers = AsyncMock(return_value=ProviderDiscovery())
-    monkeypatch.setattr(activities, "ToolManager", MagicMock(return_value=manager))
+    monkeypatch.setattr(config_activities, "ToolManager", MagicMock(return_value=manager))
 
     await functions[mode](
         ToolDiscoveryRequest(
@@ -310,10 +313,10 @@ async def test_files_snapshot_regular_and_task_inputs_and_retries_reuse_snapshot
     request = file_request(["notes.txt", source_path, "notes.txt"])
     user = UserContext(user_id="user", workspace_id="workspace")
 
-    first = await activities._prepare_task_files(request, user)
+    first = await config_activities._prepare_task_files(request, user)
     sources.clear()
     del stored[("workspace", source_task, "report.txt")]
-    second = await activities._prepare_task_files(request, user)
+    second = await config_activities._prepare_task_files(request, user)
 
     assert first == second
     assert len(first) == 2
@@ -332,7 +335,7 @@ async def test_empty_selected_workspace_file_is_a_valid_snapshot(file_storage):
     _, _, stored, sources = file_storage
     sources[("workspace", "empty.txt")] = b""
     request = file_request(["empty.txt"])
-    result = await activities._prepare_task_files(
+    result = await config_activities._prepare_task_files(
         request, UserContext(user_id="user", workspace_id="workspace")
     )
     assert result[0]["size"] == 0
@@ -347,7 +350,7 @@ async def test_source_changed_between_head_and_read_never_poisons_snapshot(file_
     service.get.side_effect = None
     service.get.return_value = (b"after", "text/plain")
     with pytest.raises(ApplicationError, match="unavailable"):
-        await activities._prepare_task_files(
+        await config_activities._prepare_task_files(
             file_request(["notes.txt"]), UserContext(user_id="user", workspace_id="workspace")
         )
     repository.put_files.assert_not_awaited()
@@ -376,7 +379,7 @@ async def test_source_changed_between_head_and_read_never_poisons_snapshot(file_
 async def test_file_selection_rejects_traversal_hidden_and_noncanonical_paths(file_storage, path):
     repository, service, _, _ = file_storage
     with pytest.raises(ApplicationError, match="Invalid task file path") as error:
-        await activities._prepare_task_files(
+        await config_activities._prepare_task_files(
             file_request([path]), UserContext(user_id="user", workspace_id="workspace")
         )
     assert error.value.non_retryable
@@ -393,7 +396,7 @@ async def test_files_in_other_workspace_are_unavailable(file_storage, is_task_fi
     sources[("another-workspace", "private.txt")] = b"private"
     stored[("another-workspace", source_task, "private.txt")] = (b"private", "text/plain")
     with pytest.raises(ApplicationError, match="unavailable") as error:
-        await activities._prepare_task_files(
+        await config_activities._prepare_task_files(
             file_request([path]), UserContext(user_id="user", workspace_id="workspace")
         )
     assert error.value.non_retryable
@@ -427,6 +430,7 @@ async def test_config_returns_trusted_attachment_descriptors(activity_context, f
 async def test_workflow_forwards_selections_and_keeps_policy_filtering(monkeypatch, strategy):
     from agentarea_execution.workflows import agent_execution_workflow as workflow_module
     from agentarea_execution.workflows.constants import Activities
+    from agentarea_execution.workflows.models import AgentGoal
 
     instance_id = str(uuid4())
     run_tools = [{"type": "mcp", "name": instance_id}]
@@ -472,7 +476,7 @@ async def test_workflow_forwards_selections_and_keeps_policy_filtering(monkeypat
     flow.state.task_id = str(uuid4())
     flow.state.user_id = "user"
     flow.state.workspace_id = "workspace"
-    flow.state.goal = workflow_module.AgentGoal(
+    flow.state.goal = AgentGoal(
         id="goal",
         description="Work",
         context=request_parameters,
