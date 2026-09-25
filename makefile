@@ -1,4 +1,5 @@
-.PHONY: help frontend-dev docs-dev \
+.PHONY: help check check-backend check-frontend check-db db-test-up db-test-down \
+	frontend-dev docs-dev \
 	agentarea-platform-api agentarea-platform-worker agentarea-platform-test \
 	agentarea-platform-lint agentarea-platform-format agentarea-platform-sync \
 	build-go lint-go test-go \
@@ -20,6 +21,44 @@ help: ## Display this help message
 	@echo "$(BLUE)Available targets:$(NC)"
 	@awk 'BEGIN {FS = ":.*##"; printf "\n"} /^[a-zA-Z0-9_-]+:.*?##/ { printf "  $(GREEN)%-24s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(YELLOW)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
+##@ Checks (the same entrypoints CI runs)
+
+check: check-backend check-frontend ## Every non-DB check across all stacks
+	@echo "$(GREEN)All checks passed$(NC)"
+
+check-backend: ## Platform + openapi drift, MCP manager, event service, operator
+	$(MAKE) -C agentarea-platform check
+	$(MAKE) -C agentarea-platform openapi-drift
+	$(MAKE) -C agentarea-mcp-manager check
+	$(MAKE) -C agentarea-event-service check
+	$(MAKE) -C agentarea-operator check
+
+check-frontend: ## Webapp (lint, types, tests, client drift, build) + CLI
+	pnpm -C agentarea-webapp run check
+	pnpm -C agentarea-webapp run check:integration
+	pnpm -C agentarea-cli run check
+
+check-db: ## Migrations roundtrip + schema-backed suites (needs POSTGRES_*; see db-test-up)
+	$(MAKE) -C agentarea-platform check-db
+
+DB_TEST_CONTAINER := agentarea-check-db
+DB_TEST_PORT ?= 55432
+
+db-test-up: ## Start a throwaway Postgres (tmpfs) for check-db and print its env
+	docker run -d --rm --name $(DB_TEST_CONTAINER) \
+		-e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=agentarea_test \
+		-e PGDATA=/var/lib/postgresql/data --tmpfs /var/lib/postgresql/data \
+		-p $(DB_TEST_PORT):5432 postgres:15
+	@for _ in $$(seq 1 30); do \
+		docker exec $(DB_TEST_CONTAINER) pg_isready -U postgres -d agentarea_test >/dev/null 2>&1 && break; \
+		sleep 1; \
+	done; \
+	docker exec $(DB_TEST_CONTAINER) pg_isready -U postgres -d agentarea_test >/dev/null || { echo "Postgres did not become ready" >&2; exit 1; }
+	@echo "export POSTGRES_HOST=localhost POSTGRES_PORT=$(DB_TEST_PORT) POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres POSTGRES_DB=agentarea_test"
+
+db-test-down: ## Remove the check-db Postgres
+	docker rm -f $(DB_TEST_CONTAINER)
+
 ##@ Development - Frontend
 
 frontend-dev: ## Start frontend development server
@@ -37,10 +76,10 @@ agentarea-platform-worker: ## Run the worker application
 	cd agentarea-platform && uv run --package agentarea-worker python -m agentarea_worker.main
 
 agentarea-platform-test: ## Run platform Python tests
-	cd agentarea-platform && uv run pytest
+	$(MAKE) -C agentarea-platform test
 
 agentarea-platform-lint: ## Lint platform Python code
-	cd agentarea-platform && uv run ruff check && uv run pyright
+	$(MAKE) -C agentarea-platform lint
 
 agentarea-platform-format: ## Format platform Python code
 	cd agentarea-platform && uv run ruff format && uv run ruff check --fix
@@ -51,13 +90,13 @@ agentarea-platform-sync: ## Sync platform dependencies
 ##@ Development - Go MCP Manager
 
 build-go: ## Build Go MCP manager
-	cd agentarea-mcp-manager && go build ./...
+	$(MAKE) -C agentarea-mcp-manager build
 
 lint-go: ## Lint Go code
-	cd agentarea-mcp-manager && golangci-lint run --timeout=5m
+	$(MAKE) -C agentarea-mcp-manager lint
 
 test-go: ## Run Go tests
-	cd agentarea-mcp-manager && go test ./...
+	$(MAKE) -C agentarea-mcp-manager test
 
 ##@ Docker - Development Environment
 

@@ -37,12 +37,24 @@ agentarea/
 
 ## COMMANDS
 
+Checks: one entrypoint per stack, the same command CI runs.
+
 ```bash
+# From the repo root
+make check          # Every non-DB check (check-backend + check-frontend)
+make check-db       # Migrations + schema-backed suites; needs POSTGRES_* (make db-test-up / db-test-down)
+
+# Per stack
+make -C agentarea-platform check        # ruff + format + pyright, pytest, one alembic head
+make -C agentarea-mcp-manager check     # go build + test + golangci-lint (same for agentarea-event-service)
+make -C agentarea-operator check        # pytest
+pnpm -C agentarea-webapp run check      # eslint + tsc + vitest (check:integration = client drift + build)
+pnpm -C agentarea-cli run check         # prettier + tsc + ava
+
 # Backend (from agentarea-platform/)
 make install        # Setup venv + install deps
 make run-api        # FastAPI on :8000
 make run-worker     # Temporal worker
-make test           # Unit + functional tests
 
 # Frontend (from agentarea-webapp/)
 npm run dev         # Next.js on :3000

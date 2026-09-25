@@ -39,6 +39,7 @@
 		"lint": "prettier --check . && xo",
 		"pretest": "pnpm -C ../agentarea-webapp --filter @agentarea/api-client... install --frozen-lockfile && pnpm -C ../agentarea-webapp --filter @agentarea/api-client run build",
 		"test": "prettier --check . && tsc --noEmit && ava",
+		"check": "pnpm run test",
 		"prepublishOnly": "npm run build"
 	},
 	"files": [

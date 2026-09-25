@@ -123,18 +123,11 @@ Ensure MCP servers wait for database connection before starting.
 
 ### Python Code Style
 
-**Formatting:**
-- Use `black` for code formatting
-- Use `isort` for import sorting
-- Use `ruff` for linting
+**Formatting and linting:** `ruff` (format + lint) and `pyright`.
 
 ```bash
-# Format code
-docker compose -f docker-compose.dev.yaml exec app black .
-docker compose -f docker-compose.dev.yaml exec app isort .
-
-# Check linting
-docker compose -f docker-compose.dev.yaml exec app ruff check .
+make -C agentarea-platform format   # ruff format + ruff check --fix
+make -C agentarea-platform lint     # exactly what CI's platform-lint runs
 ```
 
 **Code Quality:**
@@ -376,19 +369,18 @@ class TestAgentAPI:
         assert "id" in data
 ```
 
-### Running Tests
+### Running Checks
+Every stack has one entrypoint, and CI calls the same one.
 ```bash
-# Run all tests
-docker compose -f docker-compose.dev.yaml exec app pytest
+make check        # all non-DB checks, every stack
+make check-db     # migrations + schema-backed suites (make db-test-up first, export what it prints)
 
-# Run specific test file
-docker compose -f docker-compose.dev.yaml exec app pytest tests/unit/test_agents.py
+# One stack
+make -C agentarea-platform check
+pnpm -C agentarea-webapp run check
 
-# Run with coverage
-docker compose -f docker-compose.dev.yaml exec app pytest --cov=core
-
-# Run integration tests
-docker compose -f docker-compose.dev.yaml exec app pytest tests/integration/
+# A single test file
+cd agentarea-platform && uv run python -m pytest path/to/test_file.py
 ```
 
 ## 📚 Documentation Standards

@@ -132,11 +132,14 @@ secrets, inbox, workplace, admin, settings, ...).
 
 ```bash
 pnpm dev            # Development server :3000
+pnpm check          # lint + type-check + test (CI: webapp-lint, webapp-test)
+pnpm check:integration # client drift + elements-react + type-check + check:build (CI: frontend-integration)
+pnpm check:build    # Production build + invalid-element scan (CI: webapp-build)
 pnpm build          # Production build
 pnpm lint           # ESLint
 pnpm type-check     # tsc --noEmit
 pnpm format         # Prettier + import sort
 pnpm generate:api   # Refresh openapi.json from backend + regenerate client
-pnpm test           # vitest — pure modules only; NOT a CI gate
+pnpm test           # vitest — pure modules only
 pnpm test:e2e:smoke # Playwright smoke against a stand already on :3000
 ```
