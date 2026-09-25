@@ -2001,12 +2001,15 @@
     "noAgentsAvailable": "Агенты недоступны.",
     "createFirstAgent": "Создайте своего первого агента, чтобы начать работу.",
     "onboarding": {
-      "noAgentTitle": "Нет агента",
-      "noAgentSubtitle": "Создайте агента, чтобы начать общение в этом воркспейсе.",
-      "noProviderSubtitle": "Сначала подключите языковую модель, потом создайте агента.",
+      "connectModelTitle": "Подключите языковую модель",
+      "connectModelDescription": "Без неё не получится создать агента.",
+      "connectModelAction": "К моделям",
+      "connectModelPlaceholder": "Подключите модель, чтобы начать…",
+      "createAgentTitle": "Создайте первого агента",
+      "createAgentDescription": "Последний шаг — и можно общаться.",
       "createAgentAction": "Создать агента",
-      "connectLLMAction": "Подключить LLM",
-      "disabledPlaceholder": "Создайте агента, чтобы начать общение…"
+      "createAgentPlaceholder": "Создайте агента, чтобы начать…",
+      "noAgent": "Нет агента"
     }
   },
   "BuiltinToolIconGrid": {

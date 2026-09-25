@@ -1,105 +1,114 @@
 "use client";
 
-import React, { Suspense } from "react";
-import Link from "next/link";
+import React, { Suspense, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ArrowRight, Bot, Paperclip, Send } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { Lock, Sparkles } from "lucide-react";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
 import {
   BadgeSuggestions,
   type BadgeSuggestion,
 } from "./componets/BadgeSuggestions";
+import { ChatInputArea } from "./componets/ChatInputArea";
 import { ChatWelcome } from "./componets/ChatWelcome";
+import { ComposerSetupBanner } from "./componets/ComposerSetupBanner";
 
 interface WorkplaceOnboardingProps {
-  hasProviders: boolean;
+  hasModels: boolean;
   badgeSuggestions?: BadgeSuggestion[] | Promise<BadgeSuggestion[]>;
 }
 
+const noop = () => {};
+
+/**
+ * The workplace before it can be used: the same welcome, composer and chips as
+ * WorkplaceChat, with the composer locked and the missing step docked on top of
+ * it — a model first, then an agent. Mirroring the chat layout is deliberate:
+ * finishing setup should not move anything but the banner.
+ */
 export function WorkplaceOnboarding({
-  hasProviders,
+  hasModels,
   badgeSuggestions,
 }: WorkplaceOnboardingProps) {
   const t = useTranslations("WorkplacePage.onboarding");
   const tHero = useTranslations("Workplace.hero");
   const router = useRouter();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const primaryHref = hasProviders ? "/agents/create" : "/models";
-  const primaryLabel = hasProviders
-    ? t("createAgentAction")
-    : t("connectLLMAction");
+  const step = hasModels
+    ? {
+        index: 2,
+        title: t("createAgentTitle"),
+        description: t("createAgentDescription"),
+        action: t("createAgentAction"),
+        href: "/agents/create",
+        placeholder: t("createAgentPlaceholder"),
+      }
+    : {
+        index: 1,
+        title: t("connectModelTitle"),
+        description: t("connectModelDescription"),
+        action: t("connectModelAction"),
+        href: "/models",
+        placeholder: t("connectModelPlaceholder"),
+      };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col justify-center gap-8 py-8 md:py-0">
-      <div className="mx-auto w-full max-w-2xl px-4">
-        <div className="flex items-center gap-3 rounded-lg border bg-card px-3.5 py-2.5 shadow-sm">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-            <Bot className="h-4 w-4" strokeWidth={1.75} />
-          </div>
-          <div className="flex-1 text-xs leading-snug">
-            <p className="font-medium text-foreground">{t("noAgentTitle")}</p>
-            <p className="text-muted-foreground">
-              {hasProviders ? t("noAgentSubtitle") : t("noProviderSubtitle")}
-            </p>
-          </div>
-          <Button
-            asChild
-            size="sm"
-            variant="ghost"
-            className="h-7 gap-1 px-2.5 text-xs"
-          >
-            <Link href={primaryHref}>
-              {primaryLabel}
-              <ArrowRight />
-            </Link>
-          </Button>
-        </div>
+    <div className="mx-auto flex h-full w-full max-w-3xl flex-col justify-center gap-8 overflow-y-auto overflow-x-hidden py-8 md:overflow-visible md:py-0">
+      <div className="flex w-full flex-none items-center justify-center">
+        <ChatWelcome icon={Sparkles} title={tHero("title")} />
       </div>
 
-      <div className="flex flex-none w-full items-center justify-center">
-        <ChatWelcome title={tHero("title")} />
-      </div>
-
-      <div className="relative mx-auto w-full max-w-2xl px-4">
-        <div
-          aria-disabled="true"
-          className={cn(
-            "card pointer-events-none relative w-full cursor-not-allowed bg-white px-3 pb-2 pt-2 opacity-80",
-            "rounded-2xl border shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]"
-          )}
-        >
-          <Textarea
+      <div className="relative mx-auto w-full px-4 md:px-6">
+        <ComposerSetupBanner
+          step={step.index}
+          totalSteps={2}
+          title={step.title}
+          description={step.description}
+          actionLabel={step.action}
+          href={step.href}
+        />
+        <div className="relative pb-3">
+          <ChatInputArea
             disabled
-            placeholder={t("disabledPlaceholder")}
-            className="min-h-[60px] resize-none border-0 bg-transparent p-2 text-sm shadow-none focus-visible:ring-0"
+            input=""
+            onInputChange={noop}
+            onSubmit={(e) => e.preventDefault()}
+            isLoading={false}
+            placeholder={step.placeholder}
+            selectedFiles={[]}
+            onRemoveFile={noop}
+            onOpenFileDialog={noop}
+            onFileSelect={noop}
+            fileInputRef={fileInputRef}
+            textareaRef={textareaRef}
+            variant="centered"
+            rows={3}
+            leadingControls={
+              // Sits where the agent picker will be, shaped like its trigger.
+              <span className="flex h-7 items-center gap-1 px-1.5 text-[13px] leading-[1.2] text-zinc-400 dark:text-zinc-500">
+                <EntityAvatar
+                  variant="soft"
+                  size={20}
+                  icon={<Lock strokeWidth={1.85} />}
+                  aria-hidden
+                />
+                {t("noAgent")}
+              </span>
+            }
           />
-          <div className="flex items-center justify-between px-1 pb-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled
-              className="h-8 w-8 text-muted-foreground"
-            >
-              <Paperclip />
-            </Button>
-            <Button disabled size="icon" className="h-8 w-8">
-              <Send />
-            </Button>
-          </div>
         </div>
       </div>
 
       {badgeSuggestions && (
-        <div className="flex-none w-full pb-4">
+        <div className="w-full flex-none pb-4">
           {/* Their own boundary — the rest of the onboarding screen is static
               and should not wait on the chips. */}
           <Suspense fallback={null}>
             <BadgeSuggestions
               suggestions={badgeSuggestions}
-              onBadgeClick={() => router.push(primaryHref)}
+              onBadgeClick={() => router.push(step.href)}
               visible
             />
           </Suspense>

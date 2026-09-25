@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { getAgents } from "@/components/actions";
 import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
 import { WorkplaceOnboarding } from "@/components/Chat/WorkplaceOnboarding";
-import { getProvidersAndConfigs, listPolicies, listProjects } from "@/lib/api";
+import { listModelInstances, listPolicies, listProjects } from "@/lib/api";
 import type {
   AgentResponse,
   PolicyRuleResponse,
@@ -19,7 +19,7 @@ import { loadWorkplaceSuggestions } from "./loadWorkplaceSuggestions";
  * same time:
  *  - these three decide whether the workplace can be used at all, so the first
  *    paint waits for them and they go together;
- *  - the provider list only answers a question the onboarding screen asks, so
+ *  - the model list only answers a question the onboarding screen asks, so
  *    it is read only when there are no agents;
  *  - the starter chips are a prompt, so their promise is handed down unawaited
  *    and a <Suspense> fills them in afterwards.
@@ -81,7 +81,7 @@ export async function WorkplaceData() {
 
   const defaultAgent = agents.length > 0 ? agents[0] : null;
 
-  // Only the onboarding screen asks whether a provider exists, and it is the
+  // Only the onboarding screen asks whether a model exists, and it is the
   // screen nobody sees twice — so the read happens on that branch alone
   // instead of on every visit to a working workplace.
   const body = defaultAgent ? (
@@ -94,7 +94,7 @@ export async function WorkplaceData() {
     />
   ) : (
     <WorkplaceOnboarding
-      hasProviders={await hasAnyProvider()}
+      hasModels={await hasAnyModel()}
       badgeSuggestions={badgeSuggestions}
     />
   );
@@ -107,11 +107,11 @@ export async function WorkplaceData() {
   );
 }
 
-async function hasAnyProvider(): Promise<boolean> {
-  const { data } = await getProvidersAndConfigs();
-  const configs = (data as unknown as { providerConfigs?: unknown[] })
-    ?.providerConfigs;
-  return (configs?.length ?? 0) > 0;
+// A model instance, not a provider config: an agent is created against a model,
+// so a provider with no models connected still leaves step one unfinished.
+async function hasAnyModel(): Promise<boolean> {
+  const { data } = await listModelInstances();
+  return (data?.length ?? 0) > 0;
 }
 
 function formatPolicyName(policy: PolicyRuleResponse) {

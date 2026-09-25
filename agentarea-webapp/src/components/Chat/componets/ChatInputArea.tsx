@@ -77,6 +77,12 @@ export interface ChatInputAreaProps {
   isSubmitDisabled?: boolean;
 
   /**
+   * Render the composer but let nothing be typed, attached or sent — for a
+   * surface that shows where chatting will happen before it is possible.
+   */
+  disabled?: boolean;
+
+  /**
    * Placeholder text
    */
   placeholder: string;
@@ -249,6 +255,12 @@ export interface ChatInputAreaProps {
   onTaskSkillsChange?: (next: TaskResourceRef[]) => void;
 
   /**
+   * Shown at the start of the bottom row, before the agent/project/policy
+   * selectors — e.g. a locked placeholder while no agent exists yet.
+   */
+  leadingControls?: React.ReactNode;
+
+  /**
    * Stop/Pause handler
    */
   onStop?: () => void;
@@ -309,6 +321,7 @@ export function ChatInputArea({
   onSubmit,
   isLoading,
   isSubmitDisabled = false,
+  disabled = false,
   placeholder,
   selectedFiles,
   onRemoveFile,
@@ -340,6 +353,7 @@ export function ChatInputArea({
   taskSkills,
   onTaskMcpsChange,
   onTaskSkillsChange,
+  leadingControls,
   onStop,
   onResume,
   isStopping = false,
@@ -349,6 +363,7 @@ export function ChatInputArea({
   const t = useTranslations("Chat.inputControls");
   const SendIcon = sendButtonIcon === "arrow" ? ArrowUp : Send;
   const showContextControls =
+    Boolean(leadingControls) ||
     Boolean(currentAgent && availableAgents?.length && onAgentChange) ||
     Boolean(availableProjects?.length && onProjectChange) ||
     Boolean(availableTaskPolicies?.length && onTaskPolicyChange);
@@ -367,7 +382,7 @@ export function ChatInputArea({
           value={inputDisplay || input}
           onChange={onInputChange}
           placeholder={placeholder}
-          disabled={isLoading}
+          disabled={isLoading || disabled}
           className="min-h-[48px] max-h-48 resize-none rounded-none border-0 bg-transparent px-4 pb-2 pt-3 text-[15px] leading-6 text-foreground shadow-none transition-none placeholder:text-muted-foreground/70 focus-visible:border-transparent dark:bg-transparent sm:min-h-[68px] sm:text-[13px] sm:leading-[21px]"
           rows={rows}
           onKeyDown={onKeyDown}
@@ -403,6 +418,7 @@ export function ChatInputArea({
           <div className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
             {showContextControls ? (
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-hidden sm:flex-nowrap sm:gap-2">
+                {leadingControls}
                 {currentAgent && availableAgents?.length && onAgentChange ? (
                   <div className="min-w-0 basis-full sm:basis-auto">
                     {/* Trigger and options share one avatar. Rendering a bare
@@ -505,7 +521,7 @@ export function ChatInputArea({
                   variant="ghost"
                   size="sm"
                   onClick={onOpenFileDialog}
-                  disabled={isLoading}
+                  disabled={isLoading || disabled}
                   aria-label="Attach files"
                   className="h-8 w-8 rounded-md p-0 text-muted-foreground hover:bg-muted hover:text-foreground dark:hover:bg-muted"
                 >
@@ -551,6 +567,7 @@ export function ChatInputArea({
                       disabled={
                         isLoading ||
                         isSubmitDisabled ||
+                        disabled ||
                         (!input.trim() && selectedFiles.length === 0)
                       }
                       className="h-8 w-8 rounded-md bg-foreground text-background shadow-none hover:bg-foreground/85 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"

@@ -2000,12 +2000,15 @@
     "noAgentsAvailable": "No agents available.",
     "createFirstAgent": "Create your first agent to get started.",
     "onboarding": {
-      "noAgentTitle": "No agent yet",
-      "noAgentSubtitle": "Create an agent to start chatting in this workspace.",
-      "noProviderSubtitle": "Connect a language model first, then add an agent.",
+      "connectModelTitle": "Connect a language model",
+      "connectModelDescription": "Needed before you can create agents.",
+      "connectModelAction": "Go to Models",
+      "connectModelPlaceholder": "Connect a model to start…",
+      "createAgentTitle": "Create your first agent",
+      "createAgentDescription": "Last step before you can chat.",
       "createAgentAction": "Create agent",
-      "connectLLMAction": "Connect LLM",
-      "disabledPlaceholder": "Create an agent to start chatting…"
+      "createAgentPlaceholder": "Create an agent to start…",
+      "noAgent": "No agent"
     }
   },
   "BuiltinToolIconGrid": {
