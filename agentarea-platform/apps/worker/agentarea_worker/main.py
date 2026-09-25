@@ -355,6 +355,7 @@ class AgentAreaWorker:
             broker=self._broker,
             dedup=self._inbound_dedup,
             event_broker=dependencies.event_broker,
+            secret_manager_factory=dependencies.secret_manager_factory,
             workflow_executor=dependencies.workflow_executor,
             stream=delivery_cfg.INBOUND_STREAM,
             group=delivery_cfg.INBOUND_GROUP,

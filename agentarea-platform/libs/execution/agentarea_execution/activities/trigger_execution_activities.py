@@ -65,6 +65,18 @@ def make_trigger_activities(dependencies: ActivityDependencies):
         List of activity functions ready for worker registration
     """
 
+    def _condition_evaluator(session, user_context):
+        from agentarea_triggers.llm_condition_evaluator import build_condition_evaluator
+
+        return build_condition_evaluator(
+            session=session,
+            user_context=user_context,
+            secret_manager=dependencies.secret_manager_factory.create(
+                session=session, user_context=user_context
+            ),
+            event_broker=dependencies.event_broker,
+        )
+
     @activity.defn(name="execute_trigger_activity")
     async def execute_trigger_activity(request: ExecuteTriggerRequest) -> ExecuteTriggerResult:
         """Execute a trigger and create a task if conditions are met.
@@ -117,6 +129,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 trigger_service = TriggerService(
                     repository_factory=repository_factory,
                     event_broker=dependencies.event_broker,
+                    llm_condition_evaluator=_condition_evaluator(session, user_context),
                 )
 
                 # Get trigger with error handling
@@ -497,6 +510,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 trigger_service = TriggerService(
                     repository_factory=repository_factory,
                     event_broker=dependencies.event_broker,
+                    llm_condition_evaluator=_condition_evaluator(session, user_context),
                 )
 
                 trigger = await trigger_service.get_trigger(trigger_id)

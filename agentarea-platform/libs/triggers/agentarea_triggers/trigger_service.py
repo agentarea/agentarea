@@ -50,6 +50,12 @@ logger = TriggerLogger(__name__)
 
 # Error classes moved to logging_utils.py for consistency
 
+
+def _only_field_matches(conditions: dict[str, Any]) -> bool:
+    """Whether the rule-based fallback can check every part of ``conditions``."""
+    return set(conditions) == {"field_matches"}
+
+
 # The task query is resolved here rather than at each execution path because
 # there are two of them -- the service, for webhooks and manual runs, and the
 # Temporal activity, for schedules and pollers -- and they had drifted apart.
@@ -1518,8 +1524,18 @@ class TriggerService:
                     trigger_context=trigger_context,
                 )
 
-            # Fallback to simple rule-based evaluation if no LLM evaluator
+            # Without an evaluator only field_matches can be checked; any other
+            # condition would be reported as met without having been looked at.
+            if not _only_field_matches(trigger.conditions):
+                raise TriggerConditionError(
+                    "Trigger conditions need the condition evaluator, which is not "
+                    "available on this path",
+                    trigger_id=str(trigger.id),
+                )
             return await self._evaluate_simple_conditions(trigger.conditions, event_data)
+
+        except TriggerConditionError:
+            raise
 
         except LLMConditionEvaluationError as e:
             logger.error(
@@ -1527,7 +1543,7 @@ class TriggerService:
             )
             # The rule-based evaluator only checks field_matches; for anything
             # else it would report a pass without having looked.
-            if "field_matches" not in trigger.conditions:
+            if not _only_field_matches(trigger.conditions):
                 raise TriggerConditionError(
                     f"Trigger conditions could not be evaluated: {e}", trigger_id=str(trigger.id)
                 ) from e

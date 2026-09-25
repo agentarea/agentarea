@@ -48,7 +48,7 @@ class TestTriggerExecutionIntegration:
             cron_expression="0 9 * * 1-5",
             timezone="UTC",
             task_parameters={"integration_test": True, "text": "Run the daily check"},
-            conditions={"hour_range": [9, 17]},
+            conditions={},
             created_by="integration_test",
             is_active=True,
         )
@@ -126,10 +126,7 @@ class TestTriggerExecutionIntegration:
         trigger_repo, execution_repo = mock_repositories
 
         # Setup trigger with specific conditions
-        sample_trigger.conditions = {
-            "field_matches": {"request.body.type": "test"},
-            "time_conditions": {"hour_range": [9, 17]},
-        }
+        sample_trigger.conditions = {"field_matches": {"request.body.type": "test"}}
 
         trigger_repo.get_trigger.return_value = sample_trigger
         trigger_repo.update_execution_tracking.return_value = sample_trigger
