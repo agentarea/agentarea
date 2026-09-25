@@ -95,10 +95,10 @@ class OpenAPITool(BaseTool):
 
         # Re-validate base_url for SSRF at execution time
         try:
+            from agentarea_common.utils.url_safety import OutboundPolicy
             from agentarea_openapi.application.url_validator import validate_url
 
-            allow_private = getattr(self._service, "_allow_private_urls", False)
-            validate_url(connection.base_url, allow_private=allow_private)
+            validate_url(connection.base_url, policy=OutboundPolicy.from_env())
         except ValueError as e:
             logger.error(
                 "SSRF validation failed for connection %s: %s",

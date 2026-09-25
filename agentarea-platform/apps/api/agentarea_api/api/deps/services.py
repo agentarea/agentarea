@@ -20,6 +20,7 @@ from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.application.model_spec_service import ModelSpecService
 from agentarea_llm.application.provider_service import ProviderService
@@ -320,7 +321,6 @@ async def get_openapi_connection_service(
         build_auth_header_resolver,
     )
 
-    settings = get_settings()
     managed_secret_manager = get_real_secret_manager(
         session=db_session,
         user_context=UserContext(
@@ -340,7 +340,7 @@ async def get_openapi_connection_service(
             repository_factory,
             secret_manager,
         ),
-        allow_private_urls=settings.mcp.ALLOW_PRIVATE_URLS,
+        outbound_policy=OutboundPolicy.from_env(),
     )
 
 

@@ -8,8 +8,8 @@ from uuid import UUID
 import httpx
 from agentarea_api.api.deps.services import get_openapi_connection_service
 from agentarea_common.auth.route_authz import requires, unrestricted
-from agentarea_common.config import get_settings
 from agentarea_common.utils.types import UtcDatetime
+from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_openapi.application.service import OpenAPIConnectionService, fetch_and_parse_spec
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
 from agentarea_openapi.application.url_validator import validate_url
@@ -74,7 +74,7 @@ class SpecPreviewRequest(BaseModel):
     def validate_spec_url(cls, v: str | None) -> str | None:
         if v is not None:
             try:
-                validate_url(v, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
+                validate_url(v, policy=OutboundPolicy.from_env())
             except ValueError as e:
                 raise ValueError(str(e)) from e
         return v
@@ -103,8 +103,7 @@ async def preview_spec(
 
     The service dependency ensures authentication is enforced.
     """
-    settings = get_settings()
-    allow_private = settings.mcp.ALLOW_PRIVATE_URLS
+    policy = OutboundPolicy.from_env()
 
     spec: dict[str, Any] | None = request.spec_content
 
@@ -114,11 +113,8 @@ async def preview_spec(
 
     if not spec and request.spec_url:
         try:
-            validate_url(request.spec_url, allow_private=allow_private)
-            spec = await fetch_and_parse_spec(
-                request.spec_url,
-                allow_private=allow_private,
-            )
+            validate_url(request.spec_url, policy=policy)
+            spec = await fetch_and_parse_spec(request.spec_url, policy=policy)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except httpx.RequestError as e:

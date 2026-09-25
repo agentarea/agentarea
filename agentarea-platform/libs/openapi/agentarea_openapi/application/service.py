@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 import httpx
 import yaml
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.utils.url_safety import OutboundPolicy
 
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
 from agentarea_openapi.application.url_validator import (
@@ -78,7 +79,7 @@ def _is_safe_header(name: str) -> bool:
 async def fetch_and_parse_spec(
     url: str,
     *,
-    allow_private: bool = False,
+    policy: OutboundPolicy,
     headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Fetch an OpenAPI spec from a URL with SSRF protection and streaming size check.
@@ -89,10 +90,10 @@ async def fetch_and_parse_spec(
         ValueError: On validation failure, size limit, or fetch error.
         httpx.HTTPStatusError: On non-2xx response.
     """
-    resolved_ips = validate_url(url, allow_private=allow_private)
+    resolved_ips = validate_url(url, policy=policy)
 
     # SSRF defenses: validate_url has confirmed scheme ∈ {http,https} and that
-    # every resolved address is non-private (or allow_private). build_pinned_target
+    # every resolved address is admitted by the policy. build_pinned_target
     # returns the destination identifiers (scheme/host/port) and the path/query as
     # separate, validated fields so the HTTP sink never receives a single string
     # that mixes user-controlled path data into the destination.
@@ -151,7 +152,8 @@ class OpenAPIConnectionService:
         auth_header_resolver: (
             Callable[[UUID, str, list[str] | None], Awaitable[dict[str, str]]] | None
         ) = None,
-        allow_private_urls: bool = False,
+        *,
+        outbound_policy: OutboundPolicy,
     ) -> None:
         self._repo: OpenAPIConnectionRepository = repository_factory.create_repository(
             OpenAPIConnectionRepository
@@ -159,7 +161,7 @@ class OpenAPIConnectionService:
         self._secret_manager = secret_manager
         self._auth_header_resolver = auth_header_resolver
         self._auth_config_access_checker = auth_config_access_checker
-        self._allow_private_urls = allow_private_urls
+        self._outbound_policy = outbound_policy
 
     async def _assert_may_use_auth_config(self, auth_config_id: UUID) -> None:
         """Only the auth config's creator or a workspace admin may attach it.
@@ -182,9 +184,9 @@ class OpenAPIConnectionService:
         status: str = "active",
     ) -> OpenAPIConnection:
         # Validate URLs at creation time (SSRF protection)
-        validate_url(payload.base_url, allow_private=self._allow_private_urls)
+        validate_url(payload.base_url, policy=self._outbound_policy)
         if payload.spec_url:
-            validate_url(payload.spec_url, allow_private=self._allow_private_urls)
+            validate_url(payload.spec_url, policy=self._outbound_policy)
 
         if payload.auth_config_id:
             await self._assert_may_use_auth_config(payload.auth_config_id)
@@ -210,7 +212,7 @@ class OpenAPIConnectionService:
             # for initial fetch, non-secret headers are enough for most public specs.
             resolved_spec = await fetch_and_parse_spec(
                 payload.spec_url,
-                allow_private=self._allow_private_urls,
+                policy=self._outbound_policy,
                 headers=resolved_headers or None,
             )
 
@@ -381,7 +383,7 @@ class OpenAPIConnectionService:
 
         # Validate URLs on update (SSRF protection)
         if patch.get("base_url"):
-            validate_url(patch["base_url"], allow_private=self._allow_private_urls)
+            validate_url(patch["base_url"], policy=self._outbound_policy)
             current = await self._repo.get_by_id(str(connection_id))
             if current and current.allowed_auth_origins:
                 parsed = urllib.parse.urlparse(patch["base_url"])
@@ -396,7 +398,7 @@ class OpenAPIConnectionService:
             if current and current.auth_config_id and "auth_config_id" not in patch:
                 await self._assert_may_use_auth_config(current.auth_config_id)
         if patch.get("spec_url"):
-            validate_url(patch["spec_url"], allow_private=self._allow_private_urls)
+            validate_url(patch["spec_url"], policy=self._outbound_policy)
 
         if patch:
             return await self._repo.update(str(connection_id), **patch)
@@ -441,6 +443,6 @@ class OpenAPIConnectionService:
         headers = await self.resolve_headers(conn)
         return await fetch_and_parse_spec(
             conn.spec_url,
-            allow_private=self._allow_private_urls,
+            policy=self._outbound_policy,
             headers=headers,
         )

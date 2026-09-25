@@ -20,7 +20,7 @@ from agentarea_bundles.schemas.preview import ImportPreview
 from agentarea_bundles.schemas.result import InstallResult
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base import RepositoryFactoryDep
-from agentarea_common.config import get_settings
+from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
@@ -38,7 +38,7 @@ _FETCH_TIMEOUT_SECONDS = 10.0
 async def fetch_bundle_source(
     url: str,
     *,
-    allow_private: bool,
+    policy: OutboundPolicy,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> str:
     """Fetch raw bundle text from a URL behind the shared SSRF guard.
@@ -53,7 +53,7 @@ async def fetch_bundle_source(
         httpx.HTTPStatusError: the URL returned a non-2xx (including redirects).
         httpx.RequestError: the request could not be completed.
     """
-    resolved_ips = validate_url(url, allow_private=allow_private)
+    resolved_ips = validate_url(url, policy=policy)
 
     # SSRF defenses mirror the OpenAPI fetcher: validate_url confirms the scheme
     # and rejects private targets, then build_pinned_target pins the request to
@@ -182,9 +182,8 @@ async def analyze_bundle(
     """Parse and analyze a bundle source, returning a non-destructive preview."""
     source = body.source
     if body.source_url:
-        allow_private = get_settings().mcp.ALLOW_PRIVATE_URLS
         try:
-            source = await fetch_bundle_source(body.source_url, allow_private=allow_private)
+            source = await fetch_bundle_source(body.source_url, policy=OutboundPolicy.from_env())
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except httpx.HTTPStatusError as exc:
