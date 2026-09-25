@@ -1972,8 +1972,7 @@
     "attachTitle": "Добавить к задаче",
     "attachDescription": "Дать этому запуску MCP-серверы и навыки сверх тех, что уже есть у агента. Действует только на эту задачу.",
     "mcpsHeading": "MCP-серверы",
-    "skillsHeading": "Навыки",
-    "detach": "Убрать {name}"
+    "skillsHeading": "Навыки"
   },
   "QuickTask": {
     "title": "Новая задача",

@@ -2,9 +2,15 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import ConfigSheet from "@/components/ConfigSheet";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { resolveMcpRef } from "@/lib/mcp/resolveMcpRef";
@@ -131,77 +137,80 @@ export function TaskResourceAttach({
 }: TaskResourceAttachProps) {
   const t = useTranslations("Pickers");
   const [open, setOpen] = useState(false);
-  const attached = [
-    ...mcps.map((ref) => ({ ref, kind: "mcp" as const })),
-    ...skills.map((ref) => ({ ref, kind: "skill" as const })),
-  ];
+  const names = [...mcps, ...skills].map((ref) => ref.name ?? ref.id);
 
-  const detach = (kind: "mcp" | "skill", id: string) =>
-    kind === "mcp"
-      ? onMcpsChange(mcps.filter((item) => item.id !== id))
-      : onSkillsChange(skills.filter((item) => item.id !== id));
+  // A count per kind rather than a chip per resource: the chips wrapped the
+  // composer's bottom row and crushed the agent and policy pickers beside them.
+  // Which ones are attached is a hover away, and the sheet is where they change.
+  const counts = [
+    { kind: "mcp", Icon: McpIcon, count: mcps.length },
+    { kind: "skill", Icon: SkillIcon, count: skills.length },
+  ].filter((entry) => entry.count > 0);
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1">
-      {attached.map(({ ref, kind }) => {
-        const Icon = kind === "mcp" ? McpIcon : SkillIcon;
-        return (
-          <span
-            key={`${kind}:${ref.id}`}
-            className="flex max-w-[12rem] items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-          >
-            {ref.iconUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={ref.iconUrl}
-                alt=""
-                aria-hidden="true"
-                className="h-3.5 w-3.5 shrink-0 rounded-sm object-contain"
-              />
-            ) : (
-              <Icon className="h-3 w-3 shrink-0" />
-            )}
-            <span className="truncate">{ref.name ?? ref.id}</span>
-            <button
-              type="button"
-              onClick={() => detach(kind, ref.id)}
-              disabled={disabled}
-              aria-label={t("detach", { name: ref.name ?? ref.id })}
-              className="shrink-0 hover:text-foreground"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        );
-      })}
-
-      <ConfigSheet
-        title={t("attachTitle")}
-        description={t("attachDescription")}
-        open={open}
-        onOpenChange={setOpen}
-        triggerComponent={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            disabled={disabled}
-            aria-label={t("attachTitle")}
-            className="h-7 w-7 text-muted-foreground"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-        }
-      >
-        {open && (
-          <AttachPickers
-            mcps={mcps}
-            skills={skills}
-            onMcpsChange={onMcpsChange}
-            onSkillsChange={onSkillsChange}
-          />
-        )}
-      </ConfigSheet>
-    </div>
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <ConfigSheet
+          title={t("attachTitle")}
+          description={t("attachDescription")}
+          open={open}
+          onOpenChange={setOpen}
+          triggerComponent={
+            <TooltipTrigger asChild>
+              {/* Sized and coloured like the agent/policy pickers beside it,
+                  with the attach button's grey hover. */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                disabled={disabled}
+                aria-label={
+                  names.length
+                    ? `${t("attachTitle")}: ${names.join(", ")}`
+                    : t("attachTitle")
+                }
+                className="h-7 min-w-7 shrink-0 gap-2 rounded-md px-1.5 text-[13px] text-zinc-400 hover:bg-muted hover:text-zinc-500 data-[state=open]:bg-muted data-[state=open]:text-zinc-500 dark:text-zinc-500 dark:hover:bg-muted dark:hover:text-zinc-300 dark:data-[state=open]:text-zinc-300"
+              >
+                {counts.length ? (
+                  counts.map(({ kind, Icon, count }) => (
+                    <span key={kind} className="flex items-center gap-1">
+                      <Icon />
+                      {/* Icon and number take the pickers' two greys. */}
+                      <span className="tabular-nums dark:text-zinc-300">
+                        {count}
+                      </span>
+                    </span>
+                  ))
+                ) : (
+                  <Plus />
+                )}
+              </Button>
+            </TooltipTrigger>
+          }
+        >
+          {open && (
+            <AttachPickers
+              mcps={mcps}
+              skills={skills}
+              onMcpsChange={onMcpsChange}
+              onSkillsChange={onSkillsChange}
+            />
+          )}
+        </ConfigSheet>
+        <TooltipContent side="top" className="max-w-64">
+          {names.length ? (
+            <ul className="space-y-0.5">
+              {names.map((name, index) => (
+                <li key={index} className="truncate">
+                  {name}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            t("attachTitle")
+          )}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
