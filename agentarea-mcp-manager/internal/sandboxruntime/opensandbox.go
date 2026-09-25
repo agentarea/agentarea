@@ -898,7 +898,7 @@ func (p *OpenSandboxProvider) List(ctx context.Context, workspaceID string) ([]S
 	return p.listInventory(ctx, workspaceID)
 }
 
-func (p *OpenSandboxProvider) listUsage(ctx context.Context) ([]SandboxStatus, string, error) {
+func (p *OpenSandboxProvider) ListAllocations(ctx context.Context) ([]SandboxStatus, string, error) {
 	items, err := p.listInventory(ctx, "")
 	return items, "validated_allocation_metadata", err
 }

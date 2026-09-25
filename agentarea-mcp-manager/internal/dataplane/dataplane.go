@@ -94,14 +94,19 @@ func Enabled() bool {
 
 // Server exposes a container backend over HTTP for a remote control plane.
 type Server struct {
-	cfg     *Config
-	backend backends.Backend
-	logger  *slog.Logger
+	cfg       *Config
+	backend   backends.Backend
+	logger    *slog.Logger
+	extension func(*gin.RouterGroup)
 }
 
 func NewServer(cfg *Config, backend backends.Backend, logger *slog.Logger) *Server {
 	return &Server{cfg: cfg, backend: backend, logger: logger}
 }
+
+// SetRouteExtension registers extra routes inside the authenticated group.
+// It must be called before Routes.
+func (s *Server) SetRouteExtension(extension func(*gin.RouterGroup)) { s.extension = extension }
 
 // Routes registers the data-plane API. Liveness is deliberately outside the
 // authenticated group so an orchestrator can probe without holding the token.
@@ -111,13 +116,15 @@ func (s *Server) Routes(router gin.IRouter) {
 	})
 
 	group := router.Group("/dataplane/v1", s.authenticate)
-	group.GET("/usage", s.sampleUsage)
 	group.POST("/instances", s.createInstance)
 	group.GET("/instances", s.listInstances)
 	group.GET("/instances/:id", s.getInstance)
 	group.DELETE("/instances/:id", s.deleteInstance)
 	group.GET("/instances/:id/health", s.healthCheck)
 	group.Any("/instances/:id/proxy/*path", s.proxy)
+	if s.extension != nil {
+		s.extension(group)
+	}
 }
 
 // instanceStarter is implemented by backends that can restart an instance whose

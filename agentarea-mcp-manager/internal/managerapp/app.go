@@ -1,0 +1,816 @@
+// Package managerapp is the MCP manager's operational startup, shared by every
+// distribution of the binary. A distribution supplies only the optional
+// extension factories in Options; the runtime itself is never forked.
+package managerapp
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
+
+	"github.com/agentarea/mcp-manager/internal/api"
+	"github.com/agentarea/mcp-manager/internal/artifactstore"
+	"github.com/agentarea/mcp-manager/internal/backends"
+	"github.com/agentarea/mcp-manager/internal/config"
+	"github.com/agentarea/mcp-manager/internal/container"
+	"github.com/agentarea/mcp-manager/internal/database"
+	"github.com/agentarea/mcp-manager/internal/dataplane"
+	"github.com/agentarea/mcp-manager/internal/environment"
+	"github.com/agentarea/mcp-manager/internal/features"
+	"github.com/agentarea/mcp-manager/internal/mcpgateway"
+	"github.com/agentarea/mcp-manager/internal/providers"
+	"github.com/agentarea/mcp-manager/internal/publishedsecrets"
+	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
+	"github.com/agentarea/mcp-manager/internal/sandboxplacement"
+	"github.com/agentarea/mcp-manager/internal/sandboxrunner"
+	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
+	"github.com/agentarea/mcp-manager/internal/secrets"
+	"github.com/agentarea/mcp-manager/internal/warmpool"
+	"github.com/agentarea/mcp-manager/internal/workspace"
+)
+
+const Version = "0.0.15"
+
+// Options holds the optional extension factories of a distribution. The zero
+// value runs the manager without extensions.
+type Options struct {
+	// ControlPlane is called once, before any operation is served.
+	ControlPlane func(context.Context, *config.Config, backends.Backend, *slog.Logger) (*Hooks, error)
+	// DataPlane returns routes added inside the data plane's authenticated
+	// group. It receives no database, Redis or secret-manager dependency.
+	DataPlane func(context.Context, *config.Config, *dataplane.Config, backends.Backend, *slog.Logger) (func(*gin.RouterGroup), error)
+}
+
+// Hooks is a control-plane extension's composition bundle. Every field is
+// optional; each is invoked once during startup, in the order declared.
+type Hooks struct {
+	// Gateway attaches to the demand gateway before it serves requests.
+	Gateway func(*mcpgateway.SQLRepository, *mcpgateway.ProviderRuntime, *mcpgateway.Gateway) error
+	// Sandbox attaches to the base sandbox runtime before the workspace
+	// decorator wraps it.
+	Sandbox func(runtime sandboxruntime.ManagedRuntime, providerName string) error
+	// Artifacts attaches to the artifact repository after it is created.
+	Artifacts func(*artifactstore.Repository) error
+	// Run starts after every component is built and before traffic is
+	// accepted. Returning before the manager is asked to stop is a failure.
+	Run func(context.Context, *redis.Client) error
+	// Close runs after Run has returned and before core connections close.
+	Close func() error
+}
+
+// Run serves the manager until ctx ends or a component fails. It returns an
+// error for every failure; the caller decides the process exit.
+func Run(ctx context.Context, cfg *config.Config, logger *slog.Logger, options Options) error {
+	if err := publishedsecrets.Reject(); err != nil {
+		return failed(logger, "Refusing to start", err)
+	}
+	initFeatures(cfg, logger)
+
+	envType, backend, containerManager, remoteUpstream, err := initBackend(ctx, cfg, logger)
+	if err != nil {
+		return err
+	}
+
+	// Data-plane mode stops here: this process is a data plane, and everything
+	// in runControlPlane — secrets, Redis, the event bus, the sandbox runtime —
+	// is control-plane wiring that must not exist on a host running untrusted
+	// containers.
+	if dataplane.Enabled() {
+		return runDataPlane(ctx, cfg, backend, logger, options.DataPlane)
+	}
+	return runControlPlane(ctx, cfg, logger, options.ControlPlane, controlPlaneBackend{
+		envType: envType, backend: backend, containerManager: containerManager, remoteUpstream: remoteUpstream,
+	})
+}
+
+// failed logs a startup failure with its established message and returns it.
+func failed(logger *slog.Logger, message string, err error, attrs ...any) error {
+	logger.Error(message, append(attrs, slog.String("error", err.Error()))...)
+	return fmt.Errorf("%s: %w", message, err)
+}
+
+func initFeatures(cfg *config.Config, logger *slog.Logger) {
+	featureConfig := &features.Config{
+		Enabled:  cfg.Features.Enabled,
+		Variants: cfg.Features.Variants,
+	}
+	configProvider := features.NewConfigProvider(logger, featureConfig)
+	envProvider := features.NewEnvironmentProvider(logger, "MCP_FEATURE")
+	hybridProvider := features.NewHybridProvider(logger, envProvider, configProvider)
+	featureService := features.NewService(logger, hybridProvider)
+	features.InitDefaultService(logger, hybridProvider)
+
+	for _, f := range features.AllFeatures {
+		if featureService.IsEnabled(f) {
+			logger.Info("Feature enabled", slog.String("feature", string(f)))
+		}
+	}
+}
+
+type controlPlaneBackend struct {
+	envType          string
+	backend          backends.Backend
+	containerManager *container.Manager
+	remoteUpstream   *mcpgateway.RemoteUpstream
+}
+
+func runControlPlane(
+	ctx context.Context,
+	cfg *config.Config,
+	logger *slog.Logger,
+	extend func(context.Context, *config.Config, backends.Backend, *slog.Logger) (*Hooks, error),
+	runtime controlPlaneBackend,
+) error {
+	backend, containerManager := runtime.backend, runtime.containerManager
+	// Sandbox and workspace policy is control-plane wiring too, so it is read
+	// only past the data-plane branch. Requiring it earlier meant a data plane
+	// could not start without carrying settings it never uses.
+	sandboxPolicy, err := sandboxruntime.LoadControlPolicyFromEnv()
+	if err != nil {
+		return failed(logger, "Failed to configure sandbox control policy", err)
+	}
+	workspaceConfig, err := workspace.LoadConfigFromEnv()
+	if err != nil {
+		return failed(logger, "Failed to configure sandbox workspace policy", err)
+	}
+
+	secretResolver, err := secrets.NewSecretResolver(logger)
+	if err != nil {
+		return failed(logger, "Failed to initialize secret resolver", err)
+	}
+	defer secretResolver.Close()
+	if containerManager != nil {
+		containerManager.SetSecretResolver(secretResolver)
+	}
+	providerManager := initProviderManager(runtime.envType, backend, containerManager, secretResolver, logger)
+
+	sandboxControlConfig, err := sandboxcontrol.LoadConfigFromEnv(cfg.Redis.URL)
+	if err != nil {
+		return failed(logger, "Failed to configure sandbox control plane", err)
+	}
+	sandboxStore, err := sandboxcontrol.NewRedisStoreFromConfig(sandboxControlConfig)
+	if err != nil {
+		return failed(logger, "Failed to initialize sandbox provider state", err)
+	}
+	defer sandboxStore.Close()
+
+	hooks := &Hooks{}
+	if extend != nil {
+		if hooks, err = extend(ctx, cfg, backend, logger); err != nil {
+			return failed(logger, "Failed to initialize control-plane extension", err)
+		}
+		if hooks == nil {
+			return failed(logger, "Failed to initialize control-plane extension", errors.New("extension returned no hooks"))
+		}
+	}
+	extension := newExtensionRun(ctx, hooks, logger)
+	defer extension.stop()
+
+	// Container-backed MCP traffic always crosses this demand boundary. It is
+	// the sole owner of cold start, request leases, and idle reclamation; Python
+	// only speaks ordinary MCP Streamable HTTP to the stable manager endpoint.
+	mcpGateway, gatewayRepository, gatewayRuntime, err := initDemandGateway(ctx, cfg, providerManager, backend, runtime.remoteUpstream, logger)
+	if err != nil {
+		return err
+	}
+	defer gatewayRepository.Close()
+	if hooks.Gateway != nil {
+		if err := hooks.Gateway(gatewayRepository, gatewayRuntime, mcpGateway); err != nil {
+			return failed(logger, "Failed to attach extension to MCP demand gateway", err)
+		}
+	}
+
+	sandboxRuntime, sandboxProviderName, err := initSandboxRuntime(ctx, backend, sandboxStore.RedisClient(), runtime.envType, sandboxPolicy, workspaceConfig, hooks, logger)
+	if err != nil {
+		return err
+	}
+
+	router := setupRouter(cfg, logger)
+	handler, err := api.NewHandler(backend, containerManager, logger, Version, api.SandboxPolicy{
+		TaskIdleTTL:      sandboxPolicy.TaskIdleTTL,
+		MaxFileBytes:     workspaceConfig.MaxFileBytes,
+		MCPIsolationTier: cfg.Container.DefaultIsolationTier,
+	}, sandboxControlConfig, sandboxRuntime)
+	if err != nil {
+		return failed(logger, "Failed to initialize API handler", err)
+	}
+	artifactRepository, err := artifactstore.NewFromConfig(ctx, artifactstore.ConfigFromWorkspace(workspaceConfig))
+	if err != nil {
+		return failed(logger, "Failed to configure sandbox artifact store", err)
+	}
+	if hooks.Artifacts != nil {
+		if err := hooks.Artifacts(artifactRepository); err != nil {
+			return failed(logger, "Failed to attach extension to sandbox artifact store", err)
+		}
+	}
+	handler.SetSandboxArtifactStore(artifactRepository)
+	handler.SetupRoutes(router)
+	router.Any("/mcp/:instance_id/mcp", gin.WrapH(mcpGateway))
+	router.DELETE("/mcp/:instance_id", gin.WrapF(mcpGateway.RetireHTTP))
+
+	if err := startBackgroundWork(ctx, cfg, backend, sandboxRuntime, sandboxProviderName, workspaceConfig, logger); err != nil {
+		return err
+	}
+	go mcpGateway.StartReaper(ctx)
+	extension.start(sandboxStore.RedisClient())
+
+	server := &http.Server{
+		Addr:         net.JoinHostPort(cfg.Server.Host, strconv.Itoa(cfg.Server.Port)),
+		Handler:      router,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
+	}
+	logger.Info("Starting MCP Manager", slog.String("version", Version), slog.String("address", server.Addr))
+	runErr := serve(ctx, server, extension.failed, logger, "Server failed to start", "Server forced to shutdown")
+	// Extension goroutines may still sample the backend; stop them first.
+	extension.stop()
+	shutdownBackend(backend, containerManager, logger)
+	logger.Info("Server shutdown complete")
+	return runErr
+}
+
+// extensionRun owns the control-plane extension's background run. stop is
+// idempotent: it cancels the run, waits for it, then calls Close.
+type extensionRun struct {
+	hooks  *Hooks
+	logger *slog.Logger
+	ctx    context.Context
+	cancel context.CancelFunc
+	done   chan struct{}
+	failed chan error
+	once   sync.Once
+}
+
+func newExtensionRun(ctx context.Context, hooks *Hooks, logger *slog.Logger) *extensionRun {
+	runCtx, cancel := context.WithCancel(ctx)
+	return &extensionRun{hooks: hooks, logger: logger, ctx: runCtx, cancel: cancel, failed: make(chan error, 1)}
+}
+
+func (e *extensionRun) start(redisClient *redis.Client) {
+	if e.hooks.Run == nil {
+		return
+	}
+	e.done = make(chan struct{})
+	go func() {
+		defer close(e.done)
+		err := e.hooks.Run(e.ctx, redisClient)
+		if e.ctx.Err() != nil {
+			return
+		}
+		if err == nil {
+			err = errors.New("control-plane extension stopped unexpectedly")
+		}
+		e.failed <- err
+	}()
+}
+
+func (e *extensionRun) stop() {
+	e.once.Do(func() {
+		e.cancel()
+		if e.done != nil {
+			<-e.done
+		}
+		if e.hooks.Close == nil {
+			return
+		}
+		if err := e.hooks.Close(); err != nil {
+			e.logger.Error("Control-plane extension shutdown failed", slog.String("error", err.Error()))
+		}
+	})
+}
+
+func startBackgroundWork(
+	ctx context.Context,
+	cfg *config.Config,
+	backend backends.Backend,
+	sandboxRuntime sandboxruntime.ComposedRuntime,
+	sandboxProviderName string,
+	workspaceConfig workspace.RepositoryConfig,
+	logger *slog.Logger,
+) error {
+	if features.IsEnabled(features.WarmPool) {
+		if k8sBackend, ok := backend.(*backends.KubernetesBackend); ok {
+			if wpClient := k8sBackend.GetWarmPoolClient(); wpClient != nil {
+				if err := startSandboxTaskGC(ctx, logger, wpClient); err != nil {
+					return failed(logger, "Failed to configure sandbox task GC", err)
+				}
+			}
+		}
+	}
+	// Run the sandbox execution consumer in-process (opt-in) so code execution
+	// works without a standalone runner — used by docker-compose. Off by default
+	// so Kubernetes, which runs a dedicated agentarea-sandbox-runner, keeps all
+	// execution work out of the (more privileged) control plane.
+	if err := startEmbeddedSandboxRunner(ctx, cfg, sandboxRuntime, sandboxProviderName, workspaceConfig, logger); err != nil {
+		return failed(logger, "Failed to configure embedded sandbox runner", err)
+	}
+	return nil
+}
+
+func shutdownBackend(backend backends.Backend, containerManager *container.Manager, logger *slog.Logger) {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := backend.Shutdown(shutdownCtx); err != nil {
+		logger.Error("Failed to shutdown backend", slog.String("error", err.Error()))
+	}
+	if containerManager != nil {
+		if err := containerManager.Shutdown(shutdownCtx); err != nil {
+			logger.Error("Failed to shutdown container manager", slog.String("error", err.Error()))
+		}
+	}
+}
+
+// serve runs server until ctx ends, the server fails, or failure receives an
+// error. It always shuts the server down before returning.
+func serve(ctx context.Context, server *http.Server, failure <-chan error, logger *slog.Logger, startMessage, shutdownMessage string) error {
+	serverFailed := make(chan error, 1)
+	go func() {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverFailed <- err
+		}
+	}()
+	var runErr error
+	select {
+	case <-ctx.Done():
+	case err := <-serverFailed:
+		runErr = failed(logger, startMessage, err)
+	case err := <-failure:
+		runErr = failed(logger, "Control-plane extension failed", err)
+	}
+
+	logger.Info("Shutting down server...")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		logger.Error(shutdownMessage, slog.String("error", err.Error()))
+	}
+	return runErr
+}
+
+func initSandboxRuntime(
+	ctx context.Context,
+	backend backends.Backend,
+	redisClient *redis.Client,
+	envType string,
+	sandboxPolicy sandboxruntime.ControlPolicy,
+	workspaceConfig workspace.RepositoryConfig,
+	hooks *Hooks,
+	logger *slog.Logger,
+) (sandboxruntime.ComposedRuntime, string, error) {
+	workspaceLimits := sandboxruntime.WorkspaceLimits{
+		MaxFiles: workspaceConfig.MaxFiles, MaxFileBytes: workspaceConfig.MaxFileBytes, MaxBytes: workspaceConfig.MaxBytes,
+	}
+	// The MCP backend and sandbox data plane are independent. A built-in
+	// sandbox provider needs the backend runtime; external providers do not.
+	builtinSandboxRuntime, _ := backend.(sandboxruntime.ManagedRuntime)
+	baseSandboxRuntime, sandboxProviderName, err := sandboxruntime.NewFromEnv(
+		ctx,
+		builtinSandboxRuntime,
+		redisClient,
+		envType,
+		sandboxPolicy,
+		workspaceLimits,
+	)
+	if err != nil {
+		return nil, "", failed(logger, "Failed to configure sandbox runtime", err)
+	}
+	if hooks.Sandbox != nil {
+		if err := hooks.Sandbox(baseSandboxRuntime, sandboxProviderName); err != nil {
+			return nil, "", failed(logger, "Failed to attach extension to sandbox runtime", err)
+		}
+	}
+	workspaceProvider, err := sandboxruntime.LoadWorkspaceProviderFromEnv()
+	if err != nil {
+		return nil, "", failed(logger, "Failed to resolve sandbox workspace provider", err)
+	}
+	sandboxRuntime, err := sandboxruntime.NewWorkspaceRuntimeForProvider(
+		ctx,
+		baseSandboxRuntime,
+		workspaceProvider,
+		workspaceConfig,
+	)
+	if err != nil {
+		return nil, "", failed(logger, "Failed to configure sandbox workspace provider", err)
+	}
+	logger.Info("Sandbox runtime configured", slog.String("provider", sandboxProviderName))
+	return sandboxRuntime, sandboxProviderName, nil
+}
+
+func initDemandGateway(ctx context.Context, cfg *config.Config, providerManager *providers.ProviderManager, backend backends.Backend, remoteUpstream *mcpgateway.RemoteUpstream, logger *slog.Logger) (*mcpgateway.Gateway, *mcpgateway.SQLRepository, *mcpgateway.ProviderRuntime, error) {
+	gatewayPolicy, err := mcpgateway.LoadPolicyFromEnv()
+	if err != nil {
+		return nil, nil, nil, failed(logger, "Failed to configure MCP demand gateway", err)
+	}
+	imagePolicy, err := mcpgateway.LoadImagePolicyFromEnv()
+	if err != nil {
+		return nil, nil, nil, failed(logger, "Failed to configure MCP instance admission", err)
+	}
+	gatewayRepository, err := mcpgateway.OpenSQLRepository(ctx, database.BuildConnStr(logger))
+	if err != nil {
+		return nil, nil, nil, failed(logger, "Failed to initialize MCP demand gateway state", err)
+	}
+	gatewayRuntime, err := mcpgateway.NewProviderRuntime(providerManager, backend, cfg, imagePolicy, gatewayPolicy.StartupTimeout, remoteUpstream)
+	if err != nil {
+		_ = gatewayRepository.Close()
+		return nil, nil, nil, failed(logger, "Failed to initialize MCP demand runtime", err)
+	}
+	mcpGateway, err := mcpgateway.New(gatewayRepository, gatewayRuntime, gatewayPolicy, logger, remoteUpstream)
+	if err != nil {
+		_ = gatewayRepository.Close()
+		return nil, nil, nil, failed(logger, "Failed to initialize MCP demand gateway", err)
+	}
+	return mcpGateway, gatewayRepository, gatewayRuntime, nil
+}
+
+// runDataPlane serves the data-plane API until ctx ends.
+//
+// It is reached only after the backend exists and before any control-plane
+// dependency is constructed, so an agent host never holds database, Redis or
+// secret-manager credentials — losing the host loses container control on that
+// host and nothing more.
+func runDataPlane(
+	ctx context.Context,
+	cfg *config.Config,
+	backend backends.Backend,
+	logger *slog.Logger,
+	extend func(context.Context, *config.Config, *dataplane.Config, backends.Backend, *slog.Logger) (func(*gin.RouterGroup), error),
+) error {
+	dpCfg, err := dataplane.ConfigFromEnv()
+	if err != nil {
+		return failed(logger, "Refusing to start in data-plane mode", err)
+	}
+
+	router := setupRouter(cfg, logger)
+	server := dataplane.NewServer(dpCfg, backend, logger)
+	if extend != nil {
+		routes, err := extend(ctx, cfg, dpCfg, backend, logger)
+		if err != nil {
+			return failed(logger, "Failed to initialize data-plane extension", err)
+		}
+		server.SetRouteExtension(routes)
+	}
+	server.Routes(router)
+
+	// No WriteTimeout: proxied MCP traffic answers over SSE, and a write deadline
+	// cuts a live stream mid-session rather than protecting anything. Slow
+	// clients are bounded by ReadTimeout and by the request context instead.
+	httpServer := &http.Server{
+		Addr:        dpCfg.ListenAddr,
+		Handler:     router,
+		ReadTimeout: 30 * time.Second,
+	}
+	logger.Info("MCP manager running as data plane",
+		slog.String("agent_id", dpCfg.AgentID),
+		slog.String("listen", dpCfg.ListenAddr),
+	)
+	runErr := serve(ctx, httpServer, nil, logger, "Data-plane server failed", "Data-plane shutdown failed")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := backend.Shutdown(shutdownCtx); err != nil {
+		logger.Error("Backend shutdown failed", slog.String("error", err.Error()))
+	}
+	return runErr
+}
+
+// backendAdapter adapts the backends.Backend interface to providers.Backend interface
+// to avoid import cycles between providers and backends packages
+type backendAdapter struct {
+	inner backends.Backend
+}
+
+func (a *backendAdapter) CreateInstance(ctx context.Context, spec *providers.BackendInstanceSpec) (*providers.BackendInstanceResult, error) {
+	// Convert providers spec to backends spec
+	innerSpec := &backends.InstanceSpec{
+		InstanceID:  spec.InstanceID,
+		WorkspaceID: spec.WorkspaceID,
+		Name:        spec.Name,
+		ServiceName: spec.ServiceName,
+		Image:       spec.Image,
+		Port:        spec.Port,
+		Environment: spec.Environment,
+		Labels:      spec.Labels,
+		Command:     spec.Command,
+		Resources: backends.ResourceRequirements{
+			Limits: backends.ResourceList{
+				CPU:    spec.Resources.Limits.CPU,
+				Memory: spec.Resources.Limits.Memory,
+			},
+			Requests: backends.ResourceList{
+				CPU:    spec.Resources.Requests.CPU,
+				Memory: spec.Resources.Requests.Memory,
+			},
+		},
+		IsolationTier: spec.IsolationTier,
+	}
+
+	result, err := a.inner.CreateInstance(ctx, innerSpec)
+	if err != nil {
+		return nil, err
+	}
+
+	return &providers.BackendInstanceResult{
+		ID:     result.ID,
+		Name:   result.Name,
+		URL:    result.URL,
+		Status: result.Status,
+	}, nil
+}
+
+func (a *backendAdapter) DeleteInstance(ctx context.Context, instanceID string) error {
+	return a.inner.DeleteInstance(ctx, instanceID)
+}
+
+func initBackend(
+	ctx context.Context,
+	cfg *config.Config,
+	logger *slog.Logger,
+) (string, backends.Backend, *container.Manager, *mcpgateway.RemoteUpstream, error) {
+	if cfg.Environment != "" {
+		logger.Info("Using forced environment", slog.String("environment", cfg.Environment))
+	}
+
+	envType, err := environment.DetectEnvironment(cfg.Environment, logger)
+	if err != nil {
+		return "", nil, nil, nil, failed(logger, "Refusing to start", err)
+	}
+	logger.Info("Environment detected", slog.String("type", envType))
+
+	var backend backends.Backend
+	var containerManager *container.Manager
+	// Non-nil only when MCP workloads live on a separate data plane.
+	var remoteUpstream *mcpgateway.RemoteUpstream
+
+	switch envType {
+	case "kubernetes":
+		logger.Info("Initializing Kubernetes backend")
+		// A task lease is the one piece of sandbox policy a backend needs, and
+		// only this backend takes it. Reading the whole policy earlier, before
+		// the backend existed, made every sandbox and workspace setting a
+		// precondition for starting at all -- including on a data plane, which
+		// serves MCP containers and by design holds no sandbox configuration.
+		sandboxPolicy, err := sandboxruntime.LoadControlPolicyFromEnv()
+		if err != nil {
+			return "", nil, nil, nil, failed(logger, "Failed to configure sandbox control policy", err)
+		}
+		k8sBackend, err := backends.NewKubernetesBackend(cfg, logger, sandboxPolicy.TaskLeaseTTL)
+		if err != nil {
+			return "", nil, nil, nil, failed(logger, "Failed to create Kubernetes backend", err)
+		}
+		backend = k8sBackend
+
+	case "docker":
+		logger.Info("Initializing Docker backend")
+		dockerBackend := backends.NewDockerBackend(cfg, logger)
+		backend = dockerBackend
+
+		// Get the container manager from the docker backend for compatibility
+		containerManager = dockerBackend.GetManager()
+
+	case "dataplane":
+		logger.Info("Initializing remote data-plane backend")
+		agentCfg, err := dataplane.ClientConfigFromEnv()
+		if err != nil {
+			return "", nil, nil, nil, failed(logger, "Failed to configure remote data-plane backend", err)
+		}
+		backend = dataplane.NewClient(agentCfg)
+		// MCP traffic is proxied to the data plane's per-instance path, and this
+		// credential is attached to that outgoing hop only.
+		remoteUpstream = &mcpgateway.RemoteUpstream{BaseURL: agentCfg.BaseURL, Token: agentCfg.Token}
+		logger.Info("Remote data-plane backend configured", slog.String("url", agentCfg.BaseURL))
+
+	default:
+		return "", nil, nil, nil, failed(logger, "Unsupported environment type", fmt.Errorf("environment %q", envType), slog.String("type", envType))
+	}
+
+	// Reachability and the token are proven here rather than on the first tool
+	// call, where the failure would reach a user as a broken tool.
+	if err := backend.Initialize(ctx); err != nil {
+		return "", nil, nil, nil, failed(logger, "Failed to initialize backend", err, slog.String("environment", envType))
+	}
+	return envType, backend, containerManager, remoteUpstream, nil
+}
+
+func initProviderManager(
+	envType string,
+	backend backends.Backend,
+	containerManager *container.Manager,
+	secretResolver secrets.SecretResolver,
+	logger *slog.Logger,
+) *providers.ProviderManager {
+	urlProvider := providers.NewURLProvider(logger)
+	switch {
+	case envType == "docker" && containerManager != nil:
+		dockerProvider := providers.NewDockerProvider(secretResolver, containerManager, logger)
+		return providers.NewProviderManager(dockerProvider, nil, urlProvider)
+	case envType == "kubernetes" || envType == "dataplane":
+		// Both drive workloads through a Backend rather than a local container
+		// runtime: the Kubernetes API in-cluster, the remote data plane's HTTP
+		// API otherwise. Without this case a data-plane deployment fell through
+		// to the URL-only manager and every container-backed instance failed
+		// with "no container provider available".
+		adapter := &backendAdapter{inner: backend}
+		backendProvider := providers.NewBackendProvider(adapter, secretResolver, logger)
+		return providers.NewProviderManager(nil, backendProvider, urlProvider)
+	default:
+		// Fallback - only URL provider
+		return providers.NewProviderManager(nil, nil, urlProvider)
+	}
+}
+
+// NewLogger configures structured logging for the manager binaries.
+func NewLogger(cfg *config.Config) *slog.Logger {
+	var handler slog.Handler
+
+	opts := &slog.HandlerOptions{
+		Level: getLogLevel(cfg.Logging.Level),
+	}
+
+	if cfg.Logging.Format == "json" {
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	}
+
+	return slog.New(handler)
+}
+
+// setupRouter configures the HTTP router
+func setupRouter(cfg *config.Config, logger *slog.Logger) *gin.Engine {
+	// Set Gin mode based on log level
+	if cfg.Logging.Level == "DEBUG" {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	router := gin.New()
+
+	// Add middleware
+	router.Use(gin.Recovery())
+
+	// Add logging middleware
+	router.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		logger.Info("HTTP request",
+			slog.String("method", param.Method),
+			slog.String("path", param.Path),
+			slog.Int("status", param.StatusCode),
+			slog.Duration("latency", param.Latency),
+			slog.String("ip", param.ClientIP))
+		return ""
+	}))
+
+	// Add CORS middleware if enabled
+	if cfg.Server.CORSEnabled {
+		corsConfig := cors.DefaultConfig()
+		if len(cfg.Server.CORSAllowedOrigins) > 0 {
+			corsConfig.AllowOrigins = cfg.Server.CORSAllowedOrigins
+		} else {
+			corsConfig.AllowAllOrigins = true
+		}
+		corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+		corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
+		corsConfig.ExposeHeaders = []string{"Content-Length"}
+		corsConfig.AllowCredentials = true
+
+		router.Use(cors.New(corsConfig))
+		logger.Info("CORS enabled", slog.Any("allowed_origins", cfg.Server.CORSAllowedOrigins))
+	} else {
+		logger.Info("CORS disabled")
+	}
+
+	return router
+}
+
+// getLogLevel converts string log level to slog.Level
+func getLogLevel(level string) slog.Level {
+	switch level {
+	case "DEBUG":
+		return slog.LevelDebug
+	case "INFO":
+		return slog.LevelInfo
+	case "WARN":
+		return slog.LevelWarn
+	case "ERROR":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
+func startSandboxTaskGC(ctx context.Context, logger *slog.Logger, client *warmpool.Client) error {
+	interval, err := getDurationEnv("SANDBOX_TASK_GC_INTERVAL", 30*time.Second)
+	if err != nil {
+		return err
+	}
+	if interval <= 0 {
+		logger.Info("Sandbox task GC disabled")
+		return nil
+	}
+
+	logger.Info("Starting sandbox task GC", slog.Duration("interval", interval))
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case now := <-ticker.C:
+				deleted, err := client.DeleteExpiredTaskPods(ctx, now.UTC())
+				if err != nil {
+					logger.Warn("Sandbox task GC failed", slog.String("error", err.Error()))
+					continue
+				}
+				if deleted > 0 {
+					logger.Info("Sandbox task GC deleted expired pods", slog.Int("deleted", deleted))
+				}
+			}
+		}
+	}()
+	return nil
+}
+
+// startEmbeddedSandboxRunner runs the sandbox execution consumer in-process,
+// delegating actual execution to the backend's data plane (the docker
+// sandbox-executor). This makes code execution work in docker-compose without a
+// standalone sandbox-runner. Opt-in via SANDBOX_EMBEDDED_RUNNER=true; off by
+// default so Kubernetes (which runs a dedicated agentarea-sandbox-runner) keeps
+// execution work out of the more-privileged control plane.
+func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, runtime sandboxruntime.Runtime, providerName string, workspaceConfig workspace.RepositoryConfig, logger *slog.Logger) error {
+	rawEnabled := os.Getenv("SANDBOX_EMBEDDED_RUNNER")
+	enabled := false
+	if rawEnabled != "" {
+		parsed, err := strconv.ParseBool(rawEnabled)
+		if err != nil {
+			return fmt.Errorf("SANDBOX_EMBEDDED_RUNNER must be a boolean: %w", err)
+		}
+		enabled = parsed
+	}
+	if !enabled {
+		logger.Info("Embedded sandbox runner disabled (set SANDBOX_EMBEDDED_RUNNER=true to enable)")
+		return nil
+	}
+
+	controlConfig, err := sandboxcontrol.LoadConfigFromEnv(cfg.Redis.URL)
+	if err != nil {
+		return fmt.Errorf("embedded sandbox runner control configuration: %w", err)
+	}
+	store, err := sandboxcontrol.NewRedisStoreFromConfig(controlConfig)
+	if err != nil {
+		return fmt.Errorf("embedded sandbox runner Redis store: %w", err)
+	}
+
+	placer, err := sandboxplacement.NewRegistry(sandboxplacement.Target{
+		Executor: runtime,
+		Capabilities: sandboxplacement.Capabilities{
+			Name:   providerName,
+			Region: os.Getenv("SANDBOX_REGION"),
+		},
+	})
+	if err != nil {
+		_ = store.Close()
+		return fmt.Errorf("embedded sandbox runner placement: %w", err)
+	}
+
+	workspaceRepository, err := workspace.NewRepositoryFromConfig(ctx, workspaceConfig)
+	if err != nil {
+		_ = store.Close()
+		return fmt.Errorf("embedded sandbox runner workspace repository: %w", err)
+	}
+	runner := sandboxrunner.NewWithPlacerAndWorkspaceRepository(
+		sandboxrunner.ConfigFromEnv(), store, placer, logger, workspaceRepository,
+	)
+	go func() {
+		if err := runner.Run(ctx); err != nil && err != context.Canceled {
+			logger.Error("Embedded sandbox runner stopped", slog.String("error", err.Error()))
+		}
+	}()
+	logger.Info("Embedded sandbox runner started",
+		slog.String("sandbox_target", providerName),
+		slog.String("sandbox_region", os.Getenv("SANDBOX_REGION")))
+	return nil
+}
+
+func getDurationEnv(name string, fallback time.Duration) (time.Duration, error) {
+	value := os.Getenv(name)
+	if value == "" {
+		return fallback, nil
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a duration: %w", name, err)
+	}
+	return duration, nil
+}
