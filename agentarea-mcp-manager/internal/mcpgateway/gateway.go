@@ -7,7 +7,6 @@ package mcpgateway
 import (
 	"context"
 	"crypto/subtle"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -19,7 +18,6 @@ import (
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/models"
-	"github.com/agentarea/mcp-manager/internal/usage"
 	"github.com/google/uuid"
 )
 
@@ -119,7 +117,7 @@ type Gateway struct {
 	policy     Policy
 	logger     *slog.Logger
 	remote     *RemoteUpstream
-	usage      usage.Recorder
+	requests   RequestObserver
 }
 
 func New(repository LifecycleRepository, runtime InstanceRuntime, policy Policy, logger *slog.Logger, remote *RemoteUpstream) (*Gateway, error) {
@@ -134,9 +132,6 @@ func New(repository LifecycleRepository, runtime InstanceRuntime, policy Policy,
 	}
 	return &Gateway{repository: repository, runtime: runtime, policy: policy, logger: logger, remote: remote}, nil
 }
-
-// SetUsageRecorder must be called before serving requests.
-func (g *Gateway) SetUsageRecorder(recorder usage.Recorder) { g.usage = recorder }
 
 // isRemoteUpstream reports whether this upstream is the configured data plane,
 // which is the only destination allowed to receive the machine credential.
@@ -159,15 +154,14 @@ func (g *Gateway) isRemoteUpstream(target *url.URL, parseErr error) bool {
 	return strings.HasPrefix(target.Path, prefix)
 }
 
-// addMCPRoutingUsageFields copies the 2026-07-28 routing headers onto a usage
-// payload. 2025-era requests carry neither and get neither key.
-func addMCPRoutingUsageFields(data map[string]any, request *http.Request) {
-	if values := request.Header.Values("Mcp-Method"); len(values) > 0 {
-		data["mcp_method"] = values[0]
+// headerValue keeps the difference between an absent header and an empty one:
+// 2025-era requests carry no MCP routing headers at all.
+func headerValue(request *http.Request, name string) *string {
+	if values := request.Header.Values(name); len(values) > 0 {
+		value := values[0]
+		return &value
 	}
-	if values := request.Header.Values("Mcp-Name"); len(values) > 0 {
-		data["mcp_name"] = values[0]
-	}
+	return nil
 }
 
 func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -183,25 +177,27 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 	request.Header.Del("X-AgentArea-Manager-Authorization")
 
 	requestID := uuid.NewString()
-	startedAt := time.Now()
-	var endedAt time.Time
+	var startedAt, endedAt time.Time
+	if g.requests != nil {
+		startedAt = time.Now()
+	}
 	instance, err := g.repository.LoadInstance(request.Context(), instanceID)
 	if err != nil {
 		http.Error(response, "MCP instance is unavailable", http.StatusBadGateway)
 		return
 	}
-	if g.usage != nil {
-		dataFields := map[string]any{
-			"request_id": requestID, "http_method": request.Method,
-			"started_at": startedAt.UTC(), "transport": "streamable_http",
+	if g.requests != nil {
+		started := RequestStarted{
+			RequestID: requestID, InstanceID: instance.InstanceID, WorkspaceID: instance.WorkspaceID,
+			Method: request.Method, MCPMethod: headerValue(request, "Mcp-Method"), MCPName: headerValue(request, "Mcp-Name"),
+			StartedAt: startedAt,
 		}
-		addMCPRoutingUsageFields(dataFields, request)
-		data, _ := json.Marshal(dataFields)
-		if err := g.recordRequestUsage(request.Context(), instance, requestID+":started", "mcp.request.started", startedAt, data); err != nil {
-			http.Error(response, "MCP request accounting unavailable", http.StatusServiceUnavailable)
+		if err := g.requests.Started(request.Context(), started); err != nil {
+			g.logRequestObserverFailure("started", started, err)
+			http.Error(response, "MCP request processing unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		observed := &usageResponseWriter{ResponseWriter: response}
+		observed := &statusResponseWriter{ResponseWriter: response}
 		response = observed
 		defer func() {
 			// A proxy panic (including a failed stream copy) is not a known
@@ -212,22 +208,13 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 			if endedAt.IsZero() {
 				endedAt = time.Now()
 			}
-			outcome := "succeeded"
-			if request.Context().Err() != nil {
-				outcome = "canceled"
-			} else if observed.status >= 400 {
-				outcome = "http_error"
+			completed := RequestCompleted{
+				RequestStarted: started, EndedAt: endedAt,
+				StatusCode: observed.status, Canceled: request.Context().Err() != nil,
 			}
-			dataFields := map[string]any{
-				"request_id": requestID, "http_method": request.Method,
-				"started_at": startedAt.UTC(), "ended_at": endedAt.UTC(),
-				"duration_ns": endedAt.Sub(startedAt).Nanoseconds(),
-				"http_status": observed.status, "outcome": outcome,
-				"transport": "streamable_http",
+			if err := g.requests.Completed(context.WithoutCancel(request.Context()), completed); err != nil {
+				g.logRequestObserverFailure("completed", started, err)
 			}
-			addMCPRoutingUsageFields(dataFields, request)
-			data, _ := json.Marshal(dataFields)
-			_ = g.recordRequestUsage(context.WithoutCancel(request.Context()), instance, requestID+":completed", "mcp.request.completed", endedAt, data)
 		}()
 	}
 	var upstream string
@@ -342,42 +329,37 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 
 }
 
-// Unwrap lets net/http's ResponseController retain flushing and hijacking
-// capabilities without buffering either request or response bodies.
-type usageResponseWriter struct {
+// statusResponseWriter records the final status only. Unwrap lets net/http's
+// ResponseController retain flushing and hijacking capabilities without
+// buffering either request or response bodies.
+type statusResponseWriter struct {
 	http.ResponseWriter
 	status int
 }
 
-func (w *usageResponseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+func (w *statusResponseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
-func (w *usageResponseWriter) WriteHeader(status int) {
+func (w *statusResponseWriter) WriteHeader(status int) {
 	if w.status == 0 && (status >= 200 || status == http.StatusSwitchingProtocols) {
 		w.status = status
 	}
 	w.ResponseWriter.WriteHeader(status)
 }
 
-func (w *usageResponseWriter) Write(body []byte) (int, error) {
+func (w *statusResponseWriter) Write(body []byte) (int, error) {
 	if w.status == 0 {
 		w.WriteHeader(http.StatusOK)
 	}
 	return w.ResponseWriter.Write(body)
 }
 
-func (g *Gateway) recordRequestUsage(ctx context.Context, instance *models.MCPServerInstance, id, kind string, at time.Time, data json.RawMessage) error {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	err := g.usage.Record(ctx, usage.Event{
-		SchemaVersion: usage.SchemaVersion,
-		ID:            id, Source: "mcp-gateway", Kind: kind,
-		WorkspaceID: instance.WorkspaceID, ResourceKind: "mcp_instance",
-		ResourceID: instance.InstanceID, OccurredAt: at.UTC(), Data: data,
-	})
-	if err != nil {
-		g.logger.Error("MCP usage persistence failed", slog.String("event_id", id), slog.String("instance_id", instance.InstanceID), slog.String("workspace_id", instance.WorkspaceID), slog.String("error", err.Error()))
-	}
-	return err
+func (g *Gateway) logRequestObserverFailure(phase string, request RequestStarted, err error) {
+	g.logger.Error("MCP request observer failed",
+		slog.String("phase", phase),
+		slog.String("request_id", request.RequestID),
+		slog.String("instance_id", request.InstanceID),
+		slog.String("workspace_id", request.WorkspaceID),
+		slog.String("error", err.Error()))
 }
 
 // RetireHTTP synchronously removes the data-plane workload before desired
