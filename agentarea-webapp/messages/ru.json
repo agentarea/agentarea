@@ -1977,7 +1977,12 @@
     "manageSkillsLink": "Управлять навыками",
     "manageMcpsLink": "Управлять MCP-серверами",
     "appliesInstantly": "Изменения применяются сразу",
-    "nothingFound": "Ничего не найдено по запросу «{query}»"
+    "nothingFound": "Попробуйте другой запрос вместо «{query}».",
+    "emptySkillsTitle": "Навыков пока нет",
+    "emptySkillsHint": "Опишите процедуру один раз — и подключайте её к любой задаче или агенту.",
+    "emptyMcpsTitle": "MCP-серверов пока нет",
+    "emptyMcpsHint": "Подключите сервер, чтобы его инструменты были у этой задачи и у любого агента.",
+    "nothingFoundTitle": "Ничего не найдено"
   },
   "QuickTask": {
     "title": "Новая задача",

@@ -3,10 +3,10 @@
 import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { ArrowUpRight, RefreshCw } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import SearchInput from "@/components/SearchInput/SearchInput";
 import { BlueprintBadge } from "@/components/ui/blueprint-badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
@@ -43,6 +43,14 @@ type Row = {
 };
 
 const SELECTED_TINT = "hsl(var(--primary))";
+
+/** The shared empty state without its card — the sheet is the card here. */
+const BARE_EMPTY_STATE =
+  "border-0 bg-transparent p-6 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent";
+
+// A new tab: leaving would drop the task being written.
+const openInNewTab = (href: string) =>
+  window.open(href, "_blank", "noopener,noreferrer");
 
 type TaskResourcePanelProps = {
   mcps: TaskResourceRef[];
@@ -140,6 +148,21 @@ export function TaskResourcePanelView({
     : rows;
   const Icon = isSkills ? ENTITY_ICONS.skill : ENTITY_ICONS.mcp;
   const heading = isSkills ? t("skillsHeading") : t("mcpsHeading");
+  const iconsType = isSkills ? "skills" : "mcp";
+
+  const emptyState = (props: {
+    title: string;
+    description?: string;
+    action?: { label: string; onClick: () => void };
+  }) => (
+    <div className="flex h-full flex-col justify-center">
+      <EmptyState
+        iconsType={iconsType}
+        className={BARE_EMPTY_STATE}
+        {...props}
+      />
+    </div>
+  );
 
   // Only what is picked; a "0" on every untouched tab would be noise.
   const selectedCount = (count: number) => (count > 0 ? count : undefined);
@@ -148,29 +171,33 @@ export function TaskResourcePanelView({
   if (resources.loading) {
     body = <RowsSkeleton />;
   } else if (resources.failed.includes(tab)) {
-    body = (
-      <div className="space-y-2 px-5 py-2">
-        <p role="alert" className="text-xs text-destructive">
-          {t("loadFailed")}
-        </p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="gap-1.5 px-1.5 text-xs text-muted-foreground hover:text-foreground"
-          onClick={resources.refresh}
-        >
-          <RefreshCw />
-          {t("refresh")}
-        </Button>
-      </div>
-    );
+    body = emptyState({
+      title: t("loadFailed"),
+      action: { label: t("refresh"), onClick: resources.refresh },
+    });
   } else if (!rows.length) {
-    body = (
-      <p className="note px-5 py-2">{isSkills ? t("noSkills") : t("noMcps")}</p>
-    );
+    body = isSkills
+      ? emptyState({
+          title: t("emptySkillsTitle"),
+          description: t("emptySkillsHint"),
+          action: {
+            label: t("manageSkills"),
+            onClick: () => openInNewTab("/skills/create"),
+          },
+        })
+      : emptyState({
+          title: t("emptyMcpsTitle"),
+          description: t("emptyMcpsHint"),
+          action: {
+            label: t("manageMcps"),
+            onClick: () => openInNewTab("/connections"),
+          },
+        });
   } else if (!visible.length) {
-    body = <p className="note px-5 py-2">{t("nothingFound", { query })}</p>;
+    body = emptyState({
+      title: t("nothingFoundTitle"),
+      description: t("nothingFound", { query }),
+    });
   } else {
     body = (
       <>
@@ -279,7 +306,6 @@ export function TaskResourcePanelView({
       <div className="min-h-0 flex-1 overflow-y-auto py-2">{body}</div>
 
       <div className="flex items-center justify-between gap-3 border-t px-5 py-3">
-        {/* A new tab: leaving would drop the task being written. */}
         <Link
           href={isSkills ? "/skills" : "/connections"}
           target="_blank"

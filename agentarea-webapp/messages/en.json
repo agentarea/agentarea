@@ -1976,7 +1976,12 @@
     "manageSkillsLink": "Manage skills",
     "manageMcpsLink": "Manage MCP servers",
     "appliesInstantly": "Changes apply instantly",
-    "nothingFound": "Nothing matches “{query}”"
+    "nothingFound": "Try something other than “{query}”.",
+    "emptySkillsTitle": "No skills yet",
+    "emptySkillsHint": "Package a procedure once, then attach it to any task or agent.",
+    "emptyMcpsTitle": "No MCP servers yet",
+    "emptyMcpsHint": "Connect one to give this task — and any agent — its tools.",
+    "nothingFoundTitle": "Nothing found"
   },
   "QuickTask": {
     "title": "New task",
