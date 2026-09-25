@@ -183,7 +183,7 @@ class Agent:
                             yield f"\n[Tool {tool_name}: {tool_result}]\n"
 
                     except Exception as e:
-                        error_msg = f"Error: {str(e)}"
+                        error_msg = f"Error: {e!s}"
                         messages.append(
                             {
                                 "role": "tool",

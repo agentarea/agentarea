@@ -19,8 +19,7 @@ PURE_ARITHMETIC = "pure arithmetic; reads and writes no workspace state"
     plane="runtime",
 )
 class MathToolset(Toolset):
-    """
-    A toolset for mathematical operations including basic arithmetic, advanced
+    """A toolset for mathematical operations including basic arithmetic, advanced
     math, and utility functions.
     """
 

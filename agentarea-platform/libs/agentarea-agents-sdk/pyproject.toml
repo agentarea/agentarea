@@ -48,12 +48,11 @@ test-agents-sdk = "run_tests:main"
 packages = ["agentarea_agents_sdk"]
 
 [tool.ruff]
-line-length = 100
-target-version = "py311"
+extend = "../../pyproject.toml"
 
-[tool.ruff.lint]
-select = ["E", "W", "F", "I", "N", "UP"]
-ignore = ["E501"]  # Line too long
+[tool.ruff.lint.extend-per-file-ignores]
+# The demo's main() writes to the console by design.
+"agentarea_agents_sdk/tools/example_decorator_tool.py" = ["T201"]
 
 [tool.mypy]
 python_version = "3.11"

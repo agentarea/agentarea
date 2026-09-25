@@ -107,8 +107,14 @@ def toolset(
     """Stamp ``ToolsetMetadata`` on a Toolset subclass and (by default) register it.
 
     Args:
+        namespace: Registry key and the prefix of every tool name in the toolset.
+        display_name: Human-readable name shown in the UI.
+        description: What the toolset is for, shown in the UI and catalog.
+        category: Grouping used by the catalog.
         plane: Which surface this toolset belongs to — the axis a split into
             separate MCP servers would cut along.
+        enabled_by_default: Whether agents get the toolset without opting in.
+        requires_user_confirmation: Whether its tools ask a human before running.
         register: If False, only stamps metadata without adding the class to the
             global lookup registry. Use when the class shares a ``namespace`` with
             another implementation that should win the lookup. (Example: the
@@ -116,7 +122,6 @@ def toolset(
             ``TriggersAgentToolset`` both manage triggers but expose different
             surfaces; the agent variant owns the namespace in the registry.)
     """
-
     meta = ToolsetMetadata(
         namespace=namespace,
         display_name=display_name,
@@ -169,7 +174,6 @@ def build_method_schema(method: Callable) -> dict[str, Any]:
       that primitives, ``BaseModel`` fields, ``list``/``dict``/``Literal`` and
       ``Optional`` types all render correctly via ``model_json_schema()``.
     """
-
     sig = inspect.signature(method)
     try:
         hints = get_type_hints(method)

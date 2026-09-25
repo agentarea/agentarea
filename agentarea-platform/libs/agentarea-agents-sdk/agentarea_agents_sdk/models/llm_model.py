@@ -212,7 +212,7 @@ class LLMModel:
 
         # Any object exposing role/content
         if hasattr(msg, "role") and hasattr(msg, "content"):
-            return {"role": getattr(msg, "role"), "content": getattr(msg, "content")}
+            return {"role": msg.role, "content": msg.content}
 
         # Otherwise return message unchanged
         return msg
@@ -457,7 +457,7 @@ class LLMModel:
                 for tool_call in message.tool_calls
                 if tool_call.type == "function"
             ]
-        elif hasattr(message, "function_call") and getattr(message, "function_call"):
+        elif hasattr(message, "function_call") and message.function_call:
             # Fallback for providers that use function_call instead of tool_calls
             fc = message.function_call
             tool_calls = [
@@ -642,7 +642,7 @@ class LLMModel:
                                             )
 
                     # Fallback: some providers stream legacy function_call instead of tool_calls
-                    if hasattr(delta, "function_call") and getattr(delta, "function_call"):
+                    if hasattr(delta, "function_call") and delta.function_call:
                         fc = delta.function_call
                         index = 0
                         if index not in tool_calls_buffer:
@@ -811,7 +811,6 @@ class LLMModel:
         Yields:
             LLMResponse objects containing delta responses (only new content)
         """
-
         # Use direct streaming for OpenAI-compatible providers to capture thinking
         if self._supports_direct_streaming():
             logger.info(
@@ -931,7 +930,7 @@ class LLMModel:
                                     tool_calls_updated = True
 
                     # Fallback: some providers stream legacy function_call instead of tool_calls
-                    if hasattr(delta, "function_call") and getattr(delta, "function_call"):
+                    if hasattr(delta, "function_call") and delta.function_call:
                         fc = delta.function_call
                         index = 0
                         if index not in tool_calls_buffer:

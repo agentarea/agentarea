@@ -30,6 +30,7 @@ class AgentGoal:
     context: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        """Reject a non-positive iteration budget."""
         if self.max_iterations <= 0:
             raise ValueError("max_iterations must be positive")
 
@@ -44,6 +45,7 @@ class RunnerConfig:
     enable_pause: bool = False
 
     def __post_init__(self) -> None:
+        """Reject a non-positive iteration budget."""
         if self.max_iterations <= 0:
             raise ValueError("max_iterations must be positive")
 

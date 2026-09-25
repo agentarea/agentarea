@@ -145,6 +145,8 @@ select = [
     "T20", # flake8-print
     "PT",  # flake8-pytest-style
     "RUF", # Ruff-specific rules
+    "TRY400", # logger.error in an except block: use logger.exception
+    "LOG", # flake8-logging (exc_info misuse, root-logger calls)
 ]
 ignore = [
     "D102",
@@ -168,6 +170,11 @@ convention = "google"
 "apps/*/tests/*" = ["D", "S101"]
 "libs/*/tests/*" = ["D", "S101"]
 "apps/api/agentarea_api/main.py" = ["E402"]
+# Under a parallel refactor; drop these once it lands and the handlers log tracebacks.
+"libs/execution/agentarea_execution/activities/agent_execution_activities.py" = ["TRY400"]
+"libs/execution/agentarea_execution/activities/dependencies.py" = ["TRY400"]
+"libs/execution/agentarea_execution/activities/event_publisher.py" = ["TRY400"]
+"libs/execution/agentarea_execution/activities/trigger_execution_activities.py" = ["TRY400"]
 
 [tool.ruff.format]
 quote-style = "double"

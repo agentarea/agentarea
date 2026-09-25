@@ -366,6 +366,7 @@ class OpenAPIToolFactory:
             connection_name_or_id: Connection UUID or name string.
             allowed_tools: Operation names to return; ``None`` means all, ``[]`` means none.
             openapi_connection_service: OpenAPIConnectionService instance.
+            payment_handler: Pays for operations that answer HTTP 402, if any.
 
         Returns:
             List of OpenAPITool instances (empty on any error).

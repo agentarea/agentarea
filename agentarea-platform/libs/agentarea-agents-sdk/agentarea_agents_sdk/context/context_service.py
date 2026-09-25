@@ -84,7 +84,7 @@ def create_context_event_listener(
                 ),
             )
         except Exception:
-            # best-effort persistence – do not crash agent flow
+            # best-effort persistence - do not crash agent flow
             logger.warning("Failed to persist context event for task %s", task_id, exc_info=True)
 
     return _listener

@@ -18,6 +18,7 @@ class SandboxControlSigner:
     task_id: str
 
     def __post_init__(self) -> None:
+        """Reject a short secret or a missing workspace/task scope."""
         if len(self.secret.encode()) < 32:
             raise ValueError("sandbox control auth secret must contain at least 32 bytes")
         if not self.workspace_id or not self.task_id:

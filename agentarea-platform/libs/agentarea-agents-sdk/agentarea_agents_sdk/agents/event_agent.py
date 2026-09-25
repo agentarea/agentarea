@@ -85,6 +85,7 @@ class EventAgent:
         self.max_tokens = max_tokens
         self.max_iterations = max_iterations
         self.event_listener = event_listener
+        self._listener_tasks: set[asyncio.Task[Any]] = set()
         # Persist context references for later history preloading
         self._context_service = context_service
         self._context_task_id = context_task_id
@@ -134,10 +135,14 @@ class EventAgent:
                         res1 = orig_listener(evt)
                         if asyncio.iscoroutine(res1):
                             # Run concurrently, but don't block on persistence
-                            asyncio.create_task(res1)
+                            task = asyncio.create_task(res1)
+                            self._listener_tasks.add(task)
+                            task.add_done_callback(self._listener_tasks.discard)
                         res2 = ctx_listener(evt)
                         if asyncio.iscoroutine(res2):
-                            asyncio.create_task(res2)
+                            task = asyncio.create_task(res2)
+                            self._listener_tasks.add(task)
+                            task.add_done_callback(self._listener_tasks.discard)
 
                     self.event_listener = _composed_listener
                 else:
