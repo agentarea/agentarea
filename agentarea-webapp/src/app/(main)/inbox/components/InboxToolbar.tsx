@@ -1,17 +1,14 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+import { CircleAlert, CircleCheck, CircleX, Inbox } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  FILTERS,
-  type InboxCounts,
+  FILTER_KEYS,
   type FilterValue,
+  type InboxCounts,
 } from "@/app/(main)/inbox/components/inboxShared";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 
 interface InboxToolbarProps {
   counts: InboxCounts;
@@ -19,27 +16,38 @@ interface InboxToolbarProps {
   onChange: (next: FilterValue) => void;
 }
 
+const FILTER_ICON: Record<FilterValue, LucideIcon> = {
+  all: Inbox,
+  pending: CircleAlert,
+  completed: CircleCheck,
+  failed: CircleX,
+};
+
+// The subtle (grey) pill: this filters the task list rather than navigating
+// the page, so it stays quieter than the selected row beneath it.
 export function InboxToolbar({ counts, filter, onChange }: InboxToolbarProps) {
+  const t = useTranslations("InboxPage.filters");
+
   return (
-    <div className="flex h-full min-w-0 w-full items-center gap-3">
-      <Select value={filter} onValueChange={(value) => onChange(value as FilterValue)}>
-        <SelectTrigger
-          aria-label="Filter inbox tasks"
-          className="h-8 w-auto min-w-[158px] border-border bg-transparent px-2.5 text-[12.5px] shadow-none"
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent align="start">
-          {FILTERS.map((item) => (
-            <SelectItem key={item.key} value={item.key}>
-              <span className="flex items-center gap-2">
-                {item.label}
-                <span className="text-muted-foreground">{counts[item.key]}</span>
+    <div className="flex h-full min-w-0 w-full items-center">
+      <CountSegmentedControl<FilterValue>
+        items={FILTER_KEYS.map((key) => {
+          const Icon = FILTER_ICON[key];
+          return {
+            value: key,
+            label: (
+              <span className="flex items-center gap-1.5 whitespace-nowrap">
+                <Icon className="h-4 w-4" strokeWidth={1.8} />
+                {t(key)}
               </span>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+            ),
+            count: counts[key],
+          };
+        })}
+        value={filter}
+        onChange={onChange}
+        layoutId="inbox-filter-control"
+      />
     </div>
   );
 }

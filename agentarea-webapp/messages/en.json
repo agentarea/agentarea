@@ -2258,6 +2258,79 @@
       "agent": "Agent wallet"
     }
   },
+  "InboxPage": {
+    "title": "Inbox",
+    "approve": "Approve",
+    "reject": "Reject",
+    "approveAll": "Approve all",
+    "loadFailed": "Failed to load inbox",
+    "filters": {
+      "all": "All",
+      "pending": "Needs approval",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
+    "row": {
+      "untitled": "Untitled task",
+      "unknownAgent": "Unknown agent",
+      "request": "Request {tool}",
+      "waiting": "Waiting for approval",
+      "resultAvailable": "Result available",
+      "taskFailed": "Task failed",
+      "taskActivity": "Task activity",
+      "select": "Select task"
+    },
+    "selection": {
+      "count": "{count} selected",
+      "clear": "Clear"
+    },
+    "sheet": {
+      "title": "Inbox task details",
+      "description": "Review task output and approve or reject the action."
+    },
+    "detail": {
+      "review": "Inbox review",
+      "openChat": "Open chat",
+      "close": "Close details panel",
+      "requestedRecently": "Requested recently",
+      "willRun": "Approving will let the agent run <b>{tool}</b>.",
+      "requestedAction": "the requested action",
+      "outputPending": "Output will be available after the action runs.",
+      "noOutput": "No output was returned for this task."
+    },
+    "result": {
+      "assistant": "Assistant",
+      "structured": "Structured result",
+      "details": "Result details"
+    },
+    "emptyList": {
+      "all": {
+        "title": "No inbox decisions yet",
+        "description": "When an agent needs approval, completes a governed action, or fails a controlled step, it will appear here for review."
+      },
+      "pending": {
+        "title": "Approval queue is clear",
+        "description": "No agent is waiting on a human decision right now. New escalations will land here before they can continue."
+      },
+      "completed": {
+        "title": "No completed approvals",
+        "description": "Approved actions will appear here after operators release them, so you can audit what moved forward."
+      },
+      "failed": {
+        "title": "No rejected or failed approvals",
+        "description": "Rejected actions and failed escalations will appear here when a governed path is stopped."
+      },
+      "viewAll": "View all",
+      "taskHistory": "Open task history",
+      "triggers": "Check triggers"
+    },
+    "detailEmpty": {
+      "title": "Select a task",
+      "pending": "{count, plural, one {# task is} other {# tasks are}} waiting for your decision. Open one to review its output, then approve or reject the action.",
+      "clear": "Nothing is waiting for your decision. Open a task to review its output.",
+      "openNext": "Review next approval"
+    }
+  },
   "AppsPage": {
     "title": "Apps",
     "description": "Interactive interfaces from your MCP connections.",

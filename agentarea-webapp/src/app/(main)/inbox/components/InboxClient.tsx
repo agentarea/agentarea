@@ -1,9 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { Check } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { Check } from "lucide-react";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
+import { InboxClientPanel } from "@/app/(main)/inbox/components/InboxClientPanel";
+import { InboxDetailEmpty } from "@/app/(main)/inbox/components/InboxDetailEmpty";
+import { InboxSelectionBar } from "@/app/(main)/inbox/components/InboxSelectionBar";
+import {
+  FILTER_KEYS,
+  isPending,
+  normalizeStatus,
+  type FilterValue,
+  type InboxCounts,
+  type InboxTask,
+} from "@/app/(main)/inbox/components/inboxShared";
+import { InboxTaskList } from "@/app/(main)/inbox/components/InboxTaskList";
+import { InboxToolbar } from "@/app/(main)/inbox/components/InboxToolbar";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import {
   Sheet,
@@ -12,18 +32,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { InboxClientPanel } from "@/app/(main)/inbox/components/InboxClientPanel";
-import { InboxSelectionBar } from "@/app/(main)/inbox/components/InboxSelectionBar";
-import { InboxTaskList } from "@/app/(main)/inbox/components/InboxTaskList";
-import { InboxToolbar } from "@/app/(main)/inbox/components/InboxToolbar";
-import {
-  FILTER_KEYS,
-  type InboxCounts,
-  type InboxTask,
-  isPending,
-  normalizeStatus,
-  type FilterValue,
-} from "@/app/(main)/inbox/components/inboxShared";
 import { resolveEscalationAction } from "@/lib/server-actions";
 
 interface InboxClientProps {
@@ -33,6 +41,7 @@ interface InboxClientProps {
 
 export function InboxClient({ items, error }: InboxClientProps) {
   const router = useRouter();
+  const t = useTranslations("InboxPage");
   const [filter, setFilter] = useQueryState(
     "filter",
     parseAsStringLiteral(FILTER_KEYS).withDefault("all")
@@ -77,7 +86,8 @@ export function InboxClient({ items, error }: InboxClientProps) {
     );
   }, [items, filter, effectiveStatus]);
 
-  const selected = visible.find((task) => String(task.id) === selectedId) ?? null;
+  const selected =
+    visible.find((task) => String(task.id) === selectedId) ?? null;
   // Keep the reading surface in sync with an optimistic resolve so the action
   // footer never offers controls for a task that has already been handled.
   const selectedWithEffectiveStatus = selected
@@ -92,6 +102,15 @@ export function InboxClient({ items, error }: InboxClientProps) {
     setFilter(next);
     setChecked(new Set());
     setSelectedId(null);
+  }
+
+  // Jump to the first task still waiting on a decision; a filter that hides
+  // it (completed / failed) switches to the approval queue first.
+  function openNextPending() {
+    const next = items.find((task) => isPending(effectiveStatus(task)));
+    if (!next) return;
+    if (filter !== "all" && filter !== "pending") changeFilter("pending");
+    setSelectedId(String(next.id));
   }
 
   function toggleCheck(id: string) {
@@ -186,13 +205,22 @@ export function InboxClient({ items, error }: InboxClientProps) {
         onClick={() => resolveMany(pendingTasks, true)}
         className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-[12.5px] font-semibold text-primary-foreground shadow-sm transition hover:brightness-95"
       >
-        <Check size={14} strokeWidth={2.4} /> Approve all
+        <Check size={14} strokeWidth={2.4} /> {t("approveAll")}
       </button>
     ) : null;
 
   return (
     <ContentBlock
-      header={{ breadcrumb: [{ label: "Inbox" }], controls: approveAll }}
+      header={{ breadcrumb: [{ label: t("title") }], controls: approveAll }}
+      subheader={
+        error ? undefined : (
+          <InboxToolbar
+            counts={counts}
+            filter={filter}
+            onChange={changeFilter}
+          />
+        )
+      }
       className="flex min-h-0 flex-1 flex-col overflow-hidden p-0"
     >
       {error ? (
@@ -212,10 +240,8 @@ export function InboxClient({ items, error }: InboxClientProps) {
               className="flex h-full w-full max-w-none flex-col p-0 sm:max-w-none lg:hidden [&>button]:hidden"
             >
               <SheetHeader className="sr-only">
-                <SheetTitle>Inbox task details</SheetTitle>
-                <SheetDescription>
-                  Review task output and approve or reject the action.
-                </SheetDescription>
+                <SheetTitle>{t("sheet.title")}</SheetTitle>
+                <SheetDescription>{t("sheet.description")}</SheetDescription>
               </SheetHeader>
               <InboxClientPanel
                 task={selectedWithEffectiveStatus}
@@ -225,10 +251,7 @@ export function InboxClient({ items, error }: InboxClientProps) {
             </SheetContent>
           </Sheet>
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:w-[34%] lg:min-w-[320px] lg:max-w-[440px] lg:flex-none lg:border-r lg:border-border">
-            <div className="flex h-[46px] shrink-0 items-center border-b border-border bg-background px-3 sm:px-4">
-              <InboxToolbar counts={counts} filter={filter} onChange={changeFilter} />
-            </div>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:w-[40%] lg:min-w-[360px] lg:max-w-[520px] lg:flex-none lg:border-r lg:border-border">
             {anyChecked && (
               <InboxSelectionBar
                 checkedCount={checked.size}
@@ -266,11 +289,18 @@ export function InboxClient({ items, error }: InboxClientProps) {
 
           {!isCompactLayout && (
             <aside className="hidden min-h-0 min-w-0 flex-1 overflow-hidden bg-background lg:flex">
-              <InboxClientPanel
-                task={selectedWithEffectiveStatus}
-                onResolve={resolveOne}
-                onClose={() => setSelectedId(null)}
-              />
+              {selectedWithEffectiveStatus ? (
+                <InboxClientPanel
+                  task={selectedWithEffectiveStatus}
+                  onResolve={resolveOne}
+                  onClose={() => setSelectedId(null)}
+                />
+              ) : (
+                <InboxDetailEmpty
+                  pendingCount={counts.pending}
+                  onOpenNextPending={openNextPending}
+                />
+              )}
             </aside>
           )}
         </div>

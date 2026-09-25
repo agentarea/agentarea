@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import {
   Bot,
   CheckCircle2,
@@ -9,11 +10,11 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import EmptyState from "@/components/EmptyState";
 import {
-  type InboxCounts,
   type FilterValue,
+  type InboxCounts,
 } from "@/app/(main)/inbox/components/inboxShared";
+import EmptyState from "@/components/EmptyState";
 
 type EmptyStateButton = {
   label: string;
@@ -25,70 +26,35 @@ interface InboxEmptyStateProps {
   counts: InboxCounts;
 }
 
+const ICONS: Record<FilterValue, LucideIcon[]> = {
+  all: [Bot, ShieldCheck, ScrollText],
+  pending: [Bot, ShieldAlert, ScrollText],
+  completed: [CheckCircle2, ShieldCheck, ScrollText],
+  failed: [XCircle, ShieldAlert, ScrollText],
+};
+
 export function InboxEmptyState({ filter, counts }: InboxEmptyStateProps) {
-  const copy: Record<
-    FilterValue,
-    {
-      title: string;
-      description: string;
-      icons: LucideIcon[];
-      buttons: EmptyStateButton[];
-    }
-  > = {
-    all: {
-      title: "No inbox decisions yet",
-      description:
-        "When an agent needs approval, completes a governed action, or fails a controlled step, it will appear here for review.",
-      icons: [Bot, ShieldCheck, ScrollText],
-      buttons: [
-        { label: "Open task history", href: "/tasks" },
-        { label: "Check triggers", href: "/triggers" },
-      ],
-    },
-    pending: {
-      title: "Approval queue is clear",
-      description:
-        "No agent is waiting on a human decision right now. New escalations will land here before they can continue.",
-      icons: [Bot, ShieldAlert, ScrollText],
-      buttons: [
-        ...(counts.all > 0 ? [{ label: "View all", href: "/inbox" }] : []),
-        { label: "Open task history", href: "/tasks" },
-        { label: "Check triggers", href: "/triggers" },
-      ],
-    },
-    completed: {
-      title: "No completed approvals",
-      description:
-        "Approved actions will appear here after operators release them, so you can audit what moved forward.",
-      icons: [CheckCircle2, ShieldCheck, ScrollText],
-      buttons: [
-        ...(counts.all > 0 ? [{ label: "View all", href: "/inbox" }] : []),
-        { label: "Open task history", href: "/tasks" },
-        { label: "Check triggers", href: "/triggers" },
-      ],
-    },
-    failed: {
-      title: "No rejected or failed approvals",
-      description:
-        "Rejected actions and failed escalations will appear here when a governed path is stopped.",
-      icons: [XCircle, ShieldAlert, ScrollText],
-      buttons: [
-        ...(counts.all > 0 ? [{ label: "View all", href: "/inbox" }] : []),
-        { label: "Open task history", href: "/tasks" },
-        { label: "Check triggers", href: "/triggers" },
-      ],
-    },
-  };
-  const { title, description, icons, buttons } = copy[filter];
+  const t = useTranslations("InboxPage.emptyList");
+
+  const taskHistory = { label: t("taskHistory"), href: "/tasks" };
+  const triggers = { label: t("triggers"), href: "/triggers" };
+  const buttons: EmptyStateButton[] =
+    filter === "all"
+      ? [taskHistory, triggers]
+      : [
+          ...(counts.all > 0 ? [{ label: t("viewAll"), href: "/inbox" }] : []),
+          taskHistory,
+          triggers,
+        ];
   const [action, additionAction, tertiaryAction] = buttons;
 
   return (
     <div className="flex h-full justify-center px-6 py-10">
       <div className="flex w-full flex-col gap-3">
         <EmptyState
-          title={title}
-          description={description}
-          icons={icons}
+          title={t(`${filter}.title`)}
+          description={t(`${filter}.description`)}
+          icons={ICONS[filter]}
           action={toEmptyStateAction(tertiaryAction ?? action)}
           additionAction={toEmptyStateAction(additionAction)}
         />
