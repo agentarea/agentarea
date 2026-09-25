@@ -236,6 +236,20 @@ class TestOAuth2Refresh:
         assert "client_secret" not in client.posted
         sm.set_secret.assert_called()  # persisted the rotated creds
 
+    async def test_refresh_never_posts_credentials_to_a_non_public_token_url(self):
+        from agentarea_common.utils.url_safety import UnsafeUrlError
+
+        svc, _, sm = _make_service()
+        sm.get_secret.return_value = json.dumps(
+            {"access_token": "old", "expires_at": 0, "refresh_token": "rt"}
+        )
+
+        with pytest.raises(UnsafeUrlError):
+            await svc.get_auth_headers(
+                _oauth_config(token_url="http://169.254.169.254/latest/api/token")
+            )
+        sm.set_secret.assert_not_called()
+
     async def test_managed_refresh_reads_platform_secret(self):
         repo = AsyncMock()
         workspace_sm = AsyncMock()

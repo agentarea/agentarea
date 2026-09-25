@@ -39,3 +39,18 @@ class PaymentStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
     PENDING = "pending"
+
+
+# Money left the wallet. A paid request that settled and then failed is still spent.
+SETTLED_PAYMENT_STATUSES: tuple[PaymentStatus, ...] = (PaymentStatus.COMPLETED,)
+
+
+def settlement_status(*, request_succeeded: bool, tx_hash: str | None) -> PaymentStatus:
+    """Status of a payment by whether it settled, not by whether the paid request succeeded.
+
+    A successful paid request means the provider settled. A settlement receipt on a
+    failed one means the same: the payment went through and the request failed after.
+    """
+    if request_succeeded or tx_hash:
+        return PaymentStatus.COMPLETED
+    return PaymentStatus.FAILED

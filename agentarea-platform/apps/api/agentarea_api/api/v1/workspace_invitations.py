@@ -438,20 +438,19 @@ async def accept_invitation(
 
     An invitation sent to an email address is only accepted by the account
     signed in under that address. Idempotent for the same acceptor.
+
+    The invitation is committed as accepted before membership is granted, and
+    it grants membership only until that grant is recorded: a graph outage on
+    the first call is retried, a replay of a used link grants nothing, and a
+    removal racing the accept wins.
     """
     try:
-        invitation = await service.accept(
+        invitation, _ = await service.accept(
             token=body.token, user_id=user.user_id, user_email=user.email
         )
+        await memberships.admit(invitation, user.user_id)
     except INVITATION_ERRORS as exc:
         _raise_invitation_error(exc)
-
-    try:
-        await memberships.record(
-            workspace_id=invitation.workspace_id,
-            user_id=user.user_id,
-            invitation_id=invitation.id,
-        )
     except GRAPH_ERRORS as exc:
         logger.exception("Failed to grant workspace membership")
         _raise_membership_graph_unavailable(exc)

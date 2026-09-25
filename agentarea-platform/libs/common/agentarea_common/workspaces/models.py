@@ -35,6 +35,8 @@ class WorkspaceInvitation(BaseModel):
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     accepted_by_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Set with the membership row it produced; while it is set, the invitation grants nothing.
+    membership_granted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     def is_expired(self, now: datetime) -> bool:
         return now >= self.expires_at

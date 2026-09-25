@@ -461,6 +461,7 @@ def create_app() -> FastAPI:
     # it via the shared problem+json helper, surfacing the numbers so the UI can
     # show "you've spent $X of $Y, raise the cap or wait".
     from agentarea_agents.application.agent_service import InvalidModelIdError
+    from agentarea_agents.application.approval_sync import ApprovalEnforcedByPolicyError
     from agentarea_common.exceptions import problem_response
     from agentarea_common.rebac import ResourceOwnershipError
     from agentarea_llm.application.provider_service import PlatformManagedConfigError
@@ -476,6 +477,17 @@ def create_app() -> FastAPI:
             status_code=400,
             code="invalid_model_id",
             detail=str(exc),
+        )
+
+    # Only a workspace admin may untick an approval rule the agent editor's toggle
+    # did not write. 409 so the editor can say who may change it.
+    @app.exception_handler(ApprovalEnforcedByPolicyError)
+    async def _approval_enforced_handler(_request: Request, exc: ApprovalEnforcedByPolicyError):
+        return problem_response(
+            status_code=409,
+            code="approval_enforced_by_policy",
+            detail=str(exc),
+            extra={"targets": sorted(exc.targets)},
         )
 
     # A configuration the deployment supplies is readable from every workspace so

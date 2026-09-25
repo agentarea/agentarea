@@ -166,7 +166,14 @@ the instance, injected the stored credential, and reached the server.
     The URL resolves to a private, loopback, or link-local address and was
     refused before any request was made. The message is deliberately generic so
     it cannot be used to probe which internal names resolve. For local
-    development, the deployment must set `ALLOW_PRIVATE_URLS` .
+    development, list the host or its address in `OUTBOUND_PRIVATE_ALLOWLIST`
+    (comma-separated, for example `localhost,mcp.tools.svc.cluster.local`), or
+    set `ALLOW_PRIVATE_URLS` to allow every private address. Name each server:
+    a wildcard such as `*.svc.cluster.local` or a cluster CIDR lets every
+    member reach every in-cluster service, the platform's own included. If
+    outbound traffic goes through `HTTP_PROXY` or `HTTPS_PROXY`, the platform
+    vets the hostname but the proxy resolves it again, so the proxy itself must
+    refuse private and link-local destinations.
   </Accordion>
   <Accordion title="`Authentication failed — check your credentials`">
     The server returned 401. The credential is wrong, expired, or the header

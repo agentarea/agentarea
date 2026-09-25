@@ -11,6 +11,14 @@ from typing import Any, Protocol
 
 import httpx2
 import redis.asyncio as redis
+from agentarea_common.utils.url_safety import (
+    OutboundPolicy,
+    PinnedSender,
+    Resolver,
+    SafeOutboundTransport,
+    UnsafeUrlError,
+    resolve_host,
+)
 from mcp import Client, MCPError
 from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamable_http_client
@@ -28,6 +36,7 @@ NEGOTIATION_ERROR_CODES = frozenset({-32022, -32601})
 # v1 parity: the SDK's streamable HTTP client used a 300 s read timeout for SSE
 # responses, and a tool call may legitimately stream that long.
 SSE_READ_TIMEOUT_SECONDS = 300.0
+MCP_CONNECT_TIMEOUT_SECONDS = 30.0
 
 
 class EraVerdictStore(Protocol):
@@ -126,6 +135,78 @@ def shared_era_verdict_store() -> RedisEraVerdictStore | None:
     return _shared_store
 
 
+class UnsafeMCPDestinationError(httpx2.RequestError, UnsafeUrlError):
+    """A member-supplied MCP URL the pinned transport refused to dial."""
+
+
+class SafeMCPTransport(httpx2.AsyncBaseTransport):
+    """httpx2 twin of ``SafeOutboundTransport`` for the MCP SDK's client."""
+
+    def __init__(
+        self,
+        policy: OutboundPolicy,
+        *,
+        resolve: Resolver = resolve_host,
+        inner: Callable[..., httpx2.AsyncBaseTransport] | None = None,
+    ) -> None:
+        self._sender = PinnedSender(
+            httpx2, policy, error=UnsafeMCPDestinationError, resolve=resolve, inner=inner
+        )
+
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
+        return await self._sender.send(request)
+
+    async def aclose(self) -> None:
+        await self._sender.aclose()
+
+
+# For addresses the platform chose itself, such as the manager gateway.
+platform_client_factory = create_mcp_http_client
+
+
+def pinned_client_factory(
+    wrapped: Callable[..., Any] | None = None,
+    *,
+    policy: OutboundPolicy | None = None,
+    resolve: Resolver = resolve_host,
+    inner: Callable[[], Any] | None = None,
+) -> Callable[..., Any]:
+    """An ``httpx_client_factory`` whose clients only reach vetted addresses.
+
+    For a member-supplied (URL-type) MCP endpoint. ``wrapped`` is a caller's own
+    factory that takes an ``inner`` transport, such as the payment client; its
+    requests then go through ``SafeOutboundTransport``. Each call builds a fresh
+    transport, because a client closes its transport on exit and the connect
+    loop opens one client per transport candidate.
+    """
+    effective = policy or OutboundPolicy.from_env()
+
+    def factory(
+        headers: dict[str, str] | None = None,
+        timeout: Any = None,
+        auth: Any = None,
+    ) -> Any:
+        if wrapped is not None:
+            return wrapped(
+                headers=headers,
+                timeout=timeout,
+                auth=auth,
+                inner=SafeOutboundTransport(effective, resolve=resolve),
+            )
+        kwargs: dict[str, Any] = {
+            "transport": SafeMCPTransport(effective, resolve=resolve, inner=inner),
+            "timeout": timeout
+            or httpx2.Timeout(MCP_CONNECT_TIMEOUT_SECONDS, read=SSE_READ_TIMEOUT_SECONDS),
+        }
+        if headers is not None:
+            kwargs["headers"] = headers
+        if auth is not None:
+            kwargs["auth"] = auth
+        return httpx2.AsyncClient(**kwargs)
+
+    return factory
+
+
 class _ConnectedClient:
     def __init__(
         self,
@@ -136,7 +217,7 @@ class _ConnectedClient:
         transport: str | None,
         verdict_key: str | None,
         verdict_store: EraVerdictStore | None,
-        httpx_client_factory: Callable[..., Any] | None,
+        httpx_client_factory: Callable[..., Any],
     ) -> None:
         self._url = url
         self._headers = headers
@@ -187,7 +268,7 @@ class _ConnectedClient:
 
     async def _open(self) -> Client:
         last_error: BaseException | None = None
-        factory = self._httpx_client_factory or create_mcp_http_client
+        factory = self._httpx_client_factory
         timeout = httpx2.Timeout(self._timeout_seconds, read=SSE_READ_TIMEOUT_SECONDS)
 
         for streamable_url in self._streamable_urls:
@@ -322,9 +403,14 @@ async def connected_mcp_client(
     transport: str | None = None,
     verdict_key: str | None = None,
     verdict_store: EraVerdictStore | None = None,
-    httpx_client_factory: Callable[..., Any] | None = None,
+    httpx_client_factory: Callable[..., Any],
 ) -> AsyncIterator[_ConnectedClient]:
-    """Yield a connected v2 ``mcp.Client`` over streamable HTTP or SSE."""
+    """Yield a connected v2 ``mcp.Client`` over streamable HTTP or SSE.
+
+    ``httpx_client_factory`` is required so every caller decides who chose the
+    address: ``pinned_client_factory()`` for a member-supplied URL,
+    ``platform_client_factory`` for the platform's own manager gateway.
+    """
     connected = _ConnectedClient(
         url=url,
         headers=dict(headers) if headers else None,

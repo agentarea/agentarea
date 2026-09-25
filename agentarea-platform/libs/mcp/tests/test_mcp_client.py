@@ -89,7 +89,12 @@ def _reset_fake(monkeypatch):
 async def test_unknown_connection_uses_auto_and_stores_modern_discover_result():
     store = _Store()
     async with mcp_client.connected_mcp_client(
-        "https://mcp.example", {}, 3.0, verdict_key="instance:fp", verdict_store=store
+        "https://mcp.example",
+        {},
+        3.0,
+        verdict_key="instance:fp",
+        verdict_store=store,
+        httpx_client_factory=mcp_client.platform_client_factory,
     ) as client:
         await client.call_tool("tool", {})
 
@@ -107,7 +112,12 @@ async def test_unknown_connection_records_legacy_verdict_after_auto_fallback(mon
     store = _Store()
 
     async with mcp_client.connected_mcp_client(
-        "https://mcp.example", {}, 3.0, verdict_key="instance:fp", verdict_store=store
+        "https://mcp.example",
+        {},
+        3.0,
+        verdict_key="instance:fp",
+        verdict_store=store,
+        httpx_client_factory=mcp_client.platform_client_factory,
     ) as client:
         await client.call_tool("tool", {})
 
@@ -121,7 +131,12 @@ async def test_cached_modern_verdict_pins_mode_without_probe():
     discover = DiscoverResult(supported_versions=["2026-07-28"], capabilities=ServerCapabilities())
     store = _Store(discover.model_dump_json())
     async with mcp_client.connected_mcp_client(
-        "https://mcp.example", {}, 3.0, verdict_key="instance:fp", verdict_store=store
+        "https://mcp.example",
+        {},
+        3.0,
+        verdict_key="instance:fp",
+        verdict_store=store,
+        httpx_client_factory=mcp_client.platform_client_factory,
     ) as client:
         await client.call_tool("tool", {})
 
@@ -134,7 +149,12 @@ async def test_cached_modern_verdict_pins_mode_without_probe():
 async def test_cached_legacy_verdict_uses_legacy_mode():
     store = _Store(mcp_client.LEGACY_VERDICT)
     async with mcp_client.connected_mcp_client(
-        "https://mcp.example", {}, 3.0, verdict_key="instance:fp", verdict_store=store
+        "https://mcp.example",
+        {},
+        3.0,
+        verdict_key="instance:fp",
+        verdict_store=store,
+        httpx_client_factory=mcp_client.platform_client_factory,
     ) as client:
         await client.call_tool("tool", {})
 
@@ -148,7 +168,12 @@ async def test_cached_protocol_error_drops_verdict_and_retries_once_with_auto():
     _FakeClient.outcomes = [MCPError(-32022, "unsupported"), object()]
 
     async with mcp_client.connected_mcp_client(
-        "https://mcp.example", {}, 3.0, verdict_key="instance:fp", verdict_store=store
+        "https://mcp.example",
+        {},
+        3.0,
+        verdict_key="instance:fp",
+        verdict_store=store,
+        httpx_client_factory=mcp_client.platform_client_factory,
     ) as client:
         await client.call_tool("tool", {})
 
@@ -164,7 +189,12 @@ async def test_non_negotiation_tool_error_is_not_retried():
 
     with pytest.raises(MCPError) as exc_info:
         async with mcp_client.connected_mcp_client(
-            "https://mcp.example", {}, 3.0, verdict_key="instance:fp", verdict_store=store
+            "https://mcp.example",
+            {},
+            3.0,
+            verdict_key="instance:fp",
+            verdict_store=store,
+            httpx_client_factory=mcp_client.platform_client_factory,
         ) as client:
             await client.call_tool("tool", {})
 

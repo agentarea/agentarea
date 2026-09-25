@@ -1,12 +1,16 @@
 """Tests for channel_origin flow: trigger → task_parameters."""
 
-from unittest.mock import AsyncMock
+import json
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from agentarea_triggers.channels.adapters import _resolve_token
 from agentarea_triggers.domain.enums import WebhookType
 from agentarea_triggers.domain.models import CronTrigger, WebhookTrigger
 from agentarea_triggers.trigger_service import TriggerService
+
+from .conftest import make_trigger_repository_factory
 
 
 class TestBuildChannelOrigin:
@@ -170,3 +174,125 @@ class TestChannelOriginInTaskParams:
         params = await trigger_service._build_task_parameters(trigger, {"action": "push"})
 
         assert "channel_origin" not in params
+
+
+class TestSuppliedChannelOriginCannotBorrowAnotherTrigger:
+    """An inbound channel_origin is event data; the trigger decides whose credentials reply."""
+
+    @pytest.fixture
+    def trigger(self):
+        return WebhookTrigger(
+            id=uuid4(),
+            name="TG Bot",
+            agent_id=uuid4(),
+            created_by="user1",
+            webhook_id="wh_tg_own",
+            webhook_type=WebhookType.TELEGRAM,
+            task_parameters={"text": "Answer the user"},
+        )
+
+    @pytest.fixture
+    def service(self, trigger):
+        trigger_repo = AsyncMock()
+        trigger_repo.get_trigger.return_value = trigger
+        execution_repo = AsyncMock()
+        execution_repo.create.return_value = MagicMock(id=uuid4(), trigger_id=trigger.id)
+        task_service = AsyncMock()
+        task_service.route_or_submit_task.return_value = MagicMock(id=uuid4(), status="submitted")
+        return TriggerService(
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=trigger_repo, execution_repo=execution_repo
+            ),
+            event_broker=AsyncMock(),
+            task_service=task_service,
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_foreign_trigger_id_still_replies_with_the_receiving_triggers_token(
+        self, service, trigger
+    ):
+        foreign_trigger_id = str(uuid4())
+        await service.execute_trigger(
+            trigger.id,
+            {
+                "events": [{"text": "hi"}],
+                "channel_origin": {
+                    "type": "a2a_webhook",
+                    "trigger_id": foreign_trigger_id,
+                    "credential_type": "slack",
+                    "url": "http://169.254.169.254/latest",
+                    "config_id": "cfg",
+                    "task_id": str(uuid4()),
+                    "chat_id": "4242",
+                    "message_id": 7,
+                },
+            },
+        )
+
+        task = service.task_service.route_or_submit_task.call_args.args[0]
+        origin = task.task_parameters["channel_origin"]
+        assert origin["trigger_id"] == str(trigger.id)
+        assert origin["type"] == "telegram"
+        assert origin["credential_type"] == "telegram"
+        assert origin["chat_id"] == "4242"
+        assert origin["message_id"] == 7
+        for smuggled in ("url", "config_id", "task_id"):
+            assert smuggled not in origin
+
+        secrets = {
+            f"channel_cred:telegram:{trigger.id}": json.dumps({"bot_token": "own-token"}),
+            f"channel_cred:telegram:{foreign_trigger_id}": json.dumps(
+                {"bot_token": "foreign-token"}
+            ),
+        }
+
+        class _Reader:
+            async def get_secret(self, name: str) -> str | None:
+                return secrets.get(name)
+
+        assert await _resolve_token(_Reader(), origin) == "own-token"
+
+    def test_a_polled_mailbox_replies_with_its_own_mailbox_credential(self, service):
+        mailbox = CronTrigger(
+            id=uuid4(),
+            name="Inbox",
+            agent_id=uuid4(),
+            created_by="user1",
+            cron_expression="*/5 * * * *",
+            data_extractor="imap",
+        )
+
+        origin = service._build_channel_origin(
+            mailbox,
+            {
+                "channel_origin": {
+                    "type": "telegram",
+                    "credential_type": "smtp_of_someone_else",
+                    "trigger_id": str(uuid4()),
+                    "chat_id": "<m1@x>",
+                    "reply_to": "a@example.com",
+                }
+            },
+        )
+
+        assert origin is not None
+        assert origin["type"] == "email"
+        assert origin["credential_type"] == "imap"
+        assert origin["trigger_id"] == str(mailbox.id)
+        assert origin["reply_to"] == "a@example.com"
+
+    def test_a_trigger_with_no_reply_channel_takes_no_supplied_origin(self, service):
+        generic = WebhookTrigger(
+            id=uuid4(),
+            name="Hook",
+            agent_id=uuid4(),
+            created_by="user1",
+            webhook_id="wh_generic",
+            webhook_type=WebhookType.GENERIC,
+        )
+
+        origin = service._build_channel_origin(
+            generic, {"channel_origin": {"type": "web", "trigger_id": str(uuid4())}}
+        )
+
+        assert origin is None

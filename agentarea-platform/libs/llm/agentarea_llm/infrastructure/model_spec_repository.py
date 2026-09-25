@@ -2,7 +2,8 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import select
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -86,6 +87,19 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
             .where(ModelSpec.id == id)
         )
         return result.unique().scalar_one_or_none()
+
+    async def get_usable(self, id: UUID) -> ModelSpec | None:
+        """A spec a model instance in this workspace may point at: its own or the platform's."""
+        result = await self.session.execute(
+            select(ModelSpec).where(
+                ModelSpec.id == id,
+                or_(
+                    self._get_workspace_filter(),
+                    ModelSpec.workspace_id == PLATFORM_WORKSPACE_ID,
+                ),
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def get_by_provider_and_model(
         self, provider_spec_id: UUID, model_name: str
@@ -172,54 +186,28 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
             projections.append(spec)
         return projections
 
-    async def _find_global_by_provider_and_model(
-        self, provider_spec_id, model_name: str
-    ) -> ModelSpec | None:
-        """Find a spec by the GLOBAL unique key ``(provider_spec_id, model_name)``.
-
-        The ``uq_model_specs_provider_model`` constraint does NOT include
-        ``workspace_id``, so existence must be checked across all workspaces. A
-        workspace-scoped lookup misses a row owned by another workspace (e.g. the
-        platform catalog, or a different tenant that discovered the same model)
-        and a subsequent INSERT then hits the unique violation.
-        """
-        pid = (
-            provider_spec_id if isinstance(provider_spec_id, UUID) else UUID(str(provider_spec_id))
-        )
-        result = await self.session.execute(
-            select(ModelSpec).where(
-                ModelSpec.provider_spec_id == pid,
-                ModelSpec.model_name == model_name,
-            )
-        )
-        return result.scalars().first()
-
     async def upsert_by_provider_and_model_kwargs(self, **kwargs) -> ModelSpec:
-        """Upsert a model spec keyed on the global ``(provider_spec_id, model_name)``.
+        """Upsert this workspace's spec keyed on ``(provider_spec_id, model_name)``.
 
-        Idempotent against the global unique constraint: update the row when this
-        workspace owns it, otherwise return the existing (e.g. platform-catalog or
-        another tenant's) row as-is instead of inserting a duplicate that would
-        raise ``IntegrityError``.
+        The key is unique per workspace, so another workspace's row for the same
+        model is never returned or touched: each workspace prices its own.
         """
         provider_spec_id = kwargs.get("provider_spec_id")
         model_name = kwargs.get("model_name")
         if provider_spec_id is None or model_name is None:
             raise ValueError("provider_spec_id and model_name are required for upsert")
-        existing = await self._find_global_by_provider_and_model(provider_spec_id, model_name)
+        pid = (
+            provider_spec_id if isinstance(provider_spec_id, UUID) else UUID(str(provider_spec_id))
+        )
+        existing = await self.find_one_by(provider_spec_id=pid, model_name=model_name)
         if existing:
-            owned = str(getattr(existing, "workspace_id", "")) == str(
-                self.user_context.workspace_id
-            )
-            if owned:
-                update_fields = {
-                    k: v
-                    for k, v in kwargs.items()
-                    if k not in ("provider_spec_id", "model_name") and v is not None
-                }
-                updated = await self.update(existing.id, **update_fields)
-                return updated or existing
-            return existing
+            update_fields = {
+                k: v
+                for k, v in kwargs.items()
+                if k not in ("provider_spec_id", "model_name") and v is not None
+            }
+            updated = await self.update(existing.id, **update_fields)
+            return updated or existing
         return await self.create(**kwargs)
 
     async def upsert_by_provider_and_model(self, entity: ModelSpec) -> ModelSpec:

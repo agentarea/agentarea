@@ -95,10 +95,10 @@ class OpenAPITool(BaseTool):
 
         # Re-validate base_url for SSRF at execution time
         try:
+            from agentarea_common.utils.url_safety import OutboundPolicy
             from agentarea_openapi.application.url_validator import validate_url
 
-            allow_private = getattr(self._service, "_allow_private_urls", False)
-            validate_url(connection.base_url, allow_private=allow_private)
+            validate_url(connection.base_url, policy=OutboundPolicy.from_env())
         except ValueError as e:
             logger.error(
                 "SSRF validation failed for connection %s: %s",
@@ -190,10 +190,19 @@ class OpenAPITool(BaseTool):
                     "status_code": None,
                 }
 
-        # Execute HTTP call
+        # Execute HTTP call. The tool only runs inside the platform, which
+        # provides agentarea_common (as it does agentarea_openapi above); the
+        # pinned client keeps a name that rebinds after the check above from
+        # reaching an internal address.
+        from agentarea_common.utils.url_safety import (
+            OutboundPolicy,
+            UnsafeUrlError,
+            safe_async_client,
+        )
+
         method = self._operation["method"]
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with safe_async_client(policy=OutboundPolicy.from_env(), timeout=30.0) as client:
                 response = await client.request(
                     method=method,
                     url=url,
@@ -202,6 +211,17 @@ class OpenAPITool(BaseTool):
                     json=json_body,
                     content=content_body,
                 )
+        except UnsafeUrlError:
+            logger.warning(
+                "Refused OpenAPI call %s %s to a non-public address", method, url, exc_info=True
+            )
+            return {
+                "success": False,
+                "error": "Destination is not an allowed address",
+                "result": None,
+                "tool_name": self.name,
+                "status_code": None,
+            }
         except httpx.TimeoutException as e:
             logger.error("HTTP timeout calling %s %s: %s", method, url, e, exc_info=True)
             return {

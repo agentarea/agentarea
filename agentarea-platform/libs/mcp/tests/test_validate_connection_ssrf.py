@@ -12,6 +12,15 @@ import pytest
 from agentarea_mcp.application.service import MCPServerInstanceService
 
 
+@pytest.fixture
+def fresh_settings():
+    from agentarea_common.config import get_settings
+
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 def _service() -> MCPServerInstanceService:
     with patch("agentarea_mcp.application.service.get_database", MagicMock()):
         return MCPServerInstanceService(
@@ -60,6 +69,38 @@ class TestValidateConnectionRefusesNonPublicTargets:
 
         assert result["valid"] is True
         dial.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_an_allowlisted_local_server_is_dialed(self, monkeypatch, fresh_settings):
+        monkeypatch.setenv("OUTBOUND_PRIVATE_ALLOWLIST", "127.0.0.0/8")
+        service = _service()
+        listing = MagicMock()
+        listing.tools = []
+
+        with patch.object(
+            service, "_list_tools_via_mcp", new=AsyncMock(return_value=listing)
+        ) as dial:
+            result = await service.validate_connection(url="http://127.0.0.1:8000/mcp")
+
+        assert result["valid"] is True
+        dial.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_the_auth_probe_of_an_instance_never_reaches_the_metadata_address(self):
+        service = _service()
+        service.repository = MagicMock()
+        service.repository.get_by_id = AsyncMock(return_value=MagicMock(id="inst-1"))
+        spec = {"type": "url", "endpoint_url": "http://169.254.169.254/latest/meta-data/"}
+
+        with patch.object(
+            service, "_get_transport_spec_for_instance", new=AsyncMock(return_value=spec)
+        ):
+            result = await service.probe_instance_auth("inst-1")
+
+        assert result == {
+            "status": "error",
+            "message": "The configured endpoint is not an allowed address",
+        }
 
     @pytest.mark.asyncio
     async def test_empty_url_is_still_rejected(self):

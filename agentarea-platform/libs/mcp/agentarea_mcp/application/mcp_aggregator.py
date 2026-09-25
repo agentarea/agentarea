@@ -16,6 +16,8 @@ from mcp.server.mcpserver import MCPServer
 from agentarea_mcp.application.mcp_client import (
     connected_mcp_client,
     mcp_verdict_key,
+    pinned_client_factory,
+    platform_client_factory,
     shared_era_verdict_store,
 )
 from agentarea_mcp.application.tool_list_cache import ToolListCache
@@ -45,6 +47,9 @@ class AggregatedMember:
     namespace_prefix: str | None = None
     config: dict = field(default_factory=dict)
     transport: str | None = None
+    # A member-supplied URL is dialed only at vetted addresses; only the
+    # platform's own gateway URL may opt out.
+    pinned: bool = True
 
 
 class MCPAggregatorProxy:
@@ -105,6 +110,10 @@ class MCPAggregatorProxy:
             "config": member.config,
         }
 
+    @staticmethod
+    def _client_factory(member: AggregatedMember) -> Callable[..., Any]:
+        return pinned_client_factory() if member.pinned else platform_client_factory
+
     def _cache_key(self, member: AggregatedMember, url: str, headers: dict[str, str]) -> str:
         return mcp_verdict_key(
             str(member.mcp_instance_id), self._runtime_identity_fields(member, url, headers)
@@ -153,6 +162,7 @@ class MCPAggregatorProxy:
                 transport=member.transport,
                 verdict_key=verdict_key,
                 verdict_store=self._era_verdict_store,
+                httpx_client_factory=self._client_factory(member),
             ) as client:
                 result = await client.list_tools()
         except Exception as exc:
@@ -195,6 +205,7 @@ class MCPAggregatorProxy:
             transport=member.transport,
             verdict_key=cache_key,
             verdict_store=self._era_verdict_store,
+            httpx_client_factory=self._client_factory(member),
         ) as client:
             result = await client.call_tool(tool_name, arguments)
         if result.content:

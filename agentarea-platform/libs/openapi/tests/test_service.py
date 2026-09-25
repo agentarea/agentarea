@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_openapi.application import service as service_module
 from agentarea_common.testing.flows import MainFlow
 from agentarea_openapi.application.service import (
@@ -42,6 +43,7 @@ class TestDiscoverTools:
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
             auth_config_access_checker=AsyncMock(),
+            outbound_policy=OutboundPolicy(),
         )
 
     @pytest.mark.flow(MainFlow.OPENAPI_CONNECTIONS)
@@ -114,6 +116,7 @@ class TestResolveHeaders:
             secret_manager=AsyncMock(),
             auth_config_access_checker=AsyncMock(),
             auth_header_resolver=resolver,
+            outbound_policy=OutboundPolicy(),
         )
         conn = OpenAPIConnection(
             name="Metrica",
@@ -148,6 +151,7 @@ class TestResolveHeaders:
             secret_manager=AsyncMock(),
             auth_config_access_checker=AsyncMock(),
             auth_header_resolver=resolver,
+            outbound_policy=OutboundPolicy(),
         )
         conn = OpenAPIConnection(
             name="Metrica",
@@ -170,6 +174,7 @@ class TestCreateConnection:
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
             auth_config_access_checker=AsyncMock(),
+            outbound_policy=OutboundPolicy(),
         )
         svc._repo = AsyncMock()
         return svc
@@ -229,6 +234,7 @@ class TestUpdateConnection:
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
             auth_config_access_checker=AsyncMock(),
+            outbound_policy=OutboundPolicy(),
         )
         svc._repo = AsyncMock()
         return svc
@@ -260,6 +266,7 @@ class TestCreateConnectionAuthConfigAccess:
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
             auth_config_access_checker=checker,
+            outbound_policy=OutboundPolicy(),
         )
         svc._repo = AsyncMock()
         svc._repo.create.return_value = OpenAPIConnection(
@@ -327,6 +334,7 @@ class TestUpdateConnectionAuthConfigAccess:
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
             auth_config_access_checker=checker,
+            outbound_policy=OutboundPolicy(),
         )
         svc._repo = AsyncMock()
         svc._repo.get_by_id.return_value = current
@@ -511,7 +519,7 @@ class TestYamlSpecWithBareDates:
     async def test_bare_dates_stay_strings(self, spec_url, monkeypatch):
         _serve(BARE_DATE_YAML_SPEC, monkeypatch)
 
-        spec = await fetch_and_parse_spec(spec_url, allow_private=True)
+        spec = await fetch_and_parse_spec(spec_url, policy=OutboundPolicy(allow_private=True))
 
         assert spec["info"]["version"] == "2024-01-01"
         assert spec["x-released-at"] == "2024-01-01T10:30:00Z"
@@ -526,7 +534,7 @@ class TestYamlSpecWithBareDates:
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
             auth_config_access_checker=AsyncMock(),
-            allow_private_urls=True,
+            outbound_policy=OutboundPolicy(allow_private=True),
         )
 
         await service.create_connection(

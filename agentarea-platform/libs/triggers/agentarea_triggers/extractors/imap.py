@@ -98,6 +98,7 @@ class ImapExtractor:
     #: Credentials come from the secret store, so the API must not copy them
     #: into the plain-JSON ``data_extractor_config`` column.
     resolves_own_credentials = True
+    reply_channel_type = "email"
 
     def __init__(self, secret_reader: Any = None, connect: Any = None) -> None:
         # Both parameters are test seams. At runtime the real reader is always

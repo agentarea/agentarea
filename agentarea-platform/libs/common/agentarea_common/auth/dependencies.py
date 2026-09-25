@@ -16,6 +16,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .authorization import AuthorizationService
 from .context import UserContext
@@ -196,8 +197,43 @@ security_required = HTTPBearer(auto_error=False)
 security_optional = HTTPBearer(auto_error=False)
 
 
+async def _owns_workspace(session: AsyncSession, user_id: str, workspace_id: str) -> bool:
+    """Whether ``workspace_id`` is ``user_id``'s personal workspace or one they own."""
+    from agentarea_common.workspaces.repository import WorkspaceRepository
+
+    if workspace_id == user_id:
+        return True
+    workspace = await WorkspaceRepository(session).get(workspace_id)
+    return workspace is not None and workspace.owner_user_id == user_id
+
+
+async def _has_graph_membership(user_id: str, workspace_id: str) -> bool:
+    """Whether the membership graph grants ``user_id`` ``workspace_id``. A failure denies.
+
+    A network call: callers make it with no database session open, so a pooled
+    connection never waits on the graph.
+    """
+    from agentarea_common.workspaces import memberships
+
+    try:
+        return await memberships.check_workspace_membership(
+            memberships.get_workspace_membership_graph(),
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+    except Exception:
+        logger.exception(
+            "Could not check membership of user %s in workspace %s", user_id, workspace_id
+        )
+        return False
+
+
 async def _validate_api_key(token: str, request: Request) -> UserContext | None:
-    """Validate an API key and return UserContext, or None if invalid."""
+    """Validate an API key and return UserContext, or None if invalid.
+
+    A key carries no authority of its own: it is only as good as its owner's
+    current membership of the key's workspace.
+    """
     from agentarea_mcp.domain.auth_models import APIKey
     from sqlalchemy import select
     from sqlalchemy import update as sa_update
@@ -214,29 +250,40 @@ async def _validate_api_key(token: str, request: Request) -> UserContext | None:
             return None
         if record.expires_at and datetime.utcnow() >= record.expires_at:
             return None
+        key_id = record.id
+        user_id = str(record.created_by)
+        workspace_id = str(record.workspace_id)
+        owned = await _owns_workspace(session, user_id, workspace_id)
 
-        # Increment access count (best-effort)
-        try:
+    if not owned and not await _has_graph_membership(user_id, workspace_id):
+        logger.warning(
+            "API key %s refused: its owner %s is not a member of workspace %s",
+            key_id,
+            user_id,
+            workspace_id,
+        )
+        return None
+
+    # Increment access count (best-effort)
+    try:
+        async with get_database().async_session_factory() as session:
             await session.execute(
                 sa_update(APIKey)
-                .where(APIKey.id == record.id)
+                .where(APIKey.id == key_id)
                 .values(
                     access_count=APIKey.access_count + 1,
                     last_accessed_at=datetime.utcnow(),
                 )
             )
             await session.commit()
-        except Exception:
-            logger.debug("Failed to increment API key access count", exc_info=True)
+    except Exception:
+        logger.debug("Failed to increment API key access count", exc_info=True)
 
-        # Default to the workspace the API key was issued for. Any explicit
-        # workspace reference is applied in get_user_context/get_optional_user AFTER
-        # accessible_workspaces has been resolved, so it cannot escape the key
-        # owner's membership.
-        return UserContext(
-            user_id=str(record.created_by),
-            workspace_id=str(record.workspace_id),
-        )
+    # Default to the workspace the API key was issued for. Any explicit
+    # workspace reference is applied in get_user_context/get_optional_user AFTER
+    # accessible_workspaces has been resolved, so it cannot escape the key
+    # owner's membership.
+    return UserContext(user_id=user_id, workspace_id=workspace_id)
 
 
 def get_auth_provider():

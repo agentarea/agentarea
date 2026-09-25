@@ -319,6 +319,7 @@ class AgentAreaWorker:
         autoclaimer) and the inbound channel event consumer.
         """
         from agentarea_common.broker import DedupCache
+        from agentarea_common.config.database import get_database
         from agentarea_triggers.channels import get_adapter
         from agentarea_triggers.channels.adapters import register_all_adapters
         from agentarea_triggers.channels.autoclaimer import StreamAutoclaimer
@@ -327,6 +328,7 @@ class AgentAreaWorker:
         )
         from agentarea_triggers.channels.inbound_subscriber import InboundMessageStreamConsumer
         from agentarea_triggers.channels.lazy_secret_manager import LazySecretReader
+        from agentarea_triggers.channels.origin_guard import TriggerWorkspaceGuard
 
         settings = get_settings()
         redis_url = getattr(settings.broker, "REDIS_URL", "redis://localhost:6379")
@@ -353,6 +355,7 @@ class AgentAreaWorker:
             broker=self._broker,
             dedup=self._inbound_dedup,
             event_broker=dependencies.event_broker,
+            secret_manager_factory=dependencies.secret_manager_factory,
             workflow_executor=dependencies.workflow_executor,
             stream=delivery_cfg.INBOUND_STREAM,
             group=delivery_cfg.INBOUND_GROUP,
@@ -380,6 +383,7 @@ class AgentAreaWorker:
             broker=self._broker,
             dedup=self._dedup,
             adapter_resolver=get_adapter,
+            origin_guard=TriggerWorkspaceGuard(get_database().async_session_factory),
             stream=delivery_cfg.OUTBOUND_STREAM,
             group=delivery_cfg.OUTBOUND_GROUP,
             dlq_stream=delivery_cfg.OUTBOUND_DLQ,

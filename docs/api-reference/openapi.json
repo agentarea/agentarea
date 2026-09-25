@@ -18488,7 +18488,7 @@
     },
     "/v1/invitations/accept": {
       "post": {
-        "description": "Accept an invitation as the authenticated user.\n\nAn invitation sent to an email address is only accepted by the account\nsigned in under that address. Idempotent for the same acceptor.",
+        "description": "Accept an invitation as the authenticated user.\n\nAn invitation sent to an email address is only accepted by the account\nsigned in under that address. Idempotent for the same acceptor.\n\nThe invitation is committed as accepted before membership is granted, and\nit grants membership only until that grant is recorded: a graph outage on\nthe first call is retried, a replay of a used link grants nothing, and a\nremoval racing the accept wins.",
         "operationId": "accept_invitation_v1_invitations_accept_post",
         "requestBody": {
           "content": {
@@ -23261,7 +23261,7 @@
     },
     "/v1/provider-configs/discover-preview": {
       "post": {
-        "description": "Discover models from a provider API using the provided API key, without requiring a saved config.",
+        "description": "Discover models from a provider API using the provided API key, without requiring a saved config.\n\nNot a dry run: the discovered specs, prices included, are persisted so the\ncaller can pick models by id. That makes it a price write.",
         "operationId": "discover_models_preview_v1_provider_configs_discover_preview_post",
         "requestBody": {
           "content": {

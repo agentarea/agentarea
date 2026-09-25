@@ -6,8 +6,9 @@
 #
 # Usage:  ./scripts/gen-dev-secrets.sh [--force]
 #
-# Without --force the script tops up only the keys that are missing or empty and
-# leaves existing values alone, so running it after a compose upgrade cannot
+# Without --force the script tops up only the keys that are missing, empty or
+# still set to a value this repository once published, and leaves every other
+# value alone, so running it after a compose upgrade cannot
 # silently rotate the secrets your running stack already depends on. The key
 # list and the generation itself live in lib/secrets.sh, shared with the
 # quickstart installer.

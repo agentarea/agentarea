@@ -208,6 +208,73 @@ class TestX402PaymentClient:
         info = (payment_required.extensions or {}).get("payment-identifier", {}).get("info", {})
         assert info.get("id") == expected_id
 
+    @pytest.mark.asyncio
+    async def test_failed_retry_keeps_the_settlement_receipt(self, monkeypatch):
+        import base64
+        import json
+        from types import SimpleNamespace
+
+        import httpx
+        from agentarea_payment import x402_client
+
+        class FakeHttpxClient:
+            def __init__(self, client):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return None
+
+            async def request(self, **kwargs):
+                receipt = base64.b64encode(json.dumps({"txHash": "0xsettled"}).encode()).decode()
+                return httpx.Response(500, headers={"PAYMENT-RESPONSE": receipt}, content=b"boom")
+
+        class FakeHTTPClient:
+            def __init__(self, client):
+                pass
+
+            def get_payment_settle_response(self, get_header):
+                return None
+
+        modules = {
+            "x402.http": SimpleNamespace(x402HTTPClient=FakeHTTPClient),
+            "x402.http.clients": SimpleNamespace(x402HttpxClient=FakeHttpxClient),
+        }
+        monkeypatch.setattr(x402_client, "import_module", modules.__getitem__)
+        monkeypatch.setattr(x402_client.X402PaymentClient, "_get_client", lambda self: object())
+        challenge = {
+            "accepts": [
+                {
+                    "scheme": "exact",
+                    "network": "eip155:84532",
+                    "maxAmountRequired": "250000",
+                    "payTo": "0xrecipient",
+                }
+            ]
+        }
+        client = x402_client.X402PaymentClient(
+            private_key="0x" + "11" * 32,  # pragma: allowlist secret
+            network="eip155:84532",
+        )
+
+        result = await client.handle_402(
+            url="https://api.example.com/paid",
+            method="GET",
+            headers={},
+            body=None,
+            response_headers={
+                "PAYMENT-REQUIRED": base64.b64encode(json.dumps(challenge).encode()).decode()
+            },
+            budget_remaining=1.0,
+        )
+
+        assert result.success is False
+        assert result.tx_hash == "0xsettled"
+        assert result.amount_usd == 0.25
+        assert result.response_status == 500
+
 
 class TestMPPPaymentClient:
     @pytest.mark.asyncio
@@ -231,3 +298,39 @@ class TestMPPPaymentClient:
         assert result.amount_usd == 0.25
         assert result.recipient == "merchant"
         assert "exceeds remaining budget" in result.error
+
+    @pytest.mark.asyncio
+    async def test_failed_retry_keeps_the_settlement_receipt(self, monkeypatch):
+        from types import SimpleNamespace
+
+        import httpx
+        from agentarea_payment import mpp_client
+
+        class FakeClient:
+            async def request(self, **kwargs):
+                return httpx.Response(500, headers={"X-MPP-Receipt": "receipt"}, content=b"boom")
+
+        async def fake_get_client(self):
+            return FakeClient()
+
+        def parse_payment_receipt(receipt):
+            return SimpleNamespace(external_id="0xsettled", reference=None)
+
+        modules = {"mpp": SimpleNamespace(parse_payment_receipt=parse_payment_receipt)}
+        monkeypatch.setattr(mpp_client, "import_module", modules.__getitem__)
+        monkeypatch.setattr(mpp_client.MPPPaymentClient, "_get_client", fake_get_client)
+        client = mpp_client.MPPPaymentClient(tempo_key="0xkey")
+
+        result = await client.handle_402(
+            url="https://api.example.com/paid",
+            method="GET",
+            headers={},
+            body=None,
+            response_headers={},
+            response_body='{"amount": "250000", "recipient": "merchant"}',
+            budget_remaining=1.0,
+        )
+
+        assert result.success is False
+        assert result.tx_hash == "0xsettled"
+        assert result.amount_usd == 0.25

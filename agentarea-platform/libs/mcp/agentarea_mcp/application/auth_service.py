@@ -7,6 +7,7 @@ from uuid import UUID
 
 from agentarea_common.auth.authorization import is_workspace_admin
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.utils.url_safety import safe_async_client
 
 from agentarea_mcp.domain.auth_models import (
     AUTH_TYPE_API_KEY,
@@ -272,7 +273,7 @@ class MCPAuthService:
             )
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with safe_async_client() as client:
                 if config.config.get("client_auth_method") == "client_secret_basic":
                     payload.pop("client_secret", None)
                     resp = await client.post(

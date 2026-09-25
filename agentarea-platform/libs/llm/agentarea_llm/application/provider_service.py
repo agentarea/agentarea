@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 
 from agentarea_common.auth.authorization import assert_workspace_admin
 from agentarea_common.events.broker import EventBroker
+from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from sqlalchemy import delete, select
 
@@ -425,7 +426,17 @@ class ProviderService:
 
         Returns:
             ModelInstance: The created model instance.
+
+        Raises:
+            NotFoundError: the config or spec is neither this workspace's nor
+                the platform's. The spec sets the price runs are billed at, so
+                one from a workspace the caller administers elsewhere would let
+                them choose it here.
         """
+        if await self.provider_config_repo.get_by_id(provider_config_id) is None:
+            raise NotFoundError(f"Provider config {provider_config_id} not found")
+        if await self.model_spec_repo.get_usable(model_spec_id) is None:
+            raise NotFoundError(f"Model spec {model_spec_id} not found")
         instance = ModelInstance(
             provider_config_id=provider_config_id,
             model_spec_id=model_spec_id,

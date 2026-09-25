@@ -312,8 +312,8 @@ equivalent are listed; the rest map onto the groups above.
 | `DOCUMENTS_BUCKET` | yes | `ai-agents-bucket` |
 | `ARTIFACTS_BUCKET` | no | `artifacts` |
 | `SECRET_MANAGER_ENCRYPTION_KEY` | yes | a shipped development key |
-| `SANDBOX_ACTIVATION_AUTH_SECRET` | yes, no default | development placeholder |
-| `SANDBOX_CLEANUP_AUTH_SECRET` | yes, no default | development placeholder |
+| `SANDBOX_ACTIVATION_AUTH_SECRET` | yes, no default | empty; `scripts/gen-dev-secrets.sh` generates it |
+| `SANDBOX_CLEANUP_AUTH_SECRET` | yes, no default | empty; `scripts/gen-dev-secrets.sh` generates it |
 | `KRATOS_JWKS_B64` / `KRATOS_ISSUER` / `KRATOS_AUDIENCE` | yes | a published test key |
 | `KRATOS_ADMIN_URL` | yes, to show member names | `http://kratos:4434` |
 | `SMTP_*` | for email delivery | targets the bundled Mailpit |

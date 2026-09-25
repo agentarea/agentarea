@@ -35,6 +35,10 @@ from agentarea_triggers.channels.delivery_consumer import ChannelDeliveryConsume
 # ---------------------------------------------------------------------------
 
 
+async def _origin_allowed(_channel_config: dict) -> bool:
+    return True
+
+
 class _InMemoryBroker:
     """Minimal BrokerClient stub backed by a deque."""
 
@@ -146,6 +150,7 @@ async def test_workflow_event_emitted_and_delivered() -> None:
     dlq_stream = f"{stream}:dlq"
 
     consumer = ChannelDeliveryConsumer(
+        origin_guard=_origin_allowed,
         broker=broker,
         dedup=dedup,
         adapter_resolver=lambda t: mock_adapter if t == adapter_type else None,

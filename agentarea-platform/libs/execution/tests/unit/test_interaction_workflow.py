@@ -155,7 +155,10 @@ async def test_input_timeout_stops_main_loop_without_second_model_turn(instance)
         await instance._execute_tool_calls([request])
 
     instance._execute_iteration = iteration
-    with patch(f"{MODULE}.wait_condition", new=AsyncMock(side_effect=TimeoutError)):
+    with (
+        patch(f"{MODULE}.wait_condition", new=AsyncMock(side_effect=TimeoutError)),
+        patch(f"{MODULE}.patched", return_value=True),
+    ):
         await instance._execute_main_loop()
     assert calls == 1
     assert instance.state.status == "blocked"

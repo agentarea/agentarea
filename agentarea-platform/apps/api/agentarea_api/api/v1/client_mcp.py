@@ -140,6 +140,7 @@ async def _resolve_client_scope(
                 continue
             try:
                 url, headers, transport = await instance_service._resolve_mcp_url_and_headers(full)
+                spec = await instance_service._get_transport_spec_for_instance(full)
             except Exception:
                 logger.exception("Failed to resolve MCP url for instance %s", iid)
                 continue
@@ -154,6 +155,7 @@ async def _resolve_client_scope(
                     order=order,
                     namespace_prefix=namespaces.get(iid),
                     transport=instance_transports[iid],
+                    pinned=spec.get("type", "docker") == "url",
                 )
             )
         proxy = MCPAggregatorProxy(

@@ -15,6 +15,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.audit import audited
+from agentarea_common.channel_origin import CHANNEL_ORIGIN_PARAMETER
 from agentarea_common.events.base_events import EventEnvelope
 from agentarea_common.events.broker import EventBroker
 
@@ -31,6 +32,7 @@ from .infrastructure.repository import TriggerExecutionRepository, TriggerReposi
 from .llm_condition_evaluator import LLMConditionEvaluationError, LLMConditionEvaluator
 from .logging_utils import (
     DependencyUnavailableError,
+    TriggerConditionError,
     TriggerExecutionError,
     TriggerLogger,
     TriggerNotFoundError,
@@ -41,17 +43,40 @@ from .logging_utils import (
 from .schemas.dto import TriggerCreate as TriggerCreatePayload
 from .schemas.dto import TriggerUpdate as TriggerUpdatePayload
 from .temporal_schedule_manager import TemporalScheduleManager
+from .webhook_verification import keep_stored_secret_fields
 
 logger = TriggerLogger(__name__)
 
 
 # Error classes moved to logging_utils.py for consistency
 
+
+def _only_field_matches(conditions: dict[str, Any]) -> bool:
+    """Whether the rule-based fallback can check every part of ``conditions``."""
+    return set(conditions) == {"field_matches"}
+
+
 # The task query is resolved here rather than at each execution path because
 # there are two of them -- the service, for webhooks and manual runs, and the
 # Temporal activity, for schedules and pollers -- and they had drifted apart.
 NO_TASK_TEXT = (
     "Trigger has no task text: nothing arrived with the event and none is set on the trigger"
+)
+
+# Where to send a reply within the trigger's own channel. Anything that picks
+# the channel, the credentials or a delivery target is set from the trigger.
+_ORIGIN_ROUTING_FIELDS = frozenset(
+    {
+        "chat_id",
+        "message_id",
+        "channel_id",
+        "thread_ts",
+        "reply_to",
+        "subject",
+        "references",
+        "user_display_name",
+        "presentation",
+    }
 )
 
 
@@ -270,6 +295,17 @@ class TriggerService:
 
         # Validate update data
         await self._validate_trigger_update(existing_trigger, trigger_update)
+
+        # Credentials are never read back, so an edit that omits one or returns
+        # the mask it was shown must not wipe the stored value.
+        for field in ("validation_rules", "webhook_config"):
+            sent = getattr(trigger_update, field)
+            if sent is not None:
+                try:
+                    kept = keep_stored_secret_fields(sent, getattr(existing_trigger, field, None))
+                except ValueError as exc:
+                    raise TriggerValidationError(f"{field}: {exc}") from exc
+                setattr(trigger_update, field, kept)
 
         # Update the trigger
         updated_trigger = await self.trigger_repository.update_by_id(trigger_id, trigger_update)
@@ -1137,12 +1173,7 @@ class TriggerService:
                         fired_by=fired_by,
                     )
 
-                channel_origin = trigger_data.get("channel_origin")
-
-                # Build task parameters
                 task_params = await self._build_task_parameters(trigger, trigger_data, fired_by)
-                if channel_origin:
-                    task_params["channel_origin"] = channel_origin
 
                 # Route to active workflow or create new task
                 from agentarea_tasks.domain.models import AgentTask
@@ -1292,8 +1323,11 @@ class TriggerService:
         Returns:
             Task parameters
         """
-        # Start with trigger's task parameters
+        # Start with trigger's task parameters. A channel_origin stored there
+        # predates the create/update check; only _build_channel_origin below
+        # may name the trigger replies are sent through.
         params = dict(trigger.task_parameters)
+        params.pop(CHANNEL_ORIGIN_PARAMETER, None)
 
         # Add trigger metadata
         params.update(
@@ -1370,14 +1404,23 @@ class TriggerService:
         Returns:
             Channel origin dict or None if no outbound routing needed.
         """
-        # If extractor already provided channel_origin, use it
-        if trigger_data.get("channel_origin"):
-            origin = trigger_data["channel_origin"]
-            # Ensure trigger_id is set for credential lookup
-            origin.setdefault("trigger_id", str(trigger.id))
-            return origin
-
         trigger_id = str(trigger.id)
+
+        # A supplied origin is event data: only its routing fields are kept.
+        # The channel and the credentials replies are sent with come from the
+        # trigger, so an origin naming another trigger cannot borrow its bot.
+        supplied = trigger_data.get("channel_origin")
+        if supplied and isinstance(supplied, dict):
+            channel = self._reply_channel(trigger)
+            if channel is None:
+                return None
+            channel_type, credential_type = channel
+            return {
+                **{k: v for k, v in supplied.items() if k in _ORIGIN_ROUTING_FIELDS},
+                "type": channel_type,
+                "credential_type": credential_type,
+                "trigger_id": trigger_id,
+            }
 
         # Build channel_origin from webhook trigger data
         if isinstance(trigger, WebhookTrigger):
@@ -1429,6 +1472,21 @@ class TriggerService:
         # Cron triggers without extractors don't have channel_origin
         return None
 
+    @staticmethod
+    def _reply_channel(trigger: Trigger) -> tuple[str, str] | None:
+        """(channel type, credential type) this trigger's replies go out on, if any."""
+        if isinstance(trigger, WebhookTrigger):
+            webhook_type = str(trigger.webhook_type)
+            if webhook_type == "generic":
+                return None
+            return webhook_type, webhook_type
+        extractor = getattr(trigger, "data_extractor", None)
+        if extractor:
+            from .extractors import reply_channel
+
+            return reply_channel(extractor)
+        return None
+
     async def evaluate_trigger_conditions(
         self, trigger: Trigger, event_data: dict[str, Any]
     ) -> bool:
@@ -1440,6 +1498,10 @@ class TriggerService:
 
         Returns:
             True if conditions are met, False otherwise
+
+        Raises:
+            TriggerConditionError: The conditions could not be evaluated. A
+                condition nobody could check is not a condition that passed.
         """
         if not trigger.conditions:
             return True
@@ -1462,23 +1524,49 @@ class TriggerService:
                     trigger_context=trigger_context,
                 )
 
-            # Fallback to simple rule-based evaluation if no LLM evaluator
+            # Without an evaluator only field_matches can be checked; any other
+            # condition would be reported as met without having been looked at.
+            if not _only_field_matches(trigger.conditions):
+                raise TriggerConditionError(
+                    "Trigger conditions need the condition evaluator, which is not "
+                    "available on this path",
+                    trigger_id=str(trigger.id),
+                )
             return await self._evaluate_simple_conditions(trigger.conditions, event_data)
 
+        except TriggerConditionError:
+            raise
+
         except LLMConditionEvaluationError as e:
-            logger.error(f"LLM condition evaluation failed for trigger {trigger.id}: {e}")
-            # Fallback to simple evaluation on LLM failure
+            logger.error(
+                f"LLM condition evaluation failed for trigger {trigger.id}: {e}", exc_info=True
+            )
+            # The rule-based evaluator only checks field_matches; for anything
+            # else it would report a pass without having looked.
+            if not _only_field_matches(trigger.conditions):
+                raise TriggerConditionError(
+                    f"Trigger conditions could not be evaluated: {e}", trigger_id=str(trigger.id)
+                ) from e
             try:
                 return await self._evaluate_simple_conditions(trigger.conditions, event_data)
             except Exception as fallback_error:
-                logger.error(f"Fallback condition evaluation also failed: {fallback_error}")
-                # Default to True to avoid blocking execution on condition evaluation errors
-                return True
+                logger.error(
+                    f"Fallback condition evaluation also failed for trigger {trigger.id}: "
+                    f"{fallback_error}",
+                    exc_info=True,
+                )
+                raise TriggerConditionError(
+                    f"Trigger conditions could not be evaluated: {fallback_error}",
+                    trigger_id=str(trigger.id),
+                ) from fallback_error
 
         except Exception as e:
-            logger.error(f"Error evaluating conditions for trigger {trigger.id}: {e}")
-            # Default to True to avoid blocking execution on condition evaluation errors
-            return True
+            logger.error(
+                f"Error evaluating conditions for trigger {trigger.id}: {e}", exc_info=True
+            )
+            raise TriggerConditionError(
+                f"Trigger conditions could not be evaluated: {e}", trigger_id=str(trigger.id)
+            ) from e
 
     def _get_nested_value(self, data: dict[str, Any], field_path: str) -> Any:
         """Get nested value from dictionary using dot notation.
@@ -1513,20 +1601,14 @@ class TriggerService:
         Returns:
             True if conditions are met, False otherwise
         """
-        try:
-            # Check for simple field matching conditions
-            if "field_matches" in conditions:
-                field_matches = conditions["field_matches"]
-                for field_path, expected_value in field_matches.items():
-                    actual_value = self._get_nested_value(event_data, field_path)
-                    if actual_value != expected_value:
-                        return False
+        if "field_matches" in conditions:
+            field_matches = conditions["field_matches"]
+            for field_path, expected_value in field_matches.items():
+                actual_value = self._get_nested_value(event_data, field_path)
+                if actual_value != expected_value:
+                    return False
 
-            return True
-
-        except Exception as e:
-            logger.error(f"Error in simple condition evaluation: {e}")
-            return True  # Default to True on evaluation errors
+        return True
 
     async def extract_task_parameters_with_llm(
         self, instruction: str, event_data: dict[str, Any], trigger_context: dict[str, Any]

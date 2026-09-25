@@ -204,7 +204,6 @@ class TestTriggerE2EScenarios:
                 "report_type": "daily",
                 "format": "pdf",
             },
-            conditions={"business_hours": True},
             created_by="test_user",
             workspace_id="e2e-test-workspace",
         )
@@ -288,7 +287,6 @@ class TestTriggerE2EScenarios:
                 "action": "deploy",
                 "environment": "staging",
             },
-            conditions={"branch": "main"},
             validation_rules={"required_headers": ["X-GitHub-Event"], "webhook_secret": secret},
             created_by="test_user",
             workspace_id="e2e-test-workspace",

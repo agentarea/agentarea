@@ -37,6 +37,7 @@ from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.auth.tool_authorization import decide_tool_policy
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
+from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_governance.application import GovernancePolicyResolver
 from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
@@ -319,14 +320,14 @@ def _egress_is_proxied(upstream_url: str) -> bool:
 
 
 def _guard_and_pin_upstream(
-    upstream_url: str, instance_type: str | None, *, allow_private: bool
+    upstream_url: str, instance_type: str | None, *, policy: OutboundPolicy
 ) -> tuple[str | httpx.URL, str | None, dict | None]:
     """SSRF chokepoint for outbound proxy requests.
 
     Container/command upstreams are always the manager gateway, an
     operator-configured address this process builds itself, so they pass through
     unchanged. URL-type upstreams are user-controlled, so they are validated
-    against private/metadata ranges (unless ``allow_private``) and pinned to the
+    against private/metadata ranges (unless ``policy`` admits them) and pinned to the
     resolved IP to defeat DNS rebinding — the Host header and TLS SNI keep the
     original hostname.
 
@@ -345,7 +346,7 @@ def _guard_and_pin_upstream(
     if instance_type != "url":
         return upstream_url, None, None
 
-    resolved_ips = validate_url(upstream_url, allow_private=allow_private)
+    resolved_ips = validate_url(upstream_url, policy=policy)
     if _egress_is_proxied(upstream_url):
         return upstream_url, None, None
 
@@ -404,10 +405,9 @@ async def proxy_instance(
 
     # SSRF guard: validate + pin user-controlled URL-type upstreams before any
     # outbound request. Container/command upstreams are internal and pass through.
-    allow_private = get_settings().mcp.ALLOW_PRIVATE_URLS
     try:
         request_target, pinned_host, extensions = _guard_and_pin_upstream(
-            upstream_url, instance_type, allow_private=allow_private
+            upstream_url, instance_type, policy=OutboundPolicy.from_env()
         )
     except ValueError as exc:
         # Strip CR/LF from the user-controlled path param to prevent log forging.

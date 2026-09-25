@@ -44,6 +44,7 @@ from agentarea_common.auth.tool_authorization import (
 )
 from agentarea_common.events.contract import LLM_FAILED, canonical_type
 from agentarea_common.money import ZERO, to_money
+from agentarea_wallet.domain.enums import settlement_status
 from prometheus_client import Counter
 
 # Third-party imports
@@ -77,6 +78,8 @@ from ..models import (
     MCPToolRequest,
     MCPToolResult,
     McpToolRoute,
+    MonthlySpendCapRequest,
+    MonthlySpendCapResult,
     ReadOutputRequest,
     ReadOutputResult,
     RecallHistoryRequest,
@@ -790,6 +793,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
             model_instance = await model_instance_service.get(_UUID(request.model_id))
             if not model_instance:
                 raise ModelInstanceNotFoundError(f"Model instance {request.model_id} not found")
+            foreign = model_instance.foreign_part()
+            if foreign is not None:
+                raise ModelInstanceNotFoundError(
+                    f"Model instance {request.model_id} uses a {foreign} from another workspace"
+                )
 
             provider_type = model_instance.provider_config.provider_spec.provider_type
             model_name = model_instance.model_spec.model_name
@@ -1159,7 +1167,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         tool_name=tool_name,
                         tool_call_id=request.tool_call_id or "",
                         idempotency_key=idempotency_key,
-                        status="completed" if result.get("success") else "failed",
+                        status=settlement_status(
+                            request_succeeded=bool(result.get("success")),
+                            tx_hash=result.get("tx_hash"),
+                        ),
                         error_message=result.get("error"),
                         protocol_metadata=result.get("protocol_metadata"),
                     )
@@ -1827,6 +1838,24 @@ def make_agent_activities(dependencies: ActivityDependencies):
             return UpdateTaskGovernanceSnapshotResult(success=True)
 
     @activity.defn
+    async def check_monthly_spend_cap_activity(
+        request: MonthlySpendCapRequest,
+    ) -> MonthlySpendCapResult:
+        """Read the workspace's month-to-date spend against the run's monthly cap."""
+        from agentarea_tasks.infrastructure.repository import TaskRepository
+
+        user_context = create_user_context(request.user_context_data)
+        async with ActivityContext(container, user_context) as ctx:
+            session = container._database.async_session_factory()
+            ctx._sessions.append(session)
+            spent = to_money(await TaskRepository(session, user_context).sum_spend_mtd())
+        return MonthlySpendCapResult(
+            exceeded=spent >= request.cap_usd,
+            month_to_date_usd=spent,
+            cap_usd=request.cap_usd,
+        )
+
+    @activity.defn
     @auto_heartbeater
     async def compact_messages_activity(
         request: CompactMessagesRequest,
@@ -2375,6 +2404,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         recall_history_activity,
         update_task_status_activity,
         update_task_governance_snapshot_activity,
+        check_monthly_spend_cap_activity,
         materialize_skill_files_activity,
         store_context_output_activity,
         read_context_output_activity,

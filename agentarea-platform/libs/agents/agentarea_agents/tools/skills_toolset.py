@@ -107,9 +107,9 @@ def _frontmatter_description(content: str) -> str | None:
 
 
 async def _fetch_text(url: str) -> str:
-    import httpx
+    from agentarea_common.utils.url_safety import safe_async_client
 
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+    async with safe_async_client(timeout=30.0, follow_redirects=True) as client:
         response = await client.get(url)
         response.raise_for_status()
         return response.text

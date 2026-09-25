@@ -31,6 +31,7 @@ from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
 from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
+from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
 from agentarea_mcp.application.auth_resolver import build_auth_config_access_checker
 from agentarea_mcp.application.auth_service import MCPAuthService, MissingCredentialsError
 from agentarea_mcp.application.oauth_client_service import PKCEPair
@@ -170,7 +171,7 @@ def _oauth_profile(spec: dict[str, Any]) -> dict[str, Any]:
         url = str(oauth[url_field])
         _origin(url)
         try:
-            validate_url(url, allow_private=False)
+            validate_url(url, policy=OutboundPolicy())
         except ValueError as exc:
             raise HTTPException(status_code=500, detail="Catalog OAuth URL is not allowed") from exc
     scheme = str(oauth.get("authorization_scheme") or "Bearer")
@@ -304,7 +305,7 @@ async def connect_catalog_item(
         auth_config_access_checker=build_auth_config_access_checker(
             repository_factory, workspace_secret_manager
         ),
-        allow_private_urls=get_settings().mcp.ALLOW_PRIVATE_URLS,
+        outbound_policy=OutboundPolicy.from_env(),
     )
     # A catalog item is a reusable connection definition, not a singleton.
     # Each authorization creates an independently governable account instance.
@@ -432,7 +433,7 @@ async def oauth_callback(
             "code_verifier": state_data["code_verifier"],
             "client_id": client_id,
         }
-        async with httpx.AsyncClient() as client:
+        async with safe_async_client() as client:
             if auth_config.config.get("client_auth_method") == "client_secret_basic":
                 response = await client.post(
                     auth_config.config["token_url"],

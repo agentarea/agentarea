@@ -2,7 +2,7 @@ from importlib import import_module
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from agentarea_common.constants import MANAGED_BY_PLATFORM
+from agentarea_common.constants import MANAGED_BY_PLATFORM, PLATFORM_WORKSPACE_ID
 from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -126,7 +126,12 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
 
     __tablename__ = "model_specs"
     __table_args__ = (
-        UniqueConstraint("provider_spec_id", "model_name", name="uq_model_specs_provider_model"),
+        UniqueConstraint(
+            "workspace_id",
+            "provider_spec_id",
+            "model_name",
+            name="uq_model_specs_workspace_provider_model",
+        ),
     )
 
     provider_spec_id: Mapped[str] = mapped_column(
@@ -181,6 +186,24 @@ class ModelInstance(BaseModel, WorkspaceScopedMixin):
         "ProviderConfig", back_populates="model_instances", lazy="selectin"
     )
     model_spec = relationship("ModelSpec", back_populates="model_instances", lazy="selectin")
+
+    def foreign_part(self) -> str | None:
+        """Name the part this instance's workspace may not use, if any.
+
+        The spec carries the price the run is billed at and the config carries
+        the credentials, so neither may come from a workspace other than the
+        instance's own, except the platform's.
+        """
+        if getattr(self.provider_config, "managed_by", None) != MANAGED_BY_PLATFORM and (
+            getattr(self.provider_config, "workspace_id", None) != self.workspace_id
+        ):
+            return "provider_config"
+        if getattr(self.model_spec, "workspace_id", None) not in (
+            self.workspace_id,
+            PLATFORM_WORKSPACE_ID,
+        ):
+            return "model_spec"
+        return None
 
     def __repr__(self):
         """Return a concise string representation for debugging."""

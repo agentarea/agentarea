@@ -2,12 +2,29 @@
 
 from uuid import UUID
 
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings
 
 from .base import BaseAppSettings
 
 MCP_MANAGER_AUTH_HEADER = "X-AgentArea-Manager-Authorization"
+
+# Sandbox and MCP gateway keys that .env.example and docker-compose.dev.yaml once
+# shipped. Anyone can sign with them, so a deployment still using one must rotate.
+_PUBLISHED_SECRET_VALUES = frozenset(
+    {
+        "dev-sandbox-activation-hmac-secret-change-in-prod",  # pragma: allowlist secret
+        "dev-sandbox-cleanup-hmac-secret-change-in-prod-00",  # pragma: allowlist secret
+        "dev-sandbox-file-auth-secret-change-in-prod-000000",  # pragma: allowlist secret
+        "dev-sandbox-control-auth-secret-change-in-prod-0000",  # pragma: allowlist secret
+        "dev-mcp-gateway-auth-secret-change-in-prod-00000000",  # pragma: allowlist secret
+        "agentarea-dev-sandbox-activation-secret-change-me",  # pragma: allowlist secret
+        "agentarea-dev-sandbox-cleanup-secret-change-me",  # pragma: allowlist secret
+        "agentarea-dev-sandbox-file-secret-change-me",  # pragma: allowlist secret
+        "agentarea-dev-sandbox-control-secret-change-me",  # pragma: allowlist secret
+        "agentarea-dev-mcp-gateway-secret-change-me",  # pragma: allowlist secret
+    }
+)
 
 
 class MCPSettings(BaseAppSettings):
@@ -37,6 +54,22 @@ class MCPSettings(BaseAppSettings):
     MCP_OAUTH_SCOPES: str = "openid offline_access offline"
     # Allow OpenAPI connections to reach localhost/private IPs (self-hosted deployments)
     ALLOW_PRIVATE_URLS: bool = False
+
+    @field_validator(
+        "MCP_GATEWAY_AUTH_SECRET",
+        "SANDBOX_FILE_AUTH_SECRET",
+        "SANDBOX_CONTROL_AUTH_SECRET",
+    )
+    @classmethod
+    def _reject_published_secret(
+        cls, value: SecretStr | None, info: ValidationInfo
+    ) -> SecretStr | None:
+        if value is not None and value.get_secret_value() in _PUBLISHED_SECRET_VALUES:
+            raise ValueError(
+                f"{info.field_name} is set to a value published in the AgentArea repository; "
+                "generate a new one (scripts/gen-dev-secrets.sh rotates it) and restart"
+            )
+        return value
 
     def manager_gateway_url(self, instance_id: UUID | str) -> str:
         return f"{self.MCP_MANAGER_URL.rstrip('/')}/mcp/{instance_id}/mcp"

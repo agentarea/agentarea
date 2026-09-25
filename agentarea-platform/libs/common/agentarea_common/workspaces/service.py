@@ -144,22 +144,22 @@ class WorkspaceInvitationService:
 
     async def accept(
         self, *, token: str, user_id: str, user_email: str | None
-    ) -> WorkspaceInvitation:
-        """Accept an invitation as ``user_id``.
+    ) -> tuple[WorkspaceInvitation, bool]:
+        """Accept an invitation as ``user_id``. Returns (invitation, accepted_now).
 
-        Idempotent for the same acceptor. The caller owns granting workspace
-        membership in the configured authorization graph.
+        Idempotent for the same acceptor, and grants nothing by itself:
+        ``WorkspaceMembershipService.admit`` grants membership, once.
         """
         invitation = await self._redeemable(token=token, user_id=user_id, user_email=user_email)
         if invitation.status == INVITATION_STATUS_ACCEPTED:
-            return invitation
+            return invitation, False
 
         invitation.status = INVITATION_STATUS_ACCEPTED
         invitation.accepted_at = _utcnow()
         invitation.accepted_by_user_id = user_id
         await self.invitation_repo.update(invitation)
 
-        return invitation
+        return invitation, True
 
     async def _redeemable(
         self, *, token: str, user_id: str, user_email: str | None
@@ -248,6 +248,29 @@ class WorkspaceMembershipService:
             )
         )
 
+    async def admit(self, invitation: WorkspaceInvitation, user_id: str) -> None:
+        """Grant the membership an accepted invitation promised, exactly once.
+
+        The graph grant comes first and the invitation is stamped granted only
+        with the membership row, so a graph outage leaves it retryable. Once
+        stamped -- including every invitation accepted before the stamp
+        existed -- replaying the link grants nothing. If a removal revoked the
+        invitation meanwhile, the removal wins and the grant is taken back.
+        """
+        if invitation.membership_granted_at is not None:
+            return
+        workspace_id = invitation.workspace_id
+        await grant_workspace_membership(self.graph, workspace_id=workspace_id, user_id=user_id)
+        if await self.membership_repo.add_for_invitation(
+            invitation_id=invitation.id, workspace_id=workspace_id, user_id=user_id, now=_utcnow()
+        ):
+            return
+        if await self.membership_repo.get(workspace_id, user_id) is None:
+            await revoke_workspace_membership(
+                self.graph, workspace_id=workspace_id, user_id=user_id
+            )
+        raise InvitationRevoked("invitation revoked")
+
     async def list_members(self, workspace_id: str) -> list[WorkspaceMemberView]:
         member_ids = await list_workspace_member_ids(self.graph, workspace_id)
         rows = {
@@ -285,10 +308,12 @@ class WorkspaceMembershipService:
                 "The last member cannot leave; the workspace would be unreachable."
             )
 
+        # Invitation revoked before the graph: an accept that grants in between
+        # then finds it revoked and takes its own grant back.
+        await self.membership_repo.end(workspace_id, target_user_id)
         await revoke_workspace_membership(
             self.graph, workspace_id=workspace_id, user_id=target_user_id
         )
-        await self.membership_repo.delete(workspace_id, target_user_id)
 
     async def owner_user_id(self, workspace_id: str) -> str:
         """Who owns the workspace.

@@ -57,6 +57,7 @@ def _offering(*names: str) -> AgentExecutionWorkflow:
         effective_policy={},
         mcp_tool_routes={},
     )
+    wf._monthly_cap_message = None
     wf._deny_tool_call = AsyncMock()
     return wf
 

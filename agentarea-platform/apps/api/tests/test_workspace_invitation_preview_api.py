@@ -69,7 +69,7 @@ def service() -> WorkspaceInvitationService:
 @pytest.fixture
 def memberships():
     memberships = MagicMock()
-    memberships.record = AsyncMock()
+    memberships.admit = AsyncMock()
     return memberships
 
 
@@ -219,13 +219,11 @@ async def test_accept_is_refused_to_an_account_it_is_not_addressed_to(
     )
 
     assert response.status_code == 403, response.text
-    memberships.record.assert_not_called()
+    memberships.admit.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_accept_by_the_addressee_grants_membership(
-    service, make_client, memberships
-) -> None:
+async def test_accept_by_the_addressee_grants_membership(service, make_client, memberships) -> None:
     token = await _invite(service, email="misha@agentarea.ai")
 
     response = await make_client("misha@agentarea.ai").post(
@@ -234,4 +232,35 @@ async def test_accept_by_the_addressee_grants_membership(
 
     assert response.status_code == 200, response.text
     assert response.json()["workspace_id"] == WORKSPACE_ID
-    memberships.record.assert_awaited_once()
+    memberships.admit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_a_retry_after_the_graph_failed_grants_membership(service, make_client, memberships):
+    """The invitation is committed as accepted before the grant; a failed grant must be retryable."""
+    from agentarea_common.rebac.openfga_client import OpenFGAUnavailableError
+
+    memberships.admit = AsyncMock(side_effect=[OpenFGAUnavailableError("down"), None])
+    token = await _invite(service)
+    client = make_client("misha@agentarea.ai")
+
+    first = await client.post("/v1/invitations/accept", json={"token": token})
+    retry = await client.post("/v1/invitations/accept", json={"token": token})
+
+    assert first.status_code == 503, first.text
+    assert retry.status_code == 200, retry.text
+    assert memberships.admit.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_an_accept_that_loses_to_a_removal_is_refused(service, make_client, memberships):
+    from agentarea_common.workspaces import InvitationRevoked
+
+    memberships.admit = AsyncMock(side_effect=InvitationRevoked("invitation revoked"))
+    token = await _invite(service)
+
+    response = await make_client("misha@agentarea.ai").post(
+        "/v1/invitations/accept", json={"token": token}
+    )
+
+    assert response.status_code == 410, response.text

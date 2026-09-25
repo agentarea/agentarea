@@ -31,6 +31,7 @@ class InboundMessageStreamConsumer:
         dedup: DedupCache,
         *,
         event_broker: EventBroker,
+        secret_manager_factory: Any,
         workflow_executor: WorkflowExecutor | None = None,
         stream: str,
         group: str,
@@ -43,6 +44,7 @@ class InboundMessageStreamConsumer:
         self._broker = broker
         self._dedup = dedup
         self._event_broker = event_broker
+        self._secret_manager_factory = secret_manager_factory
         self._workflow_executor = workflow_executor
         self._stream = stream
         self._group = group
@@ -189,6 +191,7 @@ class InboundMessageStreamConsumer:
         from agentarea_tasks.temporal_task_manager import TemporalTaskManager
 
         from agentarea_triggers.infrastructure.orm import TriggerORM
+        from agentarea_triggers.llm_condition_evaluator import build_condition_evaluator
         from agentarea_triggers.trigger_service import TriggerService
 
         database = get_database()
@@ -219,6 +222,14 @@ class InboundMessageStreamConsumer:
                 repository_factory=repository_factory,
                 event_broker=self._event_broker,
                 task_service=task_service,
+                llm_condition_evaluator=build_condition_evaluator(
+                    session=session,
+                    user_context=user_context,
+                    secret_manager=self._secret_manager_factory.create(
+                        session=session, user_context=user_context
+                    ),
+                    event_broker=self._event_broker,
+                ),
             )
 
             execution = await trigger_service.execute_trigger(UUID(trigger_id), trigger_data)

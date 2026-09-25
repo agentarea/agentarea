@@ -61,9 +61,7 @@ class TestParseGitHubUrl:
     def test_parse_https_url_with_blob(self):
         """Test parsing HTTPS URL with blob (file path)."""
         importer = GitHubSkillImporter()
-        result = importer.parse_github_url(
-            "https://github.com/owner/repo/blob/main/README.md"
-        )
+        result = importer.parse_github_url("https://github.com/owner/repo/blob/main/README.md")
 
         assert result.owner == "owner"
         assert result.repo == "repo"
@@ -172,9 +170,7 @@ class TestDownloadRepo:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await importer.download_repo(
-                "https://github.com/owner/repo/tree/develop"
-            )
+            result = await importer.download_repo("https://github.com/owner/repo/tree/develop")
 
             assert result == mock_zip_content
             # Verify the URL contains the branch
@@ -500,3 +496,41 @@ class TestGitHubRepoInfo:
         assert info.repo == "repo"
         assert info.branch == "develop"
         assert info.path == "skills/my-skill"
+
+
+class TestImportStaysOnPublicAddresses:
+    @pytest.mark.asyncio
+    async def test_a_zipball_redirect_to_the_metadata_address_is_not_followed(self, monkeypatch):
+        from agentarea_common.utils.url_safety import OutboundPolicy, SafeOutboundTransport
+
+        hosts: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            hosts.append(request.headers["host"])
+            return httpx.Response(302, headers={"location": "http://169.254.169.254/latest/"})
+
+        async def resolve(host: str, port: int) -> list[str]:
+            return {"api.github.com": ["140.82.121.6"]}[host]
+
+        def client(**kwargs):
+            transport = SafeOutboundTransport(
+                OutboundPolicy(), resolve=resolve, inner=lambda: httpx.MockTransport(handler)
+            )
+            return httpx.AsyncClient(transport=transport, **kwargs)
+
+        monkeypatch.setattr(
+            "agentarea_agents.infrastructure.github_skill_importer.safe_async_client", client
+        )
+        importer = GitHubSkillImporter()
+
+        with pytest.raises(GitHubSkillImporterError):
+            await importer.download_repo("https://github.com/owner/repo/tree/main")
+        assert hosts == ["api.github.com"]
+
+    @pytest.mark.asyncio
+    async def test_a_skill_file_fetch_refuses_a_non_public_address(self):
+        from agentarea_agents.tools.skills_toolset import _fetch_text
+        from agentarea_common.utils.url_safety import UnsafeUrlError
+
+        with pytest.raises(UnsafeUrlError):
+            await _fetch_text("http://127.0.0.1:8000/SKILL.md")
