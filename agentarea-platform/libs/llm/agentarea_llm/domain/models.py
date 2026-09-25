@@ -1,9 +1,10 @@
+from decimal import Decimal
 from importlib import import_module
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from agentarea_common.constants import MANAGED_BY_PLATFORM, PLATFORM_WORKSPACE_ID
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -142,8 +143,8 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     context_window: Mapped[int] = mapped_column(Integer, nullable=False)
     max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    input_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True)
-    output_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True)
+    input_cost_per_token: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
+    output_cost_per_token: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
     supports_function_calling: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )

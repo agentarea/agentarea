@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 from typing import Any
+
+from agentarea_common.money import ZERO, to_money
 
 from .detector import PaymentProtocolDetector
 from .models import PaymentResult
@@ -47,9 +50,12 @@ class UnifiedPaymentClient:
         if wallet_type in ("mpp", "dual") and mpp_tempo_key:
             from .mpp_client import MPPPaymentClient
 
+            session_budget_usd = self._mpp_config.get("session_budget_usd")
+            if session_budget_usd is None:
+                raise ValueError("mpp_config.session_budget_usd is required to pay over MPP")
             self._mpp_client = MPPPaymentClient(
                 tempo_key=mpp_tempo_key,
-                session_budget_usd=self._mpp_config.get("session_budget_usd", 10.0),
+                session_budget_usd=to_money(session_budget_usd),
                 payment_method_types=self._mpp_config.get("payment_method_types"),
                 chain_id=self._mpp_config.get("chain_id"),
                 rpc_url=self._mpp_config.get("rpc_url"),
@@ -67,7 +73,7 @@ class UnifiedPaymentClient:
         response_status: int,
         response_headers: dict[str, str],
         response_body: str | bytes,
-        budget_remaining: float,
+        budget_remaining: Decimal,
     ) -> PaymentResult:
         """Handle a 402 response by detecting protocol and delegating to the right client."""
         protocol = PaymentProtocolDetector.detect(response_status, response_headers)
@@ -76,7 +82,7 @@ class UnifiedPaymentClient:
             return PaymentResult(
                 success=False,
                 protocol="unknown",
-                amount_usd=0,
+                amount_usd=ZERO,
                 recipient="",
                 error="Unknown 402 protocol - no recognized payment headers",
             )
@@ -86,7 +92,7 @@ class UnifiedPaymentClient:
                 return PaymentResult(
                     success=False,
                     protocol="x402",
-                    amount_usd=0,
+                    amount_usd=ZERO,
                     recipient="",
                     error="Wallet does not support x402 protocol",
                 )
@@ -104,7 +110,7 @@ class UnifiedPaymentClient:
                 return PaymentResult(
                     success=False,
                     protocol="mpp",
-                    amount_usd=0,
+                    amount_usd=ZERO,
                     recipient="",
                     error="Wallet does not support MPP protocol",
                 )
@@ -121,7 +127,7 @@ class UnifiedPaymentClient:
         return PaymentResult(
             success=False,
             protocol=protocol,
-            amount_usd=0,
+            amount_usd=ZERO,
             recipient="",
             error=f"Unsupported protocol: {protocol}",
         )

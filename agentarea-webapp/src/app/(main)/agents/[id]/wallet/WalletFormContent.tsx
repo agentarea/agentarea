@@ -60,10 +60,10 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
   );
   const [signerType, setSignerType] = useState("evm");
   const [mppPaymentMethods, setMppPaymentMethods] = useState("charge");
-  const [mppSessionBudget, setMppSessionBudget] = useState("10.0");
+  const [mppSessionBudget, setMppSessionBudget] = useState("");
   const [x402PrivateKey, setX402PrivateKey] = useState("");
   const [mppTempoKey, setMppTempoKey] = useState("");
-  const [serviceBudget, setServiceBudget] = useState("5.0");
+  const [serviceBudget, setServiceBudget] = useState("");
   const [budgetPeriod, setBudgetPeriod] = useState("execution");
 
   useEffect(() => {
@@ -80,9 +80,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
         setMppPaymentMethods(
           wallet.mpp_config.payment_method_types?.join(", ") || "charge"
         );
-        setMppSessionBudget(
-          String(wallet.mpp_config.session_budget_usd || 10.0)
-        );
+        setMppSessionBudget(String(wallet.mpp_config.session_budget_usd ?? ""));
       }
       setServiceBudget(String(wallet.service_budget_usd));
       setBudgetPeriod(wallet.service_budget_period);
@@ -107,7 +105,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
           payment_method_types: mppPaymentMethods
             .split(",")
             .map((s) => s.trim()),
-          session_budget_usd: parseFloat(mppSessionBudget),
+          session_budget_usd: mppSessionBudget,
         }
       : undefined;
 
@@ -121,7 +119,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
         x402_config: x402Config,
         mpp_config: mppConfig,
         ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
-        service_budget_usd: parseFloat(serviceBudget),
+        service_budget_usd: serviceBudget,
         service_budget_period: budgetPeriod,
       });
     } else {
@@ -131,7 +129,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
         mpp_config: mppConfig,
         credentials:
           Object.keys(credentials).length > 0 ? credentials : undefined,
-        service_budget_usd: parseFloat(serviceBudget),
+        service_budget_usd: serviceBudget,
         service_budget_period: budgetPeriod,
       });
     }

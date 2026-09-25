@@ -44,10 +44,10 @@ export function WalletConfigPanel({ agentId }: WalletConfigPanelProps) {
   const [facilitatorUrl, setFacilitatorUrl] = useState("https://x402.org/facilitator");
   const [signerType, setSignerType] = useState("evm");
   const [mppPaymentMethods, setMppPaymentMethods] = useState("charge");
-  const [mppSessionBudget, setMppSessionBudget] = useState("10.0");
+  const [mppSessionBudget, setMppSessionBudget] = useState("");
   const [x402PrivateKey, setX402PrivateKey] = useState("");
   const [mppTempoKey, setMppTempoKey] = useState("");
-  const [serviceBudget, setServiceBudget] = useState("5.0");
+  const [serviceBudget, setServiceBudget] = useState("");
   const [budgetPeriod, setBudgetPeriod] = useState("execution");
 
   useEffect(() => {
@@ -60,7 +60,7 @@ export function WalletConfigPanel({ agentId }: WalletConfigPanelProps) {
       }
       if (wallet.mpp_config) {
         setMppPaymentMethods(wallet.mpp_config.payment_method_types?.join(", ") || "charge");
-        setMppSessionBudget(String(wallet.mpp_config.session_budget_usd || 10.0));
+        setMppSessionBudget(String(wallet.mpp_config.session_budget_usd ?? ""));
       }
       setServiceBudget(String(wallet.service_budget_usd));
       setBudgetPeriod(wallet.service_budget_period);
@@ -84,7 +84,7 @@ export function WalletConfigPanel({ agentId }: WalletConfigPanelProps) {
       const mppConfig = showMpp
         ? {
             payment_method_types: mppPaymentMethods.split(",").map((s) => s.trim()),
-            session_budget_usd: parseFloat(mppSessionBudget),
+            session_budget_usd: mppSessionBudget,
           }
         : undefined;
 
@@ -98,7 +98,7 @@ export function WalletConfigPanel({ agentId }: WalletConfigPanelProps) {
           x402_config: x402Config,
           mpp_config: mppConfig,
           ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
-          service_budget_usd: parseFloat(serviceBudget),
+          service_budget_usd: serviceBudget,
           service_budget_period: budgetPeriod,
         });
         toast.success("Wallet updated");
@@ -108,7 +108,7 @@ export function WalletConfigPanel({ agentId }: WalletConfigPanelProps) {
           x402_config: x402Config,
           mpp_config: mppConfig,
           credentials: Object.keys(credentials).length > 0 ? credentials : undefined,
-          service_budget_usd: parseFloat(serviceBudget),
+          service_budget_usd: serviceBudget,
           service_budget_period: budgetPeriod,
         });
         toast.success("Wallet created");

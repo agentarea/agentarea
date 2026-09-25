@@ -89,11 +89,6 @@ _GOVERNANCE_INTERCEPTORS = [
         phases=["tool_discovery", "pre_tool_call"],
     ),
     GovernanceOverlay(
-        interceptor_name="audit_observer",
-        category="observer",
-        phases=["pre_llm_call", "post_llm_call", "pre_tool_call", "post_tool_call"],
-    ),
-    GovernanceOverlay(
         interceptor_name="metrics_observer",
         category="observer",
         phases=["pre_llm_call", "post_llm_call", "pre_tool_call", "post_tool_call"],

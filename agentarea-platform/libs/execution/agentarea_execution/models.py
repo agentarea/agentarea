@@ -39,8 +39,8 @@ class ResolvedModelInfo(BaseModel):
         default=None,
         gt=0,
     )  # model_spec cap; bounds the per-call max_tokens
-    input_cost_per_token: float | None = Field(default=None, ge=0)
-    output_cost_per_token: float | None = Field(default=None, ge=0)
+    input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
+    output_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     display_name: str | None = None
     provider_display_name: str | None = None
     resolved_at: str | None = None  # ISO timestamp for staleness debugging
@@ -80,8 +80,8 @@ class ChangeModelPayload(BaseModel):
     endpoint_url: str | None = None
     context_window: int = Field(gt=0)
     max_output_tokens: int | None = Field(default=None, gt=0)
-    input_cost_per_token: float | None = Field(default=None, ge=0)
-    output_cost_per_token: float | None = Field(default=None, ge=0)
+    input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
+    output_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     display_name: str | None = None
     provider_display_name: str | None = None
     resolved_at: str | None = None
@@ -480,9 +480,9 @@ class LLMCallRequest(BaseModel):
     resolved_model: dict | None = None  # Cached ResolvedModelInfo dict; None = DB lookup
     effective_policy: dict[str, Any] | None = None
     # Runtime governance counters — let budget gates compare against the running total
-    cost_used: float | None = None
+    cost_used: Money | None = None
     tokens_used: int | None = None
-    service_cost_used: float | None = None
+    service_cost_used: Money | None = None
 
 
 class LLMUsage(BaseModel):
@@ -522,9 +522,9 @@ class MCPToolRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     effective_policy: dict[str, Any] | None = None
     # Runtime governance counters — let budget gates compare against the running total
-    cost_used: float | None = None
+    cost_used: Money | None = None
     tokens_used: int | None = None
-    service_cost_used: float | None = None
+    service_cost_used: Money | None = None
     user_context_data: dict[str, Any] | None = None
     # Set only by the workflow, after a human approved this exact call following
     # a governance escalation; the escalating gate decides whether it suffices.
@@ -543,7 +543,7 @@ class MCPToolResult(BaseModel):
     exit_code: int | None = None
     outcome: str | None = None  # "exit" | "timeout" | "error"
     artifact_paths: list[str] = Field(default_factory=list)
-    service_cost: float = 0.0
+    service_cost: Money = ZERO
     payment: dict[str, Any] | None = None
     # Tool-call attribution surfaced to the UI.
     source: str | None = None  # "mcp" | "builtin" | "openapi"

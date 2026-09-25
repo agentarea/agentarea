@@ -7,6 +7,7 @@ it, and whoever administered the first workspace set the price the others were
 billed and budgeted against. Each workspace now writes its own row.
 """
 
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -62,7 +63,7 @@ async def session_factory():
         await engine.dispose()
 
 
-async def _discover(session_factory, workspace_id: str, price: float) -> ModelSpec:
+async def _discover(session_factory, workspace_id: str, price: str) -> ModelSpec:
     context = UserContext(user_id=f"admin-{workspace_id}", workspace_id=workspace_id)
     async with session_factory() as session:
         return await ModelSpecRepository(session, context).upsert_by_provider_and_model_kwargs(
@@ -70,31 +71,31 @@ async def _discover(session_factory, workspace_id: str, price: float) -> ModelSp
             model_name="gpt-5",
             display_name="GPT-5",
             context_window=8192,
-            input_cost_per_token=price,
-            output_cost_per_token=price,
+            input_cost_per_token=Decimal(price),
+            output_cost_per_token=Decimal(price),
         )
 
 
 @pytest.mark.asyncio
 async def test_a_second_workspace_gets_its_own_spec_not_the_first_ones(session_factory):
-    first = await _discover(session_factory, "ws-a", 1e-6)
-    second = await _discover(session_factory, "ws-b", 0.0)
+    first = await _discover(session_factory, "ws-a", "0.000001")
+    second = await _discover(session_factory, "ws-b", "0")
 
     assert second.id != first.id
     assert second.workspace_id == "ws-b"
-    assert second.input_cost_per_token == 0.0
+    assert second.input_cost_per_token == Decimal("0")
     async with session_factory() as session:
         rows = {
             row.workspace_id: row.input_cost_per_token
             for row in (await session.execute(select(ModelSpec))).scalars()
         }
-    assert rows == {"ws-a": 1e-6, "ws-b": 0.0}
+    assert rows == {"ws-a": Decimal("0.000001"), "ws-b": Decimal("0")}
 
 
 @pytest.mark.asyncio
 async def test_rediscovery_updates_the_workspaces_own_row(session_factory):
-    first = await _discover(session_factory, "ws-a", 1e-6)
-    again = await _discover(session_factory, "ws-a", 2e-6)
+    first = await _discover(session_factory, "ws-a", "0.000001")
+    again = await _discover(session_factory, "ws-a", "0.000002")
 
     assert again.id == first.id
-    assert again.input_cost_per_token == 2e-6
+    assert again.input_cost_per_token == Decimal("0.000002")

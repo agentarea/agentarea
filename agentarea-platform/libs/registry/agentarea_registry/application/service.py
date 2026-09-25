@@ -24,6 +24,7 @@ from typing import Any
 from uuid import UUID
 
 import yaml
+from agentarea_common.money import to_optional_money
 from agentarea_common.utils.slug import generate_slug
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
 
@@ -813,8 +814,8 @@ class RegistryService:
             description=item.description,
             context_window=context_window,
             max_output_tokens=spec.get("max_output_tokens"),
-            input_cost_per_token=spec.get("input_cost_per_token"),
-            output_cost_per_token=spec.get("output_cost_per_token"),
+            input_cost_per_token=to_optional_money(spec.get("input_cost_per_token")),
+            output_cost_per_token=to_optional_money(spec.get("output_cost_per_token")),
             supports_function_calling=spec.get("supports_function_calling", False),
             is_active=spec.get("is_active", True),
         )

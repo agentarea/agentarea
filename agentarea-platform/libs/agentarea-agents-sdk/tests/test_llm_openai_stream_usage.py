@@ -1,6 +1,7 @@
 """OpenAI-compatible streaming usage/cost accounting."""
 
 import json
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -84,7 +85,7 @@ async def test_usage_only_final_chunk_is_not_dropped(monkeypatch):
     assert chunks[0].content == "hello"
     assert chunks[-1].usage is not None
     assert chunks[-1].usage.total_tokens == 15
-    assert chunks[-1].cost == pytest.approx(0.02)
+    assert chunks[-1].cost == Decimal("0.02")
     assert _Client.last_json["stream_options"] == {"include_usage": True}
 
 
@@ -147,7 +148,7 @@ async def test_litellm_stream_requests_and_preserves_usage(monkeypatch):
     assert chunks[0].content == "hello"
     assert chunks[-1].usage is not None
     assert chunks[-1].usage.total_tokens == 15
-    assert chunks[-1].cost == pytest.approx(0.02)
+    assert chunks[-1].cost == Decimal("0.02")
 
 
 @pytest.mark.asyncio
@@ -196,4 +197,4 @@ async def test_completion_preserves_reasoning_tools_and_accounting(monkeypatch):
     assert response.usage is not None
     assert (response.usage.prompt_tokens, response.usage.completion_tokens) == (10, 5)
     assert response.usage.total_tokens == 15
-    assert response.cost == pytest.approx(0.02)
+    assert response.cost == Decimal("0.02")

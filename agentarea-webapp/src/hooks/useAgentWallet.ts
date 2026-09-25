@@ -22,11 +22,11 @@ export interface AgentWallet {
   };
   mpp_config?: {
     payment_method_types: string[];
-    session_budget_usd: number;
+    session_budget_usd: string | number;
     stripe_profile_id?: string;
   };
   has_credentials: boolean;
-  service_budget_usd: number;
+  service_budget_usd: string;
   service_budget_period: "execution" | "daily" | "monthly";
   status: string;
   created_at?: string;
@@ -38,7 +38,7 @@ export interface PaymentRecord {
   agent_id: string;
   execution_id: string;
   protocol: "x402" | "mpp";
-  amount_usd: number;
+  amount_usd: string;
   recipient: string;
   tx_hash?: string;
   tool_name: string;
@@ -64,7 +64,7 @@ function isAgentWallet(value: unknown): value is AgentWallet {
     typeof v.agent_id === "string" &&
     typeof v.wallet_type === "string" &&
     typeof v.has_credentials === "boolean" &&
-    typeof v.service_budget_usd === "number" &&
+    typeof v.service_budget_usd === "string" &&
     typeof v.service_budget_period === "string" &&
     typeof v.status === "string"
   );

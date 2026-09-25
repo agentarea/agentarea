@@ -6,7 +6,6 @@ from uuid import uuid4
 from agentarea_governance.domain.enums import InterceptorAction, Phase
 from agentarea_governance.domain.models import InterceptorContext
 from agentarea_governance.interceptors.observers.metrics_observer import MetricsObserver
-from agentarea_governance.interceptors.observers.audit_observer import AuditObserver
 from agentarea_governance.interceptors.gates.semantic_guard import SemanticGuard
 from agentarea_governance.interceptors.gates.escalation_guard import EscalationGuard
 
@@ -52,36 +51,6 @@ class TestMetricsObserver:
     @pytest.mark.asyncio
     async def test_always_allows(self):
         obs = MetricsObserver()
-        result = await obs.execute(_ctx())
-        assert result.action == InterceptorAction.ALLOW
-
-
-class TestAuditObserver:
-    @pytest.mark.asyncio
-    async def test_without_sink(self):
-        obs = AuditObserver()
-        result = await obs.execute(_ctx())
-        assert result.action == InterceptorAction.ALLOW
-
-    @pytest.mark.asyncio
-    async def test_with_sink(self):
-        published = []
-
-        class FakeSink:
-            async def publish(self, event):
-                published.append(event)
-
-        obs = AuditObserver(event_sink=FakeSink())
-        await obs.execute(_ctx())
-        assert len(published) == 1
-
-    @pytest.mark.asyncio
-    async def test_sink_failure_handled(self):
-        class FailingSink:
-            async def publish(self, event):
-                raise ConnectionError("sink down")
-
-        obs = AuditObserver(event_sink=FailingSink())
         result = await obs.execute(_ctx())
         assert result.action == InterceptorAction.ALLOW
 

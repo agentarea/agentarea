@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass, field, replace
+from decimal import Decimal, InvalidOperation
 
 import httpx
 from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, safe_async_client
@@ -17,12 +18,12 @@ def _positive_int_or_none(value) -> int | None:
     return parsed if parsed > 0 else None
 
 
-def _nonnegative_float_or_none(value) -> float | None:
+def _nonnegative_money_or_none(value) -> Decimal | None:
     try:
-        parsed = float(value)
-    except (TypeError, ValueError):
+        parsed = Decimal(str(value))
+    except (InvalidOperation, ValueError):
         return None
-    return parsed if parsed >= 0 else None
+    return parsed if parsed.is_finite() and parsed >= 0 else None
 
 
 @dataclass
@@ -32,8 +33,8 @@ class DiscoveredModel:
     context_window: int | None = None
     description: str = ""
     max_output_tokens: int | None = None
-    input_cost_per_token: float | None = None
-    output_cost_per_token: float | None = None
+    input_cost_per_token: Decimal | None = None
+    output_cost_per_token: Decimal | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -91,8 +92,8 @@ class ModelDiscoveryService:
                     max_output_tokens=_positive_int_or_none(
                         m.get("max_output_tokens") or top_provider.get("max_completion_tokens")
                     ),
-                    input_cost_per_token=_nonnegative_float_or_none(pricing.get("prompt")),
-                    output_cost_per_token=_nonnegative_float_or_none(pricing.get("completion")),
+                    input_cost_per_token=_nonnegative_money_or_none(pricing.get("prompt")),
+                    output_cost_per_token=_nonnegative_money_or_none(pricing.get("completion")),
                     description=m.get("description", ""),
                 )
             )

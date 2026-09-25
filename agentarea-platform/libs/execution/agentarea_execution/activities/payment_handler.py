@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from decimal import Decimal
 from typing import Any
+
+from agentarea_common.money import ZERO, serialize_money
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +30,7 @@ async def handle_402_payment(
     response_headers: dict[str, str],
     response_body: str | bytes,
     wallet_config: dict[str, Any],
-    budget_remaining: float,
+    budget_remaining: Decimal,
     idempotency_key: str,
 ) -> dict[str, Any] | None:
     """Attempt to handle a 402 response by paying via x402 or MPP.
@@ -59,12 +62,12 @@ async def handle_402_payment(
         logger.debug("No wallet configured, cannot handle 402")
         return None
 
-    if budget_remaining <= 0:
+    if budget_remaining <= ZERO:
         logger.warning("Service budget exhausted, cannot handle 402")
         return {
             "success": False,
             "protocol": "unknown",
-            "amount_usd": 0,
+            "amount_usd": "0",
             "recipient": "",
             "error": "Service budget exhausted",
         }
@@ -95,7 +98,7 @@ async def handle_402_payment(
         return {
             "success": result.success,
             "protocol": result.protocol,
-            "amount_usd": result.amount_usd,
+            "amount_usd": serialize_money(result.amount_usd),
             "recipient": result.recipient,
             "tx_hash": result.tx_hash,
             "response_body": result.response_body,
@@ -108,7 +111,7 @@ async def handle_402_payment(
         return {
             "success": False,
             "protocol": "unknown",
-            "amount_usd": 0,
+            "amount_usd": "0",
             "recipient": "",
             "error": "Payment library not installed",
         }
@@ -117,7 +120,7 @@ async def handle_402_payment(
         return {
             "success": False,
             "protocol": "unknown",
-            "amount_usd": 0,
+            "amount_usd": "0",
             "recipient": "",
             "error": str(e),
         }

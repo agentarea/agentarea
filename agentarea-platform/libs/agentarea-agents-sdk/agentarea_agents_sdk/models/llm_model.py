@@ -4,6 +4,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, cast
 
 import httpx
@@ -68,7 +69,7 @@ class LLMResponse:
     content: str
     role: str
     tool_calls: list[dict[str, Any]] | None = None
-    cost: float = 0.0
+    cost: Decimal = Decimal(0)
     usage: LLMUsage | None = None
     reasoning_content: str = ""
 
@@ -82,8 +83,8 @@ class LLMModel:
         model_name: str,
         api_key: str | None = None,
         endpoint_url: str | None = None,
-        input_cost_per_token: float | None = None,
-        output_cost_per_token: float | None = None,
+        input_cost_per_token: Decimal | None = None,
+        output_cost_per_token: Decimal | None = None,
     ):
         """Initialize LLM model with explicit parameters.
 
@@ -102,18 +103,17 @@ class LLMModel:
         self.input_cost_per_token = input_cost_per_token
         self.output_cost_per_token = output_cost_per_token
 
-    def _configured_cost(self, usage: LLMUsage) -> float:
+    def _configured_cost(self, usage: LLMUsage) -> Decimal:
         """Calculate cost from the persisted model spec.
 
         ``None`` means pricing is unknown. Zero is accepted as an explicit free
         model price; callers decide whether unknown pricing is admissible.
         """
         if self.input_cost_per_token is None or self.output_cost_per_token is None:
-            return 0.0
-        return (
-            usage.prompt_tokens * self.input_cost_per_token
-            + usage.completion_tokens * self.output_cost_per_token
-        )
+            return Decimal(0)
+        return usage.prompt_tokens * Decimal(
+            str(self.input_cost_per_token)
+        ) + usage.completion_tokens * Decimal(str(self.output_cost_per_token))
 
     def _safe_json_serialize(self, obj: Any) -> str:
         """Convert any Python object to JSON-serializable string safely."""
@@ -422,7 +422,7 @@ class LLMModel:
                             reasoning_content=delta_reasoning,
                             cost=self._configured_cost(usage_delta)
                             if usage_delta is not None
-                            else 0.0,
+                            else Decimal(0),
                             usage=usage_delta,
                         )
             finally:
@@ -472,7 +472,7 @@ class LLMModel:
             ]
 
         # Calculate cost information
-        cost = 0.0
+        cost = Decimal(0)
         usage = LLMUsage()
 
         response_usage = getattr(response, "usage", None)
@@ -486,9 +486,9 @@ class LLMModel:
 
             # litellm includes cost calculation in some cases
             if hasattr(response_usage, "completion_tokens_cost"):
-                cost += getattr(response_usage, "completion_tokens_cost", 0.0)
+                cost += Decimal(str(getattr(response_usage, "completion_tokens_cost", 0.0)))
             if hasattr(response_usage, "prompt_tokens_cost"):
-                cost += getattr(response_usage, "prompt_tokens_cost", 0.0)
+                cost += Decimal(str(getattr(response_usage, "prompt_tokens_cost", 0.0)))
             if cost == 0.0:
                 cost = self._configured_cost(usage)
 
@@ -560,7 +560,7 @@ class LLMModel:
             complete_content = ""
             chunk_index = 0
             usage_info = None
-            cost = 0.0
+            cost = Decimal(0)
             tool_calls = []
             tool_calls_buffer = {}  # Buffer for streaming tool calls
 
@@ -684,16 +684,16 @@ class LLMModel:
                         else getattr(hidden, "response_cost", 0.0)
                     ) or 0.0
                     if rc > 0.0:
-                        cost = rc
+                        cost = Decimal(str(rc))
 
                 # Extract usage from final chunk if available
                 if hasattr(chunk, "usage") and chunk.usage:
                     usage_info = chunk.usage
                     if cost == 0.0:
                         if hasattr(usage_info, "completion_tokens_cost"):
-                            cost += getattr(usage_info, "completion_tokens_cost", 0.0)
+                            cost += Decimal(str(getattr(usage_info, "completion_tokens_cost", 0.0)))
                             if hasattr(usage_info, "prompt_tokens_cost"):
-                                cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
+                                cost += Decimal(str(getattr(usage_info, "prompt_tokens_cost", 0.0)))
 
             # Convert tool calls buffer to final format
             if tool_calls_buffer:
@@ -747,10 +747,14 @@ class LLMModel:
                             m.get("content", "") if isinstance(m, dict) else str(m)
                             for m in request.messages
                         )
-                        cost = litellm.completion_cost(
-                            model=model_str,
-                            prompt=prompt_str,
-                            completion=complete_content or "",
+                        cost = Decimal(
+                            str(
+                                litellm.completion_cost(
+                                    model=model_str,
+                                    prompt=prompt_str,
+                                    completion=complete_content or "",
+                                )
+                            )
                         )
                         # Update usage if it was estimated
                         if usage_info is None:
@@ -837,7 +841,7 @@ class LLMModel:
             complete_reasoning = ""  # Track reasoning/thinking content
             tool_calls_buffer = {}  # Buffer for streaming tool calls
             usage = LLMUsage()
-            cost = 0.0
+            cost = Decimal(0)
 
             async for chunk in response_stream:  # type: ignore[assignment]
                 # chunk: ModelResponse
@@ -972,16 +976,16 @@ class LLMModel:
                         else getattr(hidden, "response_cost", 0.0)
                     ) or 0.0
                     if rc > 0.0:
-                        cost = rc
+                        cost = Decimal(str(rc))
 
                 # Extract usage from final chunk if available
                 if hasattr(chunk, "usage") and chunk.usage:
                     usage_info = chunk.usage
                     if cost == 0.0:
                         if hasattr(usage_info, "completion_tokens_cost"):
-                            cost += getattr(usage_info, "completion_tokens_cost", 0.0)
+                            cost += Decimal(str(getattr(usage_info, "completion_tokens_cost", 0.0)))
                             if hasattr(usage_info, "prompt_tokens_cost"):
-                                cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
+                                cost += Decimal(str(getattr(usage_info, "prompt_tokens_cost", 0.0)))
 
                 # Provide current tool call state if updated this chunk
                 if tool_calls_updated:
@@ -1031,10 +1035,14 @@ class LLMModel:
                         m.get("content", "") if isinstance(m, dict) else str(m)
                         for m in request.messages
                     )
-                    cost = litellm.completion_cost(
-                        model=model_str,
-                        prompt=prompt_str,
-                        completion=complete_content,
+                    cost = Decimal(
+                        str(
+                            litellm.completion_cost(
+                                model=model_str,
+                                prompt=prompt_str,
+                                completion=complete_content,
+                            )
+                        )
                     )
                     logger.info(f"Calculated streaming cost via litellm: ${cost:.6f}")
                 except Exception as e:

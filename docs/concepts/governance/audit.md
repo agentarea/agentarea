@@ -109,9 +109,7 @@ are joined by workspace and timestamp, not by a shared identifier.
 
 ## Limits
 
-- **Runtime governance decisions do not reach the audit log.** The governance
-  pipeline registers an `AuditObserver` on every phase, but it is constructed
-  without an event sink, so it logs at debug level and returns. No tool call, no
+- **Runtime governance decisions do not reach the audit log.** No tool call, no
   policy denial, no budget denial and no approval produces an `audit_events` row.
   Those live only in the task event stream and in application logs.
 - **Authorization grant changes are not audited.** Writing or revoking a

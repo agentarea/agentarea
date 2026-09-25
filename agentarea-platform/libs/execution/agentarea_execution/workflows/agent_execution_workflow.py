@@ -2305,9 +2305,9 @@ class AgentExecutionWorkflow:
                 iteration=self.state.current_iteration,
                 resolved_model=self.state.resolved_model,
                 effective_policy=self.state.effective_policy,
-                cost_used=float(self.budget_tracker.cost) if self.budget_tracker else None,
+                cost_used=self.budget_tracker.cost if self.budget_tracker else None,
                 tokens_used=self.state.tokens_used,
-                service_cost_used=float(self.state.service_cost_used),
+                service_cost_used=self.state.service_cost_used,
             )
 
             response: LLMCallResult = await workflow.execute_activity(
@@ -3601,9 +3601,9 @@ class AgentExecutionWorkflow:
                 tools=self.state.agent_config.get("tools"),
                 metadata=self._workflow_metadata or {},
                 effective_policy=self.state.effective_policy,
-                cost_used=float(self.budget_tracker.cost) if self.budget_tracker else None,
+                cost_used=self.budget_tracker.cost if self.budget_tracker else None,
                 tokens_used=self.state.tokens_used,
-                service_cost_used=float(self.state.service_cost_used),
+                service_cost_used=self.state.service_cost_used,
             )
 
             result_obj = await self._execute_governed_tool(
@@ -3639,8 +3639,8 @@ class AgentExecutionWorkflow:
             ) or result_dict.get(
                 "execution_time_seconds", getattr(result_obj, "execution_time_seconds", None)
             )
-            service_cost = float(
-                result_dict.get("service_cost", getattr(result_obj, "service_cost", 0.0)) or 0.0
+            service_cost = to_money(
+                result_dict.get("service_cost", getattr(result_obj, "service_cost", None))
             )
 
             # Failure path: surface the error to the LLM and emit ToolCallFailed
@@ -3679,8 +3679,8 @@ class AgentExecutionWorkflow:
                 await self._publish_events_immediately()
                 return
 
-            if service_cost > 0:
-                self.state.service_cost_used += to_money(service_cost)
+            if service_cost > ZERO:
+                self.state.service_cost_used += service_cost
 
             # Offload large outputs to MinIO (hybrid/dynamic strategy)
             result_text = await self._maybe_offload_output(result_text, tool_call.id)
@@ -3710,7 +3710,7 @@ class AgentExecutionWorkflow:
                     "result": sanitize_tool_event_value(result_text, field_name="result"),
                     "arguments": sanitize_tool_event_value(tool_args),
                     "execution_time": execution_time,
-                    "service_cost": service_cost,
+                    "service_cost": serialize_money(service_cost),
                     "payment": result_dict.get("payment"),
                     "source": result_dict.get("source"),
                     "server_instance_id": result_dict.get("server_instance_id"),

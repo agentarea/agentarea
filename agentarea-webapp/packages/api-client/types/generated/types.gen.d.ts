@@ -1589,7 +1589,7 @@ export type CreateWalletRequest = {
     /**
      * Service Budget Usd
      */
-    service_budget_usd?: number;
+    service_budget_usd?: number | string;
     /**
      * Wallet Type
      */
@@ -1690,7 +1690,7 @@ export type DiscoverPreviewModelResponse = {
     /**
      * Input Cost Per Token
      */
-    input_cost_per_token?: number | null;
+    input_cost_per_token?: string | null;
     /**
      * Is New
      */
@@ -1706,7 +1706,7 @@ export type DiscoverPreviewModelResponse = {
     /**
      * Output Cost Per Token
      */
-    output_cost_per_token?: number | null;
+    output_cost_per_token?: string | null;
     /**
      * Supports Function Calling
      */
@@ -1777,7 +1777,7 @@ export type DiscoveredModelResponse = {
     /**
      * Input Cost Per Token
      */
-    input_cost_per_token?: number | null;
+    input_cost_per_token?: string | null;
     /**
      * Is New
      */
@@ -1793,7 +1793,7 @@ export type DiscoveredModelResponse = {
     /**
      * Output Cost Per Token
      */
-    output_cost_per_token?: number | null;
+    output_cost_per_token?: string | null;
     /**
      * Supports Function Calling
      */
@@ -2133,7 +2133,7 @@ export type FundWalletRequest = {
     /**
      * Service Budget Usd
      */
-    service_budget_usd: number;
+    service_budget_usd: number | string;
 };
 /**
  * GovernanceOverlay
@@ -3217,7 +3217,7 @@ export type MppConfigSchema = {
     /**
      * Session Budget Usd
      */
-    session_budget_usd?: number;
+    session_budget_usd: number | string;
     /**
      * Stripe Profile Id
      */
@@ -3523,7 +3523,7 @@ export type ModelInstanceTestResponse = {
     /**
      * Cost
      */
-    cost?: number | null;
+    cost?: string | null;
     /**
      * Error Type
      */
@@ -3576,7 +3576,7 @@ export type ModelSpecCreate = {
     /**
      * Input Cost Per Token
      */
-    input_cost_per_token: number;
+    input_cost_per_token: number | string;
     /**
      * Is Active
      */
@@ -3592,7 +3592,7 @@ export type ModelSpecCreate = {
     /**
      * Output Cost Per Token
      */
-    output_cost_per_token: number;
+    output_cost_per_token: number | string;
     /**
      * Provider Spec Id
      */
@@ -3621,7 +3621,7 @@ export type ModelSpecUpdate = {
     /**
      * Input Cost Per Token
      */
-    input_cost_per_token?: number | null;
+    input_cost_per_token?: number | string | null;
     /**
      * Is Active
      */
@@ -3633,7 +3633,7 @@ export type ModelSpecUpdate = {
     /**
      * Output Cost Per Token
      */
-    output_cost_per_token?: number | null;
+    output_cost_per_token?: number | string | null;
 };
 /**
  * MoveWorkspaceFileRequest
@@ -4171,7 +4171,7 @@ export type PaymentRecordResponse = {
     /**
      * Amount Usd
      */
-    amount_usd: number;
+    amount_usd: string;
     /**
      * Created At
      */
@@ -7019,7 +7019,7 @@ export type UpdateWalletRequest = {
     /**
      * Service Budget Usd
      */
-    service_budget_usd?: number | null;
+    service_budget_usd?: number | string | null;
     /**
      * Status
      */
@@ -7161,7 +7161,7 @@ export type WalletBalanceResponse = {
     /**
      * Remaining
      */
-    remaining: number;
+    remaining: string;
     /**
      * Service Budget Period
      */
@@ -7169,11 +7169,11 @@ export type WalletBalanceResponse = {
     /**
      * Service Budget Usd
      */
-    service_budget_usd: number;
+    service_budget_usd: string;
     /**
      * Total Spent Current Period
      */
-    total_spent_current_period: number;
+    total_spent_current_period: string;
 };
 /**
  * WalletCredentialsSchema
@@ -7242,7 +7242,7 @@ export type WalletResponse = {
     /**
      * Service Budget Usd
      */
-    service_budget_usd: number;
+    service_budget_usd: string;
     /**
      * Status
      */
@@ -7422,7 +7422,7 @@ export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
     /**
      * Input Cost Per Token
      */
-    input_cost_per_token?: number | null;
+    input_cost_per_token?: string | null;
     /**
      * Is Active
      */
@@ -7438,7 +7438,7 @@ export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
     /**
      * Output Cost Per Token
      */
-    output_cost_per_token?: number | null;
+    output_cost_per_token?: string | null;
     /**
      * Provider Key
      */
@@ -7495,7 +7495,7 @@ export type AgentareaApiApiV1ProviderSpecsModelSpecResponse = {
     /**
      * Input Cost Per Token
      */
-    input_cost_per_token?: number | null;
+    input_cost_per_token?: string | null;
     /**
      * Is Active
      */
@@ -7511,7 +7511,7 @@ export type AgentareaApiApiV1ProviderSpecsModelSpecResponse = {
     /**
      * Output Cost Per Token
      */
-    output_cost_per_token?: number | null;
+    output_cost_per_token?: string | null;
     /**
      * Provider Spec Id
      */

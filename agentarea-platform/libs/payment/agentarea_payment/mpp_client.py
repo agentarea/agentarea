@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 from importlib import import_module
 from typing import Any
+
+from agentarea_common.money import ZERO
 
 from .models import PaymentResult
 
@@ -23,7 +26,7 @@ class MPPPaymentClient:
     def __init__(
         self,
         tempo_key: str,
-        session_budget_usd: float = 10.0,
+        session_budget_usd: Decimal,
         payment_method_types: list[str] | None = None,
         chain_id: int | None = None,
         rpc_url: str | None = None,
@@ -85,7 +88,7 @@ class MPPPaymentClient:
         body: Any | None,
         response_headers: dict[str, str],
         response_body: str | bytes,
-        budget_remaining: float,
+        budget_remaining: Decimal,
     ) -> PaymentResult:
         """Handle a 402 response by making an MPP payment."""
         import json
@@ -194,7 +197,7 @@ class MPPPaymentClient:
             return PaymentResult(
                 success=False,
                 protocol="mpp",
-                amount_usd=0,
+                amount_usd=ZERO,
                 recipient="",
                 error=f"pympp SDK not available: {e}",
             )
@@ -203,10 +206,10 @@ class MPPPaymentClient:
             return PaymentResult(
                 success=False,
                 protocol="mpp",
-                amount_usd=0,
+                amount_usd=ZERO,
                 recipient="",
                 error=f"MPP payment error: {e}",
             )
 
-    def _amount_usd(self, raw_amount: Any) -> float:
-        return float(raw_amount or 0) / (10**self._decimals)
+    def _amount_usd(self, raw_amount: Any) -> Decimal:
+        return Decimal(str(raw_amount or 0)) / (Decimal(10) ** self._decimals)

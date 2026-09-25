@@ -3,9 +3,11 @@
 import json
 import logging
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.money import ZERO
 
 from agentarea_wallet.domain.exceptions import (
     WalletAlreadyExistsError,
@@ -41,7 +43,7 @@ class WalletService:
         x402_config: dict | None = None,
         mpp_config: dict | None = None,
         credentials: dict | None = None,
-        service_budget_usd: float = 0.0,
+        service_budget_usd: Decimal = ZERO,
         service_budget_period: str = "execution",
     ) -> AgentWallet:
         """Create a new wallet for an agent.
@@ -129,7 +131,7 @@ class WalletService:
         x402_config: dict | None = None,
         mpp_config: dict | None = None,
         credentials: dict | None = None,
-        service_budget_usd: float | None = None,
+        service_budget_usd: Decimal | None = None,
         service_budget_period: str | None = None,
         status: str | None = None,
     ) -> AgentWallet:
@@ -225,7 +227,9 @@ class WalletService:
     # Budget
     # ------------------------------------------------------------------
 
-    async def get_service_budget_remaining(self, agent_id: UUID | str, execution_id: str) -> float:
+    async def get_service_budget_remaining(
+        self, agent_id: UUID | str, execution_id: str
+    ) -> Decimal:
         """Compute remaining budget for an agent based on its budget period.
 
         Args:
@@ -233,8 +237,8 @@ class WalletService:
             execution_id: Current execution identifier (used for "execution" period).
 
         Returns:
-            Remaining budget in USD. Returns 0.0 if no budget is configured (unlimited
-            wallets should be checked by the caller — a 0.0 budget means "no budget set").
+            Remaining budget in USD. Returns 0 if no budget is configured (unlimited
+            wallets should be checked by the caller — a 0 budget means "no budget set").
 
         Raises:
             WalletNotFoundError: If no wallet exists for this agent.
@@ -248,9 +252,9 @@ class WalletService:
             spent = await self._payments.sum_by_period(str(agent_id), period)
 
         remaining = wallet.service_budget_usd - spent
-        return max(remaining, 0.0)
+        return max(remaining, ZERO)
 
-    async def get_total_spent_current_period(self, agent_id: UUID | str) -> float:
+    async def get_total_spent_current_period(self, agent_id: UUID | str) -> Decimal:
         """Get total USD spent in the current budget period (no execution_id needed).
 
         For execution-scoped budgets, returns total across all executions (use
@@ -270,7 +274,7 @@ class WalletService:
         agent_id: str,
         execution_id: str,
         protocol: str,
-        amount_usd: float,
+        amount_usd: Decimal,
         recipient: str,
         tx_hash: str | None,
         tool_name: str,

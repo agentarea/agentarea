@@ -20,6 +20,7 @@ from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import datetime
+from decimal import Decimal
 from pathlib import PurePosixPath
 from typing import Any
 from uuid import UUID
@@ -43,7 +44,7 @@ from agentarea_common.auth.tool_authorization import (
     authorize_tool_invocation,
 )
 from agentarea_common.events.contract import LLM_FAILED, canonical_type
-from agentarea_common.money import ZERO, to_money
+from agentarea_common.money import ZERO, serialize_money, to_money, to_optional_money
 from agentarea_wallet.domain.enums import settlement_status
 from prometheus_client import Counter
 
@@ -1097,7 +1098,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     "success": False,
                     "already_settled": True,
                     "protocol": record.protocol,
-                    "amount_usd": record.amount_usd,
+                    "amount_usd": serialize_money(record.amount_usd),
                     "recipient": record.recipient,
                     "tx_hash": record.tx_hash,
                     "protocol_metadata": record.protocol_metadata or {},
@@ -1108,14 +1109,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     ),
                 }
 
-            async def get_payment_context() -> tuple[Any, Any, dict[str, Any], str, float] | None:
+            async def get_payment_context() -> tuple[Any, Any, dict[str, Any], str, Decimal] | None:
                 return None
 
             if request.agent_id:
                 agent_id = request.agent_id
 
                 async def get_payment_context() -> (
-                    tuple[Any, Any, dict[str, Any], str, float] | None
+                    tuple[Any, Any, dict[str, Any], str, Decimal] | None
                 ):
                     try:
                         wallet_service = await ctx.get_wallet_service()
@@ -1142,7 +1143,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     return wallet_service, wallet, wallet_config, execution_id, budget_remaining
 
                 async def record_payment_result(
-                    payment_context: tuple[Any, Any, dict[str, Any], str, float] | None,
+                    payment_context: tuple[Any, Any, dict[str, Any], str, Decimal] | None,
                     result: dict[str, Any] | None,
                     *,
                     tool_name: str,
@@ -1152,8 +1153,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         return
                     if result.get("protocol") not in {"x402", "mpp"}:
                         return
-                    amount = float(result.get("amount_usd") or 0.0)
-                    if amount <= 0:
+                    amount = to_money(result.get("amount_usd"))
+                    if amount <= ZERO:
                         return
                     wallet_service, wallet, _, execution_id, _ = payment_context
                     await wallet_service.record_payment(
@@ -1387,7 +1388,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     execution_time="",
                     error=mcp_result.get("error"),
                     service_cost=sum(
-                        float(p.get("amount_usd") or 0.0) for p in mcp_payments if p.get("success")
+                        (to_money(p.get("amount_usd")) for p in mcp_payments if p.get("success")),
+                        ZERO,
                     ),
                     payment=(
                         {"payments": mcp_payments}
@@ -1429,7 +1431,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     exit_code=result.get("exit_code"),
                     outcome=result.get("outcome"),
                     artifact_paths=[str(p) for p in (result.get("artifact_paths") or [])],
-                    service_cost=float(result.get("service_cost") or 0.0),
+                    service_cost=to_money(result.get("service_cost")),
                     payment=result.get("payment")
                     if isinstance(result.get("payment"), dict)
                     else None,
@@ -1960,8 +1962,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 model_name=str(model_name),
                 api_key=api_key,
                 endpoint_url=endpoint_url,
-                input_cost_per_token=input_cost_per_token,
-                output_cost_per_token=output_cost_per_token,
+                input_cost_per_token=to_optional_money(input_cost_per_token),
+                output_cost_per_token=to_optional_money(output_cost_per_token),
             )
 
             # Build compaction prompt
