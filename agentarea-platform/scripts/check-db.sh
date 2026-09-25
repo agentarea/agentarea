@@ -36,7 +36,11 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #   wallet ledger: a payment settled before its request failed still counts,
 #     and ledger sums are exact because money columns are numeric.
 #   model prices: a per-token price survives the numeric column exactly.
-PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL)
+#   platform-managed providers: a platform config is readable from every
+#     workspace and writable from none, a rule only the WHERE clause enforces.
+#   usage events: raw facts are append-only (a trigger) and paging never crosses
+#     workspaces.
+PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL USAGE_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
   libs/llm/tests/test_provider_secret_lifecycle_db.py
@@ -44,12 +48,15 @@ PY_SUITES=(
   libs/wallet/tests/test_payment_idempotency_db.py
   libs/wallet/tests/test_payment_ledger_db.py
   libs/llm/tests/test_model_spec_price_precision_db.py
+  libs/llm/tests/test_platform_managed_providers_db.py
+  libs/common/tests/test_usage_events_db.py
 )
 
-# MCP manager Go SQL: the demand gateway's lifecycle rules, and the secret
+# MCP manager Go SQL: the demand gateway's lifecycle rules, the secret
 # resolver's join that keeps one workspace's secrets out of another's
-# containers. MCP_GATEWAY_REQUIRE_DB turns a skipped test into a failure.
-GO_PACKAGES=(./internal/mcpgateway/... ./internal/secrets/...)
+# containers, and the usage store's idempotent, precision-preserving writes.
+# MCP_GATEWAY_REQUIRE_DB and USAGE_REQUIRE_DB turn a skipped test into a failure.
+GO_PACKAGES=(./internal/mcpgateway/... ./internal/secrets/... ./internal/usage/... ./cmd/mcp-manager/)
 
 # The operator's hand-written provider-config SQL; its unit tests mock the
 # connection away, which is how it once named a column no migration created.
@@ -74,6 +81,7 @@ echo "==> MCP manager SQL against the migrated schema"
 (
   cd "$REPO_DIR/agentarea-mcp-manager"
   MCP_GATEWAY_TEST_DATABASE_URL="postgres://$DSN?sslmode=disable" MCP_GATEWAY_REQUIRE_DB=1 \
+  USAGE_TEST_DATABASE_URL="postgres://$DSN?sslmode=disable" USAGE_REQUIRE_DB=1 \
     go test -v -count=1 "${GO_PACKAGES[@]}"
 )
 
