@@ -1969,9 +1969,14 @@
     "noSkills": "No skills available yet.",
     "manageSkills": "Create a skill",
     "attachTitle": "Add to this task",
-    "attachDescription": "Give this run MCP servers and skills on top of what the agent already has. Applies to this task only.",
+    "attachDescription": "Agent defaults stay as they are.",
     "mcpsHeading": "MCP servers",
-    "skillsHeading": "Skills"
+    "skillsHeading": "Skills",
+    "thisRun": "This run",
+    "manageSkillsLink": "Manage skills",
+    "manageMcpsLink": "Manage MCP servers",
+    "appliesInstantly": "Changes apply instantly",
+    "nothingFound": "Nothing matches “{query}”"
   },
   "QuickTask": {
     "title": "New task",

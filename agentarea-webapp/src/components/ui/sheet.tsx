@@ -38,8 +38,13 @@ const sheetVariants = cva(
         bottom:
           "inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
         left: "inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
+        // A phone gets the whole screen. From sm up the panel sits exactly
+        // over the page card's edge — the same 8px inset, corner and border as
+        // <main> in ConditionalLayout — so the grey frame around the app stays
+        // unbroken; the left corners, which face the page rather than the
+        // frame, are rounded a little more.
         right:
-          "inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
+          "inset-y-0 right-0 h-full w-full data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:inset-y-2 sm:right-2 sm:h-auto sm:max-w-sm sm:rounded-sm sm:rounded-l-lg sm:border sm:border-sidebar-border",
       },
     },
     defaultVariants: {

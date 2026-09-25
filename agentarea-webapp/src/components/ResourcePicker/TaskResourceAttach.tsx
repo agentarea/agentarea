@@ -3,19 +3,17 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
-import ConfigSheet from "@/components/ConfigSheet";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useAttachableResources } from "@/hooks/use-attachable-resources";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
-import { resolveMcpRef } from "@/lib/mcp/resolveMcpRef";
-import { McpPicker } from "./McpPicker";
-import { SkillPicker } from "./SkillPicker";
+import { skillDisplay } from "@/lib/skill-display";
+import { TaskResourcePanel } from "./TaskResourcePanel";
 
 const McpIcon = ENTITY_ICONS.mcp;
 const SkillIcon = ENTITY_ICONS.skill;
@@ -45,89 +43,8 @@ type TaskResourceAttachProps = {
  *
  * The agent owns its capabilities; this is the one-off addition for a task
  * being written right now, which is why it is additive and unconfigurable —
- * restricting an MCP's tools is a property of the agent, not of one run. The
- * pickers are the same ones the agent's own configuration uses, so a server
- * reads identically in both places.
+ * restricting an MCP's tools is a property of the agent, not of one run.
  */
-/**
- * The pickers themselves, split out so the three list requests fire when the
- * sheet is opened rather than on every composer render — this control sits in
- * the chat input, which is mounted on every page.
- */
-function AttachPickers({
-  mcps,
-  skills,
-  onMcpsChange,
-  onSkillsChange,
-}: Omit<TaskResourceAttachProps, "disabled">) {
-  const t = useTranslations("Pickers");
-  const resources = useAttachableResources();
-
-  // Same resolver the picker and the connections list use, so an attached
-  // server carries the logo you picked it by instead of a generic plug.
-  const resolveIcon = (instanceId: string) => {
-    const resolved = resolveMcpRef(
-      instanceId,
-      resources.mcpInstances,
-      resources.mcpServers
-    );
-    return resolved.status === "unresolved" ? null : (resolved.iconSrc ?? null);
-  };
-
-  return (
-    <div className="flex min-h-0 flex-col gap-5 overflow-y-auto pb-6">
-      <section className="space-y-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
-          <McpIcon className="h-4 w-4 text-muted-foreground" />
-          {t("mcpsHeading")}
-        </h3>
-        <McpPicker
-          resources={resources}
-          selectedIds={mcps.map((mcp) => mcp.id)}
-          onAdd={(instance) =>
-            onMcpsChange(
-              mcps.some((item) => item.id === instance.id)
-                ? mcps
-                : [
-                    ...mcps,
-                    {
-                      id: instance.id,
-                      name: instance.name,
-                      iconUrl: resolveIcon(instance.id),
-                    },
-                  ]
-            )
-          }
-          onRemove={(instance) =>
-            onMcpsChange(mcps.filter((item) => item.id !== instance.id))
-          }
-        />
-      </section>
-
-      <section className="space-y-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
-          <SkillIcon className="h-4 w-4 text-muted-foreground" />
-          {t("skillsHeading")}
-        </h3>
-        <SkillPicker
-          resources={resources}
-          selectedIds={skills.map((skill) => skill.id)}
-          onAdd={(skill) =>
-            onSkillsChange(
-              skills.some((item) => item.id === skill.id)
-                ? skills
-                : [...skills, { id: skill.id, name: skill.name }]
-            )
-          }
-          onRemove={(skill) =>
-            onSkillsChange(skills.filter((item) => item.id !== skill.id))
-          }
-        />
-      </section>
-    </div>
-  );
-}
-
 export function TaskResourceAttach({
   mcps,
   skills,
@@ -137,7 +54,11 @@ export function TaskResourceAttach({
 }: TaskResourceAttachProps) {
   const t = useTranslations("Pickers");
   const [open, setOpen] = useState(false);
-  const names = [...mcps, ...skills].map((ref) => ref.name ?? ref.id);
+  const names = [
+    ...mcps.map((ref) => ref.name ?? ref.id),
+    // Read the way the panel lists them, not as the raw imported slug.
+    ...skills.map((ref) => skillDisplay({ name: ref.name ?? ref.id }).title),
+  ];
 
   // A count per kind rather than a chip per resource: the chips wrapped the
   // composer's bottom row and crushed the agent and policy pickers beside them.
@@ -149,13 +70,9 @@ export function TaskResourceAttach({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <Tooltip>
-        <ConfigSheet
-          title={t("attachTitle")}
-          description={t("attachDescription")}
-          open={open}
-          onOpenChange={setOpen}
-          triggerComponent={
+      <Sheet modal={false} open={open} onOpenChange={setOpen}>
+        <Tooltip>
+          <SheetTrigger asChild>
             <TooltipTrigger asChild>
               {/* Sized and coloured like the agent/policy pickers beside it,
                   with the attach button's grey hover. */}
@@ -186,31 +103,35 @@ export function TaskResourceAttach({
                 )}
               </Button>
             </TooltipTrigger>
-          }
+          </SheetTrigger>
+          <TooltipContent side="top" className="max-w-64">
+            {names.length ? (
+              <ul className="space-y-0.5">
+                {names.map((name, index) => (
+                  <li key={index} className="truncate">
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              t("attachTitle")
+            )}
+          </TooltipContent>
+        </Tooltip>
+
+        <SheetContent
+          side="right"
+          hideOverlay
+          className="flex flex-col gap-0 overflow-hidden p-0 sm:w-[420px] sm:max-w-[420px]"
         >
-          {open && (
-            <AttachPickers
-              mcps={mcps}
-              skills={skills}
-              onMcpsChange={onMcpsChange}
-              onSkillsChange={onSkillsChange}
-            />
-          )}
-        </ConfigSheet>
-        <TooltipContent side="top" className="max-w-64">
-          {names.length ? (
-            <ul className="space-y-0.5">
-              {names.map((name, index) => (
-                <li key={index} className="truncate">
-                  {name}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            t("attachTitle")
-          )}
-        </TooltipContent>
-      </Tooltip>
+          <TaskResourcePanel
+            mcps={mcps}
+            skills={skills}
+            onMcpsChange={onMcpsChange}
+            onSkillsChange={onSkillsChange}
+          />
+        </SheetContent>
+      </Sheet>
     </TooltipProvider>
   );
 }

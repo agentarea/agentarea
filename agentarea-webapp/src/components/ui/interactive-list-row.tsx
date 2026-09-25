@@ -22,6 +22,8 @@ interface InteractiveListRowProps {
   indicator?: ReactNode;
   onClick?: () => void;
   selected?: boolean;
+  /** For a clickable row that toggles something: announced as aria-pressed. */
+  pressed?: boolean;
   className?: string;
   dividerClassName?: string;
   contentClassName?: string;
@@ -45,6 +47,7 @@ export function InteractiveListRow({
   indicator,
   onClick,
   selected = false,
+  pressed,
   className,
   dividerClassName = "border-b border-zinc-200 dark:border-zinc-700",
   contentClassName,
@@ -74,6 +77,7 @@ export function InteractiveListRow({
     <div
       role={isClickable ? "button" : undefined}
       tabIndex={isClickable ? 0 : undefined}
+      aria-pressed={isClickable ? pressed : undefined}
       onClick={onClick}
       onKeyDown={handleKeyDown}
       className={cn(

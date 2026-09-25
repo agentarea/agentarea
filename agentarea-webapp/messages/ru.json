@@ -1970,9 +1970,14 @@
     "noSkills": "Пока нет ни одного навыка.",
     "manageSkills": "Создать навык",
     "attachTitle": "Добавить к задаче",
-    "attachDescription": "Дать этому запуску MCP-серверы и навыки сверх тех, что уже есть у агента. Действует только на эту задачу.",
+    "attachDescription": "Настройки агента не меняются.",
     "mcpsHeading": "MCP-серверы",
-    "skillsHeading": "Навыки"
+    "skillsHeading": "Навыки",
+    "thisRun": "Только эта задача",
+    "manageSkillsLink": "Управлять навыками",
+    "manageMcpsLink": "Управлять MCP-серверами",
+    "appliesInstantly": "Изменения применяются сразу",
+    "nothingFound": "Ничего не найдено по запросу «{query}»"
   },
   "QuickTask": {
     "title": "Новая задача",
