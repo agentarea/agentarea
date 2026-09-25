@@ -188,7 +188,7 @@ class TriggerExecutionWorkflow:
             return execution_result
 
         except ApplicationError as e:
-            workflow.logger.error(f"Trigger {trigger_id} execution failed: {e}")
+            workflow.logger.error(f"Trigger {trigger_id} execution failed: {e}", exc_info=True)
 
             execution_time_ms = int(
                 (workflow.now() - self.execution_start_time).total_seconds() * 1000
@@ -228,7 +228,9 @@ class TriggerExecutionWorkflow:
             raise
 
         except Exception as e:
-            workflow.logger.error(f"Unexpected error in trigger {trigger_id} execution: {e}")
+            workflow.logger.error(
+                f"Unexpected error in trigger {trigger_id} execution: {e}", exc_info=True
+            )
 
             execution_time_ms = int(
                 (workflow.now() - self.execution_start_time).total_seconds() * 1000

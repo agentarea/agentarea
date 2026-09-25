@@ -107,7 +107,7 @@ async def handle_402_payment(
             "protocol_metadata": result.protocol_metadata,
         }
     except ImportError:
-        logger.warning("Payment library not available, cannot handle 402")
+        logger.warning("Payment library not available, cannot handle 402", exc_info=True)
         return {
             "success": False,
             "protocol": "unknown",

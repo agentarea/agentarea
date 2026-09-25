@@ -34,10 +34,8 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
-from agentarea_execution.workflows.agent_execution_workflow import (
-    MONTHLY_CAP_AT_START_PATCH,
-    AgentExecutionWorkflow,
-)
+from agentarea_execution.workflows.agent.patches import MONTHLY_CAP_AT_START_PATCH
+from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio import activity, workflow
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.testing import WorkflowEnvironment

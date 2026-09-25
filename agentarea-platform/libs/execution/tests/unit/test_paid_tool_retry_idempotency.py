@@ -21,6 +21,7 @@ import pytest
 from agentarea_agents_sdk.tools.base_tool import BaseTool
 from agentarea_execution.activities import agent_execution_activities as activities
 from agentarea_execution.activities import mcp_payment_httpx, payment_handler
+from agentarea_execution.activities.agent import tools as tool_activities
 from agentarea_execution.models import MCPToolRequest, McpToolRoute
 from temporalio.testing import ActivityEnvironment
 
@@ -106,7 +107,7 @@ def activity_fns(monkeypatch, wallet_service):
     ctx.get_openapi_connection_service = AsyncMock()
     monkeypatch.setattr(dependencies, "ActivityServiceContainer", MagicMock())
     monkeypatch.setattr(dependencies, "ActivityContext", MagicMock(return_value=ctx))
-    monkeypatch.setattr(activities, "_offload_large_activity_output", CancelledAfterTool())
+    monkeypatch.setattr(tool_activities, "_offload_large_activity_output", CancelledAfterTool())
     fns = {fn.__name__: fn for fn in activities.make_agent_activities(MagicMock())}
     return ctx, fns["execute_mcp_tool_activity"]
 
@@ -359,5 +360,7 @@ def test_call_ref_without_tool_call_id_uses_the_activity_identity():
     )
     request = _request(tool_call_id=None)
 
-    assert env.run(activities._payment_call_ref, request) == "wf-1:run-1:7"
-    assert activities._payment_call_ref(_request(task_id="t-1", tool_call_id="c-1")) == "t-1:c-1"
+    assert env.run(tool_activities._payment_call_ref, request) == "wf-1:run-1:7"
+    assert (
+        tool_activities._payment_call_ref(_request(task_id="t-1", tool_call_id="c-1")) == "t-1:c-1"
+    )

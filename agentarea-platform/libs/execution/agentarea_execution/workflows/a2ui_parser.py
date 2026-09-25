@@ -81,7 +81,7 @@ def parse_a2ui_response(content: str) -> A2UIParseResult:
     try:
         parsed = json.loads(json_part)
     except json.JSONDecodeError as e:
-        logger.warning(f"Invalid A2UI JSON: {e}")
+        logger.warning(f"Invalid A2UI JSON: {e}", exc_info=True)
         return A2UIParseResult(
             text_content=text_part,
             raw_json=json_part,

@@ -506,6 +506,7 @@ async def test_error_publication_failure_does_not_replace_provider_error(
 def activity_boundary(monkeypatch):
     from agentarea_execution.activities import agent_execution_activities as activities
     from agentarea_execution.activities import dependencies
+    from agentarea_execution.activities.agent import llm as llm_activities
 
     # The cached-model route never needs the container's database-backed services.
     monkeypatch.setattr(dependencies, "ActivityServiceContainer", Mock())
@@ -518,7 +519,7 @@ def activity_boundary(monkeypatch):
         broker_client=None,
     )
     enriched_error = AsyncMock()
-    monkeypatch.setattr(activities, "publish_enriched_llm_error_event", enriched_error)
+    monkeypatch.setattr(llm_activities, "publish_enriched_llm_error_event", enriched_error)
     functions = {fn.__name__: fn for fn in activities.make_agent_activities(injected)}
     return SimpleNamespace(
         call=functions["call_llm_activity"], errors=enriched_error, dependencies=injected
