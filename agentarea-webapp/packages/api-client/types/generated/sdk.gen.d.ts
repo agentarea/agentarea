@@ -690,6 +690,12 @@ export declare const getInboxItemsV1InboxGet: <ThrowOnError extends boolean = fa
  *
  * An invitation sent to an email address is only accepted by the account
  * signed in under that address. Idempotent for the same acceptor.
+ *
+ * The invitation is committed as accepted before membership is granted, so
+ * the acceptor's retry grants it while they hold no membership record: a
+ * graph outage on the first call must not leave them permanently outside.
+ * A removed member's replay is refused before this, because removal revokes
+ * the invitation they joined through.
  */
 export declare const acceptInvitationV1InvitationsAcceptPost: <ThrowOnError extends boolean = false>(options: Options<AcceptInvitationV1InvitationsAcceptPostData, ThrowOnError>) => RequestResult<AcceptInvitationV1InvitationsAcceptPostResponses, AcceptInvitationV1InvitationsAcceptPostErrors, ThrowOnError>;
 /**
@@ -1248,6 +1254,9 @@ export declare const getProviderLogoV1ProviderConfigsAdminProviderKeyLogoGet: <T
  * Discover Models Preview
  *
  * Discover models from a provider API using the provided API key, without requiring a saved config.
+ *
+ * Not a dry run: the discovered specs, prices included, are persisted so the
+ * caller can pick models by id. That makes it a price write.
  */
 export declare const discoverModelsPreviewV1ProviderConfigsDiscoverPreviewPost: <ThrowOnError extends boolean = false>(options: Options<DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostData, ThrowOnError>) => RequestResult<DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostResponses, DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostErrors, ThrowOnError>;
 /**
