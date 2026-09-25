@@ -60,7 +60,6 @@ from . import (
     skill_collections,
     skills,
     triggers,
-    usage,
     wallet,
     workspace_config,
     workspace_invitations,
@@ -211,7 +210,6 @@ workspace_v1_router.include_router(clients.router)
 
 # Audit logs
 workspace_v1_router.include_router(audit.router)
-workspace_v1_router.include_router(usage.router)
 
 # Dashboard + workspace settings
 workspace_v1_router.include_router(dashboard.router)

@@ -3224,33 +3224,6 @@ export const zUploadPlanResponse = z.object({
 });
 
 /**
- * UsageEventResponse
- */
-export const zUsageEventResponse = z.object({
-  data_json: z.string(),
-  id: z.string(),
-  incarnation_id: z.string(),
-  kind: z.string(),
-  occurred_at: z.string(),
-  received_at: z.string(),
-  resource_id: z.string(),
-  resource_kind: z.string(),
-  schema_version: z.number().int(),
-  sequence: z.string(),
-  source: z.string(),
-  task_id: z.string(),
-  workspace_id: z.string(),
-});
-
-/**
- * UsageEventListResponse
- */
-export const zUsageEventListResponse = z.object({
-  events: z.array(zUsageEventResponse),
-  next_cursor: z.string().nullable(),
-});
-
-/**
  * ValidateRequest
  */
 export const zValidateRequest = z.object({
@@ -6112,26 +6085,6 @@ export const zGetExecutionTimelineV1TriggersTriggerIdTimelineGetQuery =
  */
 export const zGetExecutionTimelineV1TriggersTriggerIdTimelineGetResponse =
   zExecutionTimelineResponse;
-
-export const zListUsageEventsV1UsageEventsGetQuery = z.object({
-  source: z.string().nullish(),
-  kind: z.string().nullish(),
-  resource_kind: z.string().nullish(),
-  resource_id: z.string().nullish(),
-  task_id: z.string().nullish(),
-  from: z.string().nullish(),
-  until: z.string().nullish(),
-  cursor: z
-    .string()
-    .regex(/^[1-9]\d{0,18}$/)
-    .nullish(),
-  limit: z.number().int().gte(1).lte(100).optional().default(50),
-});
-
-/**
- * Successful Response
- */
-export const zListUsageEventsV1UsageEventsGetResponse = zUsageEventListResponse;
 
 /**
  * Response Webhook Health Check Webhooks Health Get

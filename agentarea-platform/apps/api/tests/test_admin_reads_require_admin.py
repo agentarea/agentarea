@@ -44,7 +44,6 @@ ADMIN_READS = [
     f"/v1/workspaces/{WORKSPACE}/network/people-access",
     f"/v1/workspaces/{WORKSPACE}/policies",
     f"/v1/workspaces/{WORKSPACE}/policies/{SOME_ID}",
-    f"/v1/workspaces/{WORKSPACE}/usage/events",
     f"/v1/workspaces/{WORKSPACE}/export",
     f"/v1/workspaces/{WORKSPACE}/invitations",
 ]

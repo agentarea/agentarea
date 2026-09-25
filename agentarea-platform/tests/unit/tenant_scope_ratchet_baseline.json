@@ -8,7 +8,6 @@
     "apps/worker/agentarea_worker/cli.py": 1,
     "apps/worker/agentarea_worker/main.py": 1,
     "libs/agents/agentarea_agents/domain/skill_models.py": 1,
-    "libs/common/agentarea_common/usage/models.py": 3,
     "libs/mcp/agentarea_mcp/container_monitor.py": 2,
     "libs/registry/agentarea_registry/domain/models.py": 7,
     "libs/tasks/agentarea_tasks/infrastructure/orm.py": 1,
