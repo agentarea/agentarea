@@ -14,7 +14,8 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig, ProviderSpec
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
-from sqlalchemy import select
+from agentarea_secrets.models import EncryptedSecret
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 PROVIDER_SPEC_ID = uuid4()
@@ -23,11 +24,18 @@ PROVIDER_SPEC_ID = uuid4()
 @pytest.fixture
 async def session_factory():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    # CI's SQLite enforces foreign keys; enforce them here too.
+    event.listen(
+        engine.sync_engine,
+        "connect",
+        lambda dbapi_connection, _record: dbapi_connection.execute("PRAGMA foreign_keys=ON"),
+    )
     async with engine.begin() as conn:
         await conn.run_sync(
             lambda sync_conn: BaseModel.metadata.create_all(
                 sync_conn,
                 tables=[
+                    EncryptedSecret.__table__,
                     ProviderSpec.__table__,
                     ProviderConfig.__table__,
                     ModelSpec.__table__,
@@ -35,8 +43,21 @@ async def session_factory():
                 ],
             )
         )
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    async with factory() as session:
+        session.add(
+            ProviderSpec(
+                id=PROVIDER_SPEC_ID,
+                provider_key="openai",
+                name="OpenAI",
+                provider_type="openai",
+                workspace_id="platform",
+                created_by="test",
+            )
+        )
+        await session.commit()
     try:
-        yield async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+        yield factory
     finally:
         await engine.dispose()
 

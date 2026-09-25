@@ -22,7 +22,8 @@ from agentarea_llm.infrastructure.model_instance_repository import ModelInstance
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
-from sqlalchemy import select
+from agentarea_secrets.models import EncryptedSecret
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 WORKSPACE = "ws-billed"
@@ -32,11 +33,18 @@ OTHER = "ws-attacker-owned"
 @pytest.fixture
 async def session_factory():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    # CI's SQLite enforces foreign keys; enforce them here too.
+    event.listen(
+        engine.sync_engine,
+        "connect",
+        lambda dbapi_connection, _record: dbapi_connection.execute("PRAGMA foreign_keys=ON"),
+    )
     async with engine.begin() as conn:
         await conn.run_sync(
             lambda sync_conn: BaseModel.metadata.create_all(
                 sync_conn,
                 tables=[
+                    EncryptedSecret.__table__,
                     ProviderSpec.__table__,
                     ProviderConfig.__table__,
                     ModelSpec.__table__,
