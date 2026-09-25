@@ -207,3 +207,37 @@ async def test_removal_revokes_the_invitation_so_it_cannot_be_replayed(session_f
     async with session_factory() as session:
         stored = (await session.execute(select(WorkspaceInvitation))).scalar_one()
     assert stored.status == INVITATION_STATUS_REVOKED
+
+
+async def test_the_membership_check_holds_no_database_connection(session_factory, graph):
+    """The graph is a network call; a pooled connection must not wait on it."""
+    open_sessions = 0
+
+    class _Tracked:
+        def __init__(self) -> None:
+            self._session = session_factory()
+
+        async def __aenter__(self):
+            nonlocal open_sessions
+            open_sessions += 1
+            return await self._session.__aenter__()
+
+        async def __aexit__(self, *exc):
+            nonlocal open_sessions
+            open_sessions -= 1
+            return await self._session.__aexit__(*exc)
+
+    sessions_during_check: list[int] = []
+    real_check = graph.check
+
+    async def check(**kwargs):
+        sessions_during_check.append(open_sessions)
+        return await real_check(**kwargs)
+
+    graph.check = check
+    database = SimpleNamespace(async_session_factory=_Tracked)
+    with patch("agentarea_common.config.get_database", return_value=database):
+        context = await _authenticate(MEMBER_KEY)
+
+    assert context is not None
+    assert sessions_during_check == [0]
