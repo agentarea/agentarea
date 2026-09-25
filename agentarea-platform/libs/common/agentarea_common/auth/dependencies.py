@@ -577,7 +577,7 @@ async def resolve_user_context_from_token(
                 return None
             ContextManager.set_context(hydra_context)
             return hydra_context
-        logger.warning(f"Error during token resolution: {e}")
+        logger.warning(f"Error during token resolution: {e}", exc_info=True)
         return None
 
 

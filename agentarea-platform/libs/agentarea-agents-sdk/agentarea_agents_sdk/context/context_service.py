@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -80,9 +83,9 @@ def create_context_event_listener(
                     type=getattr(evt, "type", "event"), payload=getattr(evt, "payload", {})
                 ),
             )
-        except Exception:  # noqa: S110
+        except Exception:
             # best-effort persistence – do not crash agent flow
-            pass
+            logger.warning("Failed to persist context event for task %s", task_id, exc_info=True)
 
     return _listener
 

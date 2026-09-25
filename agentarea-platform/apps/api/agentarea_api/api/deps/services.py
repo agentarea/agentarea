@@ -485,7 +485,7 @@ async def get_trigger_service(
                 model_instance_service=model_instance_service, secret_manager=secret_manager
             )
         except Exception as e:
-            logger.warning(f"LLM condition evaluator not available: {e}")
+            logger.warning(f"LLM condition evaluator not available: {e}", exc_info=True)
 
     # Create temporal schedule manager
     temporal_schedule_manager = None
@@ -495,7 +495,7 @@ async def get_trigger_service(
             task_queue=settings.triggers.TEMPORAL_SCHEDULE_TASK_QUEUE,
         )
     except Exception as e:
-        logger.warning(f"Temporal schedule manager not available: {e}")
+        logger.warning(f"Temporal schedule manager not available: {e}", exc_info=True)
 
     return TriggerService(
         repository_factory=repository_factory,
@@ -675,7 +675,9 @@ async def get_trigger_health_check(
             task_queue=settings.triggers.TEMPORAL_SCHEDULE_TASK_QUEUE,
         )
     except Exception as e:
-        logger.warning(f"Temporal schedule manager not available for health check: {e}")
+        logger.warning(
+            f"Temporal schedule manager not available for health check: {e}", exc_info=True
+        )
 
     return TriggerSystemHealthCheck(
         trigger_repository=trigger_repository,

@@ -120,7 +120,7 @@ class OutboxRelay:
                     await repo.mark_failed(row.id, str(exc))
                     # mark_failed already incremented the row's attempts.
                     if row.attempts >= self._max_attempts:
-                        logger.error(
+                        logger.exception(
                             "OutboxRelay giving up on event %s (type=%s) after %d attempts: %s",
                             row.event_id,
                             row.event_type,

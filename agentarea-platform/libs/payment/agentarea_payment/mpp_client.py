@@ -77,7 +77,9 @@ class MPPPaymentClient:
             self._client = client
             return client
         except ImportError:
-            logger.warning("pympp SDK not installed. Install with: pip install pympp")
+            logger.warning(
+                "pympp SDK not installed. Install with: pip install pympp", exc_info=True
+            )
             raise
 
     async def handle_402(

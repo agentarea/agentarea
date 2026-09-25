@@ -277,7 +277,7 @@ async def _resolve_token(
         creds = json.loads(raw)
     except json.JSONDecodeError as exc:
         # Stored blob is corrupt — caller will surface as FatalError.
-        logger.error("Corrupt credentials blob for %s trigger %s: %s", ch_type, trigger_id, exc)
+        logger.exception("Corrupt credentials blob for %s trigger %s: %s", ch_type, trigger_id, exc)
         return None
     return creds.get("bot_token")
 

@@ -648,7 +648,9 @@ async def get_containers_health(
         try:
             response = await client.get(url)
         except httpx.RequestError as e:
-            logger.warning("MCP manager unreachable for instance %s: %s", instance.id, e)
+            logger.warning(
+                "MCP manager unreachable for instance %s: %s", instance.id, e, exc_info=True
+            )
             return {**row, "healthy": False, "status": "manager_unreachable"}
 
         # The manager answers 200 when healthy and 503 when not, both with the
@@ -657,7 +659,7 @@ async def get_containers_health(
             try:
                 body = response.json()
             except ValueError:
-                logger.error("MCP manager sent unreadable health for %s", instance.id)
+                logger.exception("MCP manager sent unreadable health for %s", instance.id)
                 return {**row, "healthy": False, "status": "unreadable"}
             if not isinstance(body, dict):
                 return {**row, "healthy": False, "status": "unreadable"}

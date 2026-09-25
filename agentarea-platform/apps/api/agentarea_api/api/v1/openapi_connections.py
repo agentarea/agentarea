@@ -118,7 +118,7 @@ async def preview_spec(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except httpx.RequestError as e:
-            logger.error("Failed to fetch spec from %s: %s", request.spec_url, e)
+            logger.exception("Failed to fetch spec from %s: %s", request.spec_url, e)
             raise HTTPException(
                 status_code=400, detail="Failed to fetch spec from the provided URL."
             ) from e
@@ -175,7 +175,7 @@ async def create_connection(
             detail=f"Failed to fetch spec: HTTP {e.response.status_code}",
         ) from e
     except httpx.RequestError as e:
-        logger.error("Failed to fetch spec during connection create: %s", e)
+        logger.exception("Failed to fetch spec during connection create: %s", e)
         raise HTTPException(
             status_code=400, detail="Failed to fetch spec from the provided URL."
         ) from e
@@ -279,5 +279,5 @@ async def discover_tools(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Failed to discover tools for {connection_id}: {e}")
+        logger.exception(f"Failed to discover tools for {connection_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to discover tools") from e

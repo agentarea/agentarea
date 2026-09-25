@@ -711,7 +711,7 @@ class TaskService(BaseTaskService):
                 return filtered_tasks[:limit]
 
         except Exception as e:
-            logger.error(f"Failed to get recent tasks: {e}")
+            logger.exception(f"Failed to get recent tasks: {e}")
             # Return empty list on error to not break monitoring
             return []
 
@@ -1048,7 +1048,7 @@ class TaskService(BaseTaskService):
             # reporting it as a generic "failed" task would hide the cause.
             raise
         except Exception as e:
-            logger.error(f"Failed to submit task: {e}")
+            logger.exception(f"Failed to submit task: {e}")
             stored_task.status = "failed"
             stored_task.result = {"error": str(e), "error_type": "task_submission_failed"}
 

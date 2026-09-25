@@ -105,10 +105,10 @@ class KratosAuthProvider(BaseAuthProvider):
         except jwt.ExpiredSignatureError:
             return AuthResult(is_authenticated=False, error="Token has expired")
         except jwt.InvalidTokenError as e:
-            logger.error(f"Invalid token: {e}")
+            logger.exception(f"Invalid token: {e}")
             return AuthResult(is_authenticated=False, error=f"Invalid token: {e!s}")
         except Exception as e:
-            logger.error(f"Error verifying token: {e}")
+            logger.exception(f"Error verifying token: {e}")
             return AuthResult(is_authenticated=False, error=f"Error verifying token: {e!s}")
 
     async def get_user_info(self, user_id: str) -> dict[str, Any] | None:

@@ -412,7 +412,9 @@ async def proxy_instance(
     except ValueError as exc:
         # Strip CR/LF from the user-controlled path param to prevent log forging.
         safe_instance_id = str(instance_id).replace("\r", "").replace("\n", "")
-        logger.warning("Rejected SSRF-unsafe MCP upstream for %s: %s", safe_instance_id, exc)
+        logger.warning(
+            "Rejected SSRF-unsafe MCP upstream for %s: %s", safe_instance_id, exc, exc_info=True
+        )
         raise HTTPException(
             status_code=400, detail=f"Upstream MCP URL is not allowed: {exc}"
         ) from exc
@@ -470,7 +472,7 @@ async def proxy_instance(
         upstream_resp = await client.send(upstream_req, stream=True)
     except httpx.HTTPError as exc:
         await client.aclose()
-        logger.warning("Upstream MCP error for %s: %s", instance_id, exc)
+        logger.warning("Upstream MCP error for %s: %s", instance_id, exc, exc_info=True)
         raise HTTPException(status_code=502, detail=f"Upstream MCP error: {exc}") from exc
 
     async def _iter():

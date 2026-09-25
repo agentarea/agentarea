@@ -147,8 +147,8 @@ class LLMModel:
                     parsed = json.loads(c)
                     if isinstance(parsed, list | dict):
                         return parsed
-                except Exception:  # noqa: S110
-                    pass
+                except Exception:
+                    logger.debug("Message content is not JSON; passing it as text", exc_info=True)
             return content
 
         # Fallback to string
@@ -198,8 +198,8 @@ class LLMModel:
                                 "function": fn,
                             }
                         )
-                    except Exception:  # noqa: S110
-                        pass
+                    except Exception:
+                        logger.warning("Dropping malformed tool call from message", exc_info=True)
             return {
                 "role": "assistant",
                 "content": self._to_content_parts(msg.content, msg.metadata),
@@ -536,7 +536,7 @@ class LLMModel:
                 "error_message": str(e),
             }
 
-            logger.error(f"LLM call failed with context: {error_context}")
+            logger.exception(f"LLM call failed with context: {error_context}")
 
             # Re-raise with original exception to preserve stack trace
             raise
@@ -764,7 +764,7 @@ class LLMModel:
                                 total_tokens=prompt_tokens + completion_tokens,
                             )
                 except Exception as e:
-                    logger.warning(f"Failed to calculate cost via litellm: {e}")
+                    logger.warning(f"Failed to calculate cost via litellm: {e}", exc_info=True)
 
             # Return complete response
             result = LLMResponse(
@@ -793,7 +793,7 @@ class LLMModel:
                 "streaming": True,
             }
 
-            logger.error(f"Streaming LLM call failed with context: {error_context}")
+            logger.exception(f"Streaming LLM call failed with context: {error_context}")
 
             # Re-raise with original exception to preserve stack trace
             raise
@@ -1046,7 +1046,7 @@ class LLMModel:
                     )
                     logger.info(f"Calculated streaming cost via litellm: ${cost:.6f}")
                 except Exception as e:
-                    logger.warning(f"Failed to calculate streaming cost: {e}")
+                    logger.warning(f"Failed to calculate streaming cost: {e}", exc_info=True)
 
             # Yield final cost/usage
             if cost > 0.0:
@@ -1069,7 +1069,7 @@ class LLMModel:
                 "streaming": True,
             }
 
-            logger.error(f"Streaming LLM call failed with context: {error_context}")
+            logger.exception(f"Streaming LLM call failed with context: {error_context}")
 
             # Re-raise with original exception to preserve stack trace
             raise

@@ -264,7 +264,7 @@ class DirectTaskManager(BaseTaskManager):
             self._tasks[task.id] = task
 
         except Exception as e:
-            logger.error(f"DirectTaskManager: execution failed: {e}")
+            logger.exception(f"DirectTaskManager: execution failed: {e}")
             task.status = "failed"
             task.error_message = str(e)
             task.result = {

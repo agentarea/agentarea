@@ -216,6 +216,7 @@ class ChannelDeliveryConsumer:
                 dedup_key,
                 msg.delivery_count,
                 exc,
+                exc_info=True,
             )
             # CRITICAL: release the dedup claim so the broker's redelivery
             # (or XAUTOCLAIM hand-off to another consumer) can actually

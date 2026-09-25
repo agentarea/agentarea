@@ -60,7 +60,7 @@ class LLMErrorHandler:
                 )
 
         except Exception as e:
-            logger.error(f"Error handling auth failure event: {e}")
+            logger.exception(f"Error handling auth failure event: {e}")
 
     async def handle_rate_limit(self, event: DomainEvent) -> None:
         """Handle LLM rate limiting events."""
@@ -80,7 +80,7 @@ class LLMErrorHandler:
             # Could implement backoff strategies or model switching here
 
         except Exception as e:
-            logger.error(f"Error handling rate limit event: {e}")
+            logger.exception(f"Error handling rate limit event: {e}")
 
     async def handle_quota_exceeded(self, event: DomainEvent) -> None:
         """Handle LLM quota exceeded events."""
@@ -103,7 +103,7 @@ class LLMErrorHandler:
             # - Send urgent notification to administrators
 
         except Exception as e:
-            logger.error(f"Error handling quota exceeded event: {e}")
+            logger.exception(f"Error handling quota exceeded event: {e}")
 
     async def handle_model_not_found(self, event: DomainEvent) -> None:
         """Handle model not found events."""
@@ -124,7 +124,7 @@ class LLMErrorHandler:
             # - Update model configuration
 
         except Exception as e:
-            logger.error(f"Error handling model not found event: {e}")
+            logger.exception(f"Error handling model not found event: {e}")
 
     def get_error_summary(self) -> dict[str, Any]:
         """Get summary of error patterns."""

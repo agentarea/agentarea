@@ -501,7 +501,7 @@ async def get_all_tasks(
         return paginated_tasks
 
     except Exception as e:
-        logger.error(f"Failed to get all tasks: {e}")
+        logger.exception(f"Failed to get all tasks: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -547,7 +547,7 @@ async def get_task_by_id(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get task {task_id}: {e}")
+        logger.exception(f"Failed to get task {task_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1079,7 +1079,7 @@ async def list_agent_tasks(
         return paginated_tasks
 
     except Exception as e:
-        logger.error(f"Failed to get tasks for agent {agent_id}: {e}")
+        logger.exception(f"Failed to get tasks for agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1240,7 +1240,7 @@ async def _sandbox_manager_request(
                 headers={"Authorization": f"Bearer {secret.get_secret_value()}"},
             )
     except httpx.RequestError as exc:
-        logger.warning("Sandbox manager request failed: %s", exc)
+        logger.warning("Sandbox manager request failed: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=503, detail="Sandbox file access is temporarily unavailable"
         ) from exc
@@ -1267,7 +1267,7 @@ async def _sandbox_manager_stream(
         response = await client.send(request, stream=True)
     except httpx.RequestError as exc:
         await client.aclose()
-        logger.warning("Sandbox manager streaming request failed: %s", exc)
+        logger.warning("Sandbox manager streaming request failed: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=503, detail="Sandbox file access is temporarily unavailable"
         ) from exc
@@ -1346,7 +1346,7 @@ async def _list_task_artifact_items(
     try:
         result = _ManagerArtifactList.model_validate(response.json())
     except (ValueError, ValidationError) as exc:
-        logger.error("Sandbox manager returned an invalid artifact list: %s", exc)
+        logger.exception("Sandbox manager returned an invalid artifact list: %s", exc)
         raise HTTPException(status_code=502, detail="Artifact list response is invalid") from exc
     return [
         TaskArtifactItem(
@@ -1477,7 +1477,7 @@ async def list_task_sandbox_files(
     try:
         result = _ManagerSandboxFileList.model_validate(response.json())
     except (ValueError, ValidationError) as exc:
-        logger.error("Sandbox manager returned an invalid file list: %s", exc)
+        logger.exception("Sandbox manager returned an invalid file list: %s", exc)
         raise HTTPException(status_code=502, detail="Sandbox file list is invalid") from exc
     items = [SandboxFileItem(path=path) for path in result.paths]
     return SandboxFileListResponse(items=items, total=len(items))
@@ -1686,7 +1686,7 @@ async def pause_agent_task(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to pause task {task_id} for agent {agent_id}: {e}")
+        logger.exception(f"Failed to pause task {task_id} for agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1748,7 +1748,7 @@ async def resume_agent_task(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to resume task {task_id} for agent {agent_id}: {e}")
+        logger.exception(f"Failed to resume task {task_id} for agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1803,7 +1803,7 @@ async def send_a2ui_action(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to send A2UI action for task {task_id}: {e}")
+        logger.exception(f"Failed to send A2UI action for task {task_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -2152,7 +2152,7 @@ async def get_task_events(
         )
 
     except Exception as e:
-        logger.error(f"Failed to get task events for task {task_id}: {e}")
+        logger.exception(f"Failed to get task events for task {task_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -2243,7 +2243,7 @@ async def stream_task_events(
                     yield chunk
 
             except Exception as e:
-                logger.error(f"Fatal error in SSE stream for task {task_id}: {e}")
+                logger.exception(f"Fatal error in SSE stream for task {task_id}: {e}")
                 yield _format_sse_event(
                     "error",
                     {
@@ -2269,7 +2269,7 @@ async def stream_task_events(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to create SSE stream for task {task_id}: {e}")
+        logger.exception(f"Failed to create SSE stream for task {task_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 

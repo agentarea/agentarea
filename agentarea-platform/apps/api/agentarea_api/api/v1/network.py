@@ -207,7 +207,7 @@ async def get_network_topology(
                 )
                 return await repo.list_all()
         except Exception as e:
-            logger.warning(f"Failed to fetch MCP instances: {e}")
+            logger.warning(f"Failed to fetch MCP instances: {e}", exc_info=True)
             return []
 
     async def fetch_mcp_servers() -> list:
@@ -220,7 +220,7 @@ async def get_network_topology(
                 result = await session.execute(query)
                 return list(result.scalars().all())
         except Exception as e:
-            logger.warning(f"Failed to fetch MCP server specs: {e}")
+            logger.warning(f"Failed to fetch MCP server specs: {e}", exc_info=True)
             return []
 
     async def fetch_triggers() -> list:
@@ -232,7 +232,7 @@ async def get_network_topology(
                 result = await session.execute(query)
                 return list(result.scalars().all())
         except Exception as e:
-            logger.warning(f"Failed to fetch triggers: {e}")
+            logger.warning(f"Failed to fetch triggers: {e}", exc_info=True)
             return []
 
     async def fetch_openapi_connections() -> list:
@@ -246,7 +246,7 @@ async def get_network_topology(
                 result = await session.execute(query)
                 return list(result.scalars().all())
         except Exception as e:
-            logger.warning(f"Failed to fetch OpenAPI connections: {e}")
+            logger.warning(f"Failed to fetch OpenAPI connections: {e}", exc_info=True)
             return []
 
     (

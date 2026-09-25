@@ -153,7 +153,7 @@ class EventAgent:
             if asyncio.iscoroutine(res):
                 await res
         except Exception as e:
-            logger.warning(f"Event listener raised error for {event_type}: {e}")
+            logger.warning(f"Event listener raised error for {event_type}: {e}", exc_info=True)
 
     # --------------------------- Utilities ---------------------------
     def _build_system_prompt(self, goal: str, success_criteria: list[str] | None = None) -> str:
@@ -209,12 +209,12 @@ class EventAgent:
                         history_messages = events_to_messages(prior_events)
                         if isinstance(history_messages, list) and history_messages:
                             messages.extend(history_messages)
-                    except Exception:  # noqa: S110
+                    except Exception:
                         # best-effort history loading; proceed if it fails
-                        pass
-        except Exception:  # noqa: S110
+                        logger.warning("Failed to load prior context events", exc_info=True)
+        except Exception:
             # do not block run on context issues
-            pass
+            logger.warning("Failed to prepare context history", exc_info=True)
 
         # Append current user message
         messages.append({"role": "user", "content": task})
@@ -348,9 +348,9 @@ class EventAgent:
                                         last_task_id = parsed.get("id")
                                     elif action == "add_subtask":
                                         last_subtask_id = parsed.get("id")
-                        except Exception:  # noqa: S110
+                        except Exception:
                             # Non-fatal: placeholder tracking is best-effort for tests
-                            pass
+                            logger.debug("Failed to track task placeholder ids", exc_info=True)
 
                         # Naive completion detection (kept simple to avoid breaking changes)
                         if tool_name == "completion":

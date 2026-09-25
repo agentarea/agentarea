@@ -138,5 +138,5 @@ class ModelDiscoveryService:
             )
             return []
         except Exception as e:
-            logger.error("Model discovery failed for %s: %s", provider_key, e)
+            logger.exception("Model discovery failed for %s: %s", provider_key, e)
             return []

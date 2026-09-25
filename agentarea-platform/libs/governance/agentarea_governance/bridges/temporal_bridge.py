@@ -199,8 +199,10 @@ def _extract_params(request: Any) -> dict[str, Any]:
     if hasattr(request, "model_dump"):
         try:
             return request.model_dump()
-        except Exception:  # noqa: S110
-            pass
+        except Exception:
+            logger.warning(
+                "Could not serialize activity request for governance params", exc_info=True
+            )
     return {}
 
 

@@ -195,7 +195,7 @@ async def analyze_bundle(
             # Strip CR/LF from the user-provided URL before logging to prevent
             # log-forging via injected newlines.
             safe_url = body.source_url.replace("\r", "").replace("\n", "")
-            logger.error("Failed to fetch bundle from %s", safe_url, exc_info=exc)
+            logger.exception("Failed to fetch bundle from %s", safe_url)
             raise HTTPException(
                 status_code=400, detail="failed to fetch bundle from the provided URL"
             ) from exc

@@ -64,7 +64,7 @@ class LoggingContextMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             if logger is not None:
                 # Log error response
-                logger.error(
+                logger.exception(
                     f"Request failed: {e!s}",
                     extra={
                         "error": str(e),

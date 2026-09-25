@@ -296,7 +296,7 @@ class TemporalAgentRunner(BaseAgentRunner):
                     )
 
             except Exception as e:
-                workflow.logger.error(f"Tool call {tool_name} failed: {e}")
+                workflow.logger.exception(f"Tool call {tool_name} failed: {e}")
 
                 # Add error message
                 state.messages.append(
@@ -350,7 +350,7 @@ class TemporalAgentRunner(BaseAgentRunner):
                 state.final_response = evaluation.get("final_response")
 
         except Exception as e:
-            workflow.logger.warning(f"Goal evaluation failed: {e}")
+            workflow.logger.warning(f"Goal evaluation failed: {e}", exc_info=True)
 
     async def _check_budget_status(self) -> None:
         """Check budget status and send warnings if needed."""

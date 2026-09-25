@@ -181,5 +181,5 @@ def create_code_tool_instance(
         logger.debug("Creating %s with default constructor", tool_name)
         return cls()
     except Exception as exc:
-        logger.error("Failed to create tool instance %s: %s", tool_name, exc)
+        logger.exception("Failed to create tool instance %s: %s", tool_name, exc)
         return None
