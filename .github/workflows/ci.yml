@@ -84,6 +84,16 @@ jobs:
       - name: Verify version synchronization
         run: bash scripts/verify-version-sync.sh
 
+  # Regression check for #481: scripts/lib/secrets.sh must keep the JWKS file
+  # container-readable and its config/auth ancestor host-private.
+  jwks-perms-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JWKS/config/auth permissions
+        run: make check-jwks-perms
+
   platform-lint:
     runs-on: ubuntu-latest
     needs: changes
@@ -849,6 +859,7 @@ jobs:
     needs:
       - changes
       - version-check
+      - jwks-perms-check
       - platform-lint
       - platform-test
       - platform-build
