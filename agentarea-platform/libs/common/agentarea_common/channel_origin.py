@@ -17,3 +17,10 @@ def reject_channel_origin(parameters: dict[str, Any] | None) -> dict[str, Any] |
             "and cannot be supplied"
         )
     return parameters
+
+
+def drop_channel_origin(parameters: dict[str, Any] | None) -> dict[str, Any] | None:
+    """For an edit: parameters stored before the check echo the key back from the form."""
+    if parameters and CHANNEL_ORIGIN_PARAMETER in parameters:
+        return {k: v for k, v in parameters.items() if k != CHANNEL_ORIGIN_PARAMETER}
+    return parameters

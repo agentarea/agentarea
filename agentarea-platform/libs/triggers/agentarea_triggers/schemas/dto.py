@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Any, Literal
 from uuid import UUID
 
-from agentarea_common.channel_origin import reject_channel_origin
+from agentarea_common.channel_origin import drop_channel_origin, reject_channel_origin
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS
@@ -223,7 +223,7 @@ class TriggerUpdate(BaseModel):
     task_parameters: dict[str, Any] | None = None
     conditions: dict[str, Any] | None = None
     failure_threshold: int | None = Field(default=None, ge=1, le=100)
-    _reject_channel_origin = field_validator("task_parameters")(reject_channel_origin)
+    _drop_channel_origin = field_validator("task_parameters")(drop_channel_origin)
 
     cron_expression: str | None = None
     timezone: str | None = None

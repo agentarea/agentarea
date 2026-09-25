@@ -30,12 +30,14 @@ def test_create_rejects_channel_origin_in_task_parameters():
         )
 
 
-def test_update_rejects_channel_origin_in_task_parameters():
-    with pytest.raises(ValidationError, match="channel_origin"):
-        TriggerUpdate(task_parameters={"channel_origin": FOREIGN_ORIGIN})
+def test_update_drops_channel_origin_from_task_parameters():
+    """A trigger stored before the check echoes the key back from the edit form."""
+    update = TriggerUpdate(task_parameters={"channel_origin": FOREIGN_ORIGIN, "text": "report"})
+
+    assert update.task_parameters == {"text": "report"}
 
 
-def test_rest_and_toolset_payloads_reject_channel_origin():
+def test_rest_and_toolset_create_payloads_reject_channel_origin():
     with pytest.raises(ValidationError, match="channel_origin"):
         dto.TriggerCreate(
             name="nightly",
@@ -43,8 +45,14 @@ def test_rest_and_toolset_payloads_reject_channel_origin():
             trigger_type="cron",
             task_parameters={"channel_origin": FOREIGN_ORIGIN},
         )
-    with pytest.raises(ValidationError, match="channel_origin"):
-        dto.TriggerUpdate(task_parameters={"channel_origin": FOREIGN_ORIGIN})
+
+
+def test_editing_a_legacy_trigger_through_the_rest_payload_drops_channel_origin():
+    payload = dto.TriggerUpdate(
+        task_parameters={"channel_origin": FOREIGN_ORIGIN, "text": "report"}
+    )
+
+    assert payload.to_domain().task_parameters == {"text": "report"}
 
 
 @pytest.mark.asyncio
