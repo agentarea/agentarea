@@ -95,83 +95,19 @@ curl -X POST http://localhost:80/instances \
 | `WARM_POOL_ENABLED` | Enable warm pool fast start | `false` |
 | `KUBERNETES_GATEWAY_NAME` | Gateway API gateway name | `envoy-gateway` |
 
-## Raw usage tracking
+## Extensions
 
-Usage is recorded independently of pricing, credits, wallets, and payments.
-The manager requires the platform migration
-`20260918_1200_resource_usage` before startup:
+The shared startup in `internal/managerapp` and `internal/runnerapp` accepts
+optional extension factories. Through them a separately distributed build can
+observe MCP lifecycle transitions (inside their own transaction), request
+boundaries, provider operations, external sandbox and Kubernetes task-pod
+lifecycles, artifact publications, and serve extra routes inside the data
+plane's authenticated group. Each observer receives value snapshots; the core
+keeps ownership of transactions, provider calls and HTTP responses.
 
-```bash
-# From agentarea-platform/apps/api, with the deployment's database environment.
-uv run alembic upgrade head
-```
-
-The append-only `resource_usage_events` table in PostgreSQL is the source of
-truth. Replaying the same `(source, event_id)` is idempotent; different content
-under that identity is rejected. Events remain after the runtime is removed.
-Schema version `1` is required.
-
-| Source | Recorded facts | Timing |
-|--------|----------------|--------|
-| MCP gateway | HTTP request start/end, status, integer duration in nanoseconds, lifecycle generation | Per request/transition |
-| Native runtime | Physical container ID or pod UID, requests, limits, available CPU/RAM measurements | Every minute; also at MCP activation and before deletion |
-| Sandbox runtime | Provisioning bounds, allocation profile, lease renewal, delete request/result, confirmed absence | At lifecycle boundaries |
-| Artifact publication | Stored bytes, object version, source storage timestamp | On publication |
-| Storage inventory | Current bytes, retained versions/bytes, delete markers; content and metadata separated | Every five minutes |
-
-Docker reports cumulative CPU nanoseconds and memory `usage` bytes. CPU quota
-and period remain available as an exact ratio when integer nanocores cannot
-represent the limit. Kubernetes reports CPU nanocores over the metrics API's
-window and memory working-set bytes. These are different measurements, not
-interchangeable billing quantities. Kubernetes metrics permissions are
-namespace-scoped `get`/`list` on `metrics.k8s.io/pods`.
-
-External sandbox providers preserve allocation metadata with its provenance;
-they do not expose actual CPU/RAM telemetry through this integration. Missing
-measurements are explicitly unavailable, never zero. Provider-reported start
-times and control-plane observations are distinguished. An opaque SDK failure
-retains the provisioning attempt without inventing a physical allocation.
-Lease expiry and deletion acceptance are not proof of physical termination.
-Shared executors and unassigned pools remain platform usage, not duplicated
-per task.
-
-Storage inventory requires `ListObjectVersions` permission for the configured
-bucket/prefix, including for unversioned buckets. An incomplete scan emits no
-zero observations. Previously published/scanned scopes are recovered from
-PostgreSQL even after Redis replacement. A complete empty observation closes a
-scope once; later empty scans do not create more facts unless a new publication
-or inventory makes it active again. Object/version/delete-marker counts keep
-zero-byte scopes active. Polling is not an exact byte-time integral, and
-provider timestamps retain their original precision.
-The pre-inventory snapshot includes each scope's latest durable sequence.
-A synthesized zero is inserted only if that sequence is still current. The
-comparison and insert share a per-scope transaction lock with storage
-publications and samples; a newer fact makes the collector discard the stale
-zero. Other storage scopes remain independently writable.
-
-The manager records local lifecycle facts directly in PostgreSQL. Standalone
-sandbox runners publish to Redis stream `agentarea:usage:events`; the manager's
-`usage-persistence` consumer persists the event before returning an
-acknowledgement tied to its complete payload and removing the stream entry.
-Runner publication succeeds only after that PostgreSQL commit acknowledgement,
-not after `XADD`. It waits at most ten seconds, respects earlier cancellation,
-and returns an error when persistence cannot be confirmed. Lifecycle callers
-therefore require the persistence consumer and database to be available.
-Configure persistent Redis storage and no eviction for pending entries; a
-timeout does not prove that an event was never committed, so retry the same
-immutable event. Provider operations and event persistence are not a distributed
-transaction; incomplete observations and delivery errors must not be treated
-as complete billing records.
-
-Read workspace-scoped history through the platform API:
-`GET /v1/usage/events`. Filters include `source`, `kind`, `resource_kind`,
-`resource_id`, `task_id`, `from`, and `until`; the default page size is 50,
-maximum 100. Pass `next_cursor` unchanged as the next request's string
-`cursor`. Time bounds accept RFC3339 with up to nine fractional digits.
-`occurred_at` preserves source nanoseconds. `data_json` is JSON **text** so
-JavaScript's outer response parser cannot round 64-bit counters; use an
-integer-preserving parser when decoding it. There is no public ingestion or
-charging endpoint.
+The binaries built from this module attach no extension. Infrastructure
+resource metering is available as an optional AgentArea Enterprise extension
+and is not part of this distribution.
 
 ## Documentation
 

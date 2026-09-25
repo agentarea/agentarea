@@ -78,7 +78,9 @@ func NewClient(cfg *ClientConfig) *Client {
 	}
 }
 
-func (c *Client) do(ctx context.Context, method, path string, body any, out any) error {
+// Do sends one authenticated request to the data plane and decodes a JSON
+// response into out. Non-2xx responses keep their status for the caller.
+func (c *Client) Do(ctx context.Context, method, path string, body any, out any) error {
 	var reader io.Reader
 	if body != nil {
 		encoded, err := json.Marshal(body)
@@ -152,7 +154,7 @@ func statusCodeOf(err error) int {
 
 func (c *Client) CreateInstance(ctx context.Context, spec *backends.InstanceSpec) (*backends.InstanceResult, error) {
 	var result backends.InstanceResult
-	if err := c.do(ctx, http.MethodPost, "/dataplane/v1/instances", spec, &result); err != nil {
+	if err := c.Do(ctx, http.MethodPost, "/dataplane/v1/instances", spec, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -163,7 +165,7 @@ func (c *Client) CreateInstance(ctx context.Context, spec *backends.InstanceSpec
 // (the data plane reaped it, or the host was replaced); failing here left such
 // an instance permanently undeletable.
 func (c *Client) DeleteInstance(ctx context.Context, instanceID string) error {
-	err := c.do(ctx, http.MethodDelete, "/dataplane/v1/instances/"+url.PathEscape(instanceID), nil, nil)
+	err := c.Do(ctx, http.MethodDelete, "/dataplane/v1/instances/"+url.PathEscape(instanceID), nil, nil)
 	if statusCodeOf(err) == http.StatusNotFound {
 		return nil
 	}
@@ -176,7 +178,7 @@ func (c *Client) DeleteInstance(ctx context.Context, instanceID string) error {
 // mistaken for absence and duplicate a running workload.
 func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*backends.InstanceStatus, error) {
 	var status backends.InstanceStatus
-	if err := c.do(ctx, http.MethodGet, "/dataplane/v1/instances/"+url.PathEscape(instanceID), nil, &status); err != nil {
+	if err := c.Do(ctx, http.MethodGet, "/dataplane/v1/instances/"+url.PathEscape(instanceID), nil, &status); err != nil {
 		if statusCodeOf(err) == http.StatusNotFound {
 			return nil, backends.ErrInstanceNotFound
 		}
@@ -189,7 +191,7 @@ func (c *Client) ListInstances(ctx context.Context) ([]*backends.InstanceStatus,
 	var payload struct {
 		Instances []*backends.InstanceStatus `json:"instances"`
 	}
-	if err := c.do(ctx, http.MethodGet, "/dataplane/v1/instances", nil, &payload); err != nil {
+	if err := c.Do(ctx, http.MethodGet, "/dataplane/v1/instances", nil, &payload); err != nil {
 		return nil, err
 	}
 	return payload.Instances, nil
@@ -206,7 +208,7 @@ func (c *Client) UpdateInstance(ctx context.Context, instanceID string, spec *ba
 
 func (c *Client) PerformHealthCheck(ctx context.Context, instanceID string) (*backends.HealthCheckResult, error) {
 	var result backends.HealthCheckResult
-	if err := c.do(ctx, http.MethodGet, "/dataplane/v1/instances/"+url.PathEscape(instanceID)+"/health", nil, &result); err != nil {
+	if err := c.Do(ctx, http.MethodGet, "/dataplane/v1/instances/"+url.PathEscape(instanceID)+"/health", nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -219,7 +221,7 @@ func (c *Client) Initialize(ctx context.Context) error {
 	probe, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	if err := c.do(probe, http.MethodGet, "/dataplane/v1/instances", nil, nil); err != nil {
+	if err := c.Do(probe, http.MethodGet, "/dataplane/v1/instances", nil, nil); err != nil {
 		return fmt.Errorf("data plane at %s is not usable: %w", c.baseURL, err)
 	}
 	return nil

@@ -10,7 +10,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
-	"github.com/agentarea/mcp-manager/internal/usage"
+	"github.com/agentarea/mcp-manager/internal/warmpool"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -37,7 +37,7 @@ type KubernetesBackend struct {
 	scratchSizeLimit resource.Quantity
 	// taskOperations fences composite task work against in-process retirement.
 	taskOperations *sandboxruntime.TaskOperationGate
-	usageRecorder  usage.Recorder
+	taskObserver   warmpool.LifecycleObserver
 }
 
 // NewKubernetesBackend creates a new Kubernetes backend
@@ -89,6 +89,13 @@ func NewKubernetesBackend(cfg *config.Config, logger *slog.Logger, taskLeaseTTL 
 		scratchSizeLimit: scratchSizeLimit,
 		taskOperations:   sandboxruntime.NewTaskOperationGate("kubernetes"),
 	}, nil
+}
+
+// RuntimeClients exposes the already-resolved Kubernetes clients and namespace
+// to composition code, so an extension reuses this backend's identity instead
+// of building a second one.
+func (k *KubernetesBackend) RuntimeClients() (client.Client, kubernetes.Interface, string) {
+	return k.client, k.clientset, k.k8sConfig.Namespace
 }
 
 // Initialize initializes the Kubernetes backend

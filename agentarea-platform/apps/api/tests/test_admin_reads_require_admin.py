@@ -43,7 +43,6 @@ ADMIN_READS = [
     "/v1/network/people-access",
     "/v1/policies",
     f"/v1/policies/{SOME_ID}",
-    "/v1/usage/events",
     "/v1/workspace/export",
     f"/v1/workspaces/{WORKSPACE}/invitations",
 ]
