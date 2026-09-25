@@ -57,10 +57,22 @@ def _grants_of(user_id: str) -> list[RelationTuple]:
     return [_member(WORKSPACE, f"User:{user_id}"), _reader(f"{WORKSPACE}-root", f"User:{user_id}")]
 
 
-async def _revoke(graph: FakeGraph, *, dry_run: bool = False) -> int:
+def _members(active: dict[str, set[str]], reads: list[str] | None = None):
+    async def load(workspace_id: str) -> set[str]:
+        if reads is not None:
+            reads.append(workspace_id)
+        return active.get(workspace_id, set())
+
+    return load
+
+
+async def _revoke(graph: FakeGraph, *, dry_run: bool = False, load=None) -> int:
     writer = _module._Writer(graph, dry_run)
     return await _module._revoke_ended_memberships(
-        writer, graph, members={(WORKSPACE, MEMBER)}, owners={WORKSPACE: OWNER}
+        writer,
+        graph,
+        load_members=load or _members({WORKSPACE: {MEMBER}}),
+        owners={WORKSPACE: OWNER},
     )
 
 
@@ -98,5 +110,41 @@ async def test_a_dry_run_reports_and_deletes_nothing():
     graph = FakeGraph(_grants_of(REMOVED))
 
     assert await _revoke(graph, dry_run=True) == 2
+
+    assert graph.tuples == _grants_of(REMOVED)
+
+
+async def test_members_are_read_per_workspace_right_before_its_tuples_go():
+    other = "ws-other"
+    graph = FakeGraph(
+        [
+            *_grants_of(REMOVED),
+            _member(other, f"User:{REMOVED}"),
+        ]
+    )
+    reads: list[str] = []
+    deleted_when_read: list[int] = []
+    load = _members({}, reads)
+
+    async def tracking(workspace_id: str) -> set[str]:
+        deleted_when_read.append(len(graph.tuples))
+        return await load(workspace_id)
+
+    assert await _revoke(graph, load=tracking) == 3
+
+    assert sorted(reads) == [WORKSPACE, other]
+    assert deleted_when_read[0] == 3
+    assert deleted_when_read[1] < 3, "the second workspace is read after the first one's deletes"
+
+
+async def test_a_member_admitted_after_the_grants_were_read_keeps_them():
+    graph = FakeGraph(_grants_of(REMOVED))
+    admitted: dict[str, set[str]] = {}
+
+    async def load(workspace_id: str) -> set[str]:
+        admitted.setdefault(workspace_id, {REMOVED})
+        return admitted[workspace_id]
+
+    assert await _revoke(graph, load=load) == 0
 
     assert graph.tuples == _grants_of(REMOVED)

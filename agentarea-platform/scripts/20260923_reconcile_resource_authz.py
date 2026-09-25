@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 
 from agentarea_agents.domain.models import Agent  # noqa: F401  -- registers the mapper
 from agentarea_agents.domain.skill_models import Skill  # noqa: F401
@@ -179,13 +180,15 @@ async def _revoke_ended_memberships(
     writer: _Writer,
     client: OpenFGAClient,
     *,
-    members: set[tuple[str, str]],
+    load_members: Callable[[str], Awaitable[set[str]]],
     owners: dict[str, str],
 ) -> int:
     """Delete the member grants of every user whose membership has ended.
 
-    ``members`` holds the (workspace, user) pairs that still have a row. A
-    workspace with no row is a personal one, owned by the user sharing its id.
+    ``load_members`` reads a workspace's membership rows. It is called per
+    workspace right before that workspace's tuples are deleted, so a member
+    admitted while the run is under way keeps their grants. A workspace with no
+    row in ``owners`` is a personal one, owned by the user sharing its id.
     """
     root_suffix = root_project_id("")
     grants = await client.query_all_tuples(RelationQuery(namespace="Workspace", relation="members"))
@@ -196,6 +199,7 @@ async def _revoke_ended_memberships(
         )
         if t.object.endswith(root_suffix)
     ]
+    by_workspace: dict[str, list[tuple[str, RelationTuple]]] = {}
     for grant in grants:
         if not grant.subject_id or not grant.subject_id.startswith("User:"):
             continue
@@ -203,9 +207,14 @@ async def _revoke_ended_memberships(
         workspace_id = (
             grant.object.removesuffix(root_suffix) if grant.namespace == "project" else grant.object
         )
-        if (workspace_id, user_id) in members or owners.get(workspace_id, workspace_id) == user_id:
+        if owners.get(workspace_id, workspace_id) == user_id:
             continue
-        await writer.remove(grant)
+        by_workspace.setdefault(workspace_id, []).append((user_id, grant))
+    for workspace_id, candidates in by_workspace.items():
+        members = await load_members(workspace_id)
+        for user_id, grant in candidates:
+            if user_id not in members:
+                await writer.remove(grant)
     return writer.deleted
 
 
@@ -249,14 +258,6 @@ async def main() -> None:
                     await session.execute(text("SELECT id, owner_user_id FROM workspaces"))
                 ).all()
             }
-            active_members = {
-                (str(row.workspace_id), str(row.user_id))
-                for row in (
-                    await session.execute(
-                        text("SELECT workspace_id, user_id FROM workspace_memberships")
-                    )
-                ).all()
-            }
             for model in models:
                 rows = (
                     await session.execute(select(model.id, model.workspace_id, model.created_by))
@@ -269,8 +270,20 @@ async def main() -> None:
         logger.info("reconciled admin projections for %d workspaces", len(workspace_owners))
 
         if args.revoke_ended_memberships:
+
+            async def load_members(workspace_id: str) -> set[str]:
+                async with database.async_session_factory() as session:
+                    rows = await session.execute(
+                        text(
+                            "SELECT user_id FROM workspace_memberships "
+                            "WHERE workspace_id = :workspace_id"
+                        ),
+                        {"workspace_id": workspace_id},
+                    )
+                    return {str(user_id) for user_id in rows.scalars()}
+
             revoked = await _revoke_ended_memberships(
-                writer, client, members=active_members, owners=workspace_owners
+                writer, client, load_members=load_members, owners=workspace_owners
             )
             logger.info(
                 "%s %d grants of ended memberships",
