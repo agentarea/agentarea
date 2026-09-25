@@ -12,12 +12,14 @@ Both repositories accept ``UserContext`` per project convention but
 use it only for explicit policy checks inside the calling service.
 """
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import column, delete, or_, select, table, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import (
+    INVITATION_STATUS_ACCEPTED,
     INVITATION_STATUS_PENDING,
     INVITATION_STATUS_REVOKED,
     Workspace,
@@ -72,6 +74,40 @@ class WorkspaceMembershipRepository:
         await self.session.commit()
         await self.session.refresh(membership)
         return membership
+
+    async def add_for_invitation(
+        self, *, invitation_id: UUID, workspace_id: str, user_id: str, now: datetime
+    ) -> bool:
+        """Write the row and stamp the invitation granted, in one transaction.
+
+        The invitation is re-read under a row lock and must still be accepted by
+        ``user_id``: a removal that revoked it first wins, and nothing is written.
+        """
+        invitation = (
+            await self.session.execute(
+                select(WorkspaceInvitation)
+                .where(WorkspaceInvitation.id == invitation_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if (
+            invitation is None
+            or invitation.status != INVITATION_STATUS_ACCEPTED
+            or invitation.accepted_by_user_id != user_id
+        ):
+            await self.session.rollback()
+            return False
+        if invitation.membership_granted_at is None:
+            if await self.get(workspace_id, user_id) is None:
+                self.session.add(
+                    WorkspaceMembership(
+                        workspace_id=workspace_id, user_id=user_id, invitation_id=invitation_id
+                    )
+                )
+            invitation.membership_granted_at = now
+        await self.session.commit()
+        return True
 
     async def get(self, workspace_id: str, user_id: str) -> WorkspaceMembership | None:
         result = await self.session.execute(
