@@ -479,8 +479,8 @@ def create_app() -> FastAPI:
             detail=str(exc),
         )
 
-    # The agent editor's approval toggle cannot remove a rule a workspace policy
-    # enforces. 409 so the editor can say where the approval is actually set.
+    # Only a workspace admin may untick an approval rule the agent editor's toggle
+    # did not write. 409 so the editor can say who may change it.
     @app.exception_handler(ApprovalEnforcedByPolicyError)
     async def _approval_enforced_handler(_request: Request, exc: ApprovalEnforcedByPolicyError):
         return problem_response(

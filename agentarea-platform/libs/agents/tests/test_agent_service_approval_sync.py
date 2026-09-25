@@ -228,6 +228,10 @@ async def test_unticking_an_approval_a_policy_enforces_is_refused_not_ignored(se
             )
 
         assert refused.value.targets == {"tool:files"}
+        # Every rule written before the toggle marked its own is unmarked, so the
+        # member's own old tick lands here too; blaming a workspace policy misleads.
+        assert "only be changed by a workspace admin" in str(refused.value)
+        assert "workspace policy" not in str(refused.value)
         assert {r.target for r in await _rules(session, member, agent.id)} == {
             "tool:shell",
             "tool:files",
@@ -253,3 +257,24 @@ async def test_a_members_tool_edit_leaves_an_admins_approval_rule_alone(session_
 
         rules = await _rules(session, member, agent.id)
         assert [(r.target, r.managed_by) for r in rules] == [("tool:files", None)]
+
+
+async def test_an_admin_unticking_in_the_agent_editor_removes_an_unmarked_approval(
+    session_factory,
+):
+    member = UserContext(user_id="user-member", workspace_id="ws-a", admin_workspaces=[])
+    admin = UserContext(user_id="user-admin", workspace_id="ws-a", admin_workspaces=["ws-a"])
+    async with session_factory() as session:
+        agent = await _agent_with_admin_rule(session, member)
+
+        await _service(session, admin).update_agent(
+            agent.id,
+            AgentUpdate(
+                tools=[
+                    _code_tool("agentarea/shell", True),
+                    _code_tool("agentarea/files", False),
+                ]
+            ),
+        )
+
+        assert {r.target for r in await _rules(session, admin, agent.id)} == {"tool:shell"}

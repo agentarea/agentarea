@@ -25,6 +25,7 @@ from copy import deepcopy
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.mcp_tool_identity import mcp_tool_target
+from agentarea_common.auth.authorization import is_workspace_admin
 from agentarea_common.auth.context import UserContext
 from agentarea_governance.domain.rules import (
     MANAGED_BY_AGENT_TOOLS,
@@ -37,19 +38,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class ApprovalEnforcedByPolicyError(Exception):
-    """An agent edit unticks an approval that a workspace policy rule enforces.
+    """A non-admin's agent edit unticks an approval rule the toggle did not write.
 
     The toggle only removes rules it wrote. Answering the edit as if it had
-    worked leaves the tick coming back on the next read, so it is refused.
+    worked leaves the tick coming back on the next read, so it is refused. The
+    rule is not necessarily a workspace policy: every rule written before the
+    toggle marked its own is unmarked too, the member's own old ticks included.
     """
 
     def __init__(self, targets: set[str]) -> None:
         self.targets = targets
         names = ", ".join(sorted(target.removeprefix("tool:") for target in targets))
-        super().__init__(
-            f"Approval for {names} is enforced by a workspace policy; "
-            "change it on the Policies page."
-        )
+        super().__init__(f"Approval for {names} can only be changed by a workspace admin.")
 
 
 def _llm_facing_name(tool_name: str) -> str:
@@ -100,27 +100,36 @@ def unticked_targets(tools: list[dict]) -> set[str]:
     return targets
 
 
-async def assert_no_policy_approval_unticked(
+async def release_unticked_approvals(
     session: AsyncSession,
     user_context: UserContext,
     agent_id: UUID,
     tools: list[dict],
 ) -> None:
-    """Refuse an edit that unticks an approval a policy rule (not the toggle) enforces.
+    """Let a workspace admin untick an approval the toggle did not write; refuse anyone else.
+
+    A workspace admin may delete that rule through the policy service anyway, so
+    the editor removes it for them. The check is the policy service's own.
 
     Raises:
-        ApprovalEnforcedByPolicyError: naming the enforced targets.
+        ApprovalEnforcedByPolicyError: for a non-admin, naming the targets.
     """
-    rules = await PolicyRuleRepository(session, user_context).list_rules(
+    repo = PolicyRuleRepository(session, user_context)
+    rules = await repo.list_rules(
         subject_type=PolicySubjectType.AGENT,
         subject_id=str(agent_id),
         effect=PolicyEffect.APPROVAL,
         enabled=True,
     )
-    enforced = {rule.target for rule in rules if rule.managed_by is None}
-    conflicts = enforced & unticked_targets(tools)
-    if conflicts:
-        raise ApprovalEnforcedByPolicyError(conflicts)
+    unticked = unticked_targets(tools)
+    conflicts = [rule for rule in rules if rule.managed_by is None and rule.target in unticked]
+    if not conflicts:
+        return
+    if not await is_workspace_admin(user_context):
+        raise ApprovalEnforcedByPolicyError({rule.target for rule in conflicts})
+    for rule in conflicts:
+        if rule.id is not None:
+            await repo.delete(rule.id)
 
 
 def strip_confirmation_flags(tools: list[dict]) -> list[dict]:

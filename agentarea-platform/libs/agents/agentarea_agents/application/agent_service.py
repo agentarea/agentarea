@@ -13,7 +13,7 @@ from agentarea_llm.infrastructure.model_instance_repository import ModelInstance
 
 from agentarea_agents.application.approval_sync import (
     approval_targets_from_tools,
-    assert_no_policy_approval_unticked,
+    release_unticked_approvals,
     strip_confirmation_flags,
     sync_agent_approval_rules,
 )
@@ -359,7 +359,7 @@ class AgentService(BaseCrudService[Agent]):
         patch = payload.model_dump(exclude_unset=True)
         tools_edited = "tools" in patch and payload.tools is not None
         if tools_edited:
-            await assert_no_policy_approval_unticked(
+            await release_unticked_approvals(
                 self.repository_factory.session,
                 self.repository_factory.user_context,
                 agent.id,
