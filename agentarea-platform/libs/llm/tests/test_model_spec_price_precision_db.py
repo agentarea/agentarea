@@ -4,9 +4,8 @@ A price is a fraction of a cent per token and a run bills it by the million, so
 a column that rounds it to the nearest binary float bills a different amount
 than the one configured.
 
-Needs a PostgreSQL migrated to head; skips without one:
-
-    LLM_TEST_DATABASE_URL=postgresql+asyncpg://test:test@localhost:55441/agentarea_test
+Needs a PostgreSQL migrated to head (``LLM_TEST_DATABASE_URL``); skips without one.
+``make check-db`` wires it.
 """
 
 import os
