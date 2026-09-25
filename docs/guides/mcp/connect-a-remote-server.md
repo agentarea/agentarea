@@ -170,7 +170,10 @@ the instance, injected the stored credential, and reached the server.
     (comma-separated, for example `localhost,mcp.tools.svc.cluster.local`), or
     set `ALLOW_PRIVATE_URLS` to allow every private address. Name each server:
     a wildcard such as `*.svc.cluster.local` or a cluster CIDR lets every
-    member reach every in-cluster service, the platform's own included.
+    member reach every in-cluster service, the platform's own included. If
+    outbound traffic goes through `HTTP_PROXY` or `HTTPS_PROXY`, the platform
+    vets the hostname but the proxy resolves it again, so the proxy itself must
+    refuse private and link-local destinations.
   </Accordion>
   <Accordion title="`Authentication failed — check your credentials`">
     The server returned 401. The credential is wrong, expired, or the header
