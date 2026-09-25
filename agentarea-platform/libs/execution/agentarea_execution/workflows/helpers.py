@@ -422,7 +422,7 @@ class BudgetTracker:
 
     # --- Service budget tracking ---
 
-    def add_service_cost(self, amount: float) -> None:
+    def add_service_cost(self, amount: Money) -> None:
         """Track a service payment cost."""
         self._service_cost += to_money(amount)
         workflow.logger.info(f"Added service cost: ${amount:.6f}, total: ${self._service_cost}")

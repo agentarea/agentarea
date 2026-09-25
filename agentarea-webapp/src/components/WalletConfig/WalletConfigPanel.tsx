@@ -98,7 +98,7 @@ export function WalletConfigPanel({ agentId }: WalletConfigPanelProps) {
           x402_config: x402Config,
           mpp_config: mppConfig,
           ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
-          service_budget_usd: serviceBudget,
+          ...(serviceBudget ? { service_budget_usd: serviceBudget } : {}),
           service_budget_period: budgetPeriod,
         });
         toast.success("Wallet updated");
@@ -108,7 +108,7 @@ export function WalletConfigPanel({ agentId }: WalletConfigPanelProps) {
           x402_config: x402Config,
           mpp_config: mppConfig,
           credentials: Object.keys(credentials).length > 0 ? credentials : undefined,
-          service_budget_usd: serviceBudget,
+          ...(serviceBudget ? { service_budget_usd: serviceBudget } : {}),
           service_budget_period: budgetPeriod,
         });
         toast.success("Wallet created");
@@ -265,6 +265,7 @@ export function WalletConfigPanel({ agentId }: WalletConfigPanelProps) {
                     onChange={(e) => setMppSessionBudget(e.target.value)}
                     min="0"
                     step="0.01"
+                    required
                   />
                 </div>
               </div>
@@ -344,7 +345,11 @@ export function WalletConfigPanel({ agentId }: WalletConfigPanelProps) {
             {deleting ? "Removing..." : "Remove Wallet"}
           </Button>
         )}
-        <Button className="ml-auto" onClick={handleSave} disabled={creating || updating}>
+        <Button
+          className="ml-auto"
+          onClick={handleSave}
+          disabled={creating || updating || (showMpp && !mppSessionBudget)}
+        >
           {creating || updating ? "Saving..." : wallet ? "Update Wallet" : "Create Wallet"}
         </Button>
       </div>

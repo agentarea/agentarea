@@ -119,7 +119,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
         x402_config: x402Config,
         mpp_config: mppConfig,
         ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
-        service_budget_usd: serviceBudget,
+        ...(serviceBudget ? { service_budget_usd: serviceBudget } : {}),
         service_budget_period: budgetPeriod,
       });
     } else {
@@ -129,7 +129,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
         mpp_config: mppConfig,
         credentials:
           Object.keys(credentials).length > 0 ? credentials : undefined,
-        service_budget_usd: serviceBudget,
+        ...(serviceBudget ? { service_budget_usd: serviceBudget } : {}),
         service_budget_period: budgetPeriod,
       });
     }
@@ -300,6 +300,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
                   onChange={(e) => setMppSessionBudget(e.target.value)}
                   min="0"
                   step="0.01"
+                  required
                 />
               </div>
             </div>
