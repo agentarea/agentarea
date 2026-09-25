@@ -97,7 +97,7 @@ class DatabaseSecretManager(BaseSecretManager):
         try:
             return self._fernet.decrypt(value.encode("utf-8")).decode("utf-8")
         except Exception as exc:
-            logger.error("Failed to decrypt secret value")
+            logger.error("Failed to decrypt secret value")  # noqa: TRY400 - exception text may carry secret material; log the type only
             raise ValueError("Failed to decrypt secret. Key may have changed.") from exc
 
     def external_ref(self, secret_name: str) -> None:
@@ -140,7 +140,7 @@ class DatabaseSecretManager(BaseSecretManager):
             return decrypted_value
 
         except Exception as exc:
-            logger.error(
+            logger.error(  # noqa: TRY400 - exception text may carry secret material; log the type only
                 "Failed to retrieve secret from workspace %s (%s)",
                 self.workspace_id,
                 type(exc).__name__,
@@ -165,7 +165,7 @@ class DatabaseSecretManager(BaseSecretManager):
             return result.scalar_one_or_none() is not None
 
         except Exception as exc:
-            logger.error(
+            logger.error(  # noqa: TRY400 - exception text may carry secret material; log the type only
                 "Failed to check for secret in workspace %s (%s)",
                 self.workspace_id,
                 type(exc).__name__,
@@ -230,7 +230,7 @@ class DatabaseSecretManager(BaseSecretManager):
 
         except Exception as exc:
             await self.session.rollback()
-            logger.error(
+            logger.error(  # noqa: TRY400 - exception text may carry secret material; log the type only
                 "Failed to set secret in workspace %s (%s)",
                 self.workspace_id,
                 type(exc).__name__,
@@ -267,7 +267,7 @@ class DatabaseSecretManager(BaseSecretManager):
 
         except Exception as exc:
             await self.session.rollback()
-            logger.error(
+            logger.error(  # noqa: TRY400 - exception text may carry secret material; log the type only
                 "Failed to delete secret from workspace %s (%s)",
                 self.workspace_id,
                 type(exc).__name__,

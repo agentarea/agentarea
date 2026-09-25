@@ -69,7 +69,9 @@ class RedisToolListCache:
         try:
             value = json.loads(raw)
         except ValueError:
-            logger.warning("Discarding unreadable cached tool list for %s", cache_key)
+            logger.warning(
+                "Discarding unreadable cached tool list for %s", cache_key, exc_info=True
+            )
             return None
         return value if isinstance(value, list) else None
 

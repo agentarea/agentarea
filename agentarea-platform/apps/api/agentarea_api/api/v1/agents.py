@@ -82,7 +82,9 @@ class AgentResponse(BaseModel):
                         # Skip a malformed/legacy tool entry rather than failing
                         # the whole agent read.
                         logger.warning(
-                            "Skipping unparseable tool config", extra={"tool_config": tool}
+                            "Skipping unparseable tool config",
+                            extra={"tool_config": tool},
+                            exc_info=True,
                         )
             elif isinstance(agent_tools, dict):
                 tools = []

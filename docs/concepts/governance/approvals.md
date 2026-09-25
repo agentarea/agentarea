@@ -160,9 +160,8 @@ Whether the caller may approve is decided by `caller_can_approve`:
 
 ## Why not enforce approval in the interceptor pipeline
 
-An `EscalationGuard` exists in the codebase: a gate that reads
-`execution_state["escalation_rules"]` and returns `ESCALATE` when the action name
-matches a glob. **It is not registered in the pipeline**, and that is intentional.
+No gate in the interceptor pipeline turns a matched action into an approval
+request, and that is intentional.
 
 The interceptor pipeline runs at the Temporal *activity* boundary. An activity
 cannot pause and resume — an `ESCALATE` there is converted into an
@@ -174,7 +173,7 @@ that layer.
 
 The workflow is the only place that holds durable state, can wait indefinitely,
 can receive a signal, and can put a denial message back into the conversation. So
-approval lives there and the guard stays unregistered.
+approval lives there.
 
 The cost of that choice is coverage: any tool path that does not run through the
 agent workflow has no approval flow, only a denial. See the limits below.
@@ -185,9 +184,6 @@ agent workflow has no approval flow, only a denial. See the limits below.
   writable through the API, reaches the workflow goal, and is read by nothing.
   Per-task approval cannot be requested at task creation; write a policy rule
   instead.
-- **`EscalationGuard` is dead code today.** It is defined, tested and never
-  registered. If you read it and expect glob-matched approval on LLM calls or
-  delegations, nothing wires it up.
 - **The MCP proxy denies rather than escalates.** `_authorize_mcp_tool_calls`
   treats anything that is not `ALLOW` as not allowed, so a tool requiring approval
   called through `POST /v1/mcp/{instance_id}/mcp` returns HTTP 403 with no

@@ -149,7 +149,7 @@ class AgentDelegationTool(BaseTool):
         except ToolExecutionError:
             raise
         except Exception as e:
-            logger.error(f"Agent delegation failed: {e}")
+            logger.exception(f"Agent delegation failed: {e}")
             raise ToolExecutionError(self.name, str(e), e) from e
 
 

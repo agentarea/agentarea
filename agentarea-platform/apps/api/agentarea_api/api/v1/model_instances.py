@@ -370,7 +370,7 @@ async def validate_model_instance(
         error_message = str(e)
         error_type = type(e).__name__
 
-        logger.error(f"LLM test failed: {error_message}")
+        logger.exception(f"LLM test failed: {error_message}")
 
         # Categorize common errors
         if "AuthenticationError" in error_type or "api_key" in error_message.lower():

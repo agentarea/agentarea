@@ -449,7 +449,9 @@ async def oauth_callback(
             response.raise_for_status()
             tokens = response.json()
     except (httpx.HTTPError, MissingCredentialsError, ValueError) as exc:
-        logger.warning("Connection OAuth exchange failed for %s: %s", connection_id, exc)
+        logger.warning(
+            "Connection OAuth exchange failed for %s: %s", connection_id, exc, exc_info=True
+        )
         return RedirectResponse(
             f"{detail_url}?oauth=error&reason=token_exchange_failed", status_code=302
         )

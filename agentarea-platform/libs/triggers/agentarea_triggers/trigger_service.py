@@ -205,6 +205,7 @@ class TriggerService:
                         f"Failed to schedule cron trigger: {e}",
                         trigger_id=trigger.id,
                         cron_expression=trigger.cron_expression,
+                        exc_info=True,
                     )
                     # Don't fail the trigger creation if scheduling fails
                     # The trigger can be rescheduled later
@@ -216,6 +217,7 @@ class TriggerService:
                 f"Trigger validation failed for '{trigger_data.name}'",
                 agent_id=trigger_data.agent_id,
                 trigger_type=trigger_data.trigger_type.value,
+                exc_info=True,
             )
             raise
         except Exception as e:
@@ -223,6 +225,7 @@ class TriggerService:
                 f"Unexpected error creating trigger '{trigger_data.name}': {e}",
                 agent_id=trigger_data.agent_id,
                 trigger_type=trigger_data.trigger_type.value,
+                exc_info=True,
             )
             raise TriggerExecutionError(
                 f"Failed to create trigger: {e}",
@@ -334,7 +337,10 @@ class TriggerService:
                         )
                         logger.info(f"Updated schedule for cron trigger {trigger_id}")
                 except Exception as e:
-                    logger.error(f"Failed to update schedule for cron trigger {trigger_id}: {e}")
+                    logger.error(
+                        f"Failed to update schedule for cron trigger {trigger_id}: {e}",
+                        exc_info=True,
+                    )
 
         return updated_trigger
 
@@ -359,7 +365,9 @@ class TriggerService:
                 await self.temporal_schedule_manager.delete_cron_schedule(trigger_id)
                 logger.info(f"Deleted schedule for cron trigger {trigger_id}")
             except Exception as e:
-                logger.error(f"Failed to delete schedule for cron trigger {trigger_id}: {e}")
+                logger.error(
+                    f"Failed to delete schedule for cron trigger {trigger_id}: {e}", exc_info=True
+                )
 
         # Delete the trigger (cascade will handle executions)
         success = await self.trigger_repository.delete(trigger_id)
@@ -448,7 +456,10 @@ class TriggerService:
                     await self.temporal_schedule_manager.unpause_cron_schedule(trigger_id)
                     logger.info(f"Unpaused schedule for cron trigger {trigger_id}")
                 except Exception as e:
-                    logger.error(f"Failed to unpause schedule for cron trigger {trigger_id}: {e}")
+                    logger.error(
+                        f"Failed to unpause schedule for cron trigger {trigger_id}: {e}",
+                        exc_info=True,
+                    )
 
         return success
 
@@ -481,7 +492,10 @@ class TriggerService:
                     await self.temporal_schedule_manager.pause_cron_schedule(trigger_id)
                     logger.info(f"Paused schedule for cron trigger {trigger_id}")
                 except Exception as e:
-                    logger.error(f"Failed to pause schedule for cron trigger {trigger_id}: {e}")
+                    logger.error(
+                        f"Failed to pause schedule for cron trigger {trigger_id}: {e}",
+                        exc_info=True,
+                    )
 
         return success
 
@@ -581,6 +595,7 @@ class TriggerService:
                     f"Failed to update trigger execution tracking: {tracking_error}",
                     trigger_id=trigger_id,
                     execution_id=recorded_execution.id,
+                    exc_info=True,
                 )
 
             return recorded_execution
@@ -592,6 +607,7 @@ class TriggerService:
                 trigger_id=trigger_id,
                 status=status.value,
                 execution_time_ms=execution_time_ms,
+                exc_info=True,
             )
             raise TriggerExecutionError(
                 error_msg, trigger_id=str(trigger_id), status=status.value, original_error=str(e)
@@ -661,7 +677,10 @@ class TriggerService:
             )
             logger.info(f"Published auto-disabled event for trigger {trigger_id}")
         except Exception as e:
-            logger.error(f"Failed to publish auto-disabled event for trigger {trigger_id}: {e}")
+            logger.error(
+                f"Failed to publish auto-disabled event for trigger {trigger_id}: {e}",
+                exc_info=True,
+            )
 
     async def reset_trigger_failure_count(self, trigger_id: UUID) -> bool:
         """Reset the consecutive failure count for a trigger.
@@ -767,6 +786,7 @@ class TriggerService:
                 trigger_id=trigger.id,
                 cron_expression=trigger.cron_expression,
                 timezone=trigger.timezone,
+                exc_info=True,
             )
             raise TriggerExecutionError(
                 error_msg,
@@ -794,7 +814,7 @@ class TriggerService:
             await self.temporal_schedule_manager.delete_cron_schedule(trigger_id)
             logger.info(f"Unscheduled cron trigger {trigger_id}")
         except Exception as e:
-            logger.error(f"Failed to unschedule cron trigger {trigger_id}: {e}")
+            logger.error(f"Failed to unschedule cron trigger {trigger_id}: {e}", exc_info=True)
             raise
 
     async def update_cron_schedule(self, trigger: CronTrigger) -> None:
@@ -820,7 +840,9 @@ class TriggerService:
             )
             logger.info(f"Updated schedule for cron trigger {trigger.id}")
         except Exception as e:
-            logger.error(f"Failed to update schedule for cron trigger {trigger.id}: {e}")
+            logger.error(
+                f"Failed to update schedule for cron trigger {trigger.id}: {e}", exc_info=True
+            )
             raise
 
     async def pause_cron_schedule(self, trigger_id: UUID) -> None:
@@ -842,7 +864,9 @@ class TriggerService:
             await self.temporal_schedule_manager.pause_cron_schedule(trigger_id)
             logger.info(f"Paused schedule for cron trigger {trigger_id}")
         except Exception as e:
-            logger.error(f"Failed to pause schedule for cron trigger {trigger_id}: {e}")
+            logger.error(
+                f"Failed to pause schedule for cron trigger {trigger_id}: {e}", exc_info=True
+            )
             raise
 
     async def unpause_cron_schedule(self, trigger_id: UUID) -> None:
@@ -864,7 +888,9 @@ class TriggerService:
             await self.temporal_schedule_manager.unpause_cron_schedule(trigger_id)
             logger.info(f"Unpaused schedule for cron trigger {trigger_id}")
         except Exception as e:
-            logger.error(f"Failed to unpause schedule for cron trigger {trigger_id}: {e}")
+            logger.error(
+                f"Failed to unpause schedule for cron trigger {trigger_id}: {e}", exc_info=True
+            )
             raise
 
     async def get_cron_schedule_info(self, trigger_id: UUID) -> dict | None:
@@ -885,7 +911,9 @@ class TriggerService:
         try:
             return await self.temporal_schedule_manager.get_schedule_info(trigger_id)
         except Exception as e:
-            logger.error(f"Failed to get schedule info for cron trigger {trigger_id}: {e}")
+            logger.error(
+                f"Failed to get schedule info for cron trigger {trigger_id}: {e}", exc_info=True
+            )
             return None
 
     # Validation Methods
@@ -921,7 +949,7 @@ class TriggerService:
                 raise
 
             error_msg = f"Error validating agent existence: {e}"
-            logger.error(error_msg, agent_id=agent_id)
+            logger.error(error_msg, agent_id=agent_id, exc_info=True)
             raise DependencyUnavailableError(
                 error_msg,
                 dependency="agent_repository",
@@ -1219,7 +1247,8 @@ class TriggerService:
                 )
             except Exception as rec_err:
                 logger.warning(
-                    f"Failed to record execution history (task was created successfully): {rec_err}"
+                    f"Failed to record execution history (task was created successfully): {rec_err}",
+                    exc_info=True,
                 )
 
             return execution
@@ -1229,7 +1258,7 @@ class TriggerService:
             execution_time_ms = int((time.time() - start_time) * 1000)
 
             # Log error
-            logger.error(f"Error executing trigger {trigger_id}: {e}")
+            logger.error(f"Error executing trigger {trigger_id}: {e}", exc_info=True)
 
             # Record failed execution (non-fatal)
             execution = None
@@ -1245,10 +1274,12 @@ class TriggerService:
                 )
 
                 if trigger.should_disable_due_to_failures():
-                    logger.warning(f"Disabling trigger {trigger_id} due to consecutive failures")
+                    logger.warning(
+                        f"Disabling trigger {trigger_id} due to consecutive failures", exc_info=True
+                    )
                     await self.disable_trigger(trigger_id)
             except Exception as rec_err:
-                logger.warning(f"Failed to record execution failure: {rec_err}")
+                logger.warning(f"Failed to record execution failure: {rec_err}", exc_info=True)
 
             return execution
 
@@ -1387,7 +1418,9 @@ class TriggerService:
                 )
 
             except Exception as e:
-                logger.warning(f"LLM parameter extraction failed for trigger {trigger.id}: {e}")
+                logger.warning(
+                    f"LLM parameter extraction failed for trigger {trigger.id}: {e}", exc_info=True
+                )
                 # Continue with basic parameters
 
         return params
@@ -1631,7 +1664,7 @@ class TriggerService:
                 instruction=instruction, event_data=event_data, trigger_context=trigger_context
             )
         except Exception as e:
-            logger.error(f"LLM parameter extraction failed: {e}")
+            logger.error(f"LLM parameter extraction failed: {e}", exc_info=True)
             return {}
 
     # Enhanced monitoring and execution history methods for task 14

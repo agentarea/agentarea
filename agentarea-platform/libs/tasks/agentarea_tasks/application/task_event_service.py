@@ -89,7 +89,7 @@ class TaskEventService:
             return persisted_event
 
         except Exception as e:
-            logger.error(f"Failed to create workflow event: {e}")
+            logger.exception(f"Failed to create workflow event: {e}")
             raise
 
     async def get_task_events(
@@ -131,7 +131,7 @@ class TaskEventService:
                 created_events.append(event)
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     f"Failed to create event {event_data.get('event_type', 'unknown')}: {e}"
                 )
                 # Continue processing other events

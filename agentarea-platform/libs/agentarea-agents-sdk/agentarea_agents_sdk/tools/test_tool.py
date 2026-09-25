@@ -46,8 +46,7 @@ class TestTool(BaseTool):
         """Execute the test tool with realistic responses.
 
         Args:
-            action: The action to perform
-            query: Optional query parameter
+            **kwargs: ``action`` (the action to perform) and an optional ``query``.
 
         Returns:
             Dict containing realistic test results

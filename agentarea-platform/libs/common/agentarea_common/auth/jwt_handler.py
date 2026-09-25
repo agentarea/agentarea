@@ -68,7 +68,7 @@ class JWTTokenHandler:
             return UserContext(user_id=user_id, workspace_id=workspace_id)
 
         except jwt.InvalidTokenError as e:
-            self.logger.error(f"JWT validation failed: {e}")
+            self.logger.exception(f"JWT validation failed: {e}")
             raise InvalidJWTToken(
                 reason=f"Token validation failed: {e!s}", token_present=True
             ) from e

@@ -805,7 +805,9 @@ class SkillService:
             try:
                 await self.storage_service.delete_package(skill.s3_path)
             except Exception as e:
-                logger.warning(f"Failed to delete S3 package for skill {skill_id}: {e}")
+                logger.warning(
+                    f"Failed to delete S3 package for skill {skill_id}: {e}", exc_info=True
+                )
 
         # Delete from database
         await repo.delete(str(skill_id))

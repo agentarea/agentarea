@@ -35,7 +35,7 @@ class TriggerWorkspaceGuard:
             trigger_uuid = UUID(str(trigger_id))
             task_uuid = UUID(str(task_id))
         except ValueError:
-            logger.error(
+            logger.exception(
                 "Refusing channel delivery: unparseable trigger_id=%r or task_id=%r",
                 trigger_id,
                 task_id,

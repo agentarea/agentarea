@@ -183,20 +183,13 @@ precisely because that limit is felt — see below.
   nothing.
 - **The snapshot is frozen at task creation.** Changing a rule does not affect a
   task already running. There is no revocation path into a live workflow.
-- **Two interceptors exist and are never registered.** `EscalationGuard` (glob
-  matching against `escalation_rules`, returning escalate) and
-  `ContentPolicyEnforcer` (denying configured prohibited content categories) are
-  both implemented and tested, and neither appears in the pipeline the worker
-  builds. `EscalationGuard`'s omission is deliberate and documented — approval is
-  enforced in the workflow, which is the only layer that can pause. Reading either
-  file and assuming it runs would be wrong.
 - **The pipeline swallows interceptor exceptions.** If a gate raises, the pipeline
   logs the traceback and continues to the next interceptor. A gate that crashes
   fails open for its own dimension.
 - **`GET /v1/network/topology` reports a governance overlay that is hardcoded.**
   The interceptor list that endpoint returns is a static constant in the API, not
   a reading of the pipeline the worker builds. It advertises `escalation_guard`
-  and `content_policy_enforcer`, neither of which is registered, and its phase
+  and `content_policy_enforcer`, neither of which exists, and its phase
   lists disagree with the real registrations for `semantic_guard`,
   `prompt_injection_detector`, `output_sanitizer` and `mcp_tool_scanner`. Treat
   it as a diagram, never as evidence that a control is running.

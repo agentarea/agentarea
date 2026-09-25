@@ -19,9 +19,9 @@ register_policy("named_lookup", NamedLookupPolicy)
 register_policy("searchable", NamedLookupPolicy)
 
 __all__ = [
+    "LOAD_TOOLS_NAME",
     "DisclosureContext",
     "ExplicitPolicy",
-    "LOAD_TOOLS_NAME",
     "NamedLookupPolicy",
     "Partition",
     "RevealRequest",

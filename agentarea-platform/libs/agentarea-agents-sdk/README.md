@@ -119,19 +119,6 @@ The test suite includes:
 - **Integration tests**: Complete workflows with LLM interaction
 - **Error handling**: Edge cases and error conditions
 
-Run the examples:
-
-```bash
-python example.py
-```
-
-This demonstrates:
-
-- Streaming vs non-streaming responses
-- Simple math calculations with tool usage
-- Complex reasoning problems
-- Custom agent configurations
-
 ## Components
 
 ### High-Level Agent (`agent.py`)
@@ -189,7 +176,6 @@ agentarea-agents-sdk/
 │   ├── test_agent.py        # Agent class tests
 │   ├── test_components.py   # Component unit tests
 │   └── test_integration.py  # Integration tests
-├── example.py       # Usage examples
 └── README.md        # This file
 ```
 

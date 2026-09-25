@@ -153,7 +153,8 @@ class MCPToolFactory:
                                 break
                         except Exception as e:
                             logger.warning(
-                                f"Service.{method_name} failed for {server_instance_id}: {e}"
+                                f"Service.{method_name} failed for {server_instance_id}: {e}",
+                                exc_info=True,
                             )
 
             if not tools_data:
@@ -208,11 +209,12 @@ class MCPToolFactory:
                     )
                 except Exception as e:
                     logger.warning(
-                        f"Skipping invalid tool entry from server {server_instance_id}: {e}"
+                        f"Skipping invalid tool entry from server {server_instance_id}: {e}",
+                        exc_info=True,
                     )
 
             return mcp_tools
 
         except Exception as e:
-            logger.error(f"Failed to create tools from MCP server {server_instance_id}: {e}")
+            logger.exception(f"Failed to create tools from MCP server {server_instance_id}: {e}")
             return []

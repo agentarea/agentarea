@@ -289,7 +289,7 @@ class ToolManager:
                 all_mcp_tools.extend(mcp_tools)
 
             except Exception as e:
-                logger.error(f"Failed to get tools from MCP server {server_id}: {e}")
+                logger.exception(f"Failed to get tools from MCP server {server_id}: {e}")
                 continue
 
         return all_mcp_tools

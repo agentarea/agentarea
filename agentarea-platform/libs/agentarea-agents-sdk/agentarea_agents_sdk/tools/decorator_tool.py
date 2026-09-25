@@ -2,7 +2,6 @@
 
 import inspect
 import types
-from abc import ABC
 from collections.abc import Callable
 from typing import (
     Any,
@@ -28,7 +27,7 @@ from .tool_definition import (
 class ToolMethodMetadata:
     """Per-method metadata stamped by ``@tool_method(...)``."""
 
-    __slots__ = ("display_name", "description", "effect", "requires_user_confirmation")
+    __slots__ = ("description", "display_name", "effect", "requires_user_confirmation")
 
     def __init__(
         self,
@@ -48,7 +47,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 @overload
-def tool_method(func: F) -> F: ...
+def tool_method[T: Callable[..., Any]](func: T) -> T: ...
 
 
 @overload
@@ -112,7 +111,7 @@ def tool_method(
     return decorator(func)
 
 
-class Toolset(ABC):
+class Toolset:
     """Base class for toolsets using decorator-based method registration.
 
     A toolset represents a collection of related tool methods that can be called individually.
@@ -325,7 +324,7 @@ class Toolset(ABC):
         try:
             if len(self._tool_methods) == 1:
                 # Single method - execute directly
-                method_name, method = next(iter(self._tool_methods.items()))
+                method = next(iter(self._tool_methods.values()))
                 result = await self._execute_method(method, kwargs)
             else:
                 # Multiple methods - use action parameter
@@ -350,7 +349,7 @@ class Toolset(ABC):
         except Exception as e:
             return {
                 "success": False,
-                "result": f"Execution failed: {str(e)}",
+                "result": f"Execution failed: {e!s}",
                 "tool_name": self.name,
                 "error": str(e),
             }

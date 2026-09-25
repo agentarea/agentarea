@@ -1191,7 +1191,12 @@ class MCPServerInstanceService:
                 if auth_config:
                     headers = await auth_service.get_auth_headers(auth_config)
             except Exception as e:
-                logger.warning("Failed to resolve auth headers for instance %s: %s", instance.id, e)
+                logger.warning(
+                    "Failed to resolve auth headers for instance %s: %s",
+                    instance.id,
+                    e,
+                    exc_info=True,
+                )
 
         if instance_type in ("docker", "command"):
             headers.update(get_settings().mcp.manager_gateway_headers())

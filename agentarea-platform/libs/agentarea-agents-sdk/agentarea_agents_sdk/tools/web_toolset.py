@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import re
 from html.parser import HTMLParser
-from typing import Any
+from typing import Any, ClassVar
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -42,7 +42,7 @@ _MAX_BINARY_BYTES: int = 25 * 1024 * 1024  # 25 MiB hard ceiling per fetch
 class _TextExtractor(HTMLParser):
     """Tiny stdlib-only HTML→text. Drops <script>/<style> bodies."""
 
-    _DROP_TAGS = {"script", "style", "noscript", "head"}
+    _DROP_TAGS: ClassVar[frozenset[str]] = frozenset({"script", "style", "noscript", "head"})
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -359,7 +359,8 @@ class WebToolset(Toolset):
                     owner=self.lease_owner or None,
                 )
             else:
-                assert self.storage is not None
+                if self.storage is None:
+                    return "Error: no workspace storage configured"
                 await self.storage.put(self.workspace_id, download_path, body, content_type)
         except Exception as e:
             return f"Error writing workspace file {download_path}: {e}"

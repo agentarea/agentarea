@@ -41,8 +41,8 @@ def _get_workspace_context_for_logging() -> dict[str, Any]:
         context = ContextManager.get_context()
         if context:
             return {"workspace_id": context.workspace_id, "user_id": context.user_id}
-    except Exception:  # noqa: S110
-        pass
+    except Exception:
+        logger.debug("Workspace context unavailable for error logging", exc_info=True)
     return {}
 
 
@@ -53,8 +53,8 @@ def _get_workspace_headers() -> dict[str, str]:
         context = ContextManager.get_context()
         if context and context.workspace_id:
             headers["X-Workspace-ID"] = context.workspace_id
-    except Exception:  # noqa: S110
-        pass
+    except Exception:
+        logger.debug("Workspace context unavailable for response headers", exc_info=True)
     return headers
 
 

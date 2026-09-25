@@ -480,7 +480,7 @@ class AgentAreaWorker:
             await self.create_worker()
             await self.run()
         except Exception as e:
-            logger.error(f"Worker failed to start: {e}")
+            logger.exception(f"Worker failed to start: {e}")
             raise
         finally:
             await self.shutdown()
@@ -544,7 +544,7 @@ async def main() -> None:
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt")
     except Exception as e:
-        logger.error(f"Worker error: {e}")
+        logger.exception(f"Worker error: {e}")
         sys.exit(1)
 
 

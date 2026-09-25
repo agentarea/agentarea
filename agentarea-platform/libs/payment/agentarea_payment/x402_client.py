@@ -59,7 +59,9 @@ class X402PaymentClient:
             self._client = client
             return client
         except ImportError:
-            logger.warning("x402 SDK not installed. Install with: pip install x402[httpx,evm]")
+            logger.warning(
+                "x402 SDK not installed. Install with: pip install x402[httpx,evm]", exc_info=True
+            )
             raise
 
     def _attach_payment_identifier(self, context: Any) -> None:
@@ -83,7 +85,7 @@ class X402PaymentClient:
 
             return signer_cls(account_cls.from_key(self._private_key))
         except ImportError:
-            logger.warning("eth_account or x402 EVM signer is not available")
+            logger.warning("eth_account or x402 EVM signer is not available", exc_info=True)
             raise
 
     @staticmethod

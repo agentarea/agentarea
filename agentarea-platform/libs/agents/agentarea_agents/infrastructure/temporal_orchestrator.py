@@ -79,12 +79,12 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                 )
                 logger.info(f"Connected to Temporal at {self.temporal_address}")
             except ImportError as e:
-                logger.error(f"Temporal library not installed: {e}")
+                logger.exception(f"Temporal library not installed: {e}")
                 raise RuntimeError(
                     "Temporal integration is not ready (missing 'temporalio')"
                 ) from e
             except Exception as e:
-                logger.error(f"Failed to connect to Temporal: {e}")
+                logger.exception(f"Failed to connect to Temporal: {e}")
                 raise RuntimeError(f"Temporal client connection failed: {e}") from e
         return self._client
 
@@ -99,7 +99,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                         await close_result
                 logger.info("Closed Temporal client connection")
             except Exception as e:
-                logger.warning(f"Error closing Temporal client: {e}")
+                logger.warning(f"Error closing Temporal client: {e}", exc_info=True)
             finally:
                 self._client = None
 
@@ -128,7 +128,8 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                         task_id_uuid = uuid4()
                         logger.warning(
                             f"Failed to extract UUID from execution_id "
-                            f"{execution_id}, using new UUID: {task_id_uuid}"
+                            f"{execution_id}, using new UUID: {task_id_uuid}",
+                            exc_info=True,
                         )
                 else:
                     # If execution_id doesn't match expected pattern, try to parse it as UUID
@@ -141,7 +142,8 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                         task_id_uuid = uuid4()
                         logger.warning(
                             f"execution_id {execution_id} is not a valid UUID "
-                            f"pattern, using new UUID: {task_id_uuid}"
+                            f"pattern, using new UUID: {task_id_uuid}",
+                            exc_info=True,
                         )
 
                 # Ensure workspace_id is provided
@@ -168,7 +170,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                 )
 
             except ImportError as e:
-                logger.error(f"Agent execution library not available: {e}")
+                logger.exception(f"Agent execution library not available: {e}")
                 raise RuntimeError(
                     "Agent execution integration is not ready (missing 'agentarea_execution')"
                 ) from e
@@ -184,7 +186,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             }
 
         except Exception as e:
-            logger.error(f"Failed to start Temporal workflow: {e}")
+            logger.exception(f"Failed to start Temporal workflow: {e}")
             raise RuntimeError(f"Failed to start Temporal workflow: {e}") from e
 
     async def get_workflow_status(self, execution_id: str) -> dict[str, Any]:
@@ -331,7 +333,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         except Exception as e:
             if "not found" in str(e).lower() or "no execution" in str(e).lower():
                 return None
-            logger.error(f"Failed to get workflow effective policy: {e}")
+            logger.exception(f"Failed to get workflow effective policy: {e}")
             return None
 
     async def get_workflow_pending_escalations(self, execution_id: str) -> list[dict[str, Any]]:
@@ -360,7 +362,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             return True
 
         except Exception as e:
-            logger.error(f"Failed to cancel workflow: {e}")
+            logger.exception(f"Failed to cancel workflow: {e}")
             return False
 
     async def pause_workflow(self, execution_id: str) -> bool:
@@ -374,7 +376,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             return True
 
         except Exception as e:
-            logger.error(f"Failed to pause workflow: {e}")
+            logger.exception(f"Failed to pause workflow: {e}")
             return False
 
     async def resume_workflow(self, execution_id: str) -> bool:
@@ -388,7 +390,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             return True
 
         except Exception as e:
-            logger.error(f"Failed to resume workflow: {e}")
+            logger.exception(f"Failed to resume workflow: {e}")
             return False
 
     async def send_a2ui_action(self, execution_id: str, action_data: dict) -> bool:
@@ -402,7 +404,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send A2UI action: {e}")
+            logger.exception(f"Failed to send A2UI action: {e}")
             return False
 
     async def resolve_escalation_workflow(

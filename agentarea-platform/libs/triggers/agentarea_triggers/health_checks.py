@@ -102,7 +102,7 @@ class TriggerSystemHealthCheck:
             }
 
         except Exception as e:
-            logger.error(f"Database health check failed: {e}")
+            logger.exception(f"Database health check failed: {e}")
             return {
                 "status": "unhealthy",
                 "message": f"Database connectivity failed: {e!s}",
@@ -143,7 +143,7 @@ class TriggerSystemHealthCheck:
                 }
 
         except Exception as e:
-            logger.error(f"Temporal health check failed: {e}")
+            logger.exception(f"Temporal health check failed: {e}")
             return {
                 "status": "unhealthy",
                 "message": f"Temporal health check failed: {e!s}",
@@ -180,7 +180,7 @@ class TriggerSystemHealthCheck:
                 }
 
         except Exception as e:
-            logger.error(f"Webhook health check failed: {e}")
+            logger.exception(f"Webhook health check failed: {e}")
             return {
                 "status": "unhealthy",
                 "message": f"Webhook health check failed: {e!s}",
@@ -243,7 +243,7 @@ class TriggerSystemHealthCheck:
             }
 
         except Exception as e:
-            logger.error(f"Execution metrics health check failed: {e}")
+            logger.exception(f"Execution metrics health check failed: {e}")
             return {
                 "status": "unhealthy",
                 "message": f"Execution metrics check failed: {e!s}",
@@ -261,7 +261,7 @@ class ComponentHealthChecker:
             await repository.count_all()
             return True
         except Exception as e:
-            logger.error(f"Database connection check failed: {e}")
+            logger.exception(f"Database connection check failed: {e}")
             return False
 
     @staticmethod
@@ -270,7 +270,7 @@ class ComponentHealthChecker:
         try:
             return await schedule_manager.is_healthy()
         except Exception as e:
-            logger.error(f"Temporal connection check failed: {e}")
+            logger.exception(f"Temporal connection check failed: {e}")
             return False
 
     @staticmethod
@@ -279,5 +279,5 @@ class ComponentHealthChecker:
         try:
             return await webhook_manager.is_healthy()
         except Exception as e:
-            logger.error(f"Webhook manager check failed: {e}")
+            logger.exception(f"Webhook manager check failed: {e}")
             return False

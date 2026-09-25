@@ -70,7 +70,7 @@ async def list_sandboxes(user_context: UserContextDep) -> SandboxListResponse:
                 },
             )
     except httpx.RequestError as exc:
-        logger.warning("Sandbox inventory manager request failed: %s", exc)
+        logger.warning("Sandbox inventory manager request failed: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Sandbox inventory is temporarily unavailable",
@@ -90,7 +90,7 @@ async def list_sandboxes(user_context: UserContextDep) -> SandboxListResponse:
     try:
         result = SandboxListResponse.model_validate(response.json())
     except (ValueError, ValidationError) as exc:
-        logger.error("Sandbox inventory manager returned an invalid response: %s", exc)
+        logger.exception("Sandbox inventory manager returned an invalid response: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Sandbox inventory response is invalid",

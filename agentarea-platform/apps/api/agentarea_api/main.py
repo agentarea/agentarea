@@ -154,7 +154,7 @@ async def initialize_services():
             type(event_broker).__name__,
         )
     except Exception as e:
-        logger.error("Service initialization failed: %s", e)
+        logger.exception("Service initialization failed: %s", e)
         raise e
 
 
@@ -169,9 +169,9 @@ async def cleanup_all_connections():
         await asyncio.wait_for(cleanup_connections(), timeout=2.0)
         logger.info("Connection manager cleanup completed")
     except TimeoutError:
-        logger.warning("Connection manager cleanup timed out (reload mode)")
+        logger.warning("Connection manager cleanup timed out (reload mode)", exc_info=True)
     except Exception as e:
-        logger.error("Error in connection manager cleanup: %s", e)
+        logger.exception("Error in connection manager cleanup: %s", e)
 
     try:
         # Stop events router with timeout
@@ -180,9 +180,9 @@ async def cleanup_all_connections():
         await asyncio.wait_for(stop_events_router(), timeout=2.0)
         logger.info("Events router cleanup completed")
     except TimeoutError:
-        logger.warning("Events router cleanup timed out (reload mode)")
+        logger.warning("Events router cleanup timed out (reload mode)", exc_info=True)
     except Exception as e:
-        logger.error("Error in events router cleanup: %s", e)
+        logger.exception("Error in events router cleanup: %s", e)
 
     logger.info("All connection cleanup completed")
 

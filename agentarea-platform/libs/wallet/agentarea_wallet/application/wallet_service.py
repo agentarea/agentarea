@@ -119,7 +119,9 @@ class WalletService:
             value = json.loads(raw)
         except json.JSONDecodeError:
             logger.warning(
-                "Wallet credentials secret for agent %s is not valid JSON", wallet.agent_id
+                "Wallet credentials secret for agent %s is not valid JSON",
+                wallet.agent_id,
+                exc_info=True,
             )
             return {}
         return value if isinstance(value, dict) else {}

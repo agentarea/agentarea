@@ -107,7 +107,7 @@ class LLMConditionEvaluator:
                 raise LLMConditionEvaluationError(f"Unknown condition type: {condition_type}")
 
         except Exception as e:
-            logger.error(f"Condition evaluation failed: {e}")
+            logger.exception(f"Condition evaluation failed: {e}")
             raise LLMConditionEvaluationError(f"Condition evaluation failed: {e}") from e
 
     async def _evaluate_rule_condition(
@@ -295,7 +295,7 @@ class LLMConditionEvaluator:
                     raise ValueError("Response is not a dictionary")
                 return parameters
             except (json.JSONDecodeError, ValueError) as e:
-                logger.warning(f"Failed to parse LLM response as JSON: {e}")
+                logger.warning(f"Failed to parse LLM response as JSON: {e}", exc_info=True)
                 # Fallback: return basic parameters
                 return {
                     "event_data": event_data,
@@ -304,7 +304,7 @@ class LLMConditionEvaluator:
                 }
 
         except Exception as e:
-            logger.error(f"Parameter extraction failed: {e}")
+            logger.exception(f"Parameter extraction failed: {e}")
             raise LLMConditionEvaluationError(f"Parameter extraction failed: {e}") from e
 
     async def validate_condition_syntax(
@@ -645,7 +645,7 @@ class LLMConditionEvaluator:
             return content.strip()
 
         except Exception as e:
-            logger.error(f"LLM call failed: {e}")
+            logger.exception(f"LLM call failed: {e}")
             raise LLMConditionEvaluationError(f"LLM call failed: {e}") from e
 
     def _parse_evaluation_response(self, response: str) -> bool:

@@ -82,7 +82,7 @@ class TemporalWorkflowService:
         try:
             return await self._execution_service.get_effective_policy(execution_id)
         except Exception as e:
-            logger.error(f"Failed to get effective policy: {e}")
+            logger.exception(f"Failed to get effective policy: {e}")
             return None
 
     async def get_pending_escalations(self, execution_id: str) -> list[dict[str, Any]]:
@@ -92,28 +92,28 @@ class TemporalWorkflowService:
         try:
             return await self._execution_service.cancel_execution(execution_id)
         except Exception as e:
-            logger.error(f"Failed to cancel task: {e}")
+            logger.exception(f"Failed to cancel task: {e}")
             return False
 
     async def pause_task(self, execution_id: str) -> bool:
         try:
             return await self._execution_service.pause_execution(execution_id)
         except Exception as e:
-            logger.error(f"Failed to pause task: {e}")
+            logger.exception(f"Failed to pause task: {e}")
             return False
 
     async def resume_task(self, execution_id: str) -> bool:
         try:
             return await self._execution_service.resume_execution(execution_id)
         except Exception as e:
-            logger.error(f"Failed to resume task: {e}")
+            logger.exception(f"Failed to resume task: {e}")
             return False
 
     async def send_a2ui_action(self, execution_id: str, action_data: dict) -> bool:
         try:
             return await self._execution_service.send_a2ui_action(execution_id, action_data)
         except Exception as e:
-            logger.error(f"Failed to send A2UI action: {e}")
+            logger.exception(f"Failed to send A2UI action: {e}")
             return False
 
     async def resolve_escalation(
@@ -142,7 +142,7 @@ class TemporalWorkflowService:
                 execution_id, command, payload
             )
         except Exception as e:
-            logger.error(f"Failed to send workflow command '{command}': {e}")
+            logger.exception(f"Failed to send workflow command '{command}': {e}")
             return False
 
     async def continue_execution(
@@ -152,5 +152,5 @@ class TemporalWorkflowService:
         try:
             return await self._execution_service.continue_execution(execution_id, payload)
         except Exception as e:
-            logger.error("Failed to continue workflow %s: %s", execution_id, e)
+            logger.exception("Failed to continue workflow %s: %s", execution_id, e)
             return {"accepted": False, "reason": "workflow_unavailable"}

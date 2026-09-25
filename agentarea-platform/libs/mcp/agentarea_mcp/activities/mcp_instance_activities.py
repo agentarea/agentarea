@@ -172,7 +172,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
 
                 return UpdateInstanceStatusResult(success=True)
         except Exception as e:
-            logger.error("Failed to update instance: %s", e)
+            logger.exception("Failed to update instance: %s", e)
             return UpdateInstanceStatusResult(success=False, error=str(e))
 
     @activity.defn(name="discover_mcp_tools_activity")
@@ -189,7 +189,9 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
             )
             return DiscoverToolsResult(success=True, tools=tools)
         except Exception as e:
-            logger.warning("Tool discovery failed for %s: %s", request.instance_id, e)
+            logger.warning(
+                "Tool discovery failed for %s: %s", request.instance_id, e, exc_info=True
+            )
             return DiscoverToolsResult(success=False, error=str(e))
 
     @activity.defn(name="publish_mcp_event_activity")
@@ -217,7 +219,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
             await redis_event_broker.publish(event)
             return PublishMCPEventResult(success=True)
         except Exception as e:
-            logger.warning("Failed to publish MCP event: %s", e)
+            logger.warning("Failed to publish MCP event: %s", e, exc_info=True)
             return PublishMCPEventResult(success=False, error=str(e))
 
     @activity.defn(name="get_mcp_instance_environment_activity")
@@ -259,7 +261,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                 return GetInstanceEnvironmentResult(env_vars=env_vars)
 
         except Exception as e:
-            logger.error("Failed to resolve environment: %s", e)
+            logger.exception("Failed to resolve environment: %s", e)
             return GetInstanceEnvironmentResult(error=str(e))
 
     @activity.defn(name="resolve_auth_headers_activity")
@@ -303,7 +305,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                 return ResolveAuthHeadersResult(headers=headers)
 
         except Exception as e:
-            logger.error("Failed to resolve auth headers: %s", e)
+            logger.exception("Failed to resolve auth headers: %s", e)
             return ResolveAuthHeadersResult(error=str(e))
 
     return [

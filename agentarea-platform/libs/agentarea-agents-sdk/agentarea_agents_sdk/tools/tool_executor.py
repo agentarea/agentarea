@@ -61,7 +61,7 @@ class ToolExecutor:
             # Re-raise tool execution errors as-is
             raise
         except Exception as e:
-            logger.error(f"Tool execution failed for '{tool_name}': {e}")
+            logger.exception(f"Tool execution failed for '{tool_name}': {e}")
             raise ToolExecutionError(tool_name, str(e), e) from e
 
     async def _create_mcp_tool(
@@ -105,7 +105,9 @@ class ToolExecutor:
                         if tools_payload is not None:
                             break
                     except Exception as e:
-                        logger.warning(f"Service.{method} failed for {server_instance_id}: {e}")
+                        logger.warning(
+                            f"Service.{method} failed for {server_instance_id}: {e}", exc_info=True
+                        )
 
             tools_list: list[dict[str, Any]] = []
             if isinstance(tools_payload, dict) and isinstance(tools_payload.get("tools"), list):
@@ -149,7 +151,7 @@ class ToolExecutor:
                 mcp_server_instance_service=mcp_server_instance_service,
             )
         except Exception as e:
-            logger.error(f"Failed to create MCP tool '{tool_name}': {e}")
+            logger.exception(f"Failed to create MCP tool '{tool_name}': {e}")
             return None
 
     def register_tool(self, tool: BaseTool) -> None:

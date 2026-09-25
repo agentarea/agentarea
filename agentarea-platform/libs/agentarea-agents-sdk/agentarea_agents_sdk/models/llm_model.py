@@ -147,8 +147,8 @@ class LLMModel:
                     parsed = json.loads(c)
                     if isinstance(parsed, list | dict):
                         return parsed
-                except Exception:  # noqa: S110
-                    pass
+                except Exception:
+                    logger.debug("Message content is not JSON; passing it as text", exc_info=True)
             return content
 
         # Fallback to string
@@ -198,8 +198,8 @@ class LLMModel:
                                 "function": fn,
                             }
                         )
-                    except Exception:  # noqa: S110
-                        pass
+                    except Exception:
+                        logger.warning("Dropping malformed tool call from message", exc_info=True)
             return {
                 "role": "assistant",
                 "content": self._to_content_parts(msg.content, msg.metadata),
@@ -212,7 +212,7 @@ class LLMModel:
 
         # Any object exposing role/content
         if hasattr(msg, "role") and hasattr(msg, "content"):
-            return {"role": getattr(msg, "role"), "content": getattr(msg, "content")}
+            return {"role": msg.role, "content": msg.content}
 
         # Otherwise return message unchanged
         return msg
@@ -457,7 +457,7 @@ class LLMModel:
                 for tool_call in message.tool_calls
                 if tool_call.type == "function"
             ]
-        elif hasattr(message, "function_call") and getattr(message, "function_call"):
+        elif hasattr(message, "function_call") and message.function_call:
             # Fallback for providers that use function_call instead of tool_calls
             fc = message.function_call
             tool_calls = [
@@ -536,7 +536,7 @@ class LLMModel:
                 "error_message": str(e),
             }
 
-            logger.error(f"LLM call failed with context: {error_context}")
+            logger.exception(f"LLM call failed with context: {error_context}")
 
             # Re-raise with original exception to preserve stack trace
             raise
@@ -642,7 +642,7 @@ class LLMModel:
                                             )
 
                     # Fallback: some providers stream legacy function_call instead of tool_calls
-                    if hasattr(delta, "function_call") and getattr(delta, "function_call"):
+                    if hasattr(delta, "function_call") and delta.function_call:
                         fc = delta.function_call
                         index = 0
                         if index not in tool_calls_buffer:
@@ -764,7 +764,7 @@ class LLMModel:
                                 total_tokens=prompt_tokens + completion_tokens,
                             )
                 except Exception as e:
-                    logger.warning(f"Failed to calculate cost via litellm: {e}")
+                    logger.warning(f"Failed to calculate cost via litellm: {e}", exc_info=True)
 
             # Return complete response
             result = LLMResponse(
@@ -793,7 +793,7 @@ class LLMModel:
                 "streaming": True,
             }
 
-            logger.error(f"Streaming LLM call failed with context: {error_context}")
+            logger.exception(f"Streaming LLM call failed with context: {error_context}")
 
             # Re-raise with original exception to preserve stack trace
             raise
@@ -811,7 +811,6 @@ class LLMModel:
         Yields:
             LLMResponse objects containing delta responses (only new content)
         """
-
         # Use direct streaming for OpenAI-compatible providers to capture thinking
         if self._supports_direct_streaming():
             logger.info(
@@ -931,7 +930,7 @@ class LLMModel:
                                     tool_calls_updated = True
 
                     # Fallback: some providers stream legacy function_call instead of tool_calls
-                    if hasattr(delta, "function_call") and getattr(delta, "function_call"):
+                    if hasattr(delta, "function_call") and delta.function_call:
                         fc = delta.function_call
                         index = 0
                         if index not in tool_calls_buffer:
@@ -1046,7 +1045,7 @@ class LLMModel:
                     )
                     logger.info(f"Calculated streaming cost via litellm: ${cost:.6f}")
                 except Exception as e:
-                    logger.warning(f"Failed to calculate streaming cost: {e}")
+                    logger.warning(f"Failed to calculate streaming cost: {e}", exc_info=True)
 
             # Yield final cost/usage
             if cost > 0.0:
@@ -1069,7 +1068,7 @@ class LLMModel:
                 "streaming": True,
             }
 
-            logger.error(f"Streaming LLM call failed with context: {error_context}")
+            logger.exception(f"Streaming LLM call failed with context: {error_context}")
 
             # Re-raise with original exception to preserve stack trace
             raise

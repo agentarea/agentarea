@@ -77,7 +77,7 @@ class BaseAuthProvider(AuthProviderInterface):
                 response.raise_for_status()
                 return response.json()
         except Exception as e:
-            logger.error(f"Failed to fetch JWKS from {jwks_url}: {e}")
+            logger.exception(f"Failed to fetch JWKS from {jwks_url}: {e}")
             raise
 
     def _find_key_by_kid(self, jwks: dict[str, Any], kid: str) -> dict[str, Any] | None:
