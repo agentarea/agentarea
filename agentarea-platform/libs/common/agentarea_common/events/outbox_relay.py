@@ -12,12 +12,18 @@ Rows that exceed ``max_attempts`` are excluded by the fetch query itself, so a
 permanently poisoned event cannot wedge the loop — live events queued behind it
 still flow. Exhausted rows are logged loudly when they give up and left in the
 table for inspection; they are never silently dropped.
+
+A row whose type has a handler is performed here instead of published: an
+effect outside Postgres that must follow a committed change (taking a removed
+member's access out of the graph) gets the same at-least-once delivery, retries
+and give-up logging as an event. Handlers therefore have to be idempotent.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable, Mapping
 
 from agentarea_common.auth.context import ServicePrincipal
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -35,6 +41,8 @@ _RELAY_CONTEXT = ServicePrincipal(
     reason="publishes queued events across every workspace; the fetch is deliberately unscoped",
 )
 
+OutboxHandler = Callable[[AsyncSession, EventEnvelope], Awaitable[None]]
+
 
 class OutboxRelay:
     """Publishes outbox rows to the broker on a bounded interval."""
@@ -47,9 +55,11 @@ class OutboxRelay:
         interval_seconds: float = 1.0,
         batch_size: int = 100,
         max_attempts: int = 10,
+        handlers: Mapping[str, OutboxHandler] | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._event_broker = event_broker
+        self._handlers = dict(handlers or {})
         self._interval = interval_seconds
         self._batch_size = batch_size
         self._max_attempts = max_attempts
@@ -108,7 +118,11 @@ class OutboxRelay:
             for row in rows:
                 try:
                     envelope = EventEnvelope.from_dict(row.payload)
-                    await self._event_broker.publish(envelope)
+                    handler = self._handlers.get(row.event_type)
+                    if handler is None:
+                        await self._event_broker.publish(envelope)
+                    else:
+                        await handler(session, envelope)
                 except Exception as exc:
                     logger.error(
                         "OutboxRelay failed to publish event %s (type=%s): %s",

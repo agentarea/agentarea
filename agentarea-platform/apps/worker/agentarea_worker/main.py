@@ -402,14 +402,23 @@ class AgentAreaWorker:
 
         # Transactional outbox relay: drains event_outbox rows (written in the
         # same txn as the aggregate change by domain services) and publishes them
-        # to the event broker. FOR UPDATE SKIP LOCKED lets it co-reside with any
-        # number of workers without coordination.
+        # to the event broker, or performs the ones that have a handler. FOR
+        # UPDATE SKIP LOCKED lets it co-reside with any number of workers
+        # without coordination.
         from agentarea_common.config.database import get_database
         from agentarea_common.events.outbox_relay import OutboxRelay
+        from agentarea_common.workspaces import (
+            MEMBERSHIP_ENDED,
+            get_workspace_membership_graph,
+            membership_removal_handler,
+        )
 
         self.outbox_relay = OutboxRelay(
             session_factory=get_database().async_session_factory,
             event_broker=dependencies.event_broker,
+            handlers={
+                MEMBERSHIP_ENDED: membership_removal_handler(get_workspace_membership_graph()),
+            },
         )
 
     async def run(self) -> None:

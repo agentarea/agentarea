@@ -23,6 +23,7 @@ from .models import (
     WorkspaceMembership,
 )
 from .repository import (
+    MEMBERSHIP_ENDED,
     WorkspaceInvitationRepository,
     WorkspaceMembershipRepository,
     WorkspaceRepository,
@@ -41,6 +42,7 @@ from .service import (
     WorkspaceMembershipService,
     WorkspaceMemberView,
     WorkspaceService,
+    membership_removal_handler,
 )
 from .slug import slugify
 
@@ -48,6 +50,7 @@ __all__ = [
     "INVITATION_STATUS_ACCEPTED",
     "INVITATION_STATUS_PENDING",
     "INVITATION_STATUS_REVOKED",
+    "MEMBERSHIP_ENDED",
     "InvitationAddressedElsewhere",
     "InvitationAlreadyAccepted",
     "InvitationExpired",
@@ -72,6 +75,7 @@ __all__ = [
     "grant_workspace_membership",
     "list_workspace_ids_for_member",
     "list_workspace_member_ids",
+    "membership_removal_handler",
     "revoke_workspace_membership",
     "slugify",
     "workspace_membership",

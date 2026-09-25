@@ -9,9 +9,13 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.authorization import assert_workspace_admin_of
 from ..auth.context import UserContext
+from ..events.base_events import EventEnvelope
+from ..events.outbox_relay import OutboxHandler
+from ..rebac import KetoError, OpenFGAError
 from .memberships import (
     MembershipGraph,
     grant_workspace_membership,
@@ -309,11 +313,31 @@ class WorkspaceMembershipService:
             )
 
         # Invitation revoked before the graph: an accept that grants in between
-        # then finds it revoked and takes its own grant back.
-        await self.membership_repo.end(workspace_id, target_user_id)
-        await revoke_workspace_membership(
-            self.graph, workspace_id=workspace_id, user_id=target_user_id
-        )
+        # then finds it revoked and takes its own grant back. The same commit
+        # queues the revocation for the outbox relay, so this attempt only makes
+        # the common case immediate; if it fails, the relay finishes the job.
+        await self.membership_repo.end(workspace_id, target_user_id, ended_by=actor_user_id)
+        try:
+            await self.finish_removal(workspace_id, target_user_id)
+        except (KetoError, OpenFGAError):
+            logger.warning(
+                "graph revocation for %s in workspace %s failed; the outbox relay retries it",
+                target_user_id,
+                workspace_id,
+                exc_info=True,
+            )
+
+    async def finish_removal(self, workspace_id: str, user_id: str) -> None:
+        """Take an ended membership's grants out of the graph. Idempotent.
+
+        Nothing is taken from a user whose membership row exists again (they
+        were admitted since) or from the owner, whose access is not membership's.
+        """
+        if await self.membership_repo.get(workspace_id, user_id) is not None:
+            return
+        if user_id == await self.owner_user_id(workspace_id):
+            return
+        await revoke_workspace_membership(self.graph, workspace_id=workspace_id, user_id=user_id)
 
     async def owner_user_id(self, workspace_id: str) -> str:
         """Who owns the workspace.
@@ -323,6 +347,20 @@ class WorkspaceMembershipService:
         """
         workspace = await self.workspace_repo.get(workspace_id)
         return workspace.owner_user_id if workspace is not None else workspace_id
+
+
+def membership_removal_handler(graph: MembershipGraph) -> OutboxHandler:
+    """The outbox relay's side of a removal: finish it in the graph."""
+
+    async def finish(session: AsyncSession, envelope: EventEnvelope) -> None:
+        service = WorkspaceMembershipService(
+            membership_repo=WorkspaceMembershipRepository(session),
+            workspace_repo=WorkspaceRepository(session),
+            graph=graph,
+        )
+        await service.finish_removal(envelope.data["workspace_id"], envelope.data["user_id"])
+
+    return finish
 
 
 def _member_order(member: WorkspaceMemberView) -> tuple[bool, datetime, str]:

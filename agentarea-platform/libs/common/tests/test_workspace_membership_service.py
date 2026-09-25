@@ -101,7 +101,7 @@ class FakeMembershipRepository:
     async def list_for_workspace(self, workspace_id: str) -> list[WorkspaceMembership]:
         return [r for r in self.rows if r.workspace_id == workspace_id]
 
-    async def end(self, workspace_id: str, user_id: str) -> None:
+    async def end(self, workspace_id: str, user_id: str, *, ended_by: str) -> None:
         row = await self.get(workspace_id, user_id)
         if row is not None:
             self.rows.remove(row)

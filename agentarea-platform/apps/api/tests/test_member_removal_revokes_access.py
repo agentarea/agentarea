@@ -18,10 +18,18 @@ from agentarea_common.auth.dependencies import _validate_api_key
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.base.models import BaseModel
 from agentarea_common.di.container import register_singleton
-from agentarea_common.rebac import CheckResult, OpenFGAError, RelationTuple
+from agentarea_common.events.outbox_orm import EventOutbox
+from agentarea_common.events.outbox_relay import OutboxRelay
+from agentarea_common.rebac import (
+    CheckResult,
+    OpenFGAError,
+    OpenFGAUnavailableError,
+    RelationTuple,
+)
 from agentarea_common.workspaces import (
     INVITATION_STATUS_ACCEPTED,
     INVITATION_STATUS_REVOKED,
+    MEMBERSHIP_ENDED,
     InvitationRevoked,
     Workspace,
     WorkspaceInvitation,
@@ -31,6 +39,7 @@ from agentarea_common.workspaces import (
     WorkspaceMembershipRepository,
     WorkspaceMembershipService,
     WorkspaceRepository,
+    membership_removal_handler,
 )
 from agentarea_mcp.application.access_token_service import hash_token
 from agentarea_mcp.domain.auth_models import APIKey
@@ -101,6 +110,7 @@ async def session_factory():
                     WorkspaceInvitation.__table__,
                     WorkspaceMembership.__table__,
                     APIKey.__table__,
+                    EventOutbox.__table__,
                 ],
             )
         )
@@ -330,6 +340,129 @@ async def test_a_removal_racing_the_accept_wins(session_factory, graph):
         accepted, _ = await invitations.accept(token=token, user_id=MEMBER, user_email=None)
         with pytest.raises(InvitationRevoked):
             await _memberships(session, graph).admit(accepted, MEMBER)
+
+    assert _member_tuples(graph) == []
+    async with session_factory() as session:
+        assert (await session.execute(select(WorkspaceMembership))).scalars().all() == []
+        stored = (await session.execute(select(WorkspaceInvitation))).scalar_one()
+    assert stored.status == INVITATION_STATUS_REVOKED
+    assert stored.membership_granted_at is None
+
+
+class _NoBroadcast:
+    async def publish(self, envelope) -> None:
+        raise AssertionError(f"{envelope.event_type} is performed by the relay, never broadcast")
+
+
+def _relay(session_factory, graph) -> OutboxRelay:
+    return OutboxRelay(
+        session_factory=session_factory,
+        event_broker=_NoBroadcast(),
+        handlers={MEMBERSHIP_ENDED: membership_removal_handler(graph)},
+    )
+
+
+def _graph_down(graph) -> list[bool]:
+    """Make every tuple delete fail until the returned switch is cleared."""
+    real_delete = graph.delete_tuple
+    down = [True]
+
+    async def delete(relation_tuple):
+        if down:
+            raise OpenFGAUnavailableError("graph unavailable")
+        await real_delete(relation_tuple)
+
+    graph.delete_tuple = delete
+    return down
+
+
+def _grant_member(graph) -> None:
+    graph.tuples.append(
+        RelationTuple(
+            namespace="project",
+            object=f"{WORKSPACE}-root",
+            relation="reader",
+            subject_id=f"User:{MEMBER}",
+        )
+    )
+
+
+async def test_a_graph_failure_during_removal_is_finished_by_the_relay(session_factory, graph):
+    _grant_member(graph)
+    down = _graph_down(graph)
+
+    async with session_factory() as session:
+        await _memberships(session, graph).remove(
+            workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER
+        )
+    assert len(_member_tuples(graph)) == 2, "the graph was down; nothing was revoked yet"
+
+    relay = _relay(session_factory, graph)
+    assert await relay.process_batch() == 0
+    down.clear()
+    assert await relay.process_batch() == 1
+
+    assert _member_tuples(graph) == []
+    assert [t.subject_id for t in graph.tuples] == [f"User:{OWNER}"]
+    assert await relay.process_batch() == 0, "the revocation is done once, not re-queued"
+
+
+async def test_removal_is_idempotent(session_factory, graph):
+    _grant_member(graph)
+    for _ in range(2):
+        async with session_factory() as session:
+            await _memberships(session, graph).remove(
+                workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER
+            )
+    relay = _relay(session_factory, graph)
+    assert await relay.process_batch() == 2
+
+    assert _member_tuples(graph) == []
+    assert [t.subject_id for t in graph.tuples] == [f"User:{OWNER}"]
+    async with session_factory() as session:
+        assert (await session.execute(select(WorkspaceMembership))).scalars().all() == []
+
+
+async def test_a_member_admitted_again_keeps_access_the_old_removal_would_take(
+    session_factory, graph
+):
+    async with session_factory() as session:
+        memberships = _memberships(session, graph)
+        await memberships.remove(workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER)
+        await memberships.record(workspace_id=WORKSPACE, user_id=MEMBER, invitation_id=None)
+
+    assert await _relay(session_factory, graph).process_batch() == 1
+
+    assert len(_member_tuples(graph)) == 2
+
+
+async def test_a_removal_racing_the_accept_wins_even_when_the_graph_fails(session_factory, graph):
+    graph.tuples = [t for t in graph.tuples if t.subject_id != f"User:{MEMBER}"]
+    real_write = graph.write_tuple
+    raced: list[bool] = []
+    real_delete = graph.delete_tuple
+
+    async def write_then_remove(relation_tuple):
+        await real_write(relation_tuple)
+        if raced:
+            return
+        raced.append(True)
+        _graph_down(graph)
+        async with session_factory() as other:
+            await _memberships(other, graph).remove(
+                workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER
+            )
+
+    graph.write_tuple = write_then_remove
+    async with session_factory() as session:
+        invitations, _, token = await _invite(session)
+        accepted, _ = await invitations.accept(token=token, user_id=MEMBER, user_email=None)
+        with pytest.raises(OpenFGAError):
+            await _memberships(session, graph).admit(accepted, MEMBER)
+    assert _member_tuples(graph), "the accept's grant outlived both failed revocations"
+
+    graph.delete_tuple = real_delete
+    assert await _relay(session_factory, graph).process_batch() == 1
 
     assert _member_tuples(graph) == []
     async with session_factory() as session:
