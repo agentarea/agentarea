@@ -77,11 +77,13 @@ class TestErrorHandlingIntegration:
         assert "Database connection lost" in str(exc_info.value)
         assert exc_info.value.correlation_id is not None
 
-    async def test_webhook_error_handling_with_correlation(self):
+    async def test_webhook_error_handling_with_correlation(self, fake_secret_reader):
         """Test webhook error handling with correlation ID tracking."""
         # Setup
         execution_callback = AsyncMock()
-        webhook_manager = DefaultWebhookManager(execution_callback)
+        webhook_manager = DefaultWebhookManager(
+            execution_callback, secret_reader=fake_secret_reader
+        )
 
         # Set an initial correlation ID
         set_correlation_id("test-correlation-123")

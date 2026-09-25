@@ -151,19 +151,23 @@ async def test_client_resource_lookup_is_limited_to_accessible_workspaces():
 
 
 class TestTransportSecurity:
-    """Host validation belongs to the ingress, not to this mount.
+    """Host validation belongs to the ingress, not to this mount."""
 
-    FastMCP turns DNS-rebinding protection on by default with an empty
-    ``allowed_hosts``, which rejects every Host header with 421. The platform
-    ``/mcp`` server opts out explicitly because it runs behind a reverse proxy;
-    ``/client-mcp`` is the same deployment and must agree, or an authenticated
-    harness gets 421 on every call once it finally has a token.
-    """
+    @staticmethod
+    def _security(server):
+        from mcp.server.transport_security import TransportSecuritySettings
+
+        server.streamable_http_app(
+            streamable_http_path="/",
+            stateless_http=True,
+            transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+        )
+        return server.session_manager.security_settings
 
     def test_dns_rebinding_protection_is_disabled(self):
         from agentarea_api.api.v1.client_mcp import client_mcp_server
 
-        security = client_mcp_server.settings.transport_security
+        security = self._security(client_mcp_server)
 
         assert security is not None
         assert security.enable_dns_rebinding_protection is False
@@ -172,9 +176,8 @@ class TestTransportSecurity:
         from agentarea_agents_sdk.mcp_server import create_mcp_server
         from agentarea_api.api.v1.client_mcp import client_mcp_server
 
-        platform = create_mcp_server(toolsets=[], name="probe")
+        platform = create_mcp_server(toolsets=[], name="probe", workspace_argument=True)
 
-        assert (
-            client_mcp_server.settings.transport_security.enable_dns_rebinding_protection
-            is platform.settings.transport_security.enable_dns_rebinding_protection
+        assert self._security(client_mcp_server).enable_dns_rebinding_protection is (
+            self._security(platform).enable_dns_rebinding_protection
         )

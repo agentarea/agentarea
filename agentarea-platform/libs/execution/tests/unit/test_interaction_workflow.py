@@ -155,7 +155,10 @@ async def test_input_timeout_stops_main_loop_without_second_model_turn(instance)
         await instance._execute_tool_calls([request])
 
     instance._execute_iteration = iteration
-    with patch(f"{MODULE}.wait_condition", new=AsyncMock(side_effect=TimeoutError)):
+    with (
+        patch(f"{MODULE}.wait_condition", new=AsyncMock(side_effect=TimeoutError)),
+        patch(f"{MODULE}.patched", return_value=True),
+    ):
         await instance._execute_main_loop()
     assert calls == 1
     assert instance.state.status == "blocked"
@@ -506,3 +509,34 @@ async def test_blocked_outcome_cannot_bypass_artifact_validation_failure(instanc
     assert instance.state.validation_repair_attempts == 1
     assert instance.state.status != "blocked"
     assert json.loads(instance.state.messages[-1].content)["status"] == "validation_failed"
+
+
+@pytest.mark.asyncio
+async def test_thinking_only_reply_is_neither_an_answer_nor_a_completion(instance):
+    thinking = "The user wants a recurring task. I need to use the `triggers"
+    with (
+        patch(f"{MODULE}.patched", return_value=True),
+        patch.object(instance, "_handle_task_completion", new=AsyncMock()) as complete,
+    ):
+        await instance._process_llm_response(
+            {"role": "assistant", "content": "", "tool_calls": None, "thinking": thinking}
+        )
+    complete.assert_not_awaited()
+    assert instance.state.success is False
+    assert not instance.state.final_response
+    assert instance._awaiting_input is False
+    assert [m for m in instance.state.messages if m.role == "assistant"] == []
+    assert all(thinking not in (m.content or "") for m in instance.state.messages)
+
+
+@pytest.mark.asyncio
+async def test_content_reply_alongside_thinking_is_still_the_answer(instance):
+    with (
+        patch(f"{MODULE}.patched", return_value=True),
+        patch.object(instance, "_handle_task_completion", new=AsyncMock()) as complete,
+    ):
+        await instance._process_llm_response(
+            {"role": "assistant", "content": "Scheduled.", "tool_calls": None, "thinking": "plan"}
+        )
+    (completion_call,) = complete.await_args.args
+    assert json.loads(completion_call.function["arguments"])["result"] == "Scheduled."

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildAuthorizeRequest,
+  canAuthorize,
   deriveOAuthConnectState,
   summarizeAuthorization,
   type MCPOAuthPreflight,
@@ -224,5 +225,34 @@ describe("summarizeAuthorization", () => {
         oauthState: "loading",
       })
     ).toEqual({ authorized: false, reachableButUnauthorized: false });
+  });
+});
+
+describe("canAuthorize", () => {
+  const needsApp = {
+    kind: "needs_oauth_app",
+    connected: false,
+    reason: "no DCR",
+    issuer: "https://accounts.google.com",
+  } as const;
+
+  it("is ready without credentials when the provider registers us itself", () => {
+    expect(
+      canAuthorize({ state: { kind: "ready", connected: false } })
+    ).toBe(true);
+  });
+
+  it("waits for a complete OAuth app before the connection even exists", () => {
+    // The create page asks this before it creates the instance the request
+    // will name, so readiness cannot depend on having an instance id.
+    expect(canAuthorize({ state: needsApp, credentials: { client_id: "cid" } })).toBe(
+      false
+    );
+    expect(
+      canAuthorize({
+        state: needsApp,
+        credentials: { client_id: "cid", client_secret: "shh" },
+      })
+    ).toBe(true);
   });
 });

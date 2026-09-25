@@ -7,6 +7,7 @@ import { AlertTriangle, BadgeCheck, ExternalLink, Loader2 } from "lucide-react";
 import { CustomOAuthAppFields } from "@/components/CustomOAuthAppFields";
 import { Button } from "@/components/ui/button";
 import type { CustomOAuthAppCredentials } from "@/lib/oauth-app";
+import { isSafeRedirectUrl } from "@/lib/safe-redirect";
 import {
   listWorkspaceSecretsAction,
   mcpOAuthPreflightAction,
@@ -15,6 +16,7 @@ import {
 
 import {
   buildAuthorizeRequest,
+  canAuthorize,
   deriveOAuthConnectState,
   type MCPOAuthPreflight,
   type OAuthConnectState,
@@ -28,13 +30,21 @@ import {
  * with no OAuth at all gets an explanation, and only a provider that can
  * actually complete the flow gets a bare Connect button.
  */
+/**
+ * What is being authorized: an existing connection, or a catalog spec whose
+ * connection is created only once the user commits to Connect.
+ */
+export type OAuthConnectTarget =
+  | { kind: "instance"; instanceId: string }
+  | { kind: "spec"; serverId: string; ensureInstance: () => Promise<string> };
+
 export function OAuthConnectPanel({
-  instanceId,
+  target,
   isUrlType,
   onStateChange,
   compact,
 }: {
-  instanceId: string;
+  target: OAuthConnectTarget;
   isUrlType: boolean;
   /** Lets the page describe the connection ("reachable, not authorized"). */
   onStateChange?: (state: OAuthConnectState) => void;
@@ -47,11 +57,18 @@ export function OAuthConnectPanel({
     useState<CustomOAuthAppCredentials | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const targetKind = target.kind;
+  const targetKey =
+    target.kind === "instance" ? target.instanceId : target.serverId;
 
   useEffect(() => {
     if (!isUrlType) return;
     let active = true;
-    mcpOAuthPreflightAction(instanceId).then(({ data, error }) => {
+    mcpOAuthPreflightAction(
+      targetKind === "instance"
+        ? { instance_id: targetKey }
+        : { server_id: targetKey }
+    ).then(({ data, error }) => {
       if (!active) return;
       if (error || !data) {
         setPreflightError(error || t("preflightFailed"));
@@ -62,7 +79,7 @@ export function OAuthConnectPanel({
     return () => {
       active = false;
     };
-  }, [instanceId, isUrlType, t]);
+  }, [targetKind, targetKey, isUrlType, t]);
 
   const state = deriveOAuthConnectState({
     isUrlType,
@@ -79,19 +96,28 @@ export function OAuthConnectPanel({
   }, [isUrlType, preflight, preflightError]);
 
   const handleConnect = useCallback(async () => {
-    const request = buildAuthorizeRequest({
-      instanceId,
-      state,
-      credentials,
-      returnTo: window.location.origin,
-    });
-    if (!request) return;
+    if (!canAuthorize({ state, credentials })) return;
 
     setIsConnecting(true);
     setConnectError(null);
     try {
+      const instanceId =
+        target.kind === "instance"
+          ? target.instanceId
+          : await target.ensureInstance();
+      const request = buildAuthorizeRequest({
+        instanceId,
+        state,
+        credentials,
+        returnTo: window.location.origin,
+      });
+      if (!request) return;
       const { data, error } = await oauthAuthorizeAction(request);
-      if (error || !data?.authorize_url) {
+      if (
+        error ||
+        !data?.authorize_url ||
+        !isSafeRedirectUrl(data.authorize_url)
+      ) {
         setConnectError(error || t("startFailed"));
         return;
       }
@@ -101,7 +127,7 @@ export function OAuthConnectPanel({
     } finally {
       setIsConnecting(false);
     }
-  }, [credentials, instanceId, state, t]);
+  }, [credentials, state, t, target]);
 
   if (state.kind === "hidden") return null;
 
@@ -130,9 +156,7 @@ export function OAuthConnectPanel({
   }
 
   const connectLabel = state.connected ? t("reconnect") : t("connect");
-  const canConnect = Boolean(
-    buildAuthorizeRequest({ instanceId, state, credentials })
-  );
+  const canConnect = canAuthorize({ state, credentials });
 
   if (state.kind === "ready") {
     return (

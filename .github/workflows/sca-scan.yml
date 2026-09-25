@@ -1,0 +1,35 @@
+name: SCA scan
+
+# Software composition analysis: scans dependency lockfiles for known
+# vulnerabilities using OSV-Scanner (https://google.github.io/osv-scanner/).
+# Fails on any finding that is not in the reviewed allowlist at
+# osv-scanner.toml (each entry there needs a reason and a review date).
+#
+# Not wired into ci-required yet (see issue #502) until it has run clean on
+# main; a required check that can't pass would block every PR.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  osv-scanner:
+    name: osv-scanner
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
+    with:
+      scan-args: |-
+        --config=./osv-scanner.toml
+        --lockfile=./agentarea-platform/uv.lock
+        --lockfile=./agentarea-operator/uv.lock
+        --lockfile=./agentarea-webapp/pnpm-lock.yaml
+        --lockfile=./agentarea-cli/pnpm-lock.yaml
+        --lockfile=./agentarea-mcp-manager/go.mod
+        --lockfile=./agentarea-event-service/go.mod

@@ -47,9 +47,7 @@ if not _TEMPORALIO_AVAILABLE:
     sys.modules["temporalio.service"] = MagicMock()
 
 
-def make_trigger_repository_factory(
-    trigger_repo=None, execution_repo=None, agent_repo=None
-):
+def make_trigger_repository_factory(trigger_repo=None, execution_repo=None, agent_repo=None):
     """Build a mock RepositoryFactory for TriggerService.
 
     The new ``TriggerService.__init__`` signature takes a ``repository_factory``
@@ -73,16 +71,12 @@ def make_trigger_repository_factory(
     try:
         from agentarea_agents.infrastructure.repository import AgentRepository
 
-        mapping[AgentRepository] = (
-            agent_repo if agent_repo is not None else AsyncMock()
-        )
+        mapping[AgentRepository] = agent_repo if agent_repo is not None else AsyncMock()
     except ImportError:
         pass
 
     factory = MagicMock()
-    factory.create_repository.side_effect = lambda cls, *a, **k: mapping.get(
-        cls, AsyncMock()
-    )
+    factory.create_repository.side_effect = lambda cls, *a, **k: mapping.get(cls, AsyncMock())
     return factory
 
 
@@ -90,6 +84,27 @@ def make_trigger_repository_factory(
 def trigger_repository_factory():
     """Fixture exposing the repository-factory builder helper."""
     return make_trigger_repository_factory
+
+
+class FakeSecretReader:
+    """In-memory SecretReader stand-in, keyed by secret name.
+
+    DefaultWebhookManager's secret_reader is required, not optional, so any
+    test constructing one needs a reader to pass explicitly. This is that
+    reader for tests that don't care about its contents.
+    """
+
+    def __init__(self, values: dict[str, str] | None = None):
+        self._values = dict(values or {})
+
+    async def get_secret(self, name: str) -> str | None:
+        return self._values.get(name)
+
+
+@pytest.fixture
+def fake_secret_reader():
+    """An empty FakeSecretReader, for tests that just need the constructor satisfied."""
+    return FakeSecretReader()
 
 
 @pytest.fixture(autouse=True)

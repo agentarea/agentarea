@@ -39,6 +39,14 @@ from agentarea_tasks.infrastructure.orm import TaskEventORM, TaskORM  # noqa: F4
 from agentarea_triggers.infrastructure.orm import TriggerExecutionORM, TriggerORM  # noqa: F401
 
 
+@pytest.fixture(autouse=True)
+def _graph_ownership(monkeypatch):
+    """Creating a governed row writes ownership tuples; here the graph is scenery."""
+    from agentarea_common.testing.graph import install_graph_ownership_stub
+
+    return install_graph_ownership_stub(monkeypatch)
+
+
 # SQLite foreign key support (mirrors tests/integration/repositories/conftest.py)
 @event.listens_for(Engine, "connect")
 def _set_sqlite_pragma(dbapi_connection, connection_record):
@@ -92,7 +100,6 @@ _GATE_MARKERS: dict[str, str] = {
     "test_real_workflow_infrastructure": "requires_llm",
     "test_real_workflow_with_mocked_db": "requires_llm",
     "test_sdk_temporal_integration": "requires_llm",
-    "test_a2a_task_execution_comprehensive": "requires_llm",
     # need object storage
     "test_artifact_service": "requires_s3",
     # need Docker / live MCP containers

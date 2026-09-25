@@ -10,7 +10,7 @@ def _tool(**kwargs):
     """A duck-typed stand-in for mcp.types.Tool (only the attrs we read)."""
     kwargs.setdefault("name", "do_thing")
     kwargs.setdefault("description", "does a thing")
-    kwargs.setdefault("inputSchema", {"type": "object"})
+    kwargs.setdefault("input_schema", {"type": "object"})
     kwargs.setdefault("title", None)
     kwargs.setdefault("annotations", None)
     return SimpleNamespace(**kwargs)
@@ -24,7 +24,7 @@ class TestSerializeMcpTool:
         assert out["inputSchema"] == {"type": "object"}
 
     def test_missing_description_and_schema_default_to_empty(self):
-        out = serialize_mcp_tool(_tool(description=None, inputSchema=None))
+        out = serialize_mcp_tool(_tool(description=None, input_schema=None))
         assert out["description"] == ""
         assert out["inputSchema"] == {}
 
@@ -53,9 +53,7 @@ class TestSerializeMcpTool:
         }
 
     def test_captures_annotations_from_dict(self):
-        out = serialize_mcp_tool(
-            _tool(annotations={"readOnlyHint": True, "idempotentHint": None})
-        )
+        out = serialize_mcp_tool(_tool(annotations={"readOnlyHint": True, "idempotentHint": None}))
         # None hints are dropped so the blob only carries what the server set.
         assert out["annotations"] == {"readOnlyHint": True}
 
@@ -69,3 +67,24 @@ class TestSerializeMcpTool:
         ann = SimpleNamespace(model_dump=lambda exclude_none: {"readOnlyHint": True})
         out = serialize_mcp_tool(_tool(title="T", annotations=ann))
         json.dumps(out)  # must not raise
+
+    def test_preserves_only_ui_metadata_and_normalizes_legacy_resource_uri(self):
+        out = serialize_mcp_tool(
+            _tool(
+                meta={
+                    "ui": {"visibility": ["app"], "resourceUri": "ui://canonical"},
+                    "ui/resourceUri": "ui://legacy",
+                    "other": "must not persist",
+                }
+            )
+        )
+
+        assert out["_meta"] == {"ui": {"visibility": ["app"], "resourceUri": "ui://canonical"}}
+        assert "other" not in out["_meta"]
+
+    def test_normalizes_legacy_resource_uri_when_ui_metadata_has_no_resource_uri(self):
+        out = serialize_mcp_tool(
+            _tool(meta={"ui": {"visibility": ["model"]}, "ui/resourceUri": "ui://legacy"})
+        )
+
+        assert out["_meta"] == {"ui": {"visibility": ["model"], "resourceUri": "ui://legacy"}}

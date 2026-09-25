@@ -17,6 +17,8 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.auth.authorization import assert_workspace_admin
+
 from agentarea_bundles.application.analyzer import (
     mcp_is_unsupported,
     policy_as_rule,
@@ -99,6 +101,10 @@ class BundleInstaller:
             raise BundleInstallError(
                 "package is not installable: missing required setup", issues=block
             )
+        # Policies install last, but each step before them commits on its own, so
+        # a refusal there would leave a partial install behind. Ask up front.
+        if package.policies:
+            await assert_workspace_admin(self._user_context)
 
         result = InstallResult(bundle_name=package.name)
 

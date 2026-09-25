@@ -4,7 +4,17 @@ import inspect
 import types
 from abc import ABC
 from collections.abc import Callable
-from typing import Any, TypeVar, Union, cast, get_args, get_origin, get_type_hints, overload
+from typing import (
+    Any,
+    ClassVar,
+    TypeVar,
+    Union,
+    cast,
+    get_args,
+    get_origin,
+    get_type_hints,
+    overload,
+)
 
 from .base_tool import BaseTool
 from .tool_definition import (
@@ -109,6 +119,11 @@ class Toolset(ABC):
     This approach automatically generates schemas from method signatures and docstrings,
     eliminating the need for manual schema definition.
     """
+
+    # Whether each tool acts on one workspace. On an MCP mount that spans
+    # workspaces, such tools take a required ``workspace`` argument; a toolset
+    # that acts on none (e.g. listing workspaces) sets this to False.
+    workspace_scoped: ClassVar[bool] = True
 
     def __init__(self):
         """Initialize the tool and discover decorated methods."""

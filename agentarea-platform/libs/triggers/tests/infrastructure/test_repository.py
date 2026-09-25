@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_common.auth.context import UserContext
+from agentarea_common.rebac.models import RelationTuple
 from agentarea_triggers.domain.enums import (
     ExecutionStatus,
     TriggerType,
@@ -289,8 +290,12 @@ class TestTriggerRepository:
 
     @pytest.mark.asyncio
     async def test_create_from_model_persists_event_filter(
-        self, repository, mock_session, sample_trigger_orm
+        self, repository, mock_session, sample_trigger_orm, monkeypatch
     ):
+        monkeypatch.setattr(
+            "agentarea_common.base.workspace_scoped_repository.grant_resource_owner",
+            AsyncMock(),
+        )
         sample_trigger_orm.trigger_type = TriggerType.WEBHOOK.value
         sample_trigger_orm.webhook_id = "webhook_123"
         sample_trigger_orm.event_types = ["message"]
@@ -307,6 +312,48 @@ class TestTriggerRepository:
         await repository.create_from_model(trigger_data)
 
         assert mock_session.add.call_args.args[0].event_types == ["message"]
+
+    @pytest.mark.asyncio
+    async def test_create_from_model_grants_creator_ownership(
+        self, repository, mock_session, mock_user_context, sample_trigger_orm, monkeypatch
+    ):
+        """Regression test for #478.
+
+        ``create_from_model`` built the ORM row itself and called
+        ``session.add`` directly, bypassing ``WorkspaceScopedRepository.create``
+        where ``grant_resource_owner`` runs. ``TriggerORM.__graph_resource__``
+        made OpenFGA fail closed, 403'ing the creator on their own trigger.
+        """
+        repository._orm_to_domain = MagicMock(return_value=sample_trigger_orm)
+
+        recorded: list[RelationTuple] = []
+        client = AsyncMock()
+        client.write_tuple.side_effect = lambda tuple_: recorded.append(tuple_)
+        monkeypatch.setattr(
+            "agentarea_common.rebac.ownership.resolve_graph_client",
+            lambda: (client, "OpenFGA"),
+        )
+
+        created_id = uuid4()
+
+        async def mock_refresh(obj):
+            obj.id = created_id
+
+        mock_session.refresh = AsyncMock(side_effect=mock_refresh)
+
+        trigger_data = TriggerCreate(
+            name="Ownership webhook",
+            agent_id=uuid4(),
+            trigger_type=TriggerType.WEBHOOK,
+            webhook_id="webhook_own",
+            created_by=mock_user_context.user_id,
+        )
+
+        await repository.create_from_model(trigger_data)
+
+        assert [t.relation for t in recorded] == ["project", "reader", "writer", "manager"]
+        assert {t.object for t in recorded} == {str(created_id)}
+        assert {t.subject_id for t in recorded[1:]} == {f"User:{mock_user_context.user_id}"}
 
 
 class TestTriggerExecutionRepository:

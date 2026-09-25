@@ -38,7 +38,7 @@ async def test_container_backed_discovery_uses_the_gateway_route(gateway_credent
     recorder = _Recorder()
 
     with patch(
-        "agentarea_mcp.verification.mcp_transport_candidates",
+        "agentarea_mcp.application.mcp_client.mcp_transport_candidates",
         side_effect=recorder.candidates,
     ):
         with suppress(Exception):
@@ -59,7 +59,7 @@ async def test_url_type_discovery_still_dials_the_given_endpoint():
     recorder = _Recorder()
 
     with patch(
-        "agentarea_mcp.verification.mcp_transport_candidates",
+        "agentarea_mcp.application.mcp_client.mcp_transport_candidates",
         side_effect=recorder.candidates,
     ):
         with suppress(Exception):

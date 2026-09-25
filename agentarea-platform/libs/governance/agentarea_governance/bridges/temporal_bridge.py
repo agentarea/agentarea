@@ -6,10 +6,13 @@ This is the ONLY module in the governance library that imports temporalio.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Sequence
 from typing import Any
 from uuid import UUID
 
 from agentarea_execution.workflows.constants import Activities
+from temporalio import activity
+from temporalio.exceptions import ApplicationError
 from temporalio.worker import (
     ActivityInboundInterceptor,
     ExecuteActivityInput,
@@ -18,8 +21,8 @@ from temporalio.worker import (
 )
 
 from ..domain.enums import InterceptorAction, Phase
-from ..domain.exceptions import EscalationRequired, GovernanceDenied
-from ..domain.models import InterceptorContext
+from ..domain.exceptions import EscalationRequiredError, GovernanceDeniedError
+from ..domain.models import InterceptorContext, InterceptorResult
 from ..domain.policies import effective_policy_from_json
 from ..pipeline import InterceptorPipeline
 
@@ -91,20 +94,52 @@ def _extract_execution_state(request: Any) -> dict[str, Any]:
     everything. Runtime counters (cost/tokens consumed so far) ride alongside
     the policy so budget gates compare against the running total, not just the
     hard ceiling.
+
+    A human's approval of an escalated call rides along too, independent of the
+    policy: the gate that escalated decides whether that approval satisfies it.
     """
+    state: dict[str, Any] = {}
     raw_policy = getattr(request, "effective_policy", None)
-    if not raw_policy:
-        return {}
+    if raw_policy:
+        policy = effective_policy_from_json(raw_policy)
 
-    policy = effective_policy_from_json(raw_policy)
+        runtime_state: dict[str, Any] = {}
+        for field in ("cost_used", "service_cost_used", "tokens_used"):
+            value = getattr(request, field, None)
+            if value is not None:
+                runtime_state[field] = value
 
-    runtime_state: dict[str, Any] = {}
-    for field in ("cost_used", "service_cost_used", "tokens_used"):
-        value = getattr(request, field, None)
-        if value is not None:
-            runtime_state[field] = value
+        state = policy.to_execution_state(runtime_state)
 
-    return policy.to_execution_state(runtime_state)
+    if getattr(request, "escalation_approved", False) is True:
+        state["escalation_approved"] = True
+    return state
+
+
+def _verdict_failure(
+    error_type: type[GovernanceDeniedError | EscalationRequiredError],
+    result: InterceptorResult,
+    phase: Phase,
+) -> ApplicationError:
+    """A gate verdict as the activity failure the workflow reads.
+
+    Temporal carries a plain exception across as its class name and ``str()``
+    only, so the gate and its reason travel as details instead of being parsed
+    back out of a message. The phase tells the workflow whether the call had
+    already run. The same verdict on the same call does not change between
+    attempts, hence non-retryable.
+    """
+    return ApplicationError(
+        f"{result.interceptor_name}: {result.reason}",
+        {
+            "interceptor_name": result.interceptor_name,
+            "reason": result.reason,
+            "metadata": result.metadata,
+            "phase": phase.value,
+        },
+        type=error_type.__name__,
+        non_retryable=True,
+    )
 
 
 def _extract_uuid(obj: Any, field: str) -> UUID | None:
@@ -195,17 +230,9 @@ class GovernanceActivityInterceptor(ActivityInboundInterceptor):
             if context:
                 result = await self._pipeline.run(pre_phase, context)
                 if result.action == InterceptorAction.DENY:
-                    raise GovernanceDenied(
-                        reason=result.reason,
-                        interceptor_name=result.interceptor_name,
-                        metadata=result.metadata,
-                    )
+                    raise _verdict_failure(GovernanceDeniedError, result, pre_phase)
                 if result.action == InterceptorAction.ESCALATE:
-                    raise EscalationRequired(
-                        reason=result.reason,
-                        interceptor_name=result.interceptor_name,
-                        metadata=result.metadata,
-                    )
+                    raise _verdict_failure(EscalationRequiredError, result, pre_phase)
 
         # Execute the actual activity
         output = await self.next.execute_activity(input)
@@ -235,10 +262,7 @@ class GovernanceActivityInterceptor(ActivityInboundInterceptor):
                 ):
                     output = _apply_modification(output, result.modified_content)
                 if result.action == InterceptorAction.DENY:
-                    raise GovernanceDenied(
-                        reason=result.reason,
-                        interceptor_name=result.interceptor_name,
-                    )
+                    raise _verdict_failure(GovernanceDeniedError, result, post_phase)
 
         return output
 
@@ -280,11 +304,15 @@ class GovernanceWorkerInterceptor(Interceptor):
         return None
 
 
-def validate_activity_mapping(registered_activities: list[str]) -> None:
-    """Validate that all mapped activity names exist in the worker's activities."""
-    for activity_name in _ACTIVITY_PHASE_MAP:
-        if activity_name not in registered_activities:
-            logger.warning(
-                "Governance bridge maps activity '%s' but it is not registered on this worker",
-                activity_name,
-            )
+def validate_activity_mapping(registered_activities: Sequence[Callable[..., Any]]) -> None:
+    """Refuse to start a worker that lacks an activity the bridge governs.
+
+    Compares the names the activities are registered under, the same names the
+    workflow schedules them by.
+    """
+    registered = {activity._Definition.must_from_callable(fn).name for fn in registered_activities}
+    missing = sorted(set(_ACTIVITY_PHASE_MAP) - registered)
+    if missing:
+        raise RuntimeError(
+            f"Governance bridge maps activities not registered on this worker: {missing}"
+        )

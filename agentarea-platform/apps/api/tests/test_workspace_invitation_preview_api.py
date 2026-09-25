@@ -14,8 +14,12 @@ import pytest
 import pytest_asyncio
 from agentarea_api.api.v1 import workspace_invitations
 from agentarea_api.main import app
+from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.auth.identity_directory import IdentityRecord
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import register_singleton
 from agentarea_common.workspaces import WorkspaceInvitationService
 from httpx import ASGITransport, AsyncClient
 
@@ -58,13 +62,14 @@ class FakeWorkspaceRepository:
 
 @pytest.fixture
 def service() -> WorkspaceInvitationService:
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
     return WorkspaceInvitationService(FakeInvitationRepository())  # type: ignore[arg-type]
 
 
 @pytest.fixture
 def memberships():
     memberships = MagicMock()
-    memberships.record = AsyncMock()
+    memberships.admit = AsyncMock()
     return memberships
 
 
@@ -120,8 +125,11 @@ async def make_client(service, memberships):
 
 
 async def _invite(service, email: str | None = None) -> str:
+    inviter = UserContext(
+        user_id=INVITER, workspace_id=WORKSPACE_ID, admin_workspaces=[WORKSPACE_ID]
+    )
     invitation, token = await service.create_invitation(
-        workspace_id=WORKSPACE_ID, invited_by=INVITER, email=email
+        actor=inviter, workspace_id=WORKSPACE_ID, email=email
     )
     invitation.expires_at = EXPIRES_AT
     return token
@@ -211,13 +219,11 @@ async def test_accept_is_refused_to_an_account_it_is_not_addressed_to(
     )
 
     assert response.status_code == 403, response.text
-    memberships.record.assert_not_called()
+    memberships.admit.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_accept_by_the_addressee_grants_membership(
-    service, make_client, memberships
-) -> None:
+async def test_accept_by_the_addressee_grants_membership(service, make_client, memberships) -> None:
     token = await _invite(service, email="misha@agentarea.ai")
 
     response = await make_client("misha@agentarea.ai").post(
@@ -226,4 +232,35 @@ async def test_accept_by_the_addressee_grants_membership(
 
     assert response.status_code == 200, response.text
     assert response.json()["workspace_id"] == WORKSPACE_ID
-    memberships.record.assert_awaited_once()
+    memberships.admit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_a_retry_after_the_graph_failed_grants_membership(service, make_client, memberships):
+    """The invitation is committed as accepted before the grant; a failed grant must be retryable."""
+    from agentarea_common.rebac.openfga_client import OpenFGAUnavailableError
+
+    memberships.admit = AsyncMock(side_effect=[OpenFGAUnavailableError("down"), None])
+    token = await _invite(service)
+    client = make_client("misha@agentarea.ai")
+
+    first = await client.post("/v1/invitations/accept", json={"token": token})
+    retry = await client.post("/v1/invitations/accept", json={"token": token})
+
+    assert first.status_code == 503, first.text
+    assert retry.status_code == 200, retry.text
+    assert memberships.admit.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_an_accept_that_loses_to_a_removal_is_refused(service, make_client, memberships):
+    from agentarea_common.workspaces import InvitationRevoked
+
+    memberships.admit = AsyncMock(side_effect=InvitationRevoked("invitation revoked"))
+    token = await _invite(service)
+
+    response = await make_client("misha@agentarea.ai").post(
+        "/v1/invitations/accept", json={"token": token}
+    )
+
+    assert response.status_code == 410, response.text

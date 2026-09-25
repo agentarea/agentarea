@@ -87,15 +87,6 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "agentarea.fullname" . }}-env-temporalui
-  labels:
-    {{- include "agentarea.labels" . | nindent 4 }}
-data:
-  {{- include "agentarea.temporalUi.configVars" . | nindent 2 }}
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
   name: {{ include "agentarea.fullname" . }}-env-mcpmanager
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}

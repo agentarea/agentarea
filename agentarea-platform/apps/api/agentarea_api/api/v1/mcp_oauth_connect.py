@@ -27,7 +27,7 @@ import logging
 import secrets
 import time
 import urllib.parse
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from agentarea_api.api.deps.services import (
@@ -53,6 +53,7 @@ from agentarea_mcp.application.oauth_client_service import (
     MCPOAuthClientService,
     MCPOAuthDiscoveryError,
     PKCEPair,
+    oauth_app_required_detail,
 )
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
@@ -117,7 +118,8 @@ class MCPOAuthPreflightResponse(BaseModel):
     ``unsupported`` — this server cannot be authorized this way; say why.
     """
 
-    instance_id: UUID
+    instance_id: UUID | None = None
+    server_id: UUID | None = None
     status: Literal["ready", "oauth_app_required", "unsupported"]
     connected: bool
     detail: str = ""
@@ -197,14 +199,6 @@ async def _load_instance_and_url(
     return instance, _resolve_instance_remote_url(server_spec)
 
 
-def _oauth_app_required_detail(issuer: str) -> str:
-    return (
-        f"{issuer} does not support Dynamic Client Registration (RFC 7591), so AgentArea "
-        "cannot register itself. Register an OAuth app with this provider and connect with "
-        "its client ID and secret."
-    )
-
-
 def _safe_frontend_base(return_to: str) -> str:
     """Validate and normalize frontend redirect base URL.
 
@@ -257,45 +251,50 @@ def _instance_detail_url(frontend_base: str, instance_id: str) -> str:
 async def oauth_preflight(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
-    instance_id: UUID = Query(..., description="MCP instance to inspect"),
+    instance_id: Annotated[UUID | None, Query(description="MCP instance to inspect")] = None,
+    server_id: Annotated[
+        UUID | None,
+        Query(description="Catalog spec to inspect before any instance exists"),
+    ] = None,
 ) -> MCPOAuthPreflightResponse:
-    """Report whether this instance can be authorized, and with what.
+    """Report whether a connection can be authorized, and with what.
 
-    Every outcome is a 200: "this server has no OAuth" is an answer the UI
-    renders, not a failure it has to decode from an error response.
+    Takes an existing instance, or a catalog spec so the create page can ask
+    before it creates anything. Every outcome is a 200: "this server has no
+    OAuth" is an answer the UI renders, not a failure it has to decode.
     """
-    instance, mcp_url = await _load_instance_and_url(instance_id, user_context, db_session)
-    connected = instance.auth_config_id is not None
+    if (instance_id is None) == (server_id is None):
+        raise HTTPException(status_code=422, detail="Pass exactly one of instance_id or server_id.")
 
-    def _unsupported(detail: str) -> MCPOAuthPreflightResponse:
-        return MCPOAuthPreflightResponse(
-            instance_id=instance_id,
-            status="unsupported",
-            connected=connected,
-            detail=detail,
+    if instance_id is not None:
+        instance, mcp_url = await _load_instance_and_url(instance_id, user_context, db_session)
+        connected = instance.auth_config_id is not None
+    else:
+        server_spec = await MCPServerRepository(db_session, user_context).get_server_by_id(
+            str(server_id)
         )
+        if server_spec is None:
+            raise HTTPException(status_code=404, detail="MCP server spec not found")
+        mcp_url = _resolve_instance_remote_url(server_spec)
+        connected = False
 
+    target = {"instance_id": instance_id, "server_id": server_id, "connected": connected}
     if not mcp_url:
-        return _unsupported(
-            "Instance has no remote URL configured. OAuth connect requires a URL-type MCP instance."
+        return MCPOAuthPreflightResponse(
+            **target,
+            status="unsupported",
+            detail=("No remote URL configured. OAuth connect requires a URL-type MCP connection."),
         )
 
-    try:
-        as_metadata = await MCPOAuthClientService().discover_auth_server(mcp_url)
-    except MCPOAuthDiscoveryError as exc:
-        return _unsupported(str(exc))
-
-    status: Literal["ready", "oauth_app_required"] = (
-        "ready" if as_metadata.registration_endpoint else "oauth_app_required"
-    )
+    capability = await MCPOAuthClientService().assess(mcp_url)
+    metadata = capability.metadata
     return MCPOAuthPreflightResponse(
-        instance_id=instance_id,
-        status=status,
-        connected=connected,
-        detail="" if status == "ready" else _oauth_app_required_detail(as_metadata.issuer),
-        issuer=as_metadata.issuer,
-        authorization_endpoint=as_metadata.authorization_endpoint,
-        scopes=list(as_metadata.scopes_supported),
+        **target,
+        status=capability.status,
+        detail=capability.detail,
+        issuer=metadata.issuer if metadata else None,
+        authorization_endpoint=metadata.authorization_endpoint if metadata else None,
+        scopes=list(metadata.scopes_supported) if metadata else [],
     )
 
 
@@ -348,7 +347,7 @@ async def oauth_authorize(
                 status_code=422,
                 detail={
                     "code": "oauth_app_required",
-                    "message": _oauth_app_required_detail(as_metadata.issuer),
+                    "message": oauth_app_required_detail(as_metadata.issuer),
                     "issuer": as_metadata.issuer,
                 },
             )

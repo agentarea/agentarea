@@ -526,6 +526,9 @@ class MCPToolRequest(BaseModel):
     tokens_used: int | None = None
     service_cost_used: float | None = None
     user_context_data: dict[str, Any] | None = None
+    # Set only by the workflow, after a human approved this exact call following
+    # a governance escalation; the escalating gate decides whether it suffices.
+    escalation_approved: bool = False
 
 
 class MCPToolResult(BaseModel):
@@ -632,6 +635,20 @@ class UpdateTaskGovernanceSnapshotRequest(BaseModel):
 class UpdateTaskGovernanceSnapshotResult(BaseModel):
     success: bool
     error: str | None = None
+
+
+class MonthlySpendCapRequest(BaseModel):
+    """Compare the workspace's month-to-date spend with the run's monthly cap."""
+
+    workspace_id: str
+    cap_usd: Money
+    user_context_data: dict[str, Any]
+
+
+class MonthlySpendCapResult(BaseModel):
+    exceeded: bool
+    month_to_date_usd: Money
+    cap_usd: Money
 
 
 class CompactMessagesRequest(BaseModel):

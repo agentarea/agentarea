@@ -4,7 +4,8 @@ Two flows let a workspace supply its own OAuth client: remote MCP instances
 (``mcp_oauth_connect``) and one-click API connections (``connection_oauth``).
 Both accept the credentials either typed in or referenced from workspace
 secrets, and both must hold the same line — exactly one source per credential,
-user-owned secrets only, and the secret value persisted on an auth config
+user-owned secrets the caller created or administers only (the client ID comes
+back inside the authorize URL), and the secret value persisted on an auth config
 rather than copied into expiring OAuth state. Those rules live here so the two
 flows cannot drift into two different security postures.
 """
@@ -14,7 +15,12 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_secrets.catalog_service import SecretCatalogService, SecretNotFoundError
+from agentarea_secrets.catalog_service import (
+    ManagedSecretError,
+    SecretAccessDeniedError,
+    SecretCatalogService,
+    SecretNotFoundError,
+)
 from agentarea_secrets.models import EncryptedSecret
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
@@ -78,19 +84,21 @@ async def workspace_secret_value(
     secret_id: UUID,
     label: str,
 ) -> tuple[EncryptedSecret, str]:
-    """Resolve a stable, workspace-checked reference without exposing its value."""
+    """Resolve a secret the caller may use, without exposing its value."""
     try:
-        secret = await catalog.get(secret_id)
+        secret = await catalog.get_for_use(secret_id)
     except SecretNotFoundError as exc:
         raise HTTPException(
             status_code=422,
             detail=f"Selected OAuth {label} secret is not available in this workspace.",
         ) from exc
-    if secret.owner_type is not None:
+    except ManagedSecretError as exc:
         raise HTTPException(
             status_code=422,
             detail=f"Selected OAuth {label} must be a user-owned workspace secret.",
-        )
+        ) from exc
+    except SecretAccessDeniedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     value = await manager.get_secret(secret.secret_name)
     if not value:
         raise HTTPException(

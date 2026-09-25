@@ -25,6 +25,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/mcpgateway"
 	"github.com/agentarea/mcp-manager/internal/providers"
+	"github.com/agentarea/mcp-manager/internal/publishedsecrets"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
 	"github.com/agentarea/mcp-manager/internal/sandboxplacement"
 	"github.com/agentarea/mcp-manager/internal/sandboxrunner"
@@ -194,6 +195,11 @@ func main() {
 
 	// Setup logging
 	logger := setupLogging(cfg)
+
+	if err := publishedsecrets.Reject(); err != nil {
+		logger.Error("Refusing to start", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 
 	// Initialize feature service
 	featureConfig := &features.Config{

@@ -113,6 +113,7 @@ class EventTypes:
     MODEL_UNAVAILABLE: Final[str] = "ModelUnavailable"
     RUNTIME_DISCOVERED: Final[str] = "RuntimeDiscovered"
     WORKFLOW_COMMAND_RECEIVED: Final[str] = "WorkflowCommandReceived"
+    WORKFLOW_COMMAND_REJECTED: Final[str] = "WorkflowCommandRejected"
 
 
 # Activity names
@@ -133,6 +134,7 @@ class Activities:
     RECALL_HISTORY: Final[str] = "recall_history_activity"
     UPDATE_TASK_STATUS: Final[str] = "update_task_status_activity"
     UPDATE_TASK_GOVERNANCE_SNAPSHOT: Final[str] = "update_task_governance_snapshot_activity"
+    CHECK_MONTHLY_SPEND_CAP: Final[str] = "check_monthly_spend_cap_activity"
     MATERIALIZE_SKILL_FILES: Final[str] = "materialize_skill_files_activity"
     # Dynamic context discovery
     DISCOVER_TOOL_PROVIDERS: Final[str] = "discover_tool_providers_activity"

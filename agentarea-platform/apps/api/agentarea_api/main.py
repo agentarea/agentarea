@@ -64,12 +64,19 @@ async def initialize_services():
             from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
             from agentarea_common.rebac.openfga_client import OpenFGAClient
 
+            if not settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN:
+                logger.warning(
+                    "ACCESS_CONTROL_OPENFGA_API_TOKEN is not set: OpenFGA calls are "
+                    "unauthenticated. Set ACCESS_CONTROL_OPENFGA_API_TOKEN and the "
+                    "server's OPENFGA_AUTHN_PRESHARED_KEYS to require a bearer token."
+                )
             await bootstrap_openfga(settings.openfga)
             openfga_client = OpenFGAClient(
                 api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
                 store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
                 authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
                 timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
+                api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
             )
             register_singleton(OpenFGAClient, openfga_client)
 
@@ -232,35 +239,76 @@ def create_app() -> FastAPI:
     # Create MCP server — stateless_http=True means no session tracking
     # between requests, but the task group still needs to be initialised
     # via session_manager.run() in the lifespan.
-    from agentarea_agents_sdk.mcp_server import create_mcp_server, mount_mcp_app
+    from agentarea_agents_sdk.mcp_server import (
+        PinnedWorkspaceMiddleware,
+        create_mcp_server,
+        mount_mcp_app,
+    )
     from agentarea_agents_sdk.mcp_server.auth import MCPAuthMiddleware
     from agentarea_agents_sdk.tools.base_tool import BaseTool
     from agentarea_agents_sdk.tools.decorator_tool import Toolset
+    from mcp.server.transport_security import TransportSecuritySettings
 
-    from agentarea_api.tools import get_platform_tools
+    from agentarea_api.tools import get_platform_tools, get_spanning_mcp_tools
 
+    _mcp_description = "AgentArea platform — agents, runs, MCP servers, providers, models, secrets"
+    _transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+    # Bare /mcp spans every workspace the caller can reach: workspace-scoped
+    # tools take a required `workspace` argument, found via workspaces_list.
     _mcp_server = create_mcp_server(
+        toolsets=cast(list[Toolset | BaseTool], get_spanning_mcp_tools()),
+        name="AgentArea",
+        description=_mcp_description,
+        workspace_argument=True,
+    )
+    _mcp_app = MCPAuthMiddleware(
+        _mcp_server.streamable_http_app(
+            streamable_http_path="/",
+            stateless_http=True,
+            transport_security=_transport_security,
+        )
+    )
+
+    # /mcp/w/{workspace} pins one workspace by URL, so its tools carry no
+    # `workspace` argument.
+    _pinned_mcp_server = create_mcp_server(
         toolsets=cast(list[Toolset | BaseTool], get_platform_tools()),
         name="AgentArea",
-        description="AgentArea platform — agents, runs, MCP servers, providers, models, secrets",
+        description=_mcp_description,
+        workspace_argument=False,
     )
-    _mcp_app = _mcp_server.streamable_http_app()
-    _mcp_app.add_middleware(MCPAuthMiddleware)
+    _pinned_mcp_app = PinnedWorkspaceMiddleware(
+        MCPAuthMiddleware(
+            _pinned_mcp_server.streamable_http_app(
+                streamable_http_path="/",
+                stateless_http=True,
+                transport_security=_transport_security,
+            )
+        ),
+        prefix="/mcp/w",
+    )
 
     from agentarea_api.api.v1.client_mcp import (
         ClientMCPScopeMiddleware,
         client_mcp_server,
     )
 
-    _client_mcp_app = client_mcp_server.streamable_http_app()
-    _client_mcp_app.add_middleware(MCPAuthMiddleware)
-    _client_mcp_app.add_middleware(ClientMCPScopeMiddleware)
+    _client_mcp_inner = MCPAuthMiddleware(
+        client_mcp_server.streamable_http_app(
+            streamable_http_path="/",
+            stateless_http=True,
+            transport_security=_transport_security,
+        )
+    )
+    _client_mcp_app = ClientMCPScopeMiddleware(_client_mcp_inner, prefix="/mcp/clients")
+    _legacy_client_mcp_app = ClientMCPScopeMiddleware(_client_mcp_inner, prefix="/client-mcp")
 
     @asynccontextmanager
     async def _lifespan(app: FastAPI):
         async with combined_lifespan(app):
             async with (
                 _mcp_server.session_manager.run(),
+                _pinned_mcp_server.session_manager.run(),
                 client_mcp_server.session_manager.run(),
             ):
                 yield
@@ -393,10 +441,12 @@ def create_app() -> FastAPI:
     # is guaranteed to be initialised before any request reaches the handler.
     # mount_mcp_app, not app.mount: the bare /mcp form is the resource identifier
     # we advertise, so it has to be served rather than redirected to /mcp/.
+    # The sub-mounts go first: Starlette matches in order, and /mcp would
+    # otherwise swallow /mcp/w/... and /mcp/clients/....
+    app.mount("/mcp/w", _pinned_mcp_app)
+    app.mount("/mcp/clients", _client_mcp_app)
+    app.mount("/client-mcp", _legacy_client_mcp_app)
     mount_mcp_app(app, "/mcp", _mcp_app)
-    mount_mcp_app(app, "/client-mcp", _client_mcp_app)
-
-    from agentarea_api.tools import get_platform_tools
 
     _tool_count = sum(len(ts._tool_methods) for ts in get_platform_tools())
     logger.info("Native MCP server mounted at /mcp with %d platform tools", _tool_count)
@@ -411,6 +461,7 @@ def create_app() -> FastAPI:
     # it via the shared problem+json helper, surfacing the numbers so the UI can
     # show "you've spent $X of $Y, raise the cap or wait".
     from agentarea_agents.application.agent_service import InvalidModelIdError
+    from agentarea_agents.application.approval_sync import ApprovalEnforcedByPolicyError
     from agentarea_common.exceptions import problem_response
     from agentarea_common.rebac import ResourceOwnershipError
     from agentarea_llm.application.provider_service import PlatformManagedConfigError
@@ -426,6 +477,17 @@ def create_app() -> FastAPI:
             status_code=400,
             code="invalid_model_id",
             detail=str(exc),
+        )
+
+    # Only a workspace admin may untick an approval rule the agent editor's toggle
+    # did not write. 409 so the editor can say who may change it.
+    @app.exception_handler(ApprovalEnforcedByPolicyError)
+    async def _approval_enforced_handler(_request: Request, exc: ApprovalEnforcedByPolicyError):
+        return problem_response(
+            status_code=409,
+            code="approval_enforced_by_policy",
+            detail=str(exc),
+            extra={"targets": sorted(exc.targets)},
         )
 
     # A configuration the deployment supplies is readable from every workspace so

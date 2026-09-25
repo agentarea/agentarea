@@ -17,7 +17,7 @@ from agentarea_common.rebac import (
 MembershipGraph = KetoClient | OpenFGAClient
 
 
-def get_workspace_membership_graph() -> MembershipGraph | None:
+def get_workspace_membership_graph() -> MembershipGraph:
     """Resolve the configured relationship graph for workspace memberships."""
     settings = get_settings()
     if settings.access_control.ACCESS_CONTROL_BACKEND == "openfga":
@@ -29,6 +29,7 @@ def get_workspace_membership_graph() -> MembershipGraph | None:
                 store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
                 authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
                 timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
+                api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
             )
     if settings.access_control.ACCESS_CONTROL_BACKEND == "keto":
         try:
@@ -39,7 +40,9 @@ def get_workspace_membership_graph() -> MembershipGraph | None:
                 write_url=settings.keto.ACCESS_CONTROL_KETO_WRITE_URL,
                 timeout_seconds=settings.keto.ACCESS_CONTROL_KETO_TIMEOUT_SECONDS,
             )
-    return None
+    raise ValueError(
+        f"Unknown ACCESS_CONTROL_BACKEND {settings.access_control.ACCESS_CONTROL_BACKEND!r}"
+    )
 
 
 def workspace_membership(workspace_id: str, user_id: str) -> RelationTuple:

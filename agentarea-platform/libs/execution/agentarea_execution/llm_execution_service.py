@@ -175,6 +175,12 @@ class LLMExecutionService:
                         raise ModelInstanceNotFoundError(
                             f"Model instance with ID {request.model_id} not found"
                         )
+                    foreign = model_instance.foreign_part()
+                    if foreign is not None:
+                        raise ModelInstanceNotFoundError(
+                            f"Model instance {request.model_id} uses a {foreign} "
+                            "from another workspace"
+                        )
 
                     provider_type = model_instance.provider_config.provider_spec.provider_type
                     model_name = model_instance.model_spec.model_name

@@ -70,11 +70,10 @@ def create_governance_pipeline() -> InterceptorPipeline:
 
     # Advanced gates
     registry.register(SemanticGuard(), Phase.PRE_TOOL_CALL, priority=400)
-    # NOTE: human-approval escalation is NOT enforced here. The activity-boundary
-    # interceptor cannot pause/resume a workflow, so an ESCALATE here would only
-    # fail the activity. ApprovalPolicy is enforced inside the workflow loop
-    # (policy_requires_approval -> HUMAN_APPROVAL_REQUESTED -> resolve_escalation),
-    # which is the only place that can pause and wait for a human.
+    # An ESCALATE here fails the activity with EscalationRequiredError; the
+    # workflow turns that into the same human approval flow ApprovalPolicy uses
+    # and, once approved, re-issues the call with escalation_approved set so the
+    # escalating gate can accept it.
 
     # Observers (always last)
     metrics = MetricsObserver()

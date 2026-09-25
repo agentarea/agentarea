@@ -1,0 +1,12 @@
+{{- /*
+No workload runs on the host kernel. The data plane and the sandbox server
+already ask for the RuntimeClass; this makes asking the only way a pod is
+admitted at all, whatever a bug in either does.
+*/ -}}
+{{- if .Values.workloads.admission.requireRuntimeClass }}
+{{ include "dataplane.requireRuntimeClass" (dict "root" . "name" (printf "%s-requires-runtimeclass" (include "dataplane.fullname" .)) "namespace" .Values.workloads.namespace "runtimeClass" .Values.workloads.runtimeClassName) }}
+{{- end }}
+{{- if and .Values.sandboxes.enabled .Values.sandboxes.admission.requireRuntimeClass }}
+---
+{{ include "dataplane.requireRuntimeClass" (dict "root" . "name" (printf "%s-sandboxes-require-runtimeclass" (include "dataplane.fullname" .)) "namespace" .Values.sandboxes.namespace "runtimeClass" .Values.sandboxes.runtimeClassName) }}
+{{- end }}

@@ -1,0 +1,121 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* The host applies its theme with `data-theme` (ext-apps applyDocumentTheme). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * shadcn tokens, fed by the MCP Apps standard style variables the host sends
+ * (`--color-*`, `--border-radius-*`, `--font-*`). Each fallback is a
+ * `light-dark()` pair, so the dashboard looks right standalone or in a host
+ * that sends only part of the table. `color-scheme` (set from the host theme)
+ * picks the side.
+ */
+:root {
+  color-scheme: light dark;
+
+  --background: var(--color-background-primary, light-dark(#ffffff, #0b0b0d));
+  --foreground: var(--color-text-primary, light-dark(#0a0a0b, #f5f5f6));
+  --card: var(--color-background-primary, light-dark(#ffffff, #0b0b0d));
+  --card-foreground: var(--foreground);
+  --popover: var(--color-background-primary, light-dark(#ffffff, #121215));
+  --popover-foreground: var(--foreground);
+  --primary: var(--color-background-inverse, light-dark(#18181b, #fafafa));
+  --primary-foreground: var(--color-text-inverse, light-dark(#fafafa, #18181b));
+  --secondary: var(--color-background-tertiary, light-dark(#f4f4f5, #232327));
+  --secondary-foreground: var(--foreground);
+  --muted: var(--color-background-secondary, light-dark(#f7f7f8, #151518));
+  --muted-foreground: var(--color-text-secondary, light-dark(#6b6b73, #a0a0a8));
+  --subtle-foreground: var(--color-text-tertiary, light-dark(#a1a1aa, #6b6b73));
+  --accent: var(--color-background-tertiary, light-dark(#f4f4f5, #232327));
+  --accent-foreground: var(--foreground);
+  --destructive: var(--color-text-danger, light-dark(#dc2626, #f87171));
+  --border: var(--color-border-primary, light-dark(#e7e7ea, #26262b));
+  --input: var(--color-border-secondary, light-dark(#d9d9de, #34343a));
+  --ring: var(--color-ring-primary, light-dark(#18181b, #d4d4d8));
+
+  /* Status colors: text on a tinted surface, straight from the host palette. */
+  --info: var(--color-text-info, light-dark(#2252b3, #6b93f0));
+  --info-surface: var(--color-background-info, light-dark(rgb(34 82 179 / 0.08), rgb(68 115 218 / 0.16)));
+  --success: var(--color-text-success, light-dark(#15803d, #4ade80));
+  --success-surface: var(--color-background-success, light-dark(#f0fdf4, rgb(22 163 74 / 0.16)));
+  --warning: var(--color-text-warning, light-dark(#c2410c, #fb923c));
+  --warning-surface: var(--color-background-warning, light-dark(#fff7ed, rgb(234 88 12 / 0.16)));
+  --danger: var(--color-text-danger, light-dark(#dc2626, #f87171));
+  --danger-surface: var(--color-background-danger, light-dark(#fef2f2, rgb(127 29 29 / 0.35)));
+
+  /* Reply classes. Hosts have no chart palette, so these are the app's own,
+     anchored on the host's semantic colors where one fits. */
+  --reply-interested: var(--success);
+  --reply-meeting_booked: var(--info);
+  --reply-referral: light-dark(#7c3aed, #a78bfa);
+  --reply-not_now: light-dark(#ca8a04, #facc15);
+  --reply-objection: var(--warning);
+  --reply-out_of_office: light-dark(#a1a1aa, #52525b);
+  --reply-unsubscribe: var(--danger);
+
+  --radius: var(--border-radius-lg, 0.625rem);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+
+  --radius-sm: var(--border-radius-sm, calc(var(--radius) - 4px));
+  --radius-md: var(--border-radius-md, calc(var(--radius) - 2px));
+  --radius-lg: var(--radius);
+  --radius-xl: var(--border-radius-xl, calc(var(--radius) + 4px));
+}
+
+/*
+ * `--font-sans`, `--font-mono`, `--font-weight-*` and `--shadow-*` share their
+ * names with Tailwind's theme: the host sets them inline on <html>, which
+ * overrides Tailwind's defaults, so `font-sans`, `shadow-sm` etc. follow it.
+ */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body {
+    @apply bg-background text-foreground;
+  }
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--font-text-sm-size, 0.875rem);
+    line-height: var(--font-text-sm-line-height, 1.43);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}

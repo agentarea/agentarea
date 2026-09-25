@@ -101,12 +101,10 @@ class FakeMembershipRepository:
     async def list_for_workspace(self, workspace_id: str) -> list[WorkspaceMembership]:
         return [r for r in self.rows if r.workspace_id == workspace_id]
 
-    async def delete(self, workspace_id: str, user_id: str) -> bool:
+    async def end(self, workspace_id: str, user_id: str) -> None:
         row = await self.get(workspace_id, user_id)
-        if row is None:
-            return False
-        self.rows.remove(row)
-        return True
+        if row is not None:
+            self.rows.remove(row)
 
 
 class FakeWorkspaceRepository:

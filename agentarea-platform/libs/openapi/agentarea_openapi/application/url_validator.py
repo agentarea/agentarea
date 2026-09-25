@@ -4,29 +4,19 @@ import ipaddress
 import socket
 from urllib.parse import urlparse
 
-_PRIVATE_NETWORKS = [
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fc00::/7"),
-]
+from agentarea_common.utils.url_safety import OutboundPolicy
 
 _SPEC_MAX_SIZE = 5 * 1024 * 1024  # 5MB
 
 
-def validate_url(url: str, *, allow_private: bool = False) -> list[str]:
-    """Validate a URL is safe to fetch and return resolved IP addresses.
+def validate_url(url: str, *, policy: OutboundPolicy) -> list[str]:
+    """Validate a URL is safe to fetch and return its resolved IP addresses.
 
-    Args:
-        url: The URL to validate.
-        allow_private: If True, skip private/internal IP checks.
-            Used for self-hosted deployments connecting to local services.
+    ``policy`` is the deployment's ``OutboundPolicy`` (``OutboundPolicy.from_env()``)
+    so this admits exactly what the pinned clients connect to, allowlist included.
 
     Returns:
-        List of resolved IP address strings (empty if allow_private).
+        The resolved addresses, empty when the policy allows every private address.
 
     Raises:
         ValueError: If the URL is not safe to fetch.
@@ -42,7 +32,7 @@ def validate_url(url: str, *, allow_private: bool = False) -> list[str]:
     if not hostname:
         raise ValueError("URL has no hostname.")
 
-    if allow_private:
+    if policy.allow_private:
         return []
 
     try:
@@ -52,18 +42,17 @@ def validate_url(url: str, *, allow_private: bool = False) -> list[str]:
 
     resolved_ips: list[str] = []
     for result in results:
-        addr_str = str(result[4][0])
+        addr_str = str(result[4][0]).split("%")[0]
         try:
             addr = ipaddress.ip_address(addr_str)
         except ValueError:
             continue
-        resolved_ips.append(addr_str)
-        for network in _PRIVATE_NETWORKS:
-            if addr in network:
-                raise ValueError(
-                    f"URL resolves to a private/internal IP address ({addr_str}), "
-                    "which is not allowed."
-                )
+        if not policy.permits(hostname, addr):
+            raise ValueError(
+                f"URL resolves to a private/internal IP address ({addr_str}), which is not allowed."
+            )
+        if addr_str not in resolved_ips:
+            resolved_ips.append(addr_str)
 
     return resolved_ips
 

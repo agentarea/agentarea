@@ -6,8 +6,16 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from agentarea_mcp.application.auth_resolver import build_auth_header_resolver
+from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import register_singleton
+from agentarea_mcp.application.auth_resolver import (
+    build_auth_config_access_checker,
+    build_auth_header_resolver,
+)
 from agentarea_mcp.application.auth_service import (
+    AuthConfigAccessDeniedError,
     MCPAuthService,
     MissingCredentialsError,
     OAuthReauthRequiredError,
@@ -227,6 +235,20 @@ class TestOAuth2Refresh:
         # Public client: no secret was sent.
         assert "client_secret" not in client.posted
         sm.set_secret.assert_called()  # persisted the rotated creds
+
+    async def test_refresh_never_posts_credentials_to_a_non_public_token_url(self):
+        from agentarea_common.utils.url_safety import UnsafeUrlError
+
+        svc, _, sm = _make_service()
+        sm.get_secret.return_value = json.dumps(
+            {"access_token": "old", "expires_at": 0, "refresh_token": "rt"}
+        )
+
+        with pytest.raises(UnsafeUrlError):
+            await svc.get_auth_headers(
+                _oauth_config(token_url="http://169.254.169.254/latest/api/token")
+            )
+        sm.set_secret.assert_not_called()
 
     async def test_managed_refresh_reads_platform_secret(self):
         repo = AsyncMock()
@@ -462,6 +484,111 @@ class TestCreateDelete:
 
         sm.delete_secret.assert_called_once_with(cfg.secret_key)
         assert result is True
+
+
+# ---------------------------------------------------------------------------
+# get_for_use — who may attach an auth config to a connection/instance
+# ---------------------------------------------------------------------------
+
+
+def _service_as(
+    user_id: str, workspace_id: str = "ws-acme", admin_workspaces: list[str] | None = None
+) -> tuple[MCPAuthService, AsyncMock]:
+    repo = AsyncMock()
+    repo.user_context = UserContext(
+        user_id=user_id, workspace_id=workspace_id, admin_workspaces=admin_workspaces
+    )
+    return MCPAuthService(repo, AsyncMock()), repo
+
+
+@pytest.mark.asyncio
+class TestGetForUse:
+    """Only the config's creator or a workspace admin may put it to use (#486)."""
+
+    @pytest.fixture(autouse=True)
+    def _authz(self) -> None:
+        register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+
+    async def test_another_member_is_refused(self):
+        config = _make_config(AUTH_TYPE_BEARER)
+        config.created_by = "member-a"
+        svc, repo = _service_as("member-b", admin_workspaces=[])
+        repo.get.return_value = config
+
+        with pytest.raises(AuthConfigAccessDeniedError):
+            await svc.get_for_use(config.id)
+
+    async def test_the_creator_may_use_it(self):
+        config = _make_config(AUTH_TYPE_BEARER)
+        config.created_by = "member-a"
+        svc, repo = _service_as("member-a", admin_workspaces=[])
+        repo.get.return_value = config
+
+        assert await svc.get_for_use(config.id) is config
+
+    async def test_a_workspace_admin_may_use_it(self):
+        config = _make_config(AUTH_TYPE_BEARER)
+        config.created_by = "member-a"
+        svc, repo = _service_as("admin", admin_workspaces=["ws-acme"])
+        repo.get.return_value = config
+
+        assert await svc.get_for_use(config.id) is config
+
+    async def test_admin_of_another_workspace_is_refused(self):
+        config = _make_config(AUTH_TYPE_BEARER)
+        config.created_by = "member-a"
+        svc, repo = _service_as("admin", workspace_id="ws-acme", admin_workspaces=["ws-other"])
+        repo.get.return_value = config
+
+        with pytest.raises(AuthConfigAccessDeniedError):
+            await svc.get_for_use(config.id)
+
+    async def test_not_found_raises_value_error(self):
+        svc, repo = _service_as("member-a", admin_workspaces=[])
+        repo.get.return_value = None
+
+        with pytest.raises(ValueError, match="not found"):
+            await svc.get_for_use(uuid4())
+
+
+@pytest.mark.asyncio
+class TestAuthConfigAccessChecker:
+    """The resolver built for OpenAPI connections enforces the same rule."""
+
+    @pytest.fixture(autouse=True)
+    def _authz(self) -> None:
+        register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+
+    async def test_checker_refuses_a_foreign_config(self):
+        config = _make_config(AUTH_TYPE_BEARER)
+        config.created_by = "member-a"
+        repo = AsyncMock()
+        repo.user_context = UserContext(
+            user_id="member-b", workspace_id="ws-acme", admin_workspaces=[]
+        )
+        repo.get.return_value = config
+        repo_factory = MagicMock()
+        repo_factory.create_repository.return_value = repo
+
+        checker = build_auth_config_access_checker(repo_factory, AsyncMock())
+
+        with pytest.raises(AuthConfigAccessDeniedError):
+            await checker(config.id)
+
+    async def test_checker_allows_the_creator(self):
+        config = _make_config(AUTH_TYPE_BEARER)
+        config.created_by = "member-a"
+        repo = AsyncMock()
+        repo.user_context = UserContext(
+            user_id="member-a", workspace_id="ws-acme", admin_workspaces=[]
+        )
+        repo.get.return_value = config
+        repo_factory = MagicMock()
+        repo_factory.create_repository.return_value = repo
+
+        checker = build_auth_config_access_checker(repo_factory, AsyncMock())
+
+        await checker(config.id)
 
 
 # ---------------------------------------------------------------------------

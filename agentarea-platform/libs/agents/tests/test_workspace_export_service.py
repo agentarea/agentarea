@@ -7,6 +7,23 @@ import pytest
 import yaml
 from agentarea_agents.application.workspace_export_service import WorkspaceExportService
 from agentarea_agents.schemas.import_export import WorkspaceConfigYAML
+from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import get_container
+from fastapi import HTTPException
+
+WORKSPACE = "test-workspace"
+
+
+@pytest.fixture(autouse=True)
+def _authorization():
+    container = get_container()
+    saved = dict(container._singletons)
+    container.register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+    yield
+    container._singletons.clear()
+    container._singletons.update(saved)
 
 
 @pytest.fixture
@@ -26,6 +43,9 @@ def mock_agent_service():
 def mock_repository_factory():
     """Create a mock repository factory."""
     factory = MagicMock()
+    factory.user_context = UserContext(
+        user_id="user-owner", workspace_id=WORKSPACE, admin_workspaces=[WORKSPACE]
+    )
     mock_repo = MagicMock()
     mock_repo.list_all = AsyncMock(
         return_value=[MagicMock(id=UUID("a1b2c3d4-e5f6-789a-bcde-123456789abc"))]
@@ -90,6 +110,21 @@ def export_service(
 
 class TestExportWorkspace:
     """Test workspace export functionality."""
+
+    @pytest.mark.asyncio
+    async def test_a_member_cannot_export_the_workspace(
+        self, export_service, mock_repository_factory, mock_agent_service
+    ):
+        """The export carries every agent, connection and provider config: admin only."""
+        mock_repository_factory.user_context = UserContext(
+            user_id="user-member", workspace_id=WORKSPACE, admin_workspaces=[]
+        )
+
+        with pytest.raises(HTTPException) as refused:
+            await export_service.export_workspace()
+
+        assert refused.value.status_code == 403
+        mock_agent_service.list.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_export_agents_only(self, export_service, mock_agent_service):

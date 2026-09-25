@@ -20,12 +20,12 @@ def _validate_url_field(v: str | None) -> str | None:
     """SSRF guard for URL fields. Imported lazily to avoid app-config coupling."""
     if v is None:
         return v
-    from agentarea_common.config import get_settings
+    from agentarea_common.utils.url_safety import OutboundPolicy
 
     from agentarea_openapi.application.url_validator import validate_url
 
     try:
-        validate_url(v, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
+        validate_url(v, policy=OutboundPolicy.from_env())
     except ValueError as e:
         raise ValueError(str(e)) from e
     return v

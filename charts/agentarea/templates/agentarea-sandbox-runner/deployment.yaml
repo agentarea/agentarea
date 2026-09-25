@@ -18,12 +18,20 @@ spec:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: sandbox-runner
     spec:
-      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      serviceAccountName: {{ include "agentarea.sandboxRunnerServiceAccountName" . }}
+      {{- with .Values.global.security.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: sandbox-runner
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ default .Values.mcpManager.image.repository .Values.mcpSandboxRunner.image.repository }}:{{ default (default .Chart.AppVersion .Values.mcpManager.image.tag) .Values.mcpSandboxRunner.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          {{- with .Values.global.security.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command:
             - /app/sandbox-runner
           env:
@@ -56,12 +64,16 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- $execKubeconfig := include "agentarea.mcpManager.executionKubeconfigPath" . }}
-          {{- if $execKubeconfig }}
           volumeMounts:
+            # Scratch spool for sandbox file upload verification under
+            # readOnlyRootFilesystem: os.CreateTemp("", ...) resolves to /tmp
+            # in internal/sandboxruntime/manager.go (SandboxFileUpload).
+            - name: tmp
+              mountPath: /tmp
             {{- include "agentarea.mcpManager.executionKubeconfigMount" . | nindent 12 }}
-          {{- end }}
-      {{- if $execKubeconfig }}
       volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.mcpSandboxRunner.tmpVolume.sizeLimit | quote }}
         {{- include "agentarea.mcpManager.executionKubeconfigVolume" . | nindent 8 }}
-      {{- end }}
 {{- end }}

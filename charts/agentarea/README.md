@@ -123,6 +123,7 @@ The following table lists configurable parameters of the chart and their default
 | global.api.auth.headerName | string | `""` |  |
 | global.api.auth.headerValue | string | `""` |  |
 | global.webapp.url | string | `""` |  |
+| global.webapp.appsSandboxUrl | string | `""` |  |
 | global.jobs.kube.namespace | string | `""` |  |
 | global.jobs.kube.serviceAccount | string | `""` |  |
 | global.jobs.kube.scheduling.spec.nodeSelectors | object | `{}` |  |
@@ -177,6 +178,9 @@ The following table lists configurable parameters of the chart and their default
 | ingress.hosts.kratos.host | string | `""` |  |
 | ingress.hosts.kratos.paths[0].path | string | `"/"` |  |
 | ingress.hosts.kratos.paths[0].pathType | string | `"Prefix"` |  |
+| ingress.hosts.appsSandbox.host | string | `""` |  |
+| ingress.hosts.appsSandbox.paths[0].path | string | `"/app-sandbox"` |  |
+| ingress.hosts.appsSandbox.paths[0].pathType | string | `"Exact"` |  |
 | ingress.tls | list | `[]` |  |
 | backend.enabled | bool | `true` |  |
 | backend.replicaCount | int | `1` |  |
@@ -297,6 +301,10 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.image.tag | string | `"latest"` |  |
 | mcpManager.service.type | string | `"ClusterIP"` |  |
 | mcpManager.service.port | int | `80` |  |
+| mcpManager.serviceAccount.create | bool | `true` |  |
+| mcpManager.serviceAccount.name | string | `""` |  |
+| mcpManager.serviceAccount.annotations | object | `{}` |  |
+| mcpManager.tmpVolume.sizeLimit | string | `"1Gi"` |  |
 | mcpManager.serverless.enabled | bool | `true` |  |
 | mcpManager.serverless.idleTimeout | string | `"10m"` |  |
 | mcpManager.serverless.sweepInterval | string | `"60s"` |  |
@@ -333,8 +341,10 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.admission.allowedImageRepositories[1] | string | `"mcp/fetch"` |  |
 | mcpManager.admission.allowedCommandPackages[0] | string | `"npx -y @modelcontextprotocol/server-everything"` |  |
 | mcpManager.admission.allowedCommandPackages[1] | string | `"npx -y @modelcontextprotocol/server-sequential-thinking"` |  |
-| mcpManager.admission.allowedCommandPackages[2] | string | `"uvx mcp-server-fetch"` |  |
-| mcpManager.admission.allowedCommandPackages[3] | string | `"uvx mcp-server-time"` |  |
+| mcpManager.admission.allowedCommandPackages[2] | string | `"npx -y @modelcontextprotocol/server-customer-segmentation --stdio"` |  |
+| mcpManager.admission.allowedCommandPackages[3] | string | `"npx -y @modelcontextprotocol/server-map --stdio"` |  |
+| mcpManager.admission.allowedCommandPackages[4] | string | `"uvx mcp-server-fetch"` |  |
+| mcpManager.admission.allowedCommandPackages[5] | string | `"uvx mcp-server-time"` |  |
 | mcpManager.executionCluster.kubeconfigSecret | string | `""` |  |
 | mcpManager.executionCluster.kubeconfigKey | string | `""` |  |
 | mcpManager.runtime.serviceAccount.create | bool | `true` |  |
@@ -379,6 +389,10 @@ The following table lists configurable parameters of the chart and their default
 | sandboxRuntime.workspace.forcePathStyle | bool | `true` |  |
 | sandboxRuntime.resources.cpu | string | `"500m"` |  |
 | sandboxRuntime.resources.memory | string | `"512Mi"` |  |
+| sandboxRuntime.resources.cpuRequest | string | `""` | What the scheduler reserves per sandbox, when the provider schedules on Kubernetes (OpenSandbox's Kubernetes runtime). Empty reserves the full limit, which leaves a small node room for only a few sandboxes. |
+| sandboxRuntime.resources.memoryRequest | string | `""` | Memory reserved per sandbox; see cpuRequest. |
+| sandboxRuntime.resources.storageLimit | string | `""` | A sandbox's ephemeral-storage limit on Kubernetes providers. It covers the workspace plus the container's own writes and is enforced by eviction. Empty is the workspace quota (workspace.maxBytes) plus 1Gi. |
+| sandboxRuntime.resources.storageRequest | string | `""` | Ephemeral storage reserved per sandbox. Empty reserves the full limit. |
 | sandboxRuntime.manifest | object | `{}` |  |
 | sandboxRuntime.opensandbox.url | string | `""` |  |
 | sandboxRuntime.opensandbox.allowInsecure | bool | `false` |  |
@@ -415,6 +429,10 @@ The following table lists configurable parameters of the chart and their default
 | mcpSandboxRunner.replicaCount | int | `1` |  |
 | mcpSandboxRunner.image.repository | string | `""` |  |
 | mcpSandboxRunner.image.tag | string | `""` |  |
+| mcpSandboxRunner.serviceAccount.create | bool | `true` |  |
+| mcpSandboxRunner.serviceAccount.name | string | `""` |  |
+| mcpSandboxRunner.serviceAccount.annotations | object | `{}` |  |
+| mcpSandboxRunner.tmpVolume.sizeLimit | string | `"512Mi"` |  |
 | mcpSandboxRunner.consumerGroup | string | `"agentarea-sandbox-runners"` |  |
 | mcpSandboxRunner.batchSize | int | `1` |  |
 | mcpSandboxRunner.resources.requests.cpu | string | `"50m"` |  |
@@ -432,14 +450,6 @@ The following table lists configurable parameters of the chart and their default
 | temporal.service.port | int | `7233` |  |
 | temporal.resources | object | `{}` |  |
 | temporal.extraEnv | list | `[]` |  |
-| temporalUi.enabled | bool | `true` |  |
-| temporalUi.replicaCount | int | `1` |  |
-| temporalUi.image.repository | string | `"temporalio/ui"` |  |
-| temporalUi.image.tag | string | `"2.39.0"` |  |
-| temporalUi.service.type | string | `"ClusterIP"` |  |
-| temporalUi.service.port | int | `8080` |  |
-| temporalUi.resources | object | `{}` |  |
-| temporalUi.extraEnv | list | `[]` |  |
 | postgresql.enabled | bool | `true` |  |
 | postgresql.image.repository | string | `"postgres"` |  |
 | postgresql.image.tag | string | `"16-alpine"` |  |
@@ -485,14 +495,7 @@ The following table lists configurable parameters of the chart and their default
 | rustfs.livenessProbe.failureThreshold | int | `6` |  |
 | jobs.dbMigration.enabled | bool | `true` |  |
 | registryReconcile.enabled | bool | `true` |  |
-| registryReconcile.registries[0].name | string | `"system-llm-providers"` |  |
-| registryReconcile.registries[0].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json"` |  |
-| registryReconcile.registries[1].name | string | `"system-llm-models"` |  |
-| registryReconcile.registries[1].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json"` |  |
-| registryReconcile.registries[2].name | string | `"system-mcp-servers"` |  |
-| registryReconcile.registries[2].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json"` |  |
-| registryReconcile.registries[3].name | string | `"system-skills-curated"` |  |
-| registryReconcile.registries[3].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json"` |  |
+| registryReconcile.registries | list | `[{"name":"system-llm-providers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json"},{"name":"system-llm-models","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json"},{"name":"system-mcp-servers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json"},{"name":"system-skills-curated","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json"}]` | a custom catalog, or the ~123k community mirror, which stays opt-in and must not drive first-run picks -- lands after them instead of interleaving its first entries with the curated front page. |
 | keto.enabled | bool | `false` |  |
 | keto.replicaCount | int | `1` |  |
 | keto.image.repository | string | `"oryd/keto"` |  |

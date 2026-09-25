@@ -4,9 +4,12 @@ Each Toolset wraps an existing service, creating a per-request service instance
 with the correct auth context. Tools are usable both internally (via ToolManager)
 and externally (via MCP adapter at /mcp).
 
-All toolsets here operate on the caller's workspace. System-wide / cross-workspace
-operations (registry sync, etc.) are intentionally not exposed as MCP tools and
-will live in a separate admin MCP server when needed.
+Platform toolsets operate on one workspace: the one a pinned MCP URL names, the
+``workspace`` argument on the bare ``/mcp`` mount, or the running agent's own.
+``WorkspacesToolset`` is the exception — it finds and creates workspaces, so it
+is served only where a caller picks among them. System-wide operations (registry
+sync, etc.) are intentionally not exposed as MCP tools and will live in a
+separate admin MCP server when needed.
 """
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset
@@ -29,6 +32,7 @@ from .secrets_toolset import SecretsToolset
 from .skills_toolset import SkillsToolset
 from .triggers_toolset import TriggersToolset
 from .workspace_config_toolset import WorkspaceConfigToolset
+from .workspaces_toolset import WorkspacesToolset
 
 
 def get_platform_tools() -> list[Toolset]:
@@ -57,3 +61,8 @@ def get_platform_tools() -> list[Toolset]:
         NetworkToolset(),
         WorkspaceConfigToolset(),
     ]
+
+
+def get_spanning_mcp_tools() -> list[Toolset]:
+    """Toolsets of the bare ``/mcp`` mount, which spans the caller's workspaces."""
+    return [WorkspacesToolset(), *get_platform_tools()]

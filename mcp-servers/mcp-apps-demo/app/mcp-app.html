@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>Leads</title>
+  <style>
+    /*
+     * Every visual value comes from the standard MCP Apps variables the host
+     * supplies; the fallbacks keep the view legible in a host that sends none.
+     */
+    :root {
+      --bg: var(--color-background-primary, #ffffff);
+      --bg-subtle: var(--color-background-secondary, #fafafa);
+      --bg-muted: var(--color-background-tertiary, #f5f5f5);
+      --text: var(--color-text-primary, #0a0a0a);
+      --text-muted: var(--color-text-secondary, #737373);
+      --text-faint: var(--color-text-tertiary, #a3a3a3);
+      --line: var(--color-border-primary, #e5e5e5);
+      --line-strong: var(--color-border-secondary, #d4d4d4);
+      --ring: var(--color-ring-primary, #0a0a0a);
+      --radius-sm: var(--border-radius-sm, 4px);
+      --radius-md: var(--border-radius-md, 6px);
+      --radius-full: var(--border-radius-full, 9999px);
+      --text-xs: var(--font-text-xs-size, 0.75rem);
+      --text-sm: var(--font-text-sm-size, 0.875rem);
+      --medium: var(--font-weight-medium, 500);
+      --semibold: var(--font-weight-semibold, 600);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans, system-ui, sans-serif);
+      font-size: var(--text-sm);
+      line-height: var(--font-text-sm-line-height, 1.43);
+      -webkit-font-smoothing: antialiased;
+    }
+    main { padding: 20px 24px 24px; display: grid; gap: 16px; }
+
+    header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    h1 {
+      margin: 0;
+      font-size: var(--font-heading-lg-size, 1.125rem);
+      line-height: var(--font-heading-lg-line-height, 1.4);
+      font-weight: var(--semibold);
+    }
+    .meta { margin: 2px 0 0; color: var(--text-muted); font-size: var(--text-xs); }
+
+    button {
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 32px; padding: 0 12px;
+      border: 1px solid var(--line); border-radius: var(--radius-md);
+      background: var(--bg); color: var(--text);
+      font: inherit; font-weight: var(--medium);
+      cursor: pointer;
+      transition: background-color 150ms ease;
+    }
+    button:hover { background: var(--bg-muted); }
+    button:disabled { cursor: progress; color: var(--text-faint); }
+    button svg { width: 14px; height: 14px; }
+    button:disabled svg { animation: spin 800ms linear infinite; }
+    :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+    .summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .summary li {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 10px;
+      border: 1px solid var(--line); border-radius: var(--radius-full);
+      color: var(--text-muted); font-size: var(--text-xs); text-transform: capitalize;
+    }
+    .summary strong { color: var(--text); font-weight: var(--semibold); font-variant-numeric: tabular-nums; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--tone-fg); }
+
+    .table-wrap { border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      padding: 8px 12px;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--line);
+      color: var(--text-muted);
+      font-size: var(--text-xs); font-weight: var(--medium);
+      text-align: left; text-transform: capitalize;
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr { transition: background-color 150ms ease, opacity 150ms ease; }
+    tbody tr:hover { background: var(--bg-subtle); }
+    tbody tr[aria-busy="true"] { opacity: 0.55; }
+    td.col-id { width: 1%; color: var(--text-faint); font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--text-xs); }
+    td.col-company { font-weight: var(--medium); }
+    td.col-muted { color: var(--text-muted); }
+    td.empty { padding: 32px 12px; color: var(--text-muted); text-align: center; }
+
+    /* Status tones map onto the host's semantic colors. */
+    [data-status="new"] { --tone-fg: var(--color-text-info, #2252b3); --tone-bg: var(--color-background-info, #eef2fb); --tone-line: var(--color-border-info, #bfcbea); }
+    [data-status="contacted"] { --tone-fg: var(--color-text-warning, #ea580c); --tone-bg: var(--color-background-warning, #fff7ed); --tone-line: var(--color-border-warning, #fed7aa); }
+    [data-status="qualified"] { --tone-fg: var(--color-text-success, #16a34a); --tone-bg: var(--color-background-success, #f0fdf4); --tone-line: var(--color-border-success, #bbf7d0); }
+    [data-status="lost"] { --tone-fg: var(--color-text-secondary, #737373); --tone-bg: var(--color-background-tertiary, #f5f5f5); --tone-line: var(--color-border-primary, #e5e5e5); }
+
+    .status { position: relative; display: inline-flex; align-items: center; }
+    .status select {
+      appearance: none;
+      height: 26px; padding: 0 26px 0 22px;
+      border: 1px solid var(--tone-line); border-radius: var(--radius-full);
+      background: var(--tone-bg); color: var(--tone-fg);
+      font: inherit; font-size: var(--text-xs); font-weight: var(--medium);
+      text-transform: capitalize;
+      cursor: pointer;
+    }
+    .status select:disabled { cursor: progress; }
+    .status .dot { position: absolute; left: 10px; pointer-events: none; }
+    .status::after {
+      content: ""; position: absolute; right: 11px; top: 50%;
+      width: 5px; height: 5px; margin-top: -4px;
+      border-right: 1.5px solid var(--tone-fg); border-bottom: 1.5px solid var(--tone-fg);
+      transform: rotate(45deg); pointer-events: none;
+    }
+
+    .error {
+      margin: 0; padding: 10px 12px;
+      border: 1px solid var(--color-border-danger, #fecaca); border-radius: var(--radius-md);
+      background: var(--color-background-danger, #fef2f2); color: var(--color-text-danger, #dc2626);
+    }
+    .error[hidden] { display: none; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Leads</h1>
+        <p id="dataset" class="meta">Waiting for data…</p>
+      </div>
+      <button id="refresh" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>
+        </svg>
+        Refresh
+      </button>
+    </header>
+    <ul id="summary" class="summary" aria-label="Leads by status"></ul>
+    <p id="error" class="error" role="alert" hidden></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr id="columns"></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </main>
+  <script type="module" src="./mcp-app.ts"></script>
+</body>
+</html>

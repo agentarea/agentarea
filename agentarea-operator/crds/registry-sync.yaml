@@ -49,6 +49,10 @@ spec:
                     url:
                       type: string
                       description: "HTTP(S) URL (for type=url) or local path (for type=file)."
+                    sha256:
+                      type: string
+                      pattern: '^[a-fA-F0-9]{64}$'
+                      description: "Expected sha256 digest of the raw catalog payload. When set, a mismatch fails the sync instead of importing unverified content."
                     configMapRef:
                       type: object
                       required:

@@ -1,20 +1,4 @@
-"""Short-lived cache for a member MCP's tool list.
-
-The upstream server is the source of truth: its tool list is a live answer
-about its own runtime, not a fact this system owns, so it is not kept as one.
-Persisting it would make us a stale mirror with no invalidation signal — a
-third-party remote changes its tools without anything on our side moving, and
-an instance we launched ourselves can be rebuilt underneath us just the same.
-
-So the serving path calls upstream honestly and this sits in front of it purely
-to keep the cost off the hot path: a short TTL, and an explicit drop when a tool
-call fails, which is the one signal an upstream actually gives us that our view
-of it is wrong.
-
-Redis rather than process memory: the API runs several replicas behind an
-ingress with no session affinity, and a per-process cache would have them
-answering differently for the same client.
-"""
+"""Redis-backed short-lived cache for upstream MCP tool lists."""
 
 from __future__ import annotations
 
@@ -30,21 +14,23 @@ DEFAULT_TTL_SECONDS = 60
 
 
 class ToolListCache(Protocol):
-    """What the aggregator needs from a cache; keeps Redis out of its tests."""
+    """What the aggregator needs from a cache; keys include runtime identity."""
 
-    async def get(self, instance_id: str) -> list[dict[str, Any]] | None: ...
+    async def get(self, cache_key: str) -> list[dict[str, Any]] | None: ...
 
-    async def set(self, instance_id: str, tools: list[dict[str, Any]]) -> None: ...
+    async def set(
+        self,
+        cache_key: str,
+        tools: list[dict[str, Any]],
+        *,
+        ttl_ms: int | None = None,
+    ) -> None: ...
 
-    async def invalidate(self, instance_id: str) -> None: ...
+    async def invalidate(self, cache_key: str) -> None: ...
 
 
 class RedisToolListCache:
-    """Redis-backed ``ToolListCache``.
-
-    Every operation is best-effort: a cache outage must slow the bundle down,
-    not break it, so failures fall through to the live path and are logged.
-    """
+    """Redis-backed ``ToolListCache`` with per-response expiry."""
 
     def __init__(
         self,
@@ -68,35 +54,46 @@ class RedisToolListCache:
             await self._client.aclose()
             self._client = None
 
-    def _key(self, instance_id: str) -> str:
-        return f"{self._prefix}:{instance_id}"
+    def _key(self, cache_key: str) -> str:
+        return f"{self._prefix}:{cache_key}"
 
-    async def get(self, instance_id: str) -> list[dict[str, Any]] | None:
+    async def get(self, cache_key: str) -> list[dict[str, Any]] | None:
         try:
             client = await self._get_client()
-            raw = await client.get(self._key(instance_id))
+            raw = await client.get(self._key(cache_key))
         except Exception:
-            logger.warning("Tool-list cache read failed for %s", instance_id, exc_info=True)
+            logger.warning("Tool-list cache read failed for %s", cache_key, exc_info=True)
             return None
         if raw is None:
             return None
         try:
             value = json.loads(raw)
         except ValueError:
-            logger.warning("Discarding unreadable cached tool list for %s", instance_id)
+            logger.warning("Discarding unreadable cached tool list for %s", cache_key)
             return None
         return value if isinstance(value, list) else None
 
-    async def set(self, instance_id: str, tools: list[dict[str, Any]]) -> None:
+    async def set(
+        self,
+        cache_key: str,
+        tools: list[dict[str, Any]],
+        *,
+        ttl_ms: int | None = None,
+    ) -> None:
         try:
             client = await self._get_client()
-            await client.set(self._key(instance_id), json.dumps(tools), ex=self._ttl)
+            if ttl_ms is None:
+                await client.set(self._key(cache_key), json.dumps(tools), ex=self._ttl)
+            elif ttl_ms > 0:
+                await client.set(self._key(cache_key), json.dumps(tools), px=int(ttl_ms))
+            else:
+                await client.delete(self._key(cache_key))
         except Exception:
-            logger.warning("Tool-list cache write failed for %s", instance_id, exc_info=True)
+            logger.warning("Tool-list cache write failed for %s", cache_key, exc_info=True)
 
-    async def invalidate(self, instance_id: str) -> None:
+    async def invalidate(self, cache_key: str) -> None:
         try:
             client = await self._get_client()
-            await client.delete(self._key(instance_id))
+            await client.delete(self._key(cache_key))
         except Exception:
-            logger.warning("Tool-list cache invalidation failed for %s", instance_id, exc_info=True)
+            logger.warning("Tool-list cache invalidation failed for %s", cache_key, exc_info=True)

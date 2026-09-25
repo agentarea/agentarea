@@ -1,5 +1,5 @@
 import json
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from agentarea_common.broker import BrokerMessage
@@ -45,6 +45,7 @@ class InboundConsumerHarness(InboundMessageStreamConsumer):
             broker,
             dedup,
             event_broker=AsyncMock(),
+            secret_manager_factory=MagicMock(),
             stream="inbound",
             group="workers",
             dlq_stream="inbound.dlq",

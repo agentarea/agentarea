@@ -25,7 +25,7 @@ Two Compose files sit at the repository root:
 | File | Purpose |
 |---|---|
 | `docker-compose.yaml` | The deployment target. Pulls published images. |
-| `docker-compose.dev.yaml` | Development. Bind-mounts source, adds Traefik, Temporal UI, Keto, OpenFGA, Hydra, and Mailpit. |
+| `docker-compose.dev.yaml` | Development. Bind-mounts source, adds Traefik, Keto, OpenFGA, Hydra, and Mailpit. |
 
 This guide covers `docker-compose.yaml`.
 
@@ -45,10 +45,16 @@ This guide covers `docker-compose.yaml`.
     ```bash
     cd /path/to/agentarea
     cp .env.example .env
+    ./scripts/gen-dev-secrets.sh
     ```
 
-    `.env.example` ships working development values. Three of them must be replaced
-    before this is a deployment rather than a demo.
+    `.env.example` leaves every signing key empty. `gen-dev-secrets.sh` writes a
+    fresh value into `.env` for each key the Compose file requires with no
+    default: the Kratos signing key, the Ory secrets, the sandbox and MCP gateway
+    HMAC keys, and the OpenFGA preshared key. It keeps values you already set,
+    except a sandbox or MCP gateway key that still holds a value an older
+    `.env.example` shipped. Those values are public, and the services refuse to
+    start on them.
   </Step>
 
   <Step title="Generate the secrets that must not stay at their defaults">
@@ -61,32 +67,16 @@ This guide covers `docker-compose.yaml`.
     python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     ```
 
-    `SANDBOX_ACTIVATION_AUTH_SECRET` and `SANDBOX_CLEANUP_AUTH_SECRET` are HMAC
-    shared secrets between the control plane and the sandbox runner. Both must be at
-    least 32 bytes. The Compose file declares them with `:?`, so `docker compose`
-    refuses to start the stack if either is empty rather than falling back to a
-    default.
-
-    ```bash
-    python -c "import secrets; print(secrets.token_urlsafe(48))"
-    ```
-
-    Set all three in `.env`:
+    Set it in `.env`, together with real database and object-store credentials:
 
     ```bash
     SECRET_MANAGER_ENCRYPTION_KEY=<fernet key from above>
-    SANDBOX_ACTIVATION_AUTH_SECRET=<48-byte token>
-    SANDBOX_CLEANUP_AUTH_SECRET=<a different 48-byte token>
     POSTGRES_USER=agentarea
     POSTGRES_PASSWORD=<a real password>
     POSTGRES_DB=agentarea
     RUSTFS_ACCESS_KEY=<a real access key>
     RUSTFS_SECRET_KEY=<a real secret key>
     ```
-
-    `.env.example` also ships a `KRATOS_JWKS_B64` value with the private key
-    included. It is a published test key. Anyone can mint tokens your API will
-    accept. Replace it before exposing the API to a network you do not control.
   </Step>
 
   <Step title="Start the stack">
@@ -164,9 +154,15 @@ recorded the current head without replaying migrations.
 
 <AccordionGroup>
   <Accordion title="`docker compose` exits immediately with `SANDBOX_ACTIVATION_AUTH_SECRET must be set`">
-    The Compose file uses `${VAR:?message}` for both sandbox secrets, so an
-    empty value aborts the run rather than starting an unauthenticated sandbox
-    path. Set both in `.env` .
+    The Compose file uses `${VAR:?message}` for the sandbox and MCP gateway
+    secrets, so an empty value aborts the run rather than starting an
+    unauthenticated sandbox path. Run `./scripts/gen-dev-secrets.sh` to fill them.
+  </Accordion>
+  <Accordion title="`mcp-manager` or the API exits with `is set to a value published in the AgentArea repository`">
+    A sandbox or MCP gateway key still holds a value an older `.env.example` or
+    `docker-compose.dev.yaml` shipped. Anyone can sign tokens with it. Run
+    `./scripts/gen-dev-secrets.sh`, which replaces it, then restart the stack so
+    every service picks up the new value.
   </Accordion>
   <Accordion title="The API container restarts in a loop with `SECRET_MANAGER_ENCRYPTION_KEY environment variable must be set`">
     The default secret backend is `database` , which requires a Fernet key.

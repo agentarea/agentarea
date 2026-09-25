@@ -12,13 +12,16 @@ Both repositories accept ``UserContext`` per project convention but
 use it only for explicit policy checks inside the calling service.
 """
 
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import column, delete, or_, select, table, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import (
+    INVITATION_STATUS_ACCEPTED,
     INVITATION_STATUS_PENDING,
+    INVITATION_STATUS_REVOKED,
     Workspace,
     WorkspaceInvitation,
     WorkspaceMembership,
@@ -72,6 +75,40 @@ class WorkspaceMembershipRepository:
         await self.session.refresh(membership)
         return membership
 
+    async def add_for_invitation(
+        self, *, invitation_id: UUID, workspace_id: str, user_id: str, now: datetime
+    ) -> bool:
+        """Write the row and stamp the invitation granted, in one transaction.
+
+        The invitation is re-read under a row lock and must still be accepted by
+        ``user_id``: a removal that revoked it first wins, and nothing is written.
+        """
+        invitation = (
+            await self.session.execute(
+                select(WorkspaceInvitation)
+                .where(WorkspaceInvitation.id == invitation_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if (
+            invitation is None
+            or invitation.status != INVITATION_STATUS_ACCEPTED
+            or invitation.accepted_by_user_id != user_id
+        ):
+            await self.session.rollback()
+            return False
+        if invitation.membership_granted_at is None:
+            if await self.get(workspace_id, user_id) is None:
+                self.session.add(
+                    WorkspaceMembership(
+                        workspace_id=workspace_id, user_id=user_id, invitation_id=invitation_id
+                    )
+                )
+            invitation.membership_granted_at = now
+        await self.session.commit()
+        return True
+
     async def get(self, workspace_id: str, user_id: str) -> WorkspaceMembership | None:
         result = await self.session.execute(
             select(WorkspaceMembership)
@@ -94,13 +131,35 @@ class WorkspaceMembershipRepository:
         )
         return list(result.scalars().all())
 
-    async def delete(self, workspace_id: str, user_id: str) -> bool:
-        membership = await self.get(workspace_id, user_id)
-        if membership is None:
-            return False
-        await self.session.delete(membership)
+    async def end(self, workspace_id: str, user_id: str) -> None:
+        """Drop the row and every credential that could bring the user back.
+
+        The invitation they joined through is revoked so replaying it is refused,
+        and their API keys for the workspace are deactivated. ``api_keys`` is
+        owned by the MCP domain, which depends on this library, so it is named
+        as a bare table rather than imported.
+        """
+        await self.session.execute(
+            delete(WorkspaceMembership)
+            .where(WorkspaceMembership.workspace_id == workspace_id)
+            .where(WorkspaceMembership.user_id == user_id)
+        )
+        await self.session.execute(
+            update(WorkspaceInvitation)
+            .where(WorkspaceInvitation.workspace_id == workspace_id)
+            .where(WorkspaceInvitation.accepted_by_user_id == user_id)
+            .values(status=INVITATION_STATUS_REVOKED)
+        )
+        api_keys = table(
+            "api_keys", column("workspace_id"), column("created_by"), column("is_active")
+        )
+        await self.session.execute(
+            update(api_keys)
+            .where(api_keys.c.workspace_id == workspace_id)
+            .where(api_keys.c.created_by == user_id)
+            .values(is_active=False)
+        )
         await self.session.commit()
-        return True
 
 
 class WorkspaceRepository:
@@ -115,8 +174,9 @@ class WorkspaceRepository:
         self.session = session
 
     async def add(self, workspace: Workspace) -> Workspace:
+        """Stage the row in the caller's transaction; ``WorkspaceService`` commits it."""
         self.session.add(workspace)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(workspace)
         return workspace
 

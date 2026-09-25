@@ -321,8 +321,20 @@ class TestPaymentHistory:
             tx_hash="0xdef",
             tool_name="weather_api",
             tool_call_id="tc_1",
+            idempotency_key="key-1",
             status="completed",
         )
 
         assert result == record
         payment_repo.create.assert_called_once()
+        assert payment_repo.create.call_args.kwargs["idempotency_key"] == "key-1"
+
+    @pytest.mark.asyncio
+    async def test_find_settled_payment_looks_up_completed_record_by_key(
+        self, service, payment_repo
+    ):
+        record = _make_payment()
+        payment_repo.get_settled_by_idempotency_key.return_value = record
+
+        assert await service.find_settled_payment("key-1") == record
+        payment_repo.get_settled_by_idempotency_key.assert_awaited_once_with("key-1")

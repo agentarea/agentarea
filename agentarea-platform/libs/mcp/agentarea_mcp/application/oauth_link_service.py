@@ -167,14 +167,14 @@ class MCPOAuthLinkService:
         client_secret: str,
     ) -> dict[str, Any]:
         """Exchange an authorization code for tokens and return identity claims."""
-        import httpx
+        from agentarea_common.utils.url_safety import safe_async_client
 
         cfg = link.provider_config
         token_url: str = cfg.get("token_url", "")
         client_id: str = cfg.get("client_id", "")
         userinfo_url: str = cfg.get("userinfo_url", "")
 
-        async with httpx.AsyncClient() as client:
+        async with safe_async_client() as client:
             resp = await client.post(
                 token_url,
                 data={
@@ -194,7 +194,7 @@ class MCPOAuthLinkService:
 
         # Fetch identity from userinfo endpoint if available
         if userinfo_url and access_token:
-            async with httpx.AsyncClient() as client:
+            async with safe_async_client() as client:
                 ui_resp = await client.get(
                     userinfo_url,
                     headers={"Authorization": f"Bearer {access_token}"},

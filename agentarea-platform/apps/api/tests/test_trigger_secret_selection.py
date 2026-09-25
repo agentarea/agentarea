@@ -13,8 +13,11 @@ from agentarea_api.api.deps.services import (
     get_trigger_service,
 )
 from agentarea_api.api.v1 import triggers
+from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import register_singleton
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from agentarea_secrets.catalog_service import SecretCatalogService, SecretNotFoundError
@@ -67,9 +70,14 @@ def harness():
     manager.has_secret.return_value = True
     catalog = AsyncMock(spec=SecretCatalogService)
     secret = SimpleNamespace(
-        id=uuid4(), secret_name=f"telegram-{uuid4()}", owner_type=None, workspace_id="workspace-a"
+        id=uuid4(),
+        secret_name=f"telegram-{uuid4()}",
+        owner_type=None,
+        owner_id=None,
+        workspace_id="workspace-a",
+        created_by="user-a",
     )
-    catalog.get.return_value = secret
+    catalog.get_for_use.return_value = secret
     webhook_service = AsyncMock()
     app = FastAPI()
     app.include_router(triggers.router, prefix="/v1")
@@ -133,7 +141,7 @@ async def test_selected_secret_is_resolved_before_mutation_and_never_returned(ha
     )
 
     assert response.status_code == (201 if operation == "create" else 200), response.text
-    harness.catalog.get.assert_awaited_once_with(harness.secret.id)
+    harness.catalog.get_for_use.assert_awaited_once_with(harness.secret.id)
     harness.manager.set_secret.assert_awaited_once_with(
         f"channel_cred:telegram:{harness.trigger.id}",
         json.dumps({"bot_token": "private-channel-token"}),
@@ -164,14 +172,14 @@ async def test_invalid_references_reject_without_mutation(harness, operation, re
 
     assert response.status_code == 422, response.text
     assert "must-not-appear" not in response.text
-    harness.catalog.get.assert_not_awaited()
+    harness.catalog.get_for_use.assert_not_awaited()
     harness.manager.get_secret.assert_not_awaited()
     assert_no_mutation(harness)
 
 
 @pytest.mark.parametrize("operation", ["create", "update"])
 async def test_missing_secret_rejects_without_mutation(harness, operation):
-    harness.catalog.get.side_effect = SecretNotFoundError("not in current workspace")
+    harness.catalog.get_for_use.side_effect = SecretNotFoundError("not in current workspace")
     response = await request(
         harness,
         operation,
@@ -205,9 +213,23 @@ async def test_cross_workspace_reference_uses_scoped_catalog_and_rejects(harness
     assert_no_mutation(harness)
 
 
+def use_real_catalog(harness, user_id, admin_workspaces):
+    """The catalog's own selection rule, over a session that finds ``harness.secret``."""
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+    session = AsyncMock()
+    session.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: harness.secret)
+    user = UserContext(
+        user_id=user_id, workspace_id="workspace-a", admin_workspaces=admin_workspaces
+    )
+    catalog = SecretCatalogService(session, user, harness.manager)
+    harness.app.dependency_overrides[get_secret_catalog_service] = lambda: catalog
+    harness.app.dependency_overrides[get_user_context] = lambda: user
+
+
 @pytest.mark.parametrize("operation", ["create", "update"])
 async def test_managed_secret_rejects_without_reading_value(harness, operation):
     harness.secret.owner_type = "mcp_auth_config"
+    use_real_catalog(harness, "user-a", ["workspace-a"])
     response = await request(
         harness,
         operation,
@@ -217,6 +239,41 @@ async def test_managed_secret_rejects_without_reading_value(harness, operation):
     assert response.status_code == 422, response.text
     harness.manager.get_secret.assert_not_awaited()
     assert_no_mutation(harness)
+
+
+@pytest.mark.parametrize("operation", ["create", "update"])
+async def test_another_members_secret_is_refused_without_reading_value(harness, operation):
+    # The selected value is sent where the trigger says -- an IMAP LOGIN to a
+    # host this member chose -- so selecting it is reading it.
+    use_real_catalog(harness, "user-b", [])
+    response = await request(
+        harness,
+        operation,
+        channel_credentials={"password": {"secret_id": str(harness.secret.id)}},
+    )
+
+    assert response.status_code == 403, response.text
+    harness.manager.get_secret.assert_not_awaited()
+    assert_no_mutation(harness)
+
+
+@pytest.mark.parametrize("operation", ["create", "update"])
+@pytest.mark.parametrize(
+    ("user_id", "admin_workspaces"), [("user-a", []), ("workspace-admin", ["workspace-a"])]
+)
+async def test_the_creator_or_an_admin_may_select_it(harness, operation, user_id, admin_workspaces):
+    use_real_catalog(harness, user_id, admin_workspaces)
+    harness.manager.get_secret.side_effect = lambda name: (
+        "private-channel-token" if name == harness.secret.secret_name else None
+    )
+    response = await request(
+        harness,
+        operation,
+        channel_credentials={"bot_token": {"secret_id": str(harness.secret.id)}},
+    )
+
+    assert response.status_code == (201 if operation == "create" else 200), response.text
+    assert "private-channel-token" not in response.text
 
 
 @pytest.mark.parametrize("operation", ["create", "update"])
@@ -241,7 +298,7 @@ async def test_unavailable_value_rejects_without_mutation_or_disclosure(
 
 @pytest.mark.parametrize("operation", ["create", "update"])
 async def test_all_credentials_are_resolved_before_any_mutation(harness, operation):
-    harness.catalog.get.side_effect = [harness.secret, SecretNotFoundError("missing")]
+    harness.catalog.get_for_use.side_effect = [harness.secret, SecretNotFoundError("missing")]
     response = await request(
         harness,
         operation,
@@ -261,7 +318,7 @@ async def test_legacy_raw_credentials_remain_supported(harness, operation):
     response = await request(harness, operation, channel_credentials=credentials)
 
     assert response.status_code == (201 if operation == "create" else 200), response.text
-    harness.catalog.get.assert_not_awaited()
+    harness.catalog.get_for_use.assert_not_awaited()
     harness.manager.get_secret.assert_not_awaited()
     assert json.loads(harness.manager.set_secret.await_args.args[1]) == credentials
     assert harness.webhook_service.register.await_args.kwargs["credentials"] == credentials
@@ -276,7 +333,7 @@ async def test_update_with_omitted_credentials_preserves_stored_secret(harness, 
 
     assert response.status_code == 200, response.text
     assert response.json()["has_channel_credentials"] is True
-    harness.catalog.get.assert_not_awaited()
+    harness.catalog.get_for_use.assert_not_awaited()
     harness.manager.get_secret.assert_not_awaited()
     harness.manager.set_secret.assert_not_awaited()
     harness.webhook_service.register.assert_not_awaited()

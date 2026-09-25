@@ -7,7 +7,7 @@ export interface ModelInfo {
 
 export interface ToolSettings {
   disabled_methods?: string[];  // For code tools
-  allowed_tools?: string[];     // For MCP and OpenAPI tools
+  allowed_tools?: string[] | null;  // For MCP and OpenAPI tools; null = all, [] = none
   openapi_connection_id?: string;  // For OpenAPI tools
   load_mode?: string;
 }
@@ -34,7 +34,7 @@ export interface Agent {
   tools_config?: {
     builtin_tools?: Array<{ tool_name: string; [key: string]: any }>;
     mcp_server_configs?: Array<{ server_id: string; tools?: string[]; [key: string]: any }>;
-    openapi_configs?: Array<{ openapi_connection_id: string; allowed_tools?: string[]; [key: string]: any }>;
+    openapi_configs?: Array<{ openapi_connection_id: string; allowed_tools?: string[] | null; [key: string]: any }>;
     [key: string]: any;
   } | null;
   events_config?: Record<string, any> | null;

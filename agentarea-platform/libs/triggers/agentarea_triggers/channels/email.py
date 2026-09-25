@@ -75,10 +75,29 @@ class EmailAdapter:
             )
 
         if event_type == "approval.response":
+            approved = data.get("approved")
+            comment = data.get("comment")
+            if approved is True:
+                return _html_wrap(
+                    subject="Approved",
+                    body="<p>The action was approved. The agent is continuing.</p>",
+                    status="success",
+                )
+            if approved is False:
+                reason = (
+                    f"<p><strong>Reason:</strong> {_escape_html(str(comment))}</p>"
+                    if comment
+                    else ""
+                )
+                return _html_wrap(
+                    subject="Action Denied",
+                    body=f"<p>The action was denied and did not run.</p>{reason}",
+                    status="error",
+                )
             return _html_wrap(
-                subject="Approval Received",
-                body="<p>Your approval was received. The agent is continuing.</p>",
-                status="success",
+                subject="Approval Resolved",
+                body="<p>The approval request was resolved.</p>",
+                status="info",
             )
 
         # Fallback

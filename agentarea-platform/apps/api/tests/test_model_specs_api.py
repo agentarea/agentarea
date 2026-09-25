@@ -15,6 +15,9 @@ import pytest
 from agentarea_api.api.deps.services import get_model_spec_repository
 from agentarea_api.api.v1.model_specs import router
 from agentarea_common.auth import UserContext, get_user_context
+from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import register_singleton
 from agentarea_common.testing.flows import MainFlow
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -43,9 +46,19 @@ def _spec(provider_spec_id, model_name="gpt-4"):
     return spec
 
 
+ADMIN = UserContext(user_id="u-1", workspace_id="ws-1", admin_workspaces=["ws-1"])
+
+
+@pytest.fixture(autouse=True)
+def _authz():
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+
+
 @pytest.fixture
 def repo():
-    return AsyncMock()
+    repo = AsyncMock()
+    repo.user_context = ADMIN
+    return repo
 
 
 @pytest.fixture
@@ -53,9 +66,7 @@ def client(repo):
     app = FastAPI()
     app.include_router(router, prefix="/v1")
     app.dependency_overrides[get_model_spec_repository] = lambda: repo
-    app.dependency_overrides[get_user_context] = lambda: UserContext(
-        user_id="u-1", workspace_id="ws-1"
-    )
+    app.dependency_overrides[get_user_context] = lambda: ADMIN
     return TestClient(app)
 
 

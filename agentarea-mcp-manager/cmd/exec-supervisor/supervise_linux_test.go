@@ -5,11 +5,15 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -80,11 +84,19 @@ func TestSuperviseHelperProcess(t *testing.T) {
 
 func runSuperviseHelper(t *testing.T, command []string, timeout time.Duration, maxFileBytes uint64) executionResult {
 	t.Helper()
-	payload, err := json.Marshal(command)
+	result, err := superviseInHelper(t.TempDir(), command, timeout, maxFileBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resultPath := filepath.Join(t.TempDir(), "result.json")
+	return result
+}
+
+func superviseInHelper(dir string, command []string, timeout time.Duration, maxFileBytes uint64) (executionResult, error) {
+	payload, err := json.Marshal(command)
+	if err != nil {
+		return executionResult{}, err
+	}
+	resultPath := filepath.Join(dir, "result.json")
 	helper := exec.Command(os.Args[0], "-test.run=^TestSuperviseHelperProcess$")
 	helper.Env = append(os.Environ(),
 		"AGENTAREA_SUPERVISE_HELPER=true",
@@ -94,21 +106,21 @@ func runSuperviseHelper(t *testing.T, command []string, timeout time.Duration, m
 		"AGENTAREA_SUPERVISE_RESULT="+resultPath,
 	)
 	if output, err := helper.CombinedOutput(); err != nil {
-		t.Fatalf("supervisor helper: %v: %s", err, output)
+		return executionResult{}, fmt.Errorf("supervisor helper: %w: %s", err, output)
 	}
 	file, err := os.Open(resultPath)
 	if err != nil {
-		t.Fatal(err)
+		return executionResult{}, err
 	}
 	defer file.Close()
 	var output superviseHelperResult
 	if err := json.NewDecoder(file).Decode(&output); err != nil {
-		t.Fatal(err)
+		return executionResult{}, err
 	}
 	if output.Error != "" {
-		t.Fatal(output.Error)
+		return executionResult{}, errors.New(output.Error)
 	}
-	return executionResult{exitCode: output.ExitCode, timedOut: output.TimedOut}
+	return executionResult{exitCode: output.ExitCode, timedOut: output.TimedOut}, nil
 }
 
 func sandboxTempPath(t *testing.T, pattern string) string {
@@ -151,6 +163,118 @@ func TestSuperviseTimeoutStillReachesQuiescence(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("timed-out descendant survived supervisor return: %v", err)
+	}
+}
+
+// Every writer is a shell blocked on `sleep 5` whose next command runs the
+// instant that sleep dies, so a write can only come from the supervisor's kill
+// waking a waiter, never from a slow machine. Concurrent supervisors also race
+// their /proc scans against hundreds of exiting processes.
+func TestSuperviseTimeoutKillWakesNoWaiter(t *testing.T) {
+	const supervisors, writers = 8, 24
+	dir, err := os.MkdirTemp("/tmp", "agentarea-supervisor-waiters-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	if err := os.Chmod(dir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	results := make([]executionResult, supervisors)
+	errs := make([]error, supervisors)
+	helperDirs := make([]string, supervisors)
+	for i := range helperDirs {
+		helperDirs[i] = t.TempDir()
+	}
+	var wg sync.WaitGroup
+	for i := range supervisors {
+		var command strings.Builder
+		for j := range writers {
+			fmt.Fprintf(&command, "setsid /bin/sh -c 'sleep 5; printf woken > %s/%d-%d' >/dev/null 2>&1 & ", dir, i, j)
+		}
+		command.WriteString("sleep 5")
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results[i], errs[i] = superviseInHelper(helperDirs[i], []string{"/bin/sh", "-c", command.String()}, 200*time.Millisecond, 1024*1024)
+		}()
+	}
+	wg.Wait()
+	for i := range supervisors {
+		if errs[i] != nil {
+			t.Fatalf("supervisor %d: %v", i, errs[i])
+		}
+		if !results[i].timedOut || results[i].exitCode != 124 {
+			t.Fatalf("supervisor %d: supervise() = %+v", i, results[i])
+		}
+	}
+	woken, err := filepath.Glob(filepath.Join(dir, "*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(woken) > 0 {
+		t.Fatalf("%d timed-out waiters ran after their child was killed: %v", len(woken), woken)
+	}
+}
+
+// A process that keeps receiving SIGCONT never reads as stopped, so the freeze
+// cannot converge. The supervisor must still kill on its freeze budget and
+// report a clean timeout instead of spending the drain's budget spinning.
+func TestSuperviseTimeoutSurvivesDefeatedFreeze(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "agentarea-supervisor-cont-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	if err := os.Chmod(dir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	pidFile := filepath.Join(dir, "pid")
+	command := fmt.Sprintf(`setsid /bin/sh -c 'echo $$ > %q.tmp && mv %q.tmp %q; sleep 30' >/dev/null 2>&1 & sleep 30`, pidFile, pidFile, pidFile)
+
+	stop := make(chan struct{})
+	continued := make(chan int, 1)
+	go func() {
+		sent := 0
+		defer func() { continued <- sent }()
+		pid := 0
+		for pid == 0 {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if data, err := os.ReadFile(pidFile); err == nil {
+				pid, _ = strconv.Atoi(strings.TrimSpace(string(data)))
+			}
+		}
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if syscall.Kill(pid, syscall.SIGCONT) == nil {
+				sent++
+			}
+		}
+	}()
+
+	started := time.Now()
+	result, err := superviseInHelper(t.TempDir(), []string{"/bin/sh", "-c", command}, 300*time.Millisecond, 1024*1024)
+	elapsed := time.Since(started)
+	close(stop)
+	if sent := <-continued; sent == 0 {
+		t.Fatal("the continuer never reached the timed-out process")
+	}
+	if err != nil {
+		t.Fatalf("supervise() failed after %s: %v", elapsed, err)
+	}
+	if !result.timedOut || result.exitCode != 124 {
+		t.Fatalf("supervise() = %+v", result)
+	}
+	if limit := 300*time.Millisecond + execsupervisor.DescendantFreezeTimeout + 2*time.Second; elapsed > limit {
+		t.Fatalf("supervise() took %s, want the freeze to give up within its own budget (<= %s)", elapsed, limit)
 	}
 }
 

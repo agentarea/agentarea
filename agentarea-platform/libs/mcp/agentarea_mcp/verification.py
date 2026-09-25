@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 
 import httpx
 from agentarea_common.config import get_database, get_settings
+from mcp import MCPError
 from sqlalchemy import select
 
 from agentarea_mcp.domain.models import MCPServer
@@ -29,6 +30,7 @@ from agentarea_mcp.tool_serialization import serialize_mcp_tool
 logger = logging.getLogger(__name__)
 
 _LIST_TOOLS_ATTEMPT_TIMEOUT = 5  # seconds per attempt
+_URL_CONNECT_FAILED = "Could not connect to the MCP server"
 _LIST_TOOLS_RETRY_DELAY = 5  # steady poll interval while the container provisions
 # Absolute safety cap. Verification is liveness-driven: while a docker/command
 # container is alive and still provisioning (pulling its image, or running a
@@ -200,63 +202,29 @@ def mcp_transport_candidates(
 
 
 async def _list_tools(
-    endpoint_url: str, headers: dict | None = None, transport: str | None = None
+    endpoint_url: str,
+    headers: dict | None = None,
+    transport: str | None = None,
+    *,
+    verdict_key: str | None = None,
+    verdict_store=None,
+    httpx_client_factory,
 ) -> list[dict]:
-    """Connect to running MCP server and list tools.
-
-    Transport selection is delegated to :func:`mcp_transport_candidates`; a
-    declared ``transport`` is honored exactly (no probing).
-
-    Raises on any connection or protocol error — caller handles retries.
-    """
-    from mcp import ClientSession
+    """Connect to an MCP server and list tools through the shared v2 client."""
+    from agentarea_mcp.application.mcp_client import connected_mcp_client
 
     custom_headers = dict(headers) if headers else None
-    timeout_seconds = float(_LIST_TOOLS_ATTEMPT_TIMEOUT)
-
-    streamable_urls, sse_url = mcp_transport_candidates(endpoint_url, transport)
-
-    result = None
-    last_streamable_err: BaseException | None = None
-    for streamable_url in streamable_urls:
-        try:
-            from mcp.client.streamable_http import streamablehttp_client
-
-            async with streamablehttp_client(
-                streamable_url,
-                timeout=timeout_seconds,
-                headers=custom_headers,
-            ) as (read_stream, write_stream, _):
-                async with ClientSession(read_stream, write_stream) as sess:
-                    await sess.initialize()
-                    result = await sess.list_tools()
-            break
-        except Exception as transport_err:
-            last_streamable_err = transport_err
-            logger.debug(
-                "Streamable HTTP failed for %s (%s), trying next transport",
-                streamable_url,
-                transport_err,
-            )
-
-    if result is None and sse_url is not None:
-        from mcp.client.sse import sse_client
-
-        async with sse_client(
-            sse_url,
-            timeout=timeout_seconds,
-            headers=custom_headers,
-        ) as (read_stream, write_stream):
-            async with ClientSession(read_stream, write_stream) as sess:
-                await sess.initialize()
-                result = await sess.list_tools()
-
-    if result is None:
-        # Declared streamable-http with no SSE fallback and it failed — surface
-        # the real transport error rather than a confusing None.
-        raise last_streamable_err or RuntimeError(f"No usable MCP transport for {endpoint_url}")
-
-    return [serialize_mcp_tool(t) for t in result.tools]
+    async with connected_mcp_client(
+        endpoint_url,
+        custom_headers,
+        float(_LIST_TOOLS_ATTEMPT_TIMEOUT),
+        transport=transport,
+        verdict_key=verdict_key,
+        verdict_store=verdict_store,
+        httpx_client_factory=httpx_client_factory,
+    ) as client:
+        result = await client.list_tools()
+    return [serialize_mcp_tool(tool) for tool in result.tools]
 
 
 def _in_progress_is_stale(verification: dict) -> bool:
@@ -406,6 +374,24 @@ async def verify(
             remote_transport = "streamable-http"
         else:
             remote_transport = declared_remote_transport(runtime_instance.json_spec)
+        verdict_store = None
+        verdict_key = None
+        client_factory = None
+        if _list_tools_fn is None:
+            from agentarea_mcp.application.mcp_client import (
+                mcp_verdict_key,
+                pinned_client_factory,
+                platform_client_factory,
+                shared_era_verdict_store,
+            )
+
+            verdict_key = mcp_verdict_key(instance_id, runtime_instance.json_spec)
+            verdict_store = shared_era_verdict_store()
+            # A URL-type endpoint is the member's choice of address; the
+            # gateway URL of a container-backed one is the platform's.
+            client_factory = (
+                pinned_client_factory() if instance_type == "url" else platform_client_factory
+            )
         deadline = asyncio.get_event_loop().time() + _SAFETY_DEADLINE
         last_error: BaseException | None = None
 
@@ -413,7 +399,14 @@ async def verify(
             try:
                 async with asyncio.timeout(_LIST_TOOLS_ATTEMPT_TIMEOUT):
                     if _list_tools_fn is None:
-                        tools = await _list_tools(endpoint_url, headers or None, remote_transport)
+                        tools = await _list_tools(
+                            endpoint_url,
+                            headers or None,
+                            remote_transport,
+                            verdict_key=verdict_key,
+                            verdict_store=verdict_store,
+                            httpx_client_factory=client_factory,
+                        )
                     else:
                         tools = await _list_tools_fn(endpoint_url, headers or None)
 
@@ -457,6 +450,15 @@ async def verify(
 
                 # MCP protocol-level error — fail fast, no retry.
                 message = f"{type(leaf).__name__}: {leaf}" if str(leaf) else type(leaf).__name__
+                if instance_type == "url" and not isinstance(leaf, MCPError):
+                    # Refusals and connection failures of a member-chosen
+                    # address would otherwise say which internal ports answer.
+                    logger.warning(
+                        "verify: could not connect to url endpoint: %s",
+                        message,
+                        extra={"instance_id": instance_id},
+                    )
+                    message = _URL_CONNECT_FAILED
                 payload = _make_payload(
                     "failed",
                     VerificationError(
@@ -483,6 +485,13 @@ async def verify(
         # returns a concrete startup failure when it cannot satisfy demand.
         error_code = "list_tools_timeout"
         error_msg = f"MCP did not become ready within {_SAFETY_DEADLINE}s: {last_error}"
+        if instance_type == "url":
+            logger.warning(
+                "verify: url endpoint never answered: %s",
+                error_msg,
+                extra={"instance_id": instance_id},
+            )
+            error_msg = _URL_CONNECT_FAILED
 
         payload = _make_payload(
             "failed",

@@ -10,12 +10,16 @@ from agentarea_api.api.v1.mcp_oauth_connect import (
     _instance_detail_url,
     _resolve_instance_remote_url,
 )
+from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import register_singleton
 from agentarea_common.testing.flows import MainFlow
 from agentarea_mcp.application.oauth_client_service import (
     AuthServerMetadata,
     MCPOAuthDiscoveryError,
 )
+from agentarea_secrets.catalog_service import SecretCatalogService
 from fastapi import HTTPException
 
 
@@ -69,7 +73,9 @@ def _google_metadata(*, registration_endpoint: str | None = None) -> AuthServerM
     )
 
 
-def _patch_instance_lookup(monkeypatch, *, auth_config_id=None, remote_url: str | None = _GMAIL_URL):
+def _patch_instance_lookup(
+    monkeypatch, *, auth_config_id=None, remote_url: str | None = _GMAIL_URL
+):
     """Point the endpoint at one URL-type instance without touching a database."""
     instance = SimpleNamespace(
         id=uuid4(),
@@ -197,6 +203,52 @@ async def test_preflight_reports_unsupported_for_an_instance_without_a_remote_ur
     assert "remote URL" in result.detail
 
 
+@pytest.mark.asyncio
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
+async def test_preflight_answers_for_a_catalog_spec_before_any_instance_exists(monkeypatch):
+    """The create page has to know whether to ask for an OAuth app before it
+    creates anything — otherwise the question arrives only after a connection
+    that cannot be authorized already exists."""
+    _patch_instance_lookup(monkeypatch)
+    _patch_discovery(monkeypatch, _google_metadata())
+    server_id = uuid4()
+
+    result = await mcp_oauth_connect.oauth_preflight(
+        _user_context(), AsyncMock(), server_id=server_id
+    )
+
+    assert result.status == "oauth_app_required"
+    assert result.connected is False
+    assert result.instance_id is None
+    assert result.server_id == server_id
+
+
+@pytest.mark.asyncio
+async def test_preflight_for_an_unknown_spec_is_not_found(monkeypatch):
+    class _NoServer:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def get_server_by_id(self, _requested_id):
+            return None
+
+    monkeypatch.setattr(mcp_oauth_connect, "MCPServerRepository", _NoServer)
+
+    with pytest.raises(HTTPException) as excinfo:
+        await mcp_oauth_connect.oauth_preflight(_user_context(), AsyncMock(), server_id=uuid4())
+
+    assert excinfo.value.status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("targets", [{}, {"instance_id": uuid4(), "server_id": uuid4()}])
+async def test_preflight_takes_exactly_one_target(targets):
+    with pytest.raises(HTTPException) as excinfo:
+        await mcp_oauth_connect.oauth_preflight(_user_context(), AsyncMock(), **targets)
+
+    assert excinfo.value.status_code == 422
+
+
 # ---------------------------------------------------------------------------
 # Authorize — request validation
 # ---------------------------------------------------------------------------
@@ -293,7 +345,7 @@ async def test_authorize_with_a_custom_oauth_app_keeps_the_secret_out_of_state(
         )
     )
     secret_catalog = SimpleNamespace(
-        get=AsyncMock(side_effect=[client_id_secret, client_secret_secret]),
+        get_for_use=AsyncMock(side_effect=[client_id_secret, client_secret_secret]),
         add_reference=AsyncMock(),
     )
     stored_state = AsyncMock()
@@ -351,7 +403,7 @@ async def test_authorize_with_a_custom_oauth_app_keeps_the_secret_out_of_state(
         assert "client_id" not in auth_kwargs["config"]
         assert auth_kwargs["config"]["client_id_secret_name"] == "gmail_client_id"  # noqa: S105
         assert (
-            auth_kwargs["config"]["client_secret_secret_name"]  # noqa: S105
+            auth_kwargs["config"]["client_secret_secret_name"]
             == "gmail_client_secret"  # pragma: allowlist secret
         )
         assert secret_catalog.add_reference.await_args_list == [
@@ -363,6 +415,60 @@ async def test_authorize_with_a_custom_oauth_app_keeps_the_secret_out_of_state(
     assert "client_secret" not in state_payload
     assert state_payload["auth_config_id"] == str(auth_config_id)
     assert state_payload["instance_id"] == str(instance.id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
+async def test_authorize_refuses_another_members_secret_as_the_client_id(monkeypatch):
+    """The client ID is echoed back inside the authorize URL, so selecting
+    someone else's secret here would hand its plaintext to the caller."""
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+    instance = _patch_instance_lookup(monkeypatch)
+    _patch_discovery(monkeypatch, _google_metadata())
+    auth_create = AsyncMock()
+
+    class _AuthService:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        create = auth_create
+
+    member_b = UserContext(user_id="member-b", workspace_id="ws", admin_workspaces=[])
+    secret = SimpleNamespace(
+        id=uuid4(),
+        secret_name="member_a_stripe_key",  # noqa: S106  # pragma: allowlist secret
+        owner_type=None,
+        owner_id=None,
+        created_by="member-a",
+    )
+    session = AsyncMock()
+    session.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: secret)
+    workspace_manager = SimpleNamespace(get_secret=AsyncMock(return_value="sk-live-member-a"))
+    stored_state = AsyncMock()
+    monkeypatch.setattr(mcp_oauth_connect, "MCPAuthService", _AuthService)
+    monkeypatch.setattr(
+        mcp_oauth_connect, "get_real_secret_manager", lambda **_kwargs: workspace_manager
+    )
+    monkeypatch.setattr(mcp_oauth_connect, "_store_state", stored_state)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await mcp_oauth_connect.oauth_authorize(
+            MCPOAuthAuthorizeRequest(
+                instance_id=instance.id,
+                credential_mode="custom",
+                client_id_secret_id=secret.id,
+                client_secret="typed-secret",  # noqa: S106  # pragma: allowlist secret
+            ),
+            member_b,
+            AsyncMock(),
+            SecretCatalogService(session, member_b, workspace_manager),
+        )
+
+    assert exc_info.value.status_code == 403
+    assert "sk-live-member-a" not in str(exc_info.value.detail)
+    workspace_manager.get_secret.assert_not_awaited()
+    auth_create.assert_not_awaited()
+    stored_state.assert_not_awaited()
 
 
 @pytest.mark.asyncio

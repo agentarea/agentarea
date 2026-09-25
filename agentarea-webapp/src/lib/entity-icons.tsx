@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   Bot,
   Boxes,
   FolderTree,
@@ -27,6 +28,7 @@ export const ENTITY_ICONS = {
   tool: Wrench,
   trigger: Zap,
   sandbox: Boxes,
+  app: AppWindow,
 } satisfies Record<string, LucideIcon>;
 
 export type EntityKind = keyof typeof ENTITY_ICONS;

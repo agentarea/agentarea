@@ -1,0 +1,29 @@
+{
+  "name": "mcp-apps-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "INPUT=app/mcp-app.html vite build && INPUT=host/index.html vite build && INPUT=host/sandbox.html vite build",
+    "typecheck": "tsc --noEmit",
+    "mcp": "DATASET_PATH=data/leads.csv bun server/main.ts",
+    "host": "bun host/serve.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/express": "2.0.0",
+    "@modelcontextprotocol/ext-apps": "^2.0.0",
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.0",
+    "@types/node": "22.10.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.0",
+    "vite-plugin-singlefile": "^2.3.0"
+  }
+}

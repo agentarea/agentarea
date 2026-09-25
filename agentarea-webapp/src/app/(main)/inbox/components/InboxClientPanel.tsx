@@ -22,6 +22,7 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import { TaskConversation } from "@/components/Chat/TaskConversation";
 import { TaskStatus } from "@/components/TaskStatus";
 import { Button } from "@/components/ui/button";
+import { EscalationArguments } from "./EscalationArguments";
 import { extractInboxResult } from "./inboxResult";
 import { InboxResultMessage } from "./InboxResultMessage";
 
@@ -146,14 +147,24 @@ export function InboxClientPanel({
               className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400"
               aria-hidden
             />
-            <p>
-              {t.rich("detail.willRun", {
-                tool: task.escalation_tool_name || t("detail.requestedAction"),
-                b: (chunks) => (
-                  <b className="font-semibold text-foreground">{chunks}</b>
-                ),
-              })}
-            </p>
+            <div className="min-w-0 flex-1">
+              <p>
+                {t.rich("detail.willRun", {
+                  tool:
+                    task.escalation_tool_name || t("detail.requestedAction"),
+                  b: (chunks) => (
+                    <b className="font-semibold text-foreground">{chunks}</b>
+                  ),
+                })}
+              </p>
+              {task.escalation_id && (
+                <EscalationArguments
+                  agentId={task.agent_id}
+                  taskId={String(task.id)}
+                  escalationId={task.escalation_id}
+                />
+              )}
+            </div>
           </div>
         </div>
       )}

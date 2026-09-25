@@ -36,7 +36,12 @@ from agentarea_common.config.app import get_app_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.utils.types import UtcDatetime
-from agentarea_secrets.catalog_service import SecretCatalogService, SecretNotFoundError
+from agentarea_secrets.catalog_service import (
+    ManagedSecretError,
+    SecretAccessDeniedError,
+    SecretCatalogService,
+    SecretNotFoundError,
+)
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
@@ -46,6 +51,10 @@ from agentarea_triggers.trigger_service import (
     TriggerNotFoundError,
     TriggerService,
     TriggerValidationError,
+)
+from agentarea_triggers.webhook_verification import (
+    channel_credential_secret_name,
+    redact_secret_fields,
 )
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -142,8 +151,8 @@ class TriggerResponse(BaseModel):
                     "webhook_type": trigger.webhook_type.value
                     if hasattr(trigger.webhook_type, "value")
                     else str(trigger.webhook_type),
-                    "validation_rules": trigger.validation_rules,
-                    "webhook_config": trigger.webhook_config,
+                    "validation_rules": redact_secret_fields(trigger.validation_rules),
+                    "webhook_config": redact_secret_fields(trigger.webhook_config),
                     "event_types": getattr(trigger, "event_types", []) or [],
                 }
             )
@@ -370,7 +379,7 @@ async def _has_credentials(secret_manager: Any, trigger: Any, trigger_id: UUID) 
     if hasattr(trigger, "webhook_type"):
         wt = trigger.webhook_type
         channel_type = wt.value if hasattr(wt, "value") else str(wt)
-    secret_name = f"channel_cred:{channel_type}:{trigger_id}"
+    secret_name = channel_credential_secret_name(channel_type, trigger_id)
     try:
         return await secret_manager.has_secret(secret_name)
     except Exception as e:
@@ -431,7 +440,7 @@ def _channel_secret_name(trigger: Any, trigger_id: Any) -> str | None:
     """
     wt = getattr(trigger, "webhook_type", None)
     name = getattr(wt, "value", None) or str(wt or "")
-    return f"channel_cred:{name}:{trigger_id}" if name else None
+    return channel_credential_secret_name(name, trigger_id) if name else None
 
 
 async def _resolve_channel_credentials(
@@ -462,17 +471,19 @@ async def _resolve_channel_credentials(
             ) from exc
 
         try:
-            secret = await secret_catalog.get(secret_id)
+            secret = await secret_catalog.get_for_use(secret_id)
         except SecretNotFoundError as exc:
             raise HTTPException(
                 status_code=422,
                 detail="Selected channel credential secret is not available in this workspace.",
             ) from exc
-        if secret.owner_type is not None:
+        except ManagedSecretError as exc:
             raise HTTPException(
                 status_code=422,
                 detail="Selected channel credential must be a user-owned workspace secret.",
-            )
+            ) from exc
+        except SecretAccessDeniedError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         try:
             value = await secret_manager.get_secret(secret.secret_name)
         except Exception:
@@ -568,7 +579,7 @@ async def create_trigger(
             # Extractor names like "telegram_polling" map to channel type via suffix stripping.
             extractor = payload.data_extractor or ""
             channel_type = payload.webhook_type or extractor.removesuffix("_polling") or "generic"
-            secret_name = f"channel_cred:{channel_type}:{trigger.id}"
+            secret_name = channel_credential_secret_name(channel_type, trigger.id)
             await secret_manager.set_secret(secret_name, json.dumps(credentials))
             has_creds = True
             logger.info(f"Stored channel credentials for trigger {trigger.id}")
@@ -802,7 +813,7 @@ async def update_trigger(
             if secret_name is None:
                 extractor = getattr(current_trigger, "data_extractor", None) or ""
                 channel_type = extractor.removesuffix("_polling") or "generic"
-                secret_name = f"channel_cred:{channel_type}:{trigger_id}"
+                secret_name = channel_credential_secret_name(channel_type, trigger_id)
             try:
                 stored = await secret_manager.get_secret(secret_name)
                 existing_credentials = json.loads(stored) if stored is not None else {}
@@ -833,7 +844,7 @@ async def update_trigger(
                 and updated_trigger_any.data_extractor
             ):
                 channel_type = str(updated_trigger_any.data_extractor).removesuffix("_polling")
-            secret_name = f"channel_cred:{channel_type}:{trigger_id}"
+            secret_name = channel_credential_secret_name(channel_type, trigger_id)
             await secret_manager.set_secret(secret_name, json.dumps(credentials))
             has_creds = True
             await webhook_service.register(

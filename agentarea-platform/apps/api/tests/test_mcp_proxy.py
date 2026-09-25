@@ -1,5 +1,6 @@
 """Unit tests for the per-instance MCP reverse proxy."""
 
+import base64
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -9,6 +10,7 @@ from agentarea_api.api.v1.mcp_proxy import (
     _filter_inbound_headers,
     _filter_outbound_headers,
     _iter_jsonrpc_tool_calls,
+    _MCPHeaderMismatchError,
     _resolve_upstream_url,
 )
 from agentarea_common.testing.flows import MainFlow
@@ -85,11 +87,17 @@ def test_filter_inbound_drops_authorization_and_host():
         "Content-Type": "application/json",
         "Accept": "application/json,text/event-stream",
         "Mcp-Session-Id": "abc",
+        "MCP-Protocol-Version": "2026-07-28",
+        "Mcp-Method": "tools/call",
+        "Mcp-Name": "github.create_issue",
     }
 
     out = _filter_inbound_headers(headers)
 
     assert "Authorization" not in out
+    assert out["MCP-Protocol-Version"] == "2026-07-28"
+    assert out["Mcp-Method"] == "tools/call"
+    assert out["Mcp-Name"] == "github.create_issue"
     assert "Host" not in out
     assert out["Content-Type"] == "application/json"
     assert out["Mcp-Session-Id"] == "abc"
@@ -193,6 +201,90 @@ async def test_authorize_mcp_tool_calls_allows_when_policy_permits(monkeypatch):
     await _authorize_mcp_tool_calls(
         _CALL, SimpleNamespace(user_id="u1", workspace_id="ws1"), object(), instance_id=_INSTANCE
     )
+
+
+@pytest.mark.asyncio
+async def test_authorize_mcp_tool_calls_rejects_mismatched_name_header():
+    body = (
+        b'{"jsonrpc":"2.0","id":7,"method":"tools/call",'
+        b'"params":{"name":"github.create_issue","arguments":{}}}'
+    )
+
+    with pytest.raises(_MCPHeaderMismatchError) as exc:
+        await _authorize_mcp_tool_calls(
+            body,
+            SimpleNamespace(user_id="u1", workspace_id="ws1"),
+            object(),
+            instance_id=_INSTANCE,
+            headers={"Mcp-Method": "tools/call", "Mcp-Name": "other"},
+        )
+
+    assert exc.value.body == {
+        "jsonrpc": "2.0",
+        "id": 7,
+        "error": {
+            "code": -32020,
+            "message": "Header mismatch: Mcp-Name header value 'other' "
+            "does not match body value 'github.create_issue'",
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_authorize_mcp_tool_calls_accepts_base64_name_header(monkeypatch):
+    _install_policy(monkeypatch, EffectivePolicy())
+    encoded_name = "=?base64?" + base64.b64encode(b"github.create_issue").decode() + "?="
+
+    await _authorize_mcp_tool_calls(
+        _CALL,
+        SimpleNamespace(user_id="u1", workspace_id="ws1"),
+        object(),
+        instance_id=_INSTANCE,
+        headers={"Mcp-Method": "tools/call", "Mcp-Name": encoded_name},
+    )
+
+
+@pytest.mark.asyncio
+async def test_authorize_mcp_tool_calls_rejects_headers_for_jsonrpc_batch():
+    body = (
+        b'[{"jsonrpc":"2.0","id":1,"method":"tools/call",'
+        b'"params":{"name":"github.create_issue","arguments":{}}}]'
+    )
+
+    with pytest.raises(_MCPHeaderMismatchError) as exc:
+        await _authorize_mcp_tool_calls(
+            body,
+            SimpleNamespace(user_id="u1", workspace_id="ws1"),
+            object(),
+            instance_id=_INSTANCE,
+            headers={"Mcp-Method": "tools/call"},
+        )
+
+    assert exc.value.body["id"] is None
+    assert exc.value.body["error"]["code"] == -32020
+
+
+@pytest.mark.asyncio
+async def test_authorize_mcp_tool_calls_leaves_header_less_batch_to_governance(monkeypatch):
+    # A 2025-era client may batch and sends no routing headers: only the
+    # policy decides, exactly as before 2026-07-28.
+    _install_policy(monkeypatch, EffectivePolicy(tools=ToolsPolicy(denied=["github.create_issue"])))
+    body = (
+        b'[{"jsonrpc":"2.0","id":1,"method":"tools/list"},'
+        b'{"jsonrpc":"2.0","id":2,"method":"tools/call",'
+        b'"params":{"name":"github.create_issue","arguments":{}}}]'
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await _authorize_mcp_tool_calls(
+            body,
+            SimpleNamespace(user_id="u1", workspace_id="ws1"),
+            object(),
+            instance_id=_INSTANCE,
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert exc.value.status_code == 403
 
 
 @pytest.mark.asyncio

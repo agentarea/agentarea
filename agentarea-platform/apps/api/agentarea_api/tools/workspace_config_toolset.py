@@ -3,6 +3,7 @@
 import json
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import requires_workspace_admin
 from agentarea_agents_sdk.tools.tool_definition import toolset
 
 from .base import platform_read_context
@@ -19,6 +20,7 @@ class WorkspaceConfigToolset(Toolset):
     """Export the workspace's agents, MCP instances, and provider configs as YAML."""
 
     @tool_method(effect="read")
+    @requires_workspace_admin()
     async def export(self) -> str:
         """Export current workspace configuration as YAML (secrets are placeholders)."""
         async with platform_read_context() as (_session, user_ctx, repo_factory, broker, secret):

@@ -8,7 +8,7 @@ from agentarea_common.config.openfga import OpenFGASettings
 from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
 
 
-def _settings(model_path: str | None = None) -> OpenFGASettings:
+def _settings(model_path: str | None = None, api_token: str = "") -> OpenFGASettings:
     return OpenFGASettings(
         ACCESS_CONTROL_OPENFGA_API_URL="http://openfga:8080",
         ACCESS_CONTROL_OPENFGA_STORE_ID="",
@@ -17,6 +17,7 @@ def _settings(model_path: str | None = None) -> OpenFGASettings:
         ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=model_path is not None,
         ACCESS_CONTROL_OPENFGA_STORE_NAME="agentarea",
         ACCESS_CONTROL_OPENFGA_MODEL_PATH=model_path,
+        ACCESS_CONTROL_OPENFGA_API_TOKEN=api_token,
     )
 
 
@@ -45,16 +46,10 @@ async def test_bootstrap_reuses_existing_store_and_writes_model(tmp_path):
                     ]
                 },
             )
-        if (
-            request.method == "POST"
-            and request.url.path == "/stores/store-1/authorization-models"
-        ):
+        if request.method == "POST" and request.url.path == "/stores/store-1/authorization-models":
             assert body == {"schema_version": "1.1", "type_definitions": []}
             return httpx.Response(201, json={"authorization_model_id": "model-2"})
-        if (
-            request.method == "GET"
-            and request.url.path == "/stores/store-1/authorization-models"
-        ):
+        if request.method == "GET" and request.url.path == "/stores/store-1/authorization-models":
             return httpx.Response(200, json={"authorization_models": []})
         return httpx.Response(404, text="unexpected")
 
@@ -108,6 +103,48 @@ async def test_bootstrap_creates_store_when_missing_and_converges_on_listed_stor
 
 
 @pytest.mark.asyncio
+async def test_bootstrap_sends_bearer_token_when_configured():
+    seen_auth: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_auth.append(request.headers.get("authorization"))
+        if request.method == "GET" and request.url.path == "/stores":
+            return httpx.Response(200, json={"stores": []})
+        if request.method == "POST" and request.url.path == "/stores":
+            return httpx.Response(201, json={"id": "store-created", "name": "agentarea"})
+        return httpx.Response(404, text="unexpected")
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    settings = _settings(api_token="preshared-secret")  # noqa: S106
+
+    await bootstrap_openfga(settings, client=http)
+
+    assert seen_auth
+    assert all(value == "Bearer preshared-secret" for value in seen_auth)
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_omits_authorization_header_without_token():
+    seen_auth: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_auth.append(request.headers.get("authorization"))
+        if request.method == "GET" and request.url.path == "/stores":
+            return httpx.Response(200, json={"stores": []})
+        if request.method == "POST" and request.url.path == "/stores":
+            return httpx.Response(201, json={"id": "store-created", "name": "agentarea"})
+        return httpx.Response(404, text="unexpected")
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    settings = _settings()
+
+    await bootstrap_openfga(settings, client=http)
+
+    assert seen_auth
+    assert all(value is None for value in seen_auth)
+
+
+@pytest.mark.asyncio
 async def test_bootstrap_reuses_matching_authorization_model(tmp_path):
     model_path = tmp_path / "authorization-model.json"
     model_path.write_text(
@@ -120,9 +157,7 @@ async def test_bootstrap_reuses_matching_authorization_model(tmp_path):
                         "relations": {"members": {"this": {}}},
                         "metadata": {
                             "relations": {
-                                "members": {
-                                    "directly_related_user_types": [{"type": "User"}]
-                                }
+                                "members": {"directly_related_user_types": [{"type": "User"}]}
                             }
                         },
                     }
@@ -148,10 +183,7 @@ async def test_bootstrap_reuses_matching_authorization_model(tmp_path):
                     ]
                 },
             )
-        if (
-            request.method == "GET"
-            and request.url.path == "/stores/store-1/authorization-models"
-        ):
+        if request.method == "GET" and request.url.path == "/stores/store-1/authorization-models":
             return httpx.Response(
                 200,
                 json={
@@ -182,10 +214,7 @@ async def test_bootstrap_reuses_matching_authorization_model(tmp_path):
                     ]
                 },
             )
-        if (
-            request.method == "POST"
-            and request.url.path == "/stores/store-1/authorization-models"
-        ):
+        if request.method == "POST" and request.url.path == "/stores/store-1/authorization-models":
             writes += 1
             return httpx.Response(201, json={"authorization_model_id": "model-new"})
         return httpx.Response(404, text="unexpected")

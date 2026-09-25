@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   Bot,
   Brain,
   ClipboardList,
@@ -104,6 +105,12 @@ export const navData = {
           titleKey: "connections",
           url: "/connections",
           icon: Plug,
+        },
+        {
+          title: "Apps",
+          titleKey: "apps",
+          url: "/apps",
+          icon: AppWindow,
         },
         {
           title: "Harnesses",

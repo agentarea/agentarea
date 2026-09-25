@@ -130,7 +130,14 @@ def make_formatter(flavor: MarkdownFlavor) -> Callable[[dict[str, Any], str], st
             q = esc(str(d.get("question", "Approval needed")))
             return f"{e['question']} {b0}Needs your input:{b1}\n{flavor.quote}{q}"
         if et == APPROVAL_RESPONSE:
-            return f"{e['check']} {esc('Approval received, continuing...')}"
+            approved = d.get("approved")
+            if approved is True:
+                return f"{e['check']} {esc('Approved, continuing...')}"
+            if approved is False:
+                comment = d.get("comment")
+                reason = f" \u2014 {esc(str(comment))}" if comment else ""
+                return f"{e['stop']} {b0}Denied{b1}{reason}"
+            return f"{e['info']} {esc('Approval resolved.')}"
 
         if presentation == "concise":
             if et == TASK_STARTED or raw_et == "WorkflowCommandReceived":
@@ -367,16 +374,15 @@ def make_a2a_webhook_sender(
 
     async def _send(channel_config: dict[str, Any], message: str) -> None:
         from agentarea_common.utils.a2a_push import push_token_secret_name
-        from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
+        from agentarea_common.utils.url_safety import (
+            OutboundPolicy,
+            UnsafeUrlError,
+            safe_async_client,
+        )
 
         url = channel_config.get("url")
         if not url or not message:
             return
-        try:
-            validate_outbound_url(url)
-        except UnsafeUrlError as e:
-            # Misconfigured/hostile target — do not retry.
-            raise FatalError(f"unsafe push webhook url: {e}") from e
 
         headers = {"Content-Type": "application/json"}
         task_id = channel_config.get("task_id")
@@ -387,8 +393,13 @@ def make_a2a_webhook_sender(
                 headers["X-A2A-Notification-Token"] = token
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            # The URL is an A2A client's, not a member's: the deployment's
+            # private allowances for member endpoints do not extend to it.
+            async with safe_async_client(policy=OutboundPolicy(), timeout=30.0) as client:
                 resp = await client.post(url, content=message, headers=headers)
+        except UnsafeUrlError as e:
+            # Misconfigured/hostile target — do not retry.
+            raise FatalError(f"unsafe push webhook url: {e}") from e
         except httpx.HTTPError as e:
             raise RetryableError(f"push webhook network error: {e}") from e
 

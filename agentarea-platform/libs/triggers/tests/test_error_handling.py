@@ -196,9 +196,9 @@ class TestWebhookManagerErrorHandling:
         return AsyncMock()
 
     @pytest.fixture
-    def webhook_manager(self, execution_callback):
+    def webhook_manager(self, execution_callback, fake_secret_reader):
         """Create DefaultWebhookManager with mocked callback."""
-        return DefaultWebhookManager(execution_callback)
+        return DefaultWebhookManager(execution_callback, secret_reader=fake_secret_reader)
 
     @pytest.fixture
     def sample_webhook_trigger(self):

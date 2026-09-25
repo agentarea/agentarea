@@ -22,6 +22,11 @@ from agentarea_triggers.channels.delivery_consumer import ChannelDeliveryConsume
 
 pytestmark = pytest.mark.asyncio
 
+
+async def _origin_allowed(_channel_config: dict) -> bool:
+    return True
+
+
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 
@@ -77,6 +82,7 @@ async def pipeline():
     register_adapter("telegram", adapter)
 
     consumer = ChannelDeliveryConsumer(
+        origin_guard=_origin_allowed,
         broker=broker,
         dedup=dedup,
         adapter_resolver=lambda t: adapter if t == "telegram" else None,

@@ -84,6 +84,15 @@ async def _ensure_admin_workspaces_resolved(user_context: UserContext) -> None:
     user_context.admin_workspaces = await administered_workspace_ids(user_context.user_id)
 
 
+async def is_workspace_admin(user_context: UserContext) -> bool:
+    """Whether the caller administers the workspace they are acting in."""
+    await _ensure_admin_workspaces_resolved(user_context)
+    from agentarea_common.di.container import resolve
+
+    authz = resolve(AuthorizationService)
+    return await authz.can_administer_workspace(user_context, user_context.workspace_id)
+
+
 async def assert_workspace_admin(user_context: UserContext) -> None:
     """Raise 403 unless the caller may mutate the given workspace.
 
@@ -93,11 +102,7 @@ async def assert_workspace_admin(user_context: UserContext) -> None:
     loosen their own spend cap, delete a deny rule, or drain another
     agent's wallet.
     """
-    await _ensure_admin_workspaces_resolved(user_context)
-    from agentarea_common.di.container import resolve
-
-    authz = resolve(AuthorizationService)
-    if not await authz.can_administer_workspace(user_context, user_context.workspace_id):
+    if not await is_workspace_admin(user_context):
         raise HTTPException(
             status_code=403,
             detail="Only a workspace admin may perform this action",

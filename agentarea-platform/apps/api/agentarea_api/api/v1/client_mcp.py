@@ -1,10 +1,13 @@
 """Dynamically-scoped MCP endpoint for clients (agent-proxies).
 
-A single MCP server is mounted at ``/client-mcp`` and its session manager is
+A single MCP server is mounted at ``/mcp/clients`` and its session manager is
 started once in the app lifespan. Each request carries a client id in the path
-(``/client-mcp/{client_id}``); a scope middleware stashes it in a ContextVar and
+(``/mcp/clients/{client_id}``); a scope middleware stashes it in a ContextVar and
 the ``list_tools`` / ``call_tool`` handlers resolve that client's own MCP
 instance set and aggregate the member tools on the fly.
+
+``/client-mcp/{client_id}`` is the previous address, still mounted so harnesses
+configured against it keep working until they are re-installed.
 """
 
 from __future__ import annotations
@@ -15,9 +18,15 @@ from contextvars import ContextVar
 from agentarea_agents_sdk.mcp_server.auth import PROTECTED_RESOURCE_SCOPE_KEY
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
 from agentarea_mcp.application.tool_list_cache import RedisToolListCache
-from mcp.server.fastmcp import FastMCP
-from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import TextContent, Tool
+from mcp.server import Server
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ListToolsResult,
+    PaginatedRequestParams,
+    TextContent,
+    Tool,
+)
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
@@ -44,20 +53,6 @@ async def _authorize_client_access(user_ctx, client_id: str) -> None:
     allowed = await resolve(PermissionService).check(user_ctx.user_id, "use", "client", client_id)
     if not allowed:
         raise ClientAccessDeniedError(client_id)
-
-
-client_mcp_server = FastMCP(
-    name="AgentArea Client",
-    instructions="Scoped tool bundle for a registered client (agent-proxy).",
-    streamable_http_path="/",
-    stateless_http=True,
-    # Same opt-out as the platform ``/mcp`` mount (see ``create_mcp_server``):
-    # FastMCP enables DNS-rebinding protection by default with an empty
-    # ``allowed_hosts``, so every Host header is answered with 421. We run behind
-    # an ingress that owns Host validation, and without this an authenticated
-    # harness gets 421 on every call after finishing its OAuth flow.
-    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
-)
 
 
 _tool_list_cache: RedisToolListCache | None = None
@@ -145,6 +140,7 @@ async def _resolve_client_scope(
                 continue
             try:
                 url, headers, transport = await instance_service._resolve_mcp_url_and_headers(full)
+                spec = await instance_service._get_transport_spec_for_instance(full)
             except Exception:
                 logger.exception("Failed to resolve MCP url for instance %s", iid)
                 continue
@@ -159,6 +155,7 @@ async def _resolve_client_scope(
                     order=order,
                     namespace_prefix=namespaces.get(iid),
                     transport=instance_transports[iid],
+                    pinned=spec.get("type", "docker") == "url",
                 )
             )
         proxy = MCPAggregatorProxy(
@@ -177,7 +174,7 @@ def _activate_skill_tool(skill_registry: dict) -> Tool:
     return Tool(
         name="activate_skill",
         description="Load full instructions for an available skill by name.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "skill_name": {
@@ -191,28 +188,30 @@ def _activate_skill_tool(skill_registry: dict) -> Tool:
     )
 
 
-@client_mcp_server._mcp_server.list_tools()
-async def _list_tools() -> list[Tool]:
+async def _list_tools(_ctx: object, _params: PaginatedRequestParams | None) -> ListToolsResult:
     client_id = _client_id_var.get()
     if not client_id:
-        return []
+        return ListToolsResult(tools=[])
     try:
         proxy, skill_registry = await _resolve_client_scope(client_id)
     except ClientAccessDeniedError:
         raise ValueError("Not authorized for this client") from None
     if proxy is None:
-        return []
+        return ListToolsResult(tools=[])
     tools = [
-        Tool(name=t["name"], description=t["description"], inputSchema=t["inputSchema"])
+        Tool(
+            name=t["name"],
+            description=t["description"],
+            input_schema=t.get("input_schema") or t["inputSchema"],
+        )
         for t in await proxy.list_namespaced_tools()
     ]
     if skill_registry:
         tools.append(_activate_skill_tool(skill_registry))
-    return tools
+    return ListToolsResult(tools=tools)
 
 
-@client_mcp_server._mcp_server.call_tool()
-async def _call_tool(name: str, arguments: dict) -> list[TextContent]:
+async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolResult:
     client_id = _client_id_var.get()
     if not client_id:
         raise ValueError("No client scope on request")
@@ -223,32 +222,44 @@ async def _call_tool(name: str, arguments: dict) -> list[TextContent]:
     if proxy is None:
         raise ValueError("Client not found")
 
-    if name == "activate_skill":
+    arguments = params.arguments or {}
+    if params.name == "activate_skill":
         from agentarea_agents_sdk.skills.skill_toolset import SkillActivationTool
 
-        skill_name = (arguments or {}).get("skill_name", "")
+        skill_name = arguments.get("skill_name", "")
         result = SkillActivationTool(skill_registry).activate_skill(skill_name)
     else:
-        result = await proxy.call_namespaced_tool(name, arguments or {})
+        result = await proxy.call_namespaced_tool(params.name, arguments)
     text = result if isinstance(result, str) else str(result)
-    return [TextContent(type="text", text=text)]
+    return CallToolResult(content=[TextContent(type="text", text=text)])
+
+
+# The tool set is resolved per request from the client scope, so this is the
+# low-level Server with its list/call handlers, not a decorator-built MCPServer.
+client_mcp_server = Server(
+    "AgentArea Client",
+    instructions="Scoped tool bundle for a registered client (agent-proxy).",
+    on_list_tools=_list_tools,
+    on_call_tool=_call_tool,
+)
 
 
 class ClientMCPScopeMiddleware:
-    """Extracts the client id from ``/client-mcp/{client_id}`` and rewrites the
+    """Extracts the client id from ``{prefix}/{client_id}`` and rewrites the
     path to the mount root so the inner MCP app serves it.
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, prefix: str) -> None:
         self.app = app
+        self._prefix = prefix.rstrip("/")
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
         path: str = scope.get("path", "")
-        if path.startswith("/client-mcp/"):
-            path = path[len("/client-mcp") :]
+        if path.startswith(f"{self._prefix}/"):
+            path = path[len(self._prefix) :]
         client_id: str | None = None
         if path.startswith("/"):
             client_id, _, tail = path[1:].partition("/")
@@ -259,7 +270,7 @@ class ClientMCPScopeMiddleware:
                 # Name the resource for the auth middleware's 401: each client's
                 # endpoint is its own RFC 9728 resource, and a harness rejects
                 # metadata whose `resource` does not match the URL it called.
-                scope[PROTECTED_RESOURCE_SCOPE_KEY] = f"client-mcp/{client_id}"
+                scope[PROTECTED_RESOURCE_SCOPE_KEY] = f"{self._prefix.strip('/')}/{client_id}"
         token = _client_id_var.set(client_id)
         try:
             await self.app(scope, receive, send)

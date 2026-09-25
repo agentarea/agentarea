@@ -519,6 +519,9 @@ import type {
   ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetData,
   ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetErrors,
   ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetResponses,
+  ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetData,
+  ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetErrors,
+  ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetResponses,
   ListPolicyRulesV1PoliciesGetData,
   ListPolicyRulesV1PoliciesGetErrors,
   ListPolicyRulesV1PoliciesGetResponses,
@@ -1797,7 +1800,7 @@ export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGet = <
 /**
  * Handle Agent Jsonrpc
  *
- * Handle A2A JSON-RPC requests with comprehensive error handling and validation.
+ * Serve one A2A JSON-RPC call (plain JSON, or SSE for the streaming methods).
  */
 export const handleAgentJsonrpcV1AgentsAgentIdA2aRpcPost = <
   ThrowOnError extends boolean = false,
@@ -1830,7 +1833,7 @@ export const handleAgentJsonrpcV1AgentsAgentIdA2aRpcPost = <
 /**
  * Get Agent Well Known
  *
- * Get current agent discovery information with proper validation and error handling.
+ * The agent card, also served at ``.well-known/agent-card.json``.
  */
 export const getAgentWellKnownV1AgentsAgentIdA2aWellKnownGet = <
   ThrowOnError extends boolean = false,
@@ -2277,6 +2280,42 @@ export const sendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPost = <
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * List Pending Escalations
+ *
+ * The escalations awaiting this caller's decision, with the exact arguments.
+ *
+ * The event log redacts tool arguments, since a command can carry an inline
+ * secret; the caller reads them here only where they may resolve the escalation.
+ */
+export const listPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetResponses,
+  ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetResponses,
+    ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/agents/{agent_id}/tasks/{task_id}/escalations",
+    ...options,
   });
 
 /**
@@ -3913,6 +3952,11 @@ export const getInboxItemsV1InboxGet = <ThrowOnError extends boolean = false>(
  *
  * An invitation sent to an email address is only accepted by the account
  * signed in under that address. Idempotent for the same acceptor.
+ *
+ * The invitation is committed as accepted before membership is granted, and
+ * it grants membership only until that grant is recorded: a graph outage on
+ * the first call is retried, a replay of a used link grants nothing, and a
+ * removal racing the accept wins.
  */
 export const acceptInvitationV1InvitationsAcceptPost = <
   ThrowOnError extends boolean = false,
@@ -4341,21 +4385,22 @@ export const oauthCallbackV1McpOauthCallbackGet = <
 /**
  * Oauth Preflight
  *
- * Report whether this instance can be authorized, and with what.
+ * Report whether a connection can be authorized, and with what.
  *
- * Every outcome is a 200: "this server has no OAuth" is an answer the UI
- * renders, not a failure it has to decode from an error response.
+ * Takes an existing instance, or a catalog spec so the create page can ask
+ * before it creates anything. Every outcome is a 200: "this server has no
+ * OAuth" is an answer the UI renders, not a failure it has to decode.
  */
 export const oauthPreflightV1McpOauthPreflightGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<OauthPreflightV1McpOauthPreflightGetData, ThrowOnError>
+  options?: Options<OauthPreflightV1McpOauthPreflightGetData, ThrowOnError>
 ): RequestResult<
   OauthPreflightV1McpOauthPreflightGetResponses,
   OauthPreflightV1McpOauthPreflightGetErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).get<
+  (options?.client ?? client).get<
     OauthPreflightV1McpOauthPreflightGetResponses,
     OauthPreflightV1McpOauthPreflightGetErrors,
     ThrowOnError
@@ -6878,6 +6923,9 @@ export const getProviderLogoV1ProviderConfigsAdminProviderKeyLogoGet = <
  * Discover Models Preview
  *
  * Discover models from a provider API using the provided API key, without requiring a saved config.
+ *
+ * Not a dry run: the discovered specs, prices included, are persisted so the
+ * caller can pick models by id. That makes it a price write.
  */
 export const discoverModelsPreviewV1ProviderConfigsDiscoverPreviewPost = <
   ThrowOnError extends boolean = false,

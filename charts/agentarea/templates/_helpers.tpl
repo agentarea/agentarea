@@ -115,6 +115,22 @@ rendered into values-backed ConfigMaps.
   value: {{ $runtime.resources.cpu | quote }}
 - name: SANDBOX_PROVIDER_MEMORY
   value: {{ $runtime.resources.memory | quote }}
+{{- with $runtime.resources.cpuRequest }}
+- name: SANDBOX_PROVIDER_CPU_REQUEST
+  value: {{ . | quote }}
+{{- end }}
+{{- with $runtime.resources.memoryRequest }}
+- name: SANDBOX_PROVIDER_MEMORY_REQUEST
+  value: {{ . | quote }}
+{{- end }}
+{{- with $runtime.resources.storageLimit }}
+- name: SANDBOX_PROVIDER_STORAGE_LIMIT
+  value: {{ . | quote }}
+{{- end }}
+{{- with $runtime.resources.storageRequest }}
+- name: SANDBOX_PROVIDER_STORAGE_REQUEST
+  value: {{ . | quote }}
+{{- end }}
 - name: SANDBOX_ALLOW_INTERNET
   value: {{ $runtime.allowInternet | quote }}
 {{- if not (empty $runtime.manifest) }}
@@ -330,6 +346,34 @@ Create the name of the MCP runtime service account.
 */}}
 {{- define "agentarea.mcpRuntimeServiceAccountName" -}}
 {{- default (printf "%s-mcp-runtime" (include "agentarea.fullname" .)) .Values.mcpManager.runtime.serviceAccount.name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Create the name of the mcp-manager control-plane service account. Separate
+from the shared app service account (which carries no Kubernetes RBAC) and
+from the mcp-runtime service account (bound to spawned instance/sandbox pods,
+not to the manager itself).
+*/}}
+{{- define "agentarea.mcpManagerServiceAccountName" -}}
+{{- if .Values.mcpManager.serviceAccount.create }}
+{{- default (printf "%s-mcp-manager" (include "agentarea.fullname" .)) .Values.mcpManager.serviceAccount.name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- default "default" .Values.mcpManager.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
+{{/*
+Create the name of the sandbox-runner service account. Kept separate from
+mcp-manager's so the two Kubernetes-API-driving components can be scoped,
+audited and rotated independently even though they are bound to the same
+namespaced Role today.
+*/}}
+{{- define "agentarea.sandboxRunnerServiceAccountName" -}}
+{{- if .Values.mcpSandboxRunner.serviceAccount.create }}
+{{- default (printf "%s-sandbox-runner" (include "agentarea.fullname" .)) .Values.mcpSandboxRunner.serviceAccount.name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- default "default" .Values.mcpSandboxRunner.serviceAccount.name }}
+{{- end }}
 {{- end }}
 
 {{/*

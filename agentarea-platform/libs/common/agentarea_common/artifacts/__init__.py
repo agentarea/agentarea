@@ -17,6 +17,11 @@ from .audit import (
     ArtifactEventRecorder,
     DbArtifactEventRecorder,
 )
+from .content_security import (
+    ACTIVE_CONTENT_TYPES,
+    attachment_content_disposition,
+    secure_download_headers,
+)
 from .service import (
     TRASH_PREFIX,
     ArtifactIntegrityError,
@@ -43,6 +48,7 @@ __all__ = [
     "ACTION_DELETED",
     "ACTION_MODIFIED",
     "ACTION_MOVED",
+    "ACTIVE_CONTENT_TYPES",
     "ACTOR_AGENT",
     "ACTOR_USER",
     "TRASH_PREFIX",
@@ -63,5 +69,7 @@ __all__ = [
     "WorkspaceQuotaError",
     "WorkspaceRepository",
     "WorkspaceValidationError",
+    "attachment_content_disposition",
     "normalize_workspace_path",
+    "secure_download_headers",
 ]

@@ -9,6 +9,7 @@ description = "Common utilities and infrastructure for AgentArea"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.12"
 dependencies = [
+    "a2a-sdk>=1.1.5",
     "pydantic>=2.4.2",
     "pydantic-settings>=2.0.0",
     "sqlalchemy[asyncio]>=2.0.23",

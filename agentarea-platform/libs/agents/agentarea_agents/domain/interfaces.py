@@ -68,6 +68,11 @@ class ExecutionServiceInterface(ABC):
         pass
 
     @abstractmethod
+    async def get_pending_escalations(self, execution_id: str) -> list[dict[str, Any]]:
+        """Get the unresolved escalations, with their arguments, from the workflow."""
+        pass
+
+    @abstractmethod
     async def cancel_execution(self, execution_id: str) -> bool:
         """Cancel execution."""
         pass

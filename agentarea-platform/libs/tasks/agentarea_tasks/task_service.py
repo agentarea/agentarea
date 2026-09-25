@@ -192,7 +192,7 @@ class TaskService(BaseTaskService):
         workspace_id: str | None,
         effective_policy: EffectivePolicy | None = None,
     ) -> None:
-        """Reject task creation if the workspace has hit its policy monthly cap.
+        """Reject task creation or continuation if the workspace has hit its monthly cap.
 
         No-op when:
         - workspace_id is missing
@@ -624,6 +624,10 @@ class TaskService(BaseTaskService):
             # Fallback for repositories that don't support workspace scoping
             return await self.list_tasks(agent_id=agent_id, limit=limit, offset=offset)
 
+    async def count_agent_tasks(self, agent_id: UUID) -> int:
+        """Count the workspace's tasks for an agent, matching ``get_agent_tasks``."""
+        return await self.task_repository.count(agent_id=agent_id)
+
     async def get_task_status(self, task_id: UUID) -> str | None:
         """Get task status."""
         task = await self.get_task(task_id)
@@ -858,6 +862,7 @@ class TaskService(BaseTaskService):
             next_policy.runtime_contract()
         except PolicyValidationError:
             return {"accepted": False, "reason": "policy_ceiling"}
+        await self._enforce_budget_cap(task.workspace_id, next_policy)
 
         resolved_execution = next_policy.execution
         if resolved_execution is None:

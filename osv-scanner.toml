@@ -1,0 +1,34 @@
+# Reviewed exceptions for the osv-scanner SCA scan (.github/workflows/sca-scan.yml,
+# issue #502). Every entry needs a reason and an ignoreUntil review date; when
+# that date passes, the finding reports again and must be re-triaged rather
+# than silently re-added.
+#
+# Findings with a trivial patch-version fix were bumped directly instead of
+# being listed here (click, google.golang.org/grpc, brace-expansion,
+# @ai-sdk/provider-utils, protobufjs). Everything below needs a minor/major
+# bump or has no fix yet, so it is deferred rather than done as a drive-by.
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+ignoreUntil = 2026-12-24
+reason = "golang.org/x/crypto/openpgp is flagged unmaintained and unsafe-by-design with no version fix. Indirect dependency of agentarea-mcp-manager (pulled in transitively; openpgp is not imported directly). Re-check at review for an upstream fix or for whatever pulls it in dropping the dependency."
+
+[[IgnoredVulns]]
+id = "GO-2026-6354"
+ignoreUntil = 2026-12-24
+reason = "Fixed in golang.org/x/crypto 0.56.0; agentarea-mcp-manager is currently on 0.55.0 (bumped from 0.52.0 as a side effect of the grpc patch bump in this PR). Going from 0.55.0 to 0.56.0 is a minor version bump, out of scope for an automated patch-only fix."
+
+[[IgnoredVulns]]
+id = "GO-2026-6355"
+ignoreUntil = 2026-12-24
+reason = "Same as GO-2026-6354: fixed in golang.org/x/crypto 0.56.0, a minor bump from the current 0.55.0, deferred to a follow-up."
+
+[[IgnoredVulns]]
+id = "GHSA-4mjr-xmp4-gh2g"
+ignoreUntil = 2026-12-24
+reason = "qs DoS via attacker-controlled isBuffer; fixed in qs 6.16.0, a minor bump from the current 6.15.3 (transitive dependency in agentarea-webapp/pnpm-lock.yaml). Out of scope for an automated patch-only fix."
+
+[[IgnoredVulns]]
+id = "GHSA-x5fp-wj9c-mxmx"
+ignoreUntil = 2026-12-24
+reason = "qs array-limit bypass via bracket-key comma parsing; fixed in qs 6.16.0, a minor bump from the current 6.15.3 (transitive dependency in agentarea-webapp/pnpm-lock.yaml). Out of scope for an automated patch-only fix."

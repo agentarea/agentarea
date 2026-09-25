@@ -13,6 +13,7 @@ This module provides Temporal activities for agent execution:
 # Standard library imports
 import asyncio
 import hashlib
+import itertools
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -43,6 +44,7 @@ from agentarea_common.auth.tool_authorization import (
 )
 from agentarea_common.events.contract import LLM_FAILED, canonical_type
 from agentarea_common.money import ZERO, to_money
+from agentarea_wallet.domain.enums import settlement_status
 from prometheus_client import Counter
 
 # Third-party imports
@@ -76,6 +78,8 @@ from ..models import (
     MCPToolRequest,
     MCPToolResult,
     McpToolRoute,
+    MonthlySpendCapRequest,
+    MonthlySpendCapResult,
     ReadOutputRequest,
     ReadOutputResult,
     RecallHistoryRequest,
@@ -376,6 +380,14 @@ _mcp_dispatch_failed_total = _make_counter(
     "Number of MCP dispatch failures",
     ["reason"],
 )
+
+
+def _payment_call_ref(request: MCPToolRequest) -> str:
+    """Identify the tool call a payment belongs to, identically on every retry of the activity."""
+    if request.task_id and request.tool_call_id:
+        return f"{request.task_id}:{request.tool_call_id}"
+    info = activity.info()
+    return f"{info.workflow_id}:{info.workflow_run_id}:{info.activity_id}"
 
 
 def _activity_output_id(prefix: str) -> str:
@@ -781,6 +793,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
             model_instance = await model_instance_service.get(_UUID(request.model_id))
             if not model_instance:
                 raise ModelInstanceNotFoundError(f"Model instance {request.model_id} not found")
+            foreign = model_instance.foreign_part()
+            if foreign is not None:
+                raise ModelInstanceNotFoundError(
+                    f"Model instance {request.model_id} uses a {foreign} from another workspace"
+                )
 
             provider_type = model_instance.provider_config.provider_spec.provider_type
             model_name = model_instance.model_spec.model_name
@@ -1058,6 +1075,39 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             payment_handler: Callable[..., Awaitable[dict[str, Any] | None]] | None = None
 
+            payment_sequence = itertools.count()
+
+            def next_payment_key() -> str:
+                from .payment_handler import payment_idempotency_key
+
+                return payment_idempotency_key(_payment_call_ref(request), next(payment_sequence))
+
+            async def find_settled_payment(
+                wallet_service: Any, idempotency_key: str
+            ) -> dict[str, Any] | None:
+                record = await wallet_service.find_settled_payment(idempotency_key)
+                if record is None:
+                    return None
+                logger.warning(
+                    "Payment %s already settled for tool call %s; not paying again",
+                    idempotency_key,
+                    request.tool_call_id,
+                )
+                return {
+                    "success": False,
+                    "already_settled": True,
+                    "protocol": record.protocol,
+                    "amount_usd": record.amount_usd,
+                    "recipient": record.recipient,
+                    "tx_hash": record.tx_hash,
+                    "protocol_metadata": record.protocol_metadata or {},
+                    "idempotency_key": idempotency_key,
+                    "error": (
+                        f"This request was already paid (tx {record.tx_hash}) by an earlier "
+                        "attempt of the same tool call; not paying again"
+                    ),
+                }
+
             async def get_payment_context() -> tuple[Any, Any, dict[str, Any], str, float] | None:
                 return None
 
@@ -1096,8 +1146,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     result: dict[str, Any] | None,
                     *,
                     tool_name: str,
+                    idempotency_key: str,
                 ) -> None:
-                    if not payment_context or not result:
+                    if not payment_context or not result or result.get("already_settled"):
                         return
                     if result.get("protocol") not in {"x402", "mpp"}:
                         return
@@ -1115,7 +1166,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         tx_hash=result.get("tx_hash"),
                         tool_name=tool_name,
                         tool_call_id=request.tool_call_id or "",
-                        status="completed" if result.get("success") else "failed",
+                        idempotency_key=idempotency_key,
+                        status=settlement_status(
+                            request_succeeded=bool(result.get("success")),
+                            tx_hash=result.get("tx_hash"),
+                        ),
                         error_message=result.get("error"),
                         protocol_metadata=result.get("protocol_metadata"),
                     )
@@ -1125,7 +1180,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     payment_context = await get_payment_context()
                     if not payment_context:
                         return None
-                    _, _, wallet_config, _, budget_remaining = payment_context
+                    wallet_service, _, wallet_config, _, budget_remaining = payment_context
+                    idempotency_key = next_payment_key()
+                    settled = await find_settled_payment(wallet_service, idempotency_key)
+                    if settled is not None:
+                        return settled
 
                     from .payment_handler import handle_402_payment
 
@@ -1139,12 +1198,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         response_body=payment_kwargs.get("response_body") or "",
                         wallet_config=wallet_config,
                         budget_remaining=budget_remaining,
+                        idempotency_key=idempotency_key,
                     )
 
                     await record_payment_result(
                         payment_context,
                         result,
                         tool_name=str(payment_kwargs.get("tool_name") or request.tool_name),
+                        idempotency_key=idempotency_key,
                     )
                     return result
 
@@ -1263,7 +1324,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     if payment_context:
                         from .mcp_payment_httpx import create_payment_httpx_client_factory
 
-                        _, _, wallet_config, _, budget_remaining = payment_context
+                        wallet_service, _, wallet_config, _, budget_remaining = payment_context
+
+                        async def find_settled_mcp_payment(
+                            idempotency_key: str, *, wallet_service=wallet_service
+                        ) -> dict[str, Any] | None:
+                            return await find_settled_payment(wallet_service, idempotency_key)
 
                         async def on_mcp_payment(
                             result: dict[str, Any],
@@ -1277,11 +1343,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
                                 payment_context,
                                 result,
                                 tool_name=tool_name,
+                                idempotency_key=result["idempotency_key"],
                             )
 
                         payment_httpx_client_factory = create_payment_httpx_client_factory(
                             wallet_config=wallet_config,
                             budget_remaining=budget_remaining,
+                            next_idempotency_key=next_payment_key,
+                            find_settled_payment=find_settled_mcp_payment,
                             on_payment=on_mcp_payment,
                         )
 
@@ -1769,6 +1838,24 @@ def make_agent_activities(dependencies: ActivityDependencies):
             return UpdateTaskGovernanceSnapshotResult(success=True)
 
     @activity.defn
+    async def check_monthly_spend_cap_activity(
+        request: MonthlySpendCapRequest,
+    ) -> MonthlySpendCapResult:
+        """Read the workspace's month-to-date spend against the run's monthly cap."""
+        from agentarea_tasks.infrastructure.repository import TaskRepository
+
+        user_context = create_user_context(request.user_context_data)
+        async with ActivityContext(container, user_context) as ctx:
+            session = container._database.async_session_factory()
+            ctx._sessions.append(session)
+            spent = to_money(await TaskRepository(session, user_context).sum_spend_mtd())
+        return MonthlySpendCapResult(
+            exceeded=spent >= request.cap_usd,
+            month_to_date_usd=spent,
+            cap_usd=request.cap_usd,
+        )
+
+    @activity.defn
     @auto_heartbeater
     async def compact_messages_activity(
         request: CompactMessagesRequest,
@@ -2248,12 +2335,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 )
                 repository_factory = RepositoryFactory(session, user_context)
                 task_repository = repository_factory.create_repository(TaskRepository)
-                if dependencies.workflow_executor is not None:
-                    task_manager = TemporalTaskManager.__new__(TemporalTaskManager)
-                    task_manager.task_repository = task_repository
-                    task_manager.temporal_executor = dependencies.workflow_executor
-                else:
-                    task_manager = TemporalTaskManager(task_repository=task_repository)
+                task_manager = TemporalTaskManager(
+                    task_repository=task_repository,
+                    temporal_executor=dependencies.workflow_executor,
+                )
 
                 task_service = TaskService(
                     repository_factory=repository_factory,
@@ -2319,6 +2404,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         recall_history_activity,
         update_task_status_activity,
         update_task_governance_snapshot_activity,
+        check_monthly_spend_cap_activity,
         materialize_skill_files_activity,
         store_context_output_activity,
         read_context_output_activity,

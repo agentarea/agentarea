@@ -6,8 +6,11 @@ full lifecycle management scenarios.
 """
 
 import asyncio
+import hashlib
+import hmac
+import json
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -48,6 +51,15 @@ from agentarea_common.testing import allow_all_permissions, install_graph_owners
 from agentarea_tasks.task_service import TaskService
 
 pytestmark = pytest.mark.asyncio
+
+
+class _FakeSecretReader:
+    """In-memory SecretReader stand-in for DefaultWebhookManager's required
+    secret_reader. Every test below that needs a signing secret configures
+    it via validation_rules, so this never has to hold real values."""
+
+    async def get_secret(self, name: str) -> str | None:
+        return None
 
 
 class TestTriggerE2EScenarios:
@@ -130,6 +142,7 @@ class TestTriggerE2EScenarios:
             execution_callback=execution_callback,
             event_broker=mock_event_broker,
             trigger_service=trigger_service,
+            secret_reader=_FakeSecretReader(),
         )
 
     @pytest.fixture
@@ -191,7 +204,6 @@ class TestTriggerE2EScenarios:
                 "report_type": "daily",
                 "format": "pdf",
             },
-            conditions={"business_hours": True},
             created_by="test_user",
             workspace_id="e2e-test-workspace",
         )
@@ -257,6 +269,10 @@ class TestTriggerE2EScenarios:
         self, trigger_service, webhook_manager, mock_task_service, sample_agent_id
     ):
         """Test complete lifecycle of a webhook trigger from creation to HTTP request handling."""
+        # github has a registered signature scheme, so a real webhook_secret and
+        # a matching X-Hub-Signature-256 (over the exact raw body) are required
+        # to get past the now fail-closed verification step.
+        secret = "github-webhook-secret"  # noqa: S105  # pragma: allowlist secret
         # Step 1: Create webhook trigger
         trigger_data = TriggerCreate(
             name="GitHub Push Webhook",
@@ -271,8 +287,7 @@ class TestTriggerE2EScenarios:
                 "action": "deploy",
                 "environment": "staging",
             },
-            conditions={"branch": "main"},
-            validation_rules={"required_headers": ["X-GitHub-Event"]},
+            validation_rules={"required_headers": ["X-GitHub-Event"], "webhook_secret": secret},
             created_by="test_user",
             workspace_id="e2e-test-workspace",
         )
@@ -288,15 +303,22 @@ class TestTriggerE2EScenarios:
         # match what Starlette/FastAPI hands the app for real HTTP requests
         # (dict(request.headers) is already lowercased) -- webhook_manager's
         # GitHub parser reads request_data.headers.get("x-github-event").
+        body = {
+            "ref": "refs/heads/main",
+            "repository": {"name": "test-repo"},
+            "commits": [{"message": "Fix bug"}],
+        }
+        raw_body = json.dumps(body).encode("utf-8")
+        signature = "sha256=" + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
         webhook_request_data = {
             "webhook_id": created_trigger.webhook_id,
             "method": "POST",
-            "headers": {"x-github-event": "push", "content-type": "application/json"},
-            "body": {
-                "ref": "refs/heads/main",
-                "repository": {"name": "test-repo"},
-                "commits": [{"message": "Fix bug"}],
+            "headers": {
+                "x-github-event": "push",
+                "content-type": "application/json",
+                "x-hub-signature-256": signature,
             },
+            "body": body,
             "query_params": {},
             "received_at": datetime.utcnow(),
         }
@@ -308,6 +330,7 @@ class TestTriggerE2EScenarios:
             webhook_request_data["headers"],
             webhook_request_data["body"],
             webhook_request_data["query_params"],
+            raw_body=raw_body,
         )
 
         # Verify webhook was processed successfully
@@ -491,9 +514,7 @@ class TestTriggerE2EScenarios:
     ):
         """Test trigger execution when task service fails."""
         # Make task service fail
-        mock_task_service.route_or_submit_task.side_effect = Exception(
-            "Task service unavailable"
-        )
+        mock_task_service.route_or_submit_task.side_effect = Exception("Task service unavailable")
 
         # Create trigger
         trigger_data = TriggerCreate(
@@ -697,6 +718,10 @@ class TestTriggerE2EScenarios:
         self, webhook_manager, trigger_service, sample_agent_id
     ):
         """Test webhook request validation and parsing for different webhook types."""
+        # github has a registered signature scheme, so both requests below need
+        # a real webhook_secret and a matching signature to get past the
+        # (now fail-closed) verification step before reaching header validation.
+        secret = "github-webhook-secret"  # noqa: S105  # pragma: allowlist secret
         # Test GitHub webhook
         github_trigger_data = TriggerCreate(
             name="GitHub Webhook",
@@ -704,7 +729,7 @@ class TestTriggerE2EScenarios:
             trigger_type=TriggerType.WEBHOOK,
             webhook_id=str(uuid4()),
             webhook_type=WebhookType.GITHUB,
-            validation_rules={"required_headers": ["X-GitHub-Event"]},
+            validation_rules={"required_headers": ["X-GitHub-Event"], "webhook_secret": secret},
             task_parameters={"text": "Summarize the open support tickets"},
             created_by="test_user",
             workspace_id="e2e-test-workspace",
@@ -713,18 +738,24 @@ class TestTriggerE2EScenarios:
         github_trigger = await trigger_service.create_trigger(github_trigger_data)
 
         # Valid GitHub request
+        github_body = {
+            "ref": "refs/heads/main",
+            "repository": {"name": "test-repo"},
+            "pusher": {"name": "testuser"},
+        }
+        github_raw_body = json.dumps(github_body).encode("utf-8")
+        github_signature = (
+            "sha256=" + hmac.new(secret.encode(), github_raw_body, hashlib.sha256).hexdigest()
+        )
         github_request = {
             "method": "POST",
             "headers": {
                 "X-GitHub-Event": "push",
                 "X-GitHub-Delivery": "12345",
                 "Content-Type": "application/json",
+                "X-Hub-Signature-256": github_signature,
             },
-            "body": {
-                "ref": "refs/heads/main",
-                "repository": {"name": "test-repo"},
-                "pusher": {"name": "testuser"},
-            },
+            "body": github_body,
             "query_params": {},
         }
 
@@ -734,16 +765,26 @@ class TestTriggerE2EScenarios:
             github_request["headers"],
             github_request["body"],
             github_request["query_params"],
+            raw_body=github_raw_body,
         )
 
         assert github_response["status_code"] == 200
         assert github_response["body"]["status"] == "success"
 
-        # Invalid GitHub request (missing required header)
+        # Invalid GitHub request (missing required header, but still signed so
+        # the assertion below exercises header validation, not verification).
+        invalid_body = {"ref": "refs/heads/main"}
+        invalid_raw_body = json.dumps(invalid_body).encode("utf-8")
+        invalid_signature = (
+            "sha256=" + hmac.new(secret.encode(), invalid_raw_body, hashlib.sha256).hexdigest()
+        )
         invalid_github_request = {
             "method": "POST",
-            "headers": {"Content-Type": "application/json"},
-            "body": {"ref": "refs/heads/main"},
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Hub-Signature-256": invalid_signature,
+            },
+            "body": invalid_body,
             "query_params": {},
         }
 
@@ -753,6 +794,7 @@ class TestTriggerE2EScenarios:
             invalid_github_request["headers"],
             invalid_github_request["body"],
             invalid_github_request["query_params"],
+            raw_body=invalid_raw_body,
         )
 
         assert invalid_response["status_code"] == 400

@@ -11,7 +11,6 @@ Components deployed:
 ✓ Temporal Worker ({{ include "agentarea.fullname" . }}-worker)
 ✓ MCP Manager ({{ include "agentarea.fullname" . }}-mcp-manager:80)
 ✓ Temporal Server ({{ include "agentarea.fullname" . }}-temporal:7233)
-✓ Temporal UI ({{ include "agentarea.fullname" . }}-temporal-ui:8080)
 {{- if .Values.postgresql.enabled }}
 ✓ PostgreSQL ({{ .Release.Name }}-postgresql:5432)
 {{- end }}
@@ -43,11 +42,6 @@ Components deployed:
    kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "agentarea.fullname" . }}-backend 8000:8000
 
    Then open: http://localhost:8000/docs
-
-4. Access Temporal UI:
-   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "agentarea.fullname" . }}-temporal-ui 8080:8080
-
-   Then open: http://localhost:8080
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

@@ -22,7 +22,7 @@ func enableChildSubreaper() error {
 	return fmt.Errorf("execution supervisor requires Linux")
 }
 
-func descendantPIDs(_ int) ([]int, error) {
+func descendantProcesses(_ int) ([]descendant, error) {
 	if os.Getenv("AGENTAREA_EXEC_SUPERVISOR_ALLOW_NON_LINUX_TEST") == "true" {
 		return nil, nil
 	}

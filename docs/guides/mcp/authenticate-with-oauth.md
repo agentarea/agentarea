@@ -70,6 +70,9 @@ supply per connection. Ask the preflight endpoint rather than guessing.
     | `oauth_app_required` | No dynamic registration; `detail` names the issuer | Register an app with the provider, then authorize with `credential_mode: custom` |
     | `unsupported` | No OAuth discovery here; `detail` says what failed | Use [Pass secrets to an MCP server](/guides/mcp/pass-secrets), or nothing if the server needs no token |
 
+    Pass `server_id` instead of `instance_id` to ask about a catalog spec before
+    any connection exists; `connected` is then always `false`.
+
     Every outcome is a 200 — the endpoint answers a question about capability
     rather than failing. It runs live discovery against the MCP URL on each call,
     so expect a round trip to the provider.

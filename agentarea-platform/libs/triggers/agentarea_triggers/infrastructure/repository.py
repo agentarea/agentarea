@@ -195,6 +195,9 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         await self.session.flush()
         await self.session.refresh(trigger_orm)
 
+        # Bypasses WorkspaceScopedRepository.create, so grant ownership explicitly.
+        await self._record_graph_ownership(trigger_orm)
+
         return self._orm_to_domain(trigger_orm)
 
     async def update_by_id(self, trigger_id: UUID, trigger_update: TriggerUpdate) -> Trigger | None:
@@ -331,10 +334,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         return cast(CursorResult[Any], result).rowcount > 0
 
     async def disable_trigger(self, trigger_id: UUID) -> bool:
-        """Disable a trigger."""
+        """Disable a trigger in the current workspace."""
         stmt = (
             update(TriggerORM)
-            .where(TriggerORM.id == trigger_id)
+            .where(TriggerORM.id == trigger_id, self._get_workspace_filter())
             .values(is_active=False, updated_at=datetime.utcnow())
         )
         result = await self.session.execute(stmt)
@@ -343,10 +346,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         return cast(CursorResult[Any], result).rowcount > 0
 
     async def enable_trigger(self, trigger_id: UUID) -> bool:
-        """Enable a trigger."""
+        """Enable a trigger in the current workspace."""
         stmt = (
             update(TriggerORM)
-            .where(TriggerORM.id == trigger_id)
+            .where(TriggerORM.id == trigger_id, self._get_workspace_filter())
             .values(is_active=True, updated_at=datetime.utcnow())
         )
         result = await self.session.execute(stmt)

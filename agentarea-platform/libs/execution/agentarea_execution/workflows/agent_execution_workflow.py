@@ -25,10 +25,15 @@ with workflow.unsafe.imports_passed_through():
         CodeToolProvider,
         MCPToolProvider,
     )
-    from agentarea_common.auth.tool_authorization import tool_matches_any
+    from agentarea_common.auth.tool_authorization import caller_can_approve, tool_matches_any
     from agentarea_common.money import ZERO, Money, serialize_money, to_money
+    from agentarea_governance.domain.exceptions import (
+        EscalationRequiredError,
+        GovernanceDeniedError,
+    )
     from agentarea_governance.domain.policies import effective_policy_from_json
     from agentarea_governance.domain.tool_calls import metered_tool_call_count
+    from pydantic import ValidationError
 
     from ..interaction import resolve_interaction_capabilities
     from .context_manager import (
@@ -52,7 +57,6 @@ with workflow.unsafe.imports_passed_through():
         ToolCallExtractor,
         approvers_for_tool,
         build_output_summary,
-        caller_can_approve,
         decide_tool_action,
         filter_disclosed_tools,
         resolve_effective_budget,
@@ -91,6 +95,8 @@ from ..models import (
     MaterializeSkillFilesRequest,
     MaterializeSkillFilesResult,
     MCPToolRequest,
+    MonthlySpendCapRequest,
+    MonthlySpendCapResult,
     ReadOutputRequest,
     ReadOutputResult,
     RecallHistoryRequest,
@@ -131,6 +137,36 @@ from .retry import make_retry_policy
 
 JsonDict = dict[str, Any]
 AgentToolRegistry = dict[str, JsonDict]
+
+# Histories recorded before these changes replay their original command sequence.
+GOVERNANCE_VERDICT_PATCH = "governance-verdict-to-hitl-v1"
+THINKING_ONLY_REPLY_PATCH = "thinking-only-reply-is-empty-v1"
+APPROVAL_RESPONSE_ONCE_PATCH = "approval-response-once-v1"
+DELEGATION_ON_OWN_QUEUE_PATCH = "delegation-on-own-task-queue-v1"
+MONTHLY_CAP_AT_START_PATCH = "monthly-cap-at-start"
+MONTHLY_CAP_FAILURE_REASON = "monthly_spend_cap_exceeded"
+LEGACY_DELEGATION_TASK_QUEUE = "agent-tasks"
+
+
+def _governance_verdict(error: ActivityError) -> tuple[str, str, bool] | None:
+    """The governance gate verdict an activity failed with, as (type, reason, ran).
+
+    The reason reads "<gate>: <why>"; ``ran`` is whether the gate judged the
+    call's output, i.e. the call had already executed. A worker on an older
+    bridge sends no details, or details without a phase; its verdict reads as a
+    denial before the call, as it always has.
+    """
+    cause = error.cause
+    if not isinstance(cause, ApplicationError) or cause.type not in (
+        GovernanceDeniedError.__name__,
+        EscalationRequiredError.__name__,
+    ):
+        return None
+    if not cause.details:
+        return cause.type, cause.message, False
+    verdict = cause.details[0]
+    ran = str(verdict.get("phase", "")).startswith("post_")
+    return cause.type, f"{verdict['interceptor_name']}: {verdict['reason']}", ran
 
 
 def _render_workspace_attachment_prompt(value: Any) -> str:
@@ -221,6 +257,7 @@ class AgentExecutionWorkflow:
         self._continuation_message: str | None = None
         self._continuation_count = 0
         self._delegated_cost: Money = ZERO
+        self._monthly_cap_message: str | None = None
         # Old histories retain their recorded command sequence.
         self._interaction_contract_enabled = True
 
@@ -415,24 +452,28 @@ class AgentExecutionWorkflow:
             esc.resolved = True
             esc.approved = approved
             esc.approved_by = resolved_by or None
+            esc.comment = comment or None
             esc.deny_comment = comment if not approved else None
 
-            # Emit resolved event so history load knows the outcome
-            event_type = (
-                EventTypes.HUMAN_APPROVAL_RECEIVED if approved else EventTypes.HUMAN_APPROVAL_DENIED
-            )
-            cast(EventManager, self.event_manager).add_event(
-                event_type,
-                {
-                    "escalation_id": escalation_id,
-                    "tool_name": esc.tool_name,
-                    "tool_call_id": esc.tool_call_id,
-                    "approved": approved,
-                    "comment": comment,
-                    "approved_by": resolved_by or None,
-                    "iteration": self.state.current_iteration,
-                },
-            )
+            # The waiting approval flow emits the one approval.response.
+            if not workflow.patched(APPROVAL_RESPONSE_ONCE_PATCH):
+                event_type = (
+                    EventTypes.HUMAN_APPROVAL_RECEIVED
+                    if approved
+                    else EventTypes.HUMAN_APPROVAL_DENIED
+                )
+                cast(EventManager, self.event_manager).add_event(
+                    event_type,
+                    {
+                        "escalation_id": escalation_id,
+                        "tool_name": esc.tool_name,
+                        "tool_call_id": esc.tool_call_id,
+                        "approved": approved,
+                        "comment": comment,
+                        "approved_by": resolved_by or None,
+                        "iteration": self.state.current_iteration,
+                    },
+                )
             workflow.logger.info(
                 f"Escalation {escalation_id} resolved by '{resolved_by or 'unknown'}': "
                 + f"approved={approved}"
@@ -452,7 +493,31 @@ class AgentExecutionWorkflow:
         }
         handler = handlers.get(command)
         if handler:
-            handler(payload)
+            # An exception escaping a signal handler fails every workflow task retry.
+            try:
+                handler(payload)
+            except (ValueError, KeyError) as error:
+                reason = (
+                    "; ".join(
+                        f"{'.'.join(map(str, e['loc']))}: {e['msg']}"
+                        for e in error.errors(include_url=False)
+                    )
+                    if isinstance(error, ValidationError)
+                    else str(error)
+                )
+                workflow.logger.warning(
+                    f"Rejected malformed workflow command {command!r}: {reason}", exc_info=True
+                )
+                if self.event_manager:
+                    self.event_manager.add_event(
+                        EventTypes.WORKFLOW_COMMAND_REJECTED,
+                        {
+                            "command": command,
+                            "reason": reason,
+                            "iteration": self.state.current_iteration,
+                        },
+                    )
+                return
             if self.event_manager:
                 self.event_manager.add_event(
                     EventTypes.WORKFLOW_COMMAND_RECEIVED,
@@ -656,7 +721,9 @@ class AgentExecutionWorkflow:
         """Queue a user message for the agent's next iteration."""
         msg_id = str(workflow.uuid4())
         # Accept both "message" and "content" keys for robustness
-        text = cast(str, payload.get("message") or payload.get("content") or "")
+        text = payload.get("message") or payload.get("content") or ""
+        if not isinstance(text, str):
+            raise ValueError("message must be a string")
         if not text:
             workflow.logger.warning("queue_message received with empty text, ignoring")
             return
@@ -1634,6 +1701,7 @@ class AgentExecutionWorkflow:
         workflow.logger.info("Starting main execution loop")
 
         self.state.status = ExecutionStatus.EXECUTING
+        await self._check_monthly_spend_cap()
 
         while True:
             # Increment iteration count
@@ -1648,6 +1716,7 @@ class AgentExecutionWorkflow:
                 # Decrement since we didn't actually execute this iteration
                 self.state.current_iteration -= 1
                 if failure_reason and await self._await_continuation(failure_reason, reason):
+                    await self._check_monthly_spend_cap()
                     continue
                 self._record_unsuccessful_termination(failure_reason, reason)
                 break
@@ -1664,6 +1733,7 @@ class AgentExecutionWorkflow:
                     f"Budget exceeded (${self._budget.cost:.2f}/${self._budget.budget_limit:.2f})"
                 )
                 if await self._await_continuation("budget_exceeded", reason):
+                    await self._check_monthly_spend_cap()
                     continue
                 self._record_unsuccessful_termination("budget_exceeded", reason)
                 break
@@ -1687,6 +1757,7 @@ class AgentExecutionWorkflow:
                 # If we got a new message, continue the loop
                 if not self._awaiting_input:
                     self._reset_for_follow_up()
+                    await self._check_monthly_spend_cap()
                     continue
                 # Timed out — exit the loop
                 break
@@ -1698,6 +1769,7 @@ class AgentExecutionWorkflow:
                     f"Stopping execution after iteration {self.state.current_iteration}: {reason}"
                 )
                 if failure_reason and await self._await_continuation(failure_reason, reason):
+                    await self._check_monthly_spend_cap()
                     continue
                 self._record_unsuccessful_termination(failure_reason, reason)
                 break
@@ -1710,8 +1782,40 @@ class AgentExecutionWorkflow:
             # Check for pause
             if self._paused:
                 await workflow.wait_condition(lambda: not self._paused)
+                await self._check_monthly_spend_cap()
 
         return {"iterations_completed": self.state.current_iteration}
+
+    async def _check_monthly_spend_cap(self) -> None:
+        """Stop the run when the workspace's month-to-date spend reached its cap.
+
+        Submission already refused a capped workspace, but a scheduled, resumed
+        or continued run executes later, so current spend is read again here.
+        """
+        if not workflow.patched(MONTHLY_CAP_AT_START_PATCH):
+            return
+        budget = effective_policy_from_json(self.state.effective_policy).budget
+        cap = budget.monthly_spend_cap_usd if budget else None
+        if cap is None:
+            return
+        result: MonthlySpendCapResult = await workflow.execute_activity(
+            Activities.CHECK_MONTHLY_SPEND_CAP,
+            args=[
+                MonthlySpendCapRequest(
+                    workspace_id=self.state.workspace_id,
+                    cap_usd=cap,
+                    user_context_data=self.state.user_context_data,
+                )
+            ],
+            result_type=MonthlySpendCapResult,
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+        )
+        if result.exceeded:
+            self._monthly_cap_message = (
+                f"Workspace monthly spend cap reached "
+                f"(${result.month_to_date_usd:.2f}/${result.cap_usd:.2f})"
+            )
 
     def _is_delegation_child(self) -> bool:
         """True iff this workflow was spawned via parent's delegation tool.
@@ -1724,6 +1828,8 @@ class AgentExecutionWorkflow:
 
     async def _await_continuation(self, failure_reason: str, message: str) -> bool:
         """Idle durably until the user grants resources or the window expires."""
+        if failure_reason == MONTHLY_CAP_FAILURE_REASON:
+            return False
         if (
             self._interaction_contract_enabled
             and self.state.interaction_capabilities.channel == "none"
@@ -1870,6 +1976,9 @@ class AgentExecutionWorkflow:
         if self.state.success:
             workflow.logger.info("Goal achieved - terminating workflow")
             return False, None, "Goal achieved successfully"
+
+        if self._monthly_cap_message:
+            return False, MONTHLY_CAP_FAILURE_REASON, self._monthly_cap_message
 
         # Check maximum iterations
         if self.state.goal is None:
@@ -2409,14 +2518,28 @@ class AgentExecutionWorkflow:
                 if a2ui_result.parse_error:
                     workflow.logger.warning(f"A2UI parse error: {a2ui_result.parse_error}")
 
-        # Use thinking as content fallback when model returns only reasoning
-        # (some models like GLM return reasoning_content without content/tool_calls)
+        # Reasoning is not an answer: a reply with only thinking (e.g. GLM cut off
+        # before emitting its tool call) is an empty response, never the result.
         effective_content = content
         if not effective_content.strip() and not tool_calls_raw and thinking_value:
-            effective_content = thinking_value
-            workflow.logger.info(
-                "LLM returned thinking without content/tools — using thinking as content"
-            )
+            if workflow.patched(THINKING_ONLY_REPLY_PATCH):
+                workflow.logger.warning(
+                    "LLM returned only reasoning, with no content or tool calls, in "
+                    f"iteration {self.state.current_iteration}; treating it as an empty response"
+                )
+                # Without a new turn the next call repeats the identical prompt and
+                # is cut off the same way until the turn budget runs out.
+                self.state.messages.append(
+                    Message(
+                        role="user",
+                        content=(
+                            "Your previous reply contained only reasoning, with no answer "
+                            "and no tool call. Reply with your answer or call a tool."
+                        ),
+                    )
+                )
+            else:
+                effective_content = thinking_value
 
         if effective_content.strip() or tool_calls_raw:
             # Create Message directly from response dict
@@ -2438,7 +2561,7 @@ class AgentExecutionWorkflow:
         if tool_calls:
             await self._execute_tool_calls(tool_calls)
         elif effective_content.strip():
-            # LLM responded with text/thinking but no tool calls.
+            # LLM responded with text but no tool calls.
             # This IS the agent's response — treat it as implicit completion.
             # Most agent frameworks (Claude Code, Cline, OpenCode) work this way:
             # text response = answer to user, no explicit completion tool needed.
@@ -2453,7 +2576,8 @@ class AgentExecutionWorkflow:
             await self._handle_task_completion(completion_call)
             return
         else:
-            # No content, no thinking, no tool calls — truly empty response
+            # No content and no tool calls — an empty response. The loop calls the
+            # model again; the iteration limit ends a run that never answers.
             workflow.logger.error(
                 f"LLM returned empty response with no tool calls in iteration {self.state.current_iteration}"
             )
@@ -3195,10 +3319,20 @@ class AgentExecutionWorkflow:
             normalized["options"] = options
         return [normalized]
 
-    async def _deny_tool_call(self, tool_call: ToolCall, tool_name: str, reason: str) -> None:
-        """Reject a tool call by policy: surface the reason to the LLM, never run it."""
+    async def _deny_tool_call(
+        self, tool_call: ToolCall, tool_name: str, reason: str, ran: bool = False
+    ) -> None:
+        """Reject a tool call by policy and surface the reason to the LLM.
+
+        ``ran`` marks a gate that judged the call's output: the call executed,
+        only its result is kept from the model.
+        """
         workflow.logger.warning(f"Tool '{tool_name}' denied by policy: {reason}")
-        message = f"Tool call denied by policy: {reason}"
+        message = (
+            f"Tool call ran, but its result was withheld by policy: {reason}"
+            if ran
+            else f"Tool call denied by policy: {reason}"
+        )
         self.state.messages.append(
             Message(
                 role="tool",
@@ -3222,7 +3356,7 @@ class AgentExecutionWorkflow:
         )
 
     async def _require_tool_approval(
-        self, tool_call: ToolCall, tool_name: str, tool_args: dict
+        self, tool_call: ToolCall, tool_name: str, tool_args: dict, reason: str | None = None
     ) -> bool:
         """Run the human-in-the-loop escalation flow. Returns True if approved."""
         if (
@@ -3276,7 +3410,8 @@ class AgentExecutionWorkflow:
                 "iteration": self.state.current_iteration,
                 "arguments": sanitize_tool_event_value(tool_args),
                 "approvers": escalation.approvers,
-                "message": f"Tool '{tool_name}' requires human approval",
+                "message": f"Tool '{tool_name}' requires human approval"
+                + (f": {reason}" if reason else ""),
             },
         )
         await self._publish_events_immediately()
@@ -3285,16 +3420,46 @@ class AgentExecutionWorkflow:
         await workflow.wait_condition(lambda: escalation.resolved)
 
         approved = escalation.approved
-        if not approved:
-            deny_msg = escalation.deny_comment or "Denied by user"
+        if approved:
+            await self._check_monthly_spend_cap()
+        one_response = workflow.patched(APPROVAL_RESPONSE_ONCE_PATCH)
+        if one_response:
             self._events.add_event(
-                EventTypes.HUMAN_APPROVAL_DENIED,
+                EventTypes.HUMAN_APPROVAL_RECEIVED
+                if approved
+                else EventTypes.HUMAN_APPROVAL_DENIED,
                 {
                     "escalation_id": escalation_id,
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,
                     "iteration": self.state.current_iteration,
-                    "comment": deny_msg,
+                    "approved": bool(approved),
+                    "approved_by": escalation.approved_by,
+                    "comment": escalation.comment,
+                },
+            )
+        if not approved:
+            deny_msg = escalation.deny_comment or "Denied by user"
+            if not one_response:
+                self._events.add_event(
+                    EventTypes.HUMAN_APPROVAL_DENIED,
+                    {
+                        "escalation_id": escalation_id,
+                        "tool_name": tool_name,
+                        "tool_call_id": tool_call.id,
+                        "iteration": self.state.current_iteration,
+                        "comment": deny_msg,
+                    },
+                )
+            self._events.add_event(
+                EventTypes.TOOL_CALL_COMPLETED,
+                {
+                    "tool_name": tool_name,
+                    "tool_call_id": tool_call.id,
+                    "success": False,
+                    "iteration": self.state.current_iteration,
+                    "error": f"Denied by human operator: {deny_msg}",
+                    "denied_by_human": True,
                 },
             )
             await self._publish_events_immediately()
@@ -3307,15 +3472,16 @@ class AgentExecutionWorkflow:
                 )
             )
         else:
-            self._events.add_event(
-                EventTypes.HUMAN_APPROVAL_RECEIVED,
-                {
-                    "escalation_id": escalation_id,
-                    "tool_name": tool_name,
-                    "tool_call_id": tool_call.id,
-                    "iteration": self.state.current_iteration,
-                },
-            )
+            if not one_response:
+                self._events.add_event(
+                    EventTypes.HUMAN_APPROVAL_RECEIVED,
+                    {
+                        "escalation_id": escalation_id,
+                        "tool_name": tool_name,
+                        "tool_call_id": tool_call.id,
+                        "iteration": self.state.current_iteration,
+                    },
+                )
             await self._publish_events_immediately()
 
         # Clean up and restore running status once no escalations remain
@@ -3335,6 +3501,9 @@ class AgentExecutionWorkflow:
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
                 retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
+        if approved and self._monthly_cap_message:
+            await self._deny_tool_call(tool_call, tool_name, self._monthly_cap_message)
+            return False
         return bool(approved)
 
     async def _gate_tool_call(self, tool_call: ToolCall) -> bool:
@@ -3351,6 +3520,10 @@ class AgentExecutionWorkflow:
             tool_args = json.loads(tool_call.function["arguments"])
         except (json.JSONDecodeError, KeyError):
             tool_args = {}
+
+        if self._monthly_cap_message:
+            await self._deny_tool_call(tool_call, tool_name, self._monthly_cap_message)
+            return False
 
         # The model may only call what it was offered: a name it invented, recalled
         # from earlier context, or read in a skill never reaches an executor.
@@ -3433,13 +3606,11 @@ class AgentExecutionWorkflow:
                 service_cost_used=float(self.state.service_cost_used),
             )
 
-            result_obj = await workflow.execute_activity(
-                Activities.EXECUTE_MCP_TOOL,
-                args=[mcp_request],
-                start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
-                heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+            result_obj = await self._execute_governed_tool(
+                tool_call, tool_name, tool_args, mcp_request
             )
+            if result_obj is None:
+                return
 
             # Normalize result to a dict for robust access
             result_dict: dict[str, Any]
@@ -3575,6 +3746,59 @@ class AgentExecutionWorkflow:
                 },
             )
             await self._publish_events_immediately()
+
+    async def _execute_governed_tool(
+        self,
+        tool_call: ToolCall,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        mcp_request: MCPToolRequest,
+    ) -> Any | None:
+        """Run the tool activity and act on a governance gate's verdict on it.
+
+        A gate DENY reaches the model as a policy denial. A gate ESCALATE pauses
+        for a human through the same approval flow as ApprovalPolicy; on approval
+        the same call is re-issued with the approval recorded, and the gate that
+        escalated decides whether that satisfies it. Returns None when the call
+        did not run — the tool message is already in the conversation.
+        """
+        try:
+            return await workflow.execute_activity(
+                Activities.EXECUTE_MCP_TOOL,
+                args=[mcp_request],
+                start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
+                heartbeat_timeout=HEARTBEAT_TIMEOUT,
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+            )
+        except ActivityError as error:
+            verdict = _governance_verdict(error)
+            # An escalation of a call a human already approved is not asked
+            # twice; it fails the call like any other activity error.
+            if (
+                verdict is None
+                or (
+                    verdict[0] == EscalationRequiredError.__name__
+                    and mcp_request.escalation_approved
+                )
+                or not workflow.patched(GOVERNANCE_VERDICT_PATCH)
+            ):
+                raise
+        verdict_type, reason, ran = verdict
+
+        if verdict_type == GovernanceDeniedError.__name__:
+            await self._deny_tool_call(tool_call, tool_name, reason, ran=ran)
+            await self._publish_events_immediately()
+            return None
+
+        if not await self._require_tool_approval(tool_call, tool_name, tool_args, reason):
+            await self._publish_events_immediately()
+            return None
+        return await self._execute_governed_tool(
+            tool_call,
+            tool_name,
+            tool_args,
+            mcp_request.model_copy(update={"escalation_approved": True}),
+        )
 
     async def _execute_recall_history(self, tool_call: ToolCall) -> None:
         """Execute recall_history tool.
@@ -4115,7 +4339,11 @@ class AgentExecutionWorkflow:
                 AgentExecutionWorkflow.run,
                 args=[child_request],
                 id=child_workflow_id,
-                task_queue="agent-tasks",
+                task_queue=(
+                    workflow.info().task_queue
+                    if workflow.patched(DELEGATION_ON_OWN_QUEUE_PATCH)
+                    else LEGACY_DELEGATION_TASK_QUEUE
+                ),
                 execution_timeout=DELEGATION_TIMEOUT,
                 parent_close_policy=ParentClosePolicy.TERMINATE,
             )
@@ -4770,6 +4998,26 @@ class AgentExecutionWorkflow:
     def get_latest_events(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get latest workflow events."""
         return self.event_manager.get_latest_events(limit) if self.event_manager else []
+
+    @workflow.query
+    def get_pending_escalations(self) -> list[dict[str, Any]]:
+        """Unresolved escalations with the exact arguments awaiting a decision.
+
+        The event log redacts arguments (commands can carry inline secrets), so
+        this is how an approver sees what they approve. Callers gate it on the
+        authority to resolve the escalation; get_current_state never carries it.
+        """
+        return [
+            {
+                "escalation_id": escalation.escalation_id,
+                "tool_name": escalation.tool_name,
+                "tool_call_id": escalation.tool_call_id,
+                "tool_args": escalation.tool_args,
+                "approvers": escalation.approvers,
+            }
+            for escalation in self._pending_escalations.values()
+            if not escalation.resolved
+        ]
 
     @workflow.query
     def get_current_state(self) -> dict[str, Any]:

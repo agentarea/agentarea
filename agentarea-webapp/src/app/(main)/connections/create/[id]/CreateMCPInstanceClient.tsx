@@ -31,8 +31,9 @@ import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import {
   checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration,
   validateConnectionAction,
-  oauthAuthorizeAction,
 } from "@/lib/server-actions";
+import { OAuthConnectPanel } from "../../OAuthConnectPanel";
+import { authModeFromValidation, modeFromMethods, type AuthMode } from "./auth-mode";
 import type { MCPServer } from "../../types";
 import { createMCPServerInstance } from "../../actions";
 import { getConnectionType, MCP_CONSTANTS } from "../../utils";
@@ -270,35 +271,11 @@ interface UrlFormValues {
   fields: Record<string, string>;
 }
 
-/**
- * How the endpoint wants to be authorized. Resolved on mount — from the spec's
- * cached `auth_methods`, or by validating the bare endpoint — so the user lands
- * on the right form immediately instead of discovering it after a first
- * "Connect" that has already created a (broken) instance.
- */
-type AuthMode =
-  | "loading" // probing the endpoint
-  | "fields" // spec declares headers → fill them in, validate, create
-  | "none" // endpoint is open → Connect creates the instance directly
-  | "oauth" // OAuth only (manual entry offered as a fallback link)
-  | "credentials" // manual credentials only
-  | "both" // OAuth or manual, user picks
-  | "error"; // probe failed → retry, or Force create from the subheader
-
 const DEFAULT_CREDENTIAL_FIELD: FieldSpec = {
   name: "Authorization",
   isSecret: true,
   placeholder: "Bearer your-token",
 };
-
-function modeFromMethods(methods: string[]): AuthMode {
-  const oauth = methods.includes("oauth");
-  const credentials = methods.includes("credentials");
-  if (oauth && credentials) return "both";
-  if (oauth) return "oauth";
-  if (credentials) return "credentials";
-  return "none";
-}
 
 // Env vars a spec may declare for manual auth; shown as the credential inputs.
 const CREDENTIAL_ENV_NAMES = new Set(["AUTHORIZATION", "API_KEY", "TOKEN"]);
@@ -377,16 +354,9 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
       setAuthMode("error");
       return;
     }
-    if (data.valid) {
-      setAuthMode("none");
-      return;
-    }
-    if (data.auth_methods && data.auth_methods.length > 0) {
-      setAuthMode(modeFromMethods(data.auth_methods));
-      return;
-    }
-    setProbeError(data.errors?.[0] || t("probeFailed"));
-    setAuthMode("error");
+    const mode = authModeFromValidation(data);
+    if (mode === "error") setProbeError(data.errors?.[0] || t("probeFailed"));
+    setAuthMode(mode);
   }, [endpointUrl, server.id, t]);
 
   const probedRef = useRef(false);
@@ -487,26 +457,6 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t("createFailed"));
-    } finally {
-      setIsWorking(false);
-    }
-  };
-
-  // OAuth flow: the authorize endpoint is bound to an instance, so create it
-  // (once) right before redirecting to the authorization server.
-  const handleOAuth = async () => {
-    setIsWorking(true);
-    setError(null);
-    try {
-      const instanceId = createdInstanceId ?? (await createInstance({})).id;
-      const result = await oauthAuthorizeAction({ instance_id: instanceId });
-      if (result.error || !result.data?.authorize_url) {
-        setError(apiErrorText(result.error, t("oauthDiscoveryFailed")));
-        return;
-      }
-      window.location.href = result.data.authorize_url;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("oauthStartFailed"));
     } finally {
       setIsWorking(false);
     }
@@ -656,16 +606,18 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
               <FormLabel icon={ShieldCheck}>{t("authorization")}</FormLabel>
               <BlueprintBadge>{t("oauthDetected")}</BlueprintBadge>
             </div>
-            <StartAgentButton
-              type="button"
-              size="xs"
-              className="w-auto"
-              onClick={handleOAuth}
-              isLoading={isWorking}
-              disabled={isWorking || !hasName}
-            >
-              {t("authorizeOAuth")}
-            </StartAgentButton>
+            {/* Asks the API whether the provider registers us itself or needs
+                the workspace's own OAuth app, before any connection exists. */}
+            <OAuthConnectPanel
+              target={{
+                kind: "spec",
+                serverId: server.id,
+                ensureInstance: async () =>
+                  createdInstanceId ?? (await createInstance({})).id,
+              }}
+              isUrlType
+              compact
+            />
             {authMode === "oauth" && (
               <button
                 type="button"

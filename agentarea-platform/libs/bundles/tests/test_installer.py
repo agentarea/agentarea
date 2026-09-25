@@ -7,6 +7,11 @@ import pytest
 from agentarea_bundles.application.analyzer import parse_bundle
 from agentarea_bundles.application.installer import BundleInstaller, BundleInstallError
 from agentarea_bundles.schemas.result import InstallAction
+from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import register_singleton
+from fastapi import HTTPException
 
 FULL = """
 schema_version: "0.1.0"
@@ -90,6 +95,11 @@ class FakeGovernanceSvc:
         return SimpleNamespace(id=uuid4())
 
 
+@pytest.fixture(autouse=True)
+def _authz():
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+
+
 def _installer(**overrides):
     deps = dict(
         mcp_server_service=FakeMcpServerSvc(),
@@ -101,7 +111,7 @@ def _installer(**overrides):
         trigger_service=FakeTriggerSvc(),
         trigger_repository=FakeTriggerRepo(),
         governance_service=FakeGovernanceSvc(),
-        user_context=SimpleNamespace(user_id="u", workspace_id="w"),
+        user_context=UserContext(user_id="u", workspace_id="w", admin_workspaces=["w"]),
     )
     deps.update(overrides)
     return BundleInstaller(**deps), deps
@@ -115,6 +125,36 @@ policies:
   - {key: cap, subject: workspace, target: spend, effect: cap, params: {amount_usd: 50}}
   - {key: deny, subject: lead, target: "tool:send_email", effect: deny, message: no email}
 """
+
+
+FULL_WITH_POLICY = FULL + """policies:
+  - {key: cap, subject: workspace, target: spend, effect: cap, params: {amount_usd: 50}}
+"""
+
+
+async def test_a_member_installing_policies_is_refused_before_anything_is_written():
+    member = UserContext(user_id="u", workspace_id="w", admin_workspaces=[])
+    inst, deps = _installer(user_context=member)
+
+    with pytest.raises(HTTPException) as refused:
+        await inst.install(parse_bundle(FULL_WITH_POLICY), {"token": "t"})
+
+    assert refused.value.status_code == 403
+    assert deps["mcp_server_service"].calls == []
+    assert deps["mcp_instance_service"].calls == []
+    assert deps["skill_service"].calls == []
+    assert deps["agent_service"].calls == []
+    assert deps["trigger_service"].created == []
+    assert deps["governance_service"].created == []
+
+
+async def test_a_member_installs_a_bundle_without_policies():
+    member = UserContext(user_id="u", workspace_id="w", admin_workspaces=[])
+    inst, deps = _installer(user_context=member)
+
+    await inst.install(parse_bundle(FULL), {"token": "t"})
+
+    assert len(deps["agent_service"].calls) == 1
 
 
 async def test_an_automation_prompt_becomes_the_task_text():

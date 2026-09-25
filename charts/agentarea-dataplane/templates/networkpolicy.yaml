@@ -1,0 +1,15 @@
+{{- if .Values.workloads.networkPolicy.enabled }}
+{{- $fromPods := "" }}
+{{- if not .Values.exposure.hostNetwork.enabled }}
+{{- $fromPods = include "dataplane.selectorLabels" . }}
+{{- end }}
+{{ include "dataplane.workloadNetworkPolicies" (dict "root" . "namespace" .Values.workloads.namespace "np" .Values.workloads.networkPolicy "ingressName" "ingress-from-dataplane-only" "fromPods" $fromPods "ingressPorts" list) }}
+{{- end }}
+{{- if and .Values.sandboxes.enabled .Values.sandboxes.networkPolicy.enabled }}
+{{- $fromPods := "" }}
+{{- if not .Values.exposure.hostNetwork.enabled }}
+{{- $fromPods = include "dataplane.sandboxServerSelectorLabels" . }}
+{{- end }}
+---
+{{ include "dataplane.workloadNetworkPolicies" (dict "root" . "namespace" .Values.sandboxes.namespace "np" .Values.sandboxes.networkPolicy "ingressName" "ingress-from-sandbox-server-only" "fromPods" $fromPods "ingressPorts" .Values.sandboxes.networkPolicy.ingressPorts) }}
+{{- end }}

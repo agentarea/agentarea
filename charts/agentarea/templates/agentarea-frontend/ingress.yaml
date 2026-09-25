@@ -55,4 +55,20 @@ spec:
                   name: http
           {{- end }}
     {{- end }}
+    {{- with .Values.ingress.hosts.appsSandbox }}
+    {{- if .host }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Exact" }}
+            backend:
+              service:
+                name: {{ $fullName }}-frontend
+                port:
+                  name: http
+          {{- end }}
+    {{- end }}
+    {{- end }}
 {{- end }}

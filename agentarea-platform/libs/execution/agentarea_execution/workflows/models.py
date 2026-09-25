@@ -66,6 +66,7 @@ class PendingEscalation(BaseModel):
     tool_args: dict[str, Any] = Field(default_factory=dict)
     resolved: bool = False
     approved: bool | None = None
+    comment: str | None = None
     deny_comment: str | None = None
     # Subject refs allowed to approve (from ApprovalPolicy.approvers); empty = any member
     approvers: list[str] = Field(default_factory=list)

@@ -316,8 +316,8 @@ async def create_invitation(
     """
     _ensure_workspace_access(user, workspace_id)
     kwargs: dict = {
+        "actor": user,
         "workspace_id": workspace_id,
-        "invited_by": user.user_id,
         "email": body.email,
     }
     if body.expires_in_days is not None:
@@ -346,7 +346,7 @@ async def list_invitations(
 ):
     """List pending invitations for the workspace. Tokens are NOT returned."""
     _ensure_workspace_access(user, workspace_id)
-    invitations = await service.list_pending(workspace_id)
+    invitations = await service.list_pending(actor=user, workspace_id=workspace_id)
     inviters = await _resolve_identities([i.invited_by for i in invitations])
     return [_invitation_to_response(i, inviters.get(i.invited_by)) for i in invitations]
 
@@ -365,7 +365,7 @@ async def revoke_invitation(
     """Revoke a pending invitation. Idempotent — already-resolved invitations are no-ops."""
     _ensure_workspace_access(user, workspace_id)
     try:
-        await service.revoke(workspace_id=workspace_id, invitation_id=invitation_id)
+        await service.revoke(actor=user, workspace_id=workspace_id, invitation_id=invitation_id)
     except InvitationNotFound as exc:
         raise HTTPException(status_code=404, detail="Invitation not found") from exc
 
@@ -438,20 +438,19 @@ async def accept_invitation(
 
     An invitation sent to an email address is only accepted by the account
     signed in under that address. Idempotent for the same acceptor.
+
+    The invitation is committed as accepted before membership is granted, and
+    it grants membership only until that grant is recorded: a graph outage on
+    the first call is retried, a replay of a used link grants nothing, and a
+    removal racing the accept wins.
     """
     try:
-        invitation = await service.accept(
+        invitation, _ = await service.accept(
             token=body.token, user_id=user.user_id, user_email=user.email
         )
+        await memberships.admit(invitation, user.user_id)
     except INVITATION_ERRORS as exc:
         _raise_invitation_error(exc)
-
-    try:
-        await memberships.record(
-            workspace_id=invitation.workspace_id,
-            user_id=user.user_id,
-            invitation_id=invitation.id,
-        )
     except GRAPH_ERRORS as exc:
         logger.exception("Failed to grant workspace membership")
         _raise_membership_graph_unavailable(exc)

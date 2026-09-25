@@ -11,12 +11,17 @@ import json
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
 from agentarea_projects.schemas.dto import ProjectCreate, ProjectUpdate
 
 from .base import platform_context, platform_read_context
+
+PROJECTS_ARE_MEMBER_LEVEL = (
+    "every /v1/projects route is member-level; the workspace-scoped repository is the boundary"
+)
 
 
 def _build_service(repo_factory) -> ProjectService:
@@ -34,6 +39,7 @@ class ProjectsToolset(Toolset):
     """Manage projects: list, get, create, update, delete, and attach skills/agents/MCP instances."""
 
     @tool_method(effect="read")
+    @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
     async def list(self, limit: int = 50, offset: int = 0) -> str:
         """List projects in the workspace."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -45,6 +51,7 @@ class ProjectsToolset(Toolset):
             )
 
     @tool_method(effect="read")
+    @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
     async def get(self, project_id: str) -> str:
         """Get a project by ID."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -66,6 +73,7 @@ class ProjectsToolset(Toolset):
             )
 
     @tool_method(effect="write")
+    @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
     async def create(
         self,
         name: str,
@@ -86,6 +94,7 @@ class ProjectsToolset(Toolset):
             return json.dumps({"id": str(project.id), "name": project.name}, default=str)
 
     @tool_method(effect="write")
+    @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
     async def update(
         self,
         project_id: str,
@@ -114,6 +123,7 @@ class ProjectsToolset(Toolset):
             return json.dumps({"id": str(project.id), "name": project.name}, default=str)
 
     @tool_method(effect="destructive")
+    @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
     async def delete(self, project_id: str) -> str:
         """Delete a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -122,6 +132,7 @@ class ProjectsToolset(Toolset):
             return json.dumps({"deleted": deleted})
 
     @tool_method(effect="write")
+    @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
     async def add_skill(self, project_id: str, skill_id: str) -> str:
         """Attach a skill to a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -130,6 +141,7 @@ class ProjectsToolset(Toolset):
             return json.dumps({"added": True})
 
     @tool_method(effect="write")
+    @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
     async def remove_skill(self, project_id: str, skill_id: str) -> str:
         """Detach a skill from a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -138,6 +150,7 @@ class ProjectsToolset(Toolset):
             return json.dumps({"removed": True})
 
     @tool_method(effect="write")
+    @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
     async def add_agent(self, project_id: str, agent_id: str) -> str:
         """Attach an agent to a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -146,6 +159,7 @@ class ProjectsToolset(Toolset):
             return json.dumps({"added": True})
 
     @tool_method(effect="write")
+    @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
     async def remove_agent(self, project_id: str, agent_id: str) -> str:
         """Detach an agent from a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -154,6 +168,7 @@ class ProjectsToolset(Toolset):
             return json.dumps({"removed": True})
 
     @tool_method(effect="write")
+    @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
     async def add_mcp_instance(self, project_id: str, mcp_instance_id: str) -> str:
         """Attach an MCP server instance to a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -162,6 +177,7 @@ class ProjectsToolset(Toolset):
             return json.dumps({"added": True})
 
     @tool_method(effect="write")
+    @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
     async def remove_mcp_instance(self, project_id: str, mcp_instance_id: str) -> str:
         """Detach an MCP server instance from a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):

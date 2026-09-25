@@ -5,7 +5,9 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.auth.authorization import is_workspace_admin
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.utils.url_safety import safe_async_client
 
 from agentarea_mcp.domain.auth_models import (
     AUTH_TYPE_API_KEY,
@@ -55,6 +57,15 @@ class OAuthReauthRequiredError(Exception):
     exists (no refresh_token, or the refresh grant itself failed). Callers should
     surface this as an actionable "reconnect with OAuth" state rather than a raw
     upstream 401/403.
+    """
+
+
+class AuthConfigAccessDeniedError(PermissionError):
+    """Only the auth config's creator or a workspace admin may attach it.
+
+    Attaching an auth config to a connection or MCP instance sends its stored
+    credential to a host the caller chooses, so workspace membership alone is
+    not enough to select one.
     """
 
 
@@ -262,7 +273,7 @@ class MCPAuthService:
             )
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with safe_async_client() as client:
                 if config.config.get("client_auth_method") == "client_secret_basic":
                     payload.pop("client_secret", None)
                     resp = await client.post(
@@ -350,6 +361,23 @@ class MCPAuthService:
 
     async def get(self, config_id: UUID) -> MCPAuthConfig | None:
         return await self._repo.get_by_id(config_id)
+
+    async def get_for_use(self, config_id: UUID) -> MCPAuthConfig:
+        """An auth config the caller may attach to a connection or instance.
+
+        Mirrors ``SecretCatalogService.get_for_use``: only whoever created the
+        config, or a workspace admin, may select it -- everyone else in the
+        workspace can see it exists but not put its credential to use.
+        """
+        config = await self._repo.get(config_id)
+        if config is None:
+            raise ValueError(f"Auth config {config_id} not found in this workspace")
+        user_context = self._repo.user_context
+        if config.created_by != user_context.user_id and not await is_workspace_admin(user_context):
+            raise AuthConfigAccessDeniedError(
+                f"Auth config {config_id} can only be used by its creator or a workspace admin."
+            )
+        return config
 
     async def list(self) -> list[MCPAuthConfig]:
         return await self._repo.list_all()

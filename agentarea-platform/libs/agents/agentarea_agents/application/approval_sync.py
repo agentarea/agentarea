@@ -25,10 +25,31 @@ from copy import deepcopy
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.mcp_tool_identity import mcp_tool_target
+from agentarea_common.auth.authorization import is_workspace_admin
 from agentarea_common.auth.context import UserContext
-from agentarea_governance.domain.rules import PolicyEffect, PolicyRule, PolicySubjectType
+from agentarea_governance.domain.rules import (
+    MANAGED_BY_AGENT_TOOLS,
+    PolicyEffect,
+    PolicyRule,
+    PolicySubjectType,
+)
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+class ApprovalEnforcedByPolicyError(Exception):
+    """A non-admin's agent edit unticks an approval rule the toggle did not write.
+
+    The toggle only removes rules it wrote. Answering the edit as if it had
+    worked leaves the tick coming back on the next read, so it is refused. The
+    rule is not necessarily a workspace policy: every rule written before the
+    toggle marked its own is unmarked too, the member's own old ticks included.
+    """
+
+    def __init__(self, targets: set[str]) -> None:
+        self.targets = targets
+        names = ", ".join(sorted(target.removeprefix("tool:") for target in targets))
+        super().__init__(f"Approval for {names} can only be changed by a workspace admin.")
 
 
 def _llm_facing_name(tool_name: str) -> str:
@@ -57,6 +78,58 @@ def approval_targets_from_tools(tools: list[dict]) -> set[str]:
             if name:
                 targets.add(f"tool:{_llm_facing_name(name)}")
     return targets
+
+
+def unticked_targets(tools: list[dict]) -> set[str]:
+    """Rule targets of the listed tools that the config leaves without approval."""
+    targets: set[str] = set()
+    for tool in tools:
+        settings = tool.get("settings") or {}
+        if tool.get("type") == "mcp":
+            server_ref = tool.get("name")
+            for perm in settings.get("allowed_tools") or []:
+                if not isinstance(perm, dict) or perm.get("requires_user_confirmation"):
+                    continue
+                name = perm.get("tool_name")
+                if name and server_ref:
+                    targets.update({_mcp_target(server_ref, name), f"tool:{name}"})
+        elif not settings.get("requires_user_confirmation"):
+            name = tool.get("name")
+            if name:
+                targets.add(f"tool:{_llm_facing_name(name)}")
+    return targets
+
+
+async def release_unticked_approvals(
+    session: AsyncSession,
+    user_context: UserContext,
+    agent_id: UUID,
+    tools: list[dict],
+) -> None:
+    """Let a workspace admin untick an approval the toggle did not write; refuse anyone else.
+
+    A workspace admin may delete that rule through the policy service anyway, so
+    the editor removes it for them. The check is the policy service's own.
+
+    Raises:
+        ApprovalEnforcedByPolicyError: for a non-admin, naming the targets.
+    """
+    repo = PolicyRuleRepository(session, user_context)
+    rules = await repo.list_rules(
+        subject_type=PolicySubjectType.AGENT,
+        subject_id=str(agent_id),
+        effect=PolicyEffect.APPROVAL,
+        enabled=True,
+    )
+    unticked = unticked_targets(tools)
+    conflicts = [rule for rule in rules if rule.managed_by is None and rule.target in unticked]
+    if not conflicts:
+        return
+    if not await is_workspace_admin(user_context):
+        raise ApprovalEnforcedByPolicyError({rule.target for rule in conflicts})
+    for rule in conflicts:
+        if rule.id is not None:
+            await repo.delete(rule.id)
 
 
 def strip_confirmation_flags(tools: list[dict]) -> list[dict]:
@@ -114,10 +187,13 @@ async def sync_agent_approval_rules(
     agent_id: UUID,
     targets: set[str],
 ) -> None:
-    """Reconcile an agent's APPROVAL rules to exactly ``targets``.
+    """Reconcile the agent's toggle-owned APPROVAL rules to exactly ``targets``.
 
     Idempotent: existing targets are left alone, missing ones created, and rows
-    whose target is no longer ticked are removed.
+    whose target is no longer ticked are removed. Only rules this sync wrote are
+    touched. Anyone who may edit the agent reaches this, admin or not, so a rule
+    an admin authored through the policy service is never altered or removed
+    here; a target it already requires needs no second rule.
     """
     repo = PolicyRuleRepository(session, user_context)
     existing = await repo.list_rules(
@@ -125,23 +201,27 @@ async def sync_agent_approval_rules(
         subject_id=str(agent_id),
         effect=PolicyEffect.APPROVAL,
     )
-    by_target = {rule.target: rule for rule in existing}
+    owned = {rule.target: rule for rule in existing if rule.managed_by == MANAGED_BY_AGENT_TOOLS}
+    authored = {rule.target for rule in existing if rule.managed_by is None and rule.enabled}
 
     for target in targets:
-        rule = by_target.get(target)
+        rule = owned.get(target)
         if rule is None:
+            if target in authored:
+                continue
             await repo.create(
                 PolicyRule(
                     subject_type=PolicySubjectType.AGENT,
                     subject_id=str(agent_id),
                     target=target,
                     effect=PolicyEffect.APPROVAL,
+                    managed_by=MANAGED_BY_AGENT_TOOLS,
                 )
             )
         elif not rule.enabled and rule.id is not None:
             await repo.set_enabled(rule.id, True)
 
-    for target, rule in by_target.items():
+    for target, rule in owned.items():
         if target not in targets and rule.id is not None:
             await repo.delete(rule.id)
 

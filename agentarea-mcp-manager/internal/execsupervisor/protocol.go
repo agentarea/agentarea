@@ -19,15 +19,18 @@ const (
 	MaxBinaryBytes  = 64 * 1024 * 1024
 	MaxStatusBytes  = 4 * 1024
 
-	// DescendantDrainTimeout bounds the supervisor's kill/reap phase after the
-	// requested command has exited or timed out. CompletionGrace also reserves
+	// DescendantFreezeTimeout bounds how long a timeout or signal stops the
+	// command's process tree before killing it anyway; DescendantDrainTimeout
+	// separately bounds the kill/reap phase that follows, so a tree that resists
+	// freezing cannot spend the drain's budget. CompletionGrace also reserves
 	// time for the durable status commit; TransportGrace is the minimum margin a
 	// caller must add so it never kills the supervisor before that proof exists.
-	DescendantDrainTimeout = 5 * time.Second
-	CompletionGrace        = DescendantDrainTimeout + 5*time.Second
-	PostExecutionBudget    = 30 * time.Second
-	NetworkGrace           = 5 * time.Second
-	TransportGrace         = CompletionGrace + PostExecutionBudget + NetworkGrace
+	DescendantFreezeTimeout = 1 * time.Second
+	DescendantDrainTimeout  = 5 * time.Second
+	CompletionGrace         = DescendantFreezeTimeout + DescendantDrainTimeout + 4*time.Second
+	PostExecutionBudget     = 30 * time.Second
+	NetworkGrace            = 5 * time.Second
+	TransportGrace          = CompletionGrace + PostExecutionBudget + NetworkGrace
 )
 
 // Attestation is the immutable runtime contract for the privileged execution

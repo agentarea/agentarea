@@ -21,10 +21,11 @@ import hashlib
 import logging
 import secrets
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlencode, urlparse
 
 import httpx
+from agentarea_common.utils.url_safety import safe_async_client
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,30 @@ _KNOWN_PROVIDERS: dict[str, dict[str, str]] = {
         "registration_endpoint": "",  # GitHub doesn't support DCR
     },
 }
+
+# Hosts allowed to advertise a plain-http endpoint — the same carve-out
+# mcp_oauth_as.py uses for native-client redirect_uris.
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def _validate_endpoint_url(url: str, field: str) -> str:
+    """Reject an AS/protected-resource metadata endpoint the browser could act on.
+
+    A malicious or compromised MCP server controls every URL in its own AS
+    metadata. authorization_endpoint flows straight into build_authorize_url(),
+    which the frontend then navigates the browser to — a `javascript:` value
+    there is a stored XSS (#482). token_endpoint and registration_endpoint are
+    POSTed to by this service, so a scheme other than https is an SSRF-adjacent
+    risk even though the browser never sees them directly.
+    """
+    parsed = urlparse(url)
+    is_loopback = parsed.hostname in _LOOPBACK_HOSTS
+    if parsed.scheme != "https" and not is_loopback:
+        raise MCPOAuthDiscoveryError(
+            f"Authorization server {field} {url!r} must use https "
+            "(or http on a loopback host for local development)"
+        )
+    return url
 
 
 @dataclass
@@ -82,8 +107,57 @@ class OAuthClientCredentials:
     client_secret: str | None = None
 
 
+@dataclass
+class OAuthCapability:
+    """Whether a remote MCP server can be authorized, and what it takes.
+
+    ``ready`` — the provider supports dynamic registration, so Connect runs on
+    its own. ``oauth_app_required`` — it does not, so the workspace brings an
+    OAuth app it registered with the provider. ``unsupported`` — no OAuth
+    discovery here; ``detail`` says why.
+    """
+
+    status: Literal["ready", "oauth_app_required", "unsupported"]
+    detail: str = ""
+    metadata: AuthServerMetadata | None = None
+
+    @property
+    def advertises_oauth(self) -> bool:
+        return self.status != "unsupported"
+
+
+def oauth_app_required_detail(issuer: str) -> str:
+    return (
+        f"{issuer} does not support Dynamic Client Registration (RFC 7591), so AgentArea "
+        "cannot register itself. Register an OAuth app with this provider and connect with "
+        "its client ID and secret."
+    )
+
+
 class MCPOAuthClientService:
     """Client-side MCP authorization: discovery, DCR, PKCE auth flow."""
+
+    async def assess(self, mcp_url: str) -> OAuthCapability:
+        """Answer "can this server be authorized, and with what" in one place.
+
+        Every caller that decides whether to offer Connect — the preflight
+        endpoint, the create page's auth detection — reads this, so a server
+        cannot be "OAuth" on one screen and "open" on the next.
+        """
+        try:
+            metadata = await self.discover_auth_server(mcp_url)
+        except MCPOAuthDiscoveryError as exc:
+            return OAuthCapability(status="unsupported", detail=str(exc))
+        except httpx.HTTPError as exc:
+            logger.info("OAuth discovery could not reach %s", mcp_url, exc_info=True)
+            return OAuthCapability(status="unsupported", detail=f"Could not reach {mcp_url}: {exc}")
+        if metadata.registration_endpoint:
+            return OAuthCapability(status="ready", metadata=metadata)
+        return OAuthCapability(
+            status="oauth_app_required",
+            detail=oauth_app_required_detail(metadata.issuer),
+            metadata=metadata,
+        )
 
     async def discover_auth_server(self, mcp_url: str) -> AuthServerMetadata:
         """Discover the authorization server for a remote MCP endpoint.
@@ -94,7 +168,7 @@ class MCPOAuthClientService:
             3. Fetch Protected Resource Metadata (RFC 9728)
             4. Fetch Authorization Server Metadata (RFC 8414)
         """
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+        async with safe_async_client(timeout=_HTTP_TIMEOUT) as client:
             # Step 1: Probe the MCP endpoint for an auth challenge. The challenge is
             # only a shortcut to the metadata URL, never a precondition: servers
             # answer an unauthenticated GET with 401 (RFC 9728), 403 (Vercel), or
@@ -205,8 +279,10 @@ class MCPOAuthClientService:
             logger.info("Using known provider config for %s", as_base)
             return AuthServerMetadata(
                 issuer=as_base,
-                authorization_endpoint=known["authorization_endpoint"],
-                token_endpoint=known["token_endpoint"],
+                authorization_endpoint=_validate_endpoint_url(
+                    known["authorization_endpoint"], "authorization_endpoint"
+                ),
+                token_endpoint=_validate_endpoint_url(known["token_endpoint"], "token_endpoint"),
                 registration_endpoint=known.get("registration_endpoint") or None,
             )
 
@@ -219,11 +295,20 @@ class MCPOAuthClientService:
                 if resp.status_code == 200:
                     data = resp.json()
                     advertised = data.get("scopes_supported") or []
+                    registration_endpoint = data.get("registration_endpoint")
                     return AuthServerMetadata(
                         issuer=data.get("issuer", as_base),
-                        authorization_endpoint=data["authorization_endpoint"],
-                        token_endpoint=data["token_endpoint"],
-                        registration_endpoint=data.get("registration_endpoint"),
+                        authorization_endpoint=_validate_endpoint_url(
+                            data["authorization_endpoint"], "authorization_endpoint"
+                        ),
+                        token_endpoint=_validate_endpoint_url(
+                            data["token_endpoint"], "token_endpoint"
+                        ),
+                        registration_endpoint=(
+                            _validate_endpoint_url(registration_endpoint, "registration_endpoint")
+                            if registration_endpoint
+                            else None
+                        ),
                         scopes_supported=list(advertised),
                         code_challenge_methods_supported=data.get(
                             "code_challenge_methods_supported", ["S256"]
@@ -260,7 +345,7 @@ class MCPOAuthClientService:
             "application_type": "web",
         }
 
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+        async with safe_async_client(timeout=_HTTP_TIMEOUT) as client:
             resp = await client.post(
                 as_metadata.registration_endpoint,
                 json=payload,
@@ -332,7 +417,7 @@ class MCPOAuthClientService:
         if client_secret:
             data["client_secret"] = client_secret
 
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+        async with safe_async_client(timeout=_HTTP_TIMEOUT) as client:
             resp = await client.post(
                 as_metadata.token_endpoint,
                 data=data,

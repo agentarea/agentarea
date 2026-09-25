@@ -1,0 +1,244 @@
+{{- if .Values.sandboxes.enabled }}
+{{- include "dataplane.validateSandboxes" . }}
+{{- $host := .Values.exposure.hostNetwork }}
+{{- $s := .Values.sandboxes }}
+{{- $name := include "dataplane.sandboxServerName" . }}
+{{- $podDefaults := dict
+  "enableServiceLinks" false
+  "automountServiceAccountToken" false
+  "securityContext" (dict "seccompProfile" (dict "type" "RuntimeDefault")) }}
+{{- $podTemplate := mergeOverwrite $podDefaults (deepCopy $s.podTemplate) }}
+{{- $config := include "dataplane.sandboxServerConfig" . }}
+{{- $batchSandboxTemplate := dict "apiVersion" "sandbox.opensandbox.io/v1alpha1" "kind" "BatchSandbox" "spec" (dict "template" (dict "spec" $podTemplate)) | toYaml }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dataplane.sandboxServerLabels" . | nindent 4 }}
+---
+# What the server does to a sandbox: a BatchSandbox, which the controller turns
+# into a pod, and reads of that pod for its state and address. Nothing that
+# could publish a sandbox (Services) or run something beside it (pods), and no
+# Secret access, since AgentArea's sandbox images need no per-sandbox pull
+# credentials.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ $s.namespace }}
+  labels:
+    {{- include "dataplane.sandboxServerLabels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/status, pods/log, events]
+    verbs: [get, list, watch]
+  - apiGroups: [sandbox.opensandbox.io]
+    resources: [batchsandboxes, batchsandboxes/status]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ $s.namespace }}
+  labels:
+    {{- include "dataplane.sandboxServerLabels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+---
+# At start the server checks that its namespace and RuntimeClass exist.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "dataplane.sandboxServerLabels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list]
+  - apiGroups: [node.k8s.io]
+    resources: [runtimeclasses]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "dataplane.sandboxServerLabels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dataplane.sandboxServerLabels" . | nindent 4 }}
+data:
+  config.toml: |
+    {{- $config | nindent 4 }}
+  # Merged under every BatchSandbox the server creates.
+  batchsandbox-template.yaml: |
+    {{- $batchSandboxTemplate | nindent 4 }}
+{{- if not $s.server.auth.existingSecret }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "dataplane.sandboxApiKeySecretName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dataplane.sandboxServerLabels" . | nindent 4 }}
+type: Opaque
+stringData:
+  api-key: {{ $s.server.auth.apiKey | quote }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dataplane.sandboxServerLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # One process owns the host port, and the server keeps its state on local disk.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "dataplane.sandboxServerSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dataplane.sandboxServerSelectorLabels" . | nindent 8 }}
+      annotations:
+        # The server reads its configuration once, at start.
+        checksum/config: {{ printf "%s%s" $config $batchSandboxTemplate | sha256sum | trunc 16 | quote }}
+        {{- if $s.server.auth.apiKey }}
+        checksum/api-key: {{ $s.server.auth.apiKey | sha256sum | trunc 16 | quote }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ $name }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $host.enabled }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          image: "{{ $s.server.image.repository }}:{{ $s.server.image.tag }}"
+          imagePullPolicy: {{ $s.server.image.pullPolicy }}
+          args: ["--config", "/etc/opensandbox/config.toml"]
+          {{- if not $host.enabled }}
+          ports:
+            - name: http
+              containerPort: {{ $s.server.port }}
+          {{- end }}
+          env:
+            - { name: SANDBOX_CONFIG_PATH, value: /etc/opensandbox/config.toml }
+            - { name: HOME, value: /var/lib/opensandbox }
+            - name: OPENSANDBOX_SERVER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dataplane.sandboxApiKeySecretName" . }}
+                  key: {{ include "dataplane.sandboxApiKeySecretKey" . }}
+          {{- $probe := dict "path" "/health" "port" ($s.server.port | int) }}
+          {{- if $host.enabled }}{{- $_ := set $probe "host" $host.bindAddress }}{{- end }}
+          readinessProbe:
+            httpGet:
+              {{- toYaml $probe | nindent 14 }}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              {{- toYaml $probe | nindent 14 }}
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml $s.server.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - { name: config, mountPath: /etc/opensandbox, readOnly: true }
+            - { name: state, mountPath: /var/lib/opensandbox }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $name }}
+        # Sandboxes are BatchSandbox objects, so the server's own store only
+        # holds snapshot metadata, which AgentArea does not create.
+        - name: state
+          emptyDir: {}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if not $host.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dataplane.sandboxServerLabels" . | nindent 4 }}
+  {{- with .Values.exposure.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.exposure.service.type }}
+  {{- with .Values.exposure.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    {{- include "dataplane.sandboxServerSelectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $s.server.port }}
+      targetPort: http
+{{- end }}
+{{- end }}

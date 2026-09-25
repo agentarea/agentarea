@@ -13,6 +13,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_openapi.schemas.dto import (
     HeaderInput,
@@ -42,14 +43,15 @@ def _serialize(conn: Any) -> dict:
 
 def _build_service(repo_factory, secret_mgr):
     """Construct an OpenAPIConnectionService bound to the current request context."""
-    from agentarea_common.config import get_settings
+    from agentarea_common.utils.url_safety import OutboundPolicy
+    from agentarea_mcp.application.auth_resolver import build_auth_config_access_checker
     from agentarea_openapi.application.service import OpenAPIConnectionService
 
-    settings = get_settings()
     return OpenAPIConnectionService(
         repository_factory=repo_factory,
         secret_manager=secret_mgr,
-        allow_private_urls=settings.mcp.ALLOW_PRIVATE_URLS,
+        auth_config_access_checker=build_auth_config_access_checker(repo_factory, secret_mgr),
+        outbound_policy=OutboundPolicy.from_env(),
     )
 
 
@@ -64,6 +66,7 @@ class OpenAPIConnectionsToolset(Toolset):
     """Manage OpenAPI REST API connections: create, list, get, update, discover_tools, delete."""
 
     @tool_method(effect="write")
+    @unrestricted("any member may add a connection, as POST /v1/openapi-connections allows")
     async def create(
         self,
         name: str,
@@ -118,6 +121,7 @@ class OpenAPIConnectionsToolset(Toolset):
             return json.dumps(_serialize(conn), default=str)
 
     @tool_method(effect="read")
+    @unrestricted("connections in the caller's workspace, as the REST listing returns them")
     async def list(self, search: str = "", limit: int = 100, offset: int = 0) -> str:
         """List OpenAPI connections in the workspace."""
         async with platform_read_context() as (
@@ -140,6 +144,7 @@ class OpenAPIConnectionsToolset(Toolset):
             )
 
     @tool_method(effect="read")
+    @unrestricted("a connection in the caller's workspace, as the REST detail returns it")
     async def get(self, connection_id: str) -> str:
         """Get details of an OpenAPI connection, including discovered tools."""
         async with platform_read_context() as (
@@ -161,6 +166,7 @@ class OpenAPIConnectionsToolset(Toolset):
             return json.dumps(payload, default=str)
 
     @tool_method(effect="write")
+    @requires("edit", "openapi_connection", id_param="connection_id")
     async def update(
         self,
         connection_id: str,
@@ -214,6 +220,7 @@ class OpenAPIConnectionsToolset(Toolset):
             return json.dumps(_serialize(conn), default=str)
 
     @tool_method(effect="write")
+    @requires("edit", "openapi_connection", id_param="connection_id")
     async def discover_tools(self, connection_id: str) -> str:
         """Re-fetch the OpenAPI spec and refresh the discovered tools list."""
         async with platform_context() as (
@@ -228,6 +235,7 @@ class OpenAPIConnectionsToolset(Toolset):
             return json.dumps(result, default=str)
 
     @tool_method(effect="destructive")
+    @requires("delete", "openapi_connection", id_param="connection_id")
     async def delete(self, connection_id: str) -> str:
         """Delete an OpenAPI connection and its stored secret headers."""
         async with platform_context() as (

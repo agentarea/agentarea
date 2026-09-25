@@ -258,6 +258,39 @@ class TestProtectedResourceMetadataLocations:
             == 404
         )
 
+    def test_client_bundle_advertises_its_own_resource(self, client):
+        client_id = "74dfa41a-1736-4ab1-a470-2e2d4c4e56c8"
+
+        response = client.get(f"/.well-known/oauth-protected-resource/mcp/clients/{client_id}")
+
+        assert response.status_code == 200
+        assert response.json()["resource"] == f"{API_BASE}/mcp/clients/{client_id}"
+
+    def test_pinned_workspace_advertises_its_own_resource(self, client):
+        response = client.get("/.well-known/oauth-protected-resource/mcp/w/acme-labs")
+
+        assert response.status_code == 200
+        assert response.json()["resource"] == f"{API_BASE}/mcp/w/acme-labs"
+
+    def test_mcp_subpaths_must_name_a_resource(self, client):
+        for path in (
+            "mcp/w",
+            "mcp/w/",
+            "mcp/w/Acme",
+            "mcp/w/acme/extra",
+            "mcp/clients/nope",
+        ):
+            assert client.get(f"/.well-known/oauth-protected-resource/{path}").status_code == 404, (
+                path
+            )
+
+    def test_trailing_newline_is_not_a_resource(self):
+        # `$` matches before a final newline; the check has to be a full match.
+        from agentarea_api.api.v1.mcp_oauth_as import _is_protected_resource
+
+        assert _is_protected_resource("mcp/w/acme")
+        assert not _is_protected_resource("mcp/w/acme\n")
+
     def test_unknown_resource_path_is_not_served(self, client):
         # A catch-all would answer for resources this API does not protect.
         assert client.get("/.well-known/oauth-protected-resource/nope").status_code == 404

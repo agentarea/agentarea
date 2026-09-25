@@ -13,6 +13,36 @@ from ..domain.interfaces import (
 logger = logging.getLogger(__name__)
 
 
+class EscalationNotPendingError(Exception):
+    """The workflow is not waiting on this escalation, so there is nothing to resolve."""
+
+    def __init__(self, execution_id: str, escalation_id: str):
+        super().__init__(f"Escalation {escalation_id} is not pending on workflow {execution_id}")
+        self.execution_id = execution_id
+        self.escalation_id = escalation_id
+
+
+class NotAnApproverError(Exception):
+    """The caller is not among the escalation's approvers; the workflow would ignore them."""
+
+    def __init__(self, execution_id: str, escalation_id: str, caller_user_id: str):
+        super().__init__(
+            f"User '{caller_user_id}' is not an approver of escalation {escalation_id} "
+            f"on workflow {execution_id}"
+        )
+        self.execution_id = execution_id
+        self.escalation_id = escalation_id
+        self.caller_user_id = caller_user_id
+
+
+class WorkflowNotFoundError(Exception):
+    """No workflow exists for the run: it never started, or its history is gone."""
+
+    def __init__(self, execution_id: str):
+        super().__init__(f"Workflow {execution_id} not found")
+        self.execution_id = execution_id
+
+
 class ExecutionService(ExecutionServiceInterface):
     """Clean execution service that delegates to workflow orchestrators."""
 
@@ -76,6 +106,10 @@ class ExecutionService(ExecutionServiceInterface):
             logger.error(f"Failed to get effective policy: {e}")
             return None
 
+    async def get_pending_escalations(self, execution_id: str) -> list[dict[str, Any]]:
+        """Get the unresolved escalations, with their arguments, from the workflow."""
+        return await self._workflow_orchestrator.get_workflow_pending_escalations(execution_id)
+
     async def cancel_execution(self, execution_id: str) -> bool:
         """Cancel execution via workflow orchestrator."""
         try:
@@ -121,8 +155,10 @@ class ExecutionService(ExecutionServiceInterface):
             return await self._workflow_orchestrator.resolve_escalation_workflow(
                 execution_id, escalation_id, approved, comment, resolved_by
             )
-        except Exception as e:
-            logger.error(f"Failed to resolve escalation: {e}")
+        except (EscalationNotPendingError, NotAnApproverError):
+            raise
+        except Exception:
+            logger.error("Failed to resolve escalation", exc_info=True)
             return False
 
     async def send_workflow_command(
@@ -164,6 +200,11 @@ class WorkflowOrchestratorInterface(ABC):
     @abstractmethod
     async def get_workflow_effective_policy(self, execution_id: str) -> dict[str, Any] | None:
         """Get the effective governance policy from the workflow."""
+        pass
+
+    @abstractmethod
+    async def get_workflow_pending_escalations(self, execution_id: str) -> list[dict[str, Any]]:
+        """Get the workflow's unresolved escalations, with their arguments."""
         pass
 
     @abstractmethod

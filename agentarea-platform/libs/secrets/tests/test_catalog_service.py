@@ -12,12 +12,16 @@ from collections.abc import AsyncGenerator
 
 import pytest
 from agentarea_common.auth import UserContext
+from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.base.models import BaseModel
+from agentarea_common.di.container import register_singleton
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_secrets.catalog_service import (
     SURFACED_OWNER_TYPES,
     DuplicateSecretNameError,
     ManagedSecretError,
+    SecretAccessDeniedError,
     SecretCatalogService,
     SecretInUseError,
     SecretNotFoundError,
@@ -58,8 +62,13 @@ async def session() -> AsyncGenerator[AsyncSession, None]:
     await engine.dispose()
 
 
-def _catalog(session: AsyncSession, workspace: str = WORKSPACE) -> SecretCatalogService:
-    ctx = UserContext(user_id="tester", workspace_id=workspace)
+def _catalog(
+    session: AsyncSession,
+    workspace: str = WORKSPACE,
+    user_id: str = "tester",
+    admin_workspaces: list[str] | None = None,
+) -> SecretCatalogService:
+    ctx = UserContext(user_id=user_id, workspace_id=workspace, admin_workspaces=admin_workspaces)
     manager = DatabaseSecretManager(
         session=session, user_context=ctx, encryption_key=Fernet.generate_key().decode()
     )
@@ -214,6 +223,77 @@ class TestVisibleSecrets:
             await catalog.rotate_user_secret(secret.id, "attacker-chosen")
         with pytest.raises(ManagedSecretError):
             await catalog.delete_user_secret(secret.id)
+
+
+class TestSelectingASecretForUse:
+    """Wiring a secret into a connection sends its value where the caller chose.
+
+    An OAuth client ID lands in the authorize URL handed back to the caller; a
+    channel password goes to whatever IMAP host the trigger names. Being in the
+    workspace is therefore not enough: only the secret's creator, or someone
+    who administers the workspace, may put it to use.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _authz(self) -> None:
+        register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+
+    async def _created_by_member_a(self, session: AsyncSession) -> EncryptedSecret:
+        return await _catalog(session, user_id="member-a", admin_workspaces=[]).create_user_secret(
+            "member-a-key", "value-of-member-a", None
+        )
+
+    async def test_another_member_is_refused(self, session: AsyncSession) -> None:
+        secret = await self._created_by_member_a(session)
+        member_b = _catalog(session, user_id="member-b", admin_workspaces=[])
+
+        with pytest.raises(SecretAccessDeniedError):
+            await member_b.get_for_use(secret.id)
+
+    async def test_the_creator_may_use_it(self, session: AsyncSession) -> None:
+        secret = await self._created_by_member_a(session)
+        member_a = _catalog(session, user_id="member-a", admin_workspaces=[])
+
+        assert (await member_a.get_for_use(secret.id)).id == secret.id
+
+    async def test_a_workspace_admin_may_use_it(self, session: AsyncSession) -> None:
+        secret = await self._created_by_member_a(session)
+        admin = _catalog(session, user_id="admin", admin_workspaces=[WORKSPACE])
+
+        assert (await admin.get_for_use(secret.id)).id == secret.id
+
+    async def test_admin_of_another_workspace_is_refused(self, session: AsyncSession) -> None:
+        secret = await self._created_by_member_a(session)
+        elsewhere = _catalog(session, user_id="admin", admin_workspaces=[OTHER_WORKSPACE])
+
+        with pytest.raises(SecretAccessDeniedError):
+            await elsewhere.get_for_use(secret.id)
+
+    async def test_a_managed_secret_is_refused_even_to_an_admin(
+        self, session: AsyncSession
+    ) -> None:
+        secret = EncryptedSecret(
+            id=uuid.uuid4(),
+            workspace_id=WORKSPACE,
+            secret_name=f"provider_config_{uuid.uuid4()}",
+            encrypted_value="ciphertext",
+            owner_type="provider_config",
+            owner_id=str(uuid.uuid4()),
+            created_by="admin",
+        )
+        session.add(secret)
+        await session.commit()
+        admin = _catalog(session, user_id="admin", admin_workspaces=[WORKSPACE])
+
+        with pytest.raises(ManagedSecretError):
+            await admin.get_for_use(secret.id)
+
+    async def test_another_workspace_cannot_find_it(self, session: AsyncSession) -> None:
+        secret = await self._created_by_member_a(session)
+        theirs = _catalog(session, OTHER_WORKSPACE, user_id="member-a", admin_workspaces=[])
+
+        with pytest.raises(SecretNotFoundError):
+            await theirs.get_for_use(secret.id)
 
 
 class TestWorkspaceIsolation:

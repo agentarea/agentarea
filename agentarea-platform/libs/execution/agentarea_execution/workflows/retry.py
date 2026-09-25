@@ -12,11 +12,19 @@ imported via ``agentarea_execution.exceptions`` for the walk to see them; the
 test suite guards that the known set is covered.)
 """
 
+from agentarea_governance.domain.exceptions import EscalationRequiredError, GovernanceDeniedError
 from temporalio.common import RetryPolicy
 
 from agentarea_execution.exceptions import PermanentError
 
 from .constants import DEFAULT_RETRY_ATTEMPTS
+
+# A governance gate's verdict on the same call does not change between attempts;
+# retrying only repeats it and delays the workflow from acting on it.
+_GOVERNANCE_VERDICTS: tuple[type[Exception], ...] = (
+    GovernanceDeniedError,
+    EscalationRequiredError,
+)
 
 
 def _permanent_error_names() -> list[str]:
@@ -32,7 +40,9 @@ def _permanent_error_names() -> list[str]:
 
 # Computed once at import; exceptions module is fully imported by the time this
 # runs, so every subclass defined there is registered.
-NON_RETRYABLE_ERROR_TYPES: list[str] = _permanent_error_names()
+NON_RETRYABLE_ERROR_TYPES: list[str] = sorted(
+    {*_permanent_error_names(), *(cls.__name__ for cls in _GOVERNANCE_VERDICTS)}
+)
 
 
 def make_retry_policy(maximum_attempts: int = DEFAULT_RETRY_ATTEMPTS) -> RetryPolicy:

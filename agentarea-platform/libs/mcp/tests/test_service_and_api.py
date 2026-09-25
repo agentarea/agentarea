@@ -5,6 +5,7 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from agentarea_mcp.application.auth_service import AuthConfigAccessDeniedError
 from agentarea_mcp.application.service import (
     MCPServerInstanceService,
     derive_bundle_verification,
@@ -119,6 +120,7 @@ def _make_service(
     svc.env_service.set_instance_environment = AsyncMock()
     svc.env_service.get_instance_environment = AsyncMock(return_value={})
     svc.db = MagicMock()
+    svc.era_verdict_store = None
 
     server_spec = MagicMock()
     server_spec.id = "test-spec-id"
@@ -645,6 +647,61 @@ class TestServiceCreateInstance:
         }
 
 
+class TestServiceCreateInstanceAuthConfigAccess:
+    """Attaching an auth config at instance-creation time is authority-checked (#486)."""
+
+    @pytest.mark.asyncio
+    async def test_a_foreign_auth_config_is_refused_before_anything_is_persisted(self):
+        svc = _make_service()
+        svc._assert_may_use_auth_config = AsyncMock(
+            side_effect=AuthConfigAccessDeniedError("nope")
+        )
+
+        with pytest.raises(AuthConfigAccessDeniedError):
+            await svc.create_instance(
+                MCPServerInstanceCreate(
+                    name="docker-inst",
+                    server_spec_id="test-spec-id",
+                    json_spec={"type": "docker"},
+                    auth_config_id=str(uuid.uuid4()),
+                )
+            )
+
+        svc.repository.session.add.assert_not_called()
+        svc.repository.session.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_own_auth_config_is_checked_then_attached(self):
+        svc = _make_service()
+        svc._assert_may_use_auth_config = AsyncMock()
+        auth_config_id = str(uuid.uuid4())
+
+        verify_called = []
+
+        async def fake_verify(instance):
+            verify_called.append(str(instance.id))
+
+        with (
+            patch("agentarea_mcp.application.service.verify", side_effect=fake_verify),
+            patch(
+                "agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec",
+                return_value=[],
+            ),
+        ):
+            inst = await svc.create_instance(
+                MCPServerInstanceCreate(
+                    name="docker-inst",
+                    server_spec_id="test-spec-id",
+                    json_spec={"type": "docker"},
+                    auth_config_id=auth_config_id,
+                )
+            )
+            await asyncio.sleep(0)
+
+        svc._assert_may_use_auth_config.assert_awaited_once_with(auth_config_id)
+        assert inst.auth_config_id == auth_config_id
+
+
 # ---------------------------------------------------------------------------
 # service.verify_instance
 # ---------------------------------------------------------------------------
@@ -720,9 +777,7 @@ class TestServiceDiscoverAndStoreTools:
         result = await svc.discover_and_store_tools(inst.id)
 
         assert result["tools"] == fresh_tools
-        svc.repository.session.refresh.assert_awaited_once_with(
-            inst, attribute_names=["tools"]
-        )
+        svc.repository.session.refresh.assert_awaited_once_with(inst, attribute_names=["tools"])
 
 
 # ---------------------------------------------------------------------------
@@ -845,9 +900,14 @@ class TestServiceExecuteTool:
             tool_args,
             httpx_client_factory=None,
             transport=None,
+            verdict_key=None,
+            verdict_store=None,
         ):
             captured["factory"] = httpx_client_factory
-            return MagicMock(content=[MagicMock(type="text", text="ok")], isError=False)
+            return MagicMock(
+                content=[MagicMock(type="text", text="ok")],
+                is_error=False,
+            )
 
         svc._call_tool_via_mcp = fake_call_tool_via_mcp
 
@@ -867,7 +927,12 @@ class TestServiceExecuteTool:
                 mod._enqueue_last_dispatch = orig
 
         assert result["success"] is True
-        assert captured["factory"] is factory
+        # A URL-type endpoint is member-chosen: the payment client is kept but
+        # its requests go through the pinned transport.
+        from agentarea_common.utils.url_safety import SafeOutboundTransport
+
+        captured["factory"](headers=None, timeout=None)
+        assert isinstance(factory.call_args.kwargs["inner"], SafeOutboundTransport)
 
 
 # ---------------------------------------------------------------------------

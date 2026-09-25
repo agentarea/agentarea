@@ -56,11 +56,11 @@ from another entity.
       "kind": "harness",
       "skills": [],
       "mcp_instances": [],
-      "mcp_endpoint_url": "https://api.example.com/client-mcp/b4c8f210-..."
+      "mcp_endpoint_url": "https://api.example.com/mcp/clients/b4c8f210-..."
     }
     ```
 
-    `mcp_endpoint_url` is the aggregate. Note it is served at `/client-mcp/{client_id}`
+    `mcp_endpoint_url` is the aggregate. Note it is served at `/mcp/clients/{client_id}`
     — outside `/v1`, because it is a mounted MCP application rather than a REST route.
   </Step>
 
@@ -109,7 +109,7 @@ from another entity.
 List the tools through the aggregate. This is the same call the harness makes.
 
 ```bash
-curl -s -X POST "$AGENTAREA_URL/client-mcp/$CLIENT_ID" \
+curl -s -X POST "$AGENTAREA_URL/mcp/clients/$CLIENT_ID" \
   -H "Authorization: Bearer $CLIENT_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
@@ -128,7 +128,7 @@ Namespaced names from more than one member prove the aggregation resolved. Then
 call one to prove forwarding works:
 
 ```bash
-curl -s -X POST "$AGENTAREA_URL/client-mcp/$CLIENT_ID" \
+curl -s -X POST "$AGENTAREA_URL/mcp/clients/$CLIENT_ID" \
   -H "Authorization: Bearer $CLIENT_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
@@ -164,7 +164,7 @@ curl -s -X POST "$AGENTAREA_URL/client-mcp/$CLIENT_ID" \
     `DELETE /v1/clients/{client_id}/mcp-instances/{mcp_instance_id}` .
   </Accordion>
   <Accordion title="The endpoint 404s">
-    `/client-mcp/{client_id}` is a mounted application, not a `/v1` route, and
+    `/mcp/clients/{client_id}` is a mounted application, not a `/v1` route, and
     it is absent from the OpenAPI spec for that reason. Use the
     `mcp_endpoint_url` from the client response rather than assembling the path
     from the API base by hand.

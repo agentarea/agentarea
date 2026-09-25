@@ -23,6 +23,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 
 
@@ -149,6 +150,7 @@ class TriggersAgentToolset(Toolset):
             raise
 
     @tool_method(effect="read")
+    @unrestricted("triggers in the run's workspace, as GET /v1/triggers lists them")
     async def list(self, active_only: bool = False, limit: int = 50) -> str:
         """List triggers in the workspace (optionally only active ones)."""
         session, _user_ctx, service = await self._open()
@@ -159,6 +161,7 @@ class TriggersAgentToolset(Toolset):
             await session.close()
 
     @tool_method(effect="read")
+    @unrestricted("a trigger in the run's workspace, as GET /v1/triggers/{id} returns it")
     async def get(self, trigger_id: str) -> str:
         """Get a trigger by ID."""
         session, _user_ctx, service = await self._open()
@@ -171,6 +174,7 @@ class TriggersAgentToolset(Toolset):
             await session.close()
 
     @tool_method(effect="write")
+    @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
     async def create_cron(
         self,
         name: str,
@@ -229,6 +233,7 @@ class TriggersAgentToolset(Toolset):
             await session.close()
 
     @tool_method(effect="write")
+    @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
     async def create_webhook(
         self,
         name: str,
@@ -284,6 +289,7 @@ class TriggersAgentToolset(Toolset):
             await session.close()
 
     @tool_method(effect="write")
+    @requires("edit", "trigger", id_param="trigger_id")
     async def enable(self, trigger_id: str) -> str:
         """Enable a trigger (resumes its schedule for cron triggers)."""
         session, _user_ctx, service = await self._open()
@@ -298,6 +304,7 @@ class TriggersAgentToolset(Toolset):
             await session.close()
 
     @tool_method(effect="write")
+    @requires("edit", "trigger", id_param="trigger_id")
     async def disable(self, trigger_id: str) -> str:
         """Pause a trigger's schedule."""
         session, _user_ctx, service = await self._open()
@@ -312,6 +319,7 @@ class TriggersAgentToolset(Toolset):
             await session.close()
 
     @tool_method(effect="destructive")
+    @requires("delete", "trigger", id_param="trigger_id")
     async def delete(self, trigger_id: str) -> str:
         """Delete a trigger and its schedule."""
         session, _user_ctx, service = await self._open()
@@ -326,6 +334,7 @@ class TriggersAgentToolset(Toolset):
             await session.close()
 
     @tool_method(effect="read")
+    @unrestricted("execution history, as GET /v1/triggers/{id}/executions serves it")
     async def get_history(self, trigger_id: str, limit: int = 50, offset: int = 0) -> str:
         """Get recent execution history for a trigger."""
         session, _user_ctx, service = await self._open()

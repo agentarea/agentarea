@@ -9,6 +9,10 @@ the invitation is still pending.
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import register_singleton
 from agentarea_common.workspaces import (
     INVITATION_STATUS_ACCEPTED,
     INVITATION_STATUS_PENDING,
@@ -48,13 +52,15 @@ def repo() -> FakeInvitationRepository:
 
 @pytest.fixture
 def service(repo) -> WorkspaceInvitationService:
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
     return WorkspaceInvitationService(repo)  # type: ignore[arg-type]
 
 
 async def _invite(service, email: str | None = None):
-    return await service.create_invitation(
-        workspace_id="workspace-1", invited_by="owner-user", email=email
+    owner = UserContext(
+        user_id="owner-user", workspace_id="workspace-1", admin_workspaces=["workspace-1"]
     )
+    return await service.create_invitation(actor=owner, workspace_id="workspace-1", email=email)
 
 
 async def test_open_link_is_previewable_by_whoever_holds_it(service) -> None:

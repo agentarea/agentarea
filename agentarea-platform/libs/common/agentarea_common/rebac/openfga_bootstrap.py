@@ -27,6 +27,11 @@ async def bootstrap_openfga(
 
     api_url = settings.ACCESS_CONTROL_OPENFGA_API_URL.rstrip("/")
     timeout = settings.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS
+    headers = (
+        {"Authorization": f"Bearer {settings.ACCESS_CONTROL_OPENFGA_API_TOKEN}"}
+        if settings.ACCESS_CONTROL_OPENFGA_API_TOKEN
+        else {}
+    )
     owns_client = client is None
     if client is None:
         client = httpx.AsyncClient(timeout=timeout)
@@ -37,6 +42,7 @@ async def bootstrap_openfga(
                 client=client,
                 api_url=api_url,
                 store_name=settings.ACCESS_CONTROL_OPENFGA_STORE_NAME,
+                headers=headers,
             )
             settings.ACCESS_CONTROL_OPENFGA_STORE_ID = store_id
 
@@ -47,22 +53,26 @@ async def bootstrap_openfga(
                     "ACCESS_CONTROL_OPENFGA_MODEL_PATH is required when model auto-apply is enabled"
                 )
             model = _load_authorization_model(Path(model_path))
-            model_id = await _find_authorization_model(client, api_url, store_id, model)
+            model_id = await _find_authorization_model(client, api_url, store_id, model, headers)
             if model_id is None:
-                model_id = await _write_authorization_model(client, api_url, store_id, model)
+                model_id = await _write_authorization_model(
+                    client, api_url, store_id, model, headers
+                )
             settings.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID = model_id
     finally:
         if owns_client:
             await client.aclose()
 
 
-async def _get_or_create_store(*, client: httpx.AsyncClient, api_url: str, store_name: str) -> str:
-    existing_store_id = await _find_store_id(client, api_url, store_name)
+async def _get_or_create_store(
+    *, client: httpx.AsyncClient, api_url: str, store_name: str, headers: dict[str, str]
+) -> str:
+    existing_store_id = await _find_store_id(client, api_url, store_name, headers)
     if existing_store_id:
         return existing_store_id
 
     try:
-        resp = await client.post(f"{api_url}/stores", json={"name": store_name})
+        resp = await client.post(f"{api_url}/stores", json={"name": store_name}, headers=headers)
     except httpx.HTTPError as exc:
         raise OpenFGAUnavailableError(f"OpenFGA store create unreachable: {exc}") from exc
     if resp.status_code not in {200, 201}:
@@ -70,10 +80,12 @@ async def _get_or_create_store(*, client: httpx.AsyncClient, api_url: str, store
 
     # A second app/worker process can race the same create. Re-list and choose
     # the stable earliest store for this name so processes converge on one id.
-    return await _find_store_id(client, api_url, store_name) or _store_id(resp.json())
+    return await _find_store_id(client, api_url, store_name, headers) or _store_id(resp.json())
 
 
-async def _find_store_id(client: httpx.AsyncClient, api_url: str, store_name: str) -> str | None:
+async def _find_store_id(
+    client: httpx.AsyncClient, api_url: str, store_name: str, headers: dict[str, str]
+) -> str | None:
     stores: list[dict[str, Any]] = []
     continuation_token: str | None = None
     while True:
@@ -81,7 +93,7 @@ async def _find_store_id(client: httpx.AsyncClient, api_url: str, store_name: st
         if continuation_token:
             params["continuation_token"] = continuation_token
         try:
-            resp = await client.get(f"{api_url}/stores", params=params)
+            resp = await client.get(f"{api_url}/stores", params=params, headers=headers)
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(f"OpenFGA store list unreachable: {exc}") from exc
         if resp.status_code != 200:
@@ -117,6 +129,7 @@ async def _find_authorization_model(
     api_url: str,
     store_id: str,
     model: dict[str, Any],
+    headers: dict[str, str],
 ) -> str | None:
     expected = _normalize_authorization_model(model)
     continuation_token: str | None = None
@@ -128,6 +141,7 @@ async def _find_authorization_model(
             resp = await client.get(
                 f"{api_url}/stores/{store_id}/authorization-models",
                 params=params,
+                headers=headers,
             )
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(
@@ -151,9 +165,12 @@ async def _write_authorization_model(
     api_url: str,
     store_id: str,
     model: dict[str, Any],
+    headers: dict[str, str],
 ) -> str:
     try:
-        resp = await client.post(f"{api_url}/stores/{store_id}/authorization-models", json=model)
+        resp = await client.post(
+            f"{api_url}/stores/{store_id}/authorization-models", json=model, headers=headers
+        )
     except httpx.HTTPError as exc:
         raise OpenFGAUnavailableError(
             f"OpenFGA authorization model write unreachable: {exc}"

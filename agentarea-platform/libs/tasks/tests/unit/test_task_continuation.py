@@ -8,6 +8,7 @@ from agentarea_governance.domain.policies import (
     PolicyValidationError,
     effective_policy_from_json,
 )
+from agentarea_tasks.domain.exceptions import BudgetCapExceededError
 from agentarea_tasks.task_service import TaskService
 
 
@@ -115,4 +116,24 @@ async def test_continue_execution_rejects_policy_ceiling_without_update():
     result = await service.continue_execution(task_id, additional_iterations=2)
 
     assert result == {"accepted": False, "reason": "policy_ceiling"}
+    service.workflow_service.continue_execution.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_continue_execution_is_refused_once_the_monthly_cap_is_reached():
+    task_id = uuid4()
+    current_policy = _policy(max_model_turns=3, run_budget_usd="1.00")
+    next_policy = effective_policy_from_json(
+        {
+            **_policy(max_model_turns=5, run_budget_usd="1.00").to_json_dict(),
+            "budget": {"run_budget_usd": "1.00", "monthly_spend_cap_usd": "50.00"},
+        }
+    )
+    task = _waiting_task(task_id, current_policy)
+    service = _service(task, next_policy=next_policy)
+    service.task_repository = SimpleNamespace(sum_spend_mtd=AsyncMock(return_value=50.0))
+
+    with pytest.raises(BudgetCapExceededError):
+        await service.continue_execution(task_id, additional_iterations=2)
+
     service.workflow_service.continue_execution.assert_not_awaited()

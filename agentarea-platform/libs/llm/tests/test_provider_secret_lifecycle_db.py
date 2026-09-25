@@ -20,6 +20,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 from agentarea_common.auth import UserContext
+from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import get_container
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ProviderConfig, ProviderSpec
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
@@ -43,6 +46,17 @@ pytestmark = pytest.mark.skipif(
 WORKSPACE = "provider-secret-test-ws"
 
 
+@pytest.fixture(autouse=True)
+def _authorization():
+    """Provider config writes assert workspace admin; the tester owns the workspace."""
+    container = get_container()
+    saved = dict(container._singletons)
+    container.register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+    yield
+    container._singletons.clear()
+    container._singletons.update(saved)
+
+
 @pytest.fixture
 async def session() -> AsyncGenerator[AsyncSession, None]:
     engine = create_async_engine(TEST_DATABASE_URL, echo=False, pool_pre_ping=True)
@@ -59,7 +73,7 @@ async def session() -> AsyncGenerator[AsyncSession, None]:
 
 
 def _service(session: AsyncSession) -> ProviderService:
-    ctx = UserContext(user_id="tester", workspace_id=WORKSPACE)
+    ctx = UserContext(user_id="tester", workspace_id=WORKSPACE, admin_workspaces=[WORKSPACE])
     return ProviderService(
         provider_spec_repo=ProviderSpecRepository(session, ctx),
         provider_config_repo=ProviderConfigRepository(session, ctx),

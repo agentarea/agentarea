@@ -33,10 +33,7 @@ import { getAgentIconComponent } from "@/lib/agent-identity";
 import type { TaskResponse } from "@/lib/api";
 import type { AvatarHue } from "@/lib/avatar-hue";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
-import {
-  getTaskStatusPresentation,
-  type StatusPresentation,
-} from "@/lib/status";
+import type { StatusPresentation } from "@/lib/status";
 import type { PolicyEffect } from "@/types/policies";
 import { isRunningTask } from "../../shared/taskStatus";
 
@@ -616,9 +613,7 @@ function TaskRow({
 }) {
   const status = String(task.status ?? "unknown");
   const label = useTaskStatusLabel(status);
-  const visuallyHideStatus =
-    hideRunningStatus &&
-    getTaskStatusPresentation(status).labelKey === "running";
+  const visuallyHideStatus = hideRunningStatus && isRunningTask(task);
   const resultCost =
     task.result && typeof task.result === "object"
       ? task.result.total_cost

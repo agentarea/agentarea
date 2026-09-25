@@ -20,7 +20,9 @@ from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_llm.application.model_spec_service import ModelSpecService
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
@@ -314,9 +316,11 @@ async def get_openapi_connection_service(
     """Get an OpenAPIConnectionService instance for the current request."""
     from agentarea_common.auth.context import UserContext
     from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
-    from agentarea_mcp.application.auth_resolver import build_auth_header_resolver
+    from agentarea_mcp.application.auth_resolver import (
+        build_auth_config_access_checker,
+        build_auth_header_resolver,
+    )
 
-    settings = get_settings()
     managed_secret_manager = get_real_secret_manager(
         session=db_session,
         user_context=UserContext(
@@ -332,7 +336,11 @@ async def get_openapi_connection_service(
             secret_manager,
             managed_secret_manager,
         ),
-        allow_private_urls=settings.mcp.ALLOW_PRIVATE_URLS,
+        auth_config_access_checker=build_auth_config_access_checker(
+            repository_factory,
+            secret_manager,
+        ),
+        outbound_policy=OutboundPolicy.from_env(),
     )
 
 
@@ -391,6 +399,12 @@ async def get_model_spec_repository(
 ) -> ModelSpecRepository:
     """Get a ModelSpecRepository instance for the current request."""
     return ModelSpecRepository(db_session, user_context)
+
+
+async def get_model_spec_service(
+    model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
+) -> ModelSpecService:
+    return ModelSpecService(model_spec_repo)
 
 
 # Trigger Service dependencies
@@ -508,6 +522,7 @@ async def get_webhook_manager(
         event_broker=event_broker,
         base_url=settings.triggers.WEBHOOK_BASE_URL,
         trigger_service=trigger_service,
+        secret_reader=secret_manager,
     )
 
 
@@ -596,6 +611,7 @@ async def get_public_webhook_manager(
                     event_broker=self._event_broker,
                     base_url=self._settings.triggers.WEBHOOK_BASE_URL,
                     trigger_service=svc,
+                    secret_reader=sec_manager,
                 )
                 # Pre-register the trigger so the manager doesn't need another lookup.
                 # Re-read through the workspace-scoped repository: the unscoped

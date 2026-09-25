@@ -173,12 +173,19 @@ class AgentAreaWorker:
             from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
             from agentarea_common.rebac.openfga_client import OpenFGAClient
 
+            if not settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN:
+                logger.warning(
+                    "ACCESS_CONTROL_OPENFGA_API_TOKEN is not set: OpenFGA calls are "
+                    "unauthenticated. Set ACCESS_CONTROL_OPENFGA_API_TOKEN and the "
+                    "server's OPENFGA_AUTHN_PRESHARED_KEYS to require a bearer token."
+                )
             await bootstrap_openfga(settings.openfga)
             openfga_client = OpenFGAClient(
                 api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
                 store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
                 authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
                 timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
+                api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
             )
             register_singleton(OpenFGAClient, openfga_client)
 
@@ -250,9 +257,7 @@ class AgentAreaWorker:
 
         governance_pipeline = create_governance_pipeline()
         all_activities = activities + mcp_activities
-        validate_activity_mapping(
-            [a.fn.__name__ if hasattr(a, "fn") else str(a) for a in all_activities]
-        )
+        validate_activity_mapping(all_activities)
 
         self.worker = Worker(
             self.client,
@@ -314,6 +319,7 @@ class AgentAreaWorker:
         autoclaimer) and the inbound channel event consumer.
         """
         from agentarea_common.broker import DedupCache
+        from agentarea_common.config.database import get_database
         from agentarea_triggers.channels import get_adapter
         from agentarea_triggers.channels.adapters import register_all_adapters
         from agentarea_triggers.channels.autoclaimer import StreamAutoclaimer
@@ -322,6 +328,7 @@ class AgentAreaWorker:
         )
         from agentarea_triggers.channels.inbound_subscriber import InboundMessageStreamConsumer
         from agentarea_triggers.channels.lazy_secret_manager import LazySecretReader
+        from agentarea_triggers.channels.origin_guard import TriggerWorkspaceGuard
 
         settings = get_settings()
         redis_url = getattr(settings.broker, "REDIS_URL", "redis://localhost:6379")
@@ -348,6 +355,7 @@ class AgentAreaWorker:
             broker=self._broker,
             dedup=self._inbound_dedup,
             event_broker=dependencies.event_broker,
+            secret_manager_factory=dependencies.secret_manager_factory,
             workflow_executor=dependencies.workflow_executor,
             stream=delivery_cfg.INBOUND_STREAM,
             group=delivery_cfg.INBOUND_GROUP,
@@ -375,6 +383,7 @@ class AgentAreaWorker:
             broker=self._broker,
             dedup=self._dedup,
             adapter_resolver=get_adapter,
+            origin_guard=TriggerWorkspaceGuard(get_database().async_session_factory),
             stream=delivery_cfg.OUTBOUND_STREAM,
             group=delivery_cfg.OUTBOUND_GROUP,
             dlq_stream=delivery_cfg.OUTBOUND_DLQ,

@@ -1,8 +1,8 @@
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import httpx
-from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
+from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, safe_async_client
 
 from ..domain.provider_profiles import ModelListShape, profile_for
 
@@ -109,27 +109,33 @@ class ModelDiscoveryService:
             logger.warning("No base URL for provider %s and no endpoint_url provided", provider_key)
             return []
 
+        headers = self._build_headers(provider_key, api_key)
+
         # Only the user-supplied endpoint_url is untrusted; built-in provider
         # base URLs (incl. ollama's localhost default) are trusted and skipped.
         if endpoint_url:
-            try:
-                validate_outbound_url(url, allow_private=self._allow_private_endpoints)
-            except UnsafeUrlError:
-                # Do not interpolate the user-supplied endpoint/host into the log
-                # message (log-injection); the rejection itself is the signal.
-                logger.warning("Rejected model-discovery endpoint blocked by outbound SSRF guard")
-                return []
-
-        headers = self._build_headers(provider_key, api_key)
+            policy = OutboundPolicy.from_env()
+            if self._allow_private_endpoints:
+                policy = replace(policy, allow_private=True)
+            client = safe_async_client(policy=policy, timeout=self._timeout)
+        else:
+            client = httpx.AsyncClient(timeout=self._timeout)
 
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with client:
                 resp = await client.get(url, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
                 models = self._parse_response(provider_key, data)
                 logger.info("Discovered %d models for provider %s", len(models), provider_key)
                 return models
+        except UnsafeUrlError:
+            # Do not interpolate the user-supplied endpoint/host into the log
+            # message (log-injection); the rejection itself is the signal.
+            logger.warning(
+                "Rejected model-discovery endpoint blocked by outbound SSRF guard", exc_info=True
+            )
+            return []
         except Exception as e:
             logger.error("Model discovery failed for %s: %s", provider_key, e)
             return []

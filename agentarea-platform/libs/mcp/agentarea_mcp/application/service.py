@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import asyncio
 import inspect
 import logging
+import socket
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -11,10 +14,24 @@ from agentarea_common.audit import audited
 from agentarea_common.base.service import BaseCrudService
 from agentarea_common.config import get_database, get_settings
 from agentarea_common.events.broker import EventBroker
+from agentarea_common.exceptions.errors import BadRequestError
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
+from agentarea_common.utils.url_safety import (
+    OutboundPolicy,
+    UnsafeUrlError,
+    safe_async_client,
+    validate_outbound_url,
+)
+from mcp import MCPError
 
 from agentarea_mcp.application.auth_service import MCPAuthService, OAuthReauthRequiredError
+from agentarea_mcp.application.mcp_client import (
+    connected_mcp_client,
+    mcp_verdict_key,
+    pinned_client_factory,
+    platform_client_factory,
+    shared_era_verdict_store,
+)
 from agentarea_mcp.domain.events import (
     MCPServerCreated,
     MCPServerDeleted,
@@ -41,11 +58,7 @@ from agentarea_mcp.schemas.dto import (
     MCPServerUpdate,
 )
 from agentarea_mcp.tool_serialization import serialize_mcp_tool
-from agentarea_mcp.verification import (
-    declared_remote_transport,
-    mcp_transport_candidates,
-    verify,
-)
+from agentarea_mcp.verification import declared_remote_transport, verify
 
 from .mcp_env_service import MCPEnvironmentService
 from .oauth_client_service import MCPOAuthClientService
@@ -93,6 +106,39 @@ def _server_transport_spec(server_spec: MCPServer) -> dict[str, Any]:
     else:
         spec.setdefault("type", "docker")
     return _normalize_url_keys(spec)
+
+
+def _is_mcp_protocol_error(exc: BaseException) -> bool:
+    """True when the server answered in MCP, rather than the dial failing."""
+    if isinstance(exc, BaseExceptionGroup):
+        return all(_is_mcp_protocol_error(inner) for inner in exc.exceptions)
+    return isinstance(exc, MCPError)
+
+
+def _endpoint_refusal(url: str | None) -> str | None:
+    """Why a member-supplied MCP endpoint may not be stored, if it may not.
+
+    A write-time check only: every dial of a URL-type endpoint goes through the
+    pinned transport regardless. A name that does not resolve yet is let through
+    for verification to report, since it reaches nothing.
+    """
+    if not url:
+        return None
+    try:
+        validate_outbound_url(url, policy=OutboundPolicy.from_env())
+    except UnsafeUrlError as exc:
+        if isinstance(exc.__cause__, socket.gaierror):
+            return None
+        logger.warning("Refused MCP endpoint %s", url, exc_info=True)
+        return "Endpoint URL is not an allowed address"
+    return None
+
+
+def _spec_endpoint_refusal(remote_url: str | None, json_spec: dict[str, Any] | None) -> str | None:
+    spec = _normalize_url_keys(dict(json_spec or {}))
+    return _endpoint_refusal(remote_url) or (
+        _endpoint_refusal(spec.get("endpoint_url")) if spec.get("type") == "url" else None
+    )
 
 
 def _instance_owned_spec(spec: dict[str, Any]) -> dict[str, Any]:
@@ -180,6 +226,9 @@ class MCPServerService(BaseCrudService[MCPServer]):
 
     @audited("mcp_server.create", resource_type="mcp_server")
     async def create_mcp_server(self, payload: MCPServerCreate) -> MCPServer:
+        refusal = _spec_endpoint_refusal(payload.remote_url, payload.json_spec)
+        if refusal:
+            raise BadRequestError(refusal)
         slug = await self._resolve_unique_slug(payload.name)
 
         server = MCPServer(
@@ -216,6 +265,10 @@ class MCPServerService(BaseCrudService[MCPServer]):
             return None
 
         patch = payload.model_dump(exclude_unset=True)
+        if "remote_url" in patch or "json_spec" in patch:
+            refusal = _spec_endpoint_refusal(patch.get("remote_url"), patch.get("json_spec"))
+            if refusal:
+                raise BadRequestError(refusal)
 
         if "name" in patch:
             server.name = patch["name"]
@@ -307,6 +360,8 @@ class MCPServerInstanceService:
         repository_factory: Any,
         event_broker: EventBroker,
         secret_manager: BaseSecretManager,
+        *,
+        era_verdict_store=None,
     ):
         self.repository = repository_factory.create_repository(MCPServerInstanceRepository)
         self.mcp_server_repository = repository_factory.create_repository(MCPServerRepository)
@@ -316,6 +371,9 @@ class MCPServerInstanceService:
         self.secret_manager = secret_manager
         self.env_service = MCPEnvironmentService(secret_manager)
         self.db = get_database()
+        self.era_verdict_store = (
+            era_verdict_store if era_verdict_store is not None else shared_era_verdict_store()
+        )
 
     def _get_secret_env_names(self, env_schema: list[dict[str, Any]]) -> set[str]:
         return {e["name"] for e in env_schema if isinstance(e, dict) and e.get("isSecret")}
@@ -471,6 +529,19 @@ class MCPServerInstanceService:
         await self.repository.session.flush()
         return copy
 
+    async def _assert_may_use_auth_config(self, auth_config_id: UUID | str) -> None:
+        """Only the auth config's creator or a workspace admin may attach it.
+
+        Attaching one lets this instance send its stored credential wherever
+        the connection points, so workspace membership alone is not enough.
+        """
+        from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
+
+        auth_repo = MCPAuthConfigRepository(self.repository.session, self.repository.user_context)
+        auth_service = MCPAuthService(auth_repo, self.secret_manager)
+        config_id = auth_config_id if isinstance(auth_config_id, UUID) else UUID(auth_config_id)
+        await auth_service.get_for_use(config_id)
+
     @audited("mcp_instance.create", resource_type="mcp_instance")
     async def create_instance(self, payload: MCPServerInstanceCreate) -> MCPServerInstance | None:
         name = payload.name
@@ -505,6 +576,10 @@ class MCPServerInstanceService:
             instance_type = transport_spec.get("type", "docker")
             if instance_type == "bundle":
                 raise MCPValidationError(["bundle is not a valid MCP server instance type"])
+            if instance_type == "url":
+                refusal = _endpoint_refusal(transport_spec.get("endpoint_url"))
+                if refusal:
+                    raise MCPValidationError([refusal])
 
             instance_spec = _instance_owned_spec(submitted_spec)
             spec, secret_env_vars = await self._extract_secrets_from_spec(
@@ -523,6 +598,7 @@ class MCPServerInstanceService:
                 "verification": dict(DEFAULT_VERIFICATION),
             }
             if auth_config_id:
+                await self._assert_may_use_auth_config(auth_config_id)
                 create_kwargs["auth_config_id"] = auth_config_id
 
             instance = MCPServerInstance(
@@ -993,6 +1069,11 @@ class MCPServerInstanceService:
 
         try:
             mcp_url, headers, transport = await self._resolve_mcp_url_and_headers(instance)
+            verdict_key = mcp_verdict_key(server_instance_id, transport_spec)
+            if instance_type == "url":
+                httpx_client_factory = pinned_client_factory(httpx_client_factory)
+            elif httpx_client_factory is None:
+                httpx_client_factory = platform_client_factory
         except Exception as e:
             return _fail(
                 f"MCP '{instance.name}' is not available (cannot resolve URL: {e}). "
@@ -1015,6 +1096,8 @@ class MCPServerInstanceService:
                 tool_args,
                 httpx_client_factory=httpx_client_factory,
                 transport=transport,
+                verdict_key=verdict_key,
+                verdict_store=self.era_verdict_store,
             )
         except Exception as e:
             logger.error(
@@ -1024,10 +1107,15 @@ class MCPServerInstanceService:
                 e,
                 exc_info=True,
             )
+            reason = (
+                "could not connect to the MCP server"
+                if instance_type == "url" and not _is_mcp_protocol_error(e)
+                else str(e)
+            )
             return _fail(
-                f"MCP '{instance.name}' tool call failed: {e}. "
+                f"MCP '{instance.name}' tool call failed: {reason}. "
                 "Re-verify the instance if this persists.",
-                f"MCP tool call failed: {e}",
+                f"MCP tool call failed: {reason}",
             )
 
         parts: list[str] = []
@@ -1036,7 +1124,7 @@ class MCPServerInstanceService:
             if block_type == "text":
                 parts.append(getattr(block, "text", "") or "")
             elif block_type == "image":
-                mime = getattr(block, "mimeType", "unknown")
+                mime = getattr(block, "mime_type", "unknown")
                 parts.append(f"<image mime={mime}>")
             elif block_type == "resource":
                 resource = getattr(block, "resource", None)
@@ -1045,8 +1133,12 @@ class MCPServerInstanceService:
             else:
                 parts.append(str(block))
 
+        structured_content = getattr(call_result, "structured_content", None)
+        if not parts and structured_content is not None:
+            parts.append(str(structured_content))
+
         result_str = "\n".join(parts)
-        is_error = bool(getattr(call_result, "isError", False))
+        is_error = bool(getattr(call_result, "is_error", False))
 
         if is_error:
             error_msg = result_str or "MCP tool returned error"
@@ -1107,98 +1199,69 @@ class MCPServerInstanceService:
 
         return mcp_url, headers, transport
 
+    async def _with_mcp_session(
+        self,
+        mcp_url: str,
+        headers: dict[str, str],
+        operation: Callable[[Any], Any],
+        *,
+        httpx_client_factory: Callable[..., Any],
+        transport: str | None = None,
+        timeout_seconds: float = 30.0,
+        verdict_key: str | None = None,
+        verdict_store=None,
+    ) -> Any:
+        """Open a connected v2 MCP client and run one operation."""
+        async with connected_mcp_client(
+            mcp_url,
+            headers or None,
+            float(timeout_seconds),
+            transport=transport,
+            verdict_key=verdict_key,
+            verdict_store=verdict_store,
+            httpx_client_factory=httpx_client_factory,
+        ) as client:
+            result = operation(client)
+            return await result if inspect.isawaitable(result) else result
+
     async def _call_tool_via_mcp(
         self,
         mcp_url: str,
         headers: dict[str, str],
         tool_name: str,
         tool_args: dict[str, Any],
-        httpx_client_factory: Callable[..., Any] | None = None,
+        httpx_client_factory: Callable[..., Any],
         transport: str | None = None,
+        *,
+        verdict_key: str | None = None,
+        verdict_store=None,
     ):
-        from mcp import ClientSession
-        from mcp.shared._httpx_utils import create_mcp_http_client
-
-        streamable_urls, sse_url = mcp_transport_candidates(mcp_url, transport)
-
-        last_err: BaseException | None = None
-        for streamable_url in streamable_urls:
-            try:
-                from mcp.client.streamable_http import streamablehttp_client
-
-                async with streamablehttp_client(
-                    streamable_url,
-                    timeout=timedelta(seconds=30),
-                    headers=headers or None,
-                    httpx_client_factory=httpx_client_factory or create_mcp_http_client,
-                ) as (read_stream, write_stream, _):
-                    async with ClientSession(read_stream, write_stream) as session:
-                        await session.initialize()
-                        return await session.call_tool(tool_name, tool_args)
-            except Exception as e:
-                last_err = e
-                logger.info(
-                    "Streamable HTTP call failed for %s (%s), trying next transport",
-                    streamable_url,
-                    e,
-                )
-
-        if sse_url is None:
-            raise last_err or RuntimeError(f"No usable MCP transport for {mcp_url}")
-
-        from mcp.client.sse import sse_client
-
-        async with sse_client(
-            sse_url,
-            timeout=30,
-            headers=headers or None,
-            httpx_client_factory=httpx_client_factory or create_mcp_http_client,
-        ) as (
-            read_stream,
-            write_stream,
-        ):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                return await session.call_tool(tool_name, tool_args)
+        return await self._with_mcp_session(
+            mcp_url,
+            headers,
+            lambda client: client.call_tool(tool_name, tool_args),
+            httpx_client_factory=httpx_client_factory,
+            transport=transport,
+            verdict_key=verdict_key,
+            verdict_store=verdict_store,
+        )
 
     async def _list_tools_via_mcp(
-        self, mcp_url: str, headers: dict[str, str], transport: str | None = None
+        self,
+        mcp_url: str,
+        headers: dict[str, str],
+        transport: str | None = None,
+        *,
+        httpx_client_factory: Callable[..., Any],
     ):
-        from mcp import ClientSession
-
-        streamable_urls, sse_url = mcp_transport_candidates(mcp_url, transport)
-
-        last_err: BaseException | None = None
-        for streamable_url in streamable_urls:
-            try:
-                from mcp.client.streamable_http import streamablehttp_client
-
-                async with streamablehttp_client(
-                    streamable_url, timeout=timedelta(seconds=10), headers=headers or None
-                ) as (read_stream, write_stream, _):
-                    async with ClientSession(read_stream, write_stream) as session:
-                        await session.initialize()
-                        return await session.list_tools()
-            except Exception as e:
-                last_err = e
-                logger.info(
-                    "Streamable HTTP failed for %s (%s), trying next transport",
-                    streamable_url,
-                    e,
-                )
-
-        if sse_url is None:
-            raise last_err or RuntimeError(f"No usable MCP transport for {mcp_url}")
-
-        from mcp.client.sse import sse_client
-
-        async with sse_client(sse_url, timeout=10, headers=headers or None) as (
-            read_stream,
-            write_stream,
-        ):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                return await session.list_tools()
+        return await self._with_mcp_session(
+            mcp_url,
+            headers,
+            lambda client: client.list_tools(),
+            transport=transport,
+            timeout_seconds=10.0,
+            httpx_client_factory=httpx_client_factory,
+        )
 
     async def validate_connection(
         self,
@@ -1220,7 +1283,7 @@ class MCPServerInstanceService:
         # unguarded URL here is a full-read SSRF, not a blind one. Refuse before
         # dialing: a check after the request would still reach the internal host.
         try:
-            validate_outbound_url(url, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
+            validate_outbound_url(url, policy=OutboundPolicy.from_env())
         except UnsafeUrlError:
             # Deliberately generic: a specific reason would turn this into a DNS
             # oracle telling the caller which internal names resolve.
@@ -1228,14 +1291,25 @@ class MCPServerInstanceService:
             return {"valid": False, "errors": ["URL is not allowed"]}
 
         try:
-            result = await self._list_tools_via_mcp(url, headers or {})
+            result = await self._list_tools_via_mcp(
+                url, headers or {}, httpx_client_factory=pinned_client_factory()
+            )
             tools = [serialize_mcp_tool(t) for t in result.tools]
-            return {
+            validated: dict[str, Any] = {
                 "valid": True,
                 "errors": [],
                 "tool_count": len(tools),
                 "tools": tools,
             }
+            # Listing tools is not using them: Gmail's MCP answers tools/list
+            # without a token and 401s every call. For a bare endpoint, report the
+            # OAuth it advertises so the page asks to connect instead of creating
+            # a connection that can list and never call.
+            if not headers:
+                auth_methods = await self._catalog_auth_methods(url, server_id)
+                if "oauth" in auth_methods:
+                    validated["auth_methods"] = auth_methods
+            return validated
         except Exception as e:
             all_msgs: list[str] = []
             if isinstance(e, ExceptionGroup):
@@ -1268,7 +1342,7 @@ class MCPServerInstanceService:
                 "errors": ["Connection failed. Verify the URL, headers, and server availability."],
             }
 
-    async def _catalog_auth_methods(self, url: str, server_id: str | None) -> "list[str]":
+    async def _catalog_auth_methods(self, url: str, server_id: str | None) -> list[str]:
         """Detect auth methods for a catalog spec, using the endpoint stored on it.
 
         The probe only ever dials a URL recorded in the catalog: the caller's
@@ -1282,22 +1356,29 @@ class MCPServerInstanceService:
             return []
         return await self._detect_auth_methods(spec.remote_url)
 
-    async def _detect_auth_methods(self, mcp_url: str) -> "list[str]":
-        """Classify an endpoint's unauthenticated challenge without creating an instance.
+    async def _detect_auth_methods(self, mcp_url: str) -> list[str]:
+        """Classify how an endpoint wants to be authorized, without an instance.
 
-        ``["oauth", "credentials"]`` when the 401/403 advertises a bearer challenge
-        and authorization-server discovery succeeds, ``["credentials"]`` for any
-        other auth challenge, ``["none"]`` for an open endpoint, ``[]`` when the
-        endpoint could not be classified. Lets the create-connection page render
-        the right auth form up front instead of after a first failed attempt.
+        ``["oauth", "credentials"]`` when the server publishes OAuth metadata,
+        ``["credentials"]`` for any other auth challenge, ``["none"]`` for an open
+        endpoint, ``[]`` when the endpoint could not be classified.
+
+        OAuth comes from the shared classifier, not from the status of a GET: an
+        MCP endpoint may be POST-only (405) or list tools without a token while
+        still requiring one to call them, and the metadata is what says so.
         """
         try:
-            validate_outbound_url(mcp_url, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
+            validate_outbound_url(mcp_url, policy=OutboundPolicy.from_env())
         except UnsafeUrlError:
             logger.debug("Auth-method detection refused for unsafe URL %s", mcp_url, exc_info=True)
             return []
+
+        capability = await MCPOAuthClientService().assess(mcp_url)
+        if capability.advertises_oauth:
+            return ["oauth", "credentials"]
+
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            async with safe_async_client(timeout=httpx.Timeout(10.0)) as client:
                 resp = await client.get(mcp_url, follow_redirects=False)
         except Exception:
             logger.debug("Auth-method detection failed for %s", mcp_url, exc_info=True)
@@ -1305,17 +1386,9 @@ class MCPServerInstanceService:
 
         if resp.status_code in (200, 405):
             return ["none"]
-        if resp.status_code not in (401, 403):
-            return []
-
-        www_auth = resp.headers.get("www-authenticate", "").lower()
-        if "resource_metadata" in www_auth or "bearer" in www_auth:
-            try:
-                await MCPOAuthClientService().discover_auth_server(mcp_url)
-                return ["oauth", "credentials"]
-            except Exception:
-                logger.debug("OAuth discovery failed for %s", mcp_url, exc_info=True)
-        return ["credentials"]
+        if resp.status_code in (401, 403):
+            return ["credentials"]
+        return []
 
     async def probe_instance_auth(self, instance_id: UUID) -> dict[str, Any]:
         import httpx
@@ -1334,7 +1407,7 @@ class MCPServerInstanceService:
             return {"status": "error", "message": "No endpoint URL configured"}
 
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            async with safe_async_client(timeout=httpx.Timeout(10.0)) as client:
                 resp = await client.get(mcp_url, follow_redirects=True)
 
                 if resp.status_code in (200, 405):
@@ -1397,6 +1470,14 @@ class MCPServerInstanceService:
                     "message": f"Unexpected response: {resp.status_code}",
                 }
 
+        except UnsafeUrlError:
+            logger.warning(
+                "Refused auth probe of a non-public URL for %s", instance_id, exc_info=True
+            )
+            return {
+                "status": "error",
+                "message": "The configured endpoint is not an allowed address",
+            }
         except httpx.ConnectError:
             return {"status": "error", "message": "Cannot connect to the configured endpoint"}
         except httpx.TimeoutException:

@@ -98,7 +98,11 @@ class ActivityServiceContainer:
         )
         from agentarea_common.auth.context import UserContext
         from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
-        from agentarea_mcp.application.auth_resolver import build_auth_header_resolver
+        from agentarea_common.utils.url_safety import OutboundPolicy
+        from agentarea_mcp.application.auth_resolver import (
+            build_auth_config_access_checker,
+            build_auth_header_resolver,
+        )
 
         managed_secret_manager = self.dependencies.secret_manager_factory.create(
             session=session,
@@ -108,22 +112,18 @@ class ActivityServiceContainer:
             ),
         )
 
-        allow_private = getattr(
-            getattr(self.dependencies, "settings", None),
-            "mcp",
-            None,
-        )
-        allow_private_urls = getattr(allow_private, "ALLOW_PRIVATE_URLS", False)
-
         service = OpenAPIConnectionService(
             repository_factory=repository_factory,
             secret_manager=secret_manager,
+            auth_config_access_checker=build_auth_config_access_checker(
+                repository_factory, secret_manager
+            ),
             auth_header_resolver=build_auth_header_resolver(
                 repository_factory,
                 secret_manager,
                 managed_secret_manager,
             ),
-            allow_private_urls=allow_private_urls,
+            outbound_policy=OutboundPolicy.from_env(),
         )
         return service, session
 

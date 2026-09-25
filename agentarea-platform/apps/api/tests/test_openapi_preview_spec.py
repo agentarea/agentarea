@@ -1,7 +1,5 @@
 """preview-spec must accept YAML specs whose unquoted values look like dates."""
 
-from types import SimpleNamespace
-
 import httpx
 import pytest
 from agentarea_api.api.v1 import openapi_connections
@@ -31,9 +29,9 @@ async def test_preview_yaml_spec_with_bare_date_version(monkeypatch):
         lambda **kwargs: real_client(transport=transport, **kwargs),
     )
     monkeypatch.setattr(
-        openapi_connections,
-        "get_settings",
-        lambda: SimpleNamespace(mcp=SimpleNamespace(ALLOW_PRIVATE_URLS=True)),
+        openapi_connections.OutboundPolicy,
+        "from_env",
+        classmethod(lambda cls: cls(allow_private=True)),
     )
 
     preview = await preview_spec(

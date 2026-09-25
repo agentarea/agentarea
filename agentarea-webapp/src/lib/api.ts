@@ -7,7 +7,6 @@ import type {
   AgentResponse,
   AgentUpdate,
   AnalyzeRequest,
-  AgentCard as ApiAgentCard,
   TaskResponse as ApiTaskResponse,
   CatalogConnectionRequest,
   CreateInvitationBody,
@@ -399,6 +398,15 @@ export const resolveEscalation = async (
         body: { escalation_id: escalationId, approved, comment },
       }
     );
+  return { data, error };
+};
+
+export const listPendingEscalations = async (agentId: string, taskId: string) => {
+  const { data, error } =
+    await sdk.listPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGet({
+      client: serverClient,
+      path: { agent_id: agentId, task_id: taskId },
+    });
   return { data, error };
 };
 
@@ -2341,7 +2349,6 @@ export type ChatResponse = { task_id: string; status: string };
 export type ConversationResponse = unknown;
 export type Principal = PrincipalResponse;
 export type TaskResponse = ApiTaskResponse;
-export type AgentCard = ApiAgentCard;
 export type TaskWithAgent = ApiTaskResponse & {
   // null when the task's agent no longer resolves — the API does not
   // substitute a placeholder name.

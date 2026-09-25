@@ -256,6 +256,87 @@ def test_a_permanent_failure_is_written_to_the_resource_status(monkeypatch):
     assert "SECRET_MANAGER_ENCRYPTION_KEY" in patch.status["message"]
 
 
+def test_a_cross_namespace_secret_ref_is_rejected_without_reading_it(monkeypatch):
+    """apiKeySecretRef only ever resolves in the CR's own namespace.
+
+    The operator's Secrets RBAC is scoped there for the same reason: reading a
+    Secret on a CR author's behalf into a namespace they may not have Secrets
+    access to is a confused-deputy read. A ref naming a different namespace is
+    refused outright, not silently narrowed to the CR's own namespace.
+    """
+    read_secret = Mock(side_effect=AssertionError("must not read a cross-namespace secret"))
+    monkeypatch.setattr(handler, "read_secret", read_secret)
+
+    patch = _Patch()
+    handler.on_provider_config_change(
+        spec={
+            "providerKey": "openai",
+            "name": "OpenAI",
+            "apiKeySecretRef": {"name": "s", "key": "api-key", "namespace": "other-ns"},
+        },
+        meta={"name": "kimi"},
+        status={},
+        namespace="agentarea",
+        patch=patch,
+    )
+
+    read_secret.assert_not_called()
+    assert patch.status["phase"] == "Error"
+    assert "other-ns" in patch.status["message"]
+    assert "agentarea" in patch.status["message"]
+
+
+def test_a_same_namespace_secret_ref_namespace_is_accepted(monkeypatch):
+    import kopf
+    import pytest
+
+    monkeypatch.setattr(handler, "read_secret", lambda *a, **k: API_KEY)
+
+    def refuse(*_args, **_kwargs):
+        raise kopf.PermanentError("SECRET_MANAGER_ENCRYPTION_KEY is not set")
+
+    monkeypatch.setattr(handler, "sync_provider_config", refuse)
+
+    patch = _Patch()
+    with pytest.raises(kopf.PermanentError):
+        handler.on_provider_config_change(
+            spec={
+                "providerKey": "openai",
+                "name": "OpenAI",
+                "apiKeySecretRef": {"name": "s", "key": "api-key", "namespace": "agentarea"},
+            },
+            meta={"name": "kimi"},
+            status={},
+            namespace="agentarea",
+            patch=patch,
+        )
+
+    # Reached sync_provider_config (and its PermanentError), proving the ref
+    # was accepted rather than rejected as cross-namespace.
+    assert "SECRET_MANAGER_ENCRYPTION_KEY" in patch.status["message"]
+
+
+def test_periodic_rediscovery_rejects_a_cross_namespace_secret_ref(monkeypatch):
+    read_secret = Mock(side_effect=AssertionError("must not read a cross-namespace secret"))
+    monkeypatch.setattr(handler, "read_secret", read_secret)
+
+    patch = _Patch()
+    handler.periodic_rediscovery(
+        spec={
+            "discoverModels": True,
+            "apiKeySecretRef": {"name": "s", "key": "api-key", "namespace": "other-ns"},
+        },
+        meta={"name": "kimi"},
+        namespace="agentarea",
+        patch=patch,
+        status={},
+    )
+
+    read_secret.assert_not_called()
+    assert patch.status["phase"] == "Error"
+    assert "other-ns" in patch.status["message"]
+
+
 def _as_context(value):
     """Wrap a value so `with x.begin() as v` yields it."""
     ctx = Mock()
@@ -264,10 +345,31 @@ def _as_context(value):
     return ctx
 
 
+def test_the_platform_prices_its_own_spec_not_a_tenants():
+    """Specs are unique per workspace. A lookup that ignored the workspace could
+    return a tenant's spec for the same model and point the platform's instance at
+    it, letting that tenant's admin set the price every other workspace pays."""
+    conn = _RecordingConn()
+
+    handler._upsert_model_spec_and_instance(
+        conn,
+        "moonshot",
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+        {"model_name": "kimi-k2.5", "input_cost_per_token": 6e-7},
+        handler.PLATFORM_WORKSPACE_ID,
+    )
+
+    lookup, params = next(
+        c for c in conn.calls if c[0].startswith("SELECT id FROM model_specs")
+    )
+    assert "workspace_id = :ws" in lookup
+    assert params["ws"] == handler.PLATFORM_WORKSPACE_ID
+
+
 def test_a_spec_another_workspace_owns_is_not_repriced():
-    """uq_model_specs_provider_model has no workspace_id, so the lookup can find a
-    tenant's own spec for the same model. Repricing it would silently change what
-    their usage of their own key costs them."""
+    """Repricing a tenant's spec would silently change what their usage of their
+    own key costs them."""
     conn = _RecordingConn()
 
     handler._upsert_model_spec_and_instance(

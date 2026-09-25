@@ -18,7 +18,7 @@ covered in [Pass secrets to an MCP
 server](/guides/mcp/pass-secrets).
 
 One token type covers the whole API. The same key authenticates
-`/v1/mcp/{instance_id}/mcp`, `/client-mcp/{client_id}`, task creation, and A2A.
+`/v1/mcp/{instance_id}/mcp`, `/mcp/clients/{client_id}`, task creation, and A2A.
 
 ## Prerequisites
 
@@ -158,7 +158,7 @@ curl -s "$AGENTAREA_URL/v1/api-keys/$NEW_TOKEN_ID" \
   </Accordion>
   <Accordion title='A client endpoint answers with "Not authorized for this client"'>
     The key authenticated but is not authorized for that client bundle, and
-    because `/client-mcp/{client_id}` speaks MCP the refusal arrives as a
+    because `/mcp/clients/{client_id}` speaks MCP the refusal arrives as a
     JSON-RPC error rather than an HTTP 403. A workspace key is not automatically
     permitted to use a registered client; the principal needs the `use` relation
     on it, or the token's subject must be the client itself.

@@ -18,6 +18,7 @@ class TestHandle402Payment:
             response_body="",
             wallet_config={},
             budget_remaining=5.0,
+            idempotency_key="key-1",
         )
         assert result is None
 
@@ -33,6 +34,7 @@ class TestHandle402Payment:
             response_body="",
             wallet_config={},
             budget_remaining=5.0,
+            idempotency_key="key-1",
         )
         assert result is None
 
@@ -48,6 +50,7 @@ class TestHandle402Payment:
             response_body="",
             wallet_config={"wallet_type": "x402"},
             budget_remaining=0.0,
+            idempotency_key="key-1",
         )
         assert result is not None
         assert result["success"] is False
@@ -71,6 +74,7 @@ class TestHandle402Payment:
                 "x402_private_key": "0xfakekey",
             },
             budget_remaining=5.0,
+            idempotency_key="key-1",
         )
         assert result is not None
         assert result["success"] is False

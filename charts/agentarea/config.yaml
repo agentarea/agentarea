@@ -76,6 +76,8 @@ groups:
       ORY_BROWSER_URL: '{{ include "agentarea.kratosPublicBrowserUrl" . }}'
       METRICS_ENABLED: '{{ .Values.global.monitoring.prometheus.enabled }}'
       HEALTH_CHECK_ENABLED: '{{ .Values.global.monitoring.health.enabled }}'
+      APPS_SANDBOX_ORIGIN: '{{ .Values.global.webapp.appsSandboxUrl }}'
+      WEBAPP_PUBLIC_ORIGIN: '{{ include "agentarea.frontendUrl" . }}'
 
   backend:
     configVars:
@@ -172,11 +174,6 @@ groups:
         conditional: '{{ .Values.mcpManager.dataPlane.url }}'
         secretName: "{{ .Values.mcpManager.dataPlane.tokenSecret }}"
         key: "{{ .Values.mcpManager.dataPlane.tokenKey }}"
-
-  temporalUi:
-    configVars:
-      TEMPORAL_ADDRESS: '{{ include "agentarea.fullname" . }}-temporal:7233'
-      TEMPORAL_CORS_ORIGINS: 'http://localhost:3000'
 
   worker:
     configVars:

@@ -10,6 +10,8 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError
 
+from ..auth.authorization import assert_workspace_admin_of
+from ..auth.context import UserContext
 from .memberships import (
     MembershipGraph,
     grant_workspace_membership,
@@ -91,33 +93,41 @@ class WorkspaceInvitationService:
     async def create_invitation(
         self,
         *,
+        actor: UserContext,
         workspace_id: str,
-        invited_by: str,
         email: str | None = None,
         expires_in_days: int = DEFAULT_EXPIRY_DAYS,
     ) -> tuple[WorkspaceInvitation, str]:
-        """Create an invitation. Returns (invitation, plaintext_token).
+        """Create an invitation from ``actor``. Returns (invitation, plaintext_token).
 
-        The plaintext token is returned exactly once and never persisted.
-        Caller is responsible for delivering it (link in UI, email,
-        Slack, etc.).
+        Only an admin of ``workspace_id`` may issue one: a join link grants
+        everything membership grants. The plaintext token is returned exactly
+        once and never persisted. Caller is responsible for delivering it (link
+        in UI, email, Slack, etc.).
         """
+        await assert_workspace_admin_of(actor, workspace_id)
         token = secrets.token_urlsafe(TOKEN_BYTES)
         invitation = WorkspaceInvitation(
             workspace_id=workspace_id,
             email=email,
             token_hash=_hash_token(token),
-            invited_by=invited_by,
+            invited_by=actor.user_id,
             status=INVITATION_STATUS_PENDING,
             expires_at=_utcnow() + timedelta(days=expires_in_days),
         )
         await self.invitation_repo.add(invitation)
         return invitation, token
 
-    async def list_pending(self, workspace_id: str) -> list[WorkspaceInvitation]:
+    async def list_pending(
+        self, *, actor: UserContext, workspace_id: str
+    ) -> list[WorkspaceInvitation]:
+        await assert_workspace_admin_of(actor, workspace_id)
         return await self.invitation_repo.list_pending(workspace_id)
 
-    async def revoke(self, *, workspace_id: str, invitation_id: UUID | str) -> WorkspaceInvitation:
+    async def revoke(
+        self, *, actor: UserContext, workspace_id: str, invitation_id: UUID | str
+    ) -> WorkspaceInvitation:
+        await assert_workspace_admin_of(actor, workspace_id)
         invitation = await self.invitation_repo.get_by_id(invitation_id)
         if invitation is None or invitation.workspace_id != workspace_id:
             raise InvitationNotFound(f"Invitation {invitation_id} not found")
@@ -134,22 +144,22 @@ class WorkspaceInvitationService:
 
     async def accept(
         self, *, token: str, user_id: str, user_email: str | None
-    ) -> WorkspaceInvitation:
-        """Accept an invitation as ``user_id``.
+    ) -> tuple[WorkspaceInvitation, bool]:
+        """Accept an invitation as ``user_id``. Returns (invitation, accepted_now).
 
-        Idempotent for the same acceptor. The caller owns granting workspace
-        membership in the configured authorization graph.
+        Idempotent for the same acceptor, and grants nothing by itself:
+        ``WorkspaceMembershipService.admit`` grants membership, once.
         """
         invitation = await self._redeemable(token=token, user_id=user_id, user_email=user_email)
         if invitation.status == INVITATION_STATUS_ACCEPTED:
-            return invitation
+            return invitation, False
 
         invitation.status = INVITATION_STATUS_ACCEPTED
         invitation.accepted_at = _utcnow()
         invitation.accepted_by_user_id = user_id
         await self.invitation_repo.update(invitation)
 
-        return invitation
+        return invitation, True
 
     async def _redeemable(
         self, *, token: str, user_id: str, user_email: str | None
@@ -238,6 +248,29 @@ class WorkspaceMembershipService:
             )
         )
 
+    async def admit(self, invitation: WorkspaceInvitation, user_id: str) -> None:
+        """Grant the membership an accepted invitation promised, exactly once.
+
+        The graph grant comes first and the invitation is stamped granted only
+        with the membership row, so a graph outage leaves it retryable. Once
+        stamped -- including every invitation accepted before the stamp
+        existed -- replaying the link grants nothing. If a removal revoked the
+        invitation meanwhile, the removal wins and the grant is taken back.
+        """
+        if invitation.membership_granted_at is not None:
+            return
+        workspace_id = invitation.workspace_id
+        await grant_workspace_membership(self.graph, workspace_id=workspace_id, user_id=user_id)
+        if await self.membership_repo.add_for_invitation(
+            invitation_id=invitation.id, workspace_id=workspace_id, user_id=user_id, now=_utcnow()
+        ):
+            return
+        if await self.membership_repo.get(workspace_id, user_id) is None:
+            await revoke_workspace_membership(
+                self.graph, workspace_id=workspace_id, user_id=user_id
+            )
+        raise InvitationRevoked("invitation revoked")
+
     async def list_members(self, workspace_id: str) -> list[WorkspaceMemberView]:
         member_ids = await list_workspace_member_ids(self.graph, workspace_id)
         rows = {
@@ -275,10 +308,12 @@ class WorkspaceMembershipService:
                 "The last member cannot leave; the workspace would be unreachable."
             )
 
+        # Invitation revoked before the graph: an accept that grants in between
+        # then finds it revoked and takes its own grant back.
+        await self.membership_repo.end(workspace_id, target_user_id)
         await revoke_workspace_membership(
             self.graph, workspace_id=workspace_id, user_id=target_user_id
         )
-        await self.membership_repo.delete(workspace_id, target_user_id)
 
     async def owner_user_id(self, workspace_id: str) -> str:
         """Who owns the workspace.
@@ -317,7 +352,10 @@ class WorkspaceService:
         # Fired exactly once when a workspace row is genuinely inserted (not on
         # idempotent re-reads). The composition layer wires cross-domain
         # provisioning here (e.g. baseline governance policies) without this
-        # base library depending on those domains.
+        # base library depending on those domains. It runs after the insert is
+        # flushed and before it is committed, and writes through the same
+        # session, so the row and what it provisions commit together: if it
+        # raises, the workspace was never created.
         self._on_created = on_created
         # Fired with the fully-built row *before* it is inserted, for admission
         # work that lives outside Postgres and therefore cannot join its
@@ -410,20 +448,33 @@ class WorkspaceService:
         that steals the slug (or, for personal workspaces, the id) raises
         ``IntegrityError`` — we roll back and retry, returning the winner's
         row via ``on_conflict_get`` when the conflict was on identity.
+
+        The insert and ``on_created`` share one transaction, committed only
+        once both succeeded; any other failure rolls both back and re-raises.
         """
+        session = self.workspace_repo.session
         for _ in range(5):
             workspace = build(await self._next_free_slug(slug_base))
+            if self._before_insert is not None:
+                await self._before_insert(workspace)
             try:
-                if self._before_insert is not None:
-                    await self._before_insert(workspace)
                 created = await self.workspace_repo.add(workspace)
-                if self._on_created is not None:
-                    await self._on_created(created)
-                return created
             except IntegrityError:
-                await self.workspace_repo.session.rollback()
+                await session.rollback()
                 if on_conflict_get is not None:
                     existing = await on_conflict_get()
                     if existing is not None:
                         return existing
+                continue
+            try:
+                if self._on_created is not None:
+                    await self._on_created(created)
+                await session.commit()
+                return created
+            except Exception:
+                logger.error(
+                    "workspace %s not created: admission failed", workspace.id, exc_info=True
+                )
+                await session.rollback()
+                raise
         raise RuntimeError(f"could not allocate a unique slug from base {slug_base!r}")

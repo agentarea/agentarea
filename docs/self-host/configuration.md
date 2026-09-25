@@ -237,11 +237,20 @@ be weakened from these values.
 | `ORY_ADMIN_URL` | `kratos.urls.admin`, else the internal service | derived |
 | `METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
 | `HEALTH_CHECK_ENABLED` | `global.monitoring.health.enabled` | `true` |
+| `APPS_SANDBOX_ORIGIN` | `global.webapp.appsSandboxUrl` | empty |
+| `WEBAPP_PUBLIC_ORIGIN` | `global.webapp.url`, else the internal frontend service URL | derived |
 
 `ORY_SDK_URL` is used for server-side calls from the frontend container;
 `ORY_BROWSER_URL` is what the browser is redirected to. Set
 `kratos.urls.publicBrowser` separately whenever pods cannot resolve the public
 domain.
+
+The Apps page renders each MCP App inside an iframe loaded from
+`APPS_SANDBOX_ORIGIN`. The frontend answers `/app-sandbox` only when the
+request's `Host` matches that origin, and the sandbox refuses to run unless it is
+embedded by `WEBAPP_PUBLIC_ORIGIN`. With `APPS_SANDBOX_ORIGIN` empty, or equal
+to the webapp origin, the Apps page lists apps but opens none. The ingress side
+is in [networking](/self-host/networking).
 
 ### Application secrets (group `application`)
 
@@ -303,8 +312,8 @@ equivalent are listed; the rest map onto the groups above.
 | `DOCUMENTS_BUCKET` | yes | `ai-agents-bucket` |
 | `ARTIFACTS_BUCKET` | no | `artifacts` |
 | `SECRET_MANAGER_ENCRYPTION_KEY` | yes | a shipped development key |
-| `SANDBOX_ACTIVATION_AUTH_SECRET` | yes, no default | development placeholder |
-| `SANDBOX_CLEANUP_AUTH_SECRET` | yes, no default | development placeholder |
+| `SANDBOX_ACTIVATION_AUTH_SECRET` | yes, no default | empty; `scripts/gen-dev-secrets.sh` generates it |
+| `SANDBOX_CLEANUP_AUTH_SECRET` | yes, no default | empty; `scripts/gen-dev-secrets.sh` generates it |
 | `KRATOS_JWKS_B64` / `KRATOS_ISSUER` / `KRATOS_AUDIENCE` | yes | a published test key |
 | `KRATOS_ADMIN_URL` | yes, to show member names | `http://kratos:4434` |
 | `SMTP_*` | for email delivery | targets the bundled Mailpit |

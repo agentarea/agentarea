@@ -11,11 +11,36 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
 from agentarea_api.tools import clients_toolset
 from agentarea_api.tools.clients_toolset import ClientsToolset
+from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.permission import PermissionService
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import get_container
 from pydantic import ValidationError
 
 CLIENT_ID = uuid4()
+
+
+class _AllowAll(PermissionService):
+    async def check(self, user_id, permission, resource_type, resource_id) -> bool:
+        return True
+
+
+@pytest.fixture(autouse=True)
+def caller():
+    """The tools check the MCP caller first; this one administers the workspace."""
+    container = get_container()
+    saved = dict(container._singletons)
+    container.register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+    container.register_singleton(PermissionService, _AllowAll())
+    owner = UserContext(user_id="user-1", workspace_id="ws-1", admin_workspaces=["ws-1"])
+    with use_mcp_user_context(owner):
+        yield
+    container._singletons.clear()
+    container._singletons.update(saved)
 
 
 class FakeClientService:
@@ -88,7 +113,7 @@ async def test_create_returns_endpoint_url_and_grants_ownership(service):
     result = json.loads(await ClientsToolset().create(name="codex"))
 
     assert result["id"] == str(CLIENT_ID)
-    assert result["mcp_endpoint_url"].endswith(f"/client-mcp/{CLIENT_ID}")
+    assert result["mcp_endpoint_url"].endswith(f"/mcp/clients/{CLIENT_ID}")
     assert service.created[0].name == "codex"
     assert service.created[0].kind == "harness"
     assert service.grants == [(str(CLIENT_ID), "ws-1", "user-1")]
@@ -121,4 +146,4 @@ async def test_get_lists_attached_skills(service):
     result = json.loads(await ClientsToolset().get(client_id=str(CLIENT_ID)))
 
     assert result["skills"][0]["name"] == "research"
-    assert result["mcp_endpoint_url"].endswith(f"/client-mcp/{CLIENT_ID}")
+    assert result["mcp_endpoint_url"].endswith(f"/mcp/clients/{CLIENT_ID}")

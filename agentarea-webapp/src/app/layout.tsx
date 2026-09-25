@@ -102,6 +102,7 @@ function getRuntimeConfig() {
     // the link in the sidebar would have pointed at an internal cluster URL that no
     // browser can reach.
     CLIENT_BILLING_URL: process.env.BILLING_PAGE_URL || "",
+    APPS_SANDBOX_ORIGIN: process.env.APPS_SANDBOX_ORIGIN || "",
   };
 }
 

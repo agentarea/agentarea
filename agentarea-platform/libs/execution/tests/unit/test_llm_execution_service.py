@@ -13,6 +13,7 @@ from agentarea_common.money import to_money
 from agentarea_execution import llm_execution_service
 from agentarea_execution.exceptions import ModelInstanceNotFoundError
 from agentarea_execution.models import LLMCallRequest, ResolvedModelInfo
+from agentarea_llm.domain.models import ModelInstance
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
@@ -115,11 +116,13 @@ def make_service():
 def model_scope():
     record = SimpleNamespace(
         id=UUID(MODEL_ID),
+        workspace_id="ws-model",
         provider_config=SimpleNamespace(
             provider_spec=SimpleNamespace(provider_type="openai"),
             endpoint_url="http://localhost:8000/provider/v1",
             api_key=None,
             managed_by=None,
+            workspace_id="ws-model",
         ),
         model_spec=SimpleNamespace(
             model_name="database-model",
@@ -127,8 +130,10 @@ def model_scope():
             max_output_tokens=2000,
             input_cost_per_token=0.001,
             output_cost_per_token=0.002,
+            workspace_id="ws-model",
         ),
     )
+    record.foreign_part = lambda: ModelInstance.foreign_part(record)  # type: ignore[arg-type]
     state = SimpleNamespace(
         record=record,
         service=SimpleNamespace(get=AsyncMock(return_value=record)),
@@ -369,6 +374,21 @@ async def test_missing_model_raises_domain_error_and_closes_scope(
     assert not model_scope.is_open
     provider.ainvoke_stream.assert_not_called()
     provider.complete.assert_not_awaited()
+
+
+@pytest.mark.parametrize("part", ["provider_config", "model_spec"])
+async def test_database_resolution_refuses_a_part_from_another_workspace(
+    provider, make_service, model_scope, user_context, part
+):
+    getattr(model_scope.record, part).workspace_id = "ws-attacker-owned"
+
+    with pytest.raises(ModelInstanceNotFoundError, match=part):
+        await make_service(model_service_scope=model_scope.scope).execute(
+            _request(resolved_model=None), user_context=user_context
+        )
+
+    provider.constructor.assert_not_called()
+    provider.ainvoke_stream.assert_not_called()
 
 
 @pytest.mark.parametrize("cancel_at", ["provider", "callback"])

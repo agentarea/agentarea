@@ -130,6 +130,7 @@ def get_graph_client() -> GraphClient | None:
                 store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
                 authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
                 timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
+                api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
             )
     if settings.access_control.ACCESS_CONTROL_BACKEND != "keto":
         return None

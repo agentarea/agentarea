@@ -1,29 +1,46 @@
 """MCPToolAdapter — converts BaseTool/Toolset instances into MCP tool registrations.
 
-Adapter pattern (GoF): bridges the internal tool interface to the MCP SDK's
-FastMCP server. Each @tool_method becomes a separate MCP tool with
-resource-first naming: ``{toolset.name}_{method_name}``.
+Adapter pattern (GoF): bridges the internal tool interface to the MCPServer.
+Each @tool_method becomes a separate MCP tool with resource-first naming:
+``{toolset.name}_{method_name}``.
 """
 
 import inspect
 import json
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Annotated, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
+from pydantic import Field
 
 from ..tools.base_tool import BaseTool
 from ..tools.decorator_tool import Toolset
+from .auth import bind_workspace
 
 logger = logging.getLogger(__name__)
 
+WORKSPACE_ARGUMENT = "workspace"
+
+_WorkspaceArgument = Annotated[
+    str,
+    Field(description="Slug or id of the workspace to act in."),
+]
+
 
 class MCPToolAdapter:
-    """Adapts BaseTool/Toolset instances to MCP SDK tool registrations."""
+    """Adapts BaseTool/Toolset instances to MCP SDK tool registrations.
 
-    def __init__(self, server: FastMCP):
+    With *workspace_argument*, every tool of a workspace-scoped toolset takes a
+    required ``workspace`` argument and runs bound to that workspace. Without
+    it, the workspace comes from the mount (a pinned URL), and the argument is
+    absent from the schema. A toolset opts out by setting
+    ``workspace_scoped = False`` (it acts on no single workspace).
+    """
+
+    def __init__(self, server: MCPServer, *, workspace_argument: bool):
         self._server = server
+        self._workspace_argument = workspace_argument
 
     def register_toolset(self, toolset: Toolset) -> None:
         """Register all @tool_method methods of a Toolset as individual MCP tools.
@@ -34,6 +51,8 @@ class MCPToolAdapter:
             tool_name = f"{toolset.name}_{method_name}"
             description = getattr(method, "_tool_description", f"{method_name}")
             handler = self._make_method_handler(toolset, method)
+            if self._workspace_argument and toolset.workspace_scoped:
+                handler = _bind_workspace_argument(handler)
 
             self._server.add_tool(handler, name=tool_name, description=description)
             logger.debug(f"Registered MCP tool: {tool_name}")
@@ -128,6 +147,31 @@ class MCPToolAdapter:
         handler.__doc__ = tool.description
 
         return handler
+
+
+def _bind_workspace_argument(handler: Callable) -> Callable:
+    """Prefix *handler* with a required ``workspace`` argument it runs bound to."""
+    sig = inspect.signature(handler)
+    if WORKSPACE_ARGUMENT in sig.parameters:
+        raise TypeError(
+            f"Tool {handler.__name__} already declares a '{WORKSPACE_ARGUMENT}' parameter"
+        )
+
+    async def bound(workspace: str, **kwargs: Any) -> str:
+        async with bind_workspace(workspace):
+            return await handler(**kwargs)
+
+    workspace_param = inspect.Parameter(
+        WORKSPACE_ARGUMENT,
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        annotation=_WorkspaceArgument,
+    )
+    bound.__signature__ = sig.replace(parameters=[workspace_param, *sig.parameters.values()])
+    bound.__annotations__ = {WORKSPACE_ARGUMENT: _WorkspaceArgument, **handler.__annotations__}
+    bound.__name__ = handler.__name__
+    bound.__qualname__ = handler.__qualname__
+    bound.__doc__ = handler.__doc__
+    return bound
 
 
 def _json_type_to_python(json_type: str) -> type:

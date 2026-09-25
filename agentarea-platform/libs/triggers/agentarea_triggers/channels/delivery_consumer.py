@@ -19,6 +19,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from agentarea_common.broker import BrokerClient, BrokerMessage, DedupCache
 
@@ -72,6 +74,7 @@ class ChannelDeliveryConsumer:
         dedup: DedupCache,
         adapter_resolver,  # Callable[[str], ChannelAdapter | None]
         *,
+        origin_guard: Callable[[dict[str, Any]], Awaitable[bool]],
         stream: str,
         group: str,
         dlq_stream: str,
@@ -83,6 +86,7 @@ class ChannelDeliveryConsumer:
         self._broker = broker
         self._dedup = dedup
         self._resolve_adapter = adapter_resolver
+        self._origin_guard = origin_guard
         self._stream = stream
         self._group = group
         self._dlq_stream = dlq_stream
@@ -191,6 +195,16 @@ class ChannelDeliveryConsumer:
                 msg.delivery_count,
             )
             await self._dedup.release(dedup_key)
+            return
+
+        try:
+            origin_allowed = await self._origin_guard(channel_config)
+        except Exception:
+            logger.exception("origin check failed on %s", dedup_key)
+            await self._dedup.release(dedup_key)
+            return
+        if not origin_allowed:
+            await self._dead_letter(msg, "channel origin trigger is not in the task's workspace")
             return
 
         try:

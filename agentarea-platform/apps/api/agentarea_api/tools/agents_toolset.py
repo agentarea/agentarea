@@ -12,8 +12,10 @@ from uuid import UUID
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.schemas.dto import AgentCreate, AgentTypeLiteral, AgentUpdate
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.di.container import resolve
 
 from .base import platform_context, platform_read_context
@@ -35,17 +37,24 @@ class AgentsToolset(Toolset):
     """Manage agents: list, get, create, update, delete."""
 
     @tool_method(effect="read")
+    @enforced_in_handler("rows the graph says this caller may read; see readable_resource_ids")
     async def list(self, limit: int = 50, offset: int = 0) -> str:
         """List all agents in the workspace."""
-        async with platform_read_context() as (_s, _u, repo_factory, event_broker, _):
+        async with platform_read_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = _build_service(repo_factory, event_broker)
             agents = await service.list()
+            readable = await readable_resource_ids(user_ctx.user_id)
             return json.dumps(
-                [{"id": str(a.id), "name": a.name, "description": a.description} for a in agents],
+                [
+                    {"id": str(a.id), "name": a.name, "description": a.description}
+                    for a in agents
+                    if str(a.id) in readable
+                ],
                 default=str,
             )
 
     @tool_method(effect="read")
+    @requires("read", "agent", id_param="agent_id")
     async def get(self, agent_id: str) -> str:
         """Get agent details by ID."""
         async with platform_read_context() as (_s, _u, repo_factory, event_broker, _):
@@ -66,6 +75,7 @@ class AgentsToolset(Toolset):
             )
 
     @tool_method(effect="write")
+    @unrestricted("any member may create an agent, as POST /v1/agents allows")
     async def create(
         self,
         name: str,
@@ -88,6 +98,7 @@ class AgentsToolset(Toolset):
             return json.dumps({"id": str(agent.id), "name": agent.name}, default=str)
 
     @tool_method(effect="write")
+    @requires("edit", "agent", id_param="agent_id")
     async def update(
         self,
         agent_id: str,
@@ -116,6 +127,7 @@ class AgentsToolset(Toolset):
             return json.dumps({"id": str(agent.id), "name": agent.name}, default=str)
 
     @tool_method(effect="destructive")
+    @requires("delete", "agent", id_param="agent_id")
     async def delete(self, agent_id: str) -> str:
         """Delete an agent by ID."""
         async with platform_context() as (_s, _u, repo_factory, event_broker, _):

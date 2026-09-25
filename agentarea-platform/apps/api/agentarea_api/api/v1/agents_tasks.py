@@ -1,16 +1,19 @@
 import logging
 import mimetypes
 import re
-import unicodedata
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from typing import Any
-from urllib.parse import quote
 from uuid import UUID, uuid4
 
 import httpx
 from agentarea_agents.application.agent_service import AgentService
+from agentarea_agents.application.execution_service import (
+    EscalationNotPendingError,
+    NotAnApproverError,
+    WorkflowNotFoundError,
+)
 from agentarea_agents.application.temporal_workflow_service import (
     TemporalWorkflowService,
 )
@@ -24,9 +27,12 @@ from agentarea_api.api.deps.services import (
     get_task_service,
     get_temporal_workflow_service,
 )
+from agentarea_common.artifacts import secure_download_headers
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
+from agentarea_common.auth.tool_authorization import caller_can_approve
 from agentarea_common.base import ReadRepositoryFactoryDep
+from agentarea_common.channel_origin import reject_channel_origin
 from agentarea_common.config import get_settings
 from agentarea_common.events.contract import (
     EXECUTION_FINISHED,
@@ -95,20 +101,13 @@ global_tasks_router = APIRouter(prefix="/tasks", tags=["tasks"])
 class TaskCreate(BaseModel):
     description: str
     parameters: dict[str, Any] = Field(default_factory=dict)
+    _reject_channel_origin = field_validator("parameters")(reject_channel_origin)
     execution: RunExecutionConfig | None = None
     requires_human_approval: bool | None = False
     project_id: str | None = None
     task_policy: PolicyDocument | None = None
     # staging refs from POST /v1/files (purpose=attachment) or POST /v1/files/upload-url
     attachments: list[str] | None = None
-
-
-def _attachment_content_disposition(filename: str) -> str:
-    """Return an ASCII fallback plus an RFC 5987 UTF-8 filename."""
-    fallback = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode()
-    fallback = re.sub(r"[^A-Za-z0-9._-]+", "_", fallback).strip("._-") or "artifact.bin"
-    encoded = quote(filename, safe="")
-    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
 
 
 def _dedupe_attachment_name(name: str, used: set[str]) -> str:
@@ -1299,16 +1298,18 @@ async def _stream_manager_download(
             await response.aclose()
             await client.aclose()
 
-    headers = {
-        "Content-Disposition": response.headers.get(
-            "content-disposition", _attachment_content_disposition(filename)
-        )
-    }
+    content_type = response.headers.get("content-type", default_content_type)
+    headers = secure_download_headers(
+        content_type=content_type,
+        filename=filename,
+        disposition=response.headers.get("content-disposition"),
+        fallback="artifact.bin",
+    )
     if content_length := response.headers.get("content-length"):
         headers["Content-Length"] = content_length
     return StreamingResponse(
         stream_content(),
-        media_type=response.headers.get("content-type", default_content_type),
+        media_type=content_type,
         headers=headers,
     )
 
@@ -2077,8 +2078,18 @@ async def resolve_task_escalation(
 
     except HTTPException:
         raise
+    except EscalationNotPendingError as e:
+        raise HTTPException(
+            status_code=404, detail="Escalation not found or no longer pending"
+        ) from e
+    except NotAnApproverError as e:
+        raise HTTPException(
+            status_code=403, detail="You are not an approver of this escalation"
+        ) from e
     except Exception as e:
-        logger.error(f"Failed to resolve escalation for task {task_id}, agent {agent_id}: {e}")
+        logger.error(
+            "Failed to resolve escalation for task %s, agent %s", task_id, agent_id, exc_info=True
+        )
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -2143,6 +2154,54 @@ async def get_task_events(
     except Exception as e:
         logger.error(f"Failed to get task events for task {task_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+class PendingEscalationResponse(BaseModel):
+    escalation_id: str
+    tool_name: str
+    tool_call_id: str
+    tool_args: dict[str, Any]
+
+
+def escalations_caller_may_resolve(
+    pending: list[dict[str, Any]], user_id: str
+) -> list[PendingEscalationResponse]:
+    """The pending escalations this caller is an approver of, with their arguments."""
+    return [
+        PendingEscalationResponse(
+            escalation_id=escalation["escalation_id"],
+            tool_name=escalation["tool_name"],
+            tool_call_id=escalation["tool_call_id"],
+            tool_args=escalation["tool_args"],
+        )
+        for escalation in pending
+        if caller_can_approve(escalation["approvers"], user_id)
+    ]
+
+
+@router.get(
+    "/{task_id}/escalations",
+    response_model=list[PendingEscalationResponse],
+    dependencies=[requires_task_authority()],
+)
+async def list_pending_escalations(
+    agent_id: UUID,
+    task_id: UUID,
+    user_context: UserContextDep,
+    task_service: TaskService = Depends(get_task_service),
+    workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
+) -> list[PendingEscalationResponse]:
+    """The escalations awaiting this caller's decision, with the exact arguments.
+
+    The event log redacts tool arguments, since a command can carry an inline
+    secret; the caller reads them here only where they may resolve the escalation.
+    """
+    await _verify_task_for_agent(task_service, agent_id, task_id)
+    try:
+        pending = await workflow_task_service.get_pending_escalations(f"task-{task_id}")
+    except WorkflowNotFoundError as e:
+        raise HTTPException(status_code=404, detail="Task has no workflow") from e
+    return escalations_caller_may_resolve(pending, str(user_context.user_id))
 
 
 @router.get(

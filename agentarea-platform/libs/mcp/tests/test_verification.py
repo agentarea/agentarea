@@ -2,11 +2,14 @@
 
 import asyncio
 import uuid
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+from agentarea_mcp.application.mcp_client import platform_client_factory
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
+from agentarea_mcp.verification import _list_tools
 
 # ---------------------------------------------------------------------------
 # _in_progress_is_stale — wedged-verifying self-heal
@@ -476,221 +479,113 @@ async def test_verify_passes_extra_headers_to_list_tools():
 
 
 @pytest.mark.asyncio
-async def test_list_tools_with_explicit_sse_url_does_not_double_sse():
-    """For URLs ending in /sse, _list_tools must use SSE transport directly,
-    NOT munge to /mcp first and then strip-and-append /sse (which produced /sse/sse)."""
-    from agentarea_mcp import verification as ver
+async def test_list_tools_uses_shared_client_for_explicit_sse_url():
+    targets = []
 
-    sse_targets: list[str] = []
-    streamable_called = False
-
-    class _FakeStream:
-        async def __aenter__(self):
-            return (object(), object(), object())
-
-        async def __aexit__(self, *args):
-            return False
-
-    class _FakeSSEStream:
-        def __init__(self, url):
-            sse_targets.append(url)
-
-        async def __aenter__(self):
-            return (object(), object())
-
-        async def __aexit__(self, *args):
-            return False
-
-    class _FakeSession:
-        def __init__(self, *_args, **_kw):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return False
-
-        async def initialize(self):
-            pass
-
+    class FakeClient:
         async def list_tools(self):
-            r = MagicMock()
-            r.tools = []
-            return r
+            return MagicMock(tools=[])
 
-    def fake_streamable(url, **kw):
-        nonlocal streamable_called
-        streamable_called = True
-        return _FakeStream()
+    @asynccontextmanager
+    async def fake_connected(url, headers, timeout, **kwargs):
+        targets.append((url, headers, timeout, kwargs))
+        yield FakeClient()
 
-    def fake_sse(url, **kw):
-        return _FakeSSEStream(url)
-
-    import sys
-
-    fake_streamable_mod = MagicMock()
-    fake_streamable_mod.streamablehttp_client = fake_streamable
-    fake_sse_mod = MagicMock()
-    fake_sse_mod.sse_client = fake_sse
-    fake_mcp_mod = MagicMock()
-    fake_mcp_mod.ClientSession = _FakeSession
-
-    with patch.dict(
-        sys.modules,
-        {
-            "mcp": fake_mcp_mod,
-            "mcp.client.streamable_http": fake_streamable_mod,
-            "mcp.client.sse": fake_sse_mod,
-        },
+    with patch(
+        "agentarea_mcp.application.mcp_client.connected_mcp_client",
+        fake_connected,
     ):
-        await ver._list_tools("https://mcp.notion.com/sse")
+        await _list_tools("https://mcp.notion.com/sse", httpx_client_factory=platform_client_factory)
 
-    assert sse_targets == ["https://mcp.notion.com/sse"], (
-        f"Explicit /sse URL must be passed unchanged to sse_client; got {sse_targets!r}"
-    )
-    assert not streamable_called, (
-        "Streamable HTTP must NOT be tried first when URL is explicitly /sse "
-        "(prevents transforming to /sse/mcp -> /sse/sse)"
-    )
+    assert targets[0][0] == "https://mcp.notion.com/sse"
 
 
 @pytest.mark.asyncio
-async def test_list_tools_with_explicit_mcp_url_uses_streamable_directly():
-    """URLs ending in /mcp must go straight to streamable-http, not be re-suffixed."""
-    from agentarea_mcp import verification as ver
+async def test_list_tools_uses_shared_client_for_explicit_mcp_url():
+    targets = []
 
-    streamable_targets: list[str] = []
-
-    class _FakeStream:
-        def __init__(self, url):
-            streamable_targets.append(url)
-
-        async def __aenter__(self):
-            return (object(), object(), object())
-
-        async def __aexit__(self, *args):
-            return False
-
-    class _FakeSession:
-        def __init__(self, *_a, **_k):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return False
-
-        async def initialize(self):
-            pass
-
+    class FakeClient:
         async def list_tools(self):
-            r = MagicMock()
-            r.tools = []
-            return r
+            return MagicMock(tools=[])
 
-    def fake_streamable(url, **kw):
-        return _FakeStream(url)
+    @asynccontextmanager
+    async def fake_connected(url, headers, timeout, **kwargs):
+        targets.append(url)
+        yield FakeClient()
 
-    def fake_sse(url, **kw):
-        raise AssertionError("SSE should not be reached when streamable succeeds")
-
-    import sys
-
-    fake_streamable_mod = MagicMock()
-    fake_streamable_mod.streamablehttp_client = fake_streamable
-    fake_sse_mod = MagicMock()
-    fake_sse_mod.sse_client = fake_sse
-    fake_mcp_mod = MagicMock()
-    fake_mcp_mod.ClientSession = _FakeSession
-
-    with patch.dict(
-        sys.modules,
-        {
-            "mcp": fake_mcp_mod,
-            "mcp.client.streamable_http": fake_streamable_mod,
-            "mcp.client.sse": fake_sse_mod,
-        },
+    with patch(
+        "agentarea_mcp.application.mcp_client.connected_mcp_client",
+        fake_connected,
     ):
-        await ver._list_tools("https://example.com/mcp")
+        await _list_tools("https://example.com/mcp", httpx_client_factory=platform_client_factory)
 
-    assert streamable_targets == ["https://example.com/mcp"]
+    assert targets == ["https://example.com/mcp"]
 
 
 @pytest.mark.asyncio
-async def test_list_tools_with_unsuffixed_url_tries_bare_then_mcp_then_sse():
-    """For bare URLs, try the URL as-given first, then /mcp, then fall back to /sse."""
-    from agentarea_mcp import verification as ver
+async def test_list_tools_delegates_unsuffixed_transport_selection():
+    targets = []
 
-    streamable_targets: list[str] = []
-    sse_targets: list[str] = []
-
-    class _FailStream:
-        def __init__(self, url):
-            streamable_targets.append(url)
-
-        async def __aenter__(self):
-            raise ConnectionError("streamable not supported")
-
-        async def __aexit__(self, *args):
-            return False
-
-    class _FakeSSEStream:
-        def __init__(self, url):
-            sse_targets.append(url)
-
-        async def __aenter__(self):
-            return (object(), object())
-
-        async def __aexit__(self, *args):
-            return False
-
-    class _FakeSession:
-        def __init__(self, *_a, **_k):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return False
-
-        async def initialize(self):
-            pass
-
+    class FakeClient:
         async def list_tools(self):
-            r = MagicMock()
-            r.tools = []
-            return r
+            return MagicMock(tools=[])
 
-    def fake_streamable(url, **kw):
-        return _FailStream(url)
+    @asynccontextmanager
+    async def fake_connected(url, headers, timeout, **kwargs):
+        targets.append(url)
+        yield FakeClient()
 
-    def fake_sse(url, **kw):
-        return _FakeSSEStream(url)
-
-    import sys
-
-    fake_streamable_mod = MagicMock()
-    fake_streamable_mod.streamablehttp_client = fake_streamable
-    fake_sse_mod = MagicMock()
-    fake_sse_mod.sse_client = fake_sse
-    fake_mcp_mod = MagicMock()
-    fake_mcp_mod.ClientSession = _FakeSession
-
-    with patch.dict(
-        sys.modules,
-        {
-            "mcp": fake_mcp_mod,
-            "mcp.client.streamable_http": fake_streamable_mod,
-            "mcp.client.sse": fake_sse_mod,
-        },
+    with patch(
+        "agentarea_mcp.application.mcp_client.connected_mcp_client",
+        fake_connected,
     ):
-        await ver._list_tools("https://example.com")
+        await _list_tools("https://example.com", httpx_client_factory=platform_client_factory)
 
-    assert streamable_targets == ["https://example.com", "https://example.com/mcp"]
-    assert sse_targets == ["https://example.com/sse"]
+    assert targets == ["https://example.com"]
+
+
+@pytest.mark.asyncio
+async def test_list_tools_declared_streamable_uses_shared_client():
+    targets = []
+
+    class FakeClient:
+        async def list_tools(self):
+            return MagicMock(tools=[])
+
+    @asynccontextmanager
+    async def fake_connected(url, headers, timeout, **kwargs):
+        targets.append((url, kwargs["transport"]))
+        yield FakeClient()
+
+    with patch(
+        "agentarea_mcp.application.mcp_client.connected_mcp_client",
+        fake_connected,
+    ):
+        await _list_tools("https://mcp.vercel.com", None, "streamable-http", httpx_client_factory=platform_client_factory)
+
+    assert targets == [("https://mcp.vercel.com", "streamable-http")]
+
+
+@pytest.mark.asyncio
+async def test_list_tools_bare_url_uses_shared_client_at_root():
+    targets = []
+
+    class FakeClient:
+        async def list_tools(self):
+            return MagicMock(tools=[])
+
+    @asynccontextmanager
+    async def fake_connected(url, headers, timeout, **kwargs):
+        targets.append(url)
+        yield FakeClient()
+
+    with patch(
+        "agentarea_mcp.application.mcp_client.connected_mcp_client",
+        fake_connected,
+    ):
+        await _list_tools("https://mcp.vercel.com", httpx_client_factory=platform_client_factory)
+
+    assert targets == ["https://mcp.vercel.com"]
 
 
 def test_declared_remote_transport_reads_remotes_type():
@@ -728,118 +623,6 @@ def test_transport_candidates_declared_transport_is_authoritative():
         ["https://x", "https://x/mcp"],
         "https://x/sse",
     )
-
-
-@pytest.mark.asyncio
-async def test_list_tools_declared_streamable_does_not_fall_back_to_sse():
-    """When the spec declares streamable-http and it fails, surface the real error
-    instead of silently probing /sse (which would 404 on servers like Vercel)."""
-    from agentarea_mcp import verification as ver
-
-    class _FailStream:
-        def __init__(self, url):
-            pass
-
-        async def __aenter__(self):
-            raise ConnectionError("boom")
-
-        async def __aexit__(self, *args):
-            return False
-
-    def fake_streamable(url, **kw):
-        return _FailStream(url)
-
-    def fake_sse(url, **kw):
-        raise AssertionError("SSE must not be attempted for a declared streamable-http server")
-
-    import sys
-
-    fake_streamable_mod = MagicMock()
-    fake_streamable_mod.streamablehttp_client = fake_streamable
-    fake_sse_mod = MagicMock()
-    fake_sse_mod.sse_client = fake_sse
-    fake_mcp_mod = MagicMock()
-    fake_mcp_mod.ClientSession = MagicMock()
-
-    with patch.dict(
-        sys.modules,
-        {
-            "mcp": fake_mcp_mod,
-            "mcp.client.streamable_http": fake_streamable_mod,
-            "mcp.client.sse": fake_sse_mod,
-        },
-    ):
-        with pytest.raises(ConnectionError, match="boom"):
-            await ver._list_tools("https://mcp.vercel.com", None, "streamable-http")
-
-
-@pytest.mark.asyncio
-async def test_list_tools_bare_url_uses_streamable_at_root():
-    """Regression (Vercel): a bare URL whose server serves streamable-HTTP at the
-    root must connect to the URL as-given — not be re-suffixed to /mcp or /sse.
-
-    https://mcp.vercel.com serves streamable-HTTP at the root; appending /mcp or
-    /sse 404s. The 404-on-/sse verification failure came from never trying the
-    provided URL directly.
-    """
-    from agentarea_mcp import verification as ver
-
-    streamable_targets: list[str] = []
-
-    class _FakeStream:
-        def __init__(self, url):
-            streamable_targets.append(url)
-
-        async def __aenter__(self):
-            return (object(), object(), object())
-
-        async def __aexit__(self, *args):
-            return False
-
-    class _FakeSession:
-        def __init__(self, *_a, **_k):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return False
-
-        async def initialize(self):
-            pass
-
-        async def list_tools(self):
-            r = MagicMock()
-            r.tools = []
-            return r
-
-    def fake_streamable(url, **kw):
-        return _FakeStream(url)
-
-    def fake_sse(url, **kw):
-        raise AssertionError("SSE must not be reached when the bare URL succeeds")
-
-    import sys
-
-    fake_streamable_mod = MagicMock()
-    fake_streamable_mod.streamablehttp_client = fake_streamable
-    fake_sse_mod = MagicMock()
-    fake_sse_mod.sse_client = fake_sse
-    fake_mcp_mod = MagicMock()
-    fake_mcp_mod.ClientSession = _FakeSession
-
-    with patch.dict(
-        sys.modules,
-        {
-            "mcp": fake_mcp_mod,
-            "mcp.client.streamable_http": fake_streamable_mod,
-            "mcp.client.sse": fake_sse_mod,
-        },
-    ):
-        await ver._list_tools("https://mcp.vercel.com")
-
-    assert streamable_targets == ["https://mcp.vercel.com"]
 
 
 # ---------------------------------------------------------------------------

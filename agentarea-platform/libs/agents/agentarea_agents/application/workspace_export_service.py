@@ -10,6 +10,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import yaml
+from agentarea_common.auth.authorization import assert_workspace_admin
 from agentarea_common.base import RepositoryFactory, is_builtin
 
 from agentarea_agents.application.agent_service import AgentService
@@ -42,9 +43,13 @@ class WorkspaceExportService:
     async def export_workspace(self) -> str:
         """Export current workspace configuration to YAML format.
 
+        The export lists every agent, connection and provider config the
+        workspace holds, so only its admin may take it, whichever door asks.
+
         Returns:
             YAML string containing workspace configuration
         """
+        await assert_workspace_admin(self.repository_factory.user_context)
         # Read the workspace's skills once and serve both the skills section and
         # the agent name lookup from it. Only workspace-owned skills are
         # exportable, so the catalog is not requested at all.

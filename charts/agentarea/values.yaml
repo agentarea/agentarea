@@ -187,6 +187,12 @@ global:
   # Web application configuration
   webapp:
     url: ""  # Public URL of the frontend (e.g. https://app.example.com). If empty, defaults to internal service URL.
+    # Origin that serves the Apps sandbox proxy (e.g. https://apps-sandbox.example.com).
+    # Must differ from `url`: the Apps page runs third-party app HTML only inside an
+    # iframe on this origin, so it can never read the webapp's cookies or DOM. Route
+    # it to the frontend with `ingress.hosts.appsSandbox`. Empty keeps the Apps
+    # page refusing to open any app.
+    appsSandboxUrl: ""
     
   # Jobs configuration - Background task processing
   jobs:
@@ -312,6 +318,13 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    # Dedicated host for the Apps sandbox proxy; set it to the host of
+    # global.webapp.appsSandboxUrl. Only the sandbox path is routed.
+    appsSandbox:
+      host: ""  # e.g., apps-sandbox.example.com
+      paths:
+        - path: /app-sandbox
+          pathType: Exact
   # TLS configuration
   tls: []
     # - secretName: agentarea-tls
@@ -596,6 +609,24 @@ mcpManager:
     type: ClusterIP
     port: 80
 
+  # Dedicated service account for the manager control plane. Kept separate
+  # from the shared app service account (serviceAccount above, which carries
+  # no Kubernetes RBAC) so only this component's pods are bound to the
+  # namespaced Role that manages MCP instance/sandbox pods, services,
+  # configmaps, secrets and deployments.
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+
+  # Scratch /tmp for artifact/upload spool files under readOnlyRootFilesystem
+  # (os.CreateTemp("", ...) in internal/artifactstore, internal/api and
+  # internal/sandboxruntime). Bounded so concurrent uploads/downloads can't
+  # exhaust node ephemeral storage; raise it if artifacts routinely approach
+  # this size.
+  tmpVolume:
+    sizeLimit: 1Gi
+
   # Serverless MCP instances: a container-backed instance is started on its
   # first call and reclaimed once it has gone idle, instead of running from
   # creation until it is deleted.
@@ -762,6 +793,8 @@ mcpManager:
     allowedCommandPackages:
       - npx -y @modelcontextprotocol/server-everything
       - npx -y @modelcontextprotocol/server-sequential-thinking
+      - npx -y @modelcontextprotocol/server-customer-segmentation --stdio
+      - npx -y @modelcontextprotocol/server-map --stdio
       - uvx mcp-server-fetch
       - uvx mcp-server-time
   # The cluster MCP instances and agent sandboxes are created in, when that is
@@ -913,6 +946,18 @@ sandboxRuntime:
   resources:
     cpu: 500m
     memory: 512Mi
+    # -- What the scheduler reserves per sandbox, when the provider schedules on
+    # Kubernetes (OpenSandbox's Kubernetes runtime). Empty reserves the full
+    # limit, which leaves a small node room for only a few sandboxes.
+    cpuRequest: ""
+    # -- Memory reserved per sandbox; see cpuRequest.
+    memoryRequest: ""
+    # -- A sandbox's ephemeral-storage limit on Kubernetes providers. It covers
+    # the workspace plus the container's own writes and is enforced by eviction.
+    # Empty is the workspace quota (workspace.maxBytes) plus 1Gi.
+    storageLimit: ""
+    # -- Ephemeral storage reserved per sandbox. Empty reserves the full limit.
+    storageRequest: ""
 
   # External runtimes must publish exactly one explicit capability manifest.
   manifest: {}
@@ -988,6 +1033,24 @@ mcpSandboxRunner:
   image:
     repository: "" # Defaults to mcpManager.image.repository
     tag: ""        # Defaults to mcpManager.image.tag
+
+  # Dedicated service account, separate from mcp-manager's. The runner drives
+  # the same Kubernetes backend/warm-pool client and so is bound to the same
+  # namespaced Role, but as its own identity: revocable, auditable and
+  # rotatable independently of the manager control plane.
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+
+  # Scratch /tmp for sandbox file upload spool files under
+  # readOnlyRootFilesystem (os.CreateTemp("", ...) in
+  # internal/sandboxruntime/manager.go SandboxFileUpload). Smaller than
+  # mcp-manager's: the runner only ever spools one sandbox file at a time,
+  # bounded by sandboxRuntime.workspace.maxFileBytes.
+  tmpVolume:
+    sizeLimit: 512Mi
+
   consumerGroup: agentarea-sandbox-runners
   batchSize: 1
   resources:
@@ -1016,19 +1079,6 @@ temporal:
   service:
     type: ClusterIP
     port: 7233
-  resources: {}
-  extraEnv: []
-
-# Temporal UI
-temporalUi:
-  enabled: true
-  replicaCount: 1
-  image:
-    repository: temporalio/ui
-    tag: "2.39.0"
-  service:
-    type: ClusterIP
-    port: 8080
   resources: {}
   extraEnv: []
 
@@ -1130,21 +1180,25 @@ jobs:
 registryReconcile:
   enabled: true
   # Each entry needs `name` + `source_url`; the catalog type is auto-detected
-  # from the fetched payload. Optional `recommendation_priority` (default 100,
-  # lower first) weights a whole source in the /explore "Recommended" order --
-  # raise it for a bulk/community mirror so its entries land after the curated
-  # catalog instead of interleaving with it. Seed the small official/known-good
-  # skills catalog; the ~123k community mirror remains opt-in and must not
-  # drive first-run picks.
+  # from the fetched payload. `recommendation_priority` (lower first, default
+  # 100) weights a whole source in the /explore "Recommended" order. The
+  # built-in curated sources below take 10, so any registry added without one
+  # -- a custom catalog, or the ~123k community mirror, which stays opt-in and
+  # must not drive first-run picks -- lands after them instead of interleaving
+  # its first entries with the curated front page.
   registries:
     - name: system-llm-providers
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json
+      recommendation_priority: 10
     - name: system-llm-models
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json
+      recommendation_priority: 10
     - name: system-mcp-servers
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json
+      recommendation_priority: 10
     - name: system-skills-curated
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json
+      recommendation_priority: 10
 
 # Ory Kratos Identity Server
 # Ory Keto (ReBAC) — powers Govern -> Policies -> Access (the relationship graph).

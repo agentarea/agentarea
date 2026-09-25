@@ -24,6 +24,30 @@ class LLMConditionEvaluationError(Exception):
     pass
 
 
+def build_condition_evaluator(
+    *, session: Any, user_context: Any, secret_manager: BaseSecretManager, event_broker: Any
+) -> "LLMConditionEvaluator | None":
+    """The evaluator a TriggerService gets outside a request, when enabled.
+
+    For the worker's trigger activities and the inbound channel consumer, which
+    have a session and the trigger's workspace context but no request
+    dependencies.
+    """
+    from agentarea_common.config import get_settings
+    from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+
+    if not get_settings().triggers.ENABLE_LLM_CONDITIONS:
+        return None
+    return LLMConditionEvaluator(
+        model_instance_service=ModelInstanceService(
+            repository=ModelInstanceRepository(session, user_context),
+            event_broker=event_broker,
+            secret_manager=secret_manager,
+        ),
+        secret_manager=secret_manager,
+    )
+
+
 class LLMConditionEvaluator:
     """Service for evaluating trigger conditions using LLM."""
 

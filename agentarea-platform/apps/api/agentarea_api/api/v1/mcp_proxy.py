@@ -37,6 +37,7 @@ from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.auth.tool_authorization import decide_tool_policy
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
+from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_governance.application import GovernancePolicyResolver
 from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
@@ -46,7 +47,8 @@ from agentarea_mcp.infrastructure.repository import (
 )
 from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from mcp.shared.inbound import NAME_BEARING_METHODS, decode_header_value
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +94,78 @@ def _filter_outbound_headers(headers) -> dict[str, str]:
             continue
         out[k] = v
     return out
+
+
+class _MCPHeaderMismatchError(Exception):
+    """A request envelope header disagrees with the JSON-RPC body."""
+
+    def __init__(self, request_id: Any, message: str) -> None:
+        self.body = {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "error": {"code": -32020, "message": message},
+        }
+        super().__init__(message)
+
+
+def _mcp_header_value(headers, name: str) -> str | None:
+    for header_name, value in headers.items():
+        if header_name.lower() == name.lower():
+            return value
+    return None
+
+
+def _validate_mcp_header_consistency(payload: Any, headers) -> None:
+    """Reject routing headers that disagree with a single JSON-RPC body."""
+    if headers is None:
+        return
+
+    method_header = _mcp_header_value(headers, "Mcp-Method")
+    name_header = _mcp_header_value(headers, "Mcp-Name")
+    if method_header is None and name_header is None:
+        # A 2025-era request: no routing headers to hold to the body.
+        return
+
+    if isinstance(payload, list):
+        raise _MCPHeaderMismatchError(
+            None,
+            "Header mismatch: Mcp-Method and Mcp-Name headers cannot be "
+            "validated against a JSON-RPC batch body",
+        )
+
+    if not isinstance(payload, dict):
+        raise _MCPHeaderMismatchError(
+            None,
+            "Header mismatch: routing headers require a JSON-RPC request object",
+        )
+
+    request_id = payload.get("id")
+    body_method = payload.get("method")
+    if method_header is not None and method_header != body_method:
+        raise _MCPHeaderMismatchError(
+            request_id,
+            f"Header mismatch: Mcp-Method header value {method_header!r} "
+            f"does not match body value {body_method!r}",
+        )
+
+    if name_header is None:
+        return
+    name_key = NAME_BEARING_METHODS.get(body_method) if isinstance(body_method, str) else None
+    if name_key is None:
+        raise _MCPHeaderMismatchError(
+            request_id,
+            f"Header mismatch: Mcp-Name header is not defined for request method {body_method!r}",
+        )
+    raw_params = payload.get("params")
+    params = raw_params if isinstance(raw_params, dict) else {}
+    body_name = params.get(name_key)
+    decoded_name = decode_header_value(name_header)
+    if decoded_name is None or decoded_name != body_name:
+        raise _MCPHeaderMismatchError(
+            request_id,
+            f"Header mismatch: Mcp-Name header value {name_header!r} "
+            f"does not match body value {body_name!r}",
+        )
 
 
 def _iter_jsonrpc_tool_calls(payload: Any) -> list[tuple[str, dict[str, Any]]]:
@@ -145,7 +219,12 @@ async def authorize_mcp_tool_call(
 
 
 async def _authorize_mcp_tool_calls(
-    body: bytes, user_context, session, *, instance_id: UUID
+    body: bytes,
+    user_context,
+    session,
+    *,
+    instance_id: UUID,
+    headers=None,
 ) -> None:
     """Deny JSON-RPC tool calls the governance policy does not permit.
 
@@ -160,6 +239,7 @@ async def _authorize_mcp_tool_calls(
         payload = json.loads(body)
     except json.JSONDecodeError:
         return
+    _validate_mcp_header_consistency(payload, headers)
     tool_calls = _iter_jsonrpc_tool_calls(payload)
     if not tool_calls:
         return
@@ -240,14 +320,14 @@ def _egress_is_proxied(upstream_url: str) -> bool:
 
 
 def _guard_and_pin_upstream(
-    upstream_url: str, instance_type: str | None, *, allow_private: bool
+    upstream_url: str, instance_type: str | None, *, policy: OutboundPolicy
 ) -> tuple[str | httpx.URL, str | None, dict | None]:
     """SSRF chokepoint for outbound proxy requests.
 
     Container/command upstreams are always the manager gateway, an
     operator-configured address this process builds itself, so they pass through
     unchanged. URL-type upstreams are user-controlled, so they are validated
-    against private/metadata ranges (unless ``allow_private``) and pinned to the
+    against private/metadata ranges (unless ``policy`` admits them) and pinned to the
     resolved IP to defeat DNS rebinding — the Host header and TLS SNI keep the
     original hostname.
 
@@ -266,7 +346,7 @@ def _guard_and_pin_upstream(
     if instance_type != "url":
         return upstream_url, None, None
 
-    resolved_ips = validate_url(upstream_url, allow_private=allow_private)
+    resolved_ips = validate_url(upstream_url, policy=policy)
     if _egress_is_proxied(upstream_url):
         return upstream_url, None, None
 
@@ -325,10 +405,9 @@ async def proxy_instance(
 
     # SSRF guard: validate + pin user-controlled URL-type upstreams before any
     # outbound request. Container/command upstreams are internal and pass through.
-    allow_private = get_settings().mcp.ALLOW_PRIVATE_URLS
     try:
         request_target, pinned_host, extensions = _guard_and_pin_upstream(
-            upstream_url, instance_type, allow_private=allow_private
+            upstream_url, instance_type, policy=OutboundPolicy.from_env()
         )
     except ValueError as exc:
         # Strip CR/LF from the user-controlled path param to prevent log forging.
@@ -366,7 +445,16 @@ async def proxy_instance(
 
     body = await request.body() if request.method in ("POST", "DELETE") else None
     if request.method == "POST" and body is not None:
-        await _authorize_mcp_tool_calls(body, user_context, db_session, instance_id=instance.id)
+        try:
+            await _authorize_mcp_tool_calls(
+                body,
+                user_context,
+                db_session,
+                instance_id=instance.id,
+                headers=request.headers,
+            )
+        except _MCPHeaderMismatchError as exc:
+            return JSONResponse(status_code=400, content=exc.body)
     params = dict(request.query_params)
 
     client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=None, write=30, pool=10))
