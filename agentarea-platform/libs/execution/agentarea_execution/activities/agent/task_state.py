@@ -80,7 +80,7 @@ def make_task_state_activities(
                     return UpdateTaskStatusResult(success=True)
                 return UpdateTaskStatusResult(success=False, error="Task not found")
             except Exception as e:
-                logger.error(f"Failed to update task status: {e}")
+                logger.error(f"Failed to update task status: {e}", exc_info=True)
                 return UpdateTaskStatusResult(success=False, error=str(e))
 
     @activity.defn

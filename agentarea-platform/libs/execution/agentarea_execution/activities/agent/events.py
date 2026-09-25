@@ -181,7 +181,9 @@ def make_events_activities(
                             )
 
                     except Exception as db_error:
-                        logger.error(f"Failed to store event using service: {db_error}")
+                        logger.error(
+                            f"Failed to store event using service: {db_error}", exc_info=True
+                        )
                         errors.append(f"DB storage failed for {event['event_type']}: {db_error!s}")
 
                     # 3. Handle LLM error events locally for immediate action
@@ -189,7 +191,9 @@ def make_events_activities(
                         try:
                             await handle_llm_error_event(domain_event)
                         except Exception as handler_error:
-                            logger.error(f"Failed to handle LLM error event: {handler_error}")
+                            logger.error(
+                                f"Failed to handle LLM error event: {handler_error}", exc_info=True
+                            )
                             errors.append(f"Error handler failed: {handler_error!s}")
 
                     # 4. Durable outbound channel delivery: enqueue directly
@@ -248,7 +252,7 @@ def make_events_activities(
                     events_published += 1
 
                 except Exception as event_error:
-                    logger.error(f"Failed to process single event: {event_error}")
+                    logger.error(f"Failed to process single event: {event_error}", exc_info=True)
                     errors.append(f"Event processing failed: {event_error!s}")
 
             return WorkflowEventsResult(
@@ -258,7 +262,7 @@ def make_events_activities(
             )
 
         except Exception as e:
-            logger.error(f"Failed to publish workflow events: {e}")
+            logger.error(f"Failed to publish workflow events: {e}", exc_info=True)
             return WorkflowEventsResult(
                 success=False,
                 events_published=0,

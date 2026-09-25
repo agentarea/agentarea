@@ -233,14 +233,14 @@ class ActivityContext:
                     # Exception occurred or auto_commit disabled, rollback
                     await session.rollback()
             except Exception as e:
-                logger.warning(f"Failed to commit/rollback session: {e}")
+                logger.warning(f"Failed to commit/rollback session: {e}", exc_info=True)
 
         # Clean up sessions
         for session in self._sessions:
             try:
                 await session.close()
             except Exception as e:
-                logger.warning(f"Failed to close session: {e}")
+                logger.warning(f"Failed to close session: {e}", exc_info=True)
 
     async def get_agent_service(self) -> AgentService:
         """Get AgentService for this context."""
@@ -290,7 +290,7 @@ class ActivityContext:
             try:
                 await session.commit()
             except Exception as e:
-                logger.error(f"Failed to commit session: {e}")
+                logger.error(f"Failed to commit session: {e}", exc_info=True)
                 raise
 
     async def rollback(self):
@@ -299,4 +299,4 @@ class ActivityContext:
             try:
                 await session.rollback()
             except Exception as e:
-                logger.warning(f"Failed to rollback session: {e}")
+                logger.warning(f"Failed to rollback session: {e}", exc_info=True)

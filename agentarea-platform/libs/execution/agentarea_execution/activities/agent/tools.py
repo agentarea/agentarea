@@ -129,7 +129,7 @@ async def _offload_large_activity_output(
         await store.store_output(output_id, content)
         return build_output_summary(content, output_id)
     except Exception as exc:
-        logger.warning("Activity output offload failed for %s: %s", output_id, exc)
+        logger.warning("Activity output offload failed for %s: %s", output_id, exc, exc_info=True)
         head = content[:TOOL_OUTPUT_OFFLOAD_CHARS]
         return (
             f"{head}\n... [activity output truncated at {TOOL_OUTPUT_OFFLOAD_CHARS} chars; "
@@ -364,7 +364,7 @@ def make_tools_activities(
                         wallet_service = await ctx.get_wallet_service()
                         wallet = await wallet_service.get_wallet(agent_id)
                     except Exception as e:
-                        logger.debug("No active wallet for payment handling: %s", e)
+                        logger.debug("No active wallet for payment handling: %s", e, exc_info=True)
                         return None
 
                     if getattr(wallet, "status", None) != "active":

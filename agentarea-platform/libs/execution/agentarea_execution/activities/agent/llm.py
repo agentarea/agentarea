@@ -171,7 +171,7 @@ def make_llm_activities(
             from ..event_publisher import _is_non_retryable_error
 
             error_message = str(error)
-            logger.error(f"LLM call failed: {error_message}")
+            logger.error(f"LLM call failed: {error_message}", exc_info=True)
             raise ApplicationError(
                 f"LLM call failed: {error_message}",
                 type=type(error).__name__,
@@ -367,7 +367,7 @@ def make_llm_activities(
             )
 
         except Exception as e:
-            logger.error(f"Message compaction failed: {e}")
+            logger.error(f"Message compaction failed: {e}", exc_info=True)
             from temporalio.exceptions import ApplicationError
 
             from ..event_publisher import _is_non_retryable_error
@@ -402,7 +402,7 @@ def make_llm_activities(
             )
 
         except Exception as e:
-            logger.error(f"Failed to create execution plan: {e}")
+            logger.error(f"Failed to create execution plan: {e}", exc_info=True)
             return ExecutionPlanResult(
                 plan=(
                     f"Execute the task '{request.goal.get('description', 'Unknown')}' step by step"

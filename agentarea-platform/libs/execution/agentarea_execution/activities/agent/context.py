@@ -92,7 +92,9 @@ def make_context_activities(
                 )
 
             except Exception as e:
-                logger.error(f"Failed to recall history for task {request.task_id}: {e}")
+                logger.error(
+                    f"Failed to recall history for task {request.task_id}: {e}", exc_info=True
+                )
                 return RecallHistoryResult(
                     summary=f"Failed to recall history: {e}",
                 )
@@ -107,7 +109,7 @@ def make_context_activities(
             await context_store.store_output(request.output_id, request.content)
             return StoreOutputResult(success=True)
         except Exception as e:
-            logger.error(f"Failed to store context output {request.output_id}: {e}")
+            logger.error(f"Failed to store context output {request.output_id}: {e}", exc_info=True)
             return StoreOutputResult(success=False, error=str(e))
 
     @activity.defn(name="read_context_output")
@@ -122,7 +124,7 @@ def make_context_activities(
             )
             return ReadOutputResult(success=True, content=content)
         except Exception as e:
-            logger.error(f"Failed to read context output {request.output_id}: {e}")
+            logger.error(f"Failed to read context output {request.output_id}: {e}", exc_info=True)
             return ReadOutputResult(success=False, error=str(e))
 
     @activity.defn(name="store_history_chunk")
@@ -135,7 +137,7 @@ def make_context_activities(
             await context_store.store_history_chunk(request.chunk_index, request.messages)
             return StoreHistoryResult(success=True)
         except Exception as e:
-            logger.error(f"Failed to store history chunk {request.chunk_index}: {e}")
+            logger.error(f"Failed to store history chunk {request.chunk_index}: {e}", exc_info=True)
             return StoreHistoryResult(success=False, error=str(e))
 
     @activity.defn(name="search_history")
@@ -150,7 +152,7 @@ def make_context_activities(
             )
             return SearchHistoryResult(success=True, results=results)
         except Exception as e:
-            logger.error(f"Failed to search history: {e}")
+            logger.error(f"Failed to search history: {e}", exc_info=True)
             return SearchHistoryResult(success=False, error=str(e))
 
     return [

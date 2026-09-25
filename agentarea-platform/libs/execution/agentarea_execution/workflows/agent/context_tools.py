@@ -80,7 +80,9 @@ class ContextToolsMixin(AgentWorkflowBase):
                     )
                     return
             except Exception as e:
-                workflow.logger.warning(f"MinIO history search failed, falling back to DB: {e}")
+                workflow.logger.warning(
+                    f"MinIO history search failed, falling back to DB: {e}", exc_info=True
+                )
 
         # Fall back to DB event log query
         request = RecallHistoryRequest(
@@ -122,7 +124,7 @@ class ContextToolsMixin(AgentWorkflowBase):
                 )
             )
         except Exception as e:
-            workflow.logger.error(f"Recall history failed: {e}")
+            workflow.logger.error(f"Recall history failed: {e}", exc_info=True)
             self.state.messages.append(
                 Message(
                     role="tool",
@@ -175,7 +177,7 @@ class ContextToolsMixin(AgentWorkflowBase):
                 else f"Error reading output: {read_result.error}"
             )
         except Exception as e:
-            workflow.logger.error(f"read_tool_output failed: {e}")
+            workflow.logger.error(f"read_tool_output failed: {e}", exc_info=True)
             content = f"Failed to read output '{output_id}': {e}"
 
         self.state.messages.append(
@@ -217,5 +219,5 @@ class ContextToolsMixin(AgentWorkflowBase):
             return content
         except Exception as e:
             # Fallback: MinIO failure doesn't break agent execution
-            workflow.logger.warning(f"Output offload exception for {output_id}: {e}")
+            workflow.logger.warning(f"Output offload exception for {output_id}: {e}", exc_info=True)
             return content

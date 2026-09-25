@@ -232,7 +232,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
             workflow.logger.info(f"MCP tool '{tool_name}' executed successfully")
 
         except Exception as e:
-            workflow.logger.error(f"MCP tool call {tool_name} failed: {e}")
+            workflow.logger.error(f"MCP tool call {tool_name} failed: {e}", exc_info=True)
 
             # Add error message to conversation
             self.state.messages.append(

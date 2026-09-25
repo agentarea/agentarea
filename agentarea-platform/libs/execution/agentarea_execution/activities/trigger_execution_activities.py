@@ -143,7 +143,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                     if isinstance(e, TriggerNotFoundError):
                         raise
                     error_msg = f"Error retrieving trigger: {e}"
-                    logger.error(error_msg, trigger_id=trigger_id)
+                    logger.error(error_msg, trigger_id=trigger_id, exc_info=True)
                     raise TriggerExecutionError(
                         error_msg, trigger_id=str(trigger_id), original_error=str(e)
                     ) from None
@@ -261,6 +261,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         logger.error(
                             f"Data extractor failed: {extractor_error}",
                             trigger_id=trigger_id,
+                            exc_info=True,
                         )
                         # Continue without extracted data
 
@@ -396,7 +397,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
             execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
 
-            logger.error(f"Error executing trigger {trigger_id}: {e}")
+            logger.error(f"Error executing trigger {trigger_id}: {e}", exc_info=True)
 
             try:
                 database = get_database()
@@ -420,7 +421,8 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                     )
             except Exception as record_error:
                 logger.error(
-                    f"Failed to record execution failure for trigger {trigger_id}: {record_error}"
+                    f"Failed to record execution failure for trigger {trigger_id}: {record_error}",
+                    exc_info=True,
                 )
 
             raise
@@ -480,7 +482,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 )
 
         except Exception as e:
-            logger.error(f"Failed to record execution for trigger {trigger_id}: {e}")
+            logger.error(f"Failed to record execution for trigger {trigger_id}: {e}", exc_info=True)
             raise
 
     @activity.defn(name="evaluate_trigger_conditions_activity")
@@ -633,7 +635,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 )
 
         except Exception as e:
-            logger.error(f"Failed to create task from trigger {trigger_id}: {e}")
+            logger.error(f"Failed to create task from trigger {trigger_id}: {e}", exc_info=True)
             return CreateTaskFromTriggerResult(
                 task_id=None,
                 trigger_id=trigger_id,

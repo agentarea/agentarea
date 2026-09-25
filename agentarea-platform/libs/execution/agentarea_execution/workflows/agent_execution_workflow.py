@@ -292,7 +292,7 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
             raise
 
         except Exception as e:
-            workflow.logger.error(f"Workflow execution failed: {e}")
+            workflow.logger.error(f"Workflow execution failed: {e}", exc_info=True)
             await self._handle_workflow_error(e)
             raise
 

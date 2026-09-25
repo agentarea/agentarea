@@ -116,7 +116,7 @@ def create_event_publisher(
             logger.debug(f"Published LLM chunk event {chunk_index} for task {task_id}")
 
         except Exception as e:
-            logger.error(f"Failed to publish chunk event: {e}")
+            logger.error(f"Failed to publish chunk event: {e}", exc_info=True)
 
     return publish_chunk_event
 
@@ -165,7 +165,7 @@ async def publish_a2ui_event(
         logger.debug(f"Published {event_type} event for task {task_id}")
 
     except Exception as e:
-        logger.error(f"Failed to publish A2UI event {event_type}: {e}")
+        logger.error(f"Failed to publish A2UI event {event_type}: {e}", exc_info=True)
 
 
 async def publish_enriched_llm_error_event(
@@ -235,7 +235,7 @@ async def publish_enriched_llm_error_event(
         logger.info(f"Published enriched LLM error event for task {task_id}: {error_type}")
 
     except Exception as e:
-        logger.error(f"Failed to publish enriched LLM error event: {e}")
+        logger.error(f"Failed to publish enriched LLM error event: {e}", exc_info=True)
 
 
 def _is_auth_error(error: Exception) -> bool:

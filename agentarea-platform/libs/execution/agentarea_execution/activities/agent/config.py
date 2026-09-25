@@ -493,7 +493,7 @@ def make_config_activities(
                     else:
                         logger.warning(f"Agent '{agent_name}' not found for delegation")
                 except Exception as e:
-                    logger.error(f"Failed to resolve agent '{agent_name}': {e}")
+                    logger.error(f"Failed to resolve agent '{agent_name}': {e}", exc_info=True)
 
             return ResolveAgentToolsResult(agent_map=agent_map)
 

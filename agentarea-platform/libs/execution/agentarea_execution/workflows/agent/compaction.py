@@ -99,7 +99,9 @@ class CompactionMixin(BudgetMixin):
                         f"History chunk store failed: {store_hist_result.error}"
                     )
             except Exception as e:
-                workflow.logger.warning(f"History preservation failed (non-blocking): {e}")
+                workflow.logger.warning(
+                    f"History preservation failed (non-blocking): {e}", exc_info=True
+                )
 
         # Call compaction activity
         try:
@@ -193,5 +195,5 @@ class CompactionMixin(BudgetMixin):
             return True
 
         except Exception as e:
-            workflow.logger.error(f"Context compaction failed: {e}")
+            workflow.logger.error(f"Context compaction failed: {e}", exc_info=True)
             raise

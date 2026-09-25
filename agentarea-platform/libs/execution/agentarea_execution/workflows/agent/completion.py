@@ -298,7 +298,7 @@ class CompletionMixin(BudgetMixin):
             if isinstance(result, dict):
                 result = ArtifactValidationResult.model_validate(result)
         except ActivityError as exc:
-            workflow.logger.error("Artifact validation activity failed: %s", exc)
+            workflow.logger.error("Artifact validation activity failed: %s", exc, exc_info=True)
             result = ArtifactValidationResult(
                 state="unavailable",
                 generation=0,

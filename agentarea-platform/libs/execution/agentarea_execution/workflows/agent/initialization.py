@@ -202,7 +202,8 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
                 )
             except Exception as e:
                 workflow.logger.warning(
-                    f"Could not pre-resolve model {model_id}, will fall back to per-call lookup: {e}"
+                    f"Could not pre-resolve model {model_id}, will fall back to per-call lookup: {e}",
+                    exc_info=True,
                 )
                 self.state.resolved_model = None
 
