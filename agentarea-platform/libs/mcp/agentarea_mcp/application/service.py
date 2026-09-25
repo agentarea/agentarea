@@ -29,6 +29,7 @@ from agentarea_mcp.application.mcp_client import (
     connected_mcp_client,
     mcp_verdict_key,
     pinned_client_factory,
+    platform_client_factory,
     shared_era_verdict_store,
 )
 from agentarea_mcp.domain.events import (
@@ -1071,6 +1072,8 @@ class MCPServerInstanceService:
             verdict_key = mcp_verdict_key(server_instance_id, transport_spec)
             if instance_type == "url":
                 httpx_client_factory = pinned_client_factory(httpx_client_factory)
+            elif httpx_client_factory is None:
+                httpx_client_factory = platform_client_factory
         except Exception as e:
             return _fail(
                 f"MCP '{instance.name}' is not available (cannot resolve URL: {e}). "
@@ -1202,7 +1205,7 @@ class MCPServerInstanceService:
         headers: dict[str, str],
         operation: Callable[[Any], Any],
         *,
-        httpx_client_factory: Callable[..., Any] | None = None,
+        httpx_client_factory: Callable[..., Any],
         transport: str | None = None,
         timeout_seconds: float = 30.0,
         verdict_key: str | None = None,
@@ -1227,7 +1230,7 @@ class MCPServerInstanceService:
         headers: dict[str, str],
         tool_name: str,
         tool_args: dict[str, Any],
-        httpx_client_factory: Callable[..., Any] | None = None,
+        httpx_client_factory: Callable[..., Any],
         transport: str | None = None,
         *,
         verdict_key: str | None = None,
@@ -1249,7 +1252,7 @@ class MCPServerInstanceService:
         headers: dict[str, str],
         transport: str | None = None,
         *,
-        httpx_client_factory: Callable[..., Any] | None = None,
+        httpx_client_factory: Callable[..., Any],
     ):
         return await self._with_mcp_session(
             mcp_url,

@@ -208,7 +208,7 @@ async def _list_tools(
     *,
     verdict_key: str | None = None,
     verdict_store=None,
-    httpx_client_factory=None,
+    httpx_client_factory,
 ) -> list[dict]:
     """Connect to an MCP server and list tools through the shared v2 client."""
     from agentarea_mcp.application.mcp_client import connected_mcp_client
@@ -381,6 +381,7 @@ async def verify(
             from agentarea_mcp.application.mcp_client import (
                 mcp_verdict_key,
                 pinned_client_factory,
+                platform_client_factory,
                 shared_era_verdict_store,
             )
 
@@ -388,8 +389,9 @@ async def verify(
             verdict_store = shared_era_verdict_store()
             # A URL-type endpoint is the member's choice of address; the
             # gateway URL of a container-backed one is the platform's.
-            if instance_type == "url":
-                client_factory = pinned_client_factory()
+            client_factory = (
+                pinned_client_factory() if instance_type == "url" else platform_client_factory
+            )
         deadline = asyncio.get_event_loop().time() + _SAFETY_DEADLINE
         last_error: BaseException | None = None
 

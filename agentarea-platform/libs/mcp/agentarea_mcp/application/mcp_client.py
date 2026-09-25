@@ -160,6 +160,10 @@ class SafeMCPTransport(httpx2.AsyncBaseTransport):
         await self._sender.aclose()
 
 
+# For addresses the platform chose itself, such as the manager gateway.
+platform_client_factory = create_mcp_http_client
+
+
 def pinned_client_factory(
     wrapped: Callable[..., Any] | None = None,
     *,
@@ -213,7 +217,7 @@ class _ConnectedClient:
         transport: str | None,
         verdict_key: str | None,
         verdict_store: EraVerdictStore | None,
-        httpx_client_factory: Callable[..., Any] | None,
+        httpx_client_factory: Callable[..., Any],
     ) -> None:
         self._url = url
         self._headers = headers
@@ -264,7 +268,7 @@ class _ConnectedClient:
 
     async def _open(self) -> Client:
         last_error: BaseException | None = None
-        factory = self._httpx_client_factory or create_mcp_http_client
+        factory = self._httpx_client_factory
         timeout = httpx2.Timeout(self._timeout_seconds, read=SSE_READ_TIMEOUT_SECONDS)
 
         for streamable_url in self._streamable_urls:
@@ -399,9 +403,14 @@ async def connected_mcp_client(
     transport: str | None = None,
     verdict_key: str | None = None,
     verdict_store: EraVerdictStore | None = None,
-    httpx_client_factory: Callable[..., Any] | None = None,
+    httpx_client_factory: Callable[..., Any],
 ) -> AsyncIterator[_ConnectedClient]:
-    """Yield a connected v2 ``mcp.Client`` over streamable HTTP or SSE."""
+    """Yield a connected v2 ``mcp.Client`` over streamable HTTP or SSE.
+
+    ``httpx_client_factory`` is required so every caller decides who chose the
+    address: ``pinned_client_factory()`` for a member-supplied URL,
+    ``platform_client_factory`` for the platform's own manager gateway.
+    """
     connected = _ConnectedClient(
         url=url,
         headers=dict(headers) if headers else None,

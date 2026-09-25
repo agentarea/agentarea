@@ -85,6 +85,8 @@ async def discover_mcp_tools(
     from agentarea_mcp.application.mcp_client import (
         connected_mcp_client,
         mcp_verdict_key,
+        pinned_client_factory,
+        platform_client_factory,
         shared_era_verdict_store,
     )
 
@@ -104,6 +106,7 @@ async def discover_mcp_tools(
         transport=transport,
         verdict_key=verdict_key,
         verdict_store=verdict_store,
+        httpx_client_factory=pinned_client_factory() if endpoint_url else platform_client_factory,
     ) as client:
         result = await client.list_tools()
 

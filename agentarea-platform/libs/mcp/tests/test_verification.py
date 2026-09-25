@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+from agentarea_mcp.application.mcp_client import platform_client_factory
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
 from agentarea_mcp.verification import _list_tools
 
@@ -494,7 +495,7 @@ async def test_list_tools_uses_shared_client_for_explicit_sse_url():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools("https://mcp.notion.com/sse")
+        await _list_tools("https://mcp.notion.com/sse", httpx_client_factory=platform_client_factory)
 
     assert targets[0][0] == "https://mcp.notion.com/sse"
 
@@ -516,7 +517,7 @@ async def test_list_tools_uses_shared_client_for_explicit_mcp_url():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools("https://example.com/mcp")
+        await _list_tools("https://example.com/mcp", httpx_client_factory=platform_client_factory)
 
     assert targets == ["https://example.com/mcp"]
 
@@ -538,7 +539,7 @@ async def test_list_tools_delegates_unsuffixed_transport_selection():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools("https://example.com")
+        await _list_tools("https://example.com", httpx_client_factory=platform_client_factory)
 
     assert targets == ["https://example.com"]
 
@@ -560,7 +561,7 @@ async def test_list_tools_declared_streamable_uses_shared_client():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools("https://mcp.vercel.com", None, "streamable-http")
+        await _list_tools("https://mcp.vercel.com", None, "streamable-http", httpx_client_factory=platform_client_factory)
 
     assert targets == [("https://mcp.vercel.com", "streamable-http")]
 
@@ -582,7 +583,7 @@ async def test_list_tools_bare_url_uses_shared_client_at_root():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools("https://mcp.vercel.com")
+        await _list_tools("https://mcp.vercel.com", httpx_client_factory=platform_client_factory)
 
     assert targets == ["https://mcp.vercel.com"]
 

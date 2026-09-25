@@ -264,3 +264,57 @@ async def test_a_server_spec_pointing_at_the_metadata_address_is_refused():
 
     with pytest.raises(BadRequestError):
         await service.create_mcp_server(payload)
+
+
+def _leaves(exc: BaseException) -> list[BaseException]:
+    if isinstance(exc, BaseExceptionGroup):
+        return [leaf for inner in exc.exceptions for leaf in _leaves(inner)]
+    return [exc]
+
+
+@pytest.fixture
+def _internal_member(monkeypatch):
+    """A Registered Client member at a URL whose name resolves to a private address."""
+    import socket
+
+    from agentarea_mcp.application import mcp_aggregator
+    from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
+
+    def getaddrinfo(host, port, *args, **kwargs):
+        assert host == "mcp.internal.example"
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", port or 80))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(mcp_aggregator, "shared_era_verdict_store", lambda: None)
+    member =AggregatedMember(mcp_instance_id="1", namespace_prefix="m", transport="streamable-http")
+    proxy = MCPAggregatorProxy(
+        name="client",
+        description="",
+        members=[member],
+        instance_urls={"1": "http://mcp.internal.example/mcp"},
+        instance_names={},
+        era_verdict_store=None,
+    )
+    return proxy, member
+
+
+@pytest.mark.asyncio
+async def test_the_aggregator_refuses_to_list_a_member_that_resolves_private(
+    _internal_member, caplog
+):
+    proxy, member = _internal_member
+
+    assert await proxy._discover_member_tools_upstream(member) == []
+
+    (failure,) = [r for r in caplog.records if r.exc_info]
+    assert any(isinstance(leaf, UnsafeUrlError) for leaf in _leaves(failure.exc_info[1]))
+
+
+@pytest.mark.asyncio
+async def test_the_aggregator_refuses_to_call_a_member_that_resolves_private(_internal_member):
+    proxy, member = _internal_member
+
+    with pytest.raises(BaseException) as raised:  # noqa: PT011
+        await proxy._call_member_tool(member, "t", {})
+
+    assert any(isinstance(leaf, UnsafeUrlError) for leaf in _leaves(raised.value))
