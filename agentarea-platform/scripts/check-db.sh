@@ -40,7 +40,10 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #     workspace and writable from none, a rule only the WHERE clause enforces.
 #   usage events: raw facts are append-only (a trigger) and paging never crosses
 #     workspaces.
-PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL USAGE_TEST_DATABASE_URL)
+#   membership backfill: the migration and the reconcile script insert rows with
+#     SQL that leans on the (workspace, user) unique constraint and the
+#     invitation and outbox tables.
+PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL USAGE_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
   libs/llm/tests/test_provider_secret_lifecycle_db.py
@@ -50,6 +53,7 @@ PY_SUITES=(
   libs/llm/tests/test_model_spec_price_precision_db.py
   libs/llm/tests/test_platform_managed_providers_db.py
   libs/common/tests/test_usage_events_db.py
+  apps/api/tests/test_membership_backfill_db.py
 )
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, the secret
