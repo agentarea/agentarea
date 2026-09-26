@@ -111,7 +111,7 @@ async def test_usage_endpoint_paginates_raw_facts_without_tenant_override(sessio
     foreign = await insert_fact(session, foreign_workspace)
     last = await insert_fact(session, workspace)
     app = FastAPI()
-    app.include_router(router, prefix="/v1")
+    app.include_router(router, prefix="/v1/workspaces/{workspace}")
     register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
     app.dependency_overrides[get_user_context] = lambda: UserContext(
         user_id="usage-reader", workspace_id=workspace, admin_workspaces=[workspace]
@@ -120,7 +120,8 @@ async def test_usage_endpoint_paginates_raw_facts_without_tenant_override(sessio
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(
-            "/v1/usage/events", params={"limit": 1, "workspace_id": foreign_workspace}
+            "/v1/workspaces/acme/usage/events",
+            params={"limit": 1, "workspace_id": foreign_workspace},
         )
         assert response.status_code == 200
         page = response.json()
@@ -131,19 +132,21 @@ async def test_usage_endpoint_paginates_raw_facts_without_tenant_override(sessio
         assert page["events"][0]["occurred_at"] == "2026-09-18T00:00:00.123456789Z"
         assert page["events"][0]["schema_version"] == 1
         response = await client.get(
-            "/v1/usage/events", params={"limit": 1, "cursor": page["next_cursor"]}
+            "/v1/workspaces/acme/usage/events", params={"limit": 1, "cursor": page["next_cursor"]}
         )
         assert response.status_code == 200
         assert [event["id"] for event in response.json()["events"]] == [first.event_id]
         assert response.json()["next_cursor"] is None
-        response = await client.get("/v1/usage/events", params={"resource_id": foreign.resource_id})
+        response = await client.get(
+            "/v1/workspaces/acme/usage/events", params={"resource_id": foreign.resource_id}
+        )
         assert response.json() == {"events": [], "next_cursor": None}
-        response = await client.get("/v1/usage/events", params={"limit": 101})
+        response = await client.get("/v1/workspaces/acme/usage/events", params={"limit": 101})
         assert response.status_code == 422
         await insert_fact(session, workspace, occurred_at_source="2026-09-18T00:00:00.123456788Z")
         await insert_fact(session, workspace, occurred_at_source="2026-09-18T00:00:00.123456790Z")
         response = await client.get(
-            "/v1/usage/events",
+            "/v1/workspaces/acme/usage/events",
             params={
                 "from": "2026-09-18T05:30:00.123456789+05:30",
                 "until": "2026-09-18T00:00:00.123456789Z",

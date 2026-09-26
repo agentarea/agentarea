@@ -37,7 +37,7 @@ rules, not graph grants. See [set a budget](/guides/governance/set-a-budget) and
 
   If you are on `make up`, switch to `make up-dev` or set the variable and run
   OpenFGA yourself before continuing.
-- You are a workspace admin. Every `/v1/access-control` endpoint requires it.
+- You are a workspace admin. Every `/v1/workspaces/{workspace}/access-control` endpoint requires it.
 - The subject is already a member of your workspace, and the object already
   exists in it. Both are checked before the tuple is written.
 - Read [the AgentArea model](/concepts/governance/the-agentarea-model) — in
@@ -51,7 +51,7 @@ Examples below assume `API=http://localhost:8000` and a bearer token in `$TOKEN`
 <Steps titleSize="h3">
   <Step title="Confirm the graph is on">
     ```bash
-    curl -s -H "Authorization: Bearer $TOKEN" "$API/v1/access-control/graph" \
+    curl -s -H "Authorization: Bearer $TOKEN" "$API/v1/workspaces/$WORKSPACE/access-control/graph" \
       | python3 -c 'import json,sys; d=json.load(sys.stdin); print("enabled:", d["enabled"], "nodes:", len(d["nodes"]))'
     ```
 
@@ -79,7 +79,7 @@ Examples below assume `API=http://localhost:8000` and a bearer token in `$TOKEN`
 
   <Step title="Write the grant">
     ```bash
-    curl -s -X POST "$API/v1/access-control/relationships" \
+    curl -s -X POST "$API/v1/workspaces/$WORKSPACE/access-control/relationships" \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -106,13 +106,13 @@ Examples below assume `API=http://localhost:8000` and a bearer token in `$TOKEN`
   <Step title="Repeat for each bit you need">
     ```bash
     for rel in reader writer manager; do
-      curl -s -X POST "$API/v1/access-control/relationships" \
+      curl -s -X POST "$API/v1/workspaces/$WORKSPACE/access-control/relationships" \
         -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
         -d "{\"namespace\":\"Agent\",\"object\":\"$AGENT_ID\",\"relation\":\"$rel\",\"subject_id\":\"User:alice@example.com\"}"
     done
     ```
 
-    To revoke, send the same body to `DELETE /v1/access-control/relationships`. It
+    To revoke, send the same body to `DELETE /v1/workspaces/{workspace}/access-control/relationships`. It
     returns HTTP 204.
   </Step>
 </Steps>
@@ -123,7 +123,7 @@ Ask the graph directly. `relation` accepts the same verbs the application uses,
 and they are mapped onto the underlying bit:
 
 ```bash
-curl -s -X POST "$API/v1/access-control/check" \
+curl -s -X POST "$API/v1/workspaces/$WORKSPACE/access-control/check" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{
         "namespace": "Agent",
@@ -141,7 +141,7 @@ To see *why* it was allowed — direct grant, role assignment, project
 inheritance, or workspace admin — resolve the path:
 
 ```bash
-curl -s -X POST "$API/v1/access-control/resolve" \
+curl -s -X POST "$API/v1/workspaces/$WORKSPACE/access-control/resolve" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{
         "subject_id": "User:alice@example.com",
@@ -157,7 +157,7 @@ You can also list what has been written:
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "$API/v1/access-control/relationships?namespace=Agent" \
+  "$API/v1/workspaces/$WORKSPACE/access-control/relationships?namespace=Agent" \
   | python3 -m json.tool
 ```
 
@@ -165,7 +165,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 
 <AccordionGroup>
   <Accordion title="`403 Only a workspace admin may modify the authorization graph`">
-    Every endpoint under `/v1/access-control` requires workspace admin,
+    Every endpoint under `/v1/workspaces/{workspace}/access-control` requires workspace admin,
     including the read and check endpoints. Being the resource's owner is not
     enough.
   </Accordion>
@@ -177,7 +177,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
   </Accordion>
   <Accordion title="`403 Subject user is not in your workspace`">
     Add the person to the workspace first through
-    `POST /v1/workspaces/{workspace_id}/invitations` . Membership is resolved
+    `POST /v1/workspaces/{workspace}/invitations` . Membership is resolved
     from the workspace owner plus the membership table, so a user who has been
     invited but has not accepted is not yet grantable.
   </Accordion>

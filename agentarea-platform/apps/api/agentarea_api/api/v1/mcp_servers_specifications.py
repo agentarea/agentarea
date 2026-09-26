@@ -6,7 +6,7 @@ from agentarea_api.api.deps.services import get_mcp_server_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
-from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
+from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.service import MCPServerService
@@ -198,7 +198,9 @@ async def delete_mcp_server(
 
 @router.post(
     "/{server_id}/deploy",
-    dependencies=[requires("edit", "mcp_server", id_param="server_id")],
+    dependencies=[
+        enforced_in_handler("per-object permission resolved by the PDP once the object is loaded")
+    ],
 )
 async def deploy_mcp_server(
     server_id: str,
@@ -208,6 +210,7 @@ async def deploy_mcp_server(
     resolved_id = await _resolve_server_id(mcp_server_service, server_id)
     if not resolved_id:
         raise HTTPException(status_code=404, detail="MCP Server not found")
+    await require_permission("edit", "mcp_server", str(resolved_id), user_context.user_id)
     server = await mcp_server_service.get(resolved_id)
     if not server:
         raise HTTPException(status_code=404, detail="MCP Server not found")

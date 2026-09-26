@@ -10,8 +10,13 @@ one offset means one thing.
 
 import pytest_asyncio
 from agentarea_registry.application.catalog_facets import derive_facets
+import pytest
 from agentarea_registry.domain.models import Registry
-from agentarea_registry.infrastructure.repository import RegistryItemRepository
+from agentarea_registry.infrastructure.repository import (
+    RegistryItemRepository,
+    RegistryRepository,
+)
+from sqlalchemy.exc import IntegrityError
 
 
 async def _registry(
@@ -53,10 +58,8 @@ async def _item(
         name=name,
         spec=spec or {},
         tags=tags or [],
-        category=facets.category,
-        sort_key=facets.sort_key,
-        featured=facets.featured,
         recommendation_rank=rank,
+        **facets._asdict(),
     )
 
 
@@ -112,6 +115,58 @@ class TestPagingAcrossRegistries:
         items, total = await item_repo.browse("skills", sort="name", limit=10, offset=0)
         assert [i.name for i in items] == ["apple", "banana", "cherry", "date", "elder", "fig"]
         assert total == 6
+
+
+class TestRegistryChangesReachItsItems:
+    """Browse reads a registry's type, weight and active flag off each item.
+
+    They are copies, so a change to the registry has to land on every item it
+    owns or /explore keeps ranking and showing the catalog as it used to be.
+    """
+
+    async def test_reweighting_a_registry_reorders_the_catalog(self, db_session, item_repo):
+        curated = await _registry(db_session, "curated", priority=10)
+        mirror = await _registry(db_session, "mirror", priority=900)
+        await _item(item_repo, curated, "c1", "zulu")
+        await _item(item_repo, mirror, "m1", "alpha")
+
+        await RegistryRepository(db_session).update(mirror.id, recommendation_priority=1)
+
+        items, _ = await item_repo.browse("skills", limit=10, offset=0)
+        assert [i.name for i in items] == ["alpha", "zulu"]
+
+    async def test_deactivating_a_registry_hides_its_items_and_their_counts(
+        self, db_session, item_repo
+    ):
+        kept = await _registry(db_session, "kept")
+        retired = await _registry(db_session, "retired")
+        await _item(item_repo, kept, "k1", "kept-one", tags=["category:data"])
+        await _item(item_repo, retired, "r1", "retired-one", tags=["category:data"])
+
+        await RegistryRepository(db_session).update(retired.id, is_active=False)
+
+        items, total = await item_repo.browse("skills", limit=10, offset=0)
+        assert [i.name for i in items] == ["kept-one"]
+        assert total == 1
+        assert await item_repo.category_counts("skills") == [("data", 1)]
+
+    async def test_reactivating_brings_them_back(self, db_session, item_repo):
+        reg = await _registry(db_session, "dormant", is_active=False)
+        await _item(item_repo, reg, "d1", "dormant-one")
+
+        await RegistryRepository(db_session).update(reg.id, is_active=True)
+
+        items, _ = await item_repo.browse("skills", limit=10, offset=0)
+        assert [i.name for i in items] == ["dormant-one"]
+
+
+class TestRegistryNames:
+    async def test_a_second_registry_with_the_same_name_is_refused(self, db_session):
+        # Reconcile finds a configured source by name; two rows under one name
+        # is how prod came to list most of its catalog twice.
+        await _registry(db_session, "system-skills")
+        with pytest.raises(IntegrityError):
+            await _registry(db_session, "system-skills")
 
 
 class TestOrdering:

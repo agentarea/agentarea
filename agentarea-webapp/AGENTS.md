@@ -8,7 +8,7 @@ Next.js 16 app router frontend. Ory Kratos auth. SSE for real-time updates. pnpm
 
 | Task | Location |
 |------|----------|
-| Add page | src/app/(main)/ |
+| Add page | src/app/w/[workspace]/(main)/ (+ `WORKSPACE_ROUTES` in src/lib/workspace-routes.ts) |
 | Add API route | src/app/api/ |
 | Add component | src/components/ |
 | Add hook | src/hooks/ |
@@ -25,7 +25,7 @@ Next.js 16 app router frontend. Ory Kratos auth. SSE for real-time updates. pnpm
 agentarea-webapp/
 ├── src/
 │   ├── app/              # Next.js app router
-│   │   ├── (main)/       # Authenticated pages
+│   │   ├── w/[workspace]/(main)/  # Workspace pages, served at /w/{slug}/...
 │   │   ├── auth/         # Auth pages (Kratos flows)
 │   │   └── api/          # Route handlers: file/stream proxy, SSE, OAuth
 │   ├── components/       # React components
@@ -105,11 +105,32 @@ already on main included.
 - `useUser()` - Current user info
 - `useModelInfo()` - LLM model metadata
 
-## ROUTES (app/(main)/)
+## ROUTES (app/w/[workspace]/(main)/)
 
-Representative — see `src/app/(main)/` for the full set (agents, tasks,
-mcp-servers, policies, triggers, bundles, projects, connections, models,
-secrets, inbox, workplace, admin, settings, ...).
+The workspace lives in the URL: every workspace page is `/w/{slug}/...`, and the
+URL is the only thing that scopes it — no cookie, no fallback. `/`, `/workplace`
+(Kratos' post-login return) and `/invite` land in the personal workspace; any
+other unprefixed path 404s. `/w/{slug}` for a workspace the caller is not a
+member of 404s (`w/[workspace]/layout.tsx`).
+
+- Write links unprefixed (`href="/agents/1"`) through `@/components/WorkspaceLink`
+  and `useWorkspaceRouter()` / `useWorkspacePathname()` from
+  `@/hooks/useWorkspaceNavigation`; they add and strip the `/w/{slug}` prefix.
+  Never import `next/link` or `useRouter`/`usePathname` from `next/navigation`
+  in workspace code. Server `redirect()`/`revalidatePath()`: `workspacePath(params.workspace, ...)`
+  in pages, `await requestWorkspacePath(...)` in server actions.
+- Reading the slug: `getRequestWorkspaceSlug()` on the server (header the proxy
+  sets from the URL), `useWorkspaceSlug()` in components,
+  `currentWorkspaceSlug()` in browser code outside React. Attaching it to a
+  backend call: `backendWorkspaceHeaders(slug)`. Browser calls to `/api/*`
+  route handlers carry `currentWorkspaceHeaders()`, or `withWorkspaceQuery()`
+  where no header can be set (EventSource, download links).
+- A new top-level page directory goes into `WORKSPACE_ROUTES`;
+  `workspace-routes.test.ts` fails until it does.
+
+Representative — see `src/app/w/[workspace]/(main)/` for the full set (agents,
+tasks, policies, triggers, bundles, projects, connections, models, secrets,
+inbox, workplace, admin, settings, ...).
 
 - `/agents`, `/agents/create` - Agent management + create wizard
 - `/tasks` - Task history
@@ -143,3 +164,13 @@ pnpm generate:api   # Refresh openapi.json from backend + regenerate client
 pnpm test           # vitest — pure modules only
 pnpm test:e2e:smoke # Playwright smoke against a stand already on :3000
 ```
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

@@ -19,7 +19,7 @@ def _parse_export(resp: httpx.Response) -> dict:
 
 @pytest.mark.integration
 def test_workspace_export_empty_ok(alice_client: httpx.Client) -> None:
-    _parse_export(alice_client.get("/v1/workspace/export"))
+    _parse_export(alice_client.get(f"{alice_client.ws}/export"))
 
 
 @pytest.mark.integration
@@ -31,7 +31,7 @@ def test_workspace_export_is_served_as_text(alice_client: httpx.Client) -> None:
     where the generated type promised a string, and the download silently
     became "{}". The filename comes from the disposition, not the media type.
     """
-    resp = alice_client.get("/v1/workspace/export")
+    resp = alice_client.get(f"{alice_client.ws}/export")
     assert resp.status_code == 200, resp.text[:200]
     assert resp.headers["content-type"].split(";")[0].strip() == "text/plain"
     assert resp.headers["content-disposition"].endswith("workspace_config.yaml")
@@ -40,11 +40,11 @@ def test_workspace_export_is_served_as_text(alice_client: httpx.Client) -> None:
 @pytest.mark.integration
 def test_workspace_export_with_content_ok(alice_client: httpx.Client) -> None:
     alice_client.post(
-        "/v1/projects/", json={"name": "export-me"}
+        f"{alice_client.ws}/projects/", json={"name": "export-me"}
     ).raise_for_status()
     agent_name = "export-agent"
     alice_client.post(
-        "/v1/agents/",
+        f"{alice_client.ws}/agents/",
         json={
             "name": agent_name,
             "description": "d",
@@ -53,7 +53,7 @@ def test_workspace_export_with_content_ok(alice_client: httpx.Client) -> None:
         },
     ).raise_for_status()
 
-    body = _parse_export(alice_client.get("/v1/workspace/export"))
+    body = _parse_export(alice_client.get(f"{alice_client.ws}/export"))
     assert body.get("agents"), f"expected agents in export, got {body}"
     assert any(a.get("name") == agent_name for a in body["agents"])
 
@@ -63,10 +63,10 @@ def test_workspace_export_is_isolated(
     alice_client: httpx.Client, bob_client: httpx.Client
 ) -> None:
     alice_project_id = alice_client.post(
-        "/v1/projects/", json={"name": "alice-private"}
+        f"{alice_client.ws}/projects/", json={"name": "alice-private"}
     ).raise_for_status().json()["id"]
 
-    bob_export = bob_client.get("/v1/workspace/export")
+    bob_export = bob_client.get(f"{bob_client.ws}/export")
     if bob_export.status_code != 200:
         pytest.skip(f"export 500 with no Bob content — unexpected: {bob_export.status_code}")
     body = bob_export.text

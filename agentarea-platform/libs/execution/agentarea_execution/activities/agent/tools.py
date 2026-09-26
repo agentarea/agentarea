@@ -222,6 +222,12 @@ def make_tools_activities(
                             ),
                             "workspace_id": str(request.workspace_id),
                         }
+                        if tool_name == "agentarea/workspace_files":
+                            from agentarea_common.workspaces.lookup import workspace_slug_for
+
+                            extra_kwargs["workspace_slug"] = await workspace_slug_for(
+                                str(request.workspace_id)
+                            )
                     elif tool_name == "agentarea/context":
                         # Read-only access to the org context store (tier 1).
                         # ArtifactService is workspace-scoped, so the task can

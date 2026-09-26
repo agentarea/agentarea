@@ -32,23 +32,33 @@ from agentarea_api.api.deps.services import (
     DatabaseSessionDep,
     MCPServerInstanceServiceDep,
 )
-from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.dependencies import (
+    PrincipalDep,
+    UserContextDep,
+    bind_request_workspace,
+    binds_workspace,
+)
 from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.auth.tool_authorization import decide_tool_policy
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
+from agentarea_common.config.database import get_read_db_session
 from agentarea_common.utils.url_safety import OutboundPolicy
+from agentarea_common.workspaces.lookup import workspace_slug_for
 from agentarea_governance.application import GovernancePolicyResolver
 from agentarea_mcp.application.auth_service import MCPAuthService
+from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
 from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from mcp.shared.inbound import NAME_BEARING_METHODS, decode_header_value
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -360,6 +370,34 @@ def _guard_and_pin_upstream(
     )
     extensions = {"sni_hostname": target.original_host} if target.original_host else None
     return request_target, target.original_host, extensions
+
+
+@binds_workspace
+async def bind_mcp_instance_workspace(
+    request: Request,
+    instance_id: str,
+    principal: PrincipalDep,
+    db_session: AsyncSession = Depends(get_read_db_session),
+) -> None:
+    """Act in the workspace of the instance the URL names.
+
+    The endpoint is addressed by instance id alone, so the instance is located
+    across workspaces and the caller must reach the one it lives in. A foreign
+    or malformed id answers like a missing instance. The id is parsed here, not
+    by FastAPI: a validation error in a dependency does not stop the ones after
+    it, which would then find no workspace bound and fail as a server error.
+    """
+    try:
+        instance_uuid = UUID(instance_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="MCP instance not found") from None
+    located = await db_session.execute(
+        select(MCPServerInstance.workspace_id).where(MCPServerInstance.id == instance_uuid)
+    )
+    workspace_id = located.scalar_one_or_none()
+    if workspace_id is None or str(workspace_id) not in (principal.accessible_workspaces or []):
+        raise HTTPException(status_code=404, detail="MCP instance not found")
+    bind_request_workspace(request, str(workspace_id), await workspace_slug_for(str(workspace_id)))
 
 
 @router.get(

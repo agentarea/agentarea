@@ -127,7 +127,9 @@ async def test_sync_run_on_agent_without_model_returns_422(async_client, wire):
     svc, task_manager = _real_task_service(_agent(model_id=None))
     wire(svc)
 
-    resp = await async_client.post(f"/v1/agents/{uuid4()}/tasks/sync", json={"description": "do x"})
+    resp = await async_client.post(
+        f"/v1/workspaces/acme/agents/{uuid4()}/tasks/sync", json={"description": "do x"}
+    )
 
     assert resp.status_code == 422
     assert resp.json()["detail"] == "Agent model is not configured"
@@ -142,7 +144,7 @@ async def test_sync_run_with_model_override_succeeds(async_client, wire):
     wire(svc)
 
     resp = await async_client.post(
-        f"/v1/agents/{uuid4()}/tasks/sync",
+        f"/v1/workspaces/acme/agents/{uuid4()}/tasks/sync",
         json={"description": "do x", "parameters": {"model_override": "inst-1"}},
     )
 
@@ -156,7 +158,9 @@ async def test_sync_run_on_agent_with_model_succeeds(async_client, wire):
     svc, task_manager = _real_task_service(_agent(model_id="inst-1"))
     wire(svc)
 
-    resp = await async_client.post(f"/v1/agents/{uuid4()}/tasks/sync", json={"description": "do x"})
+    resp = await async_client.post(
+        f"/v1/workspaces/acme/agents/{uuid4()}/tasks/sync", json={"description": "do x"}
+    )
 
     assert resp.status_code == 200
     body = resp.json()
@@ -173,7 +177,7 @@ async def test_stream_run_on_agent_without_model_emits_model_not_configured(asyn
     wire(svc, agent_service=agent_service)
 
     resp = await async_client.post(
-        f"/v1/agents/{uuid4()}/tasks/",
+        f"/v1/workspaces/acme/agents/{uuid4()}/tasks/",
         json={"description": "do x"},
     )
 

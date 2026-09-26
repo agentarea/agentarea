@@ -123,7 +123,7 @@ def _drive_scheduling_task(
     agent_id = _agent_with_triggers(client, llm_model, name=agent_name)
     task_id = (
         client.post(
-            f"/v1/agents/{agent_id}/tasks/sync",
+            f"{client.ws}/agents/{agent_id}/tasks/sync",
             json={
                 "description": user_message,
                 "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,

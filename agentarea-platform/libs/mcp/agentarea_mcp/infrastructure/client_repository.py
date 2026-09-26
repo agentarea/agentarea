@@ -43,30 +43,25 @@ class ClientRepository(WorkspaceScopedRepository[Client]):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_accessible_by_id(self, id: UUID | str) -> Client | None:
-        """Resolve a client at the request boundary across authorized workspaces.
+    @staticmethod
+    async def locate_workspace(
+        session: AsyncSession, id: UUID | str, accessible_workspaces: list[str]
+    ) -> str | None:
+        """The workspace a client lives in, if it is one of ``accessible_workspaces``.
 
-        Repository CRUD remains bound to the active workspace. This lookup is
-        reserved for resource-addressed endpoints: it finds the resource only
-        inside the caller's already-resolved workspace allowlist, after which
-        the request binds to the resource workspace before constructing other
-        workspace-scoped dependencies.
+        Repository CRUD stays bound to one workspace. This lookup is reserved for
+        resource-addressed endpoints (``/mcp/clients/{id}``): it finds the client
+        only inside the caller's already-resolved workspace allowlist, after
+        which the request enters that workspace before constructing any other
+        workspace-scoped dependency.
         """
-        accessible = self.user_context.accessible_workspaces or [self.user_context.workspace_id]
-        located = await self.session.execute(
-            select(Client.workspace_id).where(Client.id == id, Client.workspace_id.in_(accessible))
+        located = await session.execute(
+            select(Client.workspace_id).where(
+                Client.id == id, Client.workspace_id.in_(accessible_workspaces)
+            )
         )
         workspace_id = located.scalar_one_or_none()
-        if workspace_id is None:
-            return None
-        query = (
-            select(Client)
-            .where(Client.id == id)
-            .options(*self._scoped_links(workspace_id))
-            .execution_options(populate_existing=True)
-        )
-        result = await self.session.execute(query)
-        return result.scalar_one_or_none()
+        return str(workspace_id) if workspace_id is not None else None
 
     async def list_all(
         self, limit: int | None = None, offset: int | None = None, **filters

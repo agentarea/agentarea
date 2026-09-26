@@ -6,6 +6,7 @@ import {
   initialState,
   isInteractionClosed,
   reduceState,
+  terminalMessage,
 } from "./reducer";
 
 function feed(events: EventInput[]) {
@@ -139,6 +140,81 @@ describe("reducer timeline and terminal message", () => {
     expect(state.timeline.map((t) => t.eventType)).toEqual(["task.failed"]);
     expect(state.status).toBe("failed");
     expect(state.terminalMessage).toBe("budget exceeded");
+  });
+
+  it("gives a failed task its error when it carries no message or reason", () => {
+    const state = feed([
+      { eventType: "task.failed", data: { error: "no evidence" } },
+    ]);
+    expect(state.status).toBe("failed");
+    expect(state.terminalMessage).toBe("no evidence");
+  });
+
+  it("gives a cancelled task its reason", () => {
+    const state = feed([
+      { eventType: "task.cancelled", data: { reason: "stopped by owner" } },
+    ]);
+    expect(state.status).toBe("cancelled");
+    expect(state.terminalMessage).toBe("stopped by owner");
+  });
+
+  it("orders a failure's reason the way the backend contract does", () => {
+    expect(
+      terminalMessage("task.failed", { reason: "reason", error: "error" })
+    ).toBe("reason");
+    expect(
+      terminalMessage("task.failed", { message: "message", reason: "reason" })
+    ).toBe("message");
+    expect(
+      terminalMessage("task.cancelled", {
+        blocked_reason: "blocked",
+        error_type: "Timeout",
+      })
+    ).toBe("blocked");
+    expect(terminalMessage("task.failed", { error_type: "Timeout" })).toBe(
+      "Timeout"
+    );
+    expect(terminalMessage("task.failed", {})).toBe("Task failed.");
+    expect(terminalMessage("task.cancelled", {})).toBe("Task cancelled.");
+  });
+
+  it("shows the same reason in the banner and the timeline row", () => {
+    const data = { reason: "reason", error: "error" };
+    const state = feed([{ eventType: "task.failed", data }]);
+    expect(state.terminalMessage).toBe(
+      terminalMessage(state.timeline[0].eventType, state.timeline[0].data)
+    );
+  });
+
+  it("lets a failure that follows completion decide how the run ended", () => {
+    const state = feed([
+      { eventType: "tool.call", data: { tool_call_id: "t" } },
+      { eventType: "tool.result", data: { tool_call_id: "t", success: true } },
+      { eventType: "task.completed", data: { result: "profile written" } },
+      { eventType: "task.failed", data: { error: "no evidence" } },
+    ]);
+    expect(state.status).toBe("failed");
+    expect(state.terminalMessage).toBe("no evidence");
+    expect(state.completedRuns).toHaveLength(1);
+    expect(state.completedRuns[0].partIds).toEqual(["t"]);
+    expect(state.completedRuns[0].terminalType).toBe("task.failed");
+    expect(state.completedRuns[0].terminalMessage).toBe("no evidence");
+  });
+
+  it("keeps a run that ended waiting for follow-up when a cancel arrives later", () => {
+    const state = feed([
+      { eventType: "tool.call", data: { tool_call_id: "t" } },
+      { eventType: "tool.result", data: { tool_call_id: "t", success: true } },
+      {
+        eventType: "task.awaiting_follow_up",
+        data: { final_response: "the answer" },
+      },
+      { eventType: "task.cancelled", data: { reason: "conversation closed" } },
+    ]);
+    expect(state.status).toBe("cancelled");
+    expect(state.completedRuns).toHaveLength(1);
+    expect(state.completedRuns[0].terminalType).toBe("task.awaiting_follow_up");
+    expect(state.completedRuns[0].terminalMessage).toBe("the answer");
   });
 
   it("derives a completed message from final_response when message is absent", () => {

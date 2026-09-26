@@ -1024,6 +1024,11 @@
     "noMatchingTasks": "No matching tasks",
     "noMatchingTasksDescription": "No tasks match your search \"{query}\"",
     "noTasksByCreatorDescription": "Nobody has started a task matching this filter",
+    "noTasksOnPageDescription": "This page is past the last task",
+    "firstPage": "First page",
+    "previousPage": "Previous",
+    "nextPage": "Next",
+    "pageNumber": "Page {page}",
     "unknownCreator": "Unknown",
     "showTasksBy": "Show tasks started by {name}",
     "taskRunning": "Task Running",
@@ -1854,16 +1859,6 @@
       "noCap": "No cap set"
     }
   },
-  "SkillsSection": {
-    "title": "Skills",
-    "addSkill": "Add Skill",
-    "searchPlaceholder": "Search skills...",
-    "loading": "Loading skills...",
-    "noSkillsAvailable": "No skills available",
-    "createSkill": "Create a skill",
-    "noSkillsFound": "No skills found",
-    "noSkillsAssigned": "No skills assigned. Add skills to enhance this agent's capabilities."
-  },
   "TriggerControl": {
     "error": "Something went wrong with the trigger",
     "enabled": "enabled",
@@ -2270,6 +2265,7 @@
     "filters": {
       "all": "All",
       "pending": "Needs approval",
+      "input": "Needs input",
       "completed": "Completed",
       "failed": "Failed"
     },
@@ -2314,6 +2310,10 @@
       "pending": {
         "title": "Approval queue is clear",
         "description": "No agent is waiting on a human decision right now. New escalations will land here before they can continue."
+      },
+      "input": {
+        "title": "No agent is waiting for input",
+        "description": "When an agent stops to ask a question, it will appear here until someone answers it."
       },
       "completed": {
         "title": "No completed approvals",

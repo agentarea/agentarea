@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -20,13 +20,16 @@ from agentarea_common.auth.route_authz import (
     requires_workspace_admin,
 )
 from agentarea_common.money import ZERO, Money
-from agentarea_common.utils.types import UtcDatetime
+from agentarea_common.utils.types import NaiveUtcDatetime, UtcDatetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents/{agent_id}/wallet", tags=["wallet"])
+
+# agent_wallets.service_budget_usd is NUMERIC(18, 6): at most 12 integer digits.
+_BUDGET_CEILING = Decimal(10) ** 12
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +65,7 @@ class CreateWalletRequest(BaseModel):
     x402_config: X402ConfigSchema | None = None
     mpp_config: MPPConfigSchema | None = None
     credentials: WalletCredentialsSchema | None = None
-    service_budget_usd: Money = Field(default=ZERO, ge=ZERO)
+    service_budget_usd: Money = Field(default=ZERO, ge=ZERO, lt=_BUDGET_CEILING)
     service_budget_period: str = "execution"  # "execution", "daily", "monthly"
 
 
@@ -71,13 +74,13 @@ class UpdateWalletRequest(BaseModel):
     x402_config: X402ConfigSchema | None = None
     mpp_config: MPPConfigSchema | None = None
     credentials: WalletCredentialsSchema | None = None
-    service_budget_usd: Money | None = Field(default=None, ge=ZERO)
+    service_budget_usd: Money | None = Field(default=None, ge=ZERO, lt=_BUDGET_CEILING)
     service_budget_period: str | None = None
     status: str | None = None
 
 
 class FundWalletRequest(BaseModel):
-    service_budget_usd: Money = Field(ge=ZERO)
+    service_budget_usd: Money = Field(ge=ZERO, lt=_BUDGET_CEILING)
 
 
 class WalletResponse(BaseModel):
@@ -329,8 +332,8 @@ async def get_payment_history(
     wallet_service=Depends(get_wallet_service),
     protocol: str | None = Query(None, description="Filter by protocol (x402, mpp)"),
     status: str | None = Query(None, description="Filter by status"),
-    from_date: datetime | None = Query(None, description="Filter from date"),
-    to_date: datetime | None = Query(None, description="Filter to date"),
+    from_date: NaiveUtcDatetime | None = Query(None, description="Filter from date"),
+    to_date: NaiveUtcDatetime | None = Query(None, description="Filter to date"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):

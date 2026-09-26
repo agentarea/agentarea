@@ -123,7 +123,7 @@ def local_context7_mcp_server() -> Iterator[str]:
 
 def _create_skill(client: httpx.Client, *, name: str, description: str, content: str) -> str:
     resp = client.post(
-        "/v1/skills",
+        f"{client.ws}/skills",
         json={"name": name, "description": description, "content": content},
     )
     resp.raise_for_status()
@@ -151,7 +151,7 @@ def _create_agent_with_skills(
     if skill_ids:
         body["skill_ids"] = skill_ids
 
-    return client.post("/v1/agents/", json=body).raise_for_status().json()["id"]
+    return client.post(f"{client.ws}/agents/", json=body).raise_for_status().json()["id"]
 
 
 def _tool_events(events: list[dict], tool_name: str) -> list[dict]:
@@ -165,7 +165,7 @@ def _tool_events(events: list[dict], tool_name: str) -> list[dict]:
 
 def _create_mcp_instance(client: httpx.Client, *, name: str, endpoint_url: str) -> str:
     resp = client.post(
-        "/v1/mcp-server-instances/",
+        f"{client.ws}/mcp-server-instances/",
         json={
             "name": name,
             "description": "deterministic e2e MCP fixture",
@@ -182,7 +182,7 @@ def _create_mcp_instance(client: httpx.Client, *, name: str, endpoint_url: str) 
     if verification.get("status") != "succeeded":
         pytest.skip(f"Local MCP fixture did not verify: {verification}")
     tools = client.get(
-        "/v1/agents/tools",
+        f"{client.ws}/agents/tools",
         params={"include": "mcp", "mcp_instance_id": body["id"]},
     ).raise_for_status().json()
     tool_names = {tool["name"] for tool in tools}
@@ -262,8 +262,8 @@ def test_orchestrator_delegates_to_skill_file_agent_and_mcp_agent(
         ],
     )
 
-    scribe = alice_client.get(f"/v1/agents/{scribe_id}").raise_for_status().json()
-    mcp_agent = alice_client.get(f"/v1/agents/{mcp_id}").raise_for_status().json()
+    scribe = alice_client.get(f"{alice_client.ws}/agents/{scribe_id}").raise_for_status().json()
+    mcp_agent = alice_client.get(f"{alice_client.ws}/agents/{mcp_id}").raise_for_status().json()
 
     coord_id = _create_agent_with_skills(
         alice_client,
@@ -285,7 +285,7 @@ def test_orchestrator_delegates_to_skill_file_agent_and_mcp_agent(
     )
 
     task_id = alice_client.post(
-        f"/v1/agents/{coord_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{coord_id}/tasks/sync",
         json={"description": "Run the skill/file specialist and the MCP specialist."},
         timeout=30.0,
     ).raise_for_status().json()["id"]
@@ -303,13 +303,13 @@ def test_orchestrator_delegates_to_skill_file_agent_and_mcp_agent(
 
     scribe_meta = by_agent[scribe["name"]]
     scribe_events = alice_client.get(
-        f"/v1/agents/{scribe_meta['target_agent_id']}/tasks/"
+        f"{alice_client.ws}/agents/{scribe_meta['target_agent_id']}/tasks/"
         f"{scribe_meta['child_task_id']}/events"
     ).raise_for_status().json()["events"]
     assert _tool_events(scribe_events, "activate_skill"), "scribe did not activate its skill"
 
     artifacts = alice_client.get(
-        f"/v1/agents/{scribe_meta['target_agent_id']}/tasks/"
+        f"{alice_client.ws}/agents/{scribe_meta['target_agent_id']}/tasks/"
         f"{scribe_meta['child_task_id']}/artifacts"
     ).raise_for_status().json()
     report = next((a for a in artifacts if a["path"].endswith("skill-report.txt")), None)
@@ -319,7 +319,7 @@ def test_orchestrator_delegates_to_skill_file_agent_and_mcp_agent(
 
     mcp_meta = by_agent[mcp_agent["name"]]
     mcp_events = alice_client.get(
-        f"/v1/agents/{mcp_meta['target_agent_id']}/tasks/"
+        f"{alice_client.ws}/agents/{mcp_meta['target_agent_id']}/tasks/"
         f"{mcp_meta['child_task_id']}/events"
     ).raise_for_status().json()["events"]
     context7_events = _tool_events(mcp_events, "context7_lookup")
@@ -329,4 +329,4 @@ def test_orchestrator_delegates_to_skill_file_agent_and_mcp_agent(
     assert CONTEXT7_MARKER in str(context7_events[-1]["metadata"].get("result") or "")
     assert OPEN_MCP_MARKER in str(open_echo_events[-1]["metadata"].get("result") or "")
 
-    alice_client.delete(f"/v1/agents/{coord_id}/tasks/{task_id}")
+    alice_client.delete(f"{alice_client.ws}/agents/{coord_id}/tasks/{task_id}")

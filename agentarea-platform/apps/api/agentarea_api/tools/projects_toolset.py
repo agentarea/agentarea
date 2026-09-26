@@ -82,11 +82,17 @@ class ProjectsToolset(Toolset):
         parent_project_id: str | None = None,
     ) -> str:
         """Create a new project."""
+        try:
+            parent_id = UUID(parent_project_id) if parent_project_id is not None else None
+        except ValueError:
+            return json.dumps(
+                {"error": f"parent_project_id must be a UUID, got {parent_project_id!r}"}
+            )
         payload = ProjectCreate(
             name=name,
             description=description,
             instructions=instructions,
-            parent_project_id=parent_project_id,
+            parent_project_id=parent_id,
         )
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
@@ -112,7 +118,12 @@ class ProjectsToolset(Toolset):
         if instructions is not None:
             patch["instructions"] = instructions
         if parent_project_id is not None:
-            patch["parent_project_id"] = parent_project_id
+            try:
+                patch["parent_project_id"] = UUID(parent_project_id)
+            except ValueError:
+                return json.dumps(
+                    {"error": f"parent_project_id must be a UUID, got {parent_project_id!r}"}
+                )
         payload = ProjectUpdate.model_validate(patch)
 
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):

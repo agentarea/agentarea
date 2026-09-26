@@ -9,6 +9,7 @@ from uuid import uuid4
 import httpx
 import pytest
 from agentarea_api.api.v1 import agents_tasks, files
+from agentarea_common.auth.context import UserContext
 from fastapi import HTTPException
 
 
@@ -173,13 +174,18 @@ async def test_task_artifact_listing_returns_only_explicit_manager_artifacts(
     monkeypatch.setattr(agents_tasks, "_sandbox_manager_request", manager_request)
 
     items = await agents_tasks._list_task_artifact_items(
-        agent_id=agent_id, workspace_id="ws-1", task_id=task_id
+        agent_id=agent_id,
+        user_context=UserContext(user_id="u-1", workspace_id="ws-1", workspace_slug="acme"),
+        task_id=task_id,
     )
 
     assert [(item.id, item.path) for item in items] == [
         ("art_0123456789abcdef0123456789abcdef", "reports/result.txt")
     ]
-    assert items[0].download_url.endswith("/artifacts/files/art_0123456789abcdef0123456789abcdef")
+    assert items[0].download_url == (
+        f"/v1/workspaces/acme/agents/{agent_id}/tasks/{task_id}"
+        "/artifacts/files/art_0123456789abcdef0123456789abcdef"
+    )
     manager_request.assert_awaited_once_with(
         "GET",
         "/sandbox/artifacts",

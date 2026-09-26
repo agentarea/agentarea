@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
 
@@ -27,7 +27,7 @@ export default function RetryEmptyState({
   icons,
   additionAction,
 }: RetryEmptyStateProps) {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
   const t = useTranslations("Common");
 
   return (

@@ -2,7 +2,7 @@
 
 Declaring authorization on reads (2026-09-23) turned up endpoints that any
 member could call: the audit log, the usage ledger, the API key inventory and
--- worst of the set -- ``GET /v1/mcp-oauth-links/{id}``, whose response model
+-- worst of the set -- ``GET /v1/workspaces/{WORKSPACE}/mcp-oauth-links/{id}``, whose response model
 carries a live ``token``. Nothing about workspace scoping stopped any of it;
 workspace scoping answers "whose data", never "which of us may see it".
 
@@ -16,7 +16,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from agentarea_api.api.v1.router import protected_v1_router
+from agentarea_api.api.v1.router import workspace_v1_router
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
@@ -29,22 +29,22 @@ WORKSPACE = "ws-acme"
 SOME_ID = str(uuid4())
 
 ADMIN_READS = [
-    "/v1/access-control/graph",
-    "/v1/access-control/relationships",
-    "/v1/api-keys/",
-    f"/v1/api-keys/{SOME_ID}",
-    "/v1/audit-logs/",
-    "/v1/mcp-auth-configs/",
-    f"/v1/mcp-auth-configs/{SOME_ID}",
-    f"/v1/mcp-oauth-links/{SOME_ID}",
-    f"/v1/mcp-oauth-links/instance/{SOME_ID}",
-    f"/v1/mcp-server-instances/{SOME_ID}/environment",
-    f"/v1/mcp-server-instances/{SOME_ID}/oauth-links",
-    "/v1/network/people-access",
-    "/v1/policies",
-    f"/v1/policies/{SOME_ID}",
-    "/v1/usage/events",
-    "/v1/workspace/export",
+    f"/v1/workspaces/{WORKSPACE}/access-control/graph",
+    f"/v1/workspaces/{WORKSPACE}/access-control/relationships",
+    f"/v1/workspaces/{WORKSPACE}/api-keys/",
+    f"/v1/workspaces/{WORKSPACE}/api-keys/{SOME_ID}",
+    f"/v1/workspaces/{WORKSPACE}/audit-logs/",
+    f"/v1/workspaces/{WORKSPACE}/mcp-auth-configs/",
+    f"/v1/workspaces/{WORKSPACE}/mcp-auth-configs/{SOME_ID}",
+    f"/v1/workspaces/{WORKSPACE}/mcp-oauth-links/{SOME_ID}",
+    f"/v1/workspaces/{WORKSPACE}/mcp-oauth-links/instance/{SOME_ID}",
+    f"/v1/workspaces/{WORKSPACE}/mcp-server-instances/{SOME_ID}/environment",
+    f"/v1/workspaces/{WORKSPACE}/mcp-server-instances/{SOME_ID}/oauth-links",
+    f"/v1/workspaces/{WORKSPACE}/network/people-access",
+    f"/v1/workspaces/{WORKSPACE}/policies",
+    f"/v1/workspaces/{WORKSPACE}/policies/{SOME_ID}",
+    f"/v1/workspaces/{WORKSPACE}/usage/events",
+    f"/v1/workspaces/{WORKSPACE}/export",
     f"/v1/workspaces/{WORKSPACE}/invitations",
 ]
 
@@ -56,7 +56,7 @@ def _authz():
 
 def _client(context: UserContext) -> TestClient:
     app = FastAPI()
-    app.include_router(protected_v1_router)
+    app.include_router(workspace_v1_router)
     app.dependency_overrides[get_user_context] = lambda: context
     return TestClient(app, raise_server_exceptions=False)
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { LayoutGrid, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { setCookie } from "@/utils/cookies";
@@ -53,9 +54,9 @@ export default function HeaderTabs({
   value,
   onChange,
 }: HeaderTabsProps) {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
   const searchParams = useSearchParams();
-  const pathname = usePathname();
+  const pathname = useWorkspacePathname();
 
   // Unique cookie key based on current path.
   const cookieKey = useMemo(() => {

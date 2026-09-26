@@ -21,7 +21,7 @@ def test_cron_trigger_creates_task_on_schedule(
     )
 
     trigger = alice_client.post(
-        "/v1/triggers/",
+        f"{alice_client.ws}/triggers/",
         json={
             "name": "cron-e2e",
             "description": "Real cron trigger e2e test",
@@ -34,7 +34,7 @@ def test_cron_trigger_creates_task_on_schedule(
 
     try:
         status = alice_client.get(
-            f"/v1/triggers/{trigger_id}/status"
+            f"{alice_client.ws}/triggers/{trigger_id}/status"
         ).raise_for_status().json()
         assert status.get("is_active") is True, f"cron trigger not active: {status}"
         assert "schedule_info" in status or "schedule" in status or "cron_expression" in status, (
@@ -44,7 +44,7 @@ def test_cron_trigger_creates_task_on_schedule(
         deadline = time.time() + 90.0
         executions = []
         while time.time() < deadline:
-            resp = alice_client.get(f"/v1/triggers/{trigger_id}/executions")
+            resp = alice_client.get(f"{alice_client.ws}/triggers/{trigger_id}/executions")
             if resp.status_code == 200:
                 data = resp.json()
                 executions = data.get("executions", data if isinstance(data, list) else [])
@@ -63,7 +63,7 @@ def test_cron_trigger_creates_task_on_schedule(
             "pending",
         ), f"Unexpected execution record: {last}"
     finally:
-        alice_client.delete(f"/v1/triggers/{trigger_id}")
+        alice_client.delete(f"{alice_client.ws}/triggers/{trigger_id}")
 
 
 @pytest.mark.integration
@@ -78,7 +78,7 @@ def test_cron_trigger_rejects_invalid_expression(
     )
 
     resp = alice_client.post(
-        "/v1/triggers/",
+        f"{alice_client.ws}/triggers/",
         json={
             "name": "cron-bad",
             "agent_id": agent_id,
@@ -103,7 +103,7 @@ def test_cron_trigger_disable_prevents_execution(
     )
 
     trigger = alice_client.post(
-        "/v1/triggers/",
+        f"{alice_client.ws}/triggers/",
         json={
             "name": "cron-disable-test",
             "agent_id": agent_id,
@@ -114,10 +114,10 @@ def test_cron_trigger_disable_prevents_execution(
     trigger_id = trigger["id"]
 
     try:
-        alice_client.post(f"/v1/triggers/{trigger_id}/disable").raise_for_status()
+        alice_client.post(f"{alice_client.ws}/triggers/{trigger_id}/disable").raise_for_status()
         status = alice_client.get(
-            f"/v1/triggers/{trigger_id}/status"
+            f"{alice_client.ws}/triggers/{trigger_id}/status"
         ).raise_for_status().json()
         assert status.get("is_active") is False, f"Trigger still active after disable: {status}"
     finally:
-        alice_client.delete(f"/v1/triggers/{trigger_id}")
+        alice_client.delete(f"{alice_client.ws}/triggers/{trigger_id}")

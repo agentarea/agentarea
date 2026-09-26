@@ -32,8 +32,8 @@ create-task body. There is no multipart task-create endpoint.
 
 | Option | Pick it when |
 |---|---|
-| `POST /v1/files/upload-url` then PUT to the object store | Default. Bytes go straight to storage and never transit the API process. |
-| `POST /v1/files` with `purpose=attachment` | The client cannot reach the object store directly, or the file is small and you want one round trip. |
+| `POST /v1/workspaces/{workspace}/files/upload-url` then PUT to the object store | Default. Bytes go straight to storage and never transit the API process. |
+| `POST /v1/workspaces/{workspace}/files` with `purpose=attachment` | The client cannot reach the object store directly, or the file is small and you want one round trip. |
 
 Both return a `ref` of the form `staging/{id}/{filename}`, and the create-task
 endpoint treats them identically.
@@ -54,7 +54,7 @@ endpoint treats them identically.
     The request takes the digest as lowercase hex.
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/files/upload-url" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/files/upload-url" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{
@@ -92,7 +92,7 @@ endpoint treats them identically.
     **Alternative — server-proxied upload.** One call, no digest arithmetic:
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/files" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/files" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -F "purpose=attachment" \
       -F "file=@report.csv"
@@ -111,7 +111,7 @@ endpoint treats them identically.
 
   <Step title="Create the task with the ref">
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/sync" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/sync" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -136,7 +136,7 @@ List the task's files and confirm the attachment landed under
 `inputs/attachments/`:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '.[] | {path, size, content_type}'
 ```
 

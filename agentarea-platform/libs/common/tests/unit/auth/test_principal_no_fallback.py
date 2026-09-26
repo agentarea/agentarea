@@ -51,7 +51,8 @@ class TestUserContextRejectsEmptyPrincipal:
     def test_real_principal_is_accepted(self):
         ctx = UserContext(user_id="user-1", workspace_id="ws-1")
         assert ctx.user_id == "user-1"
-        assert ctx.accessible_workspaces == ["ws-1"]
+        # Unresolved, not defaulted: reach is decided by the request boundary.
+        assert ctx.accessible_workspaces is None
 
 
 class TestWorkspaceScopedRepositoryRefusesServicePrincipal:

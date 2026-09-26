@@ -6,10 +6,9 @@ from uuid import UUID
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_tasks.domain.statuses import INBOX_STATUSES
 
 from .base import platform_read_context
-
-INBOX_STATUSES = ["waiting_for_approval", "waiting_for_input", "completed", "failed"]
 
 
 @toolset(
@@ -32,6 +31,12 @@ class InboxToolset(Toolset):
         page_size: int = 50,
     ) -> str:
         """List inbox items, optionally filtered by status or agent."""
+        if status and status not in INBOX_STATUSES:
+            return json.dumps(
+                {
+                    "error": f"Unknown inbox status {status!r}; expected one of {list(INBOX_STATUSES)}"
+                }
+            )
         async with platform_read_context() as (_session, _user_ctx, repo_factory, broker, _secret):
             from agentarea_tasks.task_service import TaskService
 
@@ -49,7 +54,7 @@ class InboxToolset(Toolset):
                 workflow_service=workflow_service,
             )
 
-            statuses = [status] if status and status in INBOX_STATUSES else INBOX_STATUSES
+            statuses = [status] if status else list(INBOX_STATUSES)
             offset = max(page - 1, 0) * page_size
 
             tasks = await service.task_repository.list_by_statuses(

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import type { HumanInputSecretValue } from "@/components/Chat/types";
@@ -50,7 +50,7 @@ export default function AgentChat({
   status = "",
   className = "",
 }: AgentChatProps) {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
 
   const {
     parts,

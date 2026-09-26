@@ -98,7 +98,8 @@ export interface SSEMessage {
 export interface DisplayEvent {
   id: string;
   type: WorkflowEventType;
-  timestamp: Date;
+  /** Null when the event arrived without one — never replaced by "now". */
+  timestamp: Date | null;
   title: string;
   description: string;
   level: EventLevel;
@@ -445,24 +446,6 @@ export const mapSSEToDisplayEvent = (
   };
 };
 
-export const mapTaskEventToDisplayEvent = (
-  taskEvent: TaskEvent
-): DisplayEvent => {
-  const eventType = taskEvent.event_type as WorkflowEventType;
-  const config = EVENT_TYPE_CONFIG[eventType];
-
-  return {
-    id: taskEvent.id,
-    type: eventType,
-    timestamp: new Date(taskEvent.timestamp),
-    title: config?.title || taskEvent.event_type,
-    description: taskEvent.message,
-    level: config?.level || "info",
-    data: taskEvent.metadata,
-    icon: config?.icon,
-  };
-};
-
 export const getEventLevelColor = (level: EventLevel): string => {
   switch (level) {
     case "success":
@@ -496,7 +479,8 @@ export const getEventStats = (events: DisplayEvent[]): EventStats => {
       },
       {} as Record<EventLevel, number>
     ),
-    recentActivity: events.filter((event) => event.timestamp > oneHourAgo)
-      .length,
+    recentActivity: events.filter(
+      (event) => event.timestamp !== null && event.timestamp > oneHourAgo
+    ).length,
   };
 };

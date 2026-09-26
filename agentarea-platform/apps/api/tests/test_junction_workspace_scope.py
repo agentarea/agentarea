@@ -318,8 +318,9 @@ async def test_client_endpoint_lookup_hides_a_foreign_skill_already_linked(sessi
     await session.commit()
     session.expunge_all()
 
-    ctx = UserContext(user_id="user-a", workspace_id="ws-a", accessible_workspaces=["ws-a", "ws-b"])
-    resolved = await ClientRepository(session, ctx).get_accessible_by_id(client.id)
+    workspace_id = await ClientRepository.locate_workspace(session, client.id, ["ws-a", "ws-b"])
+    ctx = UserContext(user_id="user-a", workspace_id=workspace_id)
+    resolved = await ClientRepository(session, ctx).get_by_id(client.id)
 
     assert [s.id for s in resolved.skills] == [ours.id]
 

@@ -54,7 +54,7 @@ class TestJWTTokenHandler:
         assert isinstance(context, UserContext)
         assert context.user_id == "test-user-123"
         assert context.workspace_id == "test-workspace-456"
-        assert context.accessible_workspaces == ["test-workspace-456"]
+        assert context.accessible_workspaces is None
 
     async def test_extract_user_context_missing_authorization_header(
         self, jwt_handler, mock_request
@@ -244,7 +244,7 @@ class TestJWTTokenHandler:
         # Assert
         assert context.user_id == "full-user-123"
         assert context.workspace_id == "full-workspace-456"
-        assert context.accessible_workspaces == ["full-workspace-456"]
+        assert context.accessible_workspaces is None
 
     async def test_extract_user_context_case_insensitive_bearer(self, jwt_handler, mock_request):
         """Test that Bearer token extraction is case sensitive (as per spec)."""

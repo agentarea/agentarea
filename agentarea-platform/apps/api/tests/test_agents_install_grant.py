@@ -85,7 +85,7 @@ def captured_grant(monkeypatch):
 async def test_install_agent_grants_owner_tuple(
     async_client, mock_agent_service, forked_agent, captured_grant
 ):
-    resp = await async_client.post(f"/v1/agents/{uuid4()}/install")
+    resp = await async_client.post(f"/v1/workspaces/acme/agents/{uuid4()}/install")
 
     assert resp.status_code == 200
     mock_agent_service.install_catalog_agent.assert_awaited_once()
@@ -108,7 +108,9 @@ async def test_update_agent_grants_owner_tuple(
     monkeypatch.setattr("agentarea_api.api.v1.agents.require_permission", AsyncMock())
     # Approval-flag overlay reads the DB; irrelevant to the ownership grant asserted here.
     monkeypatch.setattr("agentarea_api.api.v1.agents._overlay_approval_flags", AsyncMock())
-    resp = await async_client.patch(f"/v1/agents/{uuid4()}", json={"name": "Renamed"})
+    resp = await async_client.patch(
+        f"/v1/workspaces/acme/agents/{uuid4()}", json={"name": "Renamed"}
+    )
 
     assert resp.status_code == 200
     mock_agent_service.get_with_skills.assert_awaited_once_with(forked_agent.id)

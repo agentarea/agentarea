@@ -40,7 +40,7 @@ it being attached per task.
     to compute, but the bytes pass through the API process:
 
     ```bash
-    curl -X POST "$AGENTAREA_URL/v1/files" \
+    curl -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/files" \
       -H "Authorization: Bearer $TOKEN" \
       -F "purpose=attachment" \
       -F "file=@report.csv"
@@ -56,7 +56,7 @@ it being attached per task.
     SHA=$(shasum -a 256 report.csv | cut -d' ' -f1)
     SIZE=$(wc -c < report.csv)
 
-    curl -s -X POST "$AGENTAREA_URL/v1/files/upload-url" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/files/upload-url" \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
       -d "{\"filename\":\"report.csv\",\"sha256\":\"$SHA\",\"size\":$SIZE,\"content_type\":\"text/csv\"}"
@@ -77,7 +77,7 @@ it being attached per task.
     Pass the refs in `attachments`:
 
     ```bash
-    curl -X POST "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/" \
+    curl -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/" \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -108,7 +108,7 @@ it being attached per task.
 List what the task actually received:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
   -H "Authorization: Bearer $TOKEN"
 ```
 

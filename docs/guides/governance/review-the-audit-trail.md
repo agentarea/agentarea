@@ -27,7 +27,7 @@ audit log — the two are separate stores. If your question is about a run, skip
   audit log.
 - Read [audit](/concepts/governance/audit) for what each trail covers.
 
-Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
+Examples assume `API=http://localhost:8000`, a bearer token in `$TOKEN`, and your workspace slug in `$WORKSPACE` (see [workspace scoping](/api-reference/introduction#workspace-scoping)).
 </Info>
 
 ## Steps
@@ -35,7 +35,7 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
 <Steps titleSize="h3">
   <Step title="Read the most recent events">
     ```bash
-    curl -s -H "Authorization: Bearer $TOKEN" "$API/v1/audit-logs/" \
+    curl -s -H "Authorization: Bearer $TOKEN" "$API/v1/workspaces/$WORKSPACE/audit-logs/" \
       | python3 -c '
     import json,sys
     d = json.load(sys.stdin)
@@ -60,7 +60,7 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
     | `limit` | 1 to 100 | you are paging |
 
     ```bash
-    curl -s -G -H "Authorization: Bearer $TOKEN" "$API/v1/audit-logs/" \
+    curl -s -G -H "Authorization: Bearer $TOKEN" "$API/v1/workspaces/$WORKSPACE/audit-logs/" \
       --data-urlencode "resource_type=agent" \
       --data-urlencode "resource_id=$AGENT_ID" \
       --data-urlencode "since=2026-07-01T00:00:00Z" \
@@ -77,11 +77,11 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
     Pass the previous response's `next_cursor` as `cursor`:
 
     ```bash
-    CURSOR=$(curl -s -H "Authorization: Bearer $TOKEN" "$API/v1/audit-logs/?limit=100" \
+    CURSOR=$(curl -s -H "Authorization: Bearer $TOKEN" "$API/v1/workspaces/$WORKSPACE/audit-logs/?limit=100" \
              | python3 -c 'import json,sys; print(json.load(sys.stdin)["next_cursor"] or "")')
 
     curl -s -H "Authorization: Bearer $TOKEN" \
-      "$API/v1/audit-logs/?limit=100&cursor=$CURSOR" | python3 -m json.tool
+      "$API/v1/workspaces/$WORKSPACE/audit-logs/?limit=100&cursor=$CURSOR" | python3 -m json.tool
     ```
 
     The cursor is the id of the last event on the previous page; the next page
@@ -92,7 +92,7 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
     Update and delete events carry a `changes` array of `{field, before, after}`:
 
     ```bash
-    curl -s -G -H "Authorization: Bearer $TOKEN" "$API/v1/audit-logs/" \
+    curl -s -G -H "Authorization: Bearer $TOKEN" "$API/v1/workspaces/$WORKSPACE/audit-logs/" \
       --data-urlencode "action=agent.update" \
       | python3 -c '
     import json,sys
@@ -117,12 +117,12 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
 Make a change you can predict, then find it:
 
 ```bash
-RULE_ID=$(curl -s -X POST "$API/v1/policies" \
+RULE_ID=$(curl -s -X POST "$API/v1/workspaces/$WORKSPACE/policies" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"subject_type":"workspace","subject_id":"'"$WORKSPACE_ID"'","target":"tool:send_email","effect":"deny"}' \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 
-curl -s -G -H "Authorization: Bearer $TOKEN" "$API/v1/audit-logs/" \
+curl -s -G -H "Authorization: Bearer $TOKEN" "$API/v1/workspaces/$WORKSPACE/audit-logs/" \
   --data-urlencode "action=governance_policy.create" --data-urlencode "limit=1" \
   | python3 -m json.tool
 ```
@@ -142,7 +142,7 @@ writes nothing. Use the task event stream instead:
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "$API/v1/agents/$AGENT_ID/tasks/$TASK_ID/events" | python3 -m json.tool
+  "$API/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/events" | python3 -m json.tool
 ```
 
 That stream carries `tool.call`, `tool.result` (including `denied_by_policy`),
@@ -150,13 +150,13 @@ That stream carries `tool.call`, `tool.result` (including `denied_by_policy`),
 `BudgetExceeded` and the terminal states.
 
 **Authorization grant changes are not there.** Writing or revoking a relationship
-through `/v1/access-control/relationships`, and the owner grants written
+through `/v1/workspaces/{workspace}/access-control/relationships`, and the owner grants written
 automatically when a resource is created, produce no audit event. Who has access
 is recorded in the graph itself — read it with
-`GET /v1/access-control/relationships` and `POST /v1/access-control/resolve`.
+`GET /v1/workspaces/{workspace}/access-control/relationships` and `POST /v1/workspaces/{workspace}/access-control/resolve`.
 
 **API key lifecycle is not there.** Creating and deleting keys under
-`/v1/api-keys/` writes no audit event.
+`/v1/workspaces/{workspace}/api-keys/` writes no audit event.
 
 ## Troubleshooting
 

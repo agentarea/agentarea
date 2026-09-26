@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { normalizeHistory } from "./normalize";
+import { eventTimestamp, normalizeHistory } from "./normalize";
+
+const TS = "2026-09-16T14:48:52.534000Z";
 
 /**
  * History rows and the SSE catch-up replay are the same events from two
@@ -12,6 +14,7 @@ describe("normalizeHistory", () => {
     const input = normalizeHistory({
       id: "a0d067e1-35e5-4738-930e-e9328dff6408",
       event_type: "task.started",
+      timestamp: TS,
       metadata: { task_id: "t-1" },
     });
 
@@ -22,6 +25,7 @@ describe("normalizeHistory", () => {
     const input = normalizeHistory({
       id: "e-1",
       event_type: "llm.call.completed",
+      timestamp: TS,
       metadata: { task_id: "t-1", iteration: 2 },
     });
 
@@ -34,6 +38,7 @@ describe("normalizeHistory", () => {
     const input = normalizeHistory({
       id: "e-1",
       event_type: "tool.result",
+      timestamp: TS,
       metadata: {
         task_id: "t-1",
         original_data: { tool_call_id: "tc-1", success: true },
@@ -49,6 +54,7 @@ describe("normalizeHistory", () => {
     const input = normalizeHistory({
       id: "row-id",
       event_type: "task.started",
+      timestamp: TS,
       metadata: { event_id: "payload-id" },
     });
 
@@ -58,6 +64,7 @@ describe("normalizeHistory", () => {
   it("survives a row with no id", () => {
     const input = normalizeHistory({
       event_type: "task.started",
+      timestamp: TS,
       metadata: { task_id: "t-1" },
     });
 
@@ -65,14 +72,47 @@ describe("normalizeHistory", () => {
     expect(input.eventType).toBe("task.started");
   });
 
-  it("uses the row message when the payload has none", () => {
+  it("never takes the row message, which the payload already carries", () => {
+    const row = {
+      id: "e-1",
+      event_type: "task.failed",
+      timestamp: TS,
+      message: "Event: task.failed",
+      metadata: { error: "no evidence for this lead" },
+    };
+    const input = normalizeHistory(row);
+
+    expect(input.data.message).toBeUndefined();
+    expect(input.data.error).toBe("no evidence for this lead");
+  });
+
+  it("carries the row timestamp, which metadata never has", () => {
     const input = normalizeHistory({
       id: "e-1",
-      event_type: "task.completed",
-      message: "done",
-      metadata: {},
+      event_type: "tool.call",
+      timestamp: TS,
+      metadata: { tool_call_id: "tc-1" },
     });
 
-    expect(input.data.message).toBe("done");
+    expect(input.data.timestamp).toBe(TS);
+  });
+});
+
+describe("eventTimestamp", () => {
+  it("reads the timestamp an event carries", () => {
+    expect(eventTimestamp({ timestamp: TS })?.toISOString()).toBe(
+      "2026-09-16T14:48:52.534Z"
+    );
+  });
+
+  it("falls back to the envelope's original_timestamp", () => {
+    expect(eventTimestamp({ original_timestamp: TS })?.toISOString()).toBe(
+      "2026-09-16T14:48:52.534Z"
+    );
+  });
+
+  it("is null, never the current time, when the event has no timestamp", () => {
+    expect(eventTimestamp({})).toBeNull();
+    expect(eventTimestamp({ timestamp: "not a date" })).toBeNull();
   });
 });

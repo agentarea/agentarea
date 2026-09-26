@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
+import Link from "@/components/WorkspaceLink";
 import { RefreshCw } from "lucide-react";
 import { SelectableList } from "@/components/SelectableList/SelectableList";
 import { Button } from "@/components/ui/button";

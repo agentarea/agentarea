@@ -186,7 +186,7 @@ async def test_a_members_key_authenticates_into_the_workspace():
     context = await _authenticate(MEMBER_KEY)
 
     assert context is not None
-    assert (context.user_id, context.workspace_id) == (MEMBER, WORKSPACE)
+    assert (context.user_id, context.bound_workspace_id) == (MEMBER, WORKSPACE)
 
 
 async def test_a_key_stops_authenticating_once_its_owner_is_no_longer_a_member(graph):
@@ -201,7 +201,7 @@ async def test_a_key_for_the_owners_personal_workspace_needs_no_graph_grant(grap
     context = await _authenticate(PERSONAL_KEY)
 
     assert context is not None
-    assert context.workspace_id == MEMBER
+    assert context.bound_workspace_id == MEMBER
 
 
 async def test_removal_revokes_the_members_keys_for_that_workspace_only(session_factory, graph):
@@ -566,3 +566,51 @@ async def test_other_pending_invitations_stay_open(session_factory, graph):
         "someone-else@example.com": INVITATION_STATUS_PENDING,
         None: INVITATION_STATUS_PENDING,
     }
+
+
+def _graph_validates_subjects(graph) -> None:
+    """Reject deletes the way OpenFGA does: a malformed user, or a tuple that is not there."""
+    real_delete = graph.delete_tuple
+
+    async def delete(relation_tuple):
+        if any(ch in relation_tuple.subject_id for ch in " #\x7f"):
+            raise OpenFGAError("write failed (400): invalid user")
+        if relation_tuple not in graph.tuples:
+            raise OpenFGAError("write failed (400): cannot delete a tuple which does not exist")
+        await real_delete(relation_tuple)
+
+    graph.delete_tuple = delete
+
+
+@pytest.mark.parametrize(
+    ("user_id", "expected"),
+    [("never-a-member", 204), ("not a user #id", 202), ("\x7f", 202)],
+    ids=["well-formed", "malformed", "control-character"],
+)
+async def test_removing_someone_who_was_never_a_member_is_not_a_server_error(
+    session_factory, graph, user_id, expected
+):
+    from agentarea_api.api.v1.workspace_invitations import get_membership_service, router
+    from agentarea_common.auth.dependencies import get_user_context
+    from urllib.parse import quote
+
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    _graph_validates_subjects(graph)
+
+    async def memberships():
+        async with session_factory() as session:
+            yield _memberships(session, graph)
+
+    app = FastAPI()
+    app.include_router(router, prefix="/v1/workspaces/{workspace}")
+    app.dependency_overrides[get_user_context] = lambda: UserContext(
+        user_id=OWNER, workspace_id=WORKSPACE, admin_workspaces=[WORKSPACE]
+    )
+    app.dependency_overrides[get_membership_service] = memberships
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.delete(f"/v1/workspaces/acme/members/{quote(user_id)}")
+
+    assert response.status_code == expected, response.text
+    assert [t.subject_id for t in graph.tuples] == [f"User:{OWNER}", f"User:{MEMBER}"]

@@ -192,9 +192,6 @@ async def create_mcp_server_instance(
         raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        logger.exception("create_mcp_server_instance failed")
-        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
 
 @router.post(
@@ -242,9 +239,6 @@ async def create_mcp_server_connection(
         raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        logger.exception("create_mcp_server_connection failed")
-        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
 
 @router.post(
@@ -276,6 +270,9 @@ async def validate_connection(
 
 @router.post(
     "/check",
+    responses={
+        503: {"description": "The MCP manager that validates configurations is unreachable"}
+    },
     dependencies=[
         unrestricted("workspace member; the workspace-scoped repository is the boundary")
     ],
@@ -317,8 +314,6 @@ async def check_mcp_server_instance_configuration(
         raise HTTPException(
             status_code=503, detail="Unable to connect to container manager for validation"
         ) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{instance_id}/environment", dependencies=[requires_workspace_admin()])

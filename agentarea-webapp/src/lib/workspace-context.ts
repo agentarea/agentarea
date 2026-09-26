@@ -1,9 +1,9 @@
 import { cache } from "react";
-import { env } from "@/env";
-import { SERVER_API_TIMEOUT_MS } from "@/lib/server-timeouts";
+import { listWorkspacesV1WorkspacesGet } from "@/api/client/sdk.gen";
+import { workspacePath } from "@/lib/workspace-routes";
 import {
-  resolveActiveWorkspace,
-  WORKSPACE_SLUG_COOKIE,
+  personalWorkspace,
+  WORKSPACE_REFERENCE_HEADER,
   type Workspace,
 } from "@/lib/workspaces";
 
@@ -11,7 +11,7 @@ import {
 // client pulls this module's caller into the browser bundle, and Turbopack
 // traces static server-only imports through it even when they are unreachable
 // at runtime.
-const serverCookies = async () => (await import("next/headers")).cookies();
+const serverHeaders = async () => (await import("next/headers")).headers();
 const serverAuthToken = async () =>
   (await import("@/lib/getAuthToken")).getAuthToken();
 
@@ -23,39 +23,44 @@ export interface WorkspaceContext {
 const EMPTY: WorkspaceContext = { workspaces: [], active: null };
 
 /**
- * Fetch the caller's workspaces without going through the generated client.
- *
- * The client wrapper stamps X-AgentArea-Workspace on every request, and the backend
- * 403s a slug the caller is not a member of — including on this endpoint. A
- * cookie left over from a workspace the user was removed from would therefore
- * break the one call needed to recover from it. Listing is user-scoped anyway,
- * so it deliberately carries no workspace header.
+ * Fetch the caller's workspaces. Listing is user-scoped: `/v1/workspaces`
+ * has no workspace in its path, so a `/w/{slug}` URL for a workspace the user
+ * was removed from cannot break the one call needed to 404 it.
  */
 async function fetchWorkspaces(): Promise<Workspace[]> {
   const token = await serverAuthToken();
   if (!token) return [];
 
-  const response = await fetch(`${env.API_URL}/v1/workspaces`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    signal: AbortSignal.timeout(SERVER_API_TIMEOUT_MS),
+  const { data, error, response } = await listWorkspacesV1WorkspacesGet({
     cache: "no-store",
   });
-  if (!response.ok) {
-    throw new Error(`GET /v1/workspaces responded ${response.status}`);
+  if (error || !data) {
+    throw new Error(`GET /v1/workspaces responded ${response?.status}`);
   }
-  return (await response.json()) as Workspace[];
+  return data;
+}
+
+/** The caller's workspaces; throws when the API cannot list them. */
+export const getWorkspaces = cache(fetchWorkspaces);
+
+/**
+ * The workspace of the page this request renders or posts to — the one place
+ * server code reads it. The proxy sets the header from the `/w/{slug}` URL and
+ * overwrites any client value; in a route handler it is what the browser sent.
+ */
+export async function getRequestWorkspaceSlug(): Promise<string | null> {
+  return (await serverHeaders()).get(WORKSPACE_REFERENCE_HEADER);
 }
 
 async function getWorkspaceContextImpl(): Promise<WorkspaceContext> {
   try {
-    const cookieStore = await serverCookies();
-    const workspaces = await fetchWorkspaces();
+    const [workspaces, slug] = await Promise.all([
+      getWorkspaces(),
+      getRequestWorkspaceSlug(),
+    ]);
     return {
       workspaces,
-      active: resolveActiveWorkspace(
-        workspaces,
-        cookieStore.get(WORKSPACE_SLUG_COOKIE)?.value
-      ),
+      active: workspaces.find((workspace) => workspace.slug === slug) ?? null,
     };
   } catch (error) {
     // The switcher is chrome, not content: an API outage must not take the
@@ -68,11 +73,13 @@ async function getWorkspaceContextImpl(): Promise<WorkspaceContext> {
 export const getWorkspaceContext = cache(getWorkspaceContextImpl);
 
 /**
- * The slug every outgoing request should be scoped to, or null for the
- * backend's own default. Resolved rather than read straight from the cookie so
- * a stale value degrades to the personal workspace instead of 403-ing the app.
+ * `path` inside the caller's personal workspace: where `/`, a fresh sign-in
+ * and links from outside any workspace (invitations, Ory settings) land.
  */
-export async function getActiveWorkspaceSlug(): Promise<string | null> {
-  const { active } = await getWorkspaceContext();
-  return active?.slug ?? null;
+export async function getPersonalWorkspacePath(path: string): Promise<string> {
+  const personal = personalWorkspace(await getWorkspaces());
+  if (!personal) {
+    throw new Error("The caller has no personal workspace to land in");
+  }
+  return workspacePath(personal.slug, path);
 }

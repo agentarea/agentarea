@@ -35,7 +35,7 @@ SHA_MARGIN = hashlib.sha256(b"margin").hexdigest()
 
 def _task_app(task_service, agent_service, context: UserContext) -> FastAPI:
     app = FastAPI()
-    app.include_router(agents_tasks.router, prefix="/v1")
+    app.include_router(agents_tasks.router, prefix="/v1/workspaces/{workspace}")
 
     app.dependency_overrides[agents_tasks.get_task_service] = lambda: task_service
     app.dependency_overrides[agents_tasks.get_agent_service] = lambda: agent_service
@@ -45,7 +45,7 @@ def _task_app(task_service, agent_service, context: UserContext) -> FastAPI:
 
 def _files_app(context: UserContext) -> FastAPI:
     app = FastAPI()
-    app.include_router(files.router, prefix="/v1")
+    app.include_router(files.router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_user_context] = lambda: context
     return app
 
@@ -187,7 +187,7 @@ async def test_refs_attach_by_copy_then_dispatch_then_delete(monkeypatch):
     }
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(f"/v1/agents/{uuid4()}/tasks/", json=payload)
+        response = await client.post(f"/v1/workspaces/acme/agents/{uuid4()}/tasks/", json=payload)
 
     assert response.status_code == 200
     # attach for both refs, then reserve, dispatch, and only then the staging
@@ -265,7 +265,7 @@ async def test_attachment_reservation_hides_policy_error_details(monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            f"/v1/agents/{uuid4()}/tasks/",
+            f"/v1/workspaces/acme/agents/{uuid4()}/tasks/",
             json={"description": "Analyze file", "attachments": ["staging/aaa/report.csv"]},
         )
 
@@ -317,7 +317,7 @@ async def test_duplicate_basenames_get_deterministic_suffix(monkeypatch):
     }
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(f"/v1/agents/{uuid4()}/tasks/", json=payload)
+        response = await client.post(f"/v1/workspaces/acme/agents/{uuid4()}/tasks/", json=payload)
 
     assert response.status_code == 200
     # Both files survive as distinct manifest entries instead of one overwriting
@@ -346,7 +346,7 @@ async def test_ref_outside_staging_is_rejected(monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            f"/v1/agents/{uuid4()}/tasks/",
+            f"/v1/workspaces/acme/agents/{uuid4()}/tasks/",
             json={
                 "description": "escape attempt",
                 "attachments": ["tasks/other/workspace/secret.txt"],
@@ -375,7 +375,7 @@ async def test_missing_ref_returns_404(monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            f"/v1/agents/{uuid4()}/tasks/",
+            f"/v1/workspaces/acme/agents/{uuid4()}/tasks/",
             json={"description": "missing", "attachments": ["staging/gone/report.csv"]},
         )
 
@@ -407,7 +407,7 @@ async def test_unresolvable_digest_fails_loudly(monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            f"/v1/agents/{uuid4()}/tasks/",
+            f"/v1/workspaces/acme/agents/{uuid4()}/tasks/",
             json={"description": "no digest", "attachments": ["staging/aaa/report.csv"]},
         )
 
@@ -461,7 +461,7 @@ async def test_quota_failure_maps_to_413_and_prevents_dispatch(monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            f"/v1/agents/{uuid4()}/tasks/",
+            f"/v1/workspaces/acme/agents/{uuid4()}/tasks/",
             json={"description": "too big", "attachments": ["staging/aaa/report.csv"]},
         )
 
@@ -521,7 +521,7 @@ async def test_sync_path_attaches_and_deletes_after_dispatch(monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            f"/v1/agents/{uuid4()}/tasks/sync",
+            f"/v1/workspaces/acme/agents/{uuid4()}/tasks/sync",
             json={"description": "sync", "attachments": ["staging/aaa/report.csv"]},
         )
 
@@ -578,7 +578,7 @@ async def test_upload_defaults_to_workspace_root_and_returns_204(monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            "/v1/files", files={"file": ("report.csv", b"revenue", "text/csv")}
+            "/v1/workspaces/acme/files", files={"file": ("report.csv", b"revenue", "text/csv")}
         )
 
     assert response.status_code == 204
@@ -601,7 +601,7 @@ async def test_upload_attachment_stages_and_returns_descriptor(monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            "/v1/files",
+            "/v1/workspaces/acme/files",
             data={"purpose": "attachment"},
             files={"file": ("report.csv", b"revenue", "text/csv")},
         )
@@ -628,7 +628,7 @@ async def test_upload_attachment_over_cap_is_413(monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            "/v1/files",
+            "/v1/workspaces/acme/files",
             data={"purpose": "attachment"},
             files={"file": ("big.bin", b"four", "application/octet-stream")},
         )
@@ -646,7 +646,7 @@ async def test_unknown_purpose_is_422(monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            "/v1/files",
+            "/v1/workspaces/acme/files",
             data={"purpose": "bogus"},
             files={"file": ("report.csv", b"revenue", "text/csv")},
         )
@@ -664,7 +664,7 @@ async def test_upload_url_binds_checksum_and_returns_ref(monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            "/v1/files/upload-url",
+            "/v1/workspaces/acme/files/upload-url",
             json={
                 "filename": "report.csv",
                 "content_type": "text/csv",
@@ -695,7 +695,7 @@ async def test_upload_url_rejects_non_hex_sha256(monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            "/v1/files/upload-url",
+            "/v1/workspaces/acme/files/upload-url",
             json={
                 "filename": "report.csv",
                 "content_type": "text/csv",
@@ -732,7 +732,7 @@ async def test_task_status_hides_raw_workflow_error(monkeypatch):
         )
     )
     app = FastAPI()
-    app.include_router(agents_tasks.router, prefix="/v1")
+    app.include_router(agents_tasks.router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_user_context] = lambda: context
     app.dependency_overrides[get_read_agent_service] = lambda: SimpleNamespace(
         get=AsyncMock(return_value=SimpleNamespace(id=agent_id))
@@ -742,7 +742,7 @@ async def test_task_status_hides_raw_workflow_error(monkeypatch):
     monkeypatch.setattr(agents_tasks, "_list_task_artifact_items", AsyncMock(return_value=[]))
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/status")
+        response = await client.get(f"/v1/workspaces/acme/agents/{agent_id}/tasks/{task_id}/status")
 
     assert response.status_code == 200
     assert response.json()["error"] is None
@@ -783,14 +783,14 @@ async def test_task_status_exposes_business_state_separately_from_execution(
 
     workflow_service = SimpleNamespace(get_workflow_status=execution_detail)
     app = FastAPI()
-    app.include_router(agents_tasks.router, prefix="/v1")
+    app.include_router(agents_tasks.router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_user_context] = lambda: context
     app.dependency_overrides[get_read_task_service] = lambda: task_service
     app.dependency_overrides[get_temporal_workflow_service] = lambda: workflow_service
     monkeypatch.setattr(agents_tasks, "_list_task_artifact_items", AsyncMock(return_value=[]))
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/status")
+        response = await client.get(f"/v1/workspaces/acme/agents/{agent_id}/tasks/{task_id}/status")
 
     assert response.status_code == 200
     assert response.json()["status"] == business_status

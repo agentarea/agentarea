@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   isPersonalWorkspace,
-  resolveActiveWorkspace,
+  personalWorkspace,
+  withWorkspaceQuery,
   type Workspace,
 } from "./workspaces";
 
@@ -36,30 +37,27 @@ describe("isPersonalWorkspace", () => {
   });
 });
 
-describe("resolveActiveWorkspace", () => {
-  it("returns the workspace matching the preferred slug", () => {
-    expect(resolveActiveWorkspace([personal, acme, globex], "globex")).toBe(
-      globex
+describe("personalWorkspace", () => {
+  it("returns the workspace whose id is its owner's", () => {
+    expect(personalWorkspace([acme, personal, globex])).toBe(personal);
+  });
+
+  it("returns null when the user has no personal workspace", () => {
+    expect(personalWorkspace([acme, globex])).toBeNull();
+  });
+});
+
+describe("withWorkspaceQuery", () => {
+  it("appends the workspace to a URL", () => {
+    expect(withWorkspaceQuery("/api/sse/x", "acme")).toBe(
+      "/api/sse/x?workspace=acme"
+    );
+    expect(withWorkspaceQuery("/api/proxy/x?a=1", "a b")).toBe(
+      "/api/proxy/x?a=1&workspace=a%20b"
     );
   });
 
-  it("falls back to the personal workspace when the slug is unknown", () => {
-    // A stale cookie must not win: the backend 403s every request made with a
-    // slug the user is no longer a member of.
-    expect(resolveActiveWorkspace([personal, acme], "left-this-one")).toBe(
-      personal
-    );
-  });
-
-  it("falls back to the personal workspace when no slug is set", () => {
-    expect(resolveActiveWorkspace([acme, personal], null)).toBe(personal);
-  });
-
-  it("falls back to the first workspace when there is no personal one", () => {
-    expect(resolveActiveWorkspace([acme, globex], undefined)).toBe(acme);
-  });
-
-  it("returns null when the user has no workspaces", () => {
-    expect(resolveActiveWorkspace([], "acme")).toBeNull();
+  it("leaves the URL alone without a workspace", () => {
+    expect(withWorkspaceQuery("/api/sse/x", null)).toBe("/api/sse/x");
   });
 });

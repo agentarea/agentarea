@@ -165,8 +165,10 @@ class TestWorkspaceErrorHandlers:
 
     @pytest.mark.asyncio
     @patch("agentarea_common.exceptions.handlers.ContextManager.get_context")
-    async def test_workspace_headers_included(self, mock_get_context, mock_request, user_context):
-        """Test that workspace headers are included in responses."""
+    async def test_no_workspace_header_is_emitted(
+        self, mock_get_context, mock_request, user_context
+    ):
+        """The workspace travels in the URL; responses carry no workspace header."""
         mock_get_context.return_value = user_context
 
         error = WorkspaceResourceNotFound(
@@ -175,8 +177,7 @@ class TestWorkspaceErrorHandlers:
 
         response = await app_error_handler(mock_request, error)
 
-        assert "X-Workspace-ID" in response.headers
-        assert response.headers["X-Workspace-ID"] == "test-workspace"
+        assert "X-Workspace-ID" not in response.headers
 
 
 class TestWorkspaceUtilities:

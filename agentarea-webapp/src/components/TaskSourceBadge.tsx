@@ -10,7 +10,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { TriggerCatalogEntry } from "@/app/(main)/triggers/components/triggerDisplay";
+import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
 import { getTaskSource } from "@/lib/taskSource";
 
 interface TaskSourceBadgeProps {

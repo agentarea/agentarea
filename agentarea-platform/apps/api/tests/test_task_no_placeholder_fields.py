@@ -61,7 +61,7 @@ async def async_client():
 async def test_the_task_endpoint_returns_a_null_agent_name_for_a_deleted_agent(async_client):
     """The contract that matters is the endpoint's, not the helper's.
 
-    GET /v1/tasks/{id} is what the task page reads; it builds TaskWithAgent
+    GET /v1/workspaces/acme/tasks/{id} is what the task page reads; it builds TaskWithAgent
     inline rather than through from_task_response.
     """
     # get_task_by_id reads through task_repository._orm_to_domain, which yields
@@ -91,7 +91,7 @@ async def test_the_task_endpoint_returns_a_null_agent_name_for_a_deleted_agent(a
     app.dependency_overrides[get_read_agent_service] = lambda: agent_service
     app.dependency_overrides[get_user_context] = lambda: user_context
     try:
-        response = await async_client.get(f"/v1/tasks/{task.id}")
+        response = await async_client.get(f"/v1/workspaces/acme/tasks/{task.id}")
     finally:
         for dep in (get_read_task_service, get_read_agent_service, get_user_context):
             app.dependency_overrides.pop(dep, None)
@@ -111,3 +111,54 @@ def test_task_event_execution_id_is_null_rather_than_a_placeholder() -> None:
     )
 
     assert event.execution_id is None
+
+
+@pytest.mark.asyncio
+async def test_task_event_message_is_null_when_the_event_carries_none(async_client):
+    """`message` was filled with "Event: <type>" when the payload had none.
+
+    The task page then showed "Event: task.failed" in place of the failure
+    reason the same payload carried under `error`.
+    """
+    from agentarea_common.base.dependencies import get_read_repository_factory
+
+    agent_id = uuid4()
+    task = Task(
+        id=uuid4(),
+        agent_id=agent_id,
+        description="do the thing",
+        parameters={},
+        status="failed",
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    record = MagicMock()
+    record.id = uuid4()
+    record.task_id = task.id
+    record.timestamp = datetime.now(UTC)
+    record.event_type = "task.failed"
+    record.data = {"error": "no evidence"}
+    record.metadata = {}
+
+    task_service = AsyncMock()
+    task_service.get_task.return_value = task
+    event_repository = AsyncMock()
+    event_repository.list_for_task.return_value = ([record], 1)
+    repository_factory = MagicMock()
+    repository_factory.create_repository.return_value = event_repository
+
+    app.dependency_overrides[get_read_task_service] = lambda: task_service
+    app.dependency_overrides[get_read_repository_factory] = lambda: repository_factory
+    app.dependency_overrides[get_user_context] = lambda: MagicMock()
+    try:
+        response = await async_client.get(
+            f"/v1/workspaces/acme/agents/{agent_id}/tasks/{task.id}/events"
+        )
+    finally:
+        for dep in (get_read_task_service, get_read_repository_factory, get_user_context):
+            app.dependency_overrides.pop(dep, None)
+
+    assert response.status_code == 200, response.text
+    event = response.json()["events"][0]
+    assert event["message"] is None
+    assert event["metadata"]["error"] == "no evidence"

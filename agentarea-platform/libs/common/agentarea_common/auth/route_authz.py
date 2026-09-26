@@ -18,7 +18,7 @@ from typing import Any
 
 from fastapi import Depends, Request, params
 
-from .authorization import assert_workspace_admin, assert_workspace_admin_of
+from .authorization import assert_workspace_admin
 from .dependencies import UserContextDep
 from .permission import require_permission
 
@@ -44,25 +44,20 @@ def requires(action: str, resource_type: str, *, id_param: str | None = None) ->
     return Depends(_check)
 
 
-def requires_workspace_admin(*, workspace_param: str | None = None) -> params.Depends:
+def requires_workspace_admin() -> params.Depends:
     """Demand authority over the workspace itself, not just membership in it.
 
     For actions whose blast radius is everyone in the workspace: credentials,
-    spend, access grants, the registries every agent installs from. This
-    resolves through ``AuthorizationService.can_administer_workspace``, which
-    answers from ownership even with no graph backend configured — unlike
-    ``requires()``, whose open-core ``PermissionService`` allows everything
-    until a graph is wired up.
+    spend, access grants, membership, the registries every agent installs
+    from. The workspace is the one the request selected. This resolves through
+    ``AuthorizationService.can_administer_workspace``, which answers from
+    ownership even with no graph backend configured — unlike ``requires()``,
+    whose open-core ``PermissionService`` allows everything until a graph is
+    wired up.
     """
 
-    async def _check(request: Request, user_context: UserContextDep) -> None:
-        if workspace_param is None:
-            await assert_workspace_admin(user_context)
-            return
-        # The workspace under administration is named in the path, which need
-        # not be the one the caller is currently acting in.
-        target = str(request.path_params.get(workspace_param, ""))
-        await assert_workspace_admin_of(user_context, target)
+    async def _check(user_context: UserContextDep) -> None:
+        await assert_workspace_admin(user_context)
 
     setattr(_check, AUTHZ_ATTR, {"action": "administer", "resource_type": "workspace"})
     return Depends(_check)

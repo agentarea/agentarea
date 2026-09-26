@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Search } from "lucide-react";
 import { useSearchWithDebounce } from "@/hooks";
 
@@ -33,7 +34,7 @@ export default function SearchInput({
   resetParamNames,
 }: SearchInputProps) {
   const commonT = useTranslations("Common");
-  const router = useRouter();
+  const router = useWorkspaceRouter();
   const searchParams = useSearchParams();
 
   // Если указан urlParamName, читаем значение из URL
@@ -51,6 +52,9 @@ export default function SearchInput({
   // Автоматическое обновление URL если указан urlParamName
   useEffect(() => {
     if (urlParamName) {
+      const nextQuery = debouncedQuery.trim() ? debouncedQuery : "";
+      if (nextQuery === (searchParams.get(urlParamName) || "")) return;
+
       const params = new URLSearchParams(searchParams.toString());
 
       if (debouncedQuery.trim()) {

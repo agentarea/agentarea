@@ -46,6 +46,15 @@ class SandboxListResponse(BaseModel):
 @router.get(
     "",
     response_model=SandboxListResponse,
+    responses={
+        502: {"description": "The sandbox manager answered with an unusable inventory"},
+        503: {
+            "description": (
+                "Sandbox inventory is not configured on this deployment, "
+                "or the sandbox manager is unreachable"
+            )
+        },
+    },
     dependencies=[
         unrestricted("provider state, filtered to the caller's workspace before it is returned")
     ],

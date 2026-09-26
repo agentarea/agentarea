@@ -39,8 +39,12 @@ export function reportResult(result: SdkResult): number {
 		result.error !== undefined || (status !== undefined && status >= 400);
 
 	if (failed) {
-		printJson({status: status ?? null, error: result.error ?? null});
-		return status !== undefined && status >= 400 ? 1 : 0;
+		// A request that never left (e.g. no workspace selected) fails with an
+		// Error, which JSON.stringify would print as {}.
+		const error =
+			result.error instanceof Error ? result.error.message : result.error;
+		printJson({status: status ?? null, error: error ?? null});
+		return 1;
 	}
 
 	printJson(result.data ?? null);

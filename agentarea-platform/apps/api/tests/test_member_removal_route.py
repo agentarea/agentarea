@@ -29,7 +29,7 @@ class FakeMemberships:
 def app_for():
     def build(revoked: bool) -> FastAPI:
         app = FastAPI()
-        app.include_router(router, prefix="/v1")
+        app.include_router(router, prefix="/v1/workspaces/{workspace}")
         app.dependency_overrides[get_user_context] = lambda: UserContext(
             user_id=OWNER, workspace_id=WORKSPACE, admin_workspaces=[WORKSPACE]
         )

@@ -1,4 +1,5 @@
 import { defineConfig } from "@hey-api/openapi-ts";
+import { dropWorkspacePathParam } from "./openapi-ts.patch";
 
 // Generates type-safe artifacts from the committed OpenAPI spec:
 //   - types.gen.ts : TS types for every schema (request/response contracts)
@@ -7,6 +8,7 @@ import { defineConfig } from "@hey-api/openapi-ts";
 // Regenerate with: pnpm generate:client
 export default defineConfig({
   input: "./src/api/openapi.json",
+  parser: { patch: { operations: dropWorkspacePathParam } },
   output: {
     path: "./src/api/client",
     postProcess: ["prettier"],

@@ -122,7 +122,7 @@ class TestE2EMainFlow:
             "parameters": {"user_id": "test-output-verification", "test_mode": True},
         }
 
-        response = await http_client.post(f"/v1/agents/{agent_id}/tasks/", json=task_data)
+        response = await http_client.post(f"/v1/workspaces/acme/agents/{agent_id}/tasks/", json=task_data)
         assert response.status_code in [200, 201], f"Failed to create task: {response.status_code}"
 
         task_info = response.json()
@@ -175,7 +175,7 @@ class TestE2EMainFlow:
         print("📋 Getting or creating model instance...")
 
         # Step 1: Check if we already have model instances
-        response = await client.get("/v1/model-instances/")
+        response = await client.get("/v1/workspaces/acme/model-instances/")
         if response.status_code == 200:
             instances = response.json()
             for instance in instances:
@@ -190,7 +190,7 @@ class TestE2EMainFlow:
                     return str(instance.get("id"))
 
         # Step 2: Get Ollama provider specification
-        response = await client.get("/v1/provider-specs/by-key/ollama")
+        response = await client.get("/v1/workspaces/acme/provider-specs/by-key/ollama")
         if response.status_code != 200:
             print(f"❌ Failed to get Ollama provider spec: {response.status_code}")
             return ""
@@ -221,7 +221,7 @@ class TestE2EMainFlow:
             "is_public": True,
         }
 
-        response = await client.post("/v1/provider-configs/", json=provider_config_data)
+        response = await client.post("/v1/workspaces/acme/provider-configs/", json=provider_config_data)
         if response.status_code not in [200, 201]:
             print(f"❌ Failed to create provider config: {response.status_code} - {response.text}")
             return ""
@@ -239,7 +239,7 @@ class TestE2EMainFlow:
             "is_public": True,
         }
 
-        response = await client.post("/v1/model-instances/", json=model_instance_data)
+        response = await client.post("/v1/workspaces/acme/model-instances/", json=model_instance_data)
         if response.status_code not in [200, 201]:
             print(f"❌ Failed to create model instance: {response.status_code} - {response.text}")
             return ""
@@ -261,7 +261,7 @@ class TestE2EMainFlow:
             "planning": False,
         }
 
-        response = await client.post("/v1/agents/", json=agent_data)
+        response = await client.post("/v1/workspaces/acme/agents/", json=agent_data)
         assert response.status_code in [200, 201], (
             f"Failed to create agent: {response.status_code} - {response.text}"
         )
@@ -281,7 +281,7 @@ class TestE2EMainFlow:
             "parameters": {"user_id": "test-user", "test_mode": True},
         }
 
-        response = await client.post(f"/v1/agents/{agent_id}/tasks/", json=task_data)
+        response = await client.post(f"/v1/workspaces/acme/agents/{agent_id}/tasks/", json=task_data)
         if response.status_code in [200, 201]:
             task = response.json()
             print(f"✅ Task created: {task.get('id')}")
@@ -302,7 +302,7 @@ class TestE2EMainFlow:
             "parameters": {"user_id": "test-user-e2e", "test_mode": True},
         }
 
-        response = await client.post(f"/v1/agents/{agent_id}/tasks/", json=task_data)
+        response = await client.post(f"/v1/workspaces/acme/agents/{agent_id}/tasks/", json=task_data)
         if response.status_code in [200, 201]:
             task = response.json()
             print(f"✅ Task created: {task.get('id')}")
@@ -330,7 +330,7 @@ class TestE2EMainFlow:
 
             # Check task status
             try:
-                response = await client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/status")
+                response = await client.get(f"/v1/workspaces/acme/agents/{agent_id}/tasks/{task_id}/status")
                 if response.status_code == 200:
                     status = response.json()
                     task_status = status.get("status", "unknown")
@@ -433,7 +433,7 @@ async def test_uuid_validation():
 
     async with httpx.AsyncClient(base_url="http://localhost:8000", timeout=10.0) as client:
         # Test invalid UUID in new architecture endpoints
-        response = await client.get("/v1/provider-specs/invalid-uuid")
+        response = await client.get("/v1/workspaces/acme/provider-specs/invalid-uuid")
         assert response.status_code == 422, f"Expected 422, got {response.status_code}"
 
         error = response.json()

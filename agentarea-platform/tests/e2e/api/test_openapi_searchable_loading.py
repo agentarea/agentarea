@@ -32,7 +32,7 @@ def _wait_for_discovery(client: httpx.Client, conn_id: str, timeout: float = 30.
     deadline = time.time() + timeout
     last: dict = {}
     while time.time() < deadline:
-        last = client.get(f"/v1/openapi-connections/{conn_id}").raise_for_status().json()
+        last = client.get(f"{client.ws}/openapi-connections/{conn_id}").raise_for_status().json()
         tools = last.get("available_tools") or []
         if isinstance(tools, list) and len(tools) > 0:
             return last
@@ -51,7 +51,7 @@ def test_searchable_openapi_load_tools_dispatch(
     # 1. Create a Petstore connection — the public sandbox has ~20 operations,
     #    enough for the catalog to be meaningful but small enough for fast e2e.
     conn = alice_client.post(
-        "/v1/openapi-connections/",
+        f"{alice_client.ws}/openapi-connections/",
         json={
             "name": f"petstore-e2e-{uuid.uuid4().hex[:6]}",
             "base_url": PETSTORE_BASE,
@@ -96,7 +96,7 @@ def test_searchable_openapi_load_tools_dispatch(
         # 4. Submit a task that requires a real Petstore call.
         task_id = (
             alice_client.post(
-                f"/v1/agents/{agent_id}/tasks/sync",
+                f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
                 json={
                     "description": (
                         "Find Petstore pets with status 'available'. "
@@ -144,4 +144,4 @@ def test_searchable_openapi_load_tools_dispatch(
             f"{[e['event_type'] for e in events]}"
         )
     finally:
-        alice_client.delete(f"/v1/openapi-connections/{conn_id}")
+        alice_client.delete(f"{alice_client.ws}/openapi-connections/{conn_id}")

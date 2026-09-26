@@ -150,6 +150,14 @@ class SpendCapParams(BaseModel):
     amount_usd: Decimal = Field(ge=0)
     period: Literal["month", "run"] = "month"
 
+    @model_validator(mode="after")
+    def _run_budget_is_positive(self) -> SpendCapParams:
+        # A zero monthly cap blocks spend; a zero run budget is not a budget, and
+        # BudgetPolicy.run_budget_usd refuses it when the rule is compiled.
+        if self.period == "run" and self.amount_usd == 0:
+            raise ValueError("a per-run spend cap must be greater than 0")
+        return self
+
 
 class ServiceCapParams(BaseModel):
     """``params`` for a ``cap`` on ``service`` spend."""

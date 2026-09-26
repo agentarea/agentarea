@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 import { Download, FileText } from "lucide-react";
+import { apiProxyUrl, isRelativeApiLink } from "@/lib/api-proxy-url";
 import Section from "./Section";
 
 interface DocumentsProps {
@@ -12,6 +13,12 @@ interface DocItem {
   meta?: string;
 }
 
+// A root-relative artifact link names an API path, reachable only through
+// the proxy; anything else is an external link.
+function toHref(url: string | undefined): string | undefined {
+  return url && isRelativeApiLink(url) ? apiProxyUrl(url) : url;
+}
+
 function toDocItem(artifact: unknown, index: number): DocItem {
   if (typeof artifact === "string") {
     return { name: artifact };
@@ -20,7 +27,7 @@ function toDocItem(artifact: unknown, index: number): DocItem {
     const a = artifact as Record<string, unknown>;
     return {
       name: `${a.name ?? a.filename ?? a.title ?? `Artifact ${index + 1}`}`,
-      href: (a.url ?? a.uri ?? a.download_url) as string | undefined,
+      href: toHref((a.url ?? a.uri ?? a.download_url) as string | undefined),
       meta: (a.mime_type ?? a.content_type ?? a.type) as string | undefined,
     };
   }

@@ -73,6 +73,10 @@ services:
         condition: service_started
       app_migrations:
         condition: service_completed_successfully
+      # Files and artifacts live in these buckets; without them every
+      # workspace-file route fails.
+      rclone-init:
+        condition: service_completed_successfully
       openfga:
         condition: service_healthy
       # mcp-manager:
@@ -429,6 +433,8 @@ services:
         condition: service_started
       temporal:
         condition: service_healthy
+      rclone-init:
+        condition: service_completed_successfully
       openfga:
         condition: service_healthy
     volumes:
@@ -515,7 +521,8 @@ services:
       - RCLONE_CONFIG_RUSTFS_ENDPOINT=http://rustfs:9000
       - RCLONE_CONFIG_RUSTFS_ACL=private
     entrypoint: ["/bin/sh", "-c"]
-    command: ["rclone mkdir rustfs:${DOCUMENTS_BUCKET:-documents} || true && rclone mkdir rustfs:${ARTIFACTS_BUCKET:-artifacts} || true && echo 'Buckets created successfully'"]
+    # rclone mkdir is idempotent, so a failure here is a real one and must stop the stack.
+    command: ["rclone mkdir rustfs:${DOCUMENTS_BUCKET:-documents} && rclone mkdir rustfs:${ARTIFACTS_BUCKET:-artifacts} && echo 'Buckets created successfully'"]
     networks:
       - default
 

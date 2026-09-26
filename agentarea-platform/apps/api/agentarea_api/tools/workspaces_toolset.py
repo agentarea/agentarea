@@ -11,6 +11,7 @@ from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.auth.dependencies import ensure_not_workspace_bound
 from agentarea_common.config import get_database, get_settings
 
 from agentarea_api.api.v1.workspaces import get_workspace_service, list_reachable_workspaces
@@ -68,6 +69,7 @@ class WorkspacesToolset(Toolset):
         if len(name) > 255:
             raise ValueError("Workspace name must be at most 255 characters")
         user_ctx = get_mcp_user_context()
+        ensure_not_workspace_bound(user_ctx)
         async with get_database().async_session_factory() as session:
             workspace = await get_workspace_service(session, user_ctx).create_shared(
                 owner_user_id=user_ctx.user_id, name=name

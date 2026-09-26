@@ -43,7 +43,7 @@ def _authz():
 
 def _app(caller: UserContext) -> tuple[FastAPI, AsyncMock]:
     app = FastAPI()
-    app.include_router(agents_tasks.router, prefix="/v1")
+    app.include_router(agents_tasks.router, prefix="/v1/workspaces/{workspace}")
 
     task_service = AsyncMock()
     task_service.get_task.return_value = SimpleNamespace(
@@ -75,10 +75,10 @@ async def owner():
 
 
 ACTIONS = [
-    ("post", f"/v1/agents/{AGENT_ID}/tasks/{TASK_ID}/pause", None),
-    ("post", f"/v1/agents/{AGENT_ID}/tasks/{TASK_ID}/resume", None),
-    ("delete", f"/v1/agents/{AGENT_ID}/tasks/{TASK_ID}", None),
-    ("post", f"/v1/agents/{AGENT_ID}/tasks/{TASK_ID}/command", {"command": "stop"}),
+    ("post", f"/v1/workspaces/acme/agents/{AGENT_ID}/tasks/{TASK_ID}/pause", None),
+    ("post", f"/v1/workspaces/acme/agents/{AGENT_ID}/tasks/{TASK_ID}/resume", None),
+    ("delete", f"/v1/workspaces/acme/agents/{AGENT_ID}/tasks/{TASK_ID}", None),
+    ("post", f"/v1/workspaces/acme/agents/{AGENT_ID}/tasks/{TASK_ID}/command", {"command": "stop"}),
 ]
 
 
@@ -110,6 +110,6 @@ async def test_a_workspace_admin_can_stop_a_run_that_is_not_theirs():
         UserContext(user_id="user-owner", workspace_id=WORKSPACE, admin_workspaces=[WORKSPACE])
     )
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as client:
-        response = await client.post(f"/v1/agents/{AGENT_ID}/tasks/{TASK_ID}/pause")
+        response = await client.post(f"/v1/workspaces/acme/agents/{AGENT_ID}/tasks/{TASK_ID}/pause")
 
     assert response.status_code != 403, response.text

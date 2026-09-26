@@ -113,7 +113,7 @@ true or the tool is in `escalation_rules`. The workflow's tool gate then:
 4. Waits on that specific escalation.
 
 The exact arguments are read from the workflow instead:
-`GET /v1/agents/{agent_id}/tasks/{task_id}/escalations` lists the pending
+`GET /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/escalations` lists the pending
 escalations with their `tool_args`. It answers only a caller who may act on the
 run, and drops any escalation whose approver list does not include them, so the
 arguments reach the same people who may resolve the escalation. The inbox shows

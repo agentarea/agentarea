@@ -13,11 +13,23 @@ must agree: the server orders by ``sort_key``, the client renders ``title``.
 """
 
 import re
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple, get_args
 
 FEATURED_TAG = "featured"
 _CATEGORY_TAG_PREFIX = "category:"
 _REPO_TAG_PREFIX = "repo:"
+
+# Connections are not all MCP: a catalog entry is either an MCP server (reached
+# over a transport -- url/command/docker) or a plain HTTP API described by an
+# OpenAPI document. The distinction is what the gallery lets you filter on, and
+# `spec.connection_type` is where every parser records it.
+OPENAPI_CONNECTION_TYPE = "openapi"
+CatalogProtocol = Literal["mcp", "api"]
+# Facet order: the vocabulary is closed, so derive it rather than restating it.
+CATALOG_PROTOCOLS: tuple[CatalogProtocol, ...] = get_args(CatalogProtocol)
+# Only the connections catalog has a protocol dimension; every other registry
+# type holds one kind of thing.
+PROTOCOL_REGISTRY_TYPE = "mcp_servers"
 
 
 class ItemFacets(NamedTuple):
@@ -26,6 +38,7 @@ class ItemFacets(NamedTuple):
     category: str | None
     sort_key: str
     featured: bool
+    protocol: CatalogProtocol | None
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -95,19 +108,28 @@ def _title(registry_type: str, name: str, spec: dict[str, Any], tags: list[Any])
     return name
 
 
+def _protocol(registry_type: str, spec: dict[str, Any]) -> CatalogProtocol | None:
+    if registry_type != PROTOCOL_REGISTRY_TYPE:
+        return None
+    # An entry that never recorded a connection_type is an MCP server: managed
+    # publications predate the field.
+    return "api" if spec.get("connection_type") == OPENAPI_CONNECTION_TYPE else "mcp"
+
+
 def derive_facets(
     registry_type: str,
     name: str,
     spec: dict[str, Any] | None,
     tags: list[Any] | None,
 ) -> ItemFacets:
-    """Category, sort key and featured flag for one catalog item."""
+    """Category, sort key, featured flag and protocol for one catalog item."""
     spec = _mapping(spec)
     tags = tags if isinstance(tags, list) else []
     return ItemFacets(
         category=_category(registry_type, spec, tags),
         sort_key=_title(registry_type, name, spec, tags).casefold(),
         featured=FEATURED_TAG in tags,
+        protocol=_protocol(registry_type, spec),
     )
 
 
@@ -121,4 +143,5 @@ def apply_facets(item: Any, registry_type: str) -> Any:
     item.category = facets.category
     item.sort_key = facets.sort_key
     item.featured = facets.featured
+    item.protocol = facets.protocol
     return item

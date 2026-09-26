@@ -78,7 +78,7 @@ Every AgentArea agent consists of several key components:
     Set up your agent's identity:
     
     ```bash
-    curl -X POST http://localhost:8000/v1/agents \
+    curl -X POST http://localhost:8000/v1/workspaces/{workspace}/agents \
       -H "Content-Type: application/json" \
       -d '{
         "name": "My Assistant",

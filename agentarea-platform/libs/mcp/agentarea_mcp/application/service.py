@@ -692,7 +692,7 @@ class MCPServerInstanceService:
         payload = MCPServerInstanceCreate(
             name=instance_payload.name,
             description=instance_payload.description,
-            server_spec_id=str(server.id),
+            server_spec_id=server.id,
             json_spec=instance_payload.json_spec,
             auth_config_id=instance_payload.auth_config_id,
         )

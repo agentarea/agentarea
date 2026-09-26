@@ -34,10 +34,12 @@ from agentarea_common.artifacts import (
     secure_download_headers,
 )
 from agentarea_common.artifacts.workspace import DEFAULT_MAX_FILE_BYTES
+from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config.app import get_app_settings
+from agentarea_common.workspaces.lookup import workspace_api_prefix
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
 from fastapi import APIRouter, Depends, Form, HTTPException, Response, UploadFile
@@ -205,10 +207,10 @@ async def _ensure_no_file_ancestors(service: ArtifactService, workspace_id: str,
             raise HTTPException(status_code=409, detail=f"A file already exists at {str(parent)!r}")
 
 
-def _workspace_file_download_url(file_path: str) -> str:
+async def _workspace_file_download_url(user_context: UserContext, file_path: str) -> str:
     base = get_app_settings().API_BASE_URL.rstrip("/")
     encoded_path = quote(file_path.lstrip("/"), safe="/")
-    return f"{base}/v1/files/download/{encoded_path}"
+    return f"{base}{await workspace_api_prefix(user_context)}/files/download/{encoded_path}"
 
 
 async def get_project_service(
@@ -609,5 +611,5 @@ async def download_workspace_file(
         exists = False
     if not exists:
         raise HTTPException(status_code=404, detail="File not found")
-    url = _workspace_file_download_url(file_path)
+    url = await _workspace_file_download_url(user_context, file_path)
     return WorkspaceFileDownloadResponse(url=url, path=file_path)

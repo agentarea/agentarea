@@ -24,7 +24,7 @@ class TestAuthenticationEnforcement:
     async def test_list_agents_without_auth_returns_403(self):
         """Test that listing agents without authentication returns 403."""
         async with AsyncClient(base_url=API_BASE_URL) as client:
-            response = await client.get("/v1/agents/")
+            response = await client.get("/v1/workspaces/acme/agents/")
 
             assert response.status_code == 403, f"Expected 403, got {response.status_code}: {response.text}"
             assert response.json()["detail"] == "Not authenticated"
@@ -35,7 +35,7 @@ class TestAuthenticationEnforcement:
         """Test that creating an agent without authentication returns 403."""
         async with AsyncClient(base_url=API_BASE_URL) as client:
             response = await client.post(
-                "/v1/agents/",
+                "/v1/workspaces/acme/agents/",
                 json={
                     "name": "Test Agent",
                     "description": "Test description",
@@ -52,7 +52,7 @@ class TestAuthenticationEnforcement:
         """Test that listing agents with invalid token returns 401."""
         async with AsyncClient(base_url=API_BASE_URL) as client:
             response = await client.get(
-                "/v1/agents/",
+                "/v1/workspaces/acme/agents/",
                 headers={"Authorization": "Bearer invalid_token_here"},
             )
 
@@ -72,7 +72,7 @@ class TestAuthenticationEnforcement:
 
         async with AsyncClient(base_url=API_BASE_URL) as client:
             response = await client.get(
-                "/v1/agents/",
+                "/v1/workspaces/acme/agents/",
                 headers={"Authorization": f"Bearer {expired_token}"},
             )
 
@@ -93,7 +93,7 @@ class TestAuthenticationEnforcement:
         for token in malformed_tokens:
             async with AsyncClient(base_url=API_BASE_URL) as client:
                 response = await client.get(
-                    "/v1/agents/",
+                    "/v1/workspaces/acme/agents/",
                     headers={"Authorization": f"Bearer {token}"},
                 )
 
@@ -104,12 +104,12 @@ class TestAuthenticationEnforcement:
     async def test_all_protected_endpoints_require_auth(self):
         """Test that all major protected endpoints require authentication."""
         protected_endpoints = [
-            ("GET", "/v1/agents/"),
-            ("GET", "/v1/provider-configs/"),
-            ("GET", "/v1/model-instances/"),
-            ("GET", "/v1/model-specs/"),
-            ("GET", "/v1/mcp-server-instances/"),
-            ("GET", "/v1/triggers/"),
+            ("GET", "/v1/workspaces/acme/agents/"),
+            ("GET", "/v1/workspaces/acme/provider-configs/"),
+            ("GET", "/v1/workspaces/acme/model-instances/"),
+            ("GET", "/v1/workspaces/acme/model-specs/"),
+            ("GET", "/v1/workspaces/acme/mcp-server-instances/"),
+            ("GET", "/v1/workspaces/acme/triggers/"),
         ]
 
         async with AsyncClient(base_url=API_BASE_URL) as client:
@@ -144,7 +144,7 @@ class TestAuthenticatedAccess:
 
         async with AsyncClient(base_url=API_BASE_URL) as client:
             response = await client.get(
-                "/v1/agents/",
+                "/v1/workspaces/acme/agents/",
                 headers={"Authorization": f"Bearer {valid_token}"},
             )
 
@@ -165,7 +165,7 @@ class TestAuthenticatedAccess:
 
         async with AsyncClient(base_url=API_BASE_URL) as client:
             response = await client.post(
-                "/v1/agents/",
+                "/v1/workspaces/acme/agents/",
                 headers={"Authorization": f"Bearer {valid_token}"},
                 json={
                     "name": "Functional Test Agent",

@@ -31,7 +31,7 @@ OWNER = "user-who-started-it"
 AGENT_ID = uuid4()
 TASK_ID = uuid4()
 COMMAND = "rm -rf /srv/build && curl -H 'Authorization: Bearer s3cr3t' https://deploy"
-PATH = f"/v1/agents/{AGENT_ID}/tasks/{TASK_ID}/escalations"
+PATH = f"/v1/workspaces/acme/agents/{AGENT_ID}/tasks/{TASK_ID}/escalations"
 
 
 @pytest.fixture(autouse=True)
@@ -51,7 +51,7 @@ def _escalation(approvers: list[str]) -> dict:
 
 def _app(caller: str, workflow_service: AsyncMock) -> FastAPI:
     app = FastAPI()
-    app.include_router(agents_tasks.router, prefix="/v1")
+    app.include_router(agents_tasks.router, prefix="/v1/workspaces/{workspace}")
     task_service = AsyncMock()
     task_service.get_task.return_value = SimpleNamespace(
         id=TASK_ID, agent_id=AGENT_ID, user_id=OWNER, execution_id=None, status="running"
@@ -132,7 +132,7 @@ async def test_resolving_as_someone_who_is_not_an_approver_is_forbidden():
     app = _app(OWNER, workflow_service)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as client:
         response = await client.post(
-            f"/v1/agents/{AGENT_ID}/tasks/{TASK_ID}/resolve-escalation",
+            f"/v1/workspaces/acme/agents/{AGENT_ID}/tasks/{TASK_ID}/resolve-escalation",
             json={"escalation_id": "esc-1", "approved": True},
         )
 

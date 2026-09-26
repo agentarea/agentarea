@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import UUID
 
 from agentarea_api.api.deps.services import get_model_spec_repository, get_model_spec_service
@@ -14,6 +15,11 @@ from sqlalchemy.exc import IntegrityError
 
 router = APIRouter(prefix="/model-specs", tags=["model-specs"])
 
+# context_window and max_output_tokens are INTEGER columns.
+_INT32_MAX = 2**31 - 1
+# The per-token costs are NUMERIC(20, 12): at most 8 integer digits.
+_COST_CEILING = Decimal(10) ** 8
+
 
 # Model Spec schemas
 class ModelSpecCreate(BaseModel):
@@ -21,10 +27,10 @@ class ModelSpecCreate(BaseModel):
     model_name: str
     display_name: str
     description: str | None = None
-    context_window: int = Field(gt=0)
-    max_output_tokens: int | None = Field(default=None, gt=0)
-    input_cost_per_token: Money = Field(ge=ZERO)
-    output_cost_per_token: Money = Field(ge=ZERO)
+    context_window: int = Field(gt=0, le=_INT32_MAX)
+    max_output_tokens: int | None = Field(default=None, gt=0, le=_INT32_MAX)
+    input_cost_per_token: Money = Field(ge=ZERO, lt=_COST_CEILING)
+    output_cost_per_token: Money = Field(ge=ZERO, lt=_COST_CEILING)
     default_context_strategy: str | None = None  # Auto-inferred from model_name if None
     is_active: bool = True
 
@@ -32,10 +38,10 @@ class ModelSpecCreate(BaseModel):
 class ModelSpecUpdate(BaseModel):
     display_name: str | None = None
     description: str | None = None
-    context_window: int | None = Field(default=None, gt=0)
-    max_output_tokens: int | None = Field(default=None, gt=0)
-    input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
-    output_cost_per_token: Money | None = Field(default=None, ge=ZERO)
+    context_window: int | None = Field(default=None, gt=0, le=_INT32_MAX)
+    max_output_tokens: int | None = Field(default=None, gt=0, le=_INT32_MAX)
+    input_cost_per_token: Money | None = Field(default=None, ge=ZERO, lt=_COST_CEILING)
+    output_cost_per_token: Money | None = Field(default=None, ge=ZERO, lt=_COST_CEILING)
     default_context_strategy: str | None = None
     is_active: bool | None = None
 

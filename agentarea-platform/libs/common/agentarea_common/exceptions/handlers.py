@@ -46,18 +46,6 @@ def _get_workspace_context_for_logging() -> dict[str, Any]:
     return {}
 
 
-def _get_workspace_headers() -> dict[str, str]:
-    """Get workspace context headers (``X-Workspace-ID``) for API responses."""
-    headers: dict[str, str] = {}
-    try:
-        context = ContextManager.get_context()
-        if context and context.workspace_id:
-            headers["X-Workspace-ID"] = context.workspace_id
-    except Exception:
-        logger.debug("Workspace context unavailable for response headers", exc_info=True)
-    return headers
-
-
 def _log_level_for(status_code: int) -> int:
     """Pick a log level: 5xx -> ERROR, auth/not-found -> INFO, else WARNING."""
     if status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR:
@@ -112,7 +100,7 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     with_traceback = exc.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR
     _log_error(exc, request, exc.status_code, with_traceback=with_traceback)
 
-    headers = {**_get_workspace_headers(), **exc.headers}
+    headers = dict(exc.headers)
     if exc.status_code == status.HTTP_401_UNAUTHORIZED and "WWW-Authenticate" not in headers:
         # An error handler must never itself raise; fall back to a bare challenge
         # if the settings-derived realm cannot be built.
@@ -132,7 +120,7 @@ async def permission_error_handler(request: Request, exc: PermissionError) -> JS
         code="permission_denied",
         detail=str(exc) or "You do not have permission to perform this action",
     )
-    return _json_problem(body, status.HTTP_403_FORBIDDEN, _get_workspace_headers())
+    return _json_problem(body, status.HTTP_403_FORBIDDEN)
 
 
 async def validation_exception_handler(
@@ -152,7 +140,7 @@ async def validation_exception_handler(
         detail="Request validation failed",
         extra={"errors": jsonable(errors)},
     )
-    return _json_problem(body, status.HTTP_422_UNPROCESSABLE_ENTITY, _get_workspace_headers())
+    return _json_problem(body, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
@@ -164,7 +152,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
         code="http_error",
         detail=detail,
     )
-    headers = {**_get_workspace_headers(), **(exc.headers or {})}
+    headers = dict(exc.headers or {})
     return _json_problem(body, exc.status_code, headers)
 
 
@@ -179,7 +167,7 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
             code="conflict",
             detail="The request conflicts with the current state of the resource",
         )
-        return _json_problem(body, status.HTTP_409_CONFLICT, _get_workspace_headers())
+        return _json_problem(body, status.HTTP_409_CONFLICT)
 
     # Unexpected integrity error (e.g. not-null) — treat as a server bug.
     _log_error(exc, request, status.HTTP_500_INTERNAL_SERVER_ERROR, with_traceback=True)
@@ -187,7 +175,6 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         code="internal_error",
         detail="Internal Server Error",
-        headers=_get_workspace_headers(),
     )
 
 
@@ -198,7 +185,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         code="internal_error",
         detail="Internal Server Error",
-        headers=_get_workspace_headers(),
     )
 
 

@@ -48,6 +48,7 @@ from agentarea_common.rebac import (
     OpenFGAUnavailableError,
     RelationQuery,
     RelationTuple,
+    write_tuple_idempotent,
 )
 from agentarea_common.workspaces.models import Workspace, WorkspaceMembership
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
@@ -850,19 +851,18 @@ async def sync_grants(
     member_ids = {str(row.user_id) for row in (await db_session.execute(member_query)).all()}
     if owner_user_id:
         member_ids.add(str(owner_user_id))
+    backend = "OpenFGA" if isinstance(graph_client, OpenFGAClient) else "Keto"
     for member_id in sorted(member_ids):
-        try:
-            await graph_client.write_tuple(
-                RelationTuple(
-                    namespace="Workspace",
-                    object=user_context.workspace_id,
-                    relation="members",
-                    subject_id=f"User:{member_id}",
-                )
-            )
-            written += 1
-        except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
-            logger.exception("Failed to mirror workspace member into graph backend")
-            raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
+        await write_tuple_idempotent(
+            graph_client,
+            backend,
+            RelationTuple(
+                namespace="Workspace",
+                object=user_context.workspace_id,
+                relation="members",
+                subject_id=f"User:{member_id}",
+            ),
+        )
+        written += 1
 
     return SyncResponse(written=written, collections=0)

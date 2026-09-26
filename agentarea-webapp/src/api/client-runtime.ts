@@ -1,35 +1,21 @@
-import type { CreateClientConfig } from "./client/client";
 import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { SERVER_API_TIMEOUT_MS } from "@/lib/server-timeouts";
-import {
-  WORKSPACE_REFERENCE_HEADER,
-  WORKSPACE_SLUG_HEADER,
-} from "@/lib/workspaces";
+import { fillWorkspace, isWorkspaceScoped } from "@/lib/workspace-url";
+import type { CreateClientConfig } from "./client/client";
 
-async function addWorkspaceSlug(request: Request) {
-  try {
-    // Imported lazily: this module is also pulled into the browser bundle via
-    // the generated client, and next/headers cannot be statically imported
-    // there.
-    const { headers } = await import("next/headers");
-    const { getActiveWorkspaceSlug } = await import("@/lib/workspace-context");
-    const requestHeaders = await headers();
-    // An explicit header wins so a caller can pin one request to a workspace;
-    // otherwise the switcher decides, via a slug validated against the user's
-    // memberships rather than read straight off the cookie.
-    const workspaceSlug =
-      requestHeaders.get(WORKSPACE_REFERENCE_HEADER) ??
-      requestHeaders.get(WORKSPACE_SLUG_HEADER) ??
-      (await getActiveWorkspaceSlug());
-    if (workspaceSlug) {
-      request.headers.set(WORKSPACE_REFERENCE_HEADER, workspaceSlug);
-    }
-  } catch {
-    // headers() is unavailable outside a request scope (for example build-time
-    // prefetch); in that case the backend falls back to the user's personal
-    // workspace.
-  }
+/**
+ * Put the page's workspace into a `/v1/workspaces/{workspace}/...` URL; a
+ * workspace-less endpoint goes out as generated. Outside a request scope
+ * there is no page, so a workspace-scoped call fails instead of guessing.
+ */
+async function fillRequestWorkspace(url: string): Promise<string> {
+  if (!isWorkspaceScoped(url)) return url;
+  // Imported lazily: this module is also pulled into the browser bundle via
+  // the generated client, and next/headers cannot be statically imported
+  // there.
+  const { getRequestWorkspaceSlug } = await import("@/lib/workspace-context");
+  return fillWorkspace(url, await getRequestWorkspaceSlug());
 }
 
 async function addAuthToken(request: Request) {
@@ -57,13 +43,15 @@ export const createClientConfig: CreateClientConfig = (config) => ({
   ...config,
   baseUrl: env.API_URL,
   fetch: async (input, init) => {
-    const request = new Request(input, {
+    if (typeof input !== "string") {
+      throw new TypeError("The generated client passes its URL as a string");
+    }
+    const request = new Request(await fillRequestWorkspace(input), {
       ...init,
       signal: init?.signal ?? AbortSignal.timeout(SERVER_API_TIMEOUT_MS),
     });
 
     await addAuthToken(request);
-    await addWorkspaceSlug(request);
 
     const response = await fetch(request);
 

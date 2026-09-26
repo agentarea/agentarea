@@ -32,7 +32,7 @@ failure code eliminates most of them in one request.
 <Steps titleSize="h3">
   <Step title="Read the failure code">
     ```bash
-    curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID" \
+    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       | jq '{status, failure_reason, error, total_cost}'
     ```
@@ -64,7 +64,7 @@ failure code eliminates most of them in one request.
 
   <Step title="Narrow with the rollup">
     ```bash
-    curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/summary" \
+    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/summary" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq
     ```
 
@@ -105,7 +105,7 @@ failure code eliminates most of them in one request.
     Filter the durable log rather than reading all of it:
 
     ```bash
-    curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events?event_type=tool.result&page_size=100" \
+    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/events?event_type=tool.result&page_size=100" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       | jq '.events[] | select(.metadata.error != null) | {timestamp, event_type, message, metadata}'
     ```
@@ -128,7 +128,7 @@ failure code eliminates most of them in one request.
     see what it was doing:
 
     ```bash
-    curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
+    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '.[].path'
     ```
   </Step>
@@ -139,7 +139,7 @@ failure code eliminates most of them in one request.
     re-resolution:
 
     ```bash
-    curl -s "$AGENTAREA_URL/v1/governance/task-policy-snapshots/$TASK_ID" \
+    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/governance/task-policy-snapshots/$TASK_ID" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq
     ```
   </Step>
@@ -151,7 +151,7 @@ You have finished debugging when you can name the failure code and point at the
 event that produced it. Confirm the two agree:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events?event_type=task.failed" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/events?event_type=task.failed" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq -r '.events[-1].message'
 ```
 

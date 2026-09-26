@@ -228,7 +228,11 @@ def _user_context(scope: A2ACallScope) -> UserContext:
     auth = scope.auth
     if not auth.authenticated or not auth.user_id or not auth.workspace_id:
         raise InvalidRequestError(message="A2A requests require an authenticated user")
-    user_context = UserContext(user_id=auth.user_id, workspace_id=auth.workspace_id)
+    user_context = UserContext(
+        user_id=auth.user_id,
+        workspace_id=auth.workspace_id,
+        workspace_slug=auth.workspace_slug,
+    )
     ContextManager.set_context(user_context)
     return user_context
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { useTranslations } from "next-intl";
 import type { AgentResponse, ProjectResponse } from "@/api/client/types.gen";
 import FullChat, {
@@ -67,7 +67,7 @@ function QuickTaskComposerSkeleton() {
 }
 
 export default function QuickTaskDialog() {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
   const t = useTranslations("QuickTask");
 
   const [open, setOpen] = React.useState(false);

@@ -36,7 +36,7 @@ from running away.
     rejected without it.
 
     ```bash
-    curl -X POST "$AGENTAREA_URL/v1/triggers/" \
+    curl -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -73,7 +73,7 @@ from running away.
     Do not wait until 09:00 to find out the agent's model is unset.
 
     ```bash
-    curl -X POST "$AGENTAREA_URL/v1/triggers/$TRIGGER_ID/execute" \
+    curl -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/$TRIGGER_ID/execute" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN"
     ```
 
@@ -104,7 +104,7 @@ Read the execution history. This is the record of what the schedule actually
 did, including ticks that created no task:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/triggers/$TRIGGER_ID/executions" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/$TRIGGER_ID/executions" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '.[0]'
 ```
 
@@ -152,7 +152,7 @@ the task itself went wrong. A trigger's job ends when the task exists.
     fixed — read the recent failures, fix the cause, then re-enable explicitly:
 
     ```bash
-    curl -X POST "$AGENTAREA_URL/v1/triggers/$TRIGGER_ID/enable" \
+    curl -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/$TRIGGER_ID/enable" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN"
     ```
   </Accordion>

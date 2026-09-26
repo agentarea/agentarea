@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
-import { WORKSPACE_REFERENCE_HEADER } from "@/lib/workspaces";
+import { fillWorkspace } from "@/lib/workspace-url";
+import { WORKSPACE_QUERY_PARAM } from "@/lib/workspaces";
 import { buildProxyResponseHeaders } from "./response-headers";
 
 /**
@@ -28,11 +29,16 @@ async function handleRequest(
     // Get authentication token from cookies (server-side)
     const authToken = await getAuthToken();
 
-    // Construct the backend URL
-    const backendUrl = `${env.API_URL}/${pathString}`;
+    // The browser passes either a concrete path or a
+    // `/v1/workspaces/{workspace}/...` template filled from the page it is on.
+    const backendUrl = fillWorkspace(
+      `${env.API_URL}/${pathString}`,
+      resolveRequestWorkspaceSlug(request)
+    );
 
     // Get query parameters from the request
     const { searchParams } = new URL(request.url);
+    searchParams.delete(WORKSPACE_QUERY_PARAM);
     const queryString = searchParams.toString();
     const fullUrl = queryString ? `${backendUrl}?${queryString}` : backendUrl;
 
@@ -44,11 +50,6 @@ async function handleRequest(
     // Add authorization header if token is available
     if (authToken) {
       headers.set("Authorization", `Bearer ${authToken}`);
-    }
-
-    const workspaceSlug = await resolveRequestWorkspaceSlug(request);
-    if (workspaceSlug) {
-      headers.set(WORKSPACE_REFERENCE_HEADER, workspaceSlug);
     }
 
     // Get request body if present
@@ -106,7 +107,10 @@ async function handleRequest(
   } catch (error: unknown) {
     console.error("API Proxy Error:", error);
     return NextResponse.json(
-      { error: "Proxy request failed", message: error instanceof Error ? error.message : String(error) },
+      {
+        error: "Proxy request failed",
+        message: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

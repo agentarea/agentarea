@@ -66,14 +66,15 @@ def test_invite_into_new_workspace(
         .json()
     )
     workspace_id = ws["id"]
+    workspace_path = f"/v1/workspaces/{ws['slug']}"
 
     # Bob is not a member yet — he can't read the shared workspace's invitations.
-    blocked = bob_client.get(f"/v1/workspaces/{workspace_id}/invitations")
+    blocked = bob_client.get(f"{workspace_path}/invitations")
     assert blocked.status_code == 403, blocked.text
 
     invitation = (
         alice_client.post(
-            f"/v1/workspaces/{workspace_id}/invitations",
+            f"{workspace_path}/invitations",
             json={"email": bob.email},
         )
         .raise_for_status()
@@ -86,7 +87,7 @@ def test_invite_into_new_workspace(
     assert accept.json()["workspace_id"] == workspace_id
 
     # Bob now reaches the shared workspace and appears in its member list.
-    members = bob_client.get(f"/v1/workspaces/{workspace_id}/members").raise_for_status().json()
+    members = bob_client.get(f"{workspace_path}/members").raise_for_status().json()
     member_ids = {m["user_id"] for m in members}
     assert bob.identity_id in member_ids
 

@@ -9,8 +9,8 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
-from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.context import UserContext, UserPrincipal
+from agentarea_common.auth.dependencies import PrincipalDep, UnboundPrincipalDep
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_database
@@ -48,7 +48,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
-def get_workspace_service(session: SessionDep, user: UserContextDep) -> WorkspaceService:
+def get_workspace_service(session: SessionDep, user: PrincipalDep) -> WorkspaceService:
     async def on_workspace_created(workspace: Workspace) -> None:
         """Provision a freshly created workspace so it is usable out of the box.
 
@@ -114,18 +114,24 @@ class CreateWorkspaceBody(BaseModel):
 
 
 async def list_reachable_workspaces(
-    user: UserContext, service: WorkspaceService
+    user: UserPrincipal, service: WorkspaceService
 ) -> list[Workspace]:
-    """Every workspace *user* can reach: personal (provisioned on first call) + joined."""
+    """Every workspace *user* can reach: personal (provisioned on first call) + joined.
+
+    An API key reaches only the workspace it was issued for.
+    """
     graph = get_workspace_membership_graph()
     member_workspace_ids = (
         await list_workspace_ids_for_member(graph, user.user_id) if graph is not None else []
     )
-    return await service.list_for_user(
+    workspaces = await service.list_for_user(
         user.user_id,
         email=user.email,
         member_workspace_ids=member_workspace_ids,
     )
+    if user.bound_workspace_id is not None:
+        return [w for w in workspaces if w.id == user.bound_workspace_id]
+    return workspaces
 
 
 router = APIRouter(tags=["workspaces"])
@@ -135,11 +141,16 @@ router = APIRouter(tags=["workspaces"])
     "/workspaces",
     response_model=WorkspaceResponse,
     status_code=201,
-    dependencies=[unrestricted("anyone may create a workspace; they become its owner")],
+    dependencies=[
+        unrestricted(
+            "any signed-in user may create a workspace and becomes its owner; "
+            "an API key confined to one workspace may not"
+        )
+    ],
 )
 async def create_workspace(
     body: CreateWorkspaceBody,
-    user: UserContextDep,
+    user: UnboundPrincipalDep,
     service: WorkspaceServiceDep,
 ) -> WorkspaceResponse:
     """Create a new shared workspace owned by the current user.
@@ -182,7 +193,7 @@ async def create_workspace(
     dependencies=[enforced_in_handler("returns only the workspaces this user owns or belongs to")],
 )
 async def list_workspaces(
-    user: UserContextDep,
+    user: PrincipalDep,
     service: WorkspaceServiceDep,
 ) -> list[WorkspaceResponse]:
     """List every workspace the current user can reach (personal + joined).

@@ -255,6 +255,20 @@ class WorkspaceRepository:
         )
         return list(result.scalars().all())
 
+    async def list_owned_or_named(
+        self, user_id: str, *, slug: str | None = None, workspace_id: str | None = None
+    ) -> list[Workspace]:
+        """Workspaces ``user_id`` owns, plus the one ``slug`` or ``workspace_id`` names."""
+        condition = Workspace.owner_user_id == user_id
+        if slug is not None:
+            condition = or_(condition, Workspace.slug == slug)
+        if workspace_id is not None:
+            condition = or_(condition, Workspace.id == workspace_id)
+        result = await self.session.execute(
+            select(Workspace).where(condition).order_by(Workspace.created_at.asc())
+        )
+        return list(result.scalars().all())
+
     async def list_owned_by_user(self, user_id: str) -> list[Workspace]:
         """List workspaces whose authoritative owner is ``user_id``."""
         result = await self.session.execute(

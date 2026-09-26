@@ -39,7 +39,7 @@ def _run_file_task(
         tools=[{"type": "code", "name": "agentarea/files"}],
     )
     task_id = client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{client.ws}/agents/{agent_id}/tasks/sync",
         json={
             "description": description,
             "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
@@ -70,7 +70,7 @@ def test_list_task_artifacts_endpoint(
     )
     agent_id, task_id = ids.split("::")
 
-    resp = alice_client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/artifacts")
+    resp = alice_client.get(f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}/artifacts")
     assert resp.status_code == 200, resp.text
     items = resp.json()
     assert isinstance(items, list)
@@ -105,7 +105,7 @@ def test_task_artifacts_are_workspace_scoped(
     agent_id, task_id = ids.split("::")
 
     # Bob asks for Alice's task's artifacts → 404 (task isn't in his workspace).
-    cross = bob_client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/artifacts")
+    cross = bob_client.get(f"{bob_client.ws}/agents/{agent_id}/tasks/{task_id}/artifacts")
     assert cross.status_code in (403, 404), (
         f"CRITICAL: Bob accessed Alice's artifacts: HTTP {cross.status_code} "
         f"{cross.text!r}"

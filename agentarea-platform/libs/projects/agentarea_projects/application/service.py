@@ -33,6 +33,8 @@ class ProjectService:
         (workspace-scoped); the prefix is fully derived from the project id
         and is not persisted on the row.
         """
+        if payload.parent_project_id is not None:
+            await self._in_workspace(ProjectRepository, payload.parent_project_id, "Parent project")
         return await self.repository.create(
             name=payload.name,
             description=payload.description,
@@ -52,6 +54,9 @@ class ProjectService:
         """
         patch = payload.model_dump(exclude_unset=True)
         if "parent_project_id" in patch and patch["parent_project_id"] is not None:
+            await self._in_workspace(
+                ProjectRepository, patch["parent_project_id"], "Parent project"
+            )
             patch["parent_project_id"] = str(patch["parent_project_id"])
         if await self.repository.update(project_id, **patch) is None:
             return None

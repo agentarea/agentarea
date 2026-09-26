@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, ChevronDown, Plus } from "lucide-react";
 import type { SecretResponse } from "@/api/client/types.gen";
-import { CreateSecretDialog } from "@/app/(main)/secrets/components/CreateSecretDialog";
+import { CreateSecretDialog } from "@/app/w/[workspace]/(main)/secrets/components/CreateSecretDialog";
 import { Button } from "@/components/ui/button";
 import {
   Command,

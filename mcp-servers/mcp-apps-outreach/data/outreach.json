@@ -2222,7 +2222,11 @@
       "lastName": "Clarke",
       "title": "VP Finance",
       "email": "camille.clarke@foundrysecurity.com",
-      "enrollment": null
+      "enrollment": {
+        "campaignId": "series-a-cfo",
+        "signalId": "sig_298",
+        "enrolledAt": "2026-09-24T23:39:35.095Z"
+      }
     },
     {
       "id": "ct_094",

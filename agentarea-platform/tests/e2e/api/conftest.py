@@ -17,6 +17,7 @@ Override endpoints via env vars if your stack runs elsewhere:
 from __future__ import annotations
 
 import os
+import time
 import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -75,13 +76,12 @@ def _mint_user(admin: httpx.Client, public: httpx.Client, email: str) -> AuthedU
     login.raise_for_status()
     session_token = login.json()["session_token"]
 
-    tokenized = public.get(
-        "/sessions/whoami",
-        params={"tokenize_as": "agentarea_jwt"},
-        headers={"X-Session-Token": session_token},
-    ).raise_for_status().json()["tokenized"]
-
-    return AuthedUser(identity_id=identity_id, email=email, session_token=session_token, jwt=tokenized)
+    return AuthedUser(
+        identity_id=identity_id,
+        email=email,
+        session_token=session_token,
+        jwt=_tokenize(public, session_token),
+    )
 
 
 @pytest.fixture(scope="session")
@@ -129,8 +129,98 @@ def bob(user_factory: Callable[[str | None], AuthedUser]) -> AuthedUser:
     return user_factory("bob")
 
 
-def _authed_client(token: str) -> httpx.Client:
-    return httpx.Client(
+class WorkspaceClient(httpx.Client):
+    """An authenticated client that knows the workspace it acts in.
+
+    ``ws`` is the API prefix of the caller's personal workspace,
+    ``/v1/workspaces/<slug>``: workspace-scoped routes are addressed as
+    ``f"{client.ws}/agents/"``.
+    """
+
+    ws: str
+
+
+def personal_workspace_path(client: httpx.Client) -> str:
+    """``/v1/workspaces/<slug>`` of the caller's personal workspace (provisioned on first list)."""
+    workspaces = client.get("/v1/workspaces").raise_for_status().json()
+    personal = next(w for w in workspaces if w["id"] == w["owner_user_id"])
+    return f"/v1/workspaces/{personal['slug']}"
+
+
+def _tokenize(public: httpx.Client, session_token: str) -> str:
+    return (
+        public.get(
+            "/sessions/whoami",
+            params={"tokenize_as": "agentarea_jwt"},
+            headers={"X-Session-Token": session_token},
+        )
+        .raise_for_status()
+        .json()["tokenized"]
+    )
+
+
+class FuzzCaller:
+    """The identity a schemathesis run acts as, with a JWT that outlives the run.
+
+    The tokenizer issues 30-minute JWTs and a full fuzz run can take longer.
+    A token that lapses mid-run turns every later call into a 401, which
+    ``not_a_server_error`` accepts, so the rest of the run would pass while
+    exercising nothing. The Kratos session lives far longer, so the JWT is
+    re-issued from it well before it expires.
+
+    ``FUZZ_JWT`` reuses an existing token instead of minting a Kratos user; it
+    is not refreshed.
+    """
+
+    _REFRESH_AFTER_SECONDS = 15 * 60
+
+    def __init__(self, label: str) -> None:
+        self._session_token: str | None = None
+        jwt = os.environ.get("FUZZ_JWT")
+        if not jwt:
+            with (
+                httpx.Client(base_url=KRATOS_ADMIN_URL, timeout=10.0) as admin,
+                httpx.Client(base_url=KRATOS_PUBLIC_URL, timeout=10.0) as public,
+            ):
+                user = _mint_user(admin, public, f"{label}-{uuid.uuid4().hex[:8]}@test.local")
+            jwt, self._session_token = user.jwt, user.session_token
+        self._jwt = jwt
+        self._issued_at = time.monotonic()
+        with httpx.Client(
+            base_url=API_URL, headers={"Authorization": f"Bearer {jwt}"}, timeout=10.0
+        ) as client:
+            self.slug = personal_workspace_path(client).rsplit("/", 1)[1]
+
+    @property
+    def jwt(self) -> str:
+        if (
+            self._session_token is not None
+            and time.monotonic() - self._issued_at > self._REFRESH_AFTER_SECONDS
+        ):
+            with httpx.Client(base_url=KRATOS_PUBLIC_URL, timeout=10.0) as public:
+                self._jwt = _tokenize(public, self._session_token)
+            self._issued_at = time.monotonic()
+        return self._jwt
+
+    def auth(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.jwt}"}
+
+
+def pin_workspace(case, slug: str) -> None:
+    """Send a generated case to the caller's own workspace.
+
+    ``{workspace}`` is a path parameter like any other to schemathesis, which
+    fills it with arbitrary slugs: every workspace route would then answer 403
+    before reaching a handler, and the fuzz would exercise nothing. Set on the
+    case itself rather than through a generation hook, because the coverage
+    phase builds cases without running those hooks. Foreign-slug refusal is
+    asserted by its own test.
+    """
+    if case.path_parameters and "workspace" in case.path_parameters:
+        case.path_parameters["workspace"] = slug
+
+def _authed_client(token: str) -> WorkspaceClient:
+    return WorkspaceClient(
         base_url=API_URL,
         headers={"Authorization": f"Bearer {token}"},
         timeout=10.0,
@@ -138,14 +228,16 @@ def _authed_client(token: str) -> httpx.Client:
 
 
 @pytest.fixture
-def alice_client(alice: AuthedUser) -> Iterator[httpx.Client]:
+def alice_client(alice: AuthedUser) -> Iterator[WorkspaceClient]:
     with _authed_client(alice.jwt) as client:
+        client.ws = personal_workspace_path(client)
         yield client
 
 
 @pytest.fixture
-def bob_client(bob: AuthedUser) -> Iterator[httpx.Client]:
+def bob_client(bob: AuthedUser) -> Iterator[WorkspaceClient]:
     with _authed_client(bob.jwt) as client:
+        client.ws = personal_workspace_path(client)
         yield client
 
 
@@ -258,7 +350,7 @@ def wait_for_workflow(
     deadline = time.time() + timeout
     last: list[dict] = []
     while time.time() < deadline:
-        resp = client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/events")
+        resp = client.get(f"{client.ws}/agents/{agent_id}/tasks/{task_id}/events")
         resp.raise_for_status()
         last = resp.json()["events"]
         if any(e["event_type"] in terminal for e in last):
@@ -288,7 +380,7 @@ def create_agent(
     }
     if tools:
         body["tools"] = tools
-    return client.post("/v1/agents/", json=body).raise_for_status().json()["id"]
+    return client.post(f"{client.ws}/agents/", json=body).raise_for_status().json()["id"]
 
 
 @pytest.fixture
@@ -302,7 +394,7 @@ def llm_model(
     Returns the model_instance UUID, usable directly as `model_id` on agent create.
     """
     pc = alice_client.post(
-        "/v1/provider-configs/",
+        f"{alice_client.ws}/provider-configs/",
         json={
             "provider_spec_id": llm_provider_spec_id,
             "name": f"e2e-llm-{uuid.uuid4().hex[:6]}",
@@ -315,7 +407,7 @@ def llm_model(
     )
 
     mi = alice_client.post(
-        "/v1/model-instances/",
+        f"{alice_client.ws}/model-instances/",
         json={
             "provider_config_id": pc["id"],
             "model_spec_id": llm_model_spec_id,

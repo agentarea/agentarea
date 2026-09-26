@@ -27,32 +27,32 @@ def test_model_spec_lifecycle(
 ) -> None:
     data = _payload(llm_provider_spec_id)
 
-    created = alice_client.post("/v1/model-specs/", json=data)
+    created = alice_client.post(f"{alice_client.ws}/model-specs/", json=data)
     assert created.status_code == 200, created.text[:200]
     spec = created.json()
     spec_id = spec["id"]
     assert spec["model_name"] == data["model_name"]
     assert spec["context_window"] == 8192
 
-    duplicate = alice_client.post("/v1/model-specs/", json=data)
+    duplicate = alice_client.post(f"{alice_client.ws}/model-specs/", json=data)
     assert duplicate.status_code == 409
 
-    fetched = alice_client.get(f"/v1/model-specs/{spec_id}")
+    fetched = alice_client.get(f"{alice_client.ws}/model-specs/{spec_id}")
     assert fetched.status_code == 200
     assert fetched.json()["id"] == spec_id
 
-    by_provider = alice_client.get(f"/v1/model-specs/by-provider/{llm_provider_spec_id}")
+    by_provider = alice_client.get(f"{alice_client.ws}/model-specs/by-provider/{llm_provider_spec_id}")
     assert by_provider.status_code == 200
     assert any(item["id"] == spec_id for item in by_provider.json())
 
     by_name = alice_client.get(
-        f"/v1/model-specs/by-provider/{llm_provider_spec_id}/{data['model_name']}"
+        f"{alice_client.ws}/model-specs/by-provider/{llm_provider_spec_id}/{data['model_name']}"
     )
     assert by_name.status_code == 200
     assert by_name.json()["id"] == spec_id
 
     patched = alice_client.patch(
-        f"/v1/model-specs/{spec_id}",
+        f"{alice_client.ws}/model-specs/{spec_id}",
         json={"display_name": "E2E patched", "context_window": 16384},
     )
     assert patched.status_code == 200
@@ -60,7 +60,7 @@ def test_model_spec_lifecycle(
     assert patched.json()["context_window"] == 16384
 
     upserted = alice_client.post(
-        "/v1/model-specs/upsert",
+        f"{alice_client.ws}/model-specs/upsert",
         json={**data, "display_name": "E2E upserted", "context_window": 32768},
     )
     assert upserted.status_code == 200
@@ -68,10 +68,10 @@ def test_model_spec_lifecycle(
     assert upserted.json()["display_name"] == "E2E upserted"
     assert upserted.json()["context_window"] == 32768
 
-    deleted = alice_client.delete(f"/v1/model-specs/{spec_id}")
+    deleted = alice_client.delete(f"{alice_client.ws}/model-specs/{spec_id}")
     assert deleted.status_code == 200
 
-    gone = alice_client.get(f"/v1/model-specs/{spec_id}")
+    gone = alice_client.get(f"{alice_client.ws}/model-specs/{spec_id}")
     assert gone.status_code == 404
 
 
@@ -82,15 +82,15 @@ def test_model_specs_are_workspace_scoped(
     llm_provider_spec_id: str,
 ) -> None:
     created = alice_client.post(
-        "/v1/model-specs/", json=_payload(llm_provider_spec_id)
+        f"{alice_client.ws}/model-specs/", json=_payload(llm_provider_spec_id)
     )
     assert created.status_code == 200, created.text[:200]
     spec_id = created.json()["id"]
 
-    bob_get = bob_client.get(f"/v1/model-specs/{spec_id}")
+    bob_get = bob_client.get(f"{bob_client.ws}/model-specs/{spec_id}")
     assert bob_get.status_code == 404
 
-    bob_list = bob_client.get("/v1/model-specs/")
+    bob_list = bob_client.get(f"{bob_client.ws}/model-specs/")
     assert bob_list.status_code == 200
     assert all(item["id"] != spec_id for item in bob_list.json())
 

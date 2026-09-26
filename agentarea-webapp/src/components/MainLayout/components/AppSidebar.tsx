@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "@/components/WorkspaceLink";
+import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
 import { Inbox, SquarePen } from "lucide-react";
 import {
   SidebarHeader,
@@ -30,25 +30,20 @@ interface AppSidebarData {
 export function AppSidebarContent({
   data,
   workspaces,
-  activeWorkspaceSlug,
 }: {
   data: AppSidebarData;
   workspaces: Workspace[];
-  activeWorkspaceSlug: string | null;
 }) {
   const { open } = useSidebar();
   const t = useTranslations("Sidebar");
-  const pathname = usePathname();
+  const pathname = useWorkspacePathname();
   const inboxActive = pathname === "/inbox" || pathname.startsWith("/inbox/");
   const homeActive = pathname === "/workplace";
 
   return (
     <>
       <SidebarHeader>
-        <TeamSwitcher
-          workspaces={workspaces}
-          activeSlug={activeWorkspaceSlug}
-        />
+        <TeamSwitcher workspaces={workspaces} />
         <div className={cn("flex items-center gap-1", !open && "flex-col")}>
           {/* Like the nav items, the tooltip only shows while the sidebar is
               collapsed; expanded, the label is already visible. */}

@@ -149,7 +149,7 @@ A verb outside this map is denied and logged at warning level.
 
 ### Verb to bit — relationship explorer
 
-Applied by the `/v1/access-control` check endpoint. Note the absence of `update`.
+Applied by the `/v1/workspaces/{workspace}/access-control` check endpoint. Note the absence of `update`.
 
 | Verb | Bit |
 |---|---|

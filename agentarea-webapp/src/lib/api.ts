@@ -9,10 +9,13 @@ import type {
   AnalyzeRequest,
   TaskResponse as ApiTaskResponse,
   CatalogConnectionRequest,
+  ContinueTaskPayload,
   CreateInvitationBody,
   CreateWalletRequest,
   CreateWorkspaceDirectoryRequest,
   FundWalletRequest,
+  GetAllTasksV1TasksGetData,
+  GetInboxItemsV1InboxGetData,
   HttpValidationError,
   InstallRequest,
   InvitationCreatedResponse,
@@ -61,31 +64,6 @@ import type {
   ValidateRequest,
 } from "@/api/client/types.gen";
 import { apiErrorMessage } from "@/lib/api-errors";
-
-type RawRequestOptions = {
-  body?: unknown;
-  params?: {
-    path?: Record<string, unknown>;
-    query?: Record<string, unknown>;
-  };
-};
-
-type RawMethod = "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
-
-function requestJson<TData = unknown, TError = unknown>(
-  method: RawMethod,
-  url: string,
-  options?: RawRequestOptions
-) {
-  const { params, ...rest } = options ?? {};
-  return serverClient.request<TData, TError>({
-    ...rest,
-    method,
-    path: params?.path,
-    query: params?.query,
-    url,
-  });
-}
 
 function withStatus<TData, TError>(result: {
   data?: TData;
@@ -338,20 +316,18 @@ export const continueAgentTask = async (
   additionalIterations: number,
   additionalBudgetUsd?: string
 ) => {
-  const body: Record<string, number | string> = {
+  const body: ContinueTaskPayload = {
     additional_iterations: additionalIterations,
   };
   if (additionalBudgetUsd) {
     body.additional_budget_usd = additionalBudgetUsd;
   }
-  const { data, error } = await requestJson(
-    "POST",
-    "/v1/tasks/{task_id}/continue",
-    {
-      params: { path: { task_id: taskId } },
+  const { data, error } =
+    await sdk.continueTaskExecutionV1TasksTaskIdContinuePost({
+      client: serverClient,
+      path: { task_id: taskId },
       body,
-    }
-  );
+    });
   return { data, error };
 };
 
@@ -401,7 +377,10 @@ export const resolveEscalation = async (
   return { data, error };
 };
 
-export const listPendingEscalations = async (agentId: string, taskId: string) => {
+export const listPendingEscalations = async (
+  agentId: string,
+  taskId: string
+) => {
   const { data, error } =
     await sdk.listPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGet({
       client: serverClient,
@@ -447,44 +426,6 @@ export const getAgentTaskEvents = async (
     },
   });
   return withStatus(result);
-};
-
-export const sendMessage = async (message: {
-  agent_id: string;
-  message: string;
-  conversation_id?: string;
-}) => {
-  const { data, error } = await requestJson("POST", "/v1/chat/messages", {
-    body: message,
-  });
-  return { data, error };
-};
-
-export const getChatAgents = async () => {
-  const { data, error } = await requestJson("GET", "/v1/chat/agents", {});
-  return { data, error };
-};
-
-export const getChatAgent = async (agentId: string) => {
-  const { data, error } = await requestJson(
-    "GET",
-    "/v1/chat/agents/{agent_id}",
-    {
-      params: { path: { agent_id: agentId } },
-    }
-  );
-  return { data, error };
-};
-
-export const getChatMessageStatus = async (taskId: string) => {
-  const { data, error } = await requestJson(
-    "GET",
-    "/v1/chat/messages/{task_id}/status",
-    {
-      params: { path: { task_id: taskId } },
-    }
-  );
-  return { data, error };
 };
 
 export const listMCPServers = async (params?: {
@@ -901,16 +842,6 @@ export const healthCheck = async () => {
   return { data: { status: "healthy" }, error: null };
 };
 
-export const getCurrentUser = async () => {
-  const { data, error } = await requestJson("GET", "/v1/auth/users/me", {});
-  return { data, error };
-};
-
-export const testProtectedEndpoint = async () => {
-  const { data, error } = await requestJson("GET", "/v1/protected/test", {});
-  return { data, error };
-};
-
 export const listAllTools = async (options?: {
   include?: "code" | "mcp" | "code,mcp";
   mcpInstanceId?: string;
@@ -1074,23 +1005,6 @@ export const createSkill = async (skill: {
     body: skill,
   });
   return { data, error };
-};
-
-export const uploadSkill = async (formData: FormData) => {
-  // For file upload, we need to use fetch directly
-  const response = await fetch("/api/proxy/v1/skills/upload", {
-    method: "POST",
-    body: formData,
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response
-      .json()
-      .catch(() => ({ detail: "Upload failed" }));
-    return { data: null, error };
-  }
-  const data = await response.json();
-  return { data, error: null };
 };
 
 export const updateSkill = async (
@@ -1355,63 +1269,43 @@ export const createWorkspace = async (name: string) => {
   return { data, error };
 };
 
-export const listWorkspaceMembers = async (workspaceId: string) => {
-  const { data, error } =
-    await sdk.listMembersV1WorkspacesWorkspaceIdMembersGet({
-      client: serverClient,
-      path: { workspace_id: workspaceId },
-    });
+export const listWorkspaceMembers = async () => {
+  const { data, error } = await sdk.listMembersV1MembersGet({
+    client: serverClient,
+  });
   return { data, error };
 };
 
-export const removeWorkspaceMember = async (
-  workspaceId: string,
-  userId: string
-) => {
-  const result =
-    await sdk.removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete({
-      client: serverClient,
-      path: { workspace_id: workspaceId, user_id: userId },
-    });
+export const removeWorkspaceMember = async (userId: string) => {
+  const result = await sdk.removeMemberV1MembersUserIdDelete({
+    client: serverClient,
+    path: { user_id: userId },
+  });
   return withStatus(result);
 };
 
-export const listWorkspaceInvitations = async (workspaceId: string) => {
-  const result = await sdk.listInvitationsV1WorkspacesWorkspaceIdInvitationsGet(
-    {
-      client: serverClient,
-      path: { workspace_id: workspaceId },
-    }
-  );
+export const listWorkspaceInvitations = async () => {
+  const result = await sdk.listInvitationsV1InvitationsGet({
+    client: serverClient,
+  });
   // Pending invitations are admin-only; the caller needs the status to tell
   // "you may not see these" from "the call failed".
   return withStatus(result);
 };
 
-export const createWorkspaceInvitation = async (
-  workspaceId: string,
-  body: CreateInvitationBody
-) => {
-  const result =
-    await sdk.createInvitationV1WorkspacesWorkspaceIdInvitationsPost({
-      client: serverClient,
-      path: { workspace_id: workspaceId },
-      body,
-    });
+export const createWorkspaceInvitation = async (body: CreateInvitationBody) => {
+  const result = await sdk.createInvitationV1InvitationsPost({
+    client: serverClient,
+    body,
+  });
   return withStatus(result);
 };
 
-export const revokeWorkspaceInvitation = async (
-  workspaceId: string,
-  invitationId: string
-) => {
-  const result =
-    await sdk.revokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDelete(
-      {
-        client: serverClient,
-        path: { workspace_id: workspaceId, invitation_id: invitationId },
-      }
-    );
+export const revokeWorkspaceInvitation = async (invitationId: string) => {
+  const result = await sdk.revokeInvitationV1InvitationsInvitationIdDelete({
+    client: serverClient,
+    path: { invitation_id: invitationId },
+  });
   return withStatus(result);
 };
 
@@ -1577,94 +1471,6 @@ export const previewOpenAPISpec = async (body: {
       client: serverClient,
       body,
     });
-  return { data, error };
-};
-
-export const listCompoundMCPs = async () => {
-  const { data, error } = await requestJson("GET", "/v1/compound-mcps/", {});
-  return { data, error };
-};
-
-export const getCompoundMCP = async (compoundId: string) => {
-  const { data, error } = await requestJson(
-    "GET",
-    "/v1/compound-mcps/{compound_id}",
-    {
-      params: { path: { compound_id: compoundId } },
-    }
-  );
-  return { data, error };
-};
-
-export const createCompoundMCP = async (body: unknown) => {
-  const { data, error } = await requestJson("POST", "/v1/compound-mcps/", {
-    body,
-  });
-  return { data, error };
-};
-
-export const updateCompoundMCP = async (compoundId: string, body: unknown) => {
-  const { data, error } = await requestJson(
-    "PUT",
-    "/v1/compound-mcps/{compound_id}",
-    {
-      params: { path: { compound_id: compoundId } },
-      body,
-    }
-  );
-  return { data, error };
-};
-
-export const deleteCompoundMCP = async (compoundId: string) => {
-  const { data, error } = await requestJson(
-    "DELETE",
-    "/v1/compound-mcps/{compound_id}",
-    {
-      params: { path: { compound_id: compoundId } },
-    }
-  );
-  return { data, error };
-};
-
-export const listCompoundMCPMembers = async (compoundId: string) => {
-  const { data, error } = await requestJson(
-    "GET",
-    "/v1/compound-mcps/{compound_id}/members",
-    {
-      params: { path: { compound_id: compoundId } },
-    }
-  );
-  return { data, error };
-};
-
-export const addCompoundMCPMember = async (
-  compoundId: string,
-  body: unknown
-) => {
-  const { data, error } = await requestJson(
-    "POST",
-    "/v1/compound-mcps/{compound_id}/members",
-    {
-      params: { path: { compound_id: compoundId } },
-      body,
-    }
-  );
-  return { data, error };
-};
-
-export const removeCompoundMCPMember = async (
-  compoundId: string,
-  instanceId: string
-) => {
-  const { data, error } = await requestJson(
-    "DELETE",
-    "/v1/compound-mcps/{compound_id}/members/{instance_id}",
-    {
-      params: {
-        path: { compound_id: compoundId, instance_id: instanceId },
-      },
-    }
-  );
   return { data, error };
 };
 
@@ -1891,25 +1697,6 @@ export const listProjectFiles = async (projectId: string) => {
   return { data, error };
 };
 
-export const uploadProjectFile = async (
-  projectId: string,
-  formData: FormData
-) => {
-  const response = await fetch(`/api/proxy/v1/projects/${projectId}/files`, {
-    method: "POST",
-    body: formData,
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response
-      .json()
-      .catch(() => ({ detail: "Upload failed" }));
-    return { data: null, error };
-  }
-  const data = await response.json();
-  return { data, error: null };
-};
-
 export const downloadProjectFile = async (
   projectId: string,
   filePath: string
@@ -2047,19 +1834,19 @@ export const fundAgentWallet = async (
   return { data, error };
 };
 
-export const getAllTasks = async () => {
+export const getAllTasks = async (
+  query?: GetAllTasksV1TasksGetData["query"]
+) => {
   const { data, error } = await sdk.getAllTasksV1TasksGet({
     client: serverClient,
+    query,
   });
   return { data, error };
 };
 
-export const getInbox = async (params?: {
-  status?: string;
-  agent_id?: string;
-  page?: number;
-  page_size?: number;
-}) => {
+export const getInbox = async (
+  params?: GetInboxItemsV1InboxGetData["query"]
+) => {
   const { data, error } = await sdk.getInboxItemsV1InboxGet({
     client: serverClient,
     query: params,

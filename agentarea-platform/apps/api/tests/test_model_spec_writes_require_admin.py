@@ -45,8 +45,8 @@ def repo() -> AsyncMock:
 @pytest.fixture
 def client(repo) -> TestClient:
     app = FastAPI()
-    app.include_router(model_specs_router, prefix="/v1")
-    app.include_router(provider_configs_router, prefix="/v1")
+    app.include_router(model_specs_router, prefix="/v1/workspaces/{workspace}")
+    app.include_router(provider_configs_router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_model_spec_repository] = lambda: repo
     app.dependency_overrides[get_provider_service] = lambda: MagicMock()
     app.dependency_overrides[get_user_context] = lambda: MEMBER
@@ -54,14 +54,14 @@ def client(repo) -> TestClient:
 
 
 WRITES = {
-    "create": ("post", "/v1/model-specs/", SPEC),
-    "upsert": ("post", "/v1/model-specs/upsert", SPEC),
-    "update": ("patch", f"/v1/model-specs/{uuid4()}", {"input_cost_per_token": 0.0}),
-    "delete": ("delete", f"/v1/model-specs/{uuid4()}", None),
-    "discover": ("post", f"/v1/provider-configs/{uuid4()}/discover", None),
+    "create": ("post", "/v1/workspaces/ws-acme/model-specs/", SPEC),
+    "upsert": ("post", "/v1/workspaces/ws-acme/model-specs/upsert", SPEC),
+    "update": ("patch", f"/v1/workspaces/ws-acme/model-specs/{uuid4()}", {"input_cost_per_token": 0.0}),
+    "delete": ("delete", f"/v1/workspaces/ws-acme/model-specs/{uuid4()}", None),
+    "discover": ("post", f"/v1/workspaces/ws-acme/provider-configs/{uuid4()}/discover", None),
     "discover-preview": (
         "post",
-        "/v1/provider-configs/discover-preview",
+        "/v1/workspaces/ws-acme/provider-configs/discover-preview",
         {"provider_key": "openai", "api_key": "sk-test"},  # pragma: allowlist secret
     ),
 }

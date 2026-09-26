@@ -7,17 +7,26 @@ All monetary values across the platform should use this type:
 - serialize_money() — for dict/event contexts that bypass Pydantic
 """
 
+import re
 from decimal import Decimal, InvalidOperation
 from typing import Annotated
 
 from pydantic import BeforeValidator, PlainSerializer
 
+# Decimal() also reads every Unicode decimal digit (Thai, Tamil, fullwidth...),
+# which no amount is written in and which turns a short string into an
+# arbitrarily large number.
+_ASCII_DECIMAL = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?")
+
 
 def _parse_money(value: object) -> Decimal:
     if isinstance(value, Decimal):
         return value
+    text = str(value).strip()
+    if isinstance(value, bool) or not _ASCII_DECIMAL.fullmatch(text):
+        raise ValueError(f"{value!r} is not a money amount")
     try:
-        return Decimal(str(value))
+        return Decimal(text)
     except InvalidOperation:
         raise ValueError(f"{value!r} is not a money amount") from None
 

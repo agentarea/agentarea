@@ -16,7 +16,7 @@ from agentarea_common.config.app import get_app_settings
 from agentarea_mcp.application.client_service import ClientService
 from agentarea_mcp.infrastructure.client_repository import ClientRepository
 from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
 from ._access_control_grants import grant_resource_owner
@@ -113,8 +113,8 @@ async def create_client(
 async def list_clients(
     user_context: UserContextDep,
     service: ClientServiceDep,
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
 ):
     clients = await service.list(
         limit=limit,

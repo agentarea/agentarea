@@ -1,3 +1,5 @@
+import { currentWorkspaceHeaders } from "@/lib/workspace-browser";
+
 function bufferToHex(buffer: ArrayBuffer): string {
   return Array.from(new Uint8Array(buffer))
     .map((byte) => byte.toString(16).padStart(2, "0"))
@@ -24,7 +26,10 @@ export async function uploadAttachment(file: File): Promise<string> {
 
   const presignResponse = await fetch("/api/files/upload-url", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...currentWorkspaceHeaders(),
+    },
     body: JSON.stringify({
       filename: file.name,
       content_type: contentType,

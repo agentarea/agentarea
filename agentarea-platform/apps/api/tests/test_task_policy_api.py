@@ -33,7 +33,7 @@ def _task(agent_id):
 
 def _app_for(task_service, context: UserContext) -> FastAPI:
     app = FastAPI()
-    app.include_router(agents_tasks.router, prefix="/v1")
+    app.include_router(agents_tasks.router, prefix="/v1/workspaces/{workspace}")
 
     async def override_task_service():
         return task_service
@@ -51,9 +51,13 @@ def test_task_artifact_download_url_is_api_relative():
     task_id = uuid4()
     artifact_id = "art_0123456789abcdef0123456789abcdef"
 
-    url = agents_tasks._task_artifact_download_url(agent_id, task_id, artifact_id)
+    url = agents_tasks._task_artifact_download_url(
+        "/v1/workspaces/acme", agent_id, task_id, artifact_id
+    )
 
-    assert url == f"/v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/{artifact_id}"
+    assert url == (
+        f"/v1/workspaces/acme/agents/{agent_id}/tasks/{task_id}/artifacts/files/{artifact_id}"
+    )
     assert "agentarea-backend" not in url
 
 
@@ -77,7 +81,7 @@ async def test_task_artifact_download_rejects_anything_but_an_opaque_id():
         base_url="http://test",
     ) as client:
         response = await client.get(
-            f"/v1/agents/{agent_id}/tasks/{task.id}/artifacts/files/tasks/other-task/report.html"
+            f"/v1/workspaces/acme/agents/{agent_id}/tasks/{task.id}/artifacts/files/tasks/other-task/report.html"
         )
 
     assert response.status_code == 404
@@ -95,7 +99,7 @@ async def test_task_sync_accepts_task_policy_and_passes_typed_payload():
         base_url="http://test",
     ) as client:
         response = await client.post(
-            f"/v1/agents/{agent_id}/tasks/sync",
+            f"/v1/workspaces/acme/agents/{agent_id}/tasks/sync",
             json={
                 "description": "do the work",
                 "task_policy": {"budget": {"run_budget_usd": "1.25"}},
@@ -123,7 +127,7 @@ async def test_task_sync_rejects_unknown_task_policy_fields_before_service_call(
         base_url="http://test",
     ) as client:
         response = await client.post(
-            f"/v1/agents/{agent_id}/tasks/sync",
+            f"/v1/workspaces/acme/agents/{agent_id}/tasks/sync",
             json={
                 "description": "do the work",
                 "task_policy": {"unknown": {"enabled": True}},
@@ -150,7 +154,7 @@ async def test_task_sync_maps_policy_validation_error_to_422():
         base_url="http://test",
     ) as client:
         response = await client.post(
-            f"/v1/agents/{agent_id}/tasks/sync",
+            f"/v1/workspaces/acme/agents/{agent_id}/tasks/sync",
             json={
                 "description": "do the work",
                 "task_policy": {"budget": {"run_budget_usd": "10.00"}},

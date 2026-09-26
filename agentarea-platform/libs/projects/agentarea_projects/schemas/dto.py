@@ -9,6 +9,10 @@ for REST clients reading the OpenAPI doc.
 
 from __future__ import annotations
 
+from typing import Annotated
+from uuid import UUID
+
+from agentarea_common.utils.types import NotNull
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -37,7 +41,7 @@ class ProjectCreate(BaseModel):
         max_length=20000,
         description="System-level instructions or notes shared across the project's agents.",
     )
-    parent_project_id: str | None = Field(
+    parent_project_id: UUID | None = Field(
         default=None,
         description="UUID of the parent project, if this is a sub-project.",
     )
@@ -56,7 +60,7 @@ class ProjectUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str | None = Field(
+    name: Annotated[str | None, NotNull] = Field(
         default=None,
         min_length=1,
         max_length=255,
@@ -72,7 +76,7 @@ class ProjectUpdate(BaseModel):
         max_length=20000,
         description="New project-level instructions.",
     )
-    parent_project_id: str | None = Field(
+    parent_project_id: UUID | None = Field(
         default=None,
         description="New parent project UUID, or null to detach.",
     )

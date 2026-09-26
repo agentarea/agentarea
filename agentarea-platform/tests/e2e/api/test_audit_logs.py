@@ -9,7 +9,7 @@ import pytest
 @pytest.mark.integration
 def test_agent_create_emits_audit_event(alice_client: httpx.Client) -> None:
     agent_id = alice_client.post(
-        "/v1/agents/",
+        f"{alice_client.ws}/agents/",
         json={
             "name": "audit-agent",
             "description": "d",
@@ -18,7 +18,7 @@ def test_agent_create_emits_audit_event(alice_client: httpx.Client) -> None:
         },
     ).raise_for_status().json()["id"]
 
-    events = alice_client.get("/v1/audit-logs/").raise_for_status().json()["events"]
+    events = alice_client.get(f"{alice_client.ws}/audit-logs/").raise_for_status().json()["events"]
 
     matching = [
         e
@@ -38,7 +38,7 @@ def test_audit_logs_are_workspace_scoped(
     alice_client: httpx.Client, bob_client: httpx.Client
 ) -> None:
     alice_agent_id = alice_client.post(
-        "/v1/agents/",
+        f"{alice_client.ws}/agents/",
         json={
             "name": "audit-leak-agent",
             "description": "d",
@@ -47,7 +47,7 @@ def test_audit_logs_are_workspace_scoped(
         },
     ).raise_for_status().json()["id"]
 
-    bob_events = bob_client.get("/v1/audit-logs/").raise_for_status().json()["events"]
+    bob_events = bob_client.get(f"{bob_client.ws}/audit-logs/").raise_for_status().json()["events"]
     assert all(
         e["resource_id"] != alice_agent_id for e in bob_events
     ), "CRITICAL: Bob sees Alice's audit event"

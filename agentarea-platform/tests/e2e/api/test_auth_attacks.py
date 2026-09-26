@@ -1,4 +1,4 @@
-"""Auth hardening: malformed tokens, signature tampering, workspace spoofing.
+"""Auth hardening: malformed tokens, signature tampering, workspace selection.
 
 These are regression tests for the most common auth-layer mistakes. Any
 failure here is a critical bug — the whole workspace isolation model depends
@@ -12,7 +12,7 @@ import base64
 import httpx
 import pytest
 
-from tests.e2e.api.conftest import AuthedUser
+from tests.e2e.api.conftest import AuthedUser, WorkspaceClient
 
 
 def _tamper_signature(jwt: str) -> str:
@@ -40,7 +40,7 @@ def _tamper_payload(jwt: str, attacker_sub: str) -> str:
 @pytest.mark.integration
 def test_malformed_jwt_rejected(anon_client: httpx.Client) -> None:
     resp = anon_client.get(
-        "/v1/agents/", headers={"Authorization": "Bearer not.a.jwt"}
+        "/v1/workspaces/any-workspace/agents/", headers={"Authorization": "Bearer not.a.jwt"}
     )
     assert resp.status_code == 401
 
@@ -48,7 +48,7 @@ def test_malformed_jwt_rejected(anon_client: httpx.Client) -> None:
 @pytest.mark.integration
 def test_tampered_signature_rejected(alice: AuthedUser, anon_client: httpx.Client) -> None:
     bad = _tamper_signature(alice.jwt)
-    resp = anon_client.get("/v1/agents/", headers={"Authorization": f"Bearer {bad}"})
+    resp = anon_client.get("/v1/workspaces/any-workspace/agents/", headers={"Authorization": f"Bearer {bad}"})
     assert resp.status_code == 401, (
         f"Tampered signature must be rejected; got {resp.status_code}: {resp.text[:200]}"
     )
@@ -60,85 +60,91 @@ def test_tampered_payload_rejected(
 ) -> None:
     """Swap `sub` in Alice's JWT to Bob's id; signature is broken → must 401."""
     bad = _tamper_payload(alice.jwt, attacker_sub=bob.identity_id)
-    resp = anon_client.get("/v1/agents/", headers={"Authorization": f"Bearer {bad}"})
+    resp = anon_client.get("/v1/workspaces/any-workspace/agents/", headers={"Authorization": f"Bearer {bad}"})
     assert resp.status_code == 401
 
 
 @pytest.mark.integration
-def test_workspace_id_spoof_cannot_read_other_users_data(
-    alice_client: httpx.Client,
+def test_a_workspace_header_selects_nothing(
+    alice_client: WorkspaceClient,
     bob: AuthedUser,
-    bob_client: httpx.Client,
+    bob_client: WorkspaceClient,
 ) -> None:
-    """Alice's JWT + Bob's workspace_id in X-Workspace-ID header.
+    """Alice's JWT on her own workspace path + Bob's workspace in the retired headers.
 
-    The server must NOT return Bob's resources. Either it rejects (403) or it
-    silently scopes to Alice's real workspace — in both cases Bob's data must
-    stay invisible to Alice.
+    The path is the only selector: the headers are ignored, the request acts in
+    Alice's workspace, and Bob's data stays invisible to her.
     """
     bob_project = bob_client.post(
-        "/v1/projects/", json={"name": "bob-secret"}
+        f"{bob_client.ws}/projects/", json={"name": "bob-secret"}
     ).raise_for_status().json()
 
     attack = alice_client.get(
-        "/v1/projects/",
-        headers={"X-Workspace-ID": bob.identity_id},
+        f"{alice_client.ws}/projects/",
+        headers={
+            "X-AgentArea-Workspace": bob_client.ws.rsplit("/", 1)[1],
+            "X-Workspace-ID": bob.identity_id,
+            "X-Workspace-Slug": bob_client.ws.rsplit("/", 1)[1],
+        },
     )
-    assert attack.status_code < 500
+    assert attack.status_code == 200
     items = attack.json()
     items = items if isinstance(items, list) else items.get("items", [])
     ids = {p["id"] for p in items}
     assert bob_project["id"] not in ids, (
-        "CRITICAL: Alice read Bob's project by spoofing X-Workspace-ID header"
+        "CRITICAL: Alice read Bob's project by naming his workspace in a header"
     )
 
 
 @pytest.mark.integration
-def test_workspace_id_spoof_cannot_read_bob_project_by_id(
-    alice_client: httpx.Client,
-    bob: AuthedUser,
-    bob_client: httpx.Client,
+def test_foreign_workspace_path_is_forbidden(
+    alice_client: WorkspaceClient,
+    bob_client: WorkspaceClient,
 ) -> None:
     bob_project_id = bob_client.post(
-        "/v1/projects/", json={"name": "bob-direct"}
+        f"{bob_client.ws}/projects/", json={"name": "bob-direct"}
     ).raise_for_status().json()["id"]
 
-    attack = alice_client.get(
-        f"/v1/projects/{bob_project_id}",
-        headers={"X-Workspace-ID": bob.identity_id},
-    )
-    assert attack.status_code in (403, 404), (
-        f"CRITICAL: Alice fetched Bob's project via X-Workspace-ID spoof: "
+    attack = alice_client.get(f"{bob_client.ws}/projects/{bob_project_id}")
+    assert attack.status_code == 403, (
+        f"CRITICAL: Alice reached Bob's workspace by naming it in the path: "
         f"{attack.status_code} {attack.text[:200]}"
     )
 
 
 @pytest.mark.integration
-def test_api_key_workspace_id_spoof_blocked(
-    alice_client: httpx.Client,
-    bob: AuthedUser,
-    bob_client: httpx.Client,
+def test_unknown_workspace_path_is_refused_like_a_foreign_one(
+    alice_client: WorkspaceClient,
+    bob_client: WorkspaceClient,
 ) -> None:
-    """API key + X-Workspace-ID is a documented override path; make sure it
-    cannot be used to reach a workspace the key owner does not belong to."""
-    bob_project_id = bob_client.post(
-        "/v1/projects/", json={"name": "bob-for-api-key"}
-    ).raise_for_status().json()["id"]
+    foreign = alice_client.get(f"{bob_client.ws}/projects/")
+    unknown = alice_client.get("/v1/workspaces/no-such-workspace-e2e/projects/")
 
-    raw = alice_client.post("/v1/api-keys/", json={"name": "spoof-test"})
+    assert foreign.status_code == unknown.status_code == 403
+    assert foreign.json()["detail"] == unknown.json()["detail"]
+
+
+@pytest.mark.integration
+def test_api_key_cannot_leave_its_workspace(
+    alice_client: WorkspaceClient,
+    bob_client: WorkspaceClient,
+) -> None:
+    """An API key acts only in the workspace it was issued for, even one its
+    owner could otherwise reach — and never in a workspace the owner cannot."""
+    raw = alice_client.post(f"{alice_client.ws}/api-keys/", json={"name": "spoof-test"})
     raw.raise_for_status()
     alice_key = raw.json()["token"]
 
     with httpx.Client(
         base_url=alice_client.base_url,
-        headers={
-            "Authorization": f"Bearer {alice_key}",
-            "X-Workspace-ID": bob.identity_id,
-        },
+        headers={"Authorization": f"Bearer {alice_key}"},
         timeout=10.0,
-    ) as attacker:
-        resp = attacker.get(f"/v1/projects/{bob_project_id}")
-        assert resp.status_code in (403, 404), (
-            f"CRITICAL: Alice's API key + Bob's workspace header reached Bob's data: "
-            f"{resp.status_code} {resp.text[:200]}"
-        )
+    ) as key_client:
+        own = key_client.get(f"{alice_client.ws}/projects/")
+        foreign = key_client.get(f"{bob_client.ws}/projects/")
+
+    assert own.status_code == 200, own.text[:200]
+    assert foreign.status_code == 403, (
+        f"CRITICAL: Alice's API key reached Bob's workspace: "
+        f"{foreign.status_code} {foreign.text[:200]}"
+    )
