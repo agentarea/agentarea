@@ -39,6 +39,8 @@
           "expires_in_days": {
             "anyOf": [
               {
+                "maximum": 3650.0,
+                "minimum": 1.0,
                 "type": "integer"
               },
               {

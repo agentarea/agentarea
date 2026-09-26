@@ -18,7 +18,7 @@ export const zA2UiActionPayload = z.object({
  * APIKeyCreateRequest
  */
 export const zApiKeyCreateRequest = z.object({
-  expires_in_days: z.number().int().nullish(),
+  expires_in_days: z.number().int().gte(1).lte(3650).nullish(),
   name: z.string(),
 });
 
