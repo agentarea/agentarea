@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { getWorkspaces } from "@/lib/workspace-context";
+import { ViewerCapabilitiesProvider } from "@/components/ViewerCapabilities";
+import { getViewerCapabilities, getWorkspaces } from "@/lib/workspace-context";
 
 /**
  * The URL names the workspace. A slug the caller is not a member of is a
@@ -19,5 +20,10 @@ export default async function WorkspaceLayout({
   if (!workspaces.some((candidate) => candidate.slug === workspace)) {
     notFound();
   }
-  return children;
+  const capabilities = await getViewerCapabilities();
+  return (
+    <ViewerCapabilitiesProvider capabilities={capabilities}>
+      {children}
+    </ViewerCapabilitiesProvider>
+  );
 }

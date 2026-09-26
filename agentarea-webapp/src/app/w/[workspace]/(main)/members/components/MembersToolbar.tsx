@@ -29,6 +29,7 @@ interface MembersToolbarProps {
   tab: MembersTab;
   onTabChange: (tab: MembersTab) => void;
   counts: Record<MembersTab, number>;
+  showInvitations: boolean;
   onQueryChange: (query: string) => void;
   order: MembersOrder;
   onOrderChange: (order: MembersOrder) => void;
@@ -44,6 +45,7 @@ export function MembersToolbar({
   tab,
   onTabChange,
   counts,
+  showInvitations,
   onQueryChange,
   order,
   onOrderChange,
@@ -66,16 +68,20 @@ export function MembersToolbar({
             ),
             count: counts.members,
           },
-          {
-            value: "invitations",
-            label: (
-              <span className="flex items-center gap-1.5 whitespace-nowrap">
-                <Link2 className="h-4 w-4" strokeWidth={1.8} />
-                {t("tabInvitations")}
-              </span>
-            ),
-            count: counts.invitations,
-          },
+          ...(showInvitations
+            ? [
+                {
+                  value: "invitations" as const,
+                  label: (
+                    <span className="flex items-center gap-1.5 whitespace-nowrap">
+                      <Link2 className="h-4 w-4" strokeWidth={1.8} />
+                      {t("tabInvitations")}
+                    </span>
+                  ),
+                  count: counts.invitations,
+                },
+              ]
+            : []),
         ]}
         value={tab}
         onChange={onTabChange}

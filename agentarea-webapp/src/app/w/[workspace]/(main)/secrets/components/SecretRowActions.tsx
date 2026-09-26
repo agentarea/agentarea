@@ -2,9 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Key, Loader2, RefreshCw, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 import BaseModal from "@/components/BaseModal";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { TableRowAction } from "@/components/Table/TableRowAction";
@@ -15,6 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { deleteSecretAction, rotateSecretAction } from "../actions";
 import type { Secret } from "./SecretsTable";
 import { useSecretTypeLabel } from "./useSecretTypeLabel";
@@ -96,7 +96,13 @@ function ReplaceValueAction({ secret }: { secret: Secret }) {
   );
 }
 
-function DeleteSecretAction({ secret }: { secret: Secret }) {
+function DeleteSecretAction({
+  secret,
+  onError,
+}: {
+  secret: Secret;
+  onError: (message: string | null) => void;
+}) {
   const t = useTranslations("SecretsPage");
   const tCommon = useTranslations("Common");
   const typeLabel = useSecretTypeLabel();
@@ -104,12 +110,12 @@ function DeleteSecretAction({ secret }: { secret: Secret }) {
   const [, startTransition] = useTransition();
 
   const remove = async () => {
+    onError(null);
     const result = await deleteSecretAction(secret.id);
     if (result.error) {
-      toast.error(t("deleteDialog.failed"), { description: result.error });
+      onError(`${t("deleteDialog.failed")}: ${result.error}`);
       return;
     }
-    toast.success(t("deleteDialog.deleted", { name: secret.name }));
     startTransition(() => router.refresh());
   };
 
@@ -149,10 +155,33 @@ function DeleteSecretAction({ secret }: { secret: Secret }) {
 
 /** Hover actions for a secret the user owns directly. */
 export function SecretRowActions({ secret }: { secret: Secret }) {
+  const t = useTranslations("SecretsPage");
+  const tCommon = useTranslations("Common");
+  const { canAdminister } = useViewerCapabilities();
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  if (!canAdminister) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <TableRowAction icon={<RefreshCw />} disabled>
+          {t("rowActions.replace")}
+        </TableRowAction>
+        <TableRowAction variant="destructiveOutline" icon={<Trash2 />} disabled>
+          {tCommon("delete")}
+        </TableRowAction>
+      </span>
+    );
+  }
+
   return (
     <span className="inline-flex items-center gap-1.5">
+      {deleteError && (
+        <span className="text-xs text-destructive" role="alert">
+          {deleteError}
+        </span>
+      )}
       <ReplaceValueAction secret={secret} />
-      <DeleteSecretAction secret={secret} />
+      <DeleteSecretAction secret={secret} onError={setDeleteError} />
     </span>
   );
 }

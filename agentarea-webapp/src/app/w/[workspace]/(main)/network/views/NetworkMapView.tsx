@@ -27,6 +27,7 @@ import type {
   NetworkPeopleAccessResponse,
   NetworkPersonAgentAccess,
 } from "@/api/client/types.gen";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { cn } from "@/lib/utils";
 import DirectionalEdge from "../components/edges/DirectionalEdge";
 import NetworkConnectionPanel from "../components/NetworkConnectionPanel";
@@ -149,7 +150,12 @@ export default function NetworkMapView({
   const networkText = useTranslations("NetworkPage.networkMap");
   const isNetwork = mode === "network";
   const peopleText = useTranslations("NetworkPage.people");
-  const peopleState = useNetworkPeople(true, loadPeopleAccess, topology);
+  const { canAdminister } = useViewerCapabilities();
+  const peopleState = useNetworkPeople(
+    canAdminister,
+    loadPeopleAccess,
+    topology
+  );
   const [viewportTargets, setViewportTargets] = useState<string[] | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const onNodeClick = useCallback(
@@ -1007,6 +1013,7 @@ export default function NetworkMapView({
           <NetworkPeoplePanel
             data={peopleState.data}
             status={peopleState.status}
+            error={peopleState.error}
             selectedId={selectedPersonId}
             topology={topology}
             onSelect={selectPerson}

@@ -1047,10 +1047,10 @@ export const deleteSkill = async (skillId: string) => {
 };
 
 export const listMCPAuthConfigs = async () => {
-  const { data, error } = await sdk.listMcpAuthConfigsV1McpAuthConfigsGet({
+  const result = await sdk.listMcpAuthConfigsV1McpAuthConfigsGet({
     client: serverClient,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const createMCPAuthConfig = async (body: {
@@ -1060,18 +1060,18 @@ export const createMCPAuthConfig = async (body: {
   config?: Record<string, unknown>;
   credentials?: Record<string, unknown>;
 }) => {
-  const { data, error } = await sdk.createMcpAuthConfigV1McpAuthConfigsPost({
+  const result = await sdk.createMcpAuthConfigV1McpAuthConfigsPost({
     client: serverClient,
     body,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const listAPIKeys = async () => {
-  const { data, error } = await sdk.listApiKeysV1ApiKeysGet({
+  const result = await sdk.listApiKeysV1ApiKeysGet({
     client: serverClient,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const createAPIKey = async (body: {
@@ -1763,11 +1763,11 @@ export const workspaceFileHistory = async (filePath: string) => {
 };
 
 export const getAgentWallet = async (agentId: string) => {
-  const { data, error } = await sdk.getWalletV1AgentsAgentIdWalletGet({
+  const result = await sdk.getWalletV1AgentsAgentIdWalletGet({
     client: serverClient,
     path: { agent_id: agentId },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const createAgentWallet = async (
@@ -1820,13 +1820,12 @@ export const getAgentWalletPayments = async (
     page_size?: number;
   }
 ) => {
-  const { data, error } =
-    await sdk.getPaymentHistoryV1AgentsAgentIdWalletPaymentsGet({
-      client: serverClient,
-      path: { agent_id: agentId },
-      query: params,
-    });
-  return { data, error };
+  const result = await sdk.getPaymentHistoryV1AgentsAgentIdWalletPaymentsGet({
+    client: serverClient,
+    path: { agent_id: agentId },
+    query: params,
+  });
+  return withStatus(result);
 };
 
 export const fundAgentWallet = async (
@@ -1872,11 +1871,11 @@ export const getTask = async (taskId: string) => {
 export const listPolicies = async (
   params?: ListPolicyRulesV1PoliciesGetData["query"]
 ) => {
-  const { data, error } = await sdk.listPolicyRulesV1PoliciesGet({
+  const result = await sdk.listPolicyRulesV1PoliciesGet({
     client: serverClient,
     query: params,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const createPolicy = async (body: PolicyRuleCreateRequest) => {
@@ -1993,11 +1992,11 @@ export const listAuditLogs = async (params?: {
   cursor?: string;
   limit?: number;
 }) => {
-  const { data, error } = await sdk.listAuditLogsV1AuditLogsGet({
+  const result = await sdk.listAuditLogsV1AuditLogsGet({
     client: serverClient,
     query: params,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 // Convenience helpers built on top of the generated API
@@ -2171,10 +2170,10 @@ export type WorkspaceInvitationPreview = InvitationPreviewResponse;
 // below can read a secret back out.
 
 export const listSecrets = async () => {
-  const { data, error } = await sdk.listSecretsV1SecretsGet({
+  const result = await sdk.listSecretsV1SecretsGet({
     client: serverClient,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const createSecret = async (body: {
@@ -2207,9 +2206,8 @@ export const deleteSecret = async (secretId: string) => {
 };
 
 export const getNetworkPeopleAccess = async () => {
-  const { data, error } =
-    await sdk.getNetworkPeopleAccessV1NetworkPeopleAccessGet({
-      client: serverClient,
-    });
-  return { data, error };
+  const result = await sdk.getNetworkPeopleAccessV1NetworkPeopleAccessGet({
+    client: serverClient,
+  });
+  return withStatus(result);
 };

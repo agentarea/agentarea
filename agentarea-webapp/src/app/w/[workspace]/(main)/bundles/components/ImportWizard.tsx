@@ -3,10 +3,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "@/components/WorkspaceLink";
 import { AlertTriangle, CheckCircle2, PackagePlus, RotateCcw } from "lucide-react";
+import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import SetupForm from "@/components/SetupForm";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { cn } from "@/lib/utils";
 import type {
   ImportPreview,
@@ -162,6 +164,7 @@ function setupFields(fields: ApiSetupField[] | undefined): SetupField[] {
 }
 
 export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {}) {
+  const { canAdminister } = useViewerCapabilities();
   const [step, setStep] = useState<WizardStep>("source");
 
   // Source step
@@ -241,7 +244,9 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
 
     try {
       const data = await installBundleAction({
-        bundle: preview.bundle,
+        bundle: canAdminister
+          ? preview.bundle
+          : { ...preview.bundle, policies: [] },
         setup_values: setupValues,
       });
       setResult(data);
@@ -370,12 +375,21 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
               {ENTITY_ORDER.map((kind) => {
                 const list = grouped.get(kind);
                 if (!list || list.length === 0) return null;
+                const skipped = kind === "policy" && !canAdminister;
                 return (
                   <div key={kind} className="px-5 py-3">
                     <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                       {KIND_LABELS[kind]}
                     </div>
-                    <div className="divide-y divide-border/20 dark:divide-zinc-700/20">
+                    {skipped && (
+                      <AdminOnlyHint action="importPolicies" className="mb-2" />
+                    )}
+                    <div
+                      className={cn(
+                        "divide-y divide-border/20 dark:divide-zinc-700/20",
+                        skipped && "opacity-60"
+                      )}
+                    >
                       {list.map((entity) => (
                         <EntityRow key={entity.key} entity={entity} />
                       ))}

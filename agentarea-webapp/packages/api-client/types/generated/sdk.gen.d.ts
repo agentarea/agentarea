@@ -563,7 +563,7 @@ export declare const getPaymentHistoryV1AgentsAgentIdWalletPaymentsGet: <ThrowOn
 /**
  * List Api Keys
  *
- * List all API keys for the current workspace.
+ * List the API keys the caller may see: all of the workspace's for an admin, else their own.
  */
 export declare const listApiKeysV1ApiKeysGet: <ThrowOnError extends boolean = false>(options?: Options<ListApiKeysV1ApiKeysGetData, ThrowOnError>) => RequestResult<ListApiKeysV1ApiKeysGetResponses, ListApiKeysV1ApiKeysGetErrors, ThrowOnError>;
 /**
@@ -586,6 +586,9 @@ export declare const revokeApiKeyV1ApiKeysTokenIdDelete: <ThrowOnError extends b
  * Get Api Key
  *
  * Get a single API key by ID.
+ *
+ * Someone else's key answers 404 to a member, as a missing one does, so the
+ * ids of colleagues' keys cannot be confirmed.
  */
 export declare const getApiKeyV1ApiKeysTokenIdGet: <ThrowOnError extends boolean = false>(options: Options<GetApiKeyV1ApiKeysTokenIdGetData, ThrowOnError>) => RequestResult<GetApiKeyV1ApiKeysTokenIdGetResponses, GetApiKeyV1ApiKeysTokenIdGetErrors, ThrowOnError>;
 /**

@@ -1,11 +1,13 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
 import { KeyRound, Lock } from "lucide-react";
+import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import Table, { type Column } from "@/components/Table/Table";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import Link from "@/components/WorkspaceLink";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { SecretRowActions } from "./SecretRowActions";
 import { useSecretTypeLabel } from "./useSecretTypeLabel";
@@ -142,6 +144,7 @@ function UsedByCell({ secret }: { secret: Secret }) {
 
 export function SecretsTable({ secrets }: { secrets: Secret[] }) {
   const t = useTranslations("SecretsPage.table");
+  const { canAdminister } = useViewerCapabilities();
 
   const columns: Column<Secret>[] = [
     {
@@ -189,5 +192,12 @@ export function SecretsTable({ secrets }: { secrets: Secret[] }) {
     },
   ];
 
-  return <Table data={secrets} columns={columns} />;
+  return (
+    <>
+      {!canAdminister && secrets.some((secret) => !secret.owner) && (
+        <AdminOnlyHint action="manageSecret" className="mb-3" />
+      )}
+      <Table data={secrets} columns={columns} />
+    </>
+  );
 }

@@ -7,8 +7,10 @@ active workspace from the URL slug and to populate the switcher.
 
 import logging
 from collections.abc import AsyncGenerator
+from dataclasses import replace
 from typing import Annotated
 
+from agentarea_common.auth.authorization import is_workspace_admin
 from agentarea_common.auth.context import UserContext, UserPrincipal
 from agentarea_common.auth.dependencies import PrincipalDep, UnboundPrincipalDep
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
@@ -27,6 +29,7 @@ from agentarea_common.workspaces import (
     get_workspace_membership_graph,
     list_workspace_ids_for_member,
 )
+from agentarea_common.workspaces.authority import administered_workspace_ids
 from agentarea_governance.application import (
     GovernancePolicyService,
     provision_default_policies,
@@ -107,6 +110,7 @@ class WorkspaceResponse(BaseModel):
     # ``type`` field so the client derives the fact rather than trusting a
     # second copy of it.
     owner_user_id: str
+    can_administer: bool
 
 
 class CreateWorkspaceBody(BaseModel):
@@ -132,6 +136,29 @@ async def list_reachable_workspaces(
     if user.bound_workspace_id is not None:
         return [w for w in workspaces if w.id == user.bound_workspace_id]
     return workspaces
+
+
+async def describe_workspaces(
+    user: UserPrincipal, workspaces: list[Workspace]
+) -> list[WorkspaceResponse]:
+    """*workspaces* as *user* sees them, with the authority the admin-gated routes check."""
+    if user.admin_workspaces is None:
+        user = replace(user, admin_workspaces=await administered_workspace_ids(user.user_id))
+    # Being listed is what makes each workspace reachable, so entering it cannot fail.
+    user = replace(
+        user,
+        accessible_workspaces=[*(user.accessible_workspaces or []), *(w.id for w in workspaces)],
+    )
+    return [
+        WorkspaceResponse(
+            id=w.id,
+            slug=w.slug,
+            name=w.name,
+            owner_user_id=w.owner_user_id,
+            can_administer=await is_workspace_admin(user.enter(w.id, w.slug)),
+        )
+        for w in workspaces
+    ]
 
 
 router = APIRouter(tags=["workspaces"])
@@ -179,12 +206,10 @@ async def create_workspace(
             status_code=503, detail="Workspace authorization graph unavailable"
         ) from exc
 
-    return WorkspaceResponse(
-        id=workspace.id,
-        slug=workspace.slug,
-        name=workspace.name,
-        owner_user_id=workspace.owner_user_id,
-    )
+    # Access was resolved before this row existed; its creator owns it.
+    creator = replace(user, admin_workspaces=[*(user.admin_workspaces or []), workspace.id])
+    [response] = await describe_workspaces(creator, [workspace])
+    return response
 
 
 @router.get(
@@ -202,8 +227,4 @@ async def list_workspaces(
     new user always gets at least one entry. Baseline governance policies are
     seeded by the workspace-creation hook (see ``get_workspace_service``).
     """
-    workspaces = await list_reachable_workspaces(user, service)
-    return [
-        WorkspaceResponse(id=w.id, slug=w.slug, name=w.name, owner_user_id=w.owner_user_id)
-        for w in workspaces
-    ]
+    return await describe_workspaces(user, await list_reachable_workspaces(user, service))

@@ -13128,6 +13128,10 @@
       },
       "WorkspaceResponse": {
         "properties": {
+          "can_administer": {
+            "title": "Can Administer",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -13149,7 +13153,8 @@
           "id",
           "slug",
           "name",
-          "owner_user_id"
+          "owner_user_id",
+          "can_administer"
         ],
         "title": "WorkspaceResponse",
         "type": "object"
@@ -18094,7 +18099,7 @@
     },
     "/v1/workspaces/{workspace}/api-keys/": {
       "get": {
-        "description": "List all API keys for the current workspace.",
+        "description": "List the API keys the caller may see: all of the workspace's for an admin, else their own.",
         "operationId": "list_api_keys_v1_api_keys__get",
         "parameters": [
           {
@@ -18269,7 +18274,7 @@
         ]
       },
       "get": {
-        "description": "Get a single API key by ID.",
+        "description": "Get a single API key by ID.\n\nSomeone else's key answers 404 to a member, as a missing one does, so the\nids of colleagues' keys cannot be confirmed.",
         "operationId": "get_api_key_v1_api_keys__token_id__get",
         "parameters": [
           {

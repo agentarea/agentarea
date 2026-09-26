@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, ChevronDown, Plus } from "lucide-react";
 import type { SecretResponse } from "@/api/client/types.gen";
 import { CreateSecretDialog } from "@/app/w/[workspace]/(main)/secrets/components/CreateSecretDialog";
+import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -19,6 +20,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { cn } from "@/lib/utils";
 
 export interface SelectableSecret {
@@ -70,6 +72,7 @@ export function SecretSelect({
   // A refetch is not instant, and the list it returns may not have landed yet —
   // holding what was just created here keeps it selectable meanwhile, and keeps
   // it selectable at all when the list never loaded.
+  const { canAdminister } = useViewerCapabilities();
   const [created, setCreated] = useState<SelectableSecret[]>([]);
   const [open, setOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -140,6 +143,7 @@ export function SecretSelect({
                 <CommandItem
                   value={createLabel}
                   className="text-muted-foreground"
+                  disabled={!canAdminister}
                   onSelect={() => {
                     setOpen(false);
                     setDialogOpen(true);
@@ -148,6 +152,12 @@ export function SecretSelect({
                   <Plus className="mr-2 h-3.5 w-3.5" />
                   {createLabel}
                 </CommandItem>
+                {!canAdminister && (
+                  <AdminOnlyHint
+                    action="createSecret"
+                    className="px-2 pb-1.5"
+                  />
+                )}
               </CommandGroup>
             </CommandList>
           </Command>

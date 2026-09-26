@@ -31,7 +31,7 @@ interface MembersTableProps {
   ownerUserId: string | null;
   workspaceName: string;
   query: string;
-  onInvite: () => void;
+  onInvite?: () => void;
 }
 
 const ACCESS_BADGE: Record<MemberAccess, "default" | "secondary"> = {
@@ -195,7 +195,9 @@ export function MembersTable({
         icons={[Users]}
         title={t("noMembersTitle")}
         description={t("noMembersDescription")}
-        action={{ label: t("invitePeople"), onClick: onInvite }}
+        action={
+          onInvite ? { label: t("invitePeople"), onClick: onInvite } : undefined
+        }
       />
     );
   }

@@ -3,6 +3,7 @@
 import type { ApiKeyCreateRequest } from "@/api/client/types.gen";
 import { zApiKeyCreateRequest } from "@/api/client/zod.gen";
 import { createAPIKey as createAPIKeyAPI, revokeAPIKey as revokeAPIKeyAPI } from "@/lib/api";
+import { formatApiError } from "@/lib/api-errors";
 
 export async function createAPIKeyAction(input: ApiKeyCreateRequest) {
   const body = { ...input, name: input.name.trim() };
@@ -24,21 +25,21 @@ export async function createAPIKeyAction(input: ApiKeyCreateRequest) {
       : { expires_in_days: parsed.data.expires_in_days }),
   };
 
-  const { data, error } = await createAPIKeyAPI(apiKeyBody);
+  const result = await createAPIKeyAPI(apiKeyBody);
 
-  if (error) {
-    return { error: (error as { detail?: Array<{ msg: string }> }).detail?.[0]?.msg || "Failed to create API key" };
+  if (result.error) {
+    return { error: formatApiError(result.error) };
   }
 
-  return { data };
+  return { data: result.data };
 }
 
 export async function revokeAPIKeyAction(tokenId: string) {
-  const { data, error } = await revokeAPIKeyAPI(tokenId);
+  const result = await revokeAPIKeyAPI(tokenId);
 
-  if (error) {
-    return { error: (error as { detail?: Array<{ msg: string }> }).detail?.[0]?.msg || "Failed to revoke API key" };
+  if (result.error) {
+    return { error: formatApiError(result.error) };
   }
 
-  return { data };
+  return { data: result.data };
 }

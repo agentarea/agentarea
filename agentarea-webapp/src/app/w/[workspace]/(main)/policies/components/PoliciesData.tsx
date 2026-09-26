@@ -1,5 +1,6 @@
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { listAgents, listPolicies } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
 import type { Policy } from "@/types/policies";
 import PoliciesEditableView from "./PoliciesEditableView";
 
@@ -7,25 +8,33 @@ interface AgentLike {
   id: string;
   name: string;
   icon?: string | null;
- 
 }
 
 export async function PoliciesData() {
-  let policies: Policy[] = [];
   let agents: AgentLike[] = [];
-  let policiesError: string | null = null;
 
   const [policiesRes, agentsRes] = await Promise.all([
-    listPolicies().catch((reason) => ({ data: null, error: reason })),
+    listPolicies().catch((reason) => ({
+      data: null,
+      error: reason,
+      status: undefined,
+    })),
     listAgents().catch((reason) => ({ data: null, error: reason })),
   ]);
 
   if (policiesRes.error) {
     console.error("Failed to fetch policies:", policiesRes.error);
-    policiesError = "Failed to load policies";
-  } else {
-    policies = ((policiesRes.data as Policy[] | null) ?? []) as Policy[];
+    return (
+      <div className="space-y-4">
+        <RetryEmptyState
+          title="Couldn't load policies"
+          description={apiErrorMessage(policiesRes, "Failed to load policies")}
+          iconsType="audit"
+        />
+      </div>
+    );
   }
+  const policies = (policiesRes.data as Policy[] | null) ?? [];
 
   if (agentsRes.error) {
     console.error("Failed to load agents for policy editor:", agentsRes.error);
@@ -35,19 +44,6 @@ export async function PoliciesData() {
       name: a.name,
       icon: a.icon,
     }));
-  }
-
-  // Hard failure only when we have nothing to show at all.
-  if (policiesError && policies.length === 0) {
-    return (
-      <div className="space-y-4">
-        <RetryEmptyState
-          title="Couldn't load policies"
-          description={policiesError}
-          iconsType="audit"
-        />
-      </div>
-    );
   }
 
   return <PoliciesEditableView policies={policies} agents={agents} />;

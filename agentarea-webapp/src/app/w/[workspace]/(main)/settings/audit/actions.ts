@@ -15,6 +15,7 @@ import {
   listTriggers,
   listWorkspaceMembers,
 } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
 import { getAuthContext } from "@/lib/getAuthContext";
 
 export interface AuditChange {
@@ -83,14 +84,20 @@ export async function fetchAuditLogs(params?: {
   until?: string;
   cursor?: string;
   limit?: number;
-}): Promise<{ data: AuditLogResponse | null; error: string | null }> {
-  const { data, error } = await listAuditLogs(params);
+}): Promise<
+  { data: AuditLogResponse; error: null } | { data: null; error: string }
+> {
+  const result = await listAuditLogs(params);
 
-  if (error) {
-    return { data: null, error: "Failed to fetch audit logs" };
+  if (result.error || !result.data) {
+    console.error("Failed to fetch audit logs", result.status, result.error);
+    return {
+      data: null,
+      error: apiErrorMessage(result, "Failed to fetch audit logs"),
+    };
   }
 
-  const raw = data as unknown as AuditLogResponse;
+  const raw = result.data as unknown as AuditLogResponse;
   const events = await enrichAuditEvents(raw.events ?? []);
 
   return { data: { ...raw, events }, error: null };
@@ -276,7 +283,10 @@ async function fetchData(
   promise: Promise<{ data?: unknown; error?: unknown }>
 ) {
   const { data, error } = await promise;
-  if (error) return [];
+  if (error) {
+    console.error("Failed to load audit resource labels", error);
+    return [];
+  }
   return data;
 }
 

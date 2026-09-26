@@ -899,6 +899,10 @@
         "versionPlaceholder": "1.0.0",
         "versionRequired": "Version is required"
       }
+    },
+    "authConfigs": {
+      "loadFailed": "Couldn't load authentication configs",
+      "createFailed": "Couldn't save the authentication config"
     }
   },
   "Models": {
@@ -987,23 +991,13 @@
       "updating": "Updating...",
       "creating": "Creating..."
     },
-    "toast": {
-      "configurationCreated": "Provider configuration created successfully with {modelCount, plural, =0 {no model instances} one {# model instance} other {# model instances}}!",
-      "configurationUpdated": "Provider configuration updated successfully with {modelCount, plural, =0 {no model instances} one {# model instance} other {# model instances}}!",
-      "configurationDeleted": "Provider configuration deleted successfully!",
-      "modelInstancesUpdated": "Model instances updated successfully!",
-      "modelInstancesCreated": "Model instances created successfully!",
-      "modelInstancesDeleted": "Model instances deleted successfully!",
-      "added": "added",
-      "removed": "removed",
-      "configurationUpdatedSuccessfully": "Provider configuration updated successfully!"
-    },
     "error": {
       "failedTo": "Failed to",
       "unknownError": "Unknown error",
       "failedToLoadProviderSpecs": "Failed to load provider specifications",
       "failedToLoadData": "Failed to load data",
-      "unexpectedError": "An unexpected error occurred"
+      "unexpectedError": "An unexpected error occurred",
+      "modelInstancesPartial": "Saved the configuration, but {failed} of {total} model instances could not be created: {sample}"
     }
   },
   "Chat": {
@@ -1418,10 +1412,6 @@
       "createFailed": "Failed to create API key",
       "revokeFailed": "Failed to revoke API key",
       "loadFailed": "Failed to load API keys"
-    },
-    "success": {
-      "created": "API key created successfully",
-      "revoked": "API key revoked successfully"
     }
   },
   "TriggersPage": {
@@ -2009,7 +1999,8 @@
       "subtitle": "Create your first agent to start firing off tasks.",
       "openWorkplace": "Open Workplace",
       "createAgent": "Create agent"
-    }
+    },
+    "policiesLoadFailed": "Couldn't load task policies"
   },
   "WorkplacePage": {
     "workplace": "Workplace",
@@ -2023,7 +2014,8 @@
       "createAgentAction": "Create agent",
       "connectLLMAction": "Connect LLM",
       "disabledPlaceholder": "Create an agent to start chatting…"
-    }
+    },
+    "policiesLoadFailed": "Couldn't load task policies"
   },
   "BuiltinToolIconGrid": {
     "title": "Built-in Tools",
@@ -2053,8 +2045,6 @@
   "AuditLogPage": {
     "title": "Audit Log",
     "description": "Track who did what, when, and from where across your workspace",
-    "enterpriseFeature": "Audit logging is available on Enterprise plans.",
-    "enterpriseDescription": "Track who did what, when, and from where across your workspace.",
     "noEvents": "No audit events found.",
     "loadMore": "Load more",
     "filter": {
@@ -2072,7 +2062,8 @@
       "actor": "Actor",
       "ip": "IP",
       "when": "When"
-    }
+    },
+    "loadFailed": "Couldn't load the audit log"
   },
   "AuthConsent": {
     "title": "Authorize {clientName}",
@@ -2224,7 +2215,8 @@
     "effectSafety": "{count} safety",
     "upcoming": "Upcoming",
     "nothingUpcoming": "Nothing scheduled in the next 7 days.",
-    "inFmt": "in {time}"
+    "inFmt": "in {time}",
+    "guardrailsLoadFailed": "Couldn't load guardrails"
   },
   "SecretsPage": {
     "newSecret": "New secret",
@@ -2254,8 +2246,7 @@
       "title": "Delete {name}?",
       "inUse": "This secret is still in use. Detach it from these places first:",
       "irreversible": "This cannot be undone.",
-      "failed": "Couldn't delete the secret",
-      "deleted": "Secret {name} deleted"
+      "failed": "Couldn't delete the secret"
     },
     "table": {
       "name": "Name",
@@ -2370,5 +2361,77 @@
     "iframeTitle": "MCP App",
     "closePanel": "Close panel",
     "openAppError": "Could not open this app."
+  },
+  "AdminOnly": {
+    "membersLink": "See who administers this workspace",
+    "areas": {
+      "policies": {
+        "title": "Policies need a workspace admin",
+        "description": "Only a workspace admin can view and change the policies that govern agents here."
+      },
+      "accessControl": {
+        "title": "Access control needs a workspace admin",
+        "description": "Only a workspace admin can view and change who has access to what in this workspace."
+      },
+      "policyEditor": {
+        "title": "Editing policies needs a workspace admin",
+        "description": "Only a workspace admin can create or edit policies in this workspace."
+      },
+      "apiKeys": {
+        "description": "Only a workspace admin can see and revoke API keys created by other members. Your own keys stay yours to manage."
+      },
+      "auditLog": {
+        "title": "The audit log needs a workspace admin",
+        "description": "Only a workspace admin can read the record of who did what in this workspace."
+      },
+      "networkPeopleAccess": {
+        "title": "People access needs a workspace admin",
+        "description": "Only a workspace admin can see which people can reach which agents in this workspace."
+      },
+      "providerConfigs": {
+        "title": "Model providers need a workspace admin",
+        "description": "Only a workspace admin can connect a model provider or change its settings."
+      },
+      "wallet": {
+        "title": "Wallets and payments need a workspace admin",
+        "description": "Only a workspace admin can manage agent wallets and payments in this workspace."
+      }
+    },
+    "hints": {
+      "budgetCap": "Only a workspace admin can change the budget cap.",
+      "createSecret": "Only a workspace admin can add a secret.",
+      "manageSecret": "Only a workspace admin can edit, rotate or delete a secret.",
+      "invitePeople": "Only a workspace admin can invite people.",
+      "manageProvider": "Only a workspace admin can add or edit a model provider.",
+      "importPolicies": "Only a workspace admin can import policies.",
+      "manageMcpAuth": "Only a workspace admin can pick or create an authentication config.",
+      "viewPolicies": "Only a workspace admin can view policies.",
+      "pickTaskPolicy": "Only a workspace admin can pick a task policy. Tasks run under the default one."
+    }
+  },
+  "AgentWallet": {
+    "errors": {
+      "fetchWallet": "Couldn't load the wallet",
+      "invalidWallet": "The wallet response is malformed",
+      "fetchPayments": "Couldn't load payments",
+      "invalidPayments": "The payments response is malformed",
+      "createWallet": "Couldn't create the wallet",
+      "updateWallet": "Couldn't update the wallet",
+      "removeWallet": "Couldn't remove the wallet"
+    }
+  },
+  "PoliciesPage": {
+    "accessControl": {
+      "loadFailedTitle": "Couldn't load access control",
+      "loadFailed": "Failed to load access control",
+      "graphLoadFailed": "Failed to load the access-control graph",
+      "rulesLoadFailed": "Failed to load access-control rules",
+      "collectionsLoadFailed": "Failed to load skill collections",
+      "noData": "Access-control API returned no data"
+    },
+    "editor": {
+      "loadFailedTitle": "Couldn't load policy",
+      "loadFailed": "Failed to load policies"
+    }
   }
 }

@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Clock, Link2, Loader2, Mail, UserPlus } from "lucide-react";
-import { toast } from "sonner";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import {
   OneTimeSecretField,
@@ -40,10 +39,16 @@ const EXPIRY_OPTIONS = ["7", "14", "30"] as const;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Header "Invite people" button — opens {@link InviteDialog}. */
-export function InviteButton({ onClick }: { onClick: () => void }) {
+export function InviteButton({
+  onClick,
+  disabled,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   const t = useTranslations("MembersPage");
   return (
-    <Button size="sm" onClick={onClick}>
+    <Button size="sm" onClick={onClick} disabled={disabled}>
       <UserPlus />
       {t("invitePeople")}
     </Button>
@@ -99,7 +104,6 @@ export function InviteDialog({
         ? `${window.location.origin}/invite?token=${encodeURIComponent(token)}`
         : "";
       setCreated({ link, invitation: res.data });
-      toast.success(t("inviteLinkCreatedTitle"));
       router.refresh();
       onCreated?.();
     });

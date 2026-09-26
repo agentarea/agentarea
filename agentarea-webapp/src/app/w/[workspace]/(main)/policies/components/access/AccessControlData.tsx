@@ -1,8 +1,11 @@
+import { getTranslations } from "next-intl/server";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import {
   getAccessControlGraph,
   listAccessControlRelationships,
   listSkillCollections,
 } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
 import type {
   AccessControlEdge,
   AccessControlGraph,
@@ -11,17 +14,6 @@ import type {
   SkillCollection,
 } from "@/types/access-control";
 import AccessControlExplorer from "./AccessControlExplorer";
-
-const EMPTY_GRAPH: AccessControlGraph = {
-  enabled: false,
-  nodes: [],
-  edges: [],
-  stats: {
-    governed_skill_count: 0,
-    rule_count: 0,
-    direct_exception_count: 0,
-  },
-};
 
 const ACCESS_CONTROL_RELATIONS: ReadonlySet<string> = new Set([
   "user",
@@ -68,51 +60,86 @@ function toAccessControlGraph(data: {
   };
 }
 
-export default async function AccessControlData() {
-  let graph: AccessControlGraph = EMPTY_GRAPH;
-  let relationships: AccessControlRelationshipsResponse = {
-    relationships: [],
-    count: 0,
-  };
-  let collections: SkillCollection[] = [];
+function LoadError({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <RetryEmptyState
+      title={title}
+      description={description}
+      iconsType="audit"
+    />
+  );
+}
 
+export default async function AccessControlData() {
+  const t = await getTranslations("PoliciesPage.accessControl");
+  let results;
   try {
-    const [graphRes, relationshipsRes, collectionsRes] = await Promise.all([
+    results = await Promise.all([
       getAccessControlGraph(),
       listAccessControlRelationships(),
       listSkillCollections(),
     ]);
-
-    if (graphRes.error) {
-      console.error("Failed to fetch access-control graph:", graphRes.error);
-    } else if (graphRes.data) {
-      graph = toAccessControlGraph(graphRes.data);
-    }
-
-    if (relationshipsRes.error) {
-      console.error(
-        "Failed to fetch access-control relationships:",
-        relationshipsRes.error
-      );
-    } else if (relationshipsRes.data) {
-      relationships =
-        relationshipsRes.data as AccessControlRelationshipsResponse;
-    }
-
-    if (collectionsRes.error) {
-      console.error("Failed to fetch skill collections:", collectionsRes.error);
-    } else if (collectionsRes.data) {
-      collections = (collectionsRes.data as SkillCollection[]) ?? [];
-    }
   } catch (error) {
     console.error("Failed to load access control data:", error);
+    return (
+      <LoadError
+        title={t("loadFailedTitle")}
+        description={apiErrorMessage({ error }, t("loadFailed"))}
+      />
+    );
+  }
+  const [graphRes, relationshipsRes, collectionsRes] = results;
+
+  if (graphRes.error) {
+    console.error("Failed to fetch access-control graph:", graphRes.error);
+    return (
+      <LoadError
+        title={t("loadFailedTitle")}
+        description={apiErrorMessage(graphRes, t("graphLoadFailed"))}
+      />
+    );
+  }
+  if (relationshipsRes.error) {
+    console.error(
+      "Failed to fetch access-control relationships:",
+      relationshipsRes.error
+    );
+    return (
+      <LoadError
+        title={t("loadFailedTitle")}
+        description={apiErrorMessage(relationshipsRes, t("rulesLoadFailed"))}
+      />
+    );
+  }
+  if (collectionsRes.error) {
+    console.error("Failed to fetch skill collections:", collectionsRes.error);
+    return (
+      <LoadError
+        title={t("loadFailedTitle")}
+        description={apiErrorMessage(
+          collectionsRes,
+          t("collectionsLoadFailed")
+        )}
+      />
+    );
+  }
+  if (!graphRes.data || !relationshipsRes.data || !collectionsRes.data) {
+    throw new Error(t("noData"));
   }
 
   return (
     <AccessControlExplorer
-      graph={graph}
-      relationships={relationships}
-      collections={collections}
+      graph={toAccessControlGraph(graphRes.data)}
+      relationships={
+        relationshipsRes.data as AccessControlRelationshipsResponse
+      }
+      collections={collectionsRes.data as SkillCollection[]}
     />
   );
 }

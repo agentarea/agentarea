@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
+import { AdminOnlyState } from "@/components/AdminOnlyState";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { FormSkeleton } from "@/components/Skeleton";
 import ProviderConfigFormWrapper from "./components/ProviderConfigFormWrapper";
 import { Button } from "@/components/ui/button";
 import { getProviderSpec } from "@/lib/api";
+import { getViewerCapabilities } from "@/lib/workspace-context";
 import { workspacePath } from "@/lib/workspace-routes";
 
 export const metadata: Metadata = {
@@ -24,7 +26,25 @@ export default async function CreateProviderConfigPage({
     params,
     searchParams,
   ]);
-  const t = await getTranslations("Models");
+  const [t, { canAdminister }] = await Promise.all([
+    getTranslations("Models"),
+    getViewerCapabilities(),
+  ]);
+
+  if (!canAdminister) {
+    return (
+      <ContentBlock
+        header={{
+          breadcrumb: [
+            { label: t("title"), href: "/models" },
+            { label: t("createConfig") },
+          ],
+        }}
+      >
+        <AdminOnlyState what="providerConfigs" />
+      </ContentBlock>
+    );
+  }
 
   // Get the provider_spec_id from query params if provided
   const preselectedProviderId =

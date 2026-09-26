@@ -79,9 +79,10 @@ interface PaymentHistoryTableProps {
 
 export function PaymentHistoryTable({ agentId }: PaymentHistoryTableProps) {
   const t = useTranslations("AgentPaymentsPage");
+  const tCommon = useTranslations("Common");
   const [page, setPage] = useState(1);
 
-  const { data, loading } = useWalletPayments(agentId, {
+  const { data, loading, error, refetch } = useWalletPayments(agentId, {
     page,
     page_size: 20,
   });
@@ -89,6 +90,16 @@ export function PaymentHistoryTable({ agentId }: PaymentHistoryTableProps) {
   const payments = data?.items || [];
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / 20);
+
+  if (error) {
+    return (
+      <EmptyState
+        title={error}
+        iconsType="payments"
+        action={{ label: tCommon("retry"), onClick: () => refetch() }}
+      />
+    );
+  }
 
   if (loading && page === 1 && !data?.items?.length) {
     return (

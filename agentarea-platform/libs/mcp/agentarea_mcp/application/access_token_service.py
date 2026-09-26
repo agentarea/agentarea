@@ -81,8 +81,10 @@ class APIKeyService:
     async def get_token(self, token_id: UUID) -> APIKey | None:
         return await self._repo.get_by_id(token_id)
 
-    async def list_tokens(self) -> list[APIKey]:
-        return await self._repo.list_all()
+    async def list_tokens(self, created_by: str | None = None) -> list[APIKey]:
+        if created_by is None:
+            return await self._repo.list_all()
+        return await self._repo.list_all(created_by=created_by)
 
     async def revoke_token(self, token_id: UUID) -> bool:
         """Immediately deactivate a PAT. Returns False if not found."""

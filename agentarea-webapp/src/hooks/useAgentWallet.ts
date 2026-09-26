@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { CreateWalletRequest } from "@/api/client/types.gen";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import {
   createAgentWalletAction,
   deleteAgentWalletAction,
@@ -82,6 +84,7 @@ function isPaginatedPayments(value: unknown): value is PaginatedPayments {
 }
 
 export function useAgentWallet(agentId: string) {
+  const t = useTranslations("AgentWallet.errors");
   const [wallet, setWallet] = useState<AgentWallet | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,18 +93,25 @@ export function useAgentWallet(agentId: string) {
     try {
       setLoading(true);
       setError(null);
-      const { data, error: err } = await getAgentWalletAction(agentId);
-      if (err) {
+      const result = await getAgentWalletAction(agentId);
+      if (result.status === 404) {
         setWallet(null);
+      } else if (result.error) {
+        setWallet(null);
+        setError(apiErrorMessage(result, t("fetchWallet")));
+      } else if (!isAgentWallet(result.data)) {
+        setWallet(null);
+        setError(t("invalidWallet"));
       } else {
-        setWallet(isAgentWallet(data) ? data : null);
+        setWallet(result.data);
       }
-    } catch {
-      setError("Failed to fetch wallet");
+    } catch (err) {
+      console.error("Failed to fetch wallet", err);
+      setError(t("fetchWallet"));
     } finally {
       setLoading(false);
     }
-  }, [agentId]);
+  }, [agentId, t]);
 
   useEffect(() => {
     fetchWallet();
@@ -111,6 +121,7 @@ export function useAgentWallet(agentId: string) {
 }
 
 export function useCreateWallet(agentId: string) {
+  const t = useTranslations("AgentWallet.errors");
   const [loading, setLoading] = useState(false);
 
   const createWallet = async (
@@ -122,8 +133,10 @@ export function useCreateWallet(agentId: string) {
         agentId,
         data
       );
-      if (error) throw new Error("Failed to create wallet");
-      if (!isAgentWallet(result)) throw new Error("Invalid wallet response");
+      if (error) {
+        throw new Error(`${t("createWallet")}: ${formatApiError(error)}`);
+      }
+      if (!isAgentWallet(result)) throw new Error(t("invalidWallet"));
       return result;
     } finally {
       setLoading(false);
@@ -134,6 +147,7 @@ export function useCreateWallet(agentId: string) {
 }
 
 export function useUpdateWallet(agentId: string) {
+  const t = useTranslations("AgentWallet.errors");
   const [loading, setLoading] = useState(false);
 
   const updateWallet = async (
@@ -145,8 +159,10 @@ export function useUpdateWallet(agentId: string) {
         agentId,
         data
       );
-      if (error) throw new Error("Failed to update wallet");
-      if (!isAgentWallet(result)) throw new Error("Invalid wallet response");
+      if (error) {
+        throw new Error(`${t("updateWallet")}: ${formatApiError(error)}`);
+      }
+      if (!isAgentWallet(result)) throw new Error(t("invalidWallet"));
       return result;
     } finally {
       setLoading(false);
@@ -157,12 +173,16 @@ export function useUpdateWallet(agentId: string) {
 }
 
 export function useDeleteWallet(agentId: string) {
+  const t = useTranslations("AgentWallet.errors");
   const [loading, setLoading] = useState(false);
 
   const deleteWallet = async (): Promise<void> => {
     setLoading(true);
     try {
-      await deleteAgentWalletAction(agentId);
+      const { error } = await deleteAgentWalletAction(agentId);
+      if (error) {
+        throw new Error(`${t("removeWallet")}: ${formatApiError(error)}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -180,8 +200,10 @@ export function useWalletPayments(
     page_size?: number;
   }
 ) {
+  const t = useTranslations("AgentWallet.errors");
   const [data, setData] = useState<PaginatedPayments | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const protocol = filters?.protocol;
   const status = filters?.status;
@@ -191,23 +213,31 @@ export function useWalletPayments(
   const fetchPayments = useCallback(async () => {
     try {
       setLoading(true);
-      const { data: result } = await getAgentWalletPaymentsAction(agentId, {
+      setError(null);
+      const result = await getAgentWalletPaymentsAction(agentId, {
         protocol,
         status,
         page,
         page_size,
       });
-      if (isPaginatedPayments(result)) {
-        setData(result);
+      if (result.error) {
+        setError(apiErrorMessage(result, t("fetchPayments")));
+      } else if (!isPaginatedPayments(result.data)) {
+        setError(t("invalidPayments"));
+      } else {
+        setData(result.data);
       }
+    } catch (err) {
+      console.error("Failed to fetch payments", err);
+      setError(t("fetchPayments"));
     } finally {
       setLoading(false);
     }
-  }, [agentId, protocol, status, page, page_size]);
+  }, [agentId, protocol, status, page, page_size, t]);
 
   useEffect(() => {
     fetchPayments();
   }, [fetchPayments]);
 
-  return { data, loading, refetch: fetchPayments };
+  return { data, loading, error, refetch: fetchPayments };
 }
