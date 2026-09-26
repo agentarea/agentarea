@@ -4,9 +4,11 @@ import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import Link from "@/components/WorkspaceLink";
 import { Settings } from "lucide-react";
+import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import SearchInput from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
+import { getViewerCapabilities } from "@/lib/workspace-context";
 import ModelsSectionTabs from "./components/ModelsSectionTabs";
 import ProviderHeaderTabs from "./components/ProviderHeaderTabs";
 import ProvidersData from "./components/ProvidersData";
@@ -23,8 +25,11 @@ interface TasksPageProps {
 export default async function ProviderConfigsPage({
   searchParams,
 }: TasksPageProps) {
-  const t = await getTranslations("Models");
-  const resolvedSearchParams = await searchParams;
+  const [t, resolvedSearchParams, { canAdminister }] = await Promise.all([
+    getTranslations("Models"),
+    searchParams,
+    getViewerCapabilities(),
+  ]);
   const searchQuery =
     typeof resolvedSearchParams.search === "string"
       ? resolvedSearchParams.search
@@ -54,7 +59,7 @@ export default async function ProviderConfigsPage({
       header={{
         breadcrumb: [{ label: t("title"), href: "/models" }],
         description: t("description"),
-        controls: (
+        controls: canAdminister ? (
           <Link href="/models/create">
             <Button
               className="shrink-0"
@@ -65,6 +70,19 @@ export default async function ProviderConfigsPage({
               {t("createButton")}
             </Button>
           </Link>
+        ) : (
+          <div className="flex items-center gap-2">
+            <AdminOnlyHint action="manageProvider" />
+            <Button
+              className="shrink-0"
+              size="xs"
+              data-test="new-config-button"
+              disabled
+            >
+              <Settings />
+              {t("createButton")}
+            </Button>
+          </div>
         ),
       }}
       subheader={

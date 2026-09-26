@@ -11,13 +11,9 @@ import logging
 from uuid import UUID
 
 from agentarea_api.api.deps.services import DatabaseSessionDep
-from agentarea_common.auth.authorization import assert_workspace_admin
+from agentarea_common.auth.authorization import assert_workspace_admin, is_workspace_admin
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.route_authz import (
-    enforced_in_handler,
-    requires_workspace_admin,
-    unrestricted,
-)
+from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.access_token_service import APIKeyService
 from agentarea_mcp.infrastructure.auth_repository import APIKeyRepository
@@ -113,25 +109,50 @@ async def create_api_key(
         raise HTTPException(status_code=500, detail=f"Failed to create token: {exc}") from exc
 
 
-@router.get("/", response_model=list[APIKeyResponse], dependencies=[requires_workspace_admin()])
+@router.get(
+    "/",
+    response_model=list[APIKeyResponse],
+    dependencies=[
+        enforced_in_handler(
+            "a workspace admin lists every key, a member only the keys they created"
+        )
+    ],
+)
 async def list_api_keys(
     user_context: UserContextDep,
     service: APIKeyService = Depends(get_api_key_service),
 ):
-    """List all API keys for the current workspace."""
-    tokens = await service.list_tokens()
+    """List the API keys the caller may see: all of the workspace's for an admin, else their own."""
+    if await is_workspace_admin(user_context):
+        tokens = await service.list_tokens()
+    else:
+        tokens = await service.list_tokens(created_by=user_context.user_id)
     return [APIKeyResponse.model_validate(t) for t in tokens]
 
 
-@router.get("/{token_id}", response_model=APIKeyResponse, dependencies=[requires_workspace_admin()])
+@router.get(
+    "/{token_id}",
+    response_model=APIKeyResponse,
+    dependencies=[
+        enforced_in_handler(
+            "the key's creator, or a workspace admin; needs the record loaded first"
+        )
+    ],
+)
 async def get_api_key(
     token_id: UUID,
     user_context: UserContextDep,
     service: APIKeyService = Depends(get_api_key_service),
 ):
-    """Get a single API key by ID."""
+    """Get a single API key by ID.
+
+    Someone else's key answers 404 to a member, as a missing one does, so the
+    ids of colleagues' keys cannot be confirmed.
+    """
     token = await service.get_token(token_id)
-    if token is None:
+    if token is None or (
+        str(token.created_by) != user_context.user_id and not await is_workspace_admin(user_context)
+    ):
         raise HTTPException(status_code=404, detail="API key not found")
     return APIKeyResponse.model_validate(token)
 

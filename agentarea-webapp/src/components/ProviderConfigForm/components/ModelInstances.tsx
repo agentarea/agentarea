@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Brain, Check, Eye, RefreshCw, Wrench } from "lucide-react";
-import { toast } from "sonner";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Badge } from "@/components/ui/badge";
 import { ProviderIcon } from "@/components/ui/provider-icon";
@@ -46,6 +45,8 @@ export default function ModelInstances({
 }: ModelInstancesProps) {
   const t = useTranslations("ProviderConfigForm");
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
+  const [discoverSummary, setDiscoverSummary] = useState<string | null>(null);
   const [discoveredModelNames, setDiscoveredModelNames] =
     useState<ReadonlySet<string> | null>(null);
   // In edit mode, the existing model instances are the source of truth and
@@ -83,14 +84,16 @@ export default function ModelInstances({
   const providerKey: string | undefined = selectedProvider?.provider_key;
 
   const handleDiscoverModels = async () => {
+    setDiscoverError(null);
+    setDiscoverSummary(null);
     if (!providerConfigId) {
       if (!providerKey) {
-        toast.error(t("selectProviderFirst"));
+        setDiscoverError(t("selectProviderFirst"));
         return;
       }
       // Keyless proxies (custom endpoint, no auth) can still be discovered.
       if ((!apiKey || !apiKey.trim()) && (!endpointUrl || !endpointUrl.trim())) {
-        toast.error(t("enterApiKeyToDiscover"));
+        setDiscoverError(t("enterApiKeyToDiscover"));
         return;
       }
     }
@@ -105,7 +108,9 @@ export default function ModelInstances({
         const { data, error } = await discoverModelsAction(providerConfigId);
         if (error) {
           const detail = (error as { detail?: unknown })?.detail;
-          toast.error(typeof detail === "string" ? detail : t("failedToDiscover"));
+          setDiscoverError(
+            typeof detail === "string" ? detail : t("failedToDiscover")
+          );
           return;
         }
         totalCount = data?.discovered ?? 0;
@@ -132,7 +137,7 @@ export default function ModelInstances({
                 : typeof e?.message === "string"
                   ? e.message
                   : t("failedToDiscover");
-          toast.error(msg);
+          setDiscoverError(msg);
           return;
         }
         totalCount = data?.discovered ?? 0;
@@ -148,23 +153,20 @@ export default function ModelInstances({
       // `discovered` counts only the models that were kept. Reporting it alone
       // would present a partial discovery as a complete one, which is exactly
       // what the backend returns `skipped` to prevent.
-      toast.success(
-        summary,
+      setDiscoverSummary(
         skipped.length > 0
-          ? {
-              description: t("discoveredSkipped", {
-                skippedCount: skipped.length,
-                names: skipped.map((model) => model.model_name).join(", "),
-              }),
-            }
-          : undefined,
+          ? `${summary} ${t("discoveredSkipped", {
+              skippedCount: skipped.length,
+              names: skipped.map((model) => model.model_name).join(", "),
+            })}`
+          : summary
       );
       setDiscoveredModelNames(new Set(discoveredNames));
       setHasDiscovered(true);
       await onModelsDiscovered?.();
     } catch (err) {
       console.error("discover models failed", err);
-      toast.error(t("failedToDiscover"));
+      setDiscoverError(t("failedToDiscover"));
     } finally {
       setIsDiscovering(false);
     }
@@ -255,6 +257,14 @@ export default function ModelInstances({
                 : t("testAndDiscover")}
           </Button>
         </div>
+        {discoverError && (
+          <p role="alert" className="form-error">
+            {discoverError}
+          </p>
+        )}
+        {discoverSummary && (
+          <p className="text-xs text-muted-foreground">{discoverSummary}</p>
+        )}
         <p className="note">
           {t("selectModelsToCreateInstances", {
             providerName: selectedProvider.name,

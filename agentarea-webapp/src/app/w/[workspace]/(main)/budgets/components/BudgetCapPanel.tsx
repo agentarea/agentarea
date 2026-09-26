@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { useTranslations } from "next-intl";
 import { AlertTriangle, CheckCircle2, DollarSign, Gauge } from "lucide-react";
-import { EntityAvatar } from "@/components/ui/entity-avatar";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import FormLabel from "@/components/FormLabel/FormLabel";
+import { Button } from "@/components/ui/button";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
+import { Input } from "@/components/ui/input";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { updateWorkspaceSettingsAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 
@@ -54,6 +56,7 @@ export function BudgetCapPanel({
 }) {
   const t = useTranslations("BudgetsPage");
   const router = useWorkspaceRouter();
+  const { canAdminister } = useViewerCapabilities();
   const [cap, setCap] = useState(initialCap);
   const [capInput, setCapInput] = useState(
     initialCap == null ? "" : String(initialCap)
@@ -141,36 +144,43 @@ export function BudgetCapPanel({
               setMessage(settingsError);
             }}
             placeholder={t("capPlaceholder")}
-            disabled={isPending}
+            disabled={isPending || !canAdminister}
+            readOnly={!canAdminister}
             className="h-[38px] flex-1 font-mono tabular-nums"
           />
-          <Button
-            type="button"
-            className="h-[38px] sm:self-start"
-            isLoading={isPending}
-            disabled={!canSave}
-            onClick={saveCap}
-          >
-            {t("save")}
-          </Button>
+          {canAdminister && (
+            <Button
+              type="button"
+              className="h-[38px] sm:self-start"
+              isLoading={isPending}
+              disabled={!canSave}
+              onClick={saveCap}
+            >
+              {t("save")}
+            </Button>
+          )}
         </div>
 
-        <p
-          className={cn(
-            "flex items-start gap-1.5 text-[11.5px]",
-            status === "success"
-              ? "text-emerald-600 dark:text-emerald-400"
-              : "text-muted-foreground",
-            status === "error" && "text-destructive"
-          )}
-        >
-          {status === "success" ? (
-            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          ) : status === "error" ? (
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          ) : null}
-          <span>{message ?? t("capNote")}</span>
-        </p>
+        {!canAdminister && <AdminOnlyHint action="budgetCap" />}
+
+        {(canAdminister || message) && (
+          <p
+            className={cn(
+              "flex items-start gap-1.5 text-[11.5px]",
+              status === "success"
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-muted-foreground",
+              status === "error" && "text-destructive"
+            )}
+          >
+            {status === "success" ? (
+              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            ) : status === "error" ? (
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            ) : null}
+            <span>{message ?? t("capNote")}</span>
+          </p>
+        )}
       </div>
 
       {/* usage — left column, second row */}
@@ -184,10 +194,7 @@ export function BudgetCapPanel({
                 {t("capUsed", { amount: fmt(mtdSpend) })}
               </span>
               <span
-                className={cn(
-                  "font-medium tabular-nums",
-                  pctTone(capPct ?? 0)
-                )}
+                className={cn("font-medium tabular-nums", pctTone(capPct ?? 0))}
               >
                 {t("capOfTotal", {
                   pct: (capPct ?? 0).toFixed(1),

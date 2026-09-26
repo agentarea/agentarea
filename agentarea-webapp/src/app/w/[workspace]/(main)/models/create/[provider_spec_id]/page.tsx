@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
+import { AdminOnlyState } from "@/components/AdminOnlyState";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { FormSkeleton } from "@/components/Skeleton";
 import ProviderConfigFormWrapper from "../components/ProviderConfigFormWrapper";
 import { Button } from "@/components/ui/button";
+import { getViewerCapabilities } from "@/lib/workspace-context";
 
 export const metadata: Metadata = {
   title: "Create Provider Config",
@@ -15,9 +17,26 @@ export default async function CreateProviderConfigWithSpecPage({
 }: {
   params: Promise<{ provider_spec_id: string }>;
 }) {
-  const resolvedParams = await params;
-  const { provider_spec_id } = resolvedParams;
-  const t = await getTranslations("Models");
+  const [{ provider_spec_id }, t, { canAdminister }] = await Promise.all([
+    params,
+    getTranslations("Models"),
+    getViewerCapabilities(),
+  ]);
+
+  if (!canAdminister) {
+    return (
+      <ContentBlock
+        header={{
+          breadcrumb: [
+            { label: t("title"), href: "/models" },
+            { label: t("createConfig") },
+          ],
+        }}
+      >
+        <AdminOnlyState what="providerConfigs" />
+      </ContentBlock>
+    );
+  }
 
   return (
     <ContentBlock

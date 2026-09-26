@@ -83,8 +83,14 @@ export type AgentOverviewModel = {
   pendingApprovals: TaskResponse[];
   skills: string[];
   connections: string[];
-  policyCount: number;
-  effectCounts: Partial<Record<PolicyEffect, number>>;
+  policies:
+    | {
+        status: "ok";
+        count: number;
+        effectCounts: Partial<Record<PolicyEffect, number>>;
+      }
+    | { status: "adminOnly" }
+    | { status: "error"; message: string };
 };
 
 const fmtUsd = (v: number) =>
@@ -150,6 +156,8 @@ export async function AgentOverviewView({
   model: AgentOverviewModel;
 }) {
   const t = await getTranslations("AgentOverviewPage");
+  const tAdmin = await getTranslations("AdminOnly");
+  const { policies } = model;
   const { agentRef, stats } = model;
 
   const totalRuns = stats.completed7d + stats.failed7d;
@@ -500,14 +508,22 @@ export async function AgentOverviewView({
                 href="/policies"
                 tile={<SoftTile icon={<Shield />} />}
                 title={
-                  model.policyCount > 0
-                    ? t("effectiveGuardrails", { count: model.policyCount })
-                    : t("noGuardrails")
+                  policies.status === "adminOnly"
+                    ? tAdmin("areas.policies.title")
+                    : policies.status === "error"
+                      ? t("guardrailsLoadFailed")
+                      : policies.count > 0
+                        ? t("effectiveGuardrails", { count: policies.count })
+                        : t("noGuardrails")
                 }
                 sub={
-                  model.policyCount > 0 ? (
+                  policies.status === "adminOnly" ? (
+                    tAdmin("hints.viewPolicies")
+                  ) : policies.status === "error" ? (
+                    policies.message
+                  ) : policies.count > 0 ? (
                     <span className="flex flex-wrap gap-x-2.5">
-                      {EFFECT_ORDER.filter((e) => model.effectCounts[e]).map(
+                      {EFFECT_ORDER.filter((e) => policies.effectCounts[e]).map(
                         (e) => (
                           <span
                             key={e}
@@ -521,7 +537,7 @@ export async function AgentOverviewView({
                               }}
                             />
                             {t(EFFECT_KEY[e], {
-                              count: model.effectCounts[e] ?? 0,
+                              count: policies.effectCounts[e] ?? 0,
                             })}
                           </span>
                         )

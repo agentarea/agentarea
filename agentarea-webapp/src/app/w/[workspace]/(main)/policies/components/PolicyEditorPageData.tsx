@@ -1,4 +1,6 @@
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
+import { AdminOnlyState } from "@/components/AdminOnlyState";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import {
@@ -10,8 +12,10 @@ import {
   listWorkspaceMembers,
   type WorkspaceMember,
 } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
 import { getAuthContext } from "@/lib/getAuthContext";
 import type { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
+import { getViewerCapabilities } from "@/lib/workspace-context";
 import type { Policy } from "@/types/policies";
 import PolicyEditor, { type PolicyEditorTarget } from "./PolicyEditor";
 
@@ -55,13 +59,28 @@ interface PolicyEditorPageDataProps {
 export async function PolicyEditorPageData({
   policyId,
 }: PolicyEditorPageDataProps) {
+  const title = policyId ? "Edit policy rule" : "New policy rule";
+  const header = {
+    breadcrumb: [{ label: "Policies", href: "/policies" }, { label: title }],
+  };
+
+  const { canAdminister } = await getViewerCapabilities();
+  if (!canAdminister) {
+    return (
+      <ContentBlock header={header}>
+        <div className="main-content">
+          <AdminOnlyState what="policyEditor" />
+        </div>
+      </ContentBlock>
+    );
+  }
+
   let policies: Policy[] = [];
   let agents: AgentLike[] = [];
   let mcpInstances: McpInstance[] = [];
   let mcpServers: McpServer[] = [];
   let openapiConnections: OpenAPIConnectionLike[] = [];
   let members: MemberLike[] = [];
-  let policiesError: string | null = null;
   const authContext = await getAuthContext();
 
   const [
@@ -72,7 +91,11 @@ export async function PolicyEditorPageData({
     openapiConnectionsRes,
     membersRes,
   ] = await Promise.all([
-    listPolicies().catch((reason) => ({ data: null, error: reason })),
+    listPolicies().catch((reason) => ({
+      data: null,
+      error: reason,
+      status: undefined,
+    })),
     listAgents().catch((reason) => ({ data: null, error: reason })),
     listMCPServerInstances().catch((reason) => ({ data: null, error: reason })),
     listMCPServers({ page_size: 100 }).catch((reason) => ({
@@ -88,7 +111,20 @@ export async function PolicyEditorPageData({
 
   if (policiesRes.error) {
     console.error("Failed to fetch policies:", policiesRes.error);
-    policiesError = "Failed to load policies";
+    if (policyId) {
+      const t = await getTranslations("PoliciesPage.editor");
+      return (
+        <ContentBlock header={header}>
+          <div className="main-content">
+            <RetryEmptyState
+              title={t("loadFailedTitle")}
+              description={apiErrorMessage(policiesRes, t("loadFailed"))}
+              iconsType="audit"
+            />
+          </div>
+        </ContentBlock>
+      );
+    }
   } else {
     policies = ((policiesRes.data as Policy[] | null) ?? []) as Policy[];
   }
@@ -175,35 +211,18 @@ export async function PolicyEditorPageData({
   const target = resolveTarget({ policyId, policies });
   if (!target) notFound();
 
-  const title = policyId ? "Edit policy rule" : "New policy rule";
-
   return (
-    <ContentBlock
-      header={{
-        breadcrumb: [
-          { label: "Policies", href: "/policies" },
-          { label: title },
-        ],
-      }}
-    >
+    <ContentBlock header={header}>
       <div className="main-content">
-        {policiesError && policyId ? (
-          <RetryEmptyState
-            title="Couldn't load policy"
-            description={policiesError}
-            iconsType="audit"
-          />
-        ) : (
-          <PolicyEditor
-            target={target}
-            agents={agents}
-            mcpInstances={mcpInstances}
-            mcpServers={mcpServers}
-            openapiConnections={openapiConnections}
-            members={members}
-            workspaceId={authContext.workspaceId}
-          />
-        )}
+        <PolicyEditor
+          target={target}
+          agents={agents}
+          mcpInstances={mcpInstances}
+          mcpServers={mcpServers}
+          openapiConnections={openapiConnections}
+          members={members}
+          workspaceId={authContext.workspaceId}
+        />
       </div>
     </ContentBlock>
   );

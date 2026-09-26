@@ -1,6 +1,8 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
+import type { Metadata } from "next";
+import { AdminOnlyState } from "@/components/AdminOnlyState";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { getViewerCapabilities } from "@/lib/workspace-context";
 import AccessControlData from "./components/access/AccessControlData";
 import AccessControlHeaderControls from "./components/access/AccessControlHeaderControls";
 import { PoliciesData } from "./components/PoliciesData";
@@ -19,24 +21,30 @@ export default async function PoliciesPage({
 }) {
   const resolved = await searchParams;
   const view = resolved.view === "access" ? "access" : "policies";
+  const { canAdminister } = await getViewerCapabilities();
 
   return (
     <ContentBlock
       header={{
         breadcrumb: [{ label: "Policies" }],
-        controls:
-          view === "access" ? (
-            <AccessControlHeaderControls />
-          ) : (
-            <PoliciesHeaderControls />
-          ),
+        controls: !canAdminister ? undefined : view === "access" ? (
+          <AccessControlHeaderControls />
+        ) : (
+          <PoliciesHeaderControls />
+        ),
       }}
       subheader={<PoliciesViewTabs current={view} />}
     >
       <div className="main-content">
-        <Suspense fallback={<PoliciesSkeleton view={view} />}>
-          {view === "access" ? <AccessControlData /> : <PoliciesData />}
-        </Suspense>
+        {!canAdminister ? (
+          <AdminOnlyState
+            what={view === "access" ? "accessControl" : "policies"}
+          />
+        ) : (
+          <Suspense fallback={<PoliciesSkeleton view={view} />}>
+            {view === "access" ? <AccessControlData /> : <PoliciesData />}
+          </Suspense>
+        )}
       </div>
     </ContentBlock>
   );

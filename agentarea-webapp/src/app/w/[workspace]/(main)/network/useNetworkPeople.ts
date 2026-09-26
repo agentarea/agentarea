@@ -5,17 +5,19 @@ import type { NetworkPeopleAccessResponse } from "@/api/client/types.gen";
 import type { PeopleStatus } from "./components/NetworkPeopleNode";
 
 export function useNetworkPeople(
-  enabled: boolean,
+  canAdminister: boolean,
   load?: () => Promise<NetworkPeopleAccessResponse>,
   scopeKey?: unknown
 ) {
   const [data, setData] = useState<NetworkPeopleAccessResponse | null>(null);
   const [status, setStatus] = useState<PeopleStatus>("loading");
+  const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    if (!enabled) return;
+    if (!canAdminister) return;
     let cancelled = false;
     setData(null);
+    setError(null);
     setStatus("loading");
     if (!load) {
       setStatus("error");
@@ -28,13 +30,22 @@ export function useNetworkPeople(
           setStatus("ready");
         }
       })
-      .catch(() => {
-        if (!cancelled) setStatus("error");
+      .catch((reason: unknown) => {
+        console.error("Failed to load network people access:", reason);
+        if (!cancelled) {
+          setError(reason instanceof Error ? reason.message : String(reason));
+          setStatus("error");
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [enabled, load, attempt, scopeKey]);
+  }, [canAdminister, load, attempt, scopeKey]);
   const reload = useCallback(() => setAttempt((value) => value + 1), []);
-  return { data, status, reload };
+  return {
+    data,
+    status: canAdminister ? status : ("adminOnly" as const),
+    error,
+    reload,
+  };
 }

@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Code, Globe, Lock, LockOpen, Package, Plus, Server, Tag, Terminal, X } from "lucide-react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
+import { useTranslations } from "next-intl";
 import { z } from "zod";
+import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import FormLabel from "@/components/FormLabel/FormLabel";
@@ -18,6 +20,8 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import { apiErrorMessage } from "@/lib/api-errors";
 import {
   addMCPServer,
   type MCPServerFormState,
@@ -108,8 +112,12 @@ interface AuthConfig {
 type AuthType = "api_key" | "bearer" | "oauth2";
 
 export function AddMCPServerForm() {
+  const t = useTranslations("MCPServersPage.authConfigs");
+  const { canAdminister } = useViewerCapabilities();
   const [state, setState] = useState<MCPServerFormState>(initialState);
   const [authConfigs, setAuthConfigs] = useState<AuthConfig[]>([]);
+  const [authConfigsError, setAuthConfigsError] = useState<string | null>(null);
+  const [newAuthError, setNewAuthError] = useState<string | null>(null);
   const [selectedAuthConfigId, setSelectedAuthConfigId] = useState<string>("");
   const [showNewAuthForm, setShowNewAuthForm] = useState(false);
   const [newAuthType, setNewAuthType] = useState<AuthType>("api_key");
@@ -120,18 +128,24 @@ export function AddMCPServerForm() {
   const [jsonError, setJsonError] = useState<string | null>(null);
 
   const fetchAuthConfigs = useCallback(async () => {
+    setAuthConfigsError(null);
     try {
-      const { data } = await listMCPAuthConfigs();
-      if (data) {
-        setAuthConfigs(data as AuthConfig[]);
+      const result = await listMCPAuthConfigs();
+      if (result.error || !result.data) {
+        console.error("Failed to load MCP auth configs", result.error);
+        setAuthConfigsError(apiErrorMessage(result, t("loadFailed")));
+        return;
       }
-    } catch {
-      // Auth configs may not be available yet
+      setAuthConfigs(result.data as AuthConfig[]);
+    } catch (e) {
+      console.error("Failed to load MCP auth configs", e);
+      setAuthConfigsError(t("loadFailed"));
     }
-  }, []);
+  }, [t]);
 
   const handleCreateAuthConfig = useCallback(async (formEl: HTMLFormElement) => {
     setNewAuthSaving(true);
+    setNewAuthError(null);
     try {
       const fd = new window.FormData(formEl);
       const authType = fd.get("newAuthType") as string;
@@ -154,26 +168,30 @@ export function AddMCPServerForm() {
         credentials = { client_secret: fd.get("clientSecret") as string };
       }
 
-      const { data } = await createMCPAuthConfig({
+      const result = await createMCPAuthConfig({
         name: fd.get("newAuthName") as string,
         auth_type: authType,
         config,
         credentials,
       });
 
-      if (data) {
-        await fetchAuthConfigs();
-        setSelectedAuthConfigId((data as { id: string }).id);
-        setShowNewAuthForm(false);
-        setNewAuthName("");
-        setNewAuthType("api_key");
+      if (result.error || !result.data) {
+        console.error("Failed to create MCP auth config", result.error);
+        setNewAuthError(apiErrorMessage(result, t("createFailed")));
+        return;
       }
+      await fetchAuthConfigs();
+      setSelectedAuthConfigId((result.data as { id: string }).id);
+      setShowNewAuthForm(false);
+      setNewAuthName("");
+      setNewAuthType("api_key");
     } catch (e) {
-      console.error("Failed to create MCP auth config:", e);
+      console.error("Failed to create MCP auth config", e);
+      setNewAuthError(t("createFailed"));
     } finally {
       setNewAuthSaving(false);
     }
-  }, [fetchAuthConfigs]);
+  }, [fetchAuthConfigs, t]);
 
   const {
     register,
@@ -219,10 +237,10 @@ export function AddMCPServerForm() {
 
   // Fetch auth configs when type is external
   useEffect(() => {
-    if (watchedType === "external") {
+    if (watchedType === "external" && canAdminister) {
       fetchAuthConfigs();
     }
-  }, [watchedType, fetchAuthConfigs]);
+  }, [watchedType, canAdminister, fetchAuthConfigs]);
 
   // Dispatch submitting state for header controls
   const dispatchSubmitting = (submitting: boolean) => {
@@ -726,6 +744,7 @@ export function AddMCPServerForm() {
               <Label htmlFor="authConfigId">Authentication (optional)</Label>
               <Select
                 value={selectedAuthConfigId}
+                disabled={!canAdminister}
                 onValueChange={(value) => {
                   if (value === "__new__") {
                     setShowNewAuthForm(true);
@@ -749,6 +768,12 @@ export function AddMCPServerForm() {
                   <SelectItem value="__new__">+ Create new auth config</SelectItem>
                 </SelectContent>
               </Select>
+              {!canAdminister && <AdminOnlyHint action="manageMcpAuth" />}
+              {authConfigsError && (
+                <p role="alert" className="form-error">
+                  {authConfigsError}
+                </p>
+              )}
 
               {/* Inline Auth Config Creation Form */}
               {showNewAuthForm && (
@@ -827,6 +852,12 @@ export function AddMCPServerForm() {
                         <Input id="scopes" name="scopes" placeholder="read write" />
                       </div>
                     </>
+                  )}
+
+                  {newAuthError && (
+                    <p role="alert" className="form-error">
+                      {newAuthError}
+                    </p>
                   )}
 
                   <div className="flex gap-2 pt-1">

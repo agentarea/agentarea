@@ -1,3 +1,5 @@
+import type { WorkspaceResponse } from "@/api/client/types.gen";
+
 // Carries the page's workspace inside the webapp: from the proxy to server
 // code, and from the browser to /api route handlers. Never sent to the API,
 // which takes the workspace from its `/v1/workspaces/{workspace}` path.
@@ -5,12 +7,7 @@ export const WORKSPACE_REFERENCE_HEADER = "x-agentarea-workspace";
 // For browser requests that cannot carry a header: EventSource, <a download>.
 export const WORKSPACE_QUERY_PARAM = "workspace";
 
-export type Workspace = {
-  id: string;
-  slug: string;
-  name: string;
-  owner_user_id: string;
-};
+export type Workspace = WorkspaceResponse;
 
 /**
  * A workspace auto-provisioned for a single user, recognised by its id being

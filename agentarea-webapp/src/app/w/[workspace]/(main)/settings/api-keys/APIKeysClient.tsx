@@ -6,7 +6,6 @@ import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Trash2 } from "lucide-react";
-import { toast } from "sonner";
 import BaseModal from "@/components/BaseModal";
 import EmptyState from "@/components/EmptyState";
 import Table, { type Column } from "@/components/Table/Table";
@@ -29,7 +28,13 @@ interface APIKey {
   last_used_at?: string | null;
 }
 
-function RevokeKeyAction({ apiKey }: { apiKey: APIKey }) {
+function RevokeKeyAction({
+  apiKey,
+  onError,
+}: {
+  apiKey: APIKey;
+  onError: (message: string | null) => void;
+}) {
   const t = useTranslations("APIKeysPage");
   const router = useWorkspaceRouter();
   const [, startTransition] = useTransition();
@@ -37,10 +42,10 @@ function RevokeKeyAction({ apiKey }: { apiKey: APIKey }) {
   const revoke = async () => {
     const result = await revokeAPIKeyAction(apiKey.id);
     if (result.error) {
-      toast.error(t("error.revokeFailed"), { description: result.error });
+      onError(`${t("error.revokeFailed")}: ${result.error}`);
       return;
     }
-    toast.success(t("success.revoked"));
+    onError(null);
     startTransition(() => router.refresh());
   };
 
@@ -73,6 +78,7 @@ export default function APIKeysClient({
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createSession, setCreateSession] = useState(0);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
 
   const columns: Column<APIKey>[] = [
     {
@@ -141,12 +147,19 @@ export default function APIKeysClient({
       headerClassName: "w-0",
       cellClassName: "text-right",
       render: (_, item) =>
-        item?.status === "active" ? <RevokeKeyAction apiKey={item} /> : null,
+        item?.status === "active" ? (
+          <RevokeKeyAction apiKey={item} onError={setRevokeError} />
+        ) : null,
     },
   ];
 
   return (
     <>
+      {revokeError && (
+        <p role="alert" className="mb-3 text-sm text-destructive">
+          {revokeError}
+        </p>
+      )}
       {keys.length === 0 ? (
         <EmptyState
           title={t("noKeys")}
