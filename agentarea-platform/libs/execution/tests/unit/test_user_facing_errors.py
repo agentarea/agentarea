@@ -76,7 +76,6 @@ def _base_activities(
                 "instruction": "You are a helpful assistant.",
                 "context_window": 128000,
                 "tools_config": {"mcp_servers": []},
-                "events_config": {},
                 "planning": False,
             }
     else:

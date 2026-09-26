@@ -47,7 +47,6 @@ async def _mock_build_config(request: AgentConfigRequest) -> dict[str, Any]:
         "instruction": "You are a helpful assistant.",
         "tools_config": {"mcp_servers": []},
         "context_window": 128000,
-        "events_config": {},
         "planning": False,
     }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -195,9 +195,14 @@ function describeCron(
 interface CronSchedulerProps {
   defaultValue?: string;
   name: string;
+  onChange?: (cronExpression: string) => void;
 }
 
-export function CronScheduler({ defaultValue = "", name }: CronSchedulerProps) {
+export function CronScheduler({
+  defaultValue = "",
+  name,
+  onChange,
+}: CronSchedulerProps) {
   const parsed = useMemo(() => parseCron(defaultValue), [defaultValue]);
 
   const [frequency, setFrequency] = useState<Frequency>(parsed.frequency);
@@ -213,6 +218,10 @@ export function CronScheduler({ defaultValue = "", name }: CronSchedulerProps) {
     frequency === "custom"
       ? customExpr
       : buildCron(frequency, minute, hour, dayOfMonth, dayOfWeek, hourInterval, minuteInterval);
+
+  useEffect(() => {
+    onChange?.(cronExpr);
+  }, [cronExpr, onChange]);
 
   const description =
     frequency === "custom"

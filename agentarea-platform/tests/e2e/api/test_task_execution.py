@@ -34,6 +34,7 @@ def test_task_executes_end_to_end(
             "instruction": "Reply with exactly one lowercase word and nothing else.",
             "model_id": llm_model,
             "agent_type": "stateless",
+            "tools": [],
         },
     ).raise_for_status().json()["id"]
 
@@ -92,6 +93,7 @@ def test_task_events_are_isolated(
             "instruction": "x",
             "model_id": llm_model,
             "agent_type": "stateless",
+            "tools": [],
         },
     ).raise_for_status().json()["id"]
 

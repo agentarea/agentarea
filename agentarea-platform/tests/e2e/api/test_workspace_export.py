@@ -50,6 +50,7 @@ def test_workspace_export_with_content_ok(alice_client: httpx.Client) -> None:
             "description": "d",
             "instruction": "i",
             "agent_type": "stateless",
+            "tools": [],
         },
     ).raise_for_status()
 

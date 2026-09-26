@@ -1,7 +1,13 @@
 "use client";
 
-import type { McpServerResponse, McpServerInstanceResponse, ModelInstanceResponse } from "@/api/client/types.gen";
+import type {
+  AgentPresetResponse,
+  McpServerInstanceResponse,
+  McpServerResponse,
+  ModelInstanceResponse,
+} from "@/api/client/types.gen";
 import React from "react";
+import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/create/actions";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import AgentForm from "../shared/AgentForm";
 import { addAgent, type AddAgentFormState } from "./actions";
@@ -16,11 +22,15 @@ export default function CreateAgentClient({
   llmModelInstances,
   mcpInstanceList,
   builtinTools,
+  presets,
+  triggerCatalog,
 }: {
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
   mcpInstanceList: McpServerInstanceResponse[];
   builtinTools: unknown[];
+  presets: AgentPresetResponse[] | null;
+  triggerCatalog: TriggerCatalogEntry[] | null;
 }) {
   const router = useWorkspaceRouter();
 
@@ -43,15 +53,16 @@ export default function CreateAgentClient({
       llmModelInstances={llmModelInstances}
       mcpInstanceList={mcpInstanceList}
       builtinTools={builtinTools}
+      create={{ presets, triggerCatalog }}
       initialData={{
         name: generateAgentName(),
         description: "",
         instruction: "",
         model_id: "",
         tools_config: { mcp_server_configs: [], builtin_tools: [], openapi_configs: [] },
-        events_config: { events: [] },
         planning: false,
         skills: [],
+        triggers: [],
       }}
       onSubmit={handleSubmit}
       submitButtonText="Create Agent"

@@ -43,7 +43,6 @@ def _agent(name: str) -> SimpleNamespace:
         model_id=str(uuid4()),
         status="active",
         tools=[],
-        events_config={},
         planning=False,
         a2ui_enabled=False,
         agent_type="stateless",

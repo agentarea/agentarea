@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -38,12 +39,14 @@ def _agent(
     tools: list[dict[str, Any]] | None = None,
     tags: list[str] | None = None,
     planning: bool = False,
+    skills: list[str] | None = None,
+    triggers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "name": name,
         "description": description,
         "version": "1.0.0",
-        "instruction": instruction.strip(),
+        "instruction": textwrap.dedent(instruction).strip(),
         # The catalog is global and model instances are per-workspace, so
         # RegistryService._parse_agents carries `preferred_models` (slugs) and
         # ignores `model_id` — emitting the latter reconciles to no preference.
@@ -51,7 +54,72 @@ def _agent(
         "tools": tools or [],
         "planning": planning,
         "tags": tags or [],
+        # Stable catalog skill keys (``<skill>--<source>``, no content hash).
+        "skills": skills or [],
+        "triggers": triggers or [],
     }
+
+
+def _code(*names: str) -> list[dict[str, Any]]:
+    return [{"type": "code", "name": name} for name in names]
+
+
+# The toolsets the UI switches on and off together as "Sandbox".
+_SANDBOX = ("agentarea/shell", "agentarea/files", "agentarea/workspace_files")
+
+# Presets are catalog agents tagged "preset": the starting points offered on the
+# agent-create form. Applying one fills tools, skills, triggers and instruction.
+PRESETS: list[dict[str, Any]] = [
+    _agent(
+        "AgentArea Claw",
+        "Personal assistant that works in its own sandbox, remembers context, "
+        "checks in on a schedule and answers you in Telegram.",
+        """
+        You are a personal assistant with your own sandbox, the web, and a memory
+        of the workspace. Do the work instead of describing it: run commands,
+        write files, look things up.
+
+        Keep HEARTBEAT.md in your workspace files as a short checklist of things
+        to watch. On a heartbeat run, work through that checklist; if nothing
+        needs attention, finish without doing anything else.
+
+        Before anything destructive or hard to undo, say what you are about to do.
+        """,
+        tools=_code(*_SANDBOX, "agentarea/web", "agentarea/context"),
+        skills=["brainstorming--obra-superpowers", "writing-plans--obra-superpowers"],
+        triggers=[
+            {
+                "name": "Heartbeat",
+                "trigger_type": "cron",
+                "cron_expression": "*/30 * * * *",
+                "timezone": "UTC",
+                "task_parameters": {
+                    "text": "Heartbeat: read HEARTBEAT.md and work through its checklist."
+                },
+            },
+            {
+                "name": "Telegram",
+                "trigger_type": "webhook",
+                "webhook_type": "telegram",
+                "task_parameters": {"text": "Reply to the Telegram message you received."},
+            },
+        ],
+        tags=["preset", "assistant"],
+    ),
+    _agent(
+        "Researcher",
+        "Researches a question on the web and writes up cited findings.",
+        """
+        You are a research assistant. Break the question into parts, search and
+        read primary sources, and keep notes in your workspace files. Answer with
+        a concise write-up that cites every claim and flags what is uncertain.
+        """,
+        tools=_code(*_SANDBOX, "agentarea/web", "agentarea/context"),
+        skills=["create-plan--openai-skills"],
+        tags=["preset", "research"],
+        planning=True,
+    ),
+]
 
 
 AGENTS: list[dict[str, Any]] = [
@@ -248,7 +316,7 @@ def _agent_def(key: str, name: str, instruction: str, **over: Any) -> dict[str, 
         "key": key,
         "name": name,
         "model": "${setup.model}",
-        "instruction": instruction.strip(),
+        "instruction": textwrap.dedent(instruction).strip(),
     }
     d.update(over)
     return d
@@ -701,12 +769,37 @@ async def _validate_bundles(bundles: list[dict[str, Any]]) -> None:
         raise SystemExit("catalog is invalid:\n  " + "\n  ".join(problems))
 
 
+def _validate_presets(presets: list[dict[str, Any]]) -> None:
+    """Fail the build if a preset would not load on the agent-create form."""
+    from agentarea_agents.schemas.import_export import TOOL_CONFIG_ADAPTER
+    from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
+    from agentarea_triggers.schemas.dto import TriggerSpec
+
+    toolsets = get_code_tools_metadata()
+    problems: list[str] = []
+    for preset in presets:
+        name = preset["name"]
+        for tool in preset["tools"]:
+            TOOL_CONFIG_ADAPTER.validate_python(tool)
+            if tool["type"] == "code" and tool["name"] not in toolsets:
+                problems.append(f"{name}: unknown toolset {tool['name']!r}")
+        for trigger in preset["triggers"]:
+            TriggerSpec.model_validate(trigger)
+        for key in preset["skills"]:
+            if key.count("--") != 1:
+                problems.append(f"{name}: skill key {key!r} is not '<skill>--<source>'")
+    if problems:
+        raise SystemExit("presets are invalid:\n  " + "\n  ".join(problems))
+
+
 def main() -> None:
     asyncio.run(_validate_bundles(BUNDLES))
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    (OUT_DIR / "agents.json").write_text(json.dumps({"agents": AGENTS}, indent=2) + "\n")
+    _validate_presets(PRESETS)
+    agents = [*PRESETS, *AGENTS]
+    (OUT_DIR / "agents.json").write_text(json.dumps({"agents": agents}, indent=2) + "\n")
     (OUT_DIR / "bundles.json").write_text(json.dumps({"bundles": BUNDLES}, indent=2) + "\n")
-    print(f"Wrote {len(AGENTS)} agents and {len(BUNDLES)} bundles to {OUT_DIR}")  # noqa: T201
+    print(f"Wrote {len(agents)} agents and {len(BUNDLES)} bundles to {OUT_DIR}")  # noqa: T201
 
 
 if __name__ == "__main__":

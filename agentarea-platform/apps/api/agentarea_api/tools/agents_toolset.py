@@ -6,19 +6,25 @@ in ``agentarea_agents.schemas.dto``. The contract test in
 ``tests/contracts/test_mcp_rest_parity.py`` enforces parity.
 """
 
+import builtins
 import json
+from typing import Any
 from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.schemas.dto import AgentCreate, AgentTypeLiteral, AgentUpdate
+from agentarea_agents.schemas.import_export import ToolConfig
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.di.container import resolve
+from pydantic import TypeAdapter
 
 from .base import platform_context, platform_read_context
+
+_TOOL_LIST = TypeAdapter(list[ToolConfig])
 
 
 def _build_service(repo_factory, event_broker) -> AgentService:
@@ -80,16 +86,23 @@ class AgentsToolset(Toolset):
         self,
         name: str,
         model_id: str,
+        tools: builtins.list[dict[str, Any]],
         description: str = "",
         instruction: str = "",
         agent_type: AgentTypeLiteral = "stateless",
     ) -> str:
-        """Create a new agent."""
+        """Create a new agent.
+
+        ``tools`` is required: pass [] for an agent with no tools. Built-in
+        toolsets are ``{"type": "code", "name": "agentarea/shell"}``; GET
+        /v1/agents/tools lists them.
+        """
         payload = AgentCreate(
             name=name,
             description=description,
             instruction=instruction,
             model_id=model_id,
+            tools=_TOOL_LIST.validate_python(tools),
             agent_type=agent_type,
         )
         async with platform_context() as (_s, _u, repo_factory, event_broker, _):

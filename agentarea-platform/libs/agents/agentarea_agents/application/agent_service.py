@@ -1,4 +1,6 @@
+import builtins
 import logging
+from dataclasses import dataclass
 from typing import Any, cast
 from uuid import UUID
 
@@ -17,17 +19,32 @@ from agentarea_agents.application.approval_sync import (
     strip_confirmation_flags,
     sync_agent_approval_rules,
 )
+from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.domain.events import AgentCreated, AgentDeleted, AgentUpdated
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.catalog_agent_repository import (
     CatalogAgentItem,
     CatalogAgentRepository,
 )
+from agentarea_agents.infrastructure.catalog_skill_repository import (
+    CatalogSkillItem,
+    CatalogSkillRepository,
+)
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_agents.schemas.dto import AgentCreate, AgentUpdate
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class AgentPreset:
+    """A catalog agent offered as a starting point on agent create."""
+
+    item: CatalogAgentItem
+    skills: list[CatalogSkillItem]
+    unavailable_skills: list[str]
+    triggers: list[dict[str, Any]]
 
 
 class InvalidModelIdError(ValueError):
@@ -60,7 +77,6 @@ def _project_catalog_item(item: CatalogAgentItem) -> Agent:
         instruction=spec.get("instruction"),
         model_id=None,
         tools=tools,
-        events_config=spec.get("events_config"),
         planning=spec.get("planning"),
         a2ui_enabled=False,
         agent_type="stateless",
@@ -99,12 +115,25 @@ class AgentService(BaseCrudService[Agent]):
         """Get the agent repository with proper type."""
         return self.repository_factory.create_repository(AgentRepository)
 
-    async def _require_skills(self, skill_ids: list[UUID] | None) -> None:
-        """Refuse to attach a skill that is not in the caller's workspace."""
+    async def _resolve_skills(self, skill_ids: list[UUID] | None) -> list[UUID]:
+        """The workspace skill ids to attach for ``skill_ids``.
+
+        A workspace skill is attached as is. A catalog skill is installed into the
+        workspace first (idempotently, as Explore's "Add" does), so a preset can
+        name catalog skills directly. Anything else is refused.
+        """
         repo = self.repository_factory.create_repository(SkillRepository)
+        skills = SkillService(self.repository_factory, self._user_context)
+        resolved: list[UUID] = []
         for skill_id in skill_ids or []:
-            if await repo.get_by_id(skill_id) is None:
+            if await repo.get_by_id(skill_id) is not None:
+                resolved.append(skill_id)
+                continue
+            installed = await skills.install_catalog_skill(skill_id)
+            if installed is None:
                 raise NotFoundError(f"Skill {skill_id} not found")
+            resolved.append(installed.id)
+        return resolved
 
     async def _validate_model_id(self, model_id: str | None) -> str | None:
         """Resolve ``model_id`` to a model instance, or reject it.
@@ -238,13 +267,12 @@ class AgentService(BaseCrudService[Agent]):
 
     @audited("agent.create", resource_type="agent")
     async def create_agent(self, payload: AgentCreate) -> Agent:
-        tools = [t.model_dump(exclude_none=True) for t in payload.tools] if payload.tools else None
+        tools = [t.model_dump(exclude_none=True) for t in payload.tools]
         approval_targets, tools = self._lift_approval_toggles(tools)
-        events_config = payload.events_config.model_dump() if payload.events_config else None
 
         slug = await self._resolve_unique_slug(payload.name)
         model_id = await self._validate_model_id(payload.model_id)
-        await self._require_skills(payload.skill_ids)
+        skill_ids = await self._resolve_skills(payload.skill_ids)
 
         agent = Agent(
             name=payload.name,
@@ -253,7 +281,6 @@ class AgentService(BaseCrudService[Agent]):
             instruction=payload.instruction,
             model_id=model_id,
             tools=tools,
-            events_config=events_config,
             planning=payload.planning,
             a2ui_enabled=payload.a2ui_enabled,
             agent_type=payload.agent_type,
@@ -264,9 +291,9 @@ class AgentService(BaseCrudService[Agent]):
         if approval_targets:
             await self._sync_approval_rules(agent.id, approval_targets)
 
-        if payload.skill_ids:
+        if skill_ids:
             repo = self._get_agent_repository()
-            await repo.set_skills(agent.id, [UUID(str(sid)) for sid in payload.skill_ids])
+            await repo.set_skills(agent.id, skill_ids)
 
         await self.event_broker.publish(
             AgentCreated(
@@ -275,7 +302,6 @@ class AgentService(BaseCrudService[Agent]):
                 description=agent.description or "",
                 model_id=agent.model_id or "",
                 tools=agent.tools,
-                events_config=agent.events_config,
                 planning=agent.planning,
                 a2ui_enabled=agent.a2ui_enabled,
             )
@@ -294,7 +320,7 @@ class AgentService(BaseCrudService[Agent]):
         spec = item.spec or {}
         tools = spec.get("tools")
         if not isinstance(tools, list):
-            tools = None
+            raise ValueError(f"catalog agent {item.name!r} has no tools list in its spec")
         approval_targets, tools = self._lift_approval_toggles(tools)
 
         # The catalog never binds a concrete model — that is a per-workspace
@@ -312,7 +338,6 @@ class AgentService(BaseCrudService[Agent]):
             instruction=spec.get("instruction"),
             model_id=None,
             tools=tools,
-            events_config=spec.get("events_config"),
             planning=spec.get("planning"),
             registry_item_id=item.id,
         )
@@ -320,6 +345,37 @@ class AgentService(BaseCrudService[Agent]):
         if approval_targets:
             await self._sync_approval_rules(agent.id, approval_targets)
         return agent
+
+    async def list_presets(self) -> builtins.list[AgentPreset]:
+        """Catalog agents tagged ``preset``, with their skill keys resolved.
+
+        A preset names catalog skills by stable key. A key that no catalog skill
+        matches is reported in ``unavailable_skills`` rather than dropped, so the
+        form can say what the preset expected.
+        """
+        skill_catalog = CatalogSkillRepository(
+            session=self.repository_factory.session, user_context=self._user_context
+        )
+        presets: list[AgentPreset] = []
+        for item in await self._get_catalog_repository().list_presets():
+            spec = item.spec or {}
+            skills: list[CatalogSkillItem] = []
+            unavailable: list[str] = []
+            for key in spec.get("skills") or []:
+                found = await skill_catalog.find_by_key(str(key))
+                if found is None:
+                    unavailable.append(str(key))
+                else:
+                    skills.append(found)
+            presets.append(
+                AgentPreset(
+                    item=item,
+                    skills=skills,
+                    unavailable_skills=unavailable,
+                    triggers=list(spec.get("triggers") or []),
+                )
+            )
+        return presets
 
     async def install_catalog_agent(self, id: UUID) -> Agent | None:
         """Materialize a catalog agent into the workspace ("Add to workspace").
@@ -343,7 +399,7 @@ class AgentService(BaseCrudService[Agent]):
 
     @audited("agent.update", resource_type="agent", resource_id_param="id")
     async def update_agent(self, id: UUID, payload: AgentUpdate) -> Agent | None:
-        await self._require_skills(payload.skill_ids)
+        skill_ids = await self._resolve_skills(payload.skill_ids)
         agent = await self.get(id)
         if not agent:
             # The id may reference a catalog (not-yet-materialized) agent.
@@ -380,8 +436,6 @@ class AgentService(BaseCrudService[Agent]):
         if tools_edited:
             dumped = [t.model_dump(exclude_none=True) for t in (payload.tools or [])]
             approval_targets, agent.tools = self._lift_approval_toggles(dumped)
-        if "events_config" in patch and payload.events_config is not None:
-            agent.events_config = payload.events_config.model_dump()
         if "planning" in patch:
             agent.planning = patch["planning"]
         if "a2ui_enabled" in patch:
@@ -396,7 +450,7 @@ class AgentService(BaseCrudService[Agent]):
 
         if "skill_ids" in patch and payload.skill_ids is not None:
             repo = self._get_agent_repository()
-            await repo.set_skills(agent.id, [UUID(str(sid)) for sid in payload.skill_ids])
+            await repo.set_skills(agent.id, skill_ids)
 
         await self.event_broker.publish(
             AgentUpdated(
@@ -405,7 +459,6 @@ class AgentService(BaseCrudService[Agent]):
                 description=agent.description,
                 model_id=agent.model_id,
                 tools=agent.tools,
-                events_config=agent.events_config,
                 planning=agent.planning,
                 a2ui_enabled=agent.a2ui_enabled,
             )

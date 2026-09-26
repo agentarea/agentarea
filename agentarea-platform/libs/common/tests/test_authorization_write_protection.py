@@ -32,7 +32,6 @@ def system_agent():
     agent.description = "System agent"
     agent.model_id = "test-model"
     agent.tools = None
-    agent.events_config = None
     agent.planning = None
     return agent
 
@@ -46,7 +45,6 @@ def regular_agent():
     agent.description = "User agent"
     agent.model_id = "test-model"
     agent.tools = None
-    agent.events_config = None
     agent.planning = None
     return agent
 

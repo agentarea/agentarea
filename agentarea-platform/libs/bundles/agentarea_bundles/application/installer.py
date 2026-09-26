@@ -289,7 +289,7 @@ class BundleInstaller:
     ) -> dict[str, UUID]:
         """Returns {package agent key -> agent id}."""
         from agentarea_agents.schemas.dto import AgentCreate
-        from agentarea_agents.schemas.import_export import McpToolConfig, ToolConfig
+        from agentarea_agents.schemas.import_export import CodeToolConfig, McpToolConfig, ToolConfig
 
         agent_ids: dict[str, UUID] = {}
         for agent in package.agents:
@@ -308,9 +308,12 @@ class BundleInstaller:
                 continue
 
             tools: list[ToolConfig] = [
-                McpToolConfig(name=mcp_tool_names[ref])
-                for ref in agent.mcps
-                if ref in mcp_tool_names  # unsupported MCPs were skipped
+                *(CodeToolConfig(name=name) for name in agent.toolsets),
+                *(
+                    McpToolConfig(name=mcp_tool_names[ref])
+                    for ref in agent.mcps
+                    if ref in mcp_tool_names  # unsupported MCPs were skipped
+                ),
             ]
             attached_skill_ids = [skill_ids[ref] for ref in agent.skills if ref in skill_ids]
             model_id = resolve_placeholders(agent.model or "", setup_values)
@@ -321,7 +324,7 @@ class BundleInstaller:
                     description="",
                     instruction=agent.instruction,
                     model_id=model_id,
-                    tools=tools or None,
+                    tools=tools,
                     skill_ids=attached_skill_ids or None,
                 )
             )

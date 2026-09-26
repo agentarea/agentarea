@@ -64,7 +64,6 @@ class TestAgentExecutionWorkflowIntegration:
                     "description": "Test agent",
                     "instruction": "You are a helpful assistant.",
                     "tools_config": {"mcp_servers": []},
-                    "events_config": {},
                     "planning": False,
                 }
 
@@ -327,7 +326,6 @@ class TestAgentExecutionWorkflowIntegration:
                     "description": "Test agent",
                     "instruction": "You are a helpful assistant.",
                     "tools_config": {"mcp_servers": []},
-                    "events_config": {},
                     "planning": False,
                 }
 
@@ -509,7 +507,6 @@ class TestAgentExecutionWorkflowIntegration:
                     "model_id": "gpt-4",
                     "instruction": "You are a helpful assistant.",
                     "tools_config": {"mcp_servers": []},
-                    "events_config": {},
                     "planning": False,
                 }
 

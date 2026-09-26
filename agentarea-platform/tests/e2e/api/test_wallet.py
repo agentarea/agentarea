@@ -14,6 +14,7 @@ def _create_agent(client: httpx.Client, name: str = "wallet-host") -> str:
             "description": "for wallet e2e",
             "instruction": "respond",
             "agent_type": "stateless",
+            "tools": [],
         },
     )
     resp.raise_for_status()

@@ -569,7 +569,26 @@
       "selectModel": "Select a model",
       "noConfigurationsYet": "No configurations yet",
       "createAndUseProviderConfiguration": "Create and use a provider configuration",
-      "createConfiguration": "Create Configuration"
+      "createConfiguration": "Create Configuration",
+      "triggerEnabled": "Enabled",
+      "removeTrigger": "Remove trigger",
+      "triggerCredentialRequired": "Select a workspace secret",
+      "noTriggers": "No triggers. The agent runs only when a task is started for it.",
+      "triggersManagedElsewhere": "Schedules and channels of this agent are managed in Automation.",
+      "openTriggers": "Open Automation",
+      "presets": {
+        "title": "Start from",
+        "empty": "Empty",
+        "emptyDescription": "No tools, skills or triggers",
+        "loadFailed": "Could not load agent presets. Refresh the page or try again later.",
+        "unavailableSkills": "This preset expects skills the catalog does not have: {skills}"
+      },
+      "toolGroups": {
+        "sandbox": {
+          "label": "Sandbox",
+          "description": "Run commands and work with files in the agent's sandbox."
+        }
+      }
     },
     "browseCatalog": "Browse the catalog",
     "newTask": "New task",

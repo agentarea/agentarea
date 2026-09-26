@@ -127,7 +127,8 @@ curl -X POST http://localhost:8000/v1/workspaces/{workspace}/agents/ \
   -d '{
     "name": "hello-world",
     "description": "My first agent",
-    "type": "chat"
+    "type": "chat",
+    "tools": []
   }'
 ```
 

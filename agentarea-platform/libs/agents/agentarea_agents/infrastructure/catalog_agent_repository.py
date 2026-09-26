@@ -58,6 +58,23 @@ class CatalogAgentRepository:
         result = await self.session.execute(query, {"workspace_id": self.user_context.workspace_id})
         return [self._row_to_item(row) for row in result.fetchall()]
 
+    async def list_presets(self) -> list[CatalogAgentItem]:
+        """Catalog agents tagged ``preset``: the starting points on agent create."""
+        query = text(
+            "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
+            "rii.installed_entity_id, rii.installed_version "
+            "FROM registry_items ri "
+            "JOIN registries r ON r.id = ri.registry_id "
+            "LEFT JOIN registry_item_installs rii "
+            "  ON rii.registry_item_id = ri.id "
+            " AND rii.workspace_id = :workspace_id "
+            "WHERE r.registry_type = 'agents' "
+            "AND ri.tags @> '[\"preset\"]'::jsonb "
+            "ORDER BY ri.recommendation_rank NULLS LAST, ri.name"
+        )
+        result = await self.session.execute(query, {"workspace_id": self.user_context.workspace_id})
+        return [self._row_to_item(row) for row in result.fetchall()]
+
     async def get_item(self, item_id: str) -> CatalogAgentItem | None:
         """Get a single catalog agent item by its registry-item id."""
         query = text(

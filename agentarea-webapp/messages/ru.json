@@ -534,7 +534,26 @@
       "selectModel": "Выберите модель",
       "noConfigurationsYet": "Нет конфигураций",
       "createAndUseProviderConfiguration": "Создайте и используйте конфигурацию провайдера",
-      "createConfiguration": "Создать конфигурацию"
+      "createConfiguration": "Создать конфигурацию",
+      "triggerEnabled": "Включён",
+      "removeTrigger": "Удалить триггер",
+      "triggerCredentialRequired": "Выберите секрет рабочего пространства",
+      "noTriggers": "Триггеров нет. Агент запускается, только когда для него создают задачу.",
+      "triggersManagedElsewhere": "Расписания и каналы этого агента настраиваются в разделе «Автоматизация».",
+      "openTriggers": "Открыть автоматизацию",
+      "presets": {
+        "title": "Начать с",
+        "empty": "Пустой",
+        "emptyDescription": "Без инструментов, навыков и триггеров",
+        "loadFailed": "Не удалось загрузить пресеты агентов. Обновите страницу или попробуйте позже.",
+        "unavailableSkills": "Этот пресет ожидает навыки, которых нет в каталоге: {skills}"
+      },
+      "toolGroups": {
+        "sandbox": {
+          "label": "Песочница",
+          "description": "Выполнение команд и работа с файлами в песочнице агента."
+        }
+      }
     },
     "browseCatalog": "Открыть каталог",
     "newTask": "Новая задача",

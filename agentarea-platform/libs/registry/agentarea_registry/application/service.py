@@ -1264,7 +1264,10 @@ class RegistryService:
                         "preferred_models": _agent_preferred_models(entry),
                         "tools": tools,
                         "planning": entry.get("planning", False),
-                        "events_config": entry.get("events_config"),
+                        # Presets name catalog skills by their stable key and
+                        # carry trigger templates; see the agent presets API.
+                        "skills": entry.get("skills") or [],
+                        "triggers": entry.get("triggers") or [],
                     },
                     "tags": entry.get("tags", []),
                     **rank_fields(entry),

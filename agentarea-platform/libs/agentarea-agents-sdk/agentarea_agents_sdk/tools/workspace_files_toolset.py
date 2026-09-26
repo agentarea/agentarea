@@ -23,6 +23,7 @@ from .tool_definition import toolset
     description="List, fetch API download paths for, and delete workspace files.",
     category="platform",
     plane="runtime",
+    group="sandbox",
     requires_user_confirmation=True,
 )
 class WorkspaceFilesToolset(Toolset):

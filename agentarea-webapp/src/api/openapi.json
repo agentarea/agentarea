@@ -244,9 +244,9 @@
         "title": "AddSkillRequest",
         "type": "object"
       },
-      "AgentCreate": {
+      "AgentCreateRequest": {
         "additionalProperties": false,
-        "description": "Payload for creating an agent.\n\n``model_id`` is the UUID of a model instance configured in the workspace \u2014\nthe runtime has no other interpretation of it. Omit it (or pass ``null``) to\ncreate an agent with no model bound yet; such an agent cannot be run until a\nmodel is assigned.",
+        "description": "``AgentCreate`` plus the triggers created with the agent.",
         "properties": {
           "a2ui_enabled": {
             "anyOf": [
@@ -277,17 +277,6 @@
             "maxLength": 1000,
             "title": "Description",
             "type": "string"
-          },
-          "events_config": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EventsConfig"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Event subscriptions that auto-trigger this agent."
           },
           "instruction": {
             "default": "",
@@ -344,47 +333,49 @@
             "title": "Skill Ids"
           },
           "tools": {
-            "anyOf": [
-              {
-                "items": {
-                  "discriminator": {
-                    "mapping": {
-                      "agent": "#/components/schemas/AgentToolConfig",
-                      "code": "#/components/schemas/CodeToolConfig",
-                      "mcp": "#/components/schemas/McpToolConfig-Input",
-                      "openapi": "#/components/schemas/OpenApiToolConfig"
-                    },
-                    "propertyName": "type"
-                  },
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/CodeToolConfig"
-                    },
-                    {
-                      "$ref": "#/components/schemas/McpToolConfig-Input"
-                    },
-                    {
-                      "$ref": "#/components/schemas/AgentToolConfig"
-                    },
-                    {
-                      "$ref": "#/components/schemas/OpenApiToolConfig"
-                    }
-                  ]
+            "description": "Tools attached to the agent (code/mcp/agent/openapi). Required: pass [] for an agent with no tools. Built-in toolsets and their groups are listed by GET /v1/agents/tools.",
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "agent": "#/components/schemas/AgentToolConfig",
+                  "code": "#/components/schemas/CodeToolConfig",
+                  "mcp": "#/components/schemas/McpToolConfig-Input",
+                  "openapi": "#/components/schemas/OpenApiToolConfig"
                 },
-                "type": "array"
+                "propertyName": "type"
               },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Tools attached to the agent (code/mcp/agent/openapi).",
-            "title": "Tools"
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/CodeToolConfig"
+                },
+                {
+                  "$ref": "#/components/schemas/McpToolConfig-Input"
+                },
+                {
+                  "$ref": "#/components/schemas/AgentToolConfig"
+                },
+                {
+                  "$ref": "#/components/schemas/OpenApiToolConfig"
+                }
+              ]
+            },
+            "title": "Tools",
+            "type": "array"
+          },
+          "triggers": {
+            "description": "Triggers that start the agent: schedules, webhooks, messaging channels (types from GET /v1/triggers/catalog). Created with the agent; if any cannot be created, neither the agent nor any trigger is kept.",
+            "items": {
+              "$ref": "#/components/schemas/TriggerSpec"
+            },
+            "title": "Triggers",
+            "type": "array"
           }
         },
         "required": [
-          "name"
+          "name",
+          "tools"
         ],
-        "title": "AgentCreate",
+        "title": "AgentCreateRequest",
         "type": "object"
       },
       "AgentOverviewResponse": {
@@ -451,6 +442,101 @@
         "title": "AgentOverviewResponse",
         "type": "object"
       },
+      "AgentPresetResponse": {
+        "description": "A starting point for a new agent: applying it fills the create form.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "instruction": {
+            "default": "",
+            "title": "Instruction",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "preferred_models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Preferred Models",
+            "type": "array"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/PresetSkillResponse"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
+          "tools": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "agent": "#/components/schemas/AgentToolConfig",
+                  "code": "#/components/schemas/CodeToolConfig",
+                  "mcp": "#/components/schemas/McpToolConfig-Output",
+                  "openapi": "#/components/schemas/OpenApiToolConfig"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/CodeToolConfig"
+                },
+                {
+                  "$ref": "#/components/schemas/McpToolConfig-Output"
+                },
+                {
+                  "$ref": "#/components/schemas/AgentToolConfig"
+                },
+                {
+                  "$ref": "#/components/schemas/OpenApiToolConfig"
+                }
+              ]
+            },
+            "title": "Tools",
+            "type": "array"
+          },
+          "triggers": {
+            "items": {
+              "$ref": "#/components/schemas/TriggerSpec"
+            },
+            "title": "Triggers",
+            "type": "array"
+          },
+          "unavailable_skills": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unavailable Skills",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "tools",
+          "skills",
+          "triggers"
+        ],
+        "title": "AgentPresetResponse",
+        "type": "object"
+      },
       "AgentResponse": {
         "properties": {
           "a2ui_enabled": {
@@ -479,18 +565,6 @@
               }
             ],
             "title": "Description"
-          },
-          "events_config": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Events Config"
           },
           "id": {
             "format": "uuid",
@@ -800,16 +874,6 @@
               }
             ],
             "title": "Description"
-          },
-          "events_config": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EventsConfig"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "instruction": {
             "anyOf": [
@@ -1648,6 +1712,14 @@
               "type": "string"
             },
             "title": "Skills",
+            "type": "array"
+          },
+          "toolsets": {
+            "description": "Built-in toolsets to attach, e.g. [\"agentarea/shell\", \"agentarea/files\"].",
+            "items": {
+              "type": "string"
+            },
+            "title": "Toolsets",
             "type": "array"
           }
         },
@@ -3433,61 +3505,6 @@
           "approved"
         ],
         "title": "EscalationResolution",
-        "type": "object"
-      },
-      "EventConfig": {
-        "description": "One event subscription for an agent.",
-        "properties": {
-          "config": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Event-specific configuration.",
-            "title": "Config"
-          },
-          "enabled": {
-            "default": true,
-            "description": "Whether this subscription is active.",
-            "title": "Enabled",
-            "type": "boolean"
-          },
-          "event_type": {
-            "description": "Event type the agent listens to.",
-            "title": "Event Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "event_type"
-        ],
-        "title": "EventConfig",
-        "type": "object"
-      },
-      "EventsConfig": {
-        "description": "Per-agent event subscriptions.",
-        "properties": {
-          "events": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/EventConfig"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Events"
-          }
-        },
-        "title": "EventsConfig",
         "type": "object"
       },
       "ExecutionCorrelationResponse": {
@@ -7801,6 +7818,36 @@
         "title": "PolicySubjectType",
         "type": "string"
       },
+      "PresetSkillResponse": {
+        "description": "A catalog skill a preset attaches; attaching it installs it into the workspace.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "PresetSkillResponse",
+        "type": "object"
+      },
       "PresignUploadRequest": {
         "additionalProperties": false,
         "properties": {
@@ -11354,6 +11401,18 @@
             "title": "Display Name",
             "type": "string"
           },
+          "group": {
+            "anyOf": [
+              {
+                "const": "sandbox",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
           "input_schema": {
             "additionalProperties": true,
             "title": "Input Schema",
@@ -11458,7 +11517,7 @@
       },
       "TriggerCreate": {
         "additionalProperties": false,
-        "description": "Payload for creating a trigger.\n\nA trigger fires an agent \u2014 either on a cron schedule (``trigger_type='cron'``)\nor in response to an inbound webhook (``trigger_type='webhook'``). For poll-based\nchannels (e.g. email inbox), use ``trigger_type='polling'`` plus a\n``data_extractor`` configuration.",
+        "description": "Payload for creating a trigger on an existing agent.",
         "properties": {
           "agent_id": {
             "description": "UUID of the agent to invoke when the trigger fires.",
@@ -11628,8 +11687,8 @@
         },
         "required": [
           "name",
-          "agent_id",
-          "trigger_type"
+          "trigger_type",
+          "agent_id"
         ],
         "title": "TriggerCreate",
         "type": "object"
@@ -12024,6 +12083,177 @@
           "execution_id"
         ],
         "title": "TriggerRunResponse",
+        "type": "object"
+      },
+      "TriggerSpec": {
+        "additionalProperties": false,
+        "description": "Everything about a trigger except the agent it fires.\n\nA trigger fires an agent \u2014 either on a cron schedule (``trigger_type='cron'``)\nor in response to an inbound webhook (``trigger_type='webhook'``). For poll-based\nchannels (e.g. email inbox), use ``trigger_type='polling'`` plus a\n``data_extractor`` configuration. Creating an agent takes a list of these,\nbecause the agent does not exist yet when they are written.",
+        "properties": {
+          "allowed_methods": {
+            "description": "HTTP methods accepted on the webhook endpoint.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Methods",
+            "type": "array"
+          },
+          "channel_credentials": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Channel credentials (bot_token, SMTP password, etc). Stored encrypted in the secret store. Never returned in responses.",
+            "title": "Channel Credentials"
+          },
+          "conditions": {
+            "additionalProperties": true,
+            "description": "Optional conditions evaluated against event data before firing.",
+            "title": "Conditions",
+            "type": "object"
+          },
+          "cron_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "5- or 6-field cron expression (required when trigger_type='cron').",
+            "title": "Cron Expression"
+          },
+          "data_extractor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Polling extractor identifier (e.g. 'imap', 'rss').",
+            "title": "Data Extractor"
+          },
+          "data_extractor_config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Connection/auth details for the polling extractor.",
+            "title": "Data Extractor Config"
+          },
+          "description": {
+            "default": "",
+            "description": "Short summary of what this trigger does.",
+            "maxLength": 1000,
+            "title": "Description",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "description": "Whether the trigger is active immediately on creation.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "event_types": {
+            "description": "Event types to filter on (empty list = accept all events).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Event Types",
+            "type": "array"
+          },
+          "failure_threshold": {
+            "default": 5,
+            "description": "Auto-disable after this many consecutive failed executions.",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Failure Threshold",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Human-readable trigger name.",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "task_parameters": {
+            "additionalProperties": true,
+            "description": "Parameters merged into the task created when the trigger fires.",
+            "title": "Task Parameters",
+            "type": "object"
+          },
+          "timezone": {
+            "default": "UTC",
+            "description": "IANA timezone for cron evaluation (e.g. 'UTC', 'America/New_York').",
+            "title": "Timezone",
+            "type": "string"
+          },
+          "trigger_type": {
+            "description": "'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven.",
+            "enum": [
+              "cron",
+              "webhook",
+              "polling"
+            ],
+            "title": "Trigger Type",
+            "type": "string"
+          },
+          "validation_rules": {
+            "additionalProperties": true,
+            "description": "Per-channel validation rules (signature secrets, allowed senders, etc).",
+            "title": "Validation Rules",
+            "type": "object"
+          },
+          "webhook_config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Channel-specific configuration (bot tokens, signing keys, etc).",
+            "title": "Webhook Config"
+          },
+          "webhook_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public webhook path segment. Auto-generated if omitted for webhook triggers.",
+            "title": "Webhook Id"
+          },
+          "webhook_type": {
+            "default": "generic",
+            "description": "Channel type: 'generic', 'telegram', 'slack', 'discord', etc.",
+            "title": "Webhook Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "trigger_type"
+        ],
+        "title": "TriggerSpec",
         "type": "object"
       },
       "TriggerStatusResponse": {
@@ -15061,7 +15291,7 @@
         ]
       },
       "post": {
-        "description": "Create a new agent.",
+        "description": "Create a new agent, and the triggers that start it, in one request.\n\nEvery trigger is checked before anything is written. If creating one still\nfails, the triggers already made and the agent are removed again, so the\ncaller never ends up with an agent that silently lacks a schedule or channel.",
         "operationId": "create_agent_v1_agents__post",
         "parameters": [
           {
@@ -15082,7 +15312,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AgentCreate"
+                "$ref": "#/components/schemas/AgentCreateRequest"
               }
             }
           },
@@ -15116,6 +15346,64 @@
           }
         ],
         "summary": "Create Agent",
+        "tags": [
+          "v1",
+          "protected",
+          "agents"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/agents/presets": {
+      "get": {
+        "description": "Starting points for a new agent: tools, skills, triggers and an instruction.",
+        "operationId": "list_agent_presets_v1_agents_presets_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentPresetResponse"
+                  },
+                  "title": "Response List Agent Presets V1 Agents Presets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Agent Presets",
         "tags": [
           "v1",
           "protected",

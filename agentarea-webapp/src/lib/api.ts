@@ -3,7 +3,7 @@ import * as sdk from "@/api/client/sdk.gen";
 import type {
   A2UiActionPayload,
   AgentareaApiApiV1ModelSpecsModelSpecResponse,
-  AgentCreate,
+  AgentCreateRequest,
   AgentResponse,
   AgentUpdate,
   AnalyzeRequest,
@@ -84,10 +84,17 @@ export const listAgents = async () => {
   return { data, error };
 };
 
-export const createAgent = async (agent: AgentCreate) => {
+export const createAgent = async (agent: AgentCreateRequest) => {
   const { data, error } = await sdk.createAgentV1AgentsPost({
     client: serverClient,
     body: agent,
+  });
+  return { data, error };
+};
+
+export const listAgentPresets = async () => {
+  const { data, error } = await sdk.listAgentPresetsV1AgentsPresetsGet({
+    client: serverClient,
   });
   return { data, error };
 };

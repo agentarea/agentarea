@@ -58,7 +58,6 @@ def mock_database_calls():
         "instruction": "You are a helpful AI assistant. When you complete a task, use the task_complete tool to mark it as completed.",
         "model_id": "66666666-6666-6666-6666-666666666666",
         "tools_config": {},
-        "events_config": {},
         "planning": False,
         "workspace_id": "test-workspace-id",
         "created_by": "test-user-id",

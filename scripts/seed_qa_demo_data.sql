@@ -232,7 +232,7 @@ BEGIN
 
         FOR i IN 1..16 LOOP
             INSERT INTO agents (
-                id, name, slug, status, description, instruction, model_id, tools, events_config,
+                id, name, slug, status, description, instruction, model_id, tools,
                 planning, a2ui_enabled, agent_type, registry_item_id,
                 workspace_id, created_by, created_at, updated_at
             )
@@ -260,7 +260,6 @@ BEGIN
                     )
                     ELSE json_build_array(json_build_object('type', 'code', 'name', 'agentarea/skills'))
                 END,
-                json_build_object('events', json_build_array('task.created', 'task.completed', 'artifact.created')),
                 i % 3 = 0,
                 i % 5 = 0,
                 CASE WHEN i % 6 = 0 THEN 'stateful' ELSE 'stateless' END,

@@ -58,7 +58,6 @@ never reachable outside the workspace that owns it.
 | `planning` | Advertised in the agent card as a `task-planning` skill. |
 | `a2ui_enabled` | Enables the interactive UI action channel on tasks. |
 | `agent_type` | `stateless` or `stateful`. Stored and returned; see Limits. |
-| `events_config` | Stored and returned; see Limits. |
 | `registry_item_id` | Provenance. Set when the agent was forked copy-on-write from a catalog item, null when created from scratch. |
 
 `tools` is a discriminated union on `type`, not a free-form blob. Four variants
@@ -163,9 +162,9 @@ it is a property of the sandbox runtime, not of the agent.
 - **`agent_type` selects nothing.** It is validated, stored, returned by the API
   and carried into the execution config, but no workflow branches on it. A
   `stateful` agent and a `stateless` agent execute identically today.
-- **`events_config` has no execution consumer.** It is stored on the row and
-  round-trips through the API and the registry sync; nothing in the execution
-  library reads it.
+- **Triggers are not a field on the agent.** Schedules, webhooks and channel
+  triggers are created alongside an agent via the `triggers` list on
+  `POST /v1/agents`, or independently through the Triggers API.
 - **The execution environment is not per-agent.** Image, resource limits and
   egress profile are properties of the sandbox runtime and cannot be declared on
   an agent definition.

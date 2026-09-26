@@ -1,4 +1,4 @@
-import type { McpServerResponse } from "@/api/client/types.gen";
+import type { McpServerResponse, ToolResponse } from "@/api/client/types.gen";
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
@@ -7,6 +7,7 @@ import {
   Control,
   FieldErrors,
   UseFieldArrayAppend,
+  UseFieldArrayRemove,
   UseFieldArrayReturn,
   UseFormGetValues,
   UseFormSetValue,
@@ -44,6 +45,17 @@ import { SelectableList } from "@/components/SelectableList";
 import { TriggerControl } from "./TriggerControl";
 
 type MCPServer = McpServerResponse;
+type ToolGroup = NonNullable<ToolResponse["group"]>;
+
+const TOOL_GROUP_MESSAGES: Record<
+  ToolGroup,
+  { label: string; description: string }
+> = {
+  sandbox: {
+    label: "create.toolGroups.sandbox.label",
+    description: "create.toolGroups.sandbox.description",
+  },
+};
 
 interface BuiltinTool {
   name: string;
@@ -51,6 +63,7 @@ interface BuiltinTool {
   category?: string;
   description?: string;
   available_methods?: Method[];
+  group?: ToolGroup | null;
 }
 
 type ToolConfigProps = {
@@ -76,7 +89,7 @@ type ToolConfigProps = {
     "tools_config.builtin_tools",
     "id"
   >["fields"];
-  removeBuiltinTool?: (index: number) => void;
+  removeBuiltinTool?: UseFieldArrayRemove;
   appendBuiltinTool?: UseFieldArrayAppend<
     AgentFormValues,
     "tools_config.builtin_tools"
@@ -112,6 +125,23 @@ const ToolConfig = ({
   appendOpenapiTool,
 }: ToolConfigProps) => {
   const builtinTools = builtinToolsInput as BuiltinTool[];
+  // Toolsets sharing a group are one switch; they never appear one by one
+  const toolGroups = useMemo(() => {
+    const groups = new Map<ToolGroup, BuiltinTool[]>();
+    for (const tool of builtinTools) {
+      if (tool.group) {
+        groups.set(tool.group, [...(groups.get(tool.group) ?? []), tool]);
+      }
+    }
+    return [...groups.entries()];
+  }, [builtinTools]);
+  const ungroupedBuiltinTools = builtinTools.filter((tool) => !tool.group);
+  const groupedToolNames = new Set(
+    builtinTools.filter((tool) => tool.group).map((tool) => tool.name)
+  );
+  const visibleBuiltinToolFields = (builtinToolFields ?? []).filter(
+    (field) => !groupedToolNames.has(field.tool_name)
+  );
   const [accordionValue, setAccordionValue] = useState<string>("tools");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [scrollToolId] = useState<string | null>(null);
@@ -254,6 +284,28 @@ const ToolConfig = ({
     if (index !== undefined && index !== -1) {
       removeBuiltinTool(index);
     }
+  };
+
+  const isToolGroupEnabled = (members: BuiltinTool[]) =>
+    members.every((member) =>
+      builtinToolFields?.some((field) => field.tool_name === member.name)
+    );
+
+  const setToolGroupEnabled = (members: BuiltinTool[], enabled: boolean) => {
+    if (enabled) {
+      const missing = members.filter(
+        (member) =>
+          !builtinToolFields?.some((field) => field.tool_name === member.name)
+      );
+      if (missing.length) {
+        appendBuiltinTool?.(missing.map((member) => ({ tool_name: member.name })));
+      }
+      return;
+    }
+    const indices = (builtinToolFields ?? []).flatMap((field, index) =>
+      members.some((member) => member.name === field.tool_name) ? [index] : []
+    );
+    if (indices.length) removeBuiltinTool?.(indices);
   };
 
   const handleAddOpenapiConnection = (connection: OpenAPIConnection) => {
@@ -612,7 +664,10 @@ const ToolConfig = ({
             <div className="flex flex-col space-y-4 overflow-y-auto">
               <div className="font-semibold text-sm">{t("create.builtinTools")}</div>
               <SelectableList
-                items={builtinTools.map((tool) => ({ ...tool, id: tool.name }))}
+                items={ungroupedBuiltinTools.map((tool) => ({
+                  ...tool,
+                  id: tool.name,
+                }))}
                 prefix="builtin-tool"
                 extractTitle={(tool) => {
                   const { IconComponent, displayName } =
@@ -865,8 +920,39 @@ const ToolConfig = ({
         }
       >
         <div className="space-y-4">
+          {toolGroups.map(([group, members]) => (
+            <div
+              key={group}
+              className="flex items-center justify-between gap-3 rounded-md border bg-card px-3 py-2"
+            >
+              <div className="min-w-0">
+                <label
+                  htmlFor={`tool-group-${group}`}
+                  className="cursor-pointer text-sm font-medium"
+                >
+                  {t(TOOL_GROUP_MESSAGES[group].label)}
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  {t(TOOL_GROUP_MESSAGES[group].description)}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {members
+                    .map((member) => getBuiltinToolDisplayInfo(member).displayName)
+                    .join(", ")}
+                </p>
+              </div>
+              <Switch
+                id={`tool-group-${group}`}
+                checked={isToolGroupEnabled(members)}
+                onCheckedChange={(enabled) =>
+                  setToolGroupEnabled(members, enabled)
+                }
+              />
+            </div>
+          ))}
+
           {/* Built-in Tools Section */}
-          {builtinToolFields && builtinToolFields.length > 0 && (
+          {visibleBuiltinToolFields.length > 0 && (
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-foreground">
                 {t("create.builtinTools")}
@@ -876,11 +962,11 @@ const ToolConfig = ({
                 id="builtin-tools-items"
                 className="space-y-2"
               >
-                {builtinToolFields.map((item, index) => {
+                {(builtinToolFields ?? []).map((item, index) => {
                   const builtinTool = builtinTools.find(
                     (tool) => tool.name === item.tool_name
                   );
-                  if (!builtinTool) return null;
+                  if (!builtinTool || builtinTool.group) return null;
 
                   const { IconComponent, displayName, description } =
                     getBuiltinToolDisplayInfo(builtinTool);

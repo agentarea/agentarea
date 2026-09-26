@@ -411,7 +411,8 @@ def _parse_agents(data: dict[str, Any]) -> list[dict[str, Any]]:
                     "model_id": entry.get("model_id"),
                     "tools": tools,
                     "planning": entry.get("planning", False),
-                    "events_config": entry.get("events_config"),
+                    "skills": entry.get("skills") or [],
+                    "triggers": entry.get("triggers") or [],
                 },
                 "tags": entry.get("tags", []),
             }

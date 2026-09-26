@@ -128,9 +128,7 @@ export default function ModelInfo({
     );
   }
 
-  // Triggers come from the canonical Triggers API (filtered by agent), not the
-  // agent's embedded events_config — the latter does not reflect the real
-  // triggers and showed stale/incorrect entries.
+  // Triggers come from the Triggers API, filtered by agent.
   const validTriggers = triggers.filter((tr) => tr && (tr.name || tr.id));
 
   return (

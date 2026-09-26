@@ -1,6 +1,11 @@
 import type { AgentResponse } from "@/api/client/types.gen";
 import { describe, expect, it } from "vitest";
-import { fromAgent, toAgentUpdate, toToolsPayload } from "./agentContract";
+import {
+  fromAgent,
+  toAgentCreate,
+  toAgentUpdate,
+  toToolsPayload,
+} from "./agentContract";
 
 describe("toToolsPayload", () => {
   it("keeps null (all tools) distinct from an empty selection (no tools)", () => {
@@ -33,6 +38,35 @@ describe("toToolsPayload", () => {
       { type: "openapi", settings: { allowed_tools: null } },
       { type: "openapi", settings: { allowed_tools: [] } },
     ]);
+  });
+
+  it("sends [] for an agent with no tools, never null", () => {
+    expect(toToolsPayload({ mcp_server_configs: [] })).toEqual([]);
+    expect(
+      toToolsPayload({
+        mcp_server_configs: [],
+        builtin_tools: [],
+        openapi_configs: [],
+      })
+    ).toEqual([]);
+  });
+});
+
+describe("toAgentCreate", () => {
+  it("always sends tools and triggers as arrays", () => {
+    const body = toAgentCreate({
+      name: "Support desk",
+      description: "",
+      instruction: "",
+      model_id: "",
+      tools_config: { mcp_server_configs: [] },
+      planning: false,
+      a2ui_enabled: false,
+    });
+
+    expect(body.tools).toEqual([]);
+    expect(body.triggers).toEqual([]);
+    expect(body).not.toHaveProperty("events_config");
   });
 });
 
@@ -87,11 +121,6 @@ const agent: AgentResponse = {
   model_id: "3b8f1f4e-5f55-4a51-8f53-0a4b8f2f7c21",
   planning: true,
   a2ui_enabled: true,
-  events_config: {
-    events: [
-      { event_type: "cron", config: { schedule: "0 9 * * 1" }, enabled: true },
-    ],
-  },
   skills: [
     { id: "skill-lead-scoring", name: "Lead scoring", description: null },
     { id: "skill-reply-drafts", name: "Reply drafts", description: "Tone guide" },
@@ -108,7 +137,6 @@ describe("fromAgent -> toAgentUpdate", () => {
     expect(update.skill_ids).toEqual(["skill-lead-scoring", "skill-reply-drafts"]);
     expect(update.a2ui_enabled).toBe(true);
     expect(update.planning).toBe(true);
-    expect(update.events_config).toEqual(agent.events_config);
     expect(update.name).toBe("BizDev — Review");
   });
 
@@ -125,7 +153,6 @@ describe("fromAgent -> toAgentUpdate", () => {
   it("sends explicit empties so a cleared form clears the agent", () => {
     const values = fromAgent(agent);
     values.skills = [];
-    values.events_config = { events: [] };
     values.tools_config = {
       ...values.tools_config,
       mcp_server_configs: [],
@@ -136,7 +163,6 @@ describe("fromAgent -> toAgentUpdate", () => {
     const update = toAgentUpdate(values);
 
     expect(update.skill_ids).toEqual([]);
-    expect(update.events_config).toEqual({ events: [] });
     expect(update.tools).toEqual([delegation]);
   });
 });

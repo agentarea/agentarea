@@ -86,7 +86,6 @@ async def _mock_build_config(request: AgentConfigRequest) -> dict[str, Any]:
         "tools_config": {"mcp_servers": []},
         "tools": [{"type": "agent", "name": _HELPER_AGENT}],
         "context_window": 128000,
-        "events_config": {},
         "planning": False,
     }
 

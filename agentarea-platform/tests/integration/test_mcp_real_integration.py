@@ -57,6 +57,7 @@ class MCPRealIntegrationTest:
             "description": "Agent for testing real MCP integration",
             "instruction": "You are a helpful assistant that uses MCP tools to help users.",
             "model_id": instance_id,
+            "tools": [],
         }
 
         response = await self.client.post(f"{self.api_base}/v1/workspaces/acme/agents/", json=agent_data)

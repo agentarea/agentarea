@@ -209,6 +209,38 @@ class CatalogSkillRepository:
         row = result.fetchone()
         return self._row_to_item(row) if row else None
 
+    async def find_by_key(self, key: str) -> CatalogSkillItem | None:
+        """The newest catalog skill whose name is ``key`` or ``key--<content hash>``.
+
+        Catalog skill names end in a content hash that changes when the skill is
+        republished, and one skill can appear in several shards. The part before
+        the hash (``<skill>--<source>``) is stable, so presets reference that.
+        """
+        query = text(
+            "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
+            "rii.installed_entity_id, rii.installed_version, "
+            "ri.created_at, ri.updated_at "
+            "FROM registry_items ri "
+            "JOIN registries r ON r.id = ri.registry_id "
+            "LEFT JOIN registry_item_installs rii "
+            "  ON rii.registry_item_id = ri.id "
+            " AND rii.workspace_id = :workspace_id "
+            "WHERE r.registry_type = 'skills' "
+            "AND (ri.name = :key OR ri.name LIKE :prefix) "
+            "ORDER BY ri.updated_at DESC, ri.id "
+            "LIMIT 1"
+        )
+        result = await self.session.execute(
+            query,
+            {
+                "key": key,
+                "prefix": key.replace("%", r"\%").replace("_", r"\_") + "--%",
+                "workspace_id": self.user_context.workspace_id,
+            },
+        )
+        row = result.fetchone()
+        return self._row_to_item(row) if row else None
+
     async def mark_installed(
         self, item_id: str, entity_id: str, installed_version: str | None
     ) -> None:
