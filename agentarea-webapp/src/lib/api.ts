@@ -64,6 +64,7 @@ import type {
   ValidateRequest,
 } from "@/api/client/types.gen";
 import { apiErrorMessage } from "@/lib/api-errors";
+import { SPEC_IDS_PER_REQUEST, specIdBatches } from "@/lib/mcp/specIds";
 
 function withStatus<TData, TError>(result: {
   data?: TData;
@@ -439,6 +440,7 @@ export const listMCPServers = async (params?: {
   status?: string;
   is_public?: boolean;
   tag?: string;
+  ids?: string[];
   page?: number;
   page_size?: number;
   search?: string;
@@ -448,6 +450,20 @@ export const listMCPServers = async (params?: {
     query: params,
   });
   return { data, error };
+};
+
+/** Exactly these specs, workspace or catalog alike, e.g. those instances use. */
+export const listMCPServerSpecs = async (
+  specIds: readonly (string | null | undefined)[]
+): Promise<{ data?: McpServerResponse[]; error?: unknown }> => {
+  const pages = await Promise.all(
+    specIdBatches(specIds).map((ids) =>
+      listMCPServers({ ids, page_size: SPEC_IDS_PER_REQUEST })
+    )
+  );
+  const failed = pages.find((page) => page.error);
+  if (failed) return { error: failed.error };
+  return { data: pages.flatMap((page) => page.data?.items ?? []) };
 };
 
 export const createMCPServer = async (server: McpServerCreate) => {

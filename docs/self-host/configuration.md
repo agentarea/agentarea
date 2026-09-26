@@ -109,8 +109,8 @@ Rendered only when `rustfs.enabled` is true.
 | `MCP_MANAGER_URL` | the MCP Manager service and `mcpManager.service.port` | derived |
 | `MCP_CLIENT_TIMEOUT` | fixed | `30` |
 | `PUBLIC_S3_ENDPOINT` | `global.storage.publicEndpoint` | `""` |
-| `METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
-| `METRICS_PORT` | `global.monitoring.prometheus.port` | `9090` |
+| `METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `false` |
+| `METRICS_PORT` | `global.monitoring.prometheus.port` | `9464` |
 | `HEALTH_CHECK_ENABLED` | `global.monitoring.health.enabled` | `true` |
 | `HEALTH_CHECK_PORT` | `global.monitoring.health.port` | `8001` |
 | `KRATOS_ISSUER` | `kratos.jwt.issuer` | `https://agentarea.dev` |
@@ -120,10 +120,10 @@ Rendered only when `rustfs.enabled` is true.
 | `FRONTEND_BASE_URL` | derived from the frontend ingress | `http://localhost:3000` |
 | `SMTP_CONNECTION_URI` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME` | `kratos.smtp.*` | empty (invitations are link-only) |
 
-`METRICS_ENABLED`, `METRICS_PORT`, `HEALTH_CHECK_ENABLED`, and
-`HEALTH_CHECK_PORT` are rendered by the chart but have no reader in the Python
-source. The API serves `/health` on its normal port unconditionally and exposes
-no `/metrics` endpoint. See [observability](/self-host/observability).
+`METRICS_ENABLED` serves Prometheus metrics on `METRICS_PORT`, never on the API
+port. `HEALTH_CHECK_ENABLED` and `HEALTH_CHECK_PORT` are rendered by the chart
+but have no reader in the Python source: the API serves `/health` on its normal
+port unconditionally. See [observability](/self-host/observability).
 
 `API_BASE_URL` is the URL the backend advertises for itself — provider icon URLs,
 OAuth protected-resource metadata, and the MCP `WWW-Authenticate` header. It must
@@ -235,7 +235,7 @@ be weakened from these values.
 | `ORY_SDK_URL` | `kratos.urls.public`, else the internal service | derived |
 | `ORY_BROWSER_URL` | `kratos.urls.publicBrowser`, else `kratos.urls.public` | derived |
 | `ORY_ADMIN_URL` | `kratos.urls.admin`, else the internal service | derived |
-| `METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
+| `METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `false` |
 | `HEALTH_CHECK_ENABLED` | `global.monitoring.health.enabled` | `true` |
 | `APPS_SANDBOX_ORIGIN` | `global.webapp.appsSandboxUrl` | empty |
 | `WEBAPP_PUBLIC_ORIGIN` | `global.webapp.url`, else the internal frontend service URL | derived |

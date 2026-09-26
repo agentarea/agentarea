@@ -4639,6 +4639,7 @@ export const zListMcpServersV1McpServersGetQuery = z.object({
   status: z.string().nullish(),
   is_public: z.boolean().nullish(),
   tag: z.string().nullish(),
+  ids: z.array(z.string().uuid()).max(100).nullish(),
   page: z.number().int().gte(1).optional().default(1),
   page_size: z.number().int().gte(1).lte(100).optional().default(50),
   search: z.string().nullish(),

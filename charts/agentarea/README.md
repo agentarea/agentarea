@@ -151,8 +151,8 @@ The following table lists configurable parameters of the chart and their default
 | global.workloads.resources.sidecarContainer.memory.limit | string | `"256Mi"` |  |
 | global.serviceMesh.enabled | bool | `false` |  |
 | global.serviceMesh.type | string | `"istio"` |  |
-| global.monitoring.prometheus.enabled | bool | `true` |  |
-| global.monitoring.prometheus.port | int | `9090` |  |
+| global.monitoring.prometheus.enabled | bool | `false` |  |
+| global.monitoring.prometheus.port | int | `9464` |  |
 | global.monitoring.prometheus.path | string | `"/metrics"` |  |
 | global.monitoring.health.enabled | bool | `true` |  |
 | global.monitoring.health.port | int | `8001` |  |

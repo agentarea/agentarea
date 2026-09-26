@@ -90,6 +90,7 @@ import {
   listMCPAuthConfigs,
   listMCPServerInstances,
   listMCPServers,
+  listMCPServerSpecs,
   listModelInstances,
   listModelSpecs,
   listOpenAPIConnections,
@@ -543,6 +544,10 @@ export async function listMCPServersAction(params?: {
   search?: string;
 }) {
   return await listMCPServers(params);
+}
+
+export async function listMCPServerSpecsAction(specIds: (string | null | undefined)[]) {
+  return await listMCPServerSpecs(specIds);
 }
 
 export async function listOpenAPIConnectionsAction(

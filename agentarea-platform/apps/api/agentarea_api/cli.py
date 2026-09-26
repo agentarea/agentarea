@@ -64,6 +64,17 @@ def cli():
 )
 def serve(host: str, port: int, reload: bool, log_level: str, workers: int, shutdown_timeout: int):
     """Start the API server."""
+    from agentarea_common.config import ObservabilitySettings
+
+    observability = ObservabilitySettings()
+    if observability.METRICS_ENABLED and workers > 1 and not reload:
+        # Each worker process would bind METRICS_PORT; the second one fails,
+        # and the first would only ever report its own share of requests.
+        raise click.UsageError(
+            "METRICS_ENABLED needs a single worker process per pod; "
+            "scale with replicas instead of AGENTAREA_API_WORKERS"
+        )
+
     click.echo(f"Starting AgentArea API server on {host}:{port}")
     click.echo(f"Reload: {reload}, Log Level: {log_level}, Workers: {workers}")
 

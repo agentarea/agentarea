@@ -256,10 +256,12 @@ global:
 
   # Monitoring configuration
   monitoring:
-    # Prometheus metrics
+    # Prometheus metrics. The backend serves them on this port, a listener of
+    # its own that the public API port never answers for. Needs
+    # backend.workers: 1 -- each worker process would bind the port.
     prometheus:
-      enabled: true
-      port: 9090
+      enabled: false
+      port: 9464
       path: "/metrics"
     # Health checks
     health:

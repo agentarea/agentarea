@@ -19,12 +19,15 @@ every tenant reads the same built-in spec definitions with no workspace filter.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -50,18 +53,66 @@ class CatalogMcpRepository:
         self.session = session
         self.user_context = user_context
 
-    async def list_items(self) -> list[CatalogMcpItem]:
-        """List all catalog MCP server items (global catalog, no workspace filter)."""
-        query = text(
-            "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, ri.tags, "
-            "ri.created_at, ri.updated_at "
-            "FROM registry_items ri "
-            "JOIN registries r ON r.id = ri.registry_id "
-            "WHERE r.registry_type = 'mcp_servers' AND r.is_active "
-            "ORDER BY ri.name"
+    async def list_page(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        exclude_item_ids: Collection[str],
+        tag: str | None = None,
+        search: str | None = None,
+        item_ids: Collection[str] | None = None,
+    ) -> tuple[list[CatalogMcpItem], int]:
+        """Page the catalog in SQL, returning ``(items, total_matching)``.
+
+        Filters on the registry type and active flag each item carries, which
+        the partial browse indexes serve. ``exclude_item_ids`` drops items a
+        tenant spec already instantiates; ``item_ids`` keeps only those items.
+        """
+        where = ["ri.registry_type = 'mcp_servers'", "ri.registry_active"]
+        params: dict[str, Any] = {}
+        expanding: list[str] = []
+
+        if item_ids is not None:
+            where.append("ri.id IN :item_ids")
+            params["item_ids"] = [UUID(str(i)) for i in item_ids]
+            expanding.append("item_ids")
+        if exclude_item_ids:
+            where.append("ri.id NOT IN :exclude_ids")
+            params["exclude_ids"] = [UUID(str(i)) for i in exclude_item_ids]
+            expanding.append("exclude_ids")
+        if tag is not None:
+            where.append("ri.tags @> CAST(:tag AS jsonb)")
+            params["tag"] = json.dumps([tag])
+        if search is not None:
+            where.append("(ri.name ILIKE :search OR COALESCE(ri.description, '') ILIKE :search)")
+            params["search"] = f"%{search}%"
+
+        # Only the fixed clauses above are interpolated; every value is bound.
+        where_sql = " AND ".join(where)
+        bind = [bindparam(name, expanding=True) for name in expanding]
+        total = (
+            await self.session.execute(
+                text(
+                    f"SELECT COUNT(*) FROM registry_items ri WHERE {where_sql}"  # noqa: S608
+                ).bindparams(*bind),
+                params,
+            )
+        ).scalar_one()
+        if limit <= 0 or offset >= total:
+            return [], total
+
+        rows = await self.session.execute(
+            text(
+                "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, ri.tags, "  # noqa: S608
+                "ri.created_at, ri.updated_at "
+                f"FROM registry_items ri WHERE {where_sql} "
+                "ORDER BY ri.sort_key, ri.id "
+                "LIMIT :limit OFFSET :offset"
+            ).bindparams(*bind),
+            {**params, "limit": limit, "offset": offset},
         )
-        result = await self.session.execute(query)
-        return [self._row_to_item(row, registry_url=None) for row in result.fetchall()]
+        return [self._row_to_item(row, registry_url=None) for row in rows.fetchall()], total
 
     async def get_item(self, item_id: str) -> CatalogMcpItem | None:
         """Get a single catalog MCP server item by its registry-item id."""
