@@ -22494,6 +22494,7 @@
             "required": false,
             "schema": {
               "default": 1,
+              "maximum": 1000000,
               "minimum": 1,
               "title": "Page",
               "type": "integer"
@@ -29350,6 +29351,7 @@
             "required": false,
             "schema": {
               "default": 1,
+              "maximum": 1000000,
               "minimum": 1,
               "title": "Page",
               "type": "integer"
