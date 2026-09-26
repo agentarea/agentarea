@@ -31,19 +31,22 @@ With ``--revoke-ended-memberships`` it also goes the other way, and deletes:
    have no row either, which is why this runs only when asked for: check the
    ``--dry-run`` output first.
 
-Which tables to walk is read off the models themselves (``__graph_resource__``),
-so this stays in step with the runtime instead of repeating a list that rots.
+Which tables to walk is read off the models themselves (``__graph_resource__``):
+every installed ``agentarea_*`` module declaring one is imported, so this stays
+in step with the runtime instead of repeating a list that rots.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib.util
 import logging
+import pkgutil
+import re
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 
-from agentarea_agents.domain.models import Agent  # noqa: F401  -- registers the mapper
-from agentarea_agents.domain.skill_models import Skill  # noqa: F401
 from agentarea_common.config import get_database, get_settings
 from agentarea_common.rebac.models import RelationQuery, RelationTuple
 from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
@@ -53,15 +56,39 @@ from agentarea_common.rebac.ownership import (
     graph_governed_models,
     root_project_id,
 )
-from agentarea_mcp.domain.client_models import Client  # noqa: F401
-from agentarea_mcp.domain.models import MCPServer  # noqa: F401
-from agentarea_mcp.domain.mpc_server_instance_model import (  # noqa: F401
-    MCPServerInstance,
-)
 from sqlalchemy import select, text
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("reconcile_resource_authz")
+
+_GOVERNED_DECLARATION = re.compile(r"^\s+__graph_resource__\s*=\s*True\b", re.MULTILINE)
+
+
+def load_governed_models() -> list[type]:
+    """Import every module that declares a governed model, then read the registry.
+
+    ``graph_governed_models()`` sees only mapped models, and a model is mapped
+    only once its module is imported. Importing a hand-kept list left new
+    governed models unmapped here and their rows unrepaired, so the modules are
+    found by the declaration itself across every installed ``agentarea_*``
+    package.
+    """
+    for package in pkgutil.iter_modules():
+        if not package.ispkg or not package.name.startswith("agentarea_"):
+            continue
+        spec = importlib.util.find_spec(package.name)
+        if spec is None or spec.submodule_search_locations is None:
+            raise RuntimeError(f"package {package.name} was listed but cannot be located")
+        for location in spec.submodule_search_locations:
+            root = Path(location)
+            for path in sorted(root.rglob("*.py")):
+                if not _GOVERNED_DECLARATION.search(path.read_text(encoding="utf-8")):
+                    continue
+                parts = [package.name, *path.relative_to(root).with_suffix("").parts]
+                if parts[-1] == "__init__":
+                    parts.pop()
+                importlib.import_module(".".join(parts))
+    return graph_governed_models()
 
 
 class _Writer:
@@ -245,7 +272,7 @@ async def main() -> None:
         timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
     )
     writer = _Writer(client, args.dry_run)
-    models = graph_governed_models()
+    models = load_governed_models()
     logger.info("governed tables: %s", ", ".join(m.__tablename__ for m in models))
 
     database = get_database()
