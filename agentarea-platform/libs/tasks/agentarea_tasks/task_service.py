@@ -18,6 +18,7 @@ from agentarea_common.events.broker import EventBroker
 from agentarea_common.money import Money, serialize_money, to_money
 from agentarea_common.ports.policy_resolver import PolicyResolverPort
 from agentarea_governance.domain.policies import (
+    ApprovalPolicy,
     EffectivePolicy,
     ExecutionLimitsPolicy,
     PolicyDocument,
@@ -187,6 +188,26 @@ class TaskService(BaseTaskService):
             merged.model_dump(exclude={"source_policy_ids", "resolver_version"})
         )
 
+    @staticmethod
+    def _with_requested_approval(
+        task_policy: PolicyDocument | None,
+        requires_human_approval: bool,
+    ) -> PolicyDocument | None:
+        """Translate the run's approval flag into the typed task policy layer.
+
+        Tighten-only, so it passes the same subset rule as any task policy, and
+        the workflow's approval gate reads it from the effective policy.
+        """
+        if not requires_human_approval:
+            return task_policy
+        requested_policy = PolicyDocument(approval=ApprovalPolicy(requires_human_approval=True))
+        if task_policy is None:
+            return requested_policy
+        merged = PolicyResolver().resolve([task_policy, requested_policy])
+        return PolicyDocument.model_validate(
+            merged.model_dump(exclude={"source_policy_ids", "resolver_version"})
+        )
+
     async def _enforce_budget_cap(
         self,
         workspace_id: str | None,
@@ -302,6 +323,7 @@ class TaskService(BaseTaskService):
             raise SchedulingNotSupportedError(new_task_id)
         parameters = dict(parameters or {})
         task_policy = self._with_requested_execution_limits(task_policy, parameters)
+        task_policy = self._with_requested_approval(task_policy, requires_human_approval)
         # Compatibility input only: once translated into the typed policy it
         # must not survive as a second runtime source of truth.
         parameters.pop("max_iterations", None)

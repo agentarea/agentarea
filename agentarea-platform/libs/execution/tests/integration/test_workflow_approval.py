@@ -16,6 +16,7 @@ import threading
 import uuid
 from datetime import timedelta
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from agentarea_common.workflow.sandbox import create_workflow_runner
@@ -37,6 +38,9 @@ from agentarea_execution.models import (
     WorkflowEventsResult,
 )
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
+from agentarea_governance.domain.policies import EffectivePolicy, PolicyDocument, PolicyResolver
+from agentarea_tasks.schemas.dto import RunCreate
+from agentarea_tasks.task_service import TaskService
 from temporalio import activity
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.exceptions import ApplicationError
@@ -316,6 +320,64 @@ async def test_approved_tool_runs_after_the_designated_approver_signs_off():
     responses = _events("approval.response")
     assert len(responses) == 1
     assert responses[0]["data"]["approved"] is True
+
+
+async def _effective_policy_of_a_run_started_with_the_approval_flag() -> dict[str, Any]:
+    """What ``TaskService.start_run`` hands Temporal for ``requires_human_approval``.
+
+    REST, MCP ``runs.start`` and A2A all create runs through this service; the
+    workspace baseline is merged with the task layer by the real resolver.
+    """
+    baseline = PolicyDocument.model_validate(_policy())
+
+    class _Resolver:
+        async def resolve(self, *, task_policy=None, **_: Any) -> EffectivePolicy:
+            return PolicyResolver().resolve([baseline, task_policy])
+
+    agent_repo = MagicMock()
+    agent_repo.get = AsyncMock(return_value=MagicMock(model_id="gpt-4o-mini"))
+    repository_factory = MagicMock()
+    repository_factory.create_repository = lambda cls: agent_repo
+    task_manager = MagicMock()
+    task_manager.submit_task = AsyncMock(side_effect=lambda task: task)
+    service = TaskService(
+        repository_factory=repository_factory,
+        event_broker=AsyncMock(),
+        task_manager=task_manager,
+        policy_resolver=_Resolver(),
+    )
+    service.create_task = AsyncMock(side_effect=lambda task: task)
+
+    task = await service.start_run(
+        RunCreate(agent_id=uuid.uuid4(), description="deploy", requires_human_approval=True),
+        workspace_id="test-workspace",
+        user_id="test-user",
+        created_via="mcp",
+    )
+    assert task.effective_policy is not None
+    return task.effective_policy
+
+
+@pytest.mark.asyncio
+async def test_a_run_started_with_the_approval_flag_pauses_on_its_first_tool_call():
+    _llm_script.extend(["gated", "complete"])
+    policy = await _effective_policy_of_a_run_started_with_the_approval_flag()
+    assert not (policy.get("approval") or {}).get("escalation_rules")
+
+    async def drive(handle):
+        escalation = await _pending_escalation(handle)
+        assert escalation["tool_name"] == _GATED_TOOL
+        assert _tool_requests == [], "the tool ran before anyone approved it"
+        assert "waiting_for_approval" in _status_updates
+        await handle.signal(
+            AgentExecutionWorkflow.resolve_escalation,
+            args=[escalation["escalation_id"], True, "go", "test-user"],
+        )
+
+    result = await _run(_request(policy), drive)
+
+    assert result.success is True
+    assert [r.tool_name for r in _tool_requests] == [_GATED_TOOL]
 
 
 @pytest.mark.asyncio

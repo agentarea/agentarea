@@ -29,21 +29,32 @@ With ``--revoke-ended-memberships`` it also goes the other way, and deletes:
    place. Those tuples are dropped for every user with no membership row who does
    not own the workspace. Members admitted before membership rows were written
    have no row either, which is why this runs only when asked for: check the
-   ``--dry-run`` output first.
+   ``--dry-run`` output first. It refuses to run at all while any grant it would
+   delete belongs to the owner or to someone holding an accepted invitation.
 
-Which tables to walk is read off the models themselves (``__graph_resource__``),
-so this stays in step with the runtime instead of repeating a list that rots.
+``--backfill-memberships-from-graph`` writes those missing rows first:
+
+4. **Members with no row.** Every ``Workspace#members`` user without a
+   membership row, owners excepted, gets one, unless their membership was ended
+   and only its graph revocation is outstanding. Run it, and read its warnings,
+   before ``--revoke-ended-memberships``.
+
+Which tables to walk is read off the models themselves (``__graph_resource__``):
+every installed ``agentarea_*`` module declaring one is imported, so this stays
+in step with the runtime instead of repeating a list that rots.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib.util
 import logging
+import pkgutil
+import re
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 
-from agentarea_agents.domain.models import Agent  # noqa: F401  -- registers the mapper
-from agentarea_agents.domain.skill_models import Skill  # noqa: F401
 from agentarea_common.config import get_database, get_settings
 from agentarea_common.rebac.models import RelationQuery, RelationTuple
 from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
@@ -53,15 +64,45 @@ from agentarea_common.rebac.ownership import (
     graph_governed_models,
     root_project_id,
 )
-from agentarea_mcp.domain.client_models import Client  # noqa: F401
-from agentarea_mcp.domain.models import MCPServer  # noqa: F401
-from agentarea_mcp.domain.mpc_server_instance_model import (  # noqa: F401
-    MCPServerInstance,
+from agentarea_common.workspaces.models import (
+    INVITATION_STATUS_ACCEPTED,
+    INVITATION_STATUS_REVOKED,
 )
+from agentarea_common.workspaces.repository import MEMBERSHIP_ENDED
 from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("reconcile_resource_authz")
+
+_GOVERNED_DECLARATION = re.compile(r"^\s+__graph_resource__\s*=\s*True\b", re.MULTILINE)
+
+
+def load_governed_models() -> list[type]:
+    """Import every module that declares a governed model, then read the registry.
+
+    ``graph_governed_models()`` sees only mapped models, and a model is mapped
+    only once its module is imported. Importing a hand-kept list left new
+    governed models unmapped here and their rows unrepaired, so the modules are
+    found by the declaration itself across every installed ``agentarea_*``
+    package.
+    """
+    for package in pkgutil.iter_modules():
+        if not package.ispkg or not package.name.startswith("agentarea_"):
+            continue
+        spec = importlib.util.find_spec(package.name)
+        if spec is None or spec.submodule_search_locations is None:
+            raise RuntimeError(f"package {package.name} was listed but cannot be located")
+        for location in spec.submodule_search_locations:
+            root = Path(location)
+            for path in sorted(root.rglob("*.py")):
+                if not _GOVERNED_DECLARATION.search(path.read_text(encoding="utf-8")):
+                    continue
+                parts = [package.name, *path.relative_to(root).with_suffix("").parts]
+                if parts[-1] == "__init__":
+                    parts.pop()
+                importlib.import_module(".".join(parts))
+    return graph_governed_models()
 
 
 class _Writer:
@@ -176,11 +217,51 @@ async def _reconcile_member_roles(writer: _Writer, client: OpenFGAClient) -> int
     return seen
 
 
+class RevocationRefused(Exception):  # noqa: N818
+    """Revoking would take access from someone the database says belongs."""
+
+
+_ACCEPTED_WITHOUT_ROW = text(
+    """
+    SELECT owner_user_id FROM workspaces WHERE id = :workspace_id
+    UNION
+    SELECT CAST(:workspace_id AS VARCHAR)
+    WHERE NOT EXISTS (SELECT 1 FROM workspaces WHERE id = :workspace_id)
+    UNION
+    SELECT invitation.accepted_by_user_id
+    FROM workspace_invitations AS invitation
+    WHERE invitation.workspace_id = :workspace_id
+      AND invitation.status = :accepted
+      AND invitation.accepted_by_user_id IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM workspace_memberships AS membership
+          WHERE membership.workspace_id = invitation.workspace_id
+            AND membership.user_id = invitation.accepted_by_user_id
+      )
+    """
+)
+
+
+async def load_protected(session: AsyncSession, workspace_id: str) -> set[str]:
+    """Who belongs to the workspace without a membership row saying so.
+
+    The owner, whose access is not membership's, and whoever holds an accepted
+    invitation the row was never written for. A workspace with no row is a
+    personal one, owned by the user sharing its id.
+    """
+    rows = await session.execute(
+        _ACCEPTED_WITHOUT_ROW,
+        {"workspace_id": workspace_id, "accepted": INVITATION_STATUS_ACCEPTED},
+    )
+    return {str(user_id) for user_id in rows.scalars()}
+
+
 async def _revoke_ended_memberships(
     writer: _Writer,
     client: OpenFGAClient,
     *,
     load_members: Callable[[str], Awaitable[set[str]]],
+    load_protected: Callable[[str], Awaitable[set[str]]],
     owners: dict[str, str],
 ) -> int:
     """Delete the member grants of every user whose membership has ended.
@@ -189,6 +270,11 @@ async def _revoke_ended_memberships(
     workspace right before that workspace's tuples are deleted, so a member
     admitted while the run is under way keeps their grants. A workspace with no
     row in ``owners`` is a personal one, owned by the user sharing its id.
+
+    ``load_protected`` reads who belongs without a row: the owner, and anyone
+    holding an accepted invitation. Their missing row is a gap in the data, not
+    an ended membership, so a grant of theirs refuses the whole run before
+    anything is deleted.
     """
     root_suffix = root_project_id("")
     grants = await client.query_all_tuples(RelationQuery(namespace="Workspace", relation="members"))
@@ -210,12 +296,168 @@ async def _revoke_ended_memberships(
         if owners.get(workspace_id, workspace_id) == user_id:
             continue
         by_workspace.setdefault(workspace_id, []).append((user_id, grant))
+    refused: set[str] = set()
+    for workspace_id, candidates in by_workspace.items():
+        protected = await load_protected(workspace_id)
+        refused |= {
+            f"User:{user_id} in Workspace:{workspace_id}"
+            for user_id, _ in candidates
+            if user_id in protected
+        }
+    if refused:
+        raise RevocationRefused(
+            "refusing to revoke ended memberships: these users own the workspace or hold an "
+            "accepted invitation, yet have no membership row. Backfill the rows first "
+            "(alembic upgrade head, then --backfill-memberships-from-graph): "
+            + ", ".join(sorted(refused))
+        )
     for workspace_id, candidates in by_workspace.items():
         members = await load_members(workspace_id)
         for user_id, grant in candidates:
             if user_id not in members:
                 await writer.remove(grant)
     return writer.deleted
+
+
+_MEMBERSHIP_STATE = text(
+    """
+    SELECT
+        EXISTS (
+            SELECT 1 FROM workspace_memberships
+            WHERE workspace_id = :workspace_id AND user_id = :user_id
+        ) AS present,
+        EXISTS (
+            SELECT 1 FROM workspace_invitations
+            WHERE workspace_id = :workspace_id
+              AND accepted_by_user_id = :user_id
+              AND status = :revoked
+        )
+        OR EXISTS (
+            SELECT 1 FROM event_outbox
+            WHERE event_type = :ended
+              AND workspace_id = :workspace_id
+              AND aggregate_id = :user_id
+              AND published_at IS NULL
+        ) AS ended
+    """
+)
+
+_INSERT_MEMBERSHIP = text(
+    """
+    INSERT INTO workspace_memberships
+        (id, workspace_id, user_id, invitation_id, created_at, updated_at)
+    SELECT gen_random_uuid(), :workspace_id, :user_id, invitation.id, joined.at, joined.at
+    FROM (
+        SELECT COALESCE(
+            (
+                SELECT min(accepted_at) FROM workspace_invitations
+                WHERE workspace_id = :workspace_id
+                  AND accepted_by_user_id = :user_id
+                  AND status = :accepted
+            ),
+            (SELECT created_at FROM workspaces WHERE id = :workspace_id),
+            timezone('utc', now())
+        ) AS at
+    ) AS joined
+    LEFT JOIN LATERAL (
+        SELECT id FROM workspace_invitations
+        WHERE workspace_id = :workspace_id
+          AND accepted_by_user_id = :user_id
+          AND status = :accepted
+        ORDER BY accepted_at NULLS LAST
+        LIMIT 1
+    ) AS invitation ON true
+    ON CONFLICT (workspace_id, user_id) DO NOTHING
+    """
+)
+
+
+async def record_membership(
+    session: AsyncSession, workspace_id: str, user_id: str, *, dry_run: bool
+) -> str:
+    """Write the row of a graph member who has none; say which case it was.
+
+    ``present``: the row exists. ``ended``: the membership was ended and its
+    graph revocation has not landed yet -- an invitation they joined through is
+    revoked, or the removal is still queued in the outbox -- so writing a row
+    would undo the removal. ``recorded``: the row is written (or would be).
+
+    The join date is the accepted invitation's, else the workspace's creation,
+    else now, for a member neither recorded.
+    """
+    state = (
+        await session.execute(
+            _MEMBERSHIP_STATE,
+            {
+                "workspace_id": workspace_id,
+                "user_id": user_id,
+                "revoked": INVITATION_STATUS_REVOKED,
+                "ended": MEMBERSHIP_ENDED,
+            },
+        )
+    ).one()
+    if state.present:
+        return "present"
+    if state.ended:
+        return "ended"
+    if not dry_run:
+        await session.execute(
+            _INSERT_MEMBERSHIP,
+            {
+                "workspace_id": workspace_id,
+                "user_id": user_id,
+                "accepted": INVITATION_STATUS_ACCEPTED,
+            },
+        )
+    return "recorded"
+
+
+async def _backfill_memberships_from_graph(
+    client: OpenFGAClient,
+    *,
+    record: Callable[[str, str], Awaitable[str]],
+    rows: set[tuple[str, str]],
+    owners: dict[str, str],
+) -> dict[str, int]:
+    """Give every ``Workspace#members`` user a membership row, owners excepted.
+
+    The graph is what authorization reads, and the row is what removal and
+    ``--revoke-ended-memberships`` read, so the two must agree before either
+    runs. ``rows`` are the (workspace, user) pairs already recorded. A row with
+    no graph membership is reported, never deleted: it is either a member whose
+    graph grant was lost, or a member removed before removals revoked their
+    invitation, and only a person can tell which.
+    """
+    members: set[tuple[str, str]] = set()
+    for membership in await client.query_all_tuples(
+        RelationQuery(namespace="Workspace", relation="members")
+    ):
+        if not membership.subject_id or not membership.subject_id.startswith("User:"):
+            continue
+        members.add((membership.object, membership.subject_id.removeprefix("User:")))
+
+    outcomes = {"recorded": 0, "present": 0, "ended": 0}
+    for workspace_id, user_id in sorted(members - rows):
+        if owners.get(workspace_id, workspace_id) == user_id:
+            continue
+        outcome = await record(workspace_id, user_id)
+        outcomes[outcome] += 1
+        if outcome == "ended":
+            logger.warning(
+                "User:%s in Workspace:%s: membership ended, graph grant still present; "
+                "--revoke-ended-memberships takes it back",
+                user_id,
+                workspace_id,
+            )
+    for workspace_id, user_id in sorted(rows - members):
+        if owners.get(workspace_id, workspace_id) == user_id:
+            continue
+        logger.warning(
+            "User:%s in Workspace:%s has a membership row and no graph membership; review it",
+            user_id,
+            workspace_id,
+        )
+    return outcomes
 
 
 async def main() -> None:
@@ -227,6 +469,11 @@ async def main() -> None:
         "--revoke-ended-memberships",
         action="store_true",
         help="also delete member grants of users with no membership row (owners excepted)",
+    )
+    parser.add_argument(
+        "--backfill-memberships-from-graph",
+        action="store_true",
+        help="write the missing membership row of every Workspace#members user (owners excepted)",
     )
     args = parser.parse_args()
 
@@ -245,7 +492,7 @@ async def main() -> None:
         timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
     )
     writer = _Writer(client, args.dry_run)
-    models = graph_governed_models()
+    models = load_governed_models()
     logger.info("governed tables: %s", ", ".join(m.__tablename__ for m in models))
 
     database = get_database()
@@ -269,7 +516,41 @@ async def main() -> None:
         await _reconcile_workspace_admins(writer, workspace_owners)
         logger.info("reconciled admin projections for %d workspaces", len(workspace_owners))
 
+        if args.backfill_memberships_from_graph:
+            async with database.async_session_factory() as session:
+                recorded_rows = {
+                    (str(row.workspace_id), str(row.user_id))
+                    for row in (
+                        await session.execute(
+                            text("SELECT workspace_id, user_id FROM workspace_memberships")
+                        )
+                    ).all()
+                }
+
+            async def record(workspace_id: str, user_id: str) -> str:
+                async with database.async_session_factory() as session:
+                    outcome = await record_membership(
+                        session, workspace_id, user_id, dry_run=args.dry_run
+                    )
+                    await session.commit()
+                    return outcome
+
+            outcomes = await _backfill_memberships_from_graph(
+                client, record=record, rows=recorded_rows, owners=workspace_owners
+            )
+            logger.info(
+                "%s %d membership rows from the graph (%d ended, %d written meanwhile)",
+                "would write" if args.dry_run else "wrote",
+                outcomes["recorded"],
+                outcomes["ended"],
+                outcomes["present"],
+            )
+
         if args.revoke_ended_memberships:
+
+            async def load_protected_users(workspace_id: str) -> set[str]:
+                async with database.async_session_factory() as session:
+                    return await load_protected(session, workspace_id)
 
             async def load_members(workspace_id: str) -> set[str]:
                 async with database.async_session_factory() as session:
@@ -283,7 +564,11 @@ async def main() -> None:
                     return {str(user_id) for user_id in rows.scalars()}
 
             revoked = await _revoke_ended_memberships(
-                writer, client, load_members=load_members, owners=workspace_owners
+                writer,
+                client,
+                load_members=load_members,
+                load_protected=load_protected_users,
+                owners=workspace_owners,
             )
             logger.info(
                 "%s %d grants of ended memberships",
