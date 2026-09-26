@@ -13,7 +13,8 @@ class PaginatedResponse[T](BaseModel):
 class PaginationParams:
     def __init__(
         self,
-        page: int = Query(1, ge=1),
+        # Bounded so the OFFSET it becomes always fits the database's integer.
+        page: int = Query(1, ge=1, le=1_000_000),
         page_size: int = Query(50, ge=1, le=100),
         search: str | None = Query(None),
     ):

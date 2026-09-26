@@ -14,12 +14,22 @@ last_updated: 2026-07-29
 AgentArea emits structured JSON logs on stdout from every Python service, and
 optional OpenTelemetry traces over OTLP. Both are real and configurable.
 
-Metrics are not. There is no `/metrics` endpoint on the API, the worker, or the
-MCP Manager, and no Prometheus exposition of any kind. The chart renders
-`METRICS_ENABLED` and `METRICS_PORT` into the backend and frontend ConfigMaps,
-but nothing in the source reads either variable. Plan your monitoring around
-logs, traces, and health checks, and read the section below before wiring a
-scrape config against something that will never answer.
+Metrics are limited to the API. With `global.monitoring.prometheus.enabled`
+set (off by default), the API serves Prometheus metrics at `/metrics` on
+`global.monitoring.prometheus.port` (9464), a port of its own that the public
+API port never answers for:
+
+- `agentarea_http_request_duration_seconds{method, route, status}` — request
+  latency. `route` is the route template (`/v1/workspaces/{workspace}/mcp-servers/`),
+  `<unmatched>` when nothing matched; `status` is the class (`2xx`, `4xx`, `5xx`).
+- `agentarea_http_requests_in_progress{method, route}` — requests in flight.
+- `agentarea_authz_duration_seconds{operation}` — time spent on authorization:
+  `resolve_access`, `openfga_read`, `openfga_check`, `openfga_list_objects`,
+  `openfga_write`.
+
+The metrics port needs `backend.workers: 1`; the API refuses to start with more
+worker processes while metrics are on. The worker and the MCP Manager expose no
+metrics. Read the section below before wiring a scrape config against them.
 
 ## Prerequisites
 
@@ -226,7 +236,7 @@ scrape config against something that will never answer.
   <Step title="What does not exist">
     State this plainly before building on it:
 
-    - **No Prometheus metrics.** No service exposes `/metrics`. `METRICS_ENABLED` and `METRICS_PORT` are rendered by the chart and read by nothing.
+    - **No Prometheus metrics outside the API.** The worker and the MCP Manager expose no `/metrics`.
     - **Two Prometheus counters are defined but not exported.** `mcp_last_dispatch_dropped_total` and `mcp_dispatch_failed_total` (labelled by `reason`) are declared in the execution library and incremented at runtime, but no process serves the `prometheus_client` registry over HTTP. They are unreachable without adding an exposition endpoint yourself.
     - **No first-party Go metrics.** `prometheus/client_golang` is an indirect dependency of the MCP Manager. There is no `promhttp` handler.
     - **No bundled Grafana, Prometheus, Alertmanager, or Jaeger.** The chart deploys none of these and has no `monitoring.enabled` switch that does.
@@ -304,7 +314,9 @@ curl -s http://localhost:8000/health | jq .
     worker.
   </Accordion>
   <Accordion title="A Prometheus scrape of the API returns 404">
-    Expected. There is no `/metrics` endpoint. See "What does not exist" above.
+    The scrape went to the API port. Metrics are served only on
+    `global.monitoring.prometheus.port` (9464), and only while
+    `global.monitoring.prometheus.enabled` is set.
   </Accordion>
   <Accordion title="Setting `global.monitoring.health.port` did not move the health endpoint">
     That value renders `HEALTH_CHECK_PORT` , which nothing reads. `/health`

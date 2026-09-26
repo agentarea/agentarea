@@ -39,6 +39,8 @@
           "expires_in_days": {
             "anyOf": [
               {
+                "maximum": 3650.0,
+                "minimum": 1.0,
                 "type": "integer"
               },
               {
@@ -22464,11 +22466,35 @@
             }
           },
           {
+            "description": "Return exactly these specs, workspace or catalog, e.g. the specs of the instances a page shows. At most 100 per request.",
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return exactly these specs, workspace or catalog, e.g. the specs of the instances a page shows. At most 100 per request.",
+              "title": "Ids"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
             "schema": {
               "default": 1,
+              "maximum": 1000000,
               "minimum": 1,
               "title": "Page",
               "type": "integer"
@@ -29325,6 +29351,7 @@
             "required": false,
             "schema": {
               "default": 1,
+              "maximum": 1000000,
               "minimum": 1,
               "title": "Page",
               "type": "integer"

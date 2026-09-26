@@ -18,7 +18,7 @@ export const zA2UiActionPayload = z.object({
  * APIKeyCreateRequest
  */
 export const zApiKeyCreateRequest = z.object({
-  expires_in_days: z.number().int().nullish(),
+  expires_in_days: z.number().int().gte(1).lte(3650).nullish(),
   name: z.string(),
 });
 
@@ -4639,7 +4639,8 @@ export const zListMcpServersV1McpServersGetQuery = z.object({
   status: z.string().nullish(),
   is_public: z.boolean().nullish(),
   tag: z.string().nullish(),
-  page: z.number().int().gte(1).optional().default(1),
+  ids: z.array(z.string().uuid()).max(100).nullish(),
+  page: z.number().int().gte(1).lte(1000000).optional().default(1),
   page_size: z.number().int().gte(1).lte(100).optional().default(50),
   search: z.string().nullish(),
 });
@@ -5649,7 +5650,7 @@ export const zListSkillsV1SkillsGetQuery = z.object({
   source_type: z.string().nullish(),
   network_scope: z.string().nullish(),
   from_registry: z.boolean().nullish(),
-  page: z.number().int().gte(1).optional().default(1),
+  page: z.number().int().gte(1).lte(1000000).optional().default(1),
   page_size: z.number().int().gte(1).lte(100).optional().default(50),
   search: z.string().nullish(),
 });

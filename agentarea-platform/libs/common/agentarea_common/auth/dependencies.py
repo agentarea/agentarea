@@ -18,15 +18,17 @@ Provides:
 
 import hashlib
 import logging
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..observability.metrics import AUTHZ_DURATION
 from .authorization import AuthorizationService
 from .context import (
     UserContext,
@@ -165,6 +167,13 @@ async def _resolve_access(
     or ``workspace_id`` names, looked up in the same query as ownership,
     whether or not it is reachable -- the caller decides.
     """
+    with AUTHZ_DURATION.labels(operation="resolve_access").time():
+        return await _resolve_access_unobserved(principal, slug=slug, workspace_id=workspace_id)
+
+
+async def _resolve_access_unobserved(
+    principal: UserPrincipal, *, slug: str | None, workspace_id: str | None
+) -> "Workspace | None":
     from agentarea_common.di.container import resolve
 
     authz = resolve(AuthorizationService)
@@ -268,6 +277,43 @@ async def _has_graph_membership(user_id: str, workspace_id: str) -> bool:
         return False
 
 
+API_KEY_USE_WRITE_INTERVAL = timedelta(seconds=60)
+# Uses this process counted but has not written yet, by key id. They ride along
+# with the key's next write; a process that exits first loses at most one
+# interval's worth.
+_unwritten_api_key_uses: defaultdict[Any, int] = defaultdict(int)
+
+
+async def _record_api_key_use(key_id: Any, last_written: datetime | None) -> None:
+    """Count one use of an API key, writing at most once per interval.
+
+    Writing on every request put an UPDATE and a COMMIT in front of each
+    API-key call. A failed write is logged and its uses kept for the next one:
+    the stamp is bookkeeping, and a request must not fail over it.
+    """
+    from agentarea_mcp.domain.auth_models import APIKey
+    from sqlalchemy import update
+
+    from agentarea_common.config import get_database
+
+    _unwritten_api_key_uses[key_id] += 1
+    now = datetime.utcnow()
+    if last_written is not None and now - last_written < API_KEY_USE_WRITE_INTERVAL:
+        return
+    uses = _unwritten_api_key_uses.pop(key_id)
+    try:
+        async with get_database().async_session_factory() as session:
+            await session.execute(
+                update(APIKey)
+                .where(APIKey.id == key_id)
+                .values(access_count=APIKey.access_count + uses, last_accessed_at=now)
+            )
+            await session.commit()
+    except Exception:
+        _unwritten_api_key_uses[key_id] += uses
+        logger.warning("Could not record use of API key %s", key_id, exc_info=True)
+
+
 async def _validate_api_key(token: str, request: Request) -> UserPrincipal | None:
     """Validate an API key and return its principal, or None if invalid.
 
@@ -276,7 +322,6 @@ async def _validate_api_key(token: str, request: Request) -> UserPrincipal | Non
     """
     from agentarea_mcp.domain.auth_models import APIKey
     from sqlalchemy import select
-    from sqlalchemy import update as sa_update
 
     from agentarea_common.config import get_database
 
@@ -291,6 +336,7 @@ async def _validate_api_key(token: str, request: Request) -> UserPrincipal | Non
         if record.expires_at and datetime.utcnow() >= record.expires_at:
             return None
         key_id = record.id
+        last_written = record.last_accessed_at
         user_id = str(record.created_by)
         workspace_id = str(record.workspace_id)
         owned = await _owns_workspace(session, user_id, workspace_id)
@@ -304,20 +350,7 @@ async def _validate_api_key(token: str, request: Request) -> UserPrincipal | Non
         )
         return None
 
-    # Increment access count (best-effort)
-    try:
-        async with get_database().async_session_factory() as session:
-            await session.execute(
-                sa_update(APIKey)
-                .where(APIKey.id == key_id)
-                .values(
-                    access_count=APIKey.access_count + 1,
-                    last_accessed_at=datetime.utcnow(),
-                )
-            )
-            await session.commit()
-    except Exception:
-        logger.debug("Failed to increment API key access count", exc_info=True)
+    await _record_api_key_use(key_id, last_written)
 
     # The key acts for its creator, and only in the workspace it was issued
     # for: _resolve_access narrows the principal's reach to that one.

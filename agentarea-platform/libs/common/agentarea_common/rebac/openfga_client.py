@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from ..observability.metrics import AUTHZ_DURATION
 from .models import CheckResult, RelationQuery, RelationTuple, SubjectSet
 
 logger = logging.getLogger(__name__)
@@ -81,12 +82,13 @@ class OpenFGAClient:
         url = f"{self._api_url}/stores/{self._store_id}/read"
         body: dict[str, Any] = {"page_size": query.page_size}
         key = _query_key(query)
-        if "object" in key:
+        if key is not None:
             body["tuple_key"] = key
         if query.page_token:
             body["continuation_token"] = query.page_token
         try:
-            resp = await client.post(url, json=body, headers=self._headers())
+            with AUTHZ_DURATION.labels(operation="openfga_read").time():
+                resp = await client.post(url, json=body, headers=self._headers())
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(f"OpenFGA read unreachable: {exc}") from exc
         if resp.status_code != 200:
@@ -142,7 +144,8 @@ class OpenFGAClient:
         if self._authorization_model_id:
             body["authorization_model_id"] = self._authorization_model_id
         try:
-            resp = await client.post(url, json=body, headers=self._headers())
+            with AUTHZ_DURATION.labels(operation="openfga_check").time():
+                resp = await client.post(url, json=body, headers=self._headers())
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(f"OpenFGA check unreachable: {exc}") from exc
         if resp.status_code != 200:
@@ -178,7 +181,8 @@ class OpenFGAClient:
         if self._authorization_model_id:
             body["authorization_model_id"] = self._authorization_model_id
         try:
-            resp = await client.post(url, json=body, headers=self._headers())
+            with AUTHZ_DURATION.labels(operation="openfga_list_objects").time():
+                resp = await client.post(url, json=body, headers=self._headers())
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(f"OpenFGA list-objects unreachable: {exc}") from exc
         if resp.status_code != 200:
@@ -193,7 +197,8 @@ class OpenFGAClient:
         client = await self._http()
         url = f"{self._api_url}/stores/{self._store_id}/write"
         try:
-            resp = await client.post(url, json=body, headers=self._headers())
+            with AUTHZ_DURATION.labels(operation="openfga_write").time():
+                resp = await client.post(url, json=body, headers=self._headers())
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(f"OpenFGA write unreachable: {exc}") from exc
         ok_statuses = {200, 204}
@@ -227,7 +232,13 @@ def _tuple_key(tuple_: RelationTuple) -> dict[str, str]:
     }
 
 
-def _query_key(query: RelationQuery) -> dict[str, str]:
+def _query_key(query: RelationQuery) -> dict[str, str] | None:
+    """The server-side Read filter for ``query``, or None when OpenFGA cannot take one.
+
+    Read accepts a ``type:id`` object, or a bare ``type:`` when a user is also
+    given. Anything else reads the store unfiltered, page by page, and relies on
+    ``_matches`` -- a cost that grows with every tuple on the platform.
+    """
     key: dict[str, str] = {}
     if query.subject_id is not None:
         key["user"] = query.subject_id
@@ -235,8 +246,14 @@ def _query_key(query: RelationQuery) -> dict[str, str]:
         key["user"] = _subject_set_ref(query.subject_set)
     if query.relation is not None:
         key["relation"] = query.relation
-    if query.namespace is not None and query.object is not None:
+    if query.namespace is None:
+        return None
+    if query.object is not None:
         key["object"] = _object_ref(query.namespace, query.object)
+    elif "user" in key:
+        key["object"] = f"{query.namespace}:"
+    else:
+        return None
     return key
 
 

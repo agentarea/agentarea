@@ -12,7 +12,7 @@ from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.service import MCPServerService
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.schemas.dto import MCPServerCreate, MCPServerUpdate
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ._access_control_grants import grant_resource_owner
@@ -104,6 +104,14 @@ async def list_mcp_servers(
     status: str | None = None,
     is_public: bool | None = None,
     tag: str | None = None,
+    ids: list[UUID] | None = Query(
+        None,
+        max_length=100,
+        description=(
+            "Return exactly these specs, workspace or catalog, e.g. the specs of the "
+            "instances a page shows. At most 100 per request."
+        ),
+    ),
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
     servers, total = await mcp_server_service.list_servers(
@@ -114,6 +122,7 @@ async def list_mcp_servers(
         limit=pagination.limit,
         offset=pagination.offset,
         ids=await readable_resource_ids(user_context.user_id),
+        spec_ids=[str(spec_id) for spec_id in ids] if ids is not None else None,
     )
     return PaginatedResponse(
         items=[MCPServerResponse.from_domain(server) for server in servers],

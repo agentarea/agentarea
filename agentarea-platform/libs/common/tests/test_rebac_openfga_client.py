@@ -236,3 +236,104 @@ async def test_check_omits_authorization_header_without_token():
     await client.check(namespace="Skill", object="x", relation="use", subject_id="User:u1")
 
     assert seen["authorization"] is None
+
+
+@pytest.mark.asyncio
+async def test_query_by_subject_and_type_filters_on_the_server():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"tuples": [], "continuation_token": ""})
+
+    client = _client(handler)
+    await client.query_tuples(
+        RelationQuery(namespace="Workspace", relation="members", subject_id="User:u1")
+    )
+
+    assert seen["body"]["tuple_key"] == {
+        "user": "User:u1",
+        "relation": "members",
+        "object": "Workspace:",
+    }
+
+
+@pytest.mark.asyncio
+async def test_query_by_subject_set_and_type_filters_on_the_server():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"tuples": [], "continuation_token": ""})
+
+    client = _client(handler)
+    await client.query_tuples(
+        RelationQuery(
+            namespace="Skill",
+            subject_set=SubjectSet(namespace="Workspace", object="w1", relation="members"),
+        )
+    )
+
+    assert seen["body"]["tuple_key"] == {"user": "Workspace:w1#members", "object": "Skill:"}
+
+
+def _fake_store(tuples: list[dict[str, str]], calls: list[dict]):
+    """An OpenFGA /read that honours ``tuple_key`` and pages like the real one."""
+
+    def matches(key: dict[str, str], filter_: dict[str, str]) -> bool:
+        obj = filter_.get("object")
+        if obj is not None:
+            if obj.endswith(":"):
+                if not key["object"].startswith(obj):
+                    return False
+            elif key["object"] != obj:
+                return False
+        return all(key[field] == filter_[field] for field in ("user", "relation") if field in filter_)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        calls.append(body)
+        hits = [t for t in tuples if matches(t, body.get("tuple_key") or {})]
+        start = int(body.get("continuation_token") or 0)
+        end = start + body["page_size"]
+        return httpx.Response(
+            200,
+            json={
+                "tuples": [{"key": t} for t in hits[start:end]],
+                "continuation_token": str(end) if end < len(hits) else "",
+            },
+        )
+
+    return handler
+
+
+@pytest.mark.asyncio
+async def test_a_members_workspaces_are_one_read_however_large_the_store():
+    from agentarea_common.workspaces.memberships import list_workspace_ids_for_member
+
+    store = [
+        {"user": f"User:other-{n}", "relation": "members", "object": f"Workspace:w{n}"}
+        for n in range(2_000)
+    ]
+    store += [
+        {"user": "User:u1", "relation": "members", "object": "Workspace:mine"},
+        {"user": "User:u1", "relation": "members", "object": "Workspace:shared"},
+        {"user": "User:u1", "relation": "owner", "object": "resource:r1"},
+    ]
+    calls: list[dict] = []
+    reads_before = _observed_reads()
+
+    workspace_ids = await list_workspace_ids_for_member(_client(_fake_store(store, calls)), "u1")
+
+    assert workspace_ids == ["mine", "shared"]
+    assert len(calls) == 1
+    assert _observed_reads() == reads_before + 1
+
+
+def _observed_reads() -> float:
+    from prometheus_client import REGISTRY
+
+    count = REGISTRY.get_sample_value(
+        "agentarea_authz_duration_seconds_count", {"operation": "openfga_read"}
+    )
+    return count or 0.0

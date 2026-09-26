@@ -60,6 +60,10 @@ class InvitationAlreadyAccepted(Exception):  # noqa: N818
     pass
 
 
+class PersonalWorkspaceIdentityError(RuntimeError):
+    """Nobody can say who owns a personal workspace, so it cannot be named."""
+
+
 class InvitationAddressedElsewhere(Exception):  # noqa: N818
     """The invitation names an email that is not the caller's."""
 
@@ -419,8 +423,12 @@ class WorkspaceService:
         workspace_repo: WorkspaceRepository,
         on_created: Callable[[Workspace], Awaitable[None]] | None = None,
         before_insert: Callable[[Workspace], Awaitable[None]] | None = None,
+        identities: IdentityDirectory | None = None,
     ) -> None:
         self.workspace_repo = workspace_repo
+        # Names a personal workspace when the caller's credential carries no
+        # email (API keys, Hydra tokens). None when KRATOS_ADMIN_URL is unset.
+        self.identities = identities
         # Fired exactly once when a workspace row is genuinely inserted (not on
         # idempotent re-reads). The composition layer wires cross-domain
         # provisioning here (e.g. baseline governance policies) without this
@@ -443,15 +451,19 @@ class WorkspaceService:
         """Idempotently provision the user's personal workspace (id == user_id).
 
         The slug is derived from the email local-part (``jane@x.com`` ->
-        ``jane``) so personal URLs stay human; falls back to ``user`` when
-        no email is available. Race-safe: a concurrent first request loses
-        the primary-key insert and re-reads the winner's row.
+        ``jane``) so personal URLs stay human. A credential without an email
+        has it looked up in the identity provider; when that cannot answer,
+        nothing is created and :class:`PersonalWorkspaceIdentityError` is
+        raised, since a placeholder slug would be the workspace's URL for good.
+        Race-safe: a concurrent first request loses the primary-key insert and
+        re-reads the winner's row.
         """
         existing = await self.workspace_repo.get(user_id)
         if existing is not None:
             return existing
 
-        slug_base = slugify(email.split("@", 1)[0], fallback="user") if email else "user"
+        email = email or await self._email_of(user_id)
+        slug_base = slugify(email.split("@", 1)[0], fallback="user")
         return await self._insert_with_unique_slug(
             slug_base,
             lambda slug: Workspace(
@@ -462,6 +474,20 @@ class WorkspaceService:
             ),
             on_conflict_get=lambda: self.workspace_repo.get(user_id),
         )
+
+    async def _email_of(self, user_id: str) -> str:
+        if self.identities is None:
+            raise PersonalWorkspaceIdentityError(
+                f"User {user_id} has no email on their credential and KRATOS_ADMIN_URL is "
+                "unset, so their personal workspace cannot be named"
+            )
+        identity = (await self.identities.resolve([user_id])).get(user_id)
+        if identity is None or not identity.email:
+            raise PersonalWorkspaceIdentityError(
+                f"The identity provider returned no email for user {user_id}; "
+                "their personal workspace cannot be named"
+            )
+        return identity.email
 
     async def get(self, workspace_id: str) -> Workspace | None:
         return await self.workspace_repo.get(workspace_id)
@@ -487,13 +513,15 @@ class WorkspaceService:
         *,
         email: str | None = None,
         member_workspace_ids: list[str] | None = None,
+        provision_personal: bool = True,
     ) -> list[Workspace]:
         """List every workspace the user can reach.
 
-        Provisions the personal workspace first so a brand-new user always
-        gets at least one entry.
+        Provisions the personal workspace first, unless told not to, so a
+        brand-new user always gets at least one entry.
         """
-        await self.ensure_personal(user_id, email=email)
+        if provision_personal:
+            await self.ensure_personal(user_id, email=email)
         return await self.workspace_repo.list_for_user(
             user_id,
             member_workspace_ids=member_workspace_ids or [],

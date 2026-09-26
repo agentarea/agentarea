@@ -213,11 +213,23 @@ async def app_lifespan(app: FastAPI):
 
     await start_events_router()
 
+    from agentarea_common.config import ObservabilitySettings
+    from agentarea_common.observability.metrics import start_metrics_server
+
+    observability = ObservabilitySettings()
+    metrics_server = (
+        start_metrics_server(observability.METRICS_PORT) if observability.METRICS_ENABLED else None
+    )
+
     logger.info("Application started successfully")
 
     try:
         yield
     finally:
+        if metrics_server is not None:
+            metrics_server.shutdown()
+            metrics_server.server_close()
+
         # Always stop the events router — Redis subscribers hold connections
         # open and block uvicorn reload if not cancelled
         from agentarea_api.api.events.events_router import stop_events_router
@@ -383,6 +395,11 @@ def create_app() -> FastAPI:
         allow_headers=_cors.cors_allowed_headers,
         max_age=_cors.CORS_MAX_AGE,
     )
+
+    # Outermost, so it times everything the middleware above adds to a request.
+    from agentarea_api.api.http_metrics_middleware import HTTPMetricsMiddleware
+
+    app.add_middleware(HTTPMetricsMiddleware)
 
     # Mount static files - this serves all files from static/ at /static/
     static_path = Path(__file__).parent / "static"

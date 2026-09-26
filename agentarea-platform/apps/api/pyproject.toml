@@ -37,6 +37,7 @@ dependencies = [
     "opentelemetry-instrumentation-asyncpg>=0.51b0",
     "opentelemetry-instrumentation-redis>=0.51b0",
     "opentelemetry-instrumentation-httpx>=0.51b0",
+    "prometheus-client>=0.23.0",
 ]
 
 [tool.uv.sources]

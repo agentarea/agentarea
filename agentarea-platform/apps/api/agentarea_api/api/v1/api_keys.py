@@ -55,7 +55,10 @@ async def get_api_key_service(
 class APIKeyCreateRequest(BaseModel):
     name: str = Field(description="Human-friendly label for this API key")
     expires_in_days: int | None = Field(
-        default=None, description="Optional expiry in days (omit for non-expiring)"
+        default=None,
+        ge=1,
+        le=3650,
+        description="Optional expiry in days (omit for non-expiring)",
     )
 
 

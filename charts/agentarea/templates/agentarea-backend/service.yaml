@@ -23,10 +23,12 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
+    {{- if .Values.global.monitoring.prometheus.enabled }}
     - port: {{ .Values.global.monitoring.prometheus.port }}
       targetPort: metrics
       protocol: TCP
       name: metrics
+    {{- end }}
     - port: {{ .Values.global.monitoring.health.port }}
       targetPort: health
       protocol: TCP

@@ -280,9 +280,10 @@ Failures that look like one problem and are another:
     logging defect and a secret-leak risk, not a cosmetic one.
   </Accordion>
   <Accordion title="A Prometheus scrape returns 404">
-    Expected. No AgentArea service exposes `/metrics` , despite the chart
-    rendering `METRICS_ENABLED` . See [observability](/self- host/observability)
-    .
+    Only the API serves `/metrics`, and only on
+    `global.monitoring.prometheus.port` (9464) while
+    `global.monitoring.prometheus.enabled` is set; the API port answers 404.
+    See [observability](/self-host/observability).
   </Accordion>
   <Accordion title="Provider icons are broken and OAuth callbacks fail">
     Both are served from `API_BASE_URL` . When `global.api.publicUrl` is empty
