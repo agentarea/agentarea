@@ -98,6 +98,7 @@ class TestAgentMCPE2E:
             "instruction": "You are a helpful assistant that can use MCP tools. When asked to echo something, use the echo tool.",
             "mcp_server_ids": [mcp_instance_id],
             "capabilities": ["mcp_tools"],
+            "tools": [],
         }
 
         response = requests.post(f"{API_BASE_URL}/v1/workspaces/acme/agents/", json=agent_data)
@@ -232,6 +233,7 @@ class TestAgentMCPE2E:
             "instructions": "You are a helpful assistant.",
             "mcp_server_ids": [fake_instance_id],
             "capabilities": ["mcp_tools"],
+            "tools": [],
         }
 
         # This should either fail during agent creation or handle gracefully during execution

@@ -70,6 +70,7 @@ RESOURCES = [
             "description": "isolation test",
             "instruction": "behave",
             "agent_type": "stateless",
+            "tools": [],
         },
     ),
     ResourceSpec(

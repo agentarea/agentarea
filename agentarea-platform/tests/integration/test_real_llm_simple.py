@@ -67,7 +67,6 @@ async def test_real_llm_with_activity_mocking():
             "instruction": "You are a helpful AI assistant. When you complete a task, use the task_complete tool to mark it as completed.",
             "model_id": "66666666-6666-6666-6666-666666666666",
             "tools_config": {},
-            "events_config": {},
             "planning": False,
         }
 

@@ -84,7 +84,8 @@ Every AgentArea agent consists of several key components:
         "name": "My Assistant",
         "template": "task_assistant",
         "personality": "helpful and efficient",
-        "system_prompt": "You are a helpful assistant that can help users with various tasks."
+        "system_prompt": "You are a helpful assistant that can help users with various tasks.",
+        "tools": []
       }'
     ```
   </Step>

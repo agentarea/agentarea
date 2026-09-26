@@ -856,7 +856,7 @@ async def test_create_telegram_webhook_trigger_registers_webhook(
         patch(
             "agentarea_triggers.channels.telegram.set_webhook", new=AsyncMock(return_value=True)
         ) as mock_sw,
-        patch("agentarea_api.api.v1.triggers.get_app_settings", return_value=_Settings()),
+        patch("agentarea_api.api.v1._trigger_creation.get_app_settings", return_value=_Settings()),
     ):
         resp = await async_client.post(
             "/v1/workspaces/acme/triggers/",

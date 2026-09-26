@@ -259,6 +259,7 @@ class TestE2EMainFlow:
             "instruction": "You are a helpful AI assistant. Please provide clear, concise answers.",
             "model_id": model_instance_id,
             "planning": False,
+            "tools": [],
         }
 
         response = await client.post("/v1/workspaces/acme/agents/", json=agent_data)

@@ -68,6 +68,7 @@ export default function AgentEditClient({
       builtinTools={builtinTools}
       initialData={initialData}
       agentId={agentId}
+      triggersHref={`/triggers?search=${encodeURIComponent(agentName)}`}
       onSubmit={handleSubmit}
       submitButtonText="Save Changes"
       submitButtonLoadingText="Saving..."

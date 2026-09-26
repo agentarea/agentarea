@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  AgentPresetResponse,
   McpServerInstanceResponse,
   McpServerResponse,
   ModelInstanceResponse,
@@ -25,14 +26,23 @@ import {
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/create/actions";
 import {
-  AgentTriggers,
+  AgentTriggersLink,
   BasicInformation,
+  PresetPicker,
   SkillsConfig,
   ToolConfig,
+  TriggersConfig,
 } from "../create/components";
+import {
+  hasIncompleteTriggers,
+  toTriggerDrafts,
+  type TriggerDraft,
+} from "../create/components/TriggersConfig";
 import type { AddAgentFormState } from "../create/actions";
 import type { AgentFormValues, AgentSkill } from "../create/types";
+import { preferredModelId, presetFormValues } from "../create/utils/agentPreset";
 import { useChat } from "./ChatContext";
 
 type MCPServer = McpServerResponse;
@@ -45,6 +55,13 @@ interface AgentFormProps {
   builtinTools: unknown[];
   initialData?: Partial<AgentFormValues>;
   agentId?: string;
+  /** Create only: presets and trigger types, each `null` when it failed to load. */
+  create?: {
+    presets: AgentPresetResponse[] | null;
+    triggerCatalog: TriggerCatalogEntry[] | null;
+  };
+  /** Edit only: where this agent's triggers are managed. */
+  triggersHref?: string;
   onSubmit: (data: AgentFormValues) => Promise<AddAgentFormState>;
   submitButtonText?: string;
   submitButtonLoadingText?: string;
@@ -64,6 +81,8 @@ export default function AgentForm({
   builtinTools,
   initialData,
   agentId,
+  create,
+  triggersHref,
   onSubmit,
   onSuccess,
   onError,
@@ -94,7 +113,6 @@ export default function AgentForm({
         mcp_server_configs: [],
         builtin_tools: [],
       },
-      events_config: initialData?.events_config || { events: [] },
       planning: initialData?.planning || false,
       a2ui_enabled: initialData?.a2ui_enabled || false,
     },
@@ -104,6 +122,7 @@ export default function AgentForm({
     fields: toolFields,
     append: appendTool,
     remove: removeTool,
+    replace: replaceTools,
   } = useFieldArray({
     control,
     name: "tools_config.mcp_server_configs",
@@ -113,6 +132,7 @@ export default function AgentForm({
     fields: builtinToolFields,
     append: appendBuiltinTool,
     remove: removeBuiltinTool,
+    replace: replaceBuiltinTools,
   } = useFieldArray({
     control,
     name: "tools_config.builtin_tools",
@@ -122,18 +142,10 @@ export default function AgentForm({
     fields: openapiFields,
     append: appendOpenapiTool,
     remove: removeOpenapiTool,
+    replace: replaceOpenapiTools,
   } = useFieldArray({
     control,
     name: "tools_config.openapi_configs",
-  });
-
-  const {
-    fields: eventFields,
-    append: appendEvent,
-    remove: removeEvent,
-  } = useFieldArray({
-    control,
-    name: "events_config.events",
   });
 
   // Watch agent name for chat header
@@ -145,9 +157,36 @@ export default function AgentForm({
     initialData?.skills || []
   );
 
+  const [triggerDrafts, setTriggerDrafts] = useState<TriggerDraft[]>(() =>
+    toTriggerDrafts(initialData?.triggers ?? [])
+  );
+  const [showTriggerErrors, setShowTriggerErrors] = useState(false);
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
+    null
+  );
+
   useEffect(() => {
     setAgentName(watchedName || "New Agent");
   }, [watchedName]);
+
+  const applyPreset = (preset: AgentPresetResponse | null) => {
+    const values = presetFormValues(preset);
+    if (values.instruction !== undefined) {
+      setValue("instruction", values.instruction);
+    }
+    replaceTools(values.tools_config.mcp_server_configs);
+    replaceBuiltinTools(values.tools_config.builtin_tools ?? []);
+    replaceOpenapiTools(values.tools_config.openapi_configs ?? []);
+    setValue("tools_config.carried_tools", values.tools_config.carried_tools);
+    setSelectedSkills(values.skills);
+    setTriggerDrafts(toTriggerDrafts(values.triggers));
+    setShowTriggerErrors(false);
+    const modelId = preset
+      ? preferredModelId(preset, llmModelInstances)
+      : null;
+    if (modelId && !getValues("model_id")) setValue("model_id", modelId);
+    setSelectedPresetId(preset?.id ?? null);
+  };
 
   // Show loading spinner if data is still loading (hooks are already initialized above)
   if (isLoading) {
@@ -163,6 +202,14 @@ export default function AgentForm({
     const form = formRef.current;
     if (!form) return;
 
+    if (
+      create &&
+      hasIncompleteTriggers(triggerDrafts, create.triggerCatalog ?? [])
+    ) {
+      setShowTriggerErrors(true);
+      return;
+    }
+
     // Set form data attribute and dispatch event SYNCHRONOUSLY before async operations
     form.setAttribute("data-submitting", "true");
     form.dispatchEvent(
@@ -173,6 +220,7 @@ export default function AgentForm({
     const dataWithSkills = {
       ...data,
       skills: selectedSkills,
+      ...(create ? { triggers: triggerDrafts.map((draft) => draft.spec) } : {}),
     };
 
     startTransition(async () => {
@@ -278,6 +326,16 @@ export default function AgentForm({
             onSubmit={handleSubmit(handleFormSubmit)}
             className="overflow-auto h-full py-5 pr-5"
           >
+            {create && create.presets?.length !== 0 && (
+              <>
+                <PresetPicker
+                  presets={create.presets}
+                  selectedId={selectedPresetId}
+                  onSelect={applyPreset}
+                />
+                <Divider />
+              </>
+            )}
             <BasicInformation
               register={register}
               control={control}
@@ -288,14 +346,24 @@ export default function AgentForm({
               onRefreshModels={() => router.refresh()}
             />
             <Divider />
-            <AgentTriggers
-              control={control}
-              errors={errors}
-              eventFields={eventFields}
-              removeEvent={removeEvent}
-              appendEvent={appendEvent}
-            />
-            <Divider />
+            {create ? (
+              <>
+                <TriggersConfig
+                  catalog={create.triggerCatalog}
+                  drafts={triggerDrafts}
+                  onDraftsChange={setTriggerDrafts}
+                  showErrors={showTriggerErrors}
+                />
+                <Divider />
+              </>
+            ) : (
+              triggersHref && (
+                <>
+                  <AgentTriggersLink href={triggersHref} />
+                  <Divider />
+                </>
+              )
+            )}
             <ToolConfig
               control={control}
               setValue={setValue}

@@ -161,16 +161,11 @@ export type AddSkillRequest = {
     skill_id: string;
 };
 /**
- * AgentCreate
+ * AgentCreateRequest
  *
- * Payload for creating an agent.
- *
- * ``model_id`` is the UUID of a model instance configured in the workspace —
- * the runtime has no other interpretation of it. Omit it (or pass ``null``) to
- * create an agent with no model bound yet; such an agent cannot be run until a
- * model is assigned.
+ * ``AgentCreate`` plus the triggers created with the agent.
  */
-export type AgentCreate = {
+export type AgentCreateRequest = {
     /**
      * A2Ui Enabled
      *
@@ -191,10 +186,6 @@ export type AgentCreate = {
      * Short summary of what the agent does.
      */
     description?: string;
-    /**
-     * Event subscriptions that auto-trigger this agent.
-     */
-    events_config?: EventsConfig | null;
     /**
      * Instruction
      *
@@ -228,9 +219,15 @@ export type AgentCreate = {
     /**
      * Tools
      *
-     * Tools attached to the agent (code/mcp/agent/openapi).
+     * Tools attached to the agent (code/mcp/agent/openapi). Required: pass [] for an agent with no tools. Built-in toolsets and their groups are listed by GET /v1/agents/tools.
      */
-    tools?: Array<CodeToolConfig | McpToolConfigInput | AgentToolConfig | OpenApiToolConfig> | null;
+    tools: Array<CodeToolConfig | McpToolConfigInput | AgentToolConfig | OpenApiToolConfig>;
+    /**
+     * Triggers
+     *
+     * Triggers that start the agent: schedules, webhooks, messaging channels (types from GET /v1/triggers/catalog). Created with the agent; if any cannot be created, neither the agent nor any trigger is kept.
+     */
+    triggers?: Array<TriggerSpec>;
 };
 /**
  * AgentOverviewResponse
@@ -270,6 +267,49 @@ export type AgentOverviewResponse = {
     upcoming: Array<UpcomingItem>;
 };
 /**
+ * AgentPresetResponse
+ *
+ * A starting point for a new agent: applying it fills the create form.
+ */
+export type AgentPresetResponse = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Instruction
+     */
+    instruction?: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Preferred Models
+     */
+    preferred_models?: Array<string>;
+    /**
+     * Skills
+     */
+    skills: Array<PresetSkillResponse>;
+    /**
+     * Tools
+     */
+    tools: Array<CodeToolConfig | McpToolConfigOutput | AgentToolConfig | OpenApiToolConfig>;
+    /**
+     * Triggers
+     */
+    triggers: Array<TriggerSpec>;
+    /**
+     * Unavailable Skills
+     */
+    unavailable_skills?: Array<string>;
+};
+/**
  * AgentResponse
  */
 export type AgentResponse = {
@@ -285,12 +325,6 @@ export type AgentResponse = {
      * Description
      */
     description?: string | null;
-    /**
-     * Events Config
-     */
-    events_config?: {
-        [key: string]: unknown;
-    } | null;
     /**
      * Id
      */
@@ -438,7 +472,6 @@ export type AgentUpdate = {
      * Description
      */
     description?: string | null;
-    events_config?: EventsConfig | null;
     /**
      * Instruction
      */
@@ -888,6 +921,12 @@ export type BundleAgent = {
      * BundleSkill keys to attach.
      */
     skills?: Array<string>;
+    /**
+     * Toolsets
+     *
+     * Built-in toolsets to attach, e.g. ["agentarea/shell", "agentarea/files"].
+     */
+    toolsets?: Array<string>;
 };
 /**
  * BundleAutomation
@@ -1891,44 +1930,6 @@ export type EscalationResolution = {
      * Escalation Id
      */
     escalation_id: string;
-};
-/**
- * EventConfig
- *
- * One event subscription for an agent.
- */
-export type EventConfig = {
-    /**
-     * Config
-     *
-     * Event-specific configuration.
-     */
-    config?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * Enabled
-     *
-     * Whether this subscription is active.
-     */
-    enabled?: boolean;
-    /**
-     * Event Type
-     *
-     * Event type the agent listens to.
-     */
-    event_type: string;
-};
-/**
- * EventsConfig
- *
- * Per-agent event subscriptions.
- */
-export type EventsConfig = {
-    /**
-     * Events
-     */
-    events?: Array<EventConfig> | null;
 };
 /**
  * ExecutionCorrelationResponse
@@ -4388,6 +4389,25 @@ export type PolicyRuleUpdateRequest = {
  */
 export type PolicySubjectType = 'workspace' | 'agent' | 'user' | 'group';
 /**
+ * PresetSkillResponse
+ *
+ * A catalog skill a preset attaches; attaching it installs it into the workspace.
+ */
+export type PresetSkillResponse = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+};
+/**
  * PresignUploadRequest
  */
 export type PresignUploadRequest = {
@@ -6450,6 +6470,10 @@ export type ToolResponse = {
      */
     display_name?: string;
     /**
+     * Group
+     */
+    group?: 'sandbox' | null;
+    /**
      * Input Schema
      */
     input_schema?: {
@@ -6498,12 +6522,7 @@ export type ToolsPolicy = {
 /**
  * TriggerCreate
  *
- * Payload for creating a trigger.
- *
- * A trigger fires an agent — either on a cron schedule (``trigger_type='cron'``)
- * or in response to an inbound webhook (``trigger_type='webhook'``). For poll-based
- * channels (e.g. email inbox), use ``trigger_type='polling'`` plus a
- * ``data_extractor`` configuration.
+ * Payload for creating a trigger on an existing agent.
  */
 export type TriggerCreate = {
     /**
@@ -6860,6 +6879,139 @@ export type TriggerRunResponse = {
      * Trigger Id
      */
     trigger_id: string;
+};
+/**
+ * TriggerSpec
+ *
+ * Everything about a trigger except the agent it fires.
+ *
+ * A trigger fires an agent — either on a cron schedule (``trigger_type='cron'``)
+ * or in response to an inbound webhook (``trigger_type='webhook'``). For poll-based
+ * channels (e.g. email inbox), use ``trigger_type='polling'`` plus a
+ * ``data_extractor`` configuration. Creating an agent takes a list of these,
+ * because the agent does not exist yet when they are written.
+ */
+export type TriggerSpec = {
+    /**
+     * Allowed Methods
+     *
+     * HTTP methods accepted on the webhook endpoint.
+     */
+    allowed_methods?: Array<string>;
+    /**
+     * Channel Credentials
+     *
+     * Channel credentials (bot_token, SMTP password, etc). Stored encrypted in the secret store. Never returned in responses.
+     */
+    channel_credentials?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Conditions
+     *
+     * Optional conditions evaluated against event data before firing.
+     */
+    conditions?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Cron Expression
+     *
+     * 5- or 6-field cron expression (required when trigger_type='cron').
+     */
+    cron_expression?: string | null;
+    /**
+     * Data Extractor
+     *
+     * Polling extractor identifier (e.g. 'imap', 'rss').
+     */
+    data_extractor?: string | null;
+    /**
+     * Data Extractor Config
+     *
+     * Connection/auth details for the polling extractor.
+     */
+    data_extractor_config?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Description
+     *
+     * Short summary of what this trigger does.
+     */
+    description?: string;
+    /**
+     * Enabled
+     *
+     * Whether the trigger is active immediately on creation.
+     */
+    enabled?: boolean;
+    /**
+     * Event Types
+     *
+     * Event types to filter on (empty list = accept all events).
+     */
+    event_types?: Array<string>;
+    /**
+     * Failure Threshold
+     *
+     * Auto-disable after this many consecutive failed executions.
+     */
+    failure_threshold?: number;
+    /**
+     * Name
+     *
+     * Human-readable trigger name.
+     */
+    name: string;
+    /**
+     * Task Parameters
+     *
+     * Parameters merged into the task created when the trigger fires.
+     */
+    task_parameters?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Timezone
+     *
+     * IANA timezone for cron evaluation (e.g. 'UTC', 'America/New_York').
+     */
+    timezone?: string;
+    /**
+     * Trigger Type
+     *
+     * 'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven.
+     */
+    trigger_type: 'cron' | 'webhook' | 'polling';
+    /**
+     * Validation Rules
+     *
+     * Per-channel validation rules (signature secrets, allowed senders, etc).
+     */
+    validation_rules?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Webhook Config
+     *
+     * Channel-specific configuration (bot tokens, signing keys, etc).
+     */
+    webhook_config?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Webhook Id
+     *
+     * Public webhook path segment. Auto-generated if omitted for webhook triggers.
+     */
+    webhook_id?: string | null;
+    /**
+     * Webhook Type
+     *
+     * Channel type: 'generic', 'telegram', 'slack', 'discord', etc.
+     */
+    webhook_type?: string;
 };
 /**
  * TriggerStatusResponse
@@ -8332,7 +8484,7 @@ export type ListAgentsV1AgentsGet2Responses = {
 };
 export type ListAgentsV1AgentsGet2Response = ListAgentsV1AgentsGet2Responses[keyof ListAgentsV1AgentsGet2Responses];
 export type CreateAgentV1AgentsPostData = {
-    body: AgentCreate;
+    body: AgentCreateRequest;
     path?: never;
     query?: never;
     url: '/v1/workspaces/{workspace}/agents/';
@@ -8351,6 +8503,28 @@ export type CreateAgentV1AgentsPostResponses = {
     200: AgentResponse;
 };
 export type CreateAgentV1AgentsPostResponse = CreateAgentV1AgentsPostResponses[keyof CreateAgentV1AgentsPostResponses];
+export type ListAgentPresetsV1AgentsPresetsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/agents/presets';
+};
+export type ListAgentPresetsV1AgentsPresetsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListAgentPresetsV1AgentsPresetsGetError = ListAgentPresetsV1AgentsPresetsGetErrors[keyof ListAgentPresetsV1AgentsPresetsGetErrors];
+export type ListAgentPresetsV1AgentsPresetsGetResponses = {
+    /**
+     * Response List Agent Presets V1 Agents Presets Get
+     *
+     * Successful Response
+     */
+    200: Array<AgentPresetResponse>;
+};
+export type ListAgentPresetsV1AgentsPresetsGetResponse = ListAgentPresetsV1AgentsPresetsGetResponses[keyof ListAgentPresetsV1AgentsPresetsGetResponses];
 export type GetAllToolsV1AgentsToolsGetData = {
     body?: never;
     path?: never;

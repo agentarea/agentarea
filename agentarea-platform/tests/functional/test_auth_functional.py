@@ -40,6 +40,7 @@ class TestAuthenticationEnforcement:
                     "name": "Test Agent",
                     "description": "Test description",
                     "instruction": "Test instruction",
+                    "tools": [],
                 },
             )
 
@@ -171,6 +172,7 @@ class TestAuthenticatedAccess:
                     "name": "Functional Test Agent",
                     "description": "Created by functional test",
                     "instruction": "Test instruction",
+                    "tools": [],
                 },
             )
 

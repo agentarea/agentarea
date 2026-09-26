@@ -145,9 +145,8 @@ def _create_agent_with_skills(
         "instruction": instruction,
         "model_id": model_id,
         "agent_type": "stateless",
+        "tools": tools or [],
     }
-    if tools:
-        body["tools"] = tools
     if skill_ids:
         body["skill_ids"] = skill_ids
 

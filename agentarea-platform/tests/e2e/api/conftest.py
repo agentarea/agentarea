@@ -377,9 +377,8 @@ def create_agent(
         "instruction": instruction,
         "model_id": model_id,
         "agent_type": "stateless",
+        "tools": tools or [],
     }
-    if tools:
-        body["tools"] = tools
     return client.post(f"{client.ws}/agents/", json=body).raise_for_status().json()["id"]
 
 

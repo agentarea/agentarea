@@ -49,6 +49,7 @@ import {
   type TriggerFormState,
 } from "./actions";
 import { CronScheduler } from "./CronScheduler";
+import { TIMEZONES } from "./timezones";
 import { triggerShape } from "./triggerShape";
 import { TriggerExecutionContext } from "./TriggerExecutionContext";
 
@@ -73,23 +74,6 @@ const KIND_ORDER: TriggerCatalogEntry["kind"][] = [
 ];
 
 type SelectableResource = TaskParameterRef;
-
-const TIMEZONES = [
-  "UTC",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Berlin",
-  "Europe/Moscow",
-  "Asia/Tokyo",
-  "Asia/Shanghai",
-  "Asia/Kolkata",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-] as const;
 
 function resolveInitialId(
   catalog: TriggerCatalogEntry[],

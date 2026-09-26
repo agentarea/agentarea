@@ -288,8 +288,8 @@ VALUES ('test-model-instance-id', 'ollama-provider-config', 'qwen25-model-spec',
 ON CONFLICT (id) DO NOTHING;
 
 -- 7. Create test agent
-INSERT INTO agents (id, workspace_id, name, description, instruction, model_id, tools, events_config, planning, created_by, created_at, updated_at)
-VALUES ('test-agent-id', 'test-workspace-id', 'Test Agent', 'Agent for integration testing', 'You are a helpful AI assistant. When you complete a task, use the task_complete tool.', 'test-model-instance-id', '{}', '{}', false, 'test-user-id', NOW(), NOW())
+INSERT INTO agents (id, workspace_id, name, description, instruction, model_id, tools, planning, created_by, created_at, updated_at)
+VALUES ('test-agent-id', 'test-workspace-id', 'Test Agent', 'Agent for integration testing', 'You are a helpful AI assistant. When you complete a task, use the task_complete tool.', 'test-model-instance-id', '[]', false, 'test-user-id', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 -- Query to verify setup

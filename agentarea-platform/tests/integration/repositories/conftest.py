@@ -410,7 +410,6 @@ class ModelFactory:
             "instruction": "You are a helpful test agent",
             "model_id": model_id,
             "tools_config": None,
-            "events_config": None,
             "planning": False,
         }
         defaults.update(kwargs)

@@ -477,6 +477,9 @@ import type {
   InstallSkillV1SkillsSkillIdInstallPostData,
   InstallSkillV1SkillsSkillIdInstallPostErrors,
   InstallSkillV1SkillsSkillIdInstallPostResponses,
+  ListAgentPresetsV1AgentsPresetsGetData,
+  ListAgentPresetsV1AgentsPresetsGetErrors,
+  ListAgentPresetsV1AgentsPresetsGetResponses,
   ListAgentsV1AgentsGet2Data,
   ListAgentsV1AgentsGet2Errors,
   ListAgentsV1AgentsGet2Responses,
@@ -2032,7 +2035,11 @@ export const listAgentsV1AgentsGet2 = <ThrowOnError extends boolean = false>(
 /**
  * Create Agent
  *
- * Create a new agent.
+ * Create a new agent, and the triggers that start it, in one request.
+ *
+ * Every trigger is checked before anything is written. If creating one still
+ * fails, the triggers already made and the agent are removed again, so the
+ * caller never ends up with an agent that silently lacks a schedule or channel.
  */
 export const createAgentV1AgentsPost = <ThrowOnError extends boolean = false>(
   options: Options<CreateAgentV1AgentsPostData, ThrowOnError>
@@ -2059,6 +2066,36 @@ export const createAgentV1AgentsPost = <ThrowOnError extends boolean = false>(
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * List Agent Presets
+ *
+ * Starting points for a new agent: tools, skills, triggers and an instruction.
+ */
+export const listAgentPresetsV1AgentsPresetsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListAgentPresetsV1AgentsPresetsGetData, ThrowOnError>
+): RequestResult<
+  ListAgentPresetsV1AgentsPresetsGetResponses,
+  ListAgentPresetsV1AgentsPresetsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListAgentPresetsV1AgentsPresetsGetResponses,
+    ListAgentPresetsV1AgentsPresetsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/presets",
+    ...options,
   });
 
 /**

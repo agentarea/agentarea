@@ -957,6 +957,17 @@ class TriggerService:
                 original_error=str(e),
             ) from e
 
+    async def validate_configuration(self, trigger_data: TriggerCreate) -> None:
+        """Check a trigger's own configuration without touching its agent.
+
+        Lets a caller refuse a bad trigger before it creates anything the trigger
+        would hang off, such as the agent itself.
+
+        Raises:
+            TriggerValidationError: If configuration is invalid
+        """
+        await self._validate_trigger_configuration(trigger_data)
+
     async def _validate_trigger_configuration(self, trigger_data: TriggerCreate) -> None:
         """Validate trigger configuration based on type.
 

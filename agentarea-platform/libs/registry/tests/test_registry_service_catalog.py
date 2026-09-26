@@ -372,6 +372,24 @@ class TestParseDefaultAgents:
         items = RegistryService._parse_agents(data)
         assert items[0]["external_id"] == "Helper"
 
+    def test_preset_skills_and_triggers_reach_the_spec(self):
+        trigger = {"name": "Heartbeat", "trigger_type": "cron", "cron_expression": "*/30 * * * *"}
+        data = {
+            "agents": [
+                {
+                    "name": "Claw",
+                    "tools": [],
+                    "skills": ["brainstorming--obra-superpowers"],
+                    "triggers": [trigger],
+                    "tags": ["preset"],
+                }
+            ]
+        }
+        (item,) = RegistryService._parse_agents(data)
+        assert item["spec"]["skills"] == ["brainstorming--obra-superpowers"]
+        assert item["spec"]["triggers"] == [trigger]
+        assert item["tags"] == ["preset"]
+
     def test_skips_agents_without_name(self):
         data = {"agents": [{"instruction": "x"}, {"name": "keep"}]}
         items = RegistryService._parse_agents(data)

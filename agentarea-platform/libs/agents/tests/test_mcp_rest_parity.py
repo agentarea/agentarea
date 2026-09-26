@@ -116,15 +116,12 @@ PAIRS: list[Pair] = [
 #      inside ``create_cron``, so the user never sets it).
 UNCOVERED_FIELDS: dict[str, set[str]] = {
     "agents.create": {
-        "tools",
-        "events_config",
         "planning",
         "a2ui_enabled",
         "skill_ids",
     },
     "agents.update": {
         "tools",
-        "events_config",
         "planning",
         "a2ui_enabled",
         "skill_ids",

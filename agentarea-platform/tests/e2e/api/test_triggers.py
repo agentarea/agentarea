@@ -14,6 +14,7 @@ def _create_agent(client: httpx.Client, name: str = "trigger-host") -> str:
             "description": "for trigger test",
             "instruction": "respond",
             "agent_type": "stateless",
+            "tools": [],
         },
     )
     resp.raise_for_status()

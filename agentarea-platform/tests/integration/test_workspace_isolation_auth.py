@@ -39,6 +39,7 @@ class TestWorkspaceIsolation:
             json={
                 "name": "Test Agent",
                 "instructions": "Test instructions",
+                "tools": [],
             },
             headers={"Authorization": f"Bearer {token1}"},
         )
@@ -65,7 +66,7 @@ class TestEndpointAuthRequirements:
     """Test that all endpoints require authentication, before any workspace is resolved."""
 
     PROTECTED_ENDPOINTS = [
-        ("POST", "/v1/workspaces/workspace-1/agents/", {"name": "Test", "instructions": "test"}),
+        ("POST", "/v1/workspaces/workspace-1/agents/", {"name": "Test", "instructions": "test", "tools": []}),
         ("GET", "/v1/workspaces/workspace-1/agents", None),
         ("GET", f"/v1/workspaces/workspace-1/agents/{uuid4()}", None),
         ("PATCH", f"/v1/workspaces/workspace-1/agents/{uuid4()}", {"name": "Updated"}),
@@ -154,7 +155,7 @@ class TestCrossWorkspaceDataLeakage:
 
         client.post(
             "/v1/workspaces/workspace-1/agents",
-            json={"name": "Agent 1", "instructions": "test"},
+            json={"name": "Agent 1", "instructions": "test", "tools": []},
             headers={"Authorization": f"Bearer {token1}"},
         )
 
@@ -163,7 +164,7 @@ class TestCrossWorkspaceDataLeakage:
 
         client.post(
             "/v1/workspaces/workspace-2/agents",
-            json={"name": "Agent 2", "instructions": "test"},
+            json={"name": "Agent 2", "instructions": "test", "tools": []},
             headers={"Authorization": f"Bearer {token2}"},
         )
 

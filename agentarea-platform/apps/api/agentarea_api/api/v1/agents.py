@@ -16,11 +16,14 @@ from agentarea_agents.schemas.import_export import (
     ToolConfig,
 )
 from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
-from agentarea_agents_sdk.tools.tool_definition import ToolEffect, ToolPlane
+from agentarea_agents_sdk.tools.tool_definition import ToolEffect, ToolGroup, ToolPlane
 from agentarea_api.api.deps.services import (
+    BaseSecretManagerDep,
+    SecretCatalogServiceDep,
     get_agent_service,
     get_mcp_server_instance_service,
     get_read_agent_service,
+    get_trigger_service,
 )
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
@@ -29,6 +32,10 @@ from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.config.database import get_db_session
 from agentarea_mcp.application.service import MCPServerInstanceService
+from agentarea_triggers.channels.webhook_service import ChannelWebhookService
+from agentarea_triggers.domain.models import Trigger
+from agentarea_triggers.schemas.dto import TriggerSpec
+from agentarea_triggers.trigger_service import TriggerService, TriggerValidationError
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +44,13 @@ from ._access_control_grants import grant_resource_owner
 from ._approval_policy_sync import (
     apply_approval_targets,
     approval_targets_for_agents,
+)
+from ._trigger_creation import (
+    build_domain_trigger,
+    create_trigger_from_spec,
+    discard_trigger,
+    get_channel_webhook_service,
+    resolve_channel_credentials,
 )
 
 DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
@@ -55,7 +69,6 @@ class AgentResponse(BaseModel):
     instruction: str | None = None
     model_id: str | None = None
     tools: list[ToolConfig] | None = None
-    events_config: dict | None = None
     planning: bool | None = None
     a2ui_enabled: bool | None = None
     agent_type: str = "stateless"
@@ -106,7 +119,6 @@ class AgentResponse(BaseModel):
             instruction=cast(str | None, agent.instruction),
             model_id=cast(str | None, agent.model_id),
             tools=tools,
-            events_config=cast(dict | None, agent.events_config),
             planning=cast(bool | None, agent.planning),
             a2ui_enabled=cast(bool | None, agent.a2ui_enabled),
             agent_type=str(agent.agent_type),
@@ -166,6 +178,24 @@ async def _overlay_approval_flags(
         response.tools = [TOOL_CONFIG_ADAPTER.validate_python(t) for t in applied]
 
 
+# Stands in for the agent id while a trigger's configuration is checked before
+# the agent is created; configuration checks never read it.
+_NO_AGENT_YET = UUID(int=0)
+
+
+class AgentCreateRequest(AgentCreate):
+    """``AgentCreate`` plus the triggers created with the agent."""
+
+    triggers: list[TriggerSpec] = Field(
+        default_factory=list,
+        description=(
+            "Triggers that start the agent: schedules, webhooks, messaging channels "
+            "(types from GET /v1/triggers/catalog). Created with the agent; if any "
+            "cannot be created, neither the agent nor any trigger is kept."
+        ),
+    )
+
+
 @router.post(
     "/",
     response_model=AgentResponse,
@@ -174,13 +204,21 @@ async def _overlay_approval_flags(
     ],
 )
 async def create_agent(
-    data: AgentCreate,
+    data: AgentCreateRequest,
     user_context: UserContextDep,
     session: DatabaseSessionDep,
+    secret_manager: BaseSecretManagerDep,
+    secret_catalog: SecretCatalogServiceDep,
     agent_service: AgentService = Depends(get_agent_service),
+    trigger_service: TriggerService = Depends(get_trigger_service),
+    webhook_service: ChannelWebhookService = Depends(get_channel_webhook_service),
 ):
-    """Create a new agent."""
-    # Validate code tools if provided
+    """Create a new agent, and the triggers that start it, in one request.
+
+    Every trigger is checked before anything is written. If creating one still
+    fails, the triggers already made and the agent are removed again, so the
+    caller never ends up with an agent that silently lacks a schedule or channel.
+    """
     if data.tools:
         available_code_tools = get_code_tools_metadata()
         invalid_tools = [
@@ -197,7 +235,52 @@ async def create_agent(
                 ),
             )
 
-    agent = await agent_service.create_agent(data)
+    planned: list[tuple[TriggerSpec, dict[str, Any] | None]] = []
+    for spec in data.triggers:
+        credentials = await resolve_channel_credentials(
+            spec.channel_credentials, secret_catalog, secret_manager
+        )
+        try:
+            # Configuration checks never read the agent, which does not exist yet.
+            await trigger_service.validate_configuration(
+                build_domain_trigger(spec, _NO_AGENT_YET, user_context, credentials)
+            )
+        except TriggerValidationError as e:
+            raise HTTPException(status_code=400, detail=f"Trigger {spec.name!r}: {e}") from e
+        planned.append((spec, credentials))
+
+    agent = await agent_service.create_agent(
+        AgentCreate.model_validate(data.model_dump(exclude={"triggers"}, exclude_unset=True))
+    )
+    created: list[tuple[Trigger, TriggerSpec, dict[str, Any] | None]] = []
+    try:
+        for spec, credentials in planned:
+            trigger, _ = await create_trigger_from_spec(
+                spec,
+                agent_id=agent.id,
+                user_context=user_context,
+                credentials=credentials,
+                trigger_service=trigger_service,
+                secret_manager=secret_manager,
+                webhook_service=webhook_service,
+            )
+            created.append((trigger, spec, credentials))
+    except Exception as e:
+        logger.error(f"Creating triggers for new agent {agent.id} failed: {e}", exc_info=True)
+        for trigger, spec, credentials in reversed(created):
+            await discard_trigger(
+                trigger,
+                spec,
+                credentials,
+                trigger_service=trigger_service,
+                secret_manager=secret_manager,
+                webhook_service=webhook_service,
+            )
+        await agent_service.delete_agent(agent.id)
+        if isinstance(e, TriggerValidationError):
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        raise
+
     await _grant_agent_owner(agent.id, user_context.user_id, user_context.workspace_id)
     response = AgentResponse.from_domain(agent)
     await _overlay_approval_flags(session, user_context, [response])
@@ -229,6 +312,8 @@ class ToolResponse(BaseModel):
     display_name: str = ""
     category: str = ""
     plane: ToolPlane | None = None
+    # Toolsets sharing a group are switched on and off together (see ToolGroup).
+    group: ToolGroup | None = None
     requires_user_confirmation: bool = False
     available_methods: list[ToolMethodResponse] = Field(default_factory=list)
     # Per-call schema. MCP tools advertise one; a code toolset dispatches over
@@ -300,6 +385,7 @@ async def get_all_tools(
                     display_name=tool_meta.get("display_name") or tool_name,
                     category=tool_meta.get("category", ""),
                     plane=tool_meta.get("plane"),
+                    group=tool_meta.get("group"),
                     requires_user_confirmation=bool(
                         tool_meta.get("requires_user_confirmation", False)
                     ),
@@ -328,6 +414,68 @@ async def get_all_tools(
                         tools.append(response)
 
     return tools
+
+
+class PresetSkillResponse(BaseModel):
+    """A catalog skill a preset attaches; attaching it installs it into the workspace."""
+
+    id: str
+    name: str
+    description: str | None = None
+
+
+class AgentPresetResponse(BaseModel):
+    """A starting point for a new agent: applying it fills the create form."""
+
+    id: str
+    name: str
+    description: str | None = None
+    instruction: str = ""
+    preferred_models: list[str] = Field(default_factory=list)
+    tools: list[ToolConfig]
+    skills: list[PresetSkillResponse]
+    # Skill keys the preset names that no catalog skill currently matches.
+    unavailable_skills: list[str] = Field(default_factory=list)
+    triggers: list[TriggerSpec]
+
+
+@router.get(
+    "/presets",
+    response_model=list[AgentPresetResponse],
+    dependencies=[unrestricted("presets are catalog data, the same for every workspace")],
+)
+async def list_agent_presets(
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_read_agent_service),
+):
+    """Starting points for a new agent: tools, skills, triggers and an instruction."""
+    responses: list[AgentPresetResponse] = []
+    for preset in await agent_service.list_presets():
+        spec = preset.item.spec or {}
+        try:
+            responses.append(
+                AgentPresetResponse(
+                    id=preset.item.id,
+                    name=preset.item.name,
+                    description=preset.item.description,
+                    instruction=spec.get("instruction") or "",
+                    preferred_models=spec.get("preferred_models") or [],
+                    tools=[TOOL_CONFIG_ADAPTER.validate_python(t) for t in spec.get("tools") or []],
+                    skills=[
+                        PresetSkillResponse(id=s.id, name=s.name, description=s.description)
+                        for s in preset.skills
+                    ],
+                    unavailable_skills=preset.unavailable_skills,
+                    triggers=[TriggerSpec.model_validate(t) for t in preset.triggers],
+                )
+            )
+        except ValidationError as e:
+            logger.exception(f"Catalog preset {preset.item.name!r} is malformed")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Catalog preset {preset.item.name!r} is malformed: {e.errors()}",
+            ) from e
+    return responses
 
 
 @router.get(

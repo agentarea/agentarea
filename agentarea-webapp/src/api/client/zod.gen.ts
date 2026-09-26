@@ -269,6 +269,7 @@ export const zBundleAgent = z.object({
   model: z.string().nullish(),
   name: z.string().min(1),
   skills: z.array(z.string()).optional(),
+  toolsets: z.array(z.string()).optional(),
 });
 
 /**
@@ -678,26 +679,6 @@ export const zEscalationResolution = z.object({
   approved: z.boolean(),
   comment: z.string().optional().default(""),
   escalation_id: z.string(),
-});
-
-/**
- * EventConfig
- *
- * One event subscription for an agent.
- */
-export const zEventConfig = z.object({
-  config: z.record(z.unknown()).nullish(),
-  enabled: z.boolean().optional().default(true),
-  event_type: z.string(),
-});
-
-/**
- * EventsConfig
- *
- * Per-agent event subscriptions.
- */
-export const zEventsConfig = z.object({
-  events: z.array(zEventConfig).nullish(),
 });
 
 /**
@@ -1647,45 +1628,12 @@ export const zOpenApiToolConfig = z.object({
 });
 
 /**
- * AgentCreate
- *
- * Payload for creating an agent.
- *
- * ``model_id`` is the UUID of a model instance configured in the workspace —
- * the runtime has no other interpretation of it. Omit it (or pass ``null``) to
- * create an agent with no model bound yet; such an agent cannot be run until a
- * model is assigned.
- */
-export const zAgentCreate = z.object({
-  a2ui_enabled: z.boolean().nullish(),
-  agent_type: z.enum(["stateless", "stateful"]).optional().default("stateless"),
-  description: z.string().max(1000).optional().default(""),
-  events_config: zEventsConfig.nullish(),
-  instruction: z.string().max(20000).optional().default(""),
-  model_id: z.string().nullish(),
-  name: z.string().min(1).max(255),
-  planning: z.boolean().nullish(),
-  skill_ids: z.array(z.string().uuid()).nullish(),
-  tools: z
-    .array(
-      z.union([
-        zCodeToolConfig,
-        zMcpToolConfigInput,
-        zAgentToolConfig,
-        zOpenApiToolConfig,
-      ])
-    )
-    .nullish(),
-});
-
-/**
  * AgentResponse
  */
 export const zAgentResponse = z.object({
   a2ui_enabled: z.boolean().nullish(),
   agent_type: z.string().optional().default("stateless"),
   description: z.string().nullish(),
-  events_config: z.record(z.unknown()).nullish(),
   id: z.string().uuid(),
   instruction: z.string().nullish(),
   is_catalog: z.boolean().optional().default(false),
@@ -1719,7 +1667,6 @@ export const zAgentUpdate = z.object({
   agent_type: z.enum(["stateless", "stateful"]).optional(),
   capabilities: z.array(z.string()).nullish(),
   description: z.string().max(1000).nullish(),
-  events_config: zEventsConfig.nullish(),
   instruction: z.string().max(20000).nullish(),
   model_id: z.string().nullish(),
   name: z.string().min(1).max(255).optional(),
@@ -1860,6 +1807,17 @@ export const zPolicyRuleUpdateRequest = z.object({
   subject_id: z.string().nullish(),
   subject_type: zPolicySubjectType.nullish(),
   target: z.string().nullish(),
+});
+
+/**
+ * PresetSkillResponse
+ *
+ * A catalog skill a preset attaches; attaching it installs it into the workspace.
+ */
+export const zPresetSkillResponse = z.object({
+  description: z.string().nullish(),
+  id: z.string(),
+  name: z.string(),
 });
 
 /**
@@ -2855,6 +2813,7 @@ export const zToolResponse = z.object({
   category: z.string().optional().default(""),
   description: z.string(),
   display_name: z.string().optional().default(""),
+  group: z.literal("sandbox").nullish(),
   input_schema: z.record(z.unknown()).optional(),
   mcp_instance_id: z.string().uuid().nullish(),
   mcp_instance_name: z.string().nullish(),
@@ -2955,12 +2914,7 @@ export const zTaskCreate = z.object({
 /**
  * TriggerCreate
  *
- * Payload for creating a trigger.
- *
- * A trigger fires an agent — either on a cron schedule (``trigger_type='cron'``)
- * or in response to an inbound webhook (``trigger_type='webhook'``). For poll-based
- * channels (e.g. email inbox), use ``trigger_type='polling'`` plus a
- * ``data_extractor`` configuration.
+ * Payload for creating a trigger on an existing agent.
  */
 export const zTriggerCreate = z.object({
   agent_id: z.string().uuid(),
@@ -3071,6 +3025,87 @@ export const zTriggerRunResponse = z.object({
   status: z.enum(["started", "skipped"]),
   task_id: z.string().uuid().nullish(),
   trigger_id: z.string().uuid(),
+});
+
+/**
+ * TriggerSpec
+ *
+ * Everything about a trigger except the agent it fires.
+ *
+ * A trigger fires an agent — either on a cron schedule (``trigger_type='cron'``)
+ * or in response to an inbound webhook (``trigger_type='webhook'``). For poll-based
+ * channels (e.g. email inbox), use ``trigger_type='polling'`` plus a
+ * ``data_extractor`` configuration. Creating an agent takes a list of these,
+ * because the agent does not exist yet when they are written.
+ */
+export const zTriggerSpec = z.object({
+  allowed_methods: z.array(z.string()).optional(),
+  channel_credentials: z.record(z.unknown()).nullish(),
+  conditions: z.record(z.unknown()).optional(),
+  cron_expression: z.string().nullish(),
+  data_extractor: z.string().nullish(),
+  data_extractor_config: z.record(z.unknown()).nullish(),
+  description: z.string().max(1000).optional().default(""),
+  enabled: z.boolean().optional().default(true),
+  event_types: z.array(z.string()).optional(),
+  failure_threshold: z.number().int().gte(1).lte(100).optional().default(5),
+  name: z.string().min(1).max(255),
+  task_parameters: z.record(z.unknown()).optional(),
+  timezone: z.string().optional().default("UTC"),
+  trigger_type: z.enum(["cron", "webhook", "polling"]),
+  validation_rules: z.record(z.unknown()).optional(),
+  webhook_config: z.record(z.unknown()).nullish(),
+  webhook_id: z.string().nullish(),
+  webhook_type: z.string().optional().default("generic"),
+});
+
+/**
+ * AgentCreateRequest
+ *
+ * ``AgentCreate`` plus the triggers created with the agent.
+ */
+export const zAgentCreateRequest = z.object({
+  a2ui_enabled: z.boolean().nullish(),
+  agent_type: z.enum(["stateless", "stateful"]).optional().default("stateless"),
+  description: z.string().max(1000).optional().default(""),
+  instruction: z.string().max(20000).optional().default(""),
+  model_id: z.string().nullish(),
+  name: z.string().min(1).max(255),
+  planning: z.boolean().nullish(),
+  skill_ids: z.array(z.string().uuid()).nullish(),
+  tools: z.array(
+    z.union([
+      zCodeToolConfig,
+      zMcpToolConfigInput,
+      zAgentToolConfig,
+      zOpenApiToolConfig,
+    ])
+  ),
+  triggers: z.array(zTriggerSpec).optional(),
+});
+
+/**
+ * AgentPresetResponse
+ *
+ * A starting point for a new agent: applying it fills the create form.
+ */
+export const zAgentPresetResponse = z.object({
+  description: z.string().nullish(),
+  id: z.string(),
+  instruction: z.string().optional().default(""),
+  name: z.string(),
+  preferred_models: z.array(z.string()).optional(),
+  skills: z.array(zPresetSkillResponse),
+  tools: z.array(
+    z.union([
+      zCodeToolConfig,
+      zMcpToolConfigOutput,
+      zAgentToolConfig,
+      zOpenApiToolConfig,
+    ])
+  ),
+  triggers: z.array(zTriggerSpec),
+  unavailable_skills: z.array(z.string()).optional(),
 });
 
 /**
@@ -3641,12 +3676,20 @@ export const zListAgentsV1AgentsGetResponse = z.array(zAgentResponse);
  */
 export const zListAgentsV1AgentsGet2Response = z.array(zAgentResponse);
 
-export const zCreateAgentV1AgentsPostBody = zAgentCreate;
+export const zCreateAgentV1AgentsPostBody = zAgentCreateRequest;
 
 /**
  * Successful Response
  */
 export const zCreateAgentV1AgentsPostResponse = zAgentResponse;
+
+/**
+ * Response List Agent Presets V1 Agents Presets Get
+ *
+ * Successful Response
+ */
+export const zListAgentPresetsV1AgentsPresetsGetResponse =
+  z.array(zAgentPresetResponse);
 
 export const zGetAllToolsV1AgentsToolsGetQuery = z.object({
   include: z.string().optional().default("code,mcp"),

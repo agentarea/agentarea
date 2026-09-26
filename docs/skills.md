@@ -87,6 +87,7 @@ curl -X POST /v1/workspaces/{workspace}/agents/ \
     "name": "Data Agent",
     "instruction": "You are a data analysis agent.",
     "model_id": "model-instance-uuid",
+    "tools": [],
     "skill_ids": ["skill-uuid-1", "skill-uuid-2"]
   }'
 ```

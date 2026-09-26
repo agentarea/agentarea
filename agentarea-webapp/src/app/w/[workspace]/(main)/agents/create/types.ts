@@ -1,13 +1,4 @@
-import type { AgentUpdate } from "@/api/client/types.gen";
-
-/**
- * Event configuration type
- */
-export type EventConfig = {
-  event_type: string;
-  config?: Record<string, unknown> | null;
-  enabled?: boolean;
-};
+import type { AgentUpdate, TriggerSpec } from "@/api/client/types.gen";
 
 /**
  * MCP Tool configuration type
@@ -75,11 +66,10 @@ export type AgentFormValues = {
     // Tools this form does not edit (e.g. delegation), sent back unchanged.
     carried_tools?: NonNullable<AgentUpdate["tools"]>;
   };
-  events_config: {
-    events: EventConfig[];
-  };
   planning: boolean;
   a2ui_enabled: boolean;
   skills?: AgentSkill[];
+  // Created together with the agent; an existing agent's triggers live on /triggers
+  triggers?: TriggerSpec[];
 };
 

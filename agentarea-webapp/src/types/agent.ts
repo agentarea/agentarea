@@ -37,7 +37,6 @@ export interface Agent {
     openapi_configs?: Array<{ openapi_connection_id: string; allowed_tools?: string[] | null; [key: string]: any }>;
     [key: string]: any;
   } | null;
-  events_config?: Record<string, any> | null;
   planning?: boolean | null;
   a2ui_enabled?: boolean | null;
   skills?: Array<{ id: string; name: string; description?: string | null }> | null;

@@ -42,7 +42,6 @@ def agent(*, tools=None, skills=None):
         model_id=str(uuid4()),
         tools=tools or [],
         skills=skills or [],
-        events_config={},
         planning=False,
         a2ui_enabled=False,
         agent_type="stateful",

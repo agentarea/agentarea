@@ -1,7 +1,7 @@
 "use server";
 
-import type { AgentCreate } from "@/api/client/types.gen";
-import { zAgentCreate } from "@/api/client/zod.gen";
+import type { AgentCreateRequest } from "@/api/client/types.gen";
+import { zAgentCreateRequest } from "@/api/client/zod.gen";
 import { createAgent } from "@/lib/api";
 import { toAgentCreate } from "../shared/agentContract";
 import type { AgentFormValues } from "./types";
@@ -38,13 +38,6 @@ export interface AddAgentFormState {
         load_mode?: "explicit" | "searchable";
       }> | null;
     } | null;
-    events_config?: {
-      events?: Array<{
-        event_type: string;
-        config?: Record<string, unknown> | null;
-        enabled?: boolean;
-      }> | null;
-    } | null;
     planning?: boolean;
     a2ui_enabled?: boolean;
     skill_ids?: string[] | null;
@@ -56,11 +49,11 @@ export async function addAgent(
   input: AgentFormValues
 ): Promise<AddAgentFormState> {
   // Map the UI form to the backend contract, then validate against the
-  // GENERATED schema. zAgentCreate is generated from the backend OpenAPI spec,
+  // GENERATED schema. zAgentCreateRequest is generated from the backend OpenAPI spec,
   // so any drift between frontend and backend fails here at the boundary
   // instead of silently producing a malformed request.
   const body = toAgentCreate(input);
-  const parsed = zAgentCreate.safeParse(body);
+  const parsed = zAgentCreateRequest.safeParse(body);
 
   if (!parsed.success) {
     const errors: { [key: string]: string[] } = {};
@@ -76,7 +69,7 @@ export async function addAgent(
   }
 
   try {
-    const { data, error } = await createAgent(parsed.data as AgentCreate);
+    const { data, error } = await createAgent(parsed.data as AgentCreateRequest);
 
     if (error) {
       const apiErr = error as { message?: string; detail?: Array<{ msg: string }> };

@@ -1199,6 +1199,11 @@ registryReconcile:
     - name: system-skills-curated
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json
       recommendation_priority: 10
+    # Built-in agents; those tagged "preset" are the starting points offered on
+    # the agent-create form.
+    - name: system-agents
+      source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json
+      recommendation_priority: 10
 
 # Ory Kratos Identity Server
 # Ory Keto (ReBAC) — powers Govern -> Policies -> Access (the relationship graph).

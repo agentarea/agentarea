@@ -373,7 +373,6 @@ class AgentConfigResult(BaseModel):
     context_window: int = Field(gt=0)  # From ModelSpec, used for context window management
     default_context_strategy: str | None = None  # From ModelSpec: "static", "hybrid", "dynamic"
     tools: list[dict[str, Any]] = Field(default_factory=list)
-    events_config: dict[str, Any] = Field(default_factory=dict)
     planning: bool = False
     a2ui_enabled: bool = False
     execution_context: dict[str, Any] | None = None

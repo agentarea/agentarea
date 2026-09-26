@@ -254,7 +254,6 @@ class E2ETemporalTest:
                 status="active",
                 model_id=str(self.test_model_instance_id),
                 tools_config={"mcp_servers": []},
-                events_config={},
                 planning=False,
             )
             created_agent = await agent_service.create(new_agent)
@@ -312,7 +311,6 @@ class E2ETemporalTest:
                 status="active",
                 model_id=str(self.test_model_instance_id),
                 tools_config=tools_config,
-                events_config={},
                 planning=False,
             )
             created_agent = await agent_service.create(new_agent)
