@@ -1,5 +1,5 @@
 import { defineConfig } from "@hey-api/openapi-ts";
-import { dropWorkspacePathParam } from "../../openapi-ts.patch";
+import { dropWorkspacePathParam } from "./openapi-ts.patch";
 
 // Generates the runtime-agnostic (fetch) flavor of the AgentArea API client.
 // Source of truth is the SAME spec the webapp commits — no second curl, no drift.

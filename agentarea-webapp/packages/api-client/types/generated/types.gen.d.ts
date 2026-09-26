@@ -10598,6 +10598,10 @@ export type CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostErro
      * Validation Error
      */
     422: HttpValidationError;
+    /**
+     * The MCP manager that validates configurations is unreachable
+     */
+    503: unknown;
 };
 export type CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostError = CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostErrors[keyof CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostErrors];
 export type CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostResponses = {
