@@ -29,15 +29,23 @@ Env vars, read from `__ENV`:
 | `AGENTAREA_API_URL` | `https://api.agentarea.ru` | |
 | `WORKSPACE` | `user` | workspace slug the workspace-scoped routes hit |
 
-k6 does **not** read the process environment on its own — a var exported in
-the shell is invisible to the script unless it's also forwarded with `-e`.
-The `make` targets do this for you (they pick the vars up from `make`'s own
-environment import and forward them); running k6 directly needs it spelled
-out:
+`k6 run` forwards the whole process environment into `__ENV` on its own
+(`--include-system-env-vars`, on by default), so exporting `AGENTAREA_TOKEN`
+and `AGENTAREA_API_URL` is enough — running `k6 run scenarios/smoke.js`
+directly after sourcing `ru.env` works with no flags at all. **Don't** pass
+either through `-e`: that puts the value in the process's argv, which any
+local `ps`/`pgrep -fl` shows in plaintext to anyone with process-list access
+on the machine. `-e` is for `WORKSPACE` only, a non-secret knob the `make`
+targets pass explicitly:
 
 ```bash
-k6 run -e AGENTAREA_TOKEN="$AGENTAREA_TOKEN" -e AGENTAREA_API_URL="$AGENTAREA_API_URL" scenarios/smoke.js
+k6 run -e WORKSPACE=some-workspace scenarios/smoke.js
 ```
+
+(`k6 inspect` does *not* forward the environment the same way `k6 run`
+does — if you're validating a script with `k6 inspect`, pass
+`-e AGENTAREA_TOKEN=dummy` there, it's just for a syntax/threshold check and
+never talks to a real API.)
 
 ## Safety rules
 
@@ -49,8 +57,9 @@ k6 run -e AGENTAREA_TOKEN="$AGENTAREA_TOKEN" -e AGENTAREA_API_URL="$AGENTAREA_AP
 - **`stress` is opt-in and never for prod.** It ramps to 50 VUs and refuses to
   run at all unless `ALLOW_STRESS=1` is set. Only ever point it at a
   staging/local target.
-- **The token never touches disk or git.** Source `ru.env` into the shell
-  each time; nothing in this directory reads or writes that file.
+- **The token never touches disk, git, or argv.** Source `ru.env` into the
+  shell each time; nothing in this directory reads or writes that file, and
+  nothing passes it through `-e` (see "Running it" above for why).
 
 ## Thresholds
 

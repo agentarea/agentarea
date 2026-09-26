@@ -9,11 +9,11 @@ export const TOKEN = __ENV.AGENTAREA_TOKEN;
 
 if (!TOKEN) {
   throw new Error(
-    "AGENTAREA_TOKEN is not set. k6 does not read the process environment on its own — " +
-      "every var must be forwarded with -e, even ones already exported in the shell:\n" +
+    "AGENTAREA_TOKEN is not set. `k6 run` forwards the whole process environment into " +
+      "__ENV on its own, so exporting it is enough — no -e needed, and don't add one: " +
+      "-e puts the value in argv, which any local `ps`/`pgrep -fl` shows in plaintext.\n" +
       "  set -a; . ~/.config/agentarea/ru.env; set +a\n" +
-      '  k6 run -e AGENTAREA_TOKEN="$AGENTAREA_TOKEN" -e AGENTAREA_API_URL="$AGENTAREA_API_URL" scenarios/smoke.js\n' +
-      "or just `make smoke` / `make baseline`, which forwards them for you."
+      "  make smoke   # or: k6 run scenarios/smoke.js"
   );
 }
 
