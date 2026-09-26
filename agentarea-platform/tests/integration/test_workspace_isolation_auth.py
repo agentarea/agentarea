@@ -35,12 +35,12 @@ class TestWorkspaceIsolation:
 
         # Create agent as user 1
         response = client.post(
-            "/v1/agents",
+            "/v1/workspaces/workspace-1/agents",
             json={
                 "name": "Test Agent",
                 "instructions": "Test instructions",
             },
-            headers={"Authorization": f"Bearer {token1}", "X-Workspace-ID": "workspace-1"},
+            headers={"Authorization": f"Bearer {token1}"},
         )
 
         if response.status_code == 201:
@@ -54,37 +54,37 @@ class TestWorkspaceIsolation:
             )
 
             response = client.get(
-                f"/v1/agents/{agent_id}",
-                headers={"Authorization": f"Bearer {token2}", "X-Workspace-ID": "workspace-2"},
+                f"/v1/workspaces/workspace-2/agents/{agent_id}",
+                headers={"Authorization": f"Bearer {token2}"},
             )
             # Should be 404 (not found) or 403 (forbidden), NOT 200
             assert response.status_code in [403, 404], "Agent should not be accessible across workspaces"
 
 @pytest.mark.integration
 class TestEndpointAuthRequirements:
-    """Test that all endpoints require authentication."""
+    """Test that all endpoints require authentication, before any workspace is resolved."""
 
     PROTECTED_ENDPOINTS = [
-        ("POST", "/v1/agents/", {"name": "Test", "instructions": "test"}),
-        ("GET", "/v1/agents", None),
-        ("GET", f"/v1/agents/{uuid4()}", None),
-        ("PATCH", f"/v1/agents/{uuid4()}", {"name": "Updated"}),
-        ("DELETE", f"/v1/agents/{uuid4()}", None),
+        ("POST", "/v1/workspaces/workspace-1/agents/", {"name": "Test", "instructions": "test"}),
+        ("GET", "/v1/workspaces/workspace-1/agents", None),
+        ("GET", f"/v1/workspaces/workspace-1/agents/{uuid4()}", None),
+        ("PATCH", f"/v1/workspaces/workspace-1/agents/{uuid4()}", {"name": "Updated"}),
+        ("DELETE", f"/v1/workspaces/workspace-1/agents/{uuid4()}", None),
 
         # Add more endpoints as they are implemented
-        # Task creation is agent-scoped (no global POST /v1/tasks endpoint).
-        ("POST", f"/v1/agents/{uuid4()}/tasks/", {"input": "test"}),
-        ("GET", "/v1/tasks", None),
-        ("GET", f"/v1/tasks/{uuid4()}", None),
+        # Task creation is agent-scoped (no workspace-wide POST .../tasks endpoint).
+        ("POST", f"/v1/workspaces/workspace-1/agents/{uuid4()}/tasks/", {"input": "test"}),
+        ("GET", "/v1/workspaces/workspace-1/tasks", None),
+        ("GET", f"/v1/workspaces/workspace-1/tasks/{uuid4()}", None),
 
-        ("POST", "/v1/model-instances", {"name": "test"}),
-        ("GET", "/v1/model-instances", None),
+        ("POST", "/v1/workspaces/workspace-1/model-instances", {"name": "test"}),
+        ("GET", "/v1/workspaces/workspace-1/model-instances", None),
 
-        ("POST", "/v1/provider-configs", {"name": "test"}),
-        ("GET", "/v1/provider-configs", None),
+        ("POST", "/v1/workspaces/workspace-1/provider-configs", {"name": "test"}),
+        ("GET", "/v1/workspaces/workspace-1/provider-configs", None),
 
-        ("POST", "/v1/triggers", {"name": "test"}),
-        ("GET", "/v1/triggers", None),
+        ("POST", "/v1/workspaces/workspace-1/triggers", {"name": "test"}),
+        ("GET", "/v1/workspaces/workspace-1/triggers", None),
     ]
 
     @pytest.mark.parametrize("method,endpoint,data", PROTECTED_ENDPOINTS)
@@ -153,24 +153,24 @@ class TestCrossWorkspaceDataLeakage:
         token1 = generate_jwt_token(user_id="user-1", workspace_id="workspace-1")
 
         client.post(
-            "/v1/agents",
+            "/v1/workspaces/workspace-1/agents",
             json={"name": "Agent 1", "instructions": "test"},
-            headers={"Authorization": f"Bearer {token1}", "X-Workspace-ID": "workspace-1"},
+            headers={"Authorization": f"Bearer {token1}"},
         )
 
         # Create resources in workspace-2
         token2 = generate_jwt_token(user_id="user-2", workspace_id="workspace-2")
 
         client.post(
-            "/v1/agents",
+            "/v1/workspaces/workspace-2/agents",
             json={"name": "Agent 2", "instructions": "test"},
-            headers={"Authorization": f"Bearer {token2}", "X-Workspace-ID": "workspace-2"},
+            headers={"Authorization": f"Bearer {token2}"},
         )
 
         # List agents as user 1 - should only see workspace-1 agents
         response = client.get(
-            "/v1/agents",
-            headers={"Authorization": f"Bearer {token1}", "X-Workspace-ID": "workspace-1"},
+            "/v1/workspaces/workspace-1/agents",
+            headers={"Authorization": f"Bearer {token1}"},
         )
 
         if response.status_code == 200:

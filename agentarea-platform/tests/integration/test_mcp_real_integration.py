@@ -59,7 +59,7 @@ class MCPRealIntegrationTest:
             "model_id": instance_id,
         }
 
-        response = await self.client.post(f"{self.api_base}/v1/agents/", json=agent_data)
+        response = await self.client.post(f"{self.api_base}/v1/workspaces/acme/agents/", json=agent_data)
         if response.status_code in [200, 201]:
             agent = response.json()
             self.agent_id = agent["id"]
@@ -92,7 +92,7 @@ class MCPRealIntegrationTest:
         }
 
         # Create server
-        response = await self.client.post(f"{self.api_base}/v1/mcp-servers/", json=server_data)
+        response = await self.client.post(f"{self.api_base}/v1/workspaces/acme/mcp-servers/", json=server_data)
         if response.status_code not in [200, 201]:
             print(f"❌ Failed to create MCP server: {response.status_code} - {response.text}")
             return False
@@ -116,7 +116,7 @@ class MCPRealIntegrationTest:
         }
 
         response = await self.client.post(
-            f"{self.api_base}/v1/mcp-server-instances/", json=instance_data
+            f"{self.api_base}/v1/workspaces/acme/mcp-server-instances/", json=instance_data
         )
         if response.status_code not in [200, 201]:
             print(f"❌ Failed to create MCP instance: {response.status_code} - {response.text}")
@@ -146,7 +146,7 @@ class MCPRealIntegrationTest:
         }
 
         response = await self.client.post(
-            f"{self.api_base}/v1/agents/{self.agent_id}/tasks/", json=task_data
+            f"{self.api_base}/v1/workspaces/acme/agents/{self.agent_id}/tasks/", json=task_data
         )
         if response.status_code not in [200, 201]:
             print(f"❌ Failed to create task: {response.status_code} - {response.text}")
@@ -170,20 +170,20 @@ class MCPRealIntegrationTest:
             return False
 
         # Check agent
-        agent_response = await self.client.get(f"{self.api_base}/v1/agents/{self.agent_id}")
+        agent_response = await self.client.get(f"{self.api_base}/v1/workspaces/acme/agents/{self.agent_id}")
         if agent_response.status_code != 200:
             print("❌ Agent not accessible")
             return False
 
         # Check MCP server
-        mcp_response = await self.client.get(f"{self.api_base}/v1/mcp-servers/{self.mcp_server_id}")
+        mcp_response = await self.client.get(f"{self.api_base}/v1/workspaces/acme/mcp-servers/{self.mcp_server_id}")
         if mcp_response.status_code != 200:
             print("❌ MCP server not accessible")
             return False
 
         # Check MCP instance
         instance_response = await self.client.get(
-            f"{self.api_base}/v1/mcp-server-instances/{self.mcp_instance_id}"
+            f"{self.api_base}/v1/workspaces/acme/mcp-server-instances/{self.mcp_instance_id}"
         )
         if instance_response.status_code != 200:
             print("❌ MCP instance not accessible")
@@ -202,7 +202,7 @@ class MCPRealIntegrationTest:
             return None
 
         # Step 1: Get or find Ollama provider spec
-        response = await self.client.get(f"{self.api_base}/v1/provider-specs/")
+        response = await self.client.get(f"{self.api_base}/v1/workspaces/acme/provider-specs/")
         if response.status_code != 200:
             print(f"❌ Failed to get provider specs: {response.status_code}")
             return None
@@ -223,7 +223,7 @@ class MCPRealIntegrationTest:
 
         # Step 2: Check for existing provider config
         response = await self.client.get(
-            f"{self.api_base}/v1/provider-configs/", params={"provider_spec_id": provider_spec_id}
+            f"{self.api_base}/v1/workspaces/acme/provider-configs/", params={"provider_spec_id": provider_spec_id}
         )
 
         provider_config_id = None
@@ -244,7 +244,7 @@ class MCPRealIntegrationTest:
             }
 
             response = await self.client.post(
-                f"{self.api_base}/v1/provider-configs/", json=config_data
+                f"{self.api_base}/v1/workspaces/acme/provider-configs/", json=config_data
             )
             if response.status_code in [200, 201]:
                 config = response.json()
@@ -267,7 +267,7 @@ class MCPRealIntegrationTest:
         import uuid
 
         # Step 1: Get model specs for the provider
-        response = await self.client.get(f"{self.api_base}/v1/provider-specs/with-models")
+        response = await self.client.get(f"{self.api_base}/v1/workspaces/acme/provider-specs/with-models")
         if response.status_code != 200:
             print(f"❌ Failed to get provider specs with models: {response.status_code}")
             return None
@@ -309,7 +309,7 @@ class MCPRealIntegrationTest:
         }
 
         response = await self.client.post(
-            f"{self.api_base}/v1/model-instances/", json=instance_data
+            f"{self.api_base}/v1/workspaces/acme/model-instances/", json=instance_data
         )
         if response.status_code in [200, 201]:
             instance = response.json()

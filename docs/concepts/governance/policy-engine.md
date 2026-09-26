@@ -54,7 +54,7 @@ A `PolicyRule` row is one governance intent for one subject:
 | `condition` | an optional expression string |
 | `enabled`, `priority` | row state |
 
-Rules are managed through `/v1/policies` (list, create, get, patch, delete), and
+Rules are managed through `/v1/workspaces/{workspace}/policies` (list, create, get, patch, delete), and
 every mutation is recorded in the audit log as `governance_policy.create`,
 `.update`, `.set_enabled` or `.delete`. A malformed target selector is rejected
 at parse time rather than silently ignored.
@@ -91,13 +91,13 @@ filter its parent enabled.
 
 The result is an `EffectivePolicy`: the merged document plus `source_policy_ids`
 and a `resolver_version` (`policy-resolver-v1`). You can compute one without
-committing to a task through `POST /v1/governance/effective-policy/preview`.
+committing to a task through `POST /v1/workspaces/{workspace}/governance/effective-policy/preview`.
 
 ### The snapshot
 
 The effective policy is resolved once, at task creation, and carried into the
 Temporal workflow as state. It is not persisted to a database table;
-`GET /v1/governance/task-policy-snapshots/{task_id}` serves it by querying the
+`GET /v1/workspaces/{workspace}/governance/task-policy-snapshots/{task_id}` serves it by querying the
 task's workflow. A task that is not running has no snapshot to return.
 
 That snapshot is translated into a flat `execution_state` dictionary for the
@@ -112,7 +112,7 @@ a float because the gates do ratio arithmetic; authoritative accounting stays in
 
 | Role | Where |
 |---|---|
-| **PAP** — where policy is written | `/v1/policies`, `GovernancePolicyService`, `config/default_policies.yaml` |
+| **PAP** — where policy is written | `/v1/workspaces/{workspace}/policies`, `GovernancePolicyService`, `config/default_policies.yaml` |
 | **PDP** — where the verdict is computed | `decide_tool_policy` for tool verdicts; each interceptor gate for its own dimension |
 | **PEP** — where the verdict is applied | tool disclosure in the workflow, the workflow tool gate, the tool activity, the MCP proxy, task creation, and the Temporal activity interceptor |
 
@@ -186,7 +186,7 @@ precisely because that limit is felt — see below.
 - **The pipeline swallows interceptor exceptions.** If a gate raises, the pipeline
   logs the traceback and continues to the next interceptor. A gate that crashes
   fails open for its own dimension.
-- **`GET /v1/network/topology` reports a governance overlay that is hardcoded.**
+- **`GET /v1/workspaces/{workspace}/network/topology` reports a governance overlay that is hardcoded.**
   The interceptor list that endpoint returns is a static constant in the API, not
   a reading of the pipeline the worker builds. It advertises `escalation_guard`
   and `content_policy_enforcer`, neither of which exists, and its phase

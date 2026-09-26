@@ -11,6 +11,7 @@ from agentarea_api.api.deps.services import get_read_agent_service, get_read_tas
 from agentarea_api.api.v1.agents_tasks import TaskWithAgent
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
+from agentarea_tasks.domain.statuses import INBOX_STATUSES, InboxStatus
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -19,13 +20,6 @@ from sqlalchemy import bindparam, text
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/inbox", tags=["inbox"])
-
-INBOX_STATUSES = [
-    "waiting_for_approval",
-    "waiting_for_input",
-    "completed",
-    "failed",
-]
 
 
 class InboxResponse(BaseModel):
@@ -86,7 +80,7 @@ async def _pending_escalations_for_tasks(
 )
 async def get_inbox_items(
     user_context: UserContextDep,
-    status: str | None = Query(None, description="Filter to a specific inbox status"),
+    status: InboxStatus | None = Query(None, description="Filter to a specific inbox status"),
     agent_id: UUID | None = Query(None, description="Filter by agent ID"),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=1000),
@@ -99,7 +93,7 @@ async def get_inbox_items(
     ordered by most recently updated first. Includes total count for badge/pagination.
     """
     try:
-        query_statuses = [status] if status and status in INBOX_STATUSES else INBOX_STATUSES
+        query_statuses = [status] if status else list(INBOX_STATUSES)
         offset = (page - 1) * page_size
 
         # Sequential awaits: agent_service and task_service share one AsyncSession

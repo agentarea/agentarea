@@ -1,7 +1,9 @@
-export const WORKSPACE_SLUG_COOKIE = "workspace_slug";
+// Carries the page's workspace inside the webapp: from the proxy to server
+// code, and from the browser to /api route handlers. Never sent to the API,
+// which takes the workspace from its `/v1/workspaces/{workspace}` path.
 export const WORKSPACE_REFERENCE_HEADER = "x-agentarea-workspace";
-// Accepted on incoming requests while older callers migrate.
-export const WORKSPACE_SLUG_HEADER = "x-workspace-slug";
+// For browser requests that cannot carry a header: EventSource, <a download>.
+export const WORKSPACE_QUERY_PARAM = "workspace";
 
 export type Workspace = {
   id: string;
@@ -22,25 +24,16 @@ export function isPersonalWorkspace(workspace: Workspace): boolean {
   return workspace.id === workspace.owner_user_id;
 }
 
-/**
- * Pick the workspace a request should run against.
- *
- * The preferred slug comes from the switcher cookie and is deliberately not
- * trusted: a user who left a workspace keeps the cookie, and sending a slug
- * they are no longer a member of makes the backend reject every request. An
- * unrecognised slug therefore falls back to the personal workspace, which the
- * backend provisions for every user.
- */
-export function resolveActiveWorkspace<T extends Workspace>(
-  workspaces: T[],
-  preferredSlug: string | null | undefined
+/** The workspace `/` and a fresh sign-in land in. */
+export function personalWorkspace<T extends Workspace>(
+  workspaces: T[]
 ): T | null {
-  if (workspaces.length === 0) return null;
+  return workspaces.find(isPersonalWorkspace) ?? null;
+}
 
-  if (preferredSlug) {
-    const match = workspaces.find((w) => w.slug === preferredSlug);
-    if (match) return match;
-  }
-
-  return workspaces.find(isPersonalWorkspace) ?? workspaces[0];
+/** Append the workspace to a same-origin API URL as a query parameter. */
+export function withWorkspaceQuery(url: string, slug: string | null): string {
+  if (!slug) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}${WORKSPACE_QUERY_PARAM}=${encodeURIComponent(slug)}`;
 }

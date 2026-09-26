@@ -8,7 +8,7 @@ import pytest
 
 def _create_agent(client: httpx.Client, name: str = "trigger-host") -> str:
     resp = client.post(
-        "/v1/agents/",
+        f"{client.ws}/agents/",
         json={
             "name": name,
             "description": "for trigger test",
@@ -25,7 +25,7 @@ def test_trigger_lifecycle(alice_client: httpx.Client) -> None:
     agent_id = _create_agent(alice_client)
 
     created = alice_client.post(
-        "/v1/triggers/",
+        f"{alice_client.ws}/triggers/",
         json={
             "name": "t-lifecycle",
             "description": "lifecycle test",
@@ -36,18 +36,18 @@ def test_trigger_lifecycle(alice_client: httpx.Client) -> None:
     assert created.status_code == 201, created.text[:200]
     trigger_id = created.json()["id"]
 
-    fetched = alice_client.get(f"/v1/triggers/{trigger_id}")
+    fetched = alice_client.get(f"{alice_client.ws}/triggers/{trigger_id}")
     assert fetched.status_code == 200
     assert fetched.json()["id"] == trigger_id
 
-    listed = alice_client.get("/v1/triggers/").json()
+    listed = alice_client.get(f"{alice_client.ws}/triggers/").json()
     listed = listed if isinstance(listed, list) else listed.get("items", [])
     assert any(t["id"] == trigger_id for t in listed)
 
-    deleted = alice_client.delete(f"/v1/triggers/{trigger_id}")
+    deleted = alice_client.delete(f"{alice_client.ws}/triggers/{trigger_id}")
     assert deleted.status_code in (200, 204)
 
-    gone = alice_client.get(f"/v1/triggers/{trigger_id}")
+    gone = alice_client.get(f"{alice_client.ws}/triggers/{trigger_id}")
     assert gone.status_code == 404
 
 
@@ -55,7 +55,7 @@ def test_trigger_lifecycle(alice_client: httpx.Client) -> None:
 def test_trigger_enable_disable(alice_client: httpx.Client) -> None:
     agent_id = _create_agent(alice_client, "trigger-toggle-host")
     trigger_id = alice_client.post(
-        "/v1/triggers/",
+        f"{alice_client.ws}/triggers/",
         json={
             "name": "t-toggle",
             "description": "toggle",
@@ -64,14 +64,14 @@ def test_trigger_enable_disable(alice_client: httpx.Client) -> None:
         },
     ).raise_for_status().json()["id"]
 
-    disabled = alice_client.post(f"/v1/triggers/{trigger_id}/disable")
+    disabled = alice_client.post(f"{alice_client.ws}/triggers/{trigger_id}/disable")
     assert disabled.status_code in (200, 204), disabled.text[:200]
-    state = alice_client.get(f"/v1/triggers/{trigger_id}").json()
+    state = alice_client.get(f"{alice_client.ws}/triggers/{trigger_id}").json()
     assert state["is_active"] is False
 
-    enabled = alice_client.post(f"/v1/triggers/{trigger_id}/enable")
+    enabled = alice_client.post(f"{alice_client.ws}/triggers/{trigger_id}/enable")
     assert enabled.status_code in (200, 204)
-    state = alice_client.get(f"/v1/triggers/{trigger_id}").json()
+    state = alice_client.get(f"{alice_client.ws}/triggers/{trigger_id}").json()
     assert state["is_active"] is True
 
 
@@ -81,7 +81,7 @@ def test_trigger_isolation(
 ) -> None:
     alice_agent = _create_agent(alice_client, "alice-trigger-host")
     alice_trigger_id = alice_client.post(
-        "/v1/triggers/",
+        f"{alice_client.ws}/triggers/",
         json={
             "name": "alice-secret-trigger",
             "description": "isolation",
@@ -90,13 +90,13 @@ def test_trigger_isolation(
         },
     ).raise_for_status().json()["id"]
 
-    cross_get = bob_client.get(f"/v1/triggers/{alice_trigger_id}")
+    cross_get = bob_client.get(f"{bob_client.ws}/triggers/{alice_trigger_id}")
     assert cross_get.status_code == 404, cross_get.text[:200]
 
-    cross_del = bob_client.delete(f"/v1/triggers/{alice_trigger_id}")
+    cross_del = bob_client.delete(f"{bob_client.ws}/triggers/{alice_trigger_id}")
     assert cross_del.status_code in (403, 404)
 
-    bob_list = bob_client.get("/v1/triggers/").json()
+    bob_list = bob_client.get(f"{bob_client.ws}/triggers/").json()
     bob_list = bob_list if isinstance(bob_list, list) else bob_list.get("items", [])
     assert all(t["id"] != alice_trigger_id for t in bob_list)
 
@@ -109,7 +109,7 @@ def test_trigger_rejects_other_users_agent(
     alice_agent_id = _create_agent(alice_client, "alice-fortress")
 
     attack = bob_client.post(
-        "/v1/triggers/",
+        f"{bob_client.ws}/triggers/",
         json={
             "name": "bob-attack",
             "description": "should fail",

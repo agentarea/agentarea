@@ -27,6 +27,7 @@ vi.mock("next-intl", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
+  useParams: () => ({}),
   useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
 }));
 

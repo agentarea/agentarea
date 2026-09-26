@@ -51,7 +51,7 @@ def harness():
     manager = AsyncMock(spec=BaseSecretManager)
     manager.has_secret.return_value = False
     app = FastAPI()
-    app.include_router(triggers.router, prefix="/v1")
+    app.include_router(triggers.router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_user_context] = lambda: UserContext(
         user_id="user-a", workspace_id="workspace-a"
     )
@@ -69,13 +69,13 @@ async def _call(harness, operation):
         transport=ASGITransport(app=harness.app), base_url="http://test"
     ) as client:
         if operation == "get":
-            return await client.get(f"/v1/triggers/{harness.trigger.id}")
+            return await client.get(f"/v1/workspaces/workspace-a/triggers/{harness.trigger.id}")
         if operation == "list":
-            return await client.get("/v1/triggers/")
+            return await client.get("/v1/workspaces/workspace-a/triggers/")
         if operation == "update":
-            return await client.put(f"/v1/triggers/{harness.trigger.id}", json={"name": "x"})
+            return await client.put(f"/v1/workspaces/workspace-a/triggers/{harness.trigger.id}", json={"name": "x"})
         return await client.post(
-            "/v1/triggers/",
+            "/v1/workspaces/workspace-a/triggers/",
             json={
                 "name": "Stripe payments",
                 "agent_id": str(harness.trigger.agent_id),

@@ -3,7 +3,8 @@
 import "server-only";
 import { env } from "@/env";
 import { getAuthToken } from "./getAuthToken";
-import { workspaceSlugHeaders } from "./workspace-request";
+import { getRequestWorkspaceSlug } from "./workspace-context";
+import { fillWorkspace } from "./workspace-url";
 
 export type DashboardSpend = {
   today_usd: number;
@@ -101,16 +102,14 @@ async function authedFetch(path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${token}`);
 
-  for (const [name, value] of Object.entries(await workspaceSlugHeaders())) {
-    if (!headers.has(name)) {
-      headers.set(name, value);
-    }
-  }
-
   if (init?.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  return fetch(`${env.API_URL}${path}`, {
+  const url = fillWorkspace(
+    `${env.API_URL}${path}`,
+    await getRequestWorkspaceSlug()
+  );
+  return fetch(url, {
     ...init,
     headers,
     cache: "no-store",
@@ -118,7 +117,7 @@ async function authedFetch(path: string, init?: RequestInit) {
 }
 
 export async function getDashboard(): Promise<DashboardData> {
-  const res = await authedFetch("/v1/workspace/dashboard");
+  const res = await authedFetch("/v1/workspaces/{workspace}/dashboard");
   if (!res.ok) {
     throw new Error(`Dashboard fetch failed: ${res.status}`);
   }
@@ -126,7 +125,7 @@ export async function getDashboard(): Promise<DashboardData> {
 }
 
 export async function getWorkspaceSettings(): Promise<WorkspaceSettings> {
-  const res = await authedFetch("/v1/workspace/settings");
+  const res = await authedFetch("/v1/workspaces/{workspace}/settings");
   if (!res.ok) {
     throw new Error(`Workspace settings fetch failed: ${res.status}`);
   }
@@ -137,7 +136,7 @@ export async function getAgentOverview(
   agentId: string
 ): Promise<AgentOverviewData> {
   const res = await authedFetch(
-    `/v1/agents/${encodeURIComponent(agentId)}/overview`
+    `/v1/workspaces/{workspace}/agents/${encodeURIComponent(agentId)}/overview`
   );
   if (!res.ok) {
     throw new Error(`Agent overview fetch failed: ${res.status}`);
@@ -148,7 +147,7 @@ export async function getAgentOverview(
 export async function updateWorkspaceSettings(
   monthly_cap_usd: number | null
 ): Promise<WorkspaceSettings> {
-  const res = await authedFetch("/v1/workspace/settings", {
+  const res = await authedFetch("/v1/workspaces/{workspace}/settings", {
     method: "PUT",
     body: JSON.stringify({ monthly_cap_usd }),
   });

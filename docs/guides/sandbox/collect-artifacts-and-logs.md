@@ -63,7 +63,7 @@ exceeding them fails the copy rather than truncating it.
     List everything the task produced:
 
     ```bash
-    curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
+    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
       -H "Authorization: Bearer $TOKEN"
     ```
 
@@ -72,7 +72,7 @@ exceeding them fails the copy rather than truncating it.
 
     ```bash
     curl -s -o results.json \
-      "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/artifacts/files/results.json" \
+      "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/artifacts/files/results.json" \
       -H "Authorization: Bearer $TOKEN"
     ```
   </Step>
@@ -84,7 +84,7 @@ The listing is the check — an artifact that copied out appears in it with a
 non-zero size and a SHA-256:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 ```
 

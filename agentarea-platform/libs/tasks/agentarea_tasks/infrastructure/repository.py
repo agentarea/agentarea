@@ -1,5 +1,6 @@
 """Task repository implementation."""
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 from typing import cast as type_cast
@@ -7,7 +8,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import Numeric, cast, func, select, update
+from sqlalchemy import Numeric, cast, func, or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +36,38 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         """List all tasks in workspace and convert to domain models."""
         task_orms = await self.list_all(creator_scoped=creator_scoped, limit=limit, offset=offset)
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
+
+    async def list_page(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        statuses: Sequence[str] = (),
+        created_by: str | None = None,
+        search: str | None = None,
+        agent_ids: Sequence[UUID] = (),
+    ) -> list[TaskORM]:
+        """One page of the workspace's tasks, newest first, filtered in SQL.
+
+        ``search`` matches the description case-insensitively, or any task of an
+        agent in ``agent_ids`` — agent names live in another table, so the caller
+        passes the ids of the agents whose name matched.
+        """
+        query = select(TaskORM).where(self._get_workspace_filter())
+        if statuses:
+            query = query.where(TaskORM.status.in_(statuses))
+        if created_by:
+            query = query.where(TaskORM.created_by == created_by)
+        if search:
+            matches = TaskORM.description.icontains(search, autoescape=True)
+            if agent_ids:
+                matches = or_(matches, TaskORM.agent_id.in_(agent_ids))
+            query = query.where(matches)
+        query = (
+            query.order_by(TaskORM.created_at.desc(), TaskORM.id.desc()).offset(offset).limit(limit)
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
 
     async def create_task(self, entity: Task) -> Task:
         """Create a new task from domain model."""

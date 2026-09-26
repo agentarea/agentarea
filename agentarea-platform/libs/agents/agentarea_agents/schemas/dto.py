@@ -9,9 +9,10 @@ for REST clients reading the OpenAPI doc.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
+from agentarea_common.utils.types import NotNull
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agentarea_agents.schemas.import_export import ToolConfig
@@ -112,7 +113,7 @@ class AgentUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str | None = Field(default=None, min_length=1, max_length=255)
+    name: Annotated[str | None, NotNull] = Field(default=None, min_length=1, max_length=255)
     capabilities: list[str] | None = None
     description: str | None = Field(default=None, max_length=1000)
     instruction: str | None = Field(default=None, max_length=20000)
@@ -122,7 +123,7 @@ class AgentUpdate(BaseModel):
     planning: bool | None = None
     a2ui_enabled: bool | None = None
     skill_ids: list[UUID] | None = None
-    agent_type: AgentTypeLiteral | None = None
+    agent_type: Annotated[AgentTypeLiteral | None, NotNull] = None
 
 
 class AgentSummary(BaseModel):

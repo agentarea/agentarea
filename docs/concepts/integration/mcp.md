@@ -199,7 +199,7 @@ limits.
 - **The tool list is a snapshot.** Tools discovered at verification are stored on
   the row. A server that adds a tool later is not rediscovered until a
   re-verification or an explicit
-  `POST /v1/mcp-server-instances/{instance_id}/discover-tools`.
+  `POST /v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/discover-tools`.
 - **The proxy is Streamable HTTP only.** An SSE-only server can be verified —
   verification falls back to SSE — but it cannot be served through
   `/v1/mcp/{instance_id}/mcp`.

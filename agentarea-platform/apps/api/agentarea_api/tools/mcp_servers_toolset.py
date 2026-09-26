@@ -323,11 +323,15 @@ class MCPServersToolset(Toolset):
             server_spec_id: ID of an existing MCP server spec.
             auth_config_id: Optional MCPAuthConfig UUID for OAuth/credentials.
         """
+        try:
+            spec_id = UUID(server_spec_id)
+        except ValueError:
+            return json.dumps({"error": f"server_spec_id must be a UUID, got {server_spec_id!r}"})
         spec = json.loads(json_spec_json) if json_spec_json else {}
         payload = MCPServerInstanceCreate(
             name=name,
             description=description,
-            server_spec_id=server_spec_id,
+            server_spec_id=spec_id,
             json_spec=spec,
             auth_config_id=auth_config_id,
         )

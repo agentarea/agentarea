@@ -90,9 +90,9 @@ def test_coordinator_fans_out_to_three_specialists(
     # Re-fetch sanitized agent names — that's what the LLM will see as
     # delegate_to_<name> tools. (The /v1/agents/{id} response has the
     # canonical name string.)
-    fw = alice_client.get(f"/v1/agents/{file_writer_id}").raise_for_status().json()
-    pf = alice_client.get(f"/v1/agents/{pdf_fetcher_id}").raise_for_status().json()
-    ms = alice_client.get(f"/v1/agents/{md_summarizer_id}").raise_for_status().json()
+    fw = alice_client.get(f"{alice_client.ws}/agents/{file_writer_id}").raise_for_status().json()
+    pf = alice_client.get(f"{alice_client.ws}/agents/{pdf_fetcher_id}").raise_for_status().json()
+    ms = alice_client.get(f"{alice_client.ws}/agents/{md_summarizer_id}").raise_for_status().json()
 
     coord_id = create_agent(
         alice_client,
@@ -121,7 +121,7 @@ def test_coordinator_fans_out_to_three_specialists(
         f"Then summarize what each one did."
     )
     task_id = alice_client.post(
-        f"/v1/agents/{coord_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{coord_id}/tasks/sync",
         json={
             "description": prompt,
             "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
@@ -177,7 +177,7 @@ def test_coordinator_fans_out_to_three_specialists(
     # File-writer: greeting.txt under child task scope, contains the payload.
     fw_meta = by_agent[fw["name"]]
     fw_artifacts = alice_client.get(
-        f"/v1/agents/{fw_meta['target_agent_id']}/tasks/{fw_meta['child_task_id']}/artifacts"
+        f"{alice_client.ws}/agents/{fw_meta['target_agent_id']}/tasks/{fw_meta['child_task_id']}/artifacts"
     ).raise_for_status().json()
     fw_names = [a["path"].rsplit("/", 1)[-1] for a in fw_artifacts]
     assert "greeting.txt" in fw_names, (
@@ -191,7 +191,7 @@ def test_coordinator_fans_out_to_three_specialists(
     # The web tool persists binary fetches under tasks/{task_id}/downloads/.
     pf_meta = by_agent[pf["name"]]
     pf_artifacts = alice_client.get(
-        f"/v1/agents/{pf_meta['target_agent_id']}/tasks/{pf_meta['child_task_id']}/artifacts"
+        f"{alice_client.ws}/agents/{pf_meta['target_agent_id']}/tasks/{pf_meta['child_task_id']}/artifacts"
     ).raise_for_status().json()
     pdfs = [a for a in pf_artifacts if a["content_type"] == "application/pdf"]
     assert pdfs, (
@@ -208,7 +208,7 @@ def test_coordinator_fans_out_to_three_specialists(
     # MD-summarizer: summary.md exists, contains markdown structure.
     ms_meta = by_agent[ms["name"]]
     ms_artifacts = alice_client.get(
-        f"/v1/agents/{ms_meta['target_agent_id']}/tasks/{ms_meta['child_task_id']}/artifacts"
+        f"{alice_client.ws}/agents/{ms_meta['target_agent_id']}/tasks/{ms_meta['child_task_id']}/artifacts"
     ).raise_for_status().json()
     summaries = [a for a in ms_artifacts if a["path"].endswith("summary.md")]
     assert summaries, (
@@ -231,7 +231,7 @@ def test_coordinator_fans_out_to_three_specialists(
     )
 
     # Release the coordinator's await window.
-    alice_client.delete(f"/v1/agents/{coord_id}/tasks/{task_id}")
+    alice_client.delete(f"{alice_client.ws}/agents/{coord_id}/tasks/{task_id}")
 
 
 @pytest.mark.integration
@@ -259,7 +259,7 @@ def test_specialist_writes_artifact_via_delegation(
         ),
         tools=[{"type": "code", "name": "agentarea/files"}],
     )
-    writer = alice_client.get(f"/v1/agents/{writer_id}").raise_for_status().json()
+    writer = alice_client.get(f"{alice_client.ws}/agents/{writer_id}").raise_for_status().json()
 
     coord_id = create_agent(
         alice_client,
@@ -273,7 +273,7 @@ def test_specialist_writes_artifact_via_delegation(
         tools=[{"type": "agent", "name": writer["name"]}],
     )
     task_id = alice_client.post(
-        f"/v1/agents/{coord_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{coord_id}/tasks/sync",
         json={
             "description": "Tell the writer to save note.txt now.",
             "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
@@ -297,14 +297,14 @@ def test_specialist_writes_artifact_via_delegation(
     # artifact bucket with the expected payload. This proves the child
     # really executed the file write — not just claimed completion.
     artifacts = alice_client.get(
-        f"/v1/agents/{meta['target_agent_id']}/tasks/{meta['child_task_id']}/artifacts"
+        f"{alice_client.ws}/agents/{meta['target_agent_id']}/tasks/{meta['child_task_id']}/artifacts"
     ).raise_for_status().json()
     notes = [a for a in artifacts if a["path"].endswith("note.txt")]
     assert notes, f"note.txt missing from child artifacts; got {[a['path'] for a in artifacts]}"
     body = alice_client.get(notes[0]["download_url"]).raise_for_status().text
     assert "delegated payload" in body, body[:200]
 
-    alice_client.delete(f"/v1/agents/{coord_id}/tasks/{task_id}")
+    alice_client.delete(f"{alice_client.ws}/agents/{coord_id}/tasks/{task_id}")
 
 
 @pytest.mark.integration
@@ -331,7 +331,7 @@ def test_task_summary_endpoint_reflects_event_log(
         tools=[{"type": "code", "name": "agentarea/files"}],
     )
     task_id = alice_client.post(
-        f"/v1/agents/{writer_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{writer_id}/tasks/sync",
         json={
             "description": "Save fixture.txt now.",
             "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
@@ -344,7 +344,7 @@ def test_task_summary_endpoint_reflects_event_log(
     wait_for_workflow(alice_client, writer_id, task_id, timeout=90.0)
 
     summary = alice_client.get(
-        f"/v1/agents/{writer_id}/tasks/{task_id}/summary"
+        f"{alice_client.ws}/agents/{writer_id}/tasks/{task_id}/summary"
     ).raise_for_status().json()
 
     assert summary["task_id"] == task_id
@@ -363,7 +363,7 @@ def test_task_summary_endpoint_reflects_event_log(
     # and numeric.
     assert isinstance(summary["cost_usd"], (int, float)), summary
 
-    alice_client.delete(f"/v1/agents/{writer_id}/tasks/{task_id}")
+    alice_client.delete(f"{alice_client.ws}/agents/{writer_id}/tasks/{task_id}")
 
 
 @pytest.mark.integration
@@ -377,16 +377,16 @@ def test_task_summary_cross_workspace_blocked(
         instruction="Reply ok then complete.",
     )
     task_id = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={"description": "Reply: ok"}, timeout=30.0,
     ).raise_for_status().json()["id"]
 
-    cross = bob_client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/summary")
+    cross = bob_client.get(f"{bob_client.ws}/agents/{agent_id}/tasks/{task_id}/summary")
     assert cross.status_code == 404, (
         f"CRITICAL: Bob read Alice's task summary: HTTP {cross.status_code} "
         f"{cross.text[:200]!r}"
     )
-    alice_client.delete(f"/v1/agents/{agent_id}/tasks/{task_id}")
+    alice_client.delete(f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}")
 
 
 @pytest.mark.integration
@@ -427,8 +427,8 @@ def test_fanout_partial_failure_completes_siblings(
         # to parent successfully but produces no side effects" path.
     )
 
-    good = alice_client.get(f"/v1/agents/{good_id}").raise_for_status().json()
-    bad = alice_client.get(f"/v1/agents/{bad_id}").raise_for_status().json()
+    good = alice_client.get(f"{alice_client.ws}/agents/{good_id}").raise_for_status().json()
+    bad = alice_client.get(f"{alice_client.ws}/agents/{bad_id}").raise_for_status().json()
 
     coord_id = create_agent(
         alice_client, llm_model, name=f"partial-coord-{suffix}",
@@ -443,7 +443,7 @@ def test_fanout_partial_failure_completes_siblings(
         ],
     )
     task_id = alice_client.post(
-        f"/v1/agents/{coord_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{coord_id}/tasks/sync",
         json={
             "description": "Run both agents in parallel.",
             "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
@@ -467,7 +467,7 @@ def test_fanout_partial_failure_completes_siblings(
     # were not aborted by the bad child's outcome.
     assert "WorkflowCompleted" in types, types
 
-    alice_client.delete(f"/v1/agents/{coord_id}/tasks/{task_id}")
+    alice_client.delete(f"{alice_client.ws}/agents/{coord_id}/tasks/{task_id}")
 
 
 @pytest.mark.integration
@@ -498,7 +498,7 @@ def test_agent_can_read_back_file_it_wrote(
         tools=[{"type": "code", "name": "agentarea/files"}],
     )
     task_id = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={
             "description": "Run the file round-trip steps.",
             "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
@@ -526,14 +526,14 @@ def test_agent_can_read_back_file_it_wrote(
     # And the artifact actually exists on the side: the artifact list
     # endpoint should now show note.txt with the right size.
     artifacts = alice_client.get(
-        f"/v1/agents/{agent_id}/tasks/{task_id}/artifacts"
+        f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}/artifacts"
     ).raise_for_status().json()
     notes = [a for a in artifacts if a["path"].endswith("note.txt")]
     assert notes, f"note.txt missing from storage; got {[a['path'] for a in artifacts]}"
     body = alice_client.get(notes[0]["download_url"]).raise_for_status().text
     assert body == "alpha-bravo-charlie", body[:200]
 
-    alice_client.delete(f"/v1/agents/{agent_id}/tasks/{task_id}")
+    alice_client.delete(f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}")
 
 
 @pytest.mark.integration
@@ -552,7 +552,7 @@ def test_summary_reflects_delegation_counts(
         alice_client, llm_model, name=f"sum-child-{suffix}",
         instruction="Reply with the word 'ok' then call completion.",
     )
-    child = alice_client.get(f"/v1/agents/{child_id}").raise_for_status().json()
+    child = alice_client.get(f"{alice_client.ws}/agents/{child_id}").raise_for_status().json()
 
     coord_id = create_agent(
         alice_client, llm_model, name=f"sum-coord-{suffix}",
@@ -564,7 +564,7 @@ def test_summary_reflects_delegation_counts(
         tools=[{"type": "agent", "name": child["name"]}],
     )
     task_id = alice_client.post(
-        f"/v1/agents/{coord_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{coord_id}/tasks/sync",
         json={
             "description": "Delegate once.",
             "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
@@ -575,7 +575,7 @@ def test_summary_reflects_delegation_counts(
     wait_for_workflow(alice_client, coord_id, task_id, timeout=120.0)
 
     summary = alice_client.get(
-        f"/v1/agents/{coord_id}/tasks/{task_id}/summary"
+        f"{alice_client.ws}/agents/{coord_id}/tasks/{task_id}/summary"
     ).raise_for_status().json()
 
     assert summary["status"] == "completed", summary
@@ -583,4 +583,4 @@ def test_summary_reflects_delegation_counts(
     assert summary["delegations_completed"] == 1, summary
     assert summary["delegations_failed"] == 0, summary
 
-    alice_client.delete(f"/v1/agents/{coord_id}/tasks/{task_id}")
+    alice_client.delete(f"{alice_client.ws}/agents/{coord_id}/tasks/{task_id}")

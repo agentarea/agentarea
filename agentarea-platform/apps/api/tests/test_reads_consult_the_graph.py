@@ -96,7 +96,7 @@ async def test_the_list_returns_only_the_rows_the_graph_allows(client, agent_ser
     agent_service.list.return_value = [mine, theirs]
     graph.list_objects.return_value = [str(mine.id)]
 
-    response = await client.get("/v1/agents/")
+    response = await client.get("/v1/workspaces/acme/agents/")
 
     assert response.status_code == 200, response.text
     assert [item["name"] for item in response.json()] == ["Mine"]
@@ -110,7 +110,7 @@ async def test_a_catalog_projection_stays_visible(client, agent_service, graph):
     agent_service.list.return_value = [builtin]
     graph.list_objects.return_value = []
 
-    response = await client.get("/v1/agents/")
+    response = await client.get("/v1/workspaces/acme/agents/")
 
     assert response.status_code == 200, response.text
     assert [item["name"] for item in response.json()] == ["Builtin"]
@@ -123,7 +123,7 @@ async def test_reading_one_agent_the_graph_refuses_is_403(client, agent_service,
     agent_service.get_with_skills.return_value = hidden
     graph.check.return_value = MagicMock(allowed=False)
 
-    response = await client.get(f"/v1/agents/{hidden.id}")
+    response = await client.get(f"/v1/workspaces/acme/agents/{hidden.id}")
 
     assert response.status_code == 403, response.text
 
@@ -135,7 +135,7 @@ async def test_reading_one_agent_the_graph_allows_succeeds(client, agent_service
     agent_service.get_with_skills.return_value = visible
     graph.check.return_value = MagicMock(allowed=True)
 
-    response = await client.get(f"/v1/agents/{visible.id}")
+    response = await client.get(f"/v1/workspaces/acme/agents/{visible.id}")
 
     assert response.status_code == 200, response.text
     assert response.json()["name"] == "Visible"

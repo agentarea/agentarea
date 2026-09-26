@@ -108,7 +108,7 @@ async def test_list_skills_returns_metadata_only(async_client, mock_skill_servic
     mock_skill_service.list_paginated.return_value = ([skill_one, skill_two], 2)
     graph.list_objects.return_value = [str(skill_one.id), str(skill_two.id)]
 
-    response = await async_client.get("/v1/skills")
+    response = await async_client.get("/v1/workspaces/acme/skills")
 
     assert response.status_code == 200
     data = response.json()
@@ -152,7 +152,7 @@ async def test_list_skills_accepts_pagination_and_search(async_client, mock_skil
     graph.list_objects.return_value = ["b1f0a3d6-0000-4000-8000-000000000001"]
 
     response = await async_client.get(
-        "/v1/skills?page=2&page_size=10&search=github"
+        "/v1/workspaces/acme/skills?page=2&page_size=10&search=github"
         "&source_type=github&network_scope=egress&from_registry=false"
     )
 
@@ -188,7 +188,7 @@ async def test_get_skill_content_returns_full_content(async_client, mock_skill_s
 
     mock_skill_service.get_with_catalog.return_value = skill
 
-    response = await async_client.get(f"/v1/skills/{skill_id}/content")
+    response = await async_client.get(f"/v1/workspaces/acme/skills/{skill_id}/content")
 
     assert response.status_code == 200
     data = response.json()
@@ -219,7 +219,7 @@ async def test_install_skill_materializes_catalog_skill(async_client, mock_skill
 
     mock_skill_service.install_catalog_skill.return_value = skill
 
-    response = await async_client.post(f"/v1/skills/{skill_id}/install")
+    response = await async_client.post(f"/v1/workspaces/acme/skills/{skill_id}/install")
 
     assert response.status_code == 200
     data = response.json()
@@ -258,7 +258,7 @@ async def test_update_catalog_skill_content_uses_forked_skill_id(
     monkeypatch.setattr("agentarea_api.api.v1.skills.require_permission", AsyncMock())
 
     response = await async_client.put(
-        f"/v1/skills/{original_catalog_id}",
+        f"/v1/workspaces/acme/skills/{original_catalog_id}",
         json={"description": "Updated description", "content": "# New content"},
     )
 
@@ -276,7 +276,9 @@ async def test_list_skill_files_returns_manifest(async_client, mock_skill_servic
     ]
     mock_skill_service.get_skill_files.return_value = files
 
-    response = await async_client.get(f"/v1/skills/{skill_id}/files?include_urls=true")
+    response = await async_client.get(
+        f"/v1/workspaces/acme/skills/{skill_id}/files?include_urls=true"
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -293,7 +295,7 @@ async def test_get_skill_file_returns_url(async_client, mock_skill_service):
     mock_skill_service.get_skill_file_url.return_value = "https://example.com/file.txt"
 
     response = await async_client.get(
-        f"/v1/skills/{skill_id}/files/templates/file.txt?redirect=false"
+        f"/v1/workspaces/acme/skills/{skill_id}/files/templates/file.txt?redirect=false"
     )
 
     assert response.status_code == 200

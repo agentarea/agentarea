@@ -6,23 +6,21 @@ import {
   updateWorkspaceSettings,
 } from "./api-dashboard";
 
-const { getAuthToken, workspaceSlugHeaders } = vi.hoisted(() => ({
+const { getAuthToken, getRequestWorkspaceSlug } = vi.hoisted(() => ({
   getAuthToken: vi.fn(),
-  workspaceSlugHeaders: vi.fn(),
+  getRequestWorkspaceSlug: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/env", () => ({ env: { API_URL: "https://api.example.test" } }));
 vi.mock("./getAuthToken", () => ({ getAuthToken }));
-vi.mock("./workspace-request", () => ({ workspaceSlugHeaders }));
+vi.mock("./workspace-context", () => ({ getRequestWorkspaceSlug }));
 
 describe("dashboard API client", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getAuthToken.mockResolvedValue("test-token");
-    workspaceSlugHeaders.mockResolvedValue({
-      "x-agentarea-workspace": "team-workspace",
-    });
+    getRequestWorkspaceSlug.mockResolvedValue("team-workspace");
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -39,7 +37,7 @@ describe("dashboard API client", () => {
 
     await expect(getDashboard()).rejects.toThrow("No auth token available");
     expect(fetch).not.toHaveBeenCalled();
-    expect(workspaceSlugHeaders).not.toHaveBeenCalled();
+    expect(getRequestWorkspaceSlug).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -52,10 +50,13 @@ describe("dashboard API client", () => {
     async (_name, request) => {
       await request();
 
-      const [, init] = vi.mocked(fetch).mock.calls[0];
+      const [url, init] = vi.mocked(fetch).mock.calls[0];
       const headers = new Headers(init?.headers);
       expect(headers.get("Authorization")).toBe("Bearer test-token");
-      expect(headers.get("X-AgentArea-Workspace")).toBe("team-workspace");
+      expect(headers.has("X-AgentArea-Workspace")).toBe(false);
+      expect(String(url)).toMatch(
+        /^https:\/\/api\.example\.test\/v1\/workspaces\/team-workspace\//
+      );
     }
   );
 });

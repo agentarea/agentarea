@@ -19,7 +19,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from agentarea_common.channel_origin import drop_channel_origin, reject_channel_origin
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS
 from agentarea_triggers.domain.enums import TriggerType, WebhookType
@@ -157,6 +157,12 @@ class TriggerCreate(BaseModel):
         if v.lower() not in valid_types:
             raise ValueError(f"Invalid webhook type. Must be one of: {valid_types}")
         return v.lower()
+
+    @model_validator(mode="after")
+    def _require_cron_expression(self) -> TriggerCreate:
+        if self.trigger_type == "cron" and not self.cron_expression:
+            raise ValueError("cron_expression is required when trigger_type is 'cron'")
+        return self
 
     def to_domain(self, created_by: str, workspace_id: str | None = None) -> _DomainTriggerCreate:
         """Build the internal domain ``TriggerCreate`` value object.

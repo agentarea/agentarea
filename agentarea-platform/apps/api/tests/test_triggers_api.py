@@ -305,7 +305,7 @@ class TestTriggersAPI:
         }
 
         # Make request
-        response = await async_client.post("/v1/triggers/", json=request_data)
+        response = await async_client.post("/v1/workspaces/acme/triggers/", json=request_data)
 
         # Assertions
         assert response.status_code == 201
@@ -351,7 +351,7 @@ class TestTriggersAPI:
         }
 
         # Make request
-        response = await async_client.post("/v1/triggers/", json=request_data)
+        response = await async_client.post("/v1/workspaces/acme/triggers/", json=request_data)
 
         # Assertions
         assert response.status_code == 201
@@ -384,7 +384,7 @@ class TestTriggersAPI:
         }
 
         # Make request
-        response = await async_client.post("/v1/triggers/", json=request_data)
+        response = await async_client.post("/v1/workspaces/acme/triggers/", json=request_data)
 
         # Assertions
         assert response.status_code == 400
@@ -412,7 +412,7 @@ class TestTriggersAPI:
         mock_trigger_service.list_triggers.return_value = triggers
 
         # Make request
-        response = await async_client.get("/v1/triggers/")
+        response = await async_client.get("/v1/workspaces/acme/triggers/")
 
         # Assertions
         assert response.status_code == 200
@@ -434,7 +434,7 @@ class TestTriggersAPI:
         # Make request with filters
         agent_id = str(uuid4())
         response = await async_client.get(
-            f"/v1/triggers/?agent_id={agent_id}&trigger_type=cron&active_only=true&limit=50"
+            f"/v1/workspaces/acme/triggers/?agent_id={agent_id}&trigger_type=cron&active_only=true&limit=50"
         )
 
         # Assertions
@@ -468,7 +468,7 @@ class TestTriggersAPI:
 
         # Make request
         trigger_id = str(sample_trigger_data["id"])
-        response = await async_client.get(f"/v1/triggers/{trigger_id}")
+        response = await async_client.get(f"/v1/workspaces/acme/triggers/{trigger_id}")
 
         # Assertions
         assert response.status_code == 200
@@ -489,7 +489,7 @@ class TestTriggersAPI:
 
         # Make request
         trigger_id = str(uuid4())
-        response = await async_client.get(f"/v1/triggers/{trigger_id}")
+        response = await async_client.get(f"/v1/workspaces/acme/triggers/{trigger_id}")
 
         # Assertions
         assert response.status_code == 404
@@ -527,7 +527,9 @@ class TestTriggersAPI:
 
         # Make request
         trigger_id = str(sample_trigger_data["id"])
-        response = await async_client.put(f"/v1/triggers/{trigger_id}", json=request_data)
+        response = await async_client.put(
+            f"/v1/workspaces/acme/triggers/{trigger_id}", json=request_data
+        )
 
         # Assertions
         assert response.status_code == 200
@@ -551,7 +553,9 @@ class TestTriggersAPI:
 
         # Make request
         trigger_id = str(uuid4())
-        response = await async_client.put(f"/v1/triggers/{trigger_id}", json=request_data)
+        response = await async_client.put(
+            f"/v1/workspaces/acme/triggers/{trigger_id}", json=request_data
+        )
 
         # Assertions
         assert response.status_code == 404
@@ -570,7 +574,7 @@ class TestTriggersAPI:
 
         # Make request
         trigger_id = str(uuid4())
-        response = await async_client.delete(f"/v1/triggers/{trigger_id}")
+        response = await async_client.delete(f"/v1/workspaces/acme/triggers/{trigger_id}")
 
         # Assertions
         assert response.status_code == 204
@@ -588,7 +592,7 @@ class TestTriggersAPI:
 
         # Make request
         trigger_id = str(uuid4())
-        response = await async_client.delete(f"/v1/triggers/{trigger_id}")
+        response = await async_client.delete(f"/v1/workspaces/acme/triggers/{trigger_id}")
 
         # Assertions
         assert response.status_code == 404
@@ -606,7 +610,7 @@ class TestTriggersAPI:
 
         # Make request
         trigger_id = str(uuid4())
-        response = await async_client.post(f"/v1/triggers/{trigger_id}/enable")
+        response = await async_client.post(f"/v1/workspaces/acme/triggers/{trigger_id}/enable")
 
         # Assertions
         assert response.status_code == 200
@@ -627,7 +631,7 @@ class TestTriggersAPI:
 
         # Make request
         trigger_id = str(uuid4())
-        response = await async_client.post(f"/v1/triggers/{trigger_id}/disable")
+        response = await async_client.post(f"/v1/workspaces/acme/triggers/{trigger_id}/disable")
 
         # Assertions
         assert response.status_code == 200
@@ -660,7 +664,7 @@ class TestTriggersAPI:
 
         # Make request
         trigger_id = str(sample_trigger_data["id"])
-        response = await async_client.get(f"/v1/triggers/{trigger_id}/executions")
+        response = await async_client.get(f"/v1/workspaces/acme/triggers/{trigger_id}/executions")
 
         # Assertions
         assert response.status_code == 200
@@ -693,7 +697,7 @@ class TestTriggersAPI:
         # Make request with pagination
         trigger_id = str(sample_trigger_data["id"])
         response = await async_client.get(
-            f"/v1/triggers/{trigger_id}/executions?page=2&page_size=25"
+            f"/v1/workspaces/acme/triggers/{trigger_id}/executions?page=2&page_size=25"
         )
 
         # Assertions
@@ -733,7 +737,7 @@ class TestTriggersAPI:
 
         # Make request
         trigger_id = str(sample_trigger_data["id"])
-        response = await async_client.get(f"/v1/triggers/{trigger_id}/status")
+        response = await async_client.get(f"/v1/workspaces/acme/triggers/{trigger_id}/status")
 
         # Assertions
         assert response.status_code == 200
@@ -757,7 +761,7 @@ class TestTriggersAPI:
         }
 
         # Make request
-        response = await async_client.get("/v1/triggers/health")
+        response = await async_client.get("/v1/workspaces/acme/triggers/health")
 
         # Assertions
         assert response.status_code == 200
@@ -777,7 +781,7 @@ class TestTriggersAPI:
         )
 
         # Make request
-        response = await async_client.get("/v1/triggers/health")
+        response = await async_client.get("/v1/workspaces/acme/triggers/health")
 
         # Assertions
         assert response.status_code == 200
@@ -797,7 +801,7 @@ class TestTriggersAPI:
             "trigger_type": "invalid_type",
         }
 
-        response = await async_client.post("/v1/triggers/", json=request_data)
+        response = await async_client.post("/v1/workspaces/acme/triggers/", json=request_data)
 
         # Should fail validation
         assert response.status_code == 422
@@ -813,7 +817,7 @@ class TestTriggersAPI:
             "webhook_type": "invalid_webhook_type",
         }
 
-        response = await async_client.post("/v1/triggers/", json=request_data)
+        response = await async_client.post("/v1/workspaces/acme/triggers/", json=request_data)
 
         # Should fail validation
         assert response.status_code == 422
@@ -823,7 +827,7 @@ class TestTriggersAPI:
         """Test trigger creation with missing required fields."""
         request_data = {"description": "Missing required fields"}
 
-        response = await async_client.post("/v1/triggers/", json=request_data)
+        response = await async_client.post("/v1/workspaces/acme/triggers/", json=request_data)
 
         # Should fail validation
         assert response.status_code == 422
@@ -855,7 +859,7 @@ async def test_create_telegram_webhook_trigger_registers_webhook(
         patch("agentarea_api.api.v1.triggers.get_app_settings", return_value=_Settings()),
     ):
         resp = await async_client.post(
-            "/v1/triggers/",
+            "/v1/workspaces/acme/triggers/",
             json={
                 "name": "TG Webhook",
                 "agent_id": str(data["agent_id"]),
@@ -900,7 +904,7 @@ async def test_delete_telegram_webhook_trigger_deregisters_webhook(
             "agentarea_triggers.channels.telegram.delete_webhook",
             new=AsyncMock(return_value=True),
         ) as mock_dw:
-            resp = await async_client.delete(f"/v1/triggers/{uuid4()}")
+            resp = await async_client.delete(f"/v1/workspaces/acme/triggers/{uuid4()}")
         assert resp.status_code == 204, resp.text
         mock_dw.assert_awaited_once()
         assert "123:ABC" in " ".join(map(str, mock_dw.call_args.args))
@@ -934,7 +938,7 @@ def _sample_webhook_trigger_data():
 
 
 class TestRunTriggerNow:
-    """POST /v1/triggers/{id}/run -- firing a trigger once by hand."""
+    """POST /v1/workspaces/acme/triggers/{id}/run -- firing a trigger once by hand."""
 
     def test_it_reports_the_task_to_watch(self, client, mock_trigger_service):
         trigger_id = uuid4()
@@ -943,7 +947,7 @@ class TestRunTriggerNow:
             id=uuid4(), task_id=task_id, error_message=None
         )
 
-        response = client.post(f"/v1/triggers/{trigger_id}/run")
+        response = client.post(f"/v1/workspaces/acme/triggers/{trigger_id}/run")
 
         assert response.status_code == 200, response.text
         body = response.json()
@@ -957,7 +961,7 @@ class TestRunTriggerNow:
             id=uuid4(), task_id=uuid4(), error_message=None
         )
 
-        client.post(f"/v1/triggers/{trigger_id}/run")
+        client.post(f"/v1/workspaces/acme/triggers/{trigger_id}/run")
 
         assert mock_trigger_service.execute_trigger.call_args.kwargs["fired_by"] == "test_user"
 
@@ -970,7 +974,7 @@ class TestRunTriggerNow:
             id=uuid4(), task_id=None, error_message="Trigger conditions not met"
         )
 
-        response = client.post(f"/v1/triggers/{trigger_id}/run")
+        response = client.post(f"/v1/workspaces/acme/triggers/{trigger_id}/run")
 
         assert response.status_code == 200, response.text
         body = response.json()
@@ -982,6 +986,6 @@ class TestRunTriggerNow:
         trigger_id = uuid4()
         mock_trigger_service.execute_trigger.side_effect = TriggerNotFoundError("nope")
 
-        response = client.post(f"/v1/triggers/{trigger_id}/run")
+        response = client.post(f"/v1/workspaces/acme/triggers/{trigger_id}/run")
 
         assert response.status_code == 404

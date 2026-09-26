@@ -3,7 +3,7 @@ import { env } from "@/env";
 import { formatApiError } from "@/lib/api-errors";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
-import { WORKSPACE_REFERENCE_HEADER } from "@/lib/workspaces";
+import { fillWorkspace } from "@/lib/workspace-url";
 
 // Mint a presigned PUT for a task attachment. The client uploads the file
 // bytes directly to the object store with the returned `upload_url`, then
@@ -19,12 +19,10 @@ export async function POST(request: NextRequest) {
       backendHeaders["Authorization"] = `Bearer ${token}`;
     }
 
-    const workspaceSlug = await resolveRequestWorkspaceSlug(request);
-    if (workspaceSlug) {
-      backendHeaders[WORKSPACE_REFERENCE_HEADER] = workspaceSlug;
-    }
-
-    const uploadUrlEndpoint = `${env.API_URL}/v1/files/upload-url`;
+    const uploadUrlEndpoint = fillWorkspace(
+      `${env.API_URL}/v1/workspaces/{workspace}/files/upload-url`,
+      resolveRequestWorkspaceSlug(request)
+    );
     const response = await fetch(uploadUrlEndpoint, {
       method: "POST",
       headers: backendHeaders,

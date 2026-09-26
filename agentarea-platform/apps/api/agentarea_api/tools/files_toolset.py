@@ -6,15 +6,17 @@ from urllib.parse import quote
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.auth.context import UserContext
 from agentarea_common.config.app import get_app_settings
+from agentarea_common.workspaces.lookup import workspace_api_prefix
 
 from .base import platform_context, platform_read_context
 
 
-def _workspace_file_download_url(path: str) -> str:
+async def _workspace_file_download_url(user_context: UserContext, path: str) -> str:
     base = get_app_settings().API_BASE_URL.rstrip("/")
     encoded_path = quote(path.lstrip("/"), safe="/")
-    return f"{base}/v1/files/download/{encoded_path}"
+    return f"{base}{await workspace_api_prefix(user_context)}/files/download/{encoded_path}"
 
 
 @toolset(
@@ -61,7 +63,7 @@ class FilesToolset(Toolset):
             svc = ArtifactService()
             if not await svc.exists(user_ctx.workspace_id, path):
                 return json.dumps({"error": "File not found"})
-            url = _workspace_file_download_url(path)
+            url = await _workspace_file_download_url(user_ctx, path)
             return json.dumps({"url": url, "path": path, "expires_in": expires_in})
 
     @tool_method(effect="destructive")

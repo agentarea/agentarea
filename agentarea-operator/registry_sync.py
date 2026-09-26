@@ -584,6 +584,13 @@ def _upsert_registry(
                 "url": source_url,
             },
         )
+        conn.execute(
+            _text(
+                "UPDATE registry_items SET registry_type = :rt, registry_active = true "
+                "WHERE registry_id = :id"
+            ),
+            {"id": registry_id, "rt": registry_type},
+        )
         return registry_id
     registry_id = str(uuid.uuid4())
     conn.execute(
@@ -624,12 +631,17 @@ def _create_registry_item(
     conn, registry_id: str, item: dict[str, Any], workspace_id: str
 ) -> str:
     item_id = str(uuid.uuid4())
+    # registry_type/registry_priority/registry_active are the item's copies of
+    # its registry's columns; catalog browsing filters and orders on them.
     conn.execute(
         _text(
             "INSERT INTO registry_items (id, registry_id, external_id, name, description, "
-            "version, spec, tags, update_available, created_at, updated_at) "
-            "VALUES (:id, :rid, :ext, :name, :desc, :ver, "
-            "CAST(:spec AS JSONB), CAST(:tags AS JSONB), false, now(), now())"
+            "version, spec, tags, update_available, registry_type, registry_priority, "
+            "registry_active, created_at, updated_at) "
+            "SELECT :id, r.id, :ext, :name, :desc, :ver, "
+            "CAST(:spec AS JSONB), CAST(:tags AS JSONB), false, r.registry_type, "
+            "r.recommendation_priority, r.is_active, now(), now() "
+            "FROM registries r WHERE r.id = :rid"
         ),
         {
             "id": item_id,

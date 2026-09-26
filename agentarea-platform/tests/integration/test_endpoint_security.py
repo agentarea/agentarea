@@ -43,34 +43,34 @@ class TestProtectedEndpoints:
     # List of protected endpoints that should return 403 without auth
     PROTECTED_ENDPOINTS = [
         # Agents
-        ("GET", "/v1/agents/"),
-        ("POST", "/v1/agents/"),
+        ("GET", "/v1/workspaces/acme/agents/"),
+        ("POST", "/v1/workspaces/acme/agents/"),
 
         # Tasks
-        ("GET", "/v1/tasks/"),
-        ("POST", "/v1/tasks/"),
+        ("GET", "/v1/workspaces/acme/tasks/"),
+        ("POST", "/v1/workspaces/acme/tasks/"),
 
         # Model instances
-        ("GET", "/v1/model-instances/"),
-        ("POST", "/v1/model-instances/"),
+        ("GET", "/v1/workspaces/acme/model-instances/"),
+        ("POST", "/v1/workspaces/acme/model-instances/"),
 
         # Provider configs
-        ("GET", "/v1/provider-configs/"),
-        ("POST", "/v1/provider-configs/"),
+        ("GET", "/v1/workspaces/acme/provider-configs/"),
+        ("POST", "/v1/workspaces/acme/provider-configs/"),
 
         # MCP servers
-        ("GET", "/v1/mcp-servers/"),
-        ("GET", "/v1/mcp-server-instances/"),
+        ("GET", "/v1/workspaces/acme/mcp-servers/"),
+        ("GET", "/v1/workspaces/acme/mcp-server-instances/"),
 
         # Triggers
-        ("GET", "/v1/triggers/"),
-        ("POST", "/v1/triggers/"),
+        ("GET", "/v1/workspaces/acme/triggers/"),
+        ("POST", "/v1/workspaces/acme/triggers/"),
 
         # Provider specs
-        ("GET", "/v1/provider-specs/"),
+        ("GET", "/v1/workspaces/acme/provider-specs/"),
 
         # Model specs
-        ("GET", "/v1/model-specs/"),
+        ("GET", "/v1/workspaces/acme/model-specs/"),
     ]
 
     @pytest.mark.parametrize("method,endpoint", PROTECTED_ENDPOINTS)
@@ -163,7 +163,7 @@ class TestSecurityHeaders:
         """Test that 401 responses include WWW-Authenticate header."""
         # Test with an invalid token
         headers = {"Authorization": "Bearer invalid-token"}
-        response = client.get("/v1/agents/", headers=headers)
+        response = client.get("/v1/workspaces/acme/agents/", headers=headers)
 
         if response.status_code == 401:
             assert "www-authenticate" in response.headers, (

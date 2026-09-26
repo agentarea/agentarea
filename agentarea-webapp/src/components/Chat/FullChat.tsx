@@ -25,6 +25,7 @@ import {
 } from "@/lib/server-actions";
 import { getTaskStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
+import { currentWorkspaceHeaders } from "@/lib/workspace-browser";
 import {
   extractPlainText,
   formatTextForTextarea,
@@ -607,6 +608,7 @@ export default function FullChat({
             headers: {
               "Content-Type": "application/json",
               Accept: "text/event-stream",
+              ...currentWorkspaceHeaders(),
             },
             body: JSON.stringify(taskData),
           });

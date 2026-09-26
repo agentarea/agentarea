@@ -1,5 +1,5 @@
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/WorkspaceLink";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { renderTextWithMentions } from "@/utils/mentions";
 import { useFormatTimestamp } from "../../../utils/dateUtils";

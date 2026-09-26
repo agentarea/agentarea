@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { motion } from "framer-motion";
 import {
   Ban,
@@ -79,7 +79,7 @@ export default function EmptyState({
   className,
   accentClassName,
 }: EmptyStateProps) {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
   const resolvedIcons =
     icons ||
     (iconsType

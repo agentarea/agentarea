@@ -32,8 +32,8 @@ never reaches the server directly.
 
 | Option | Pick it when |
 |---|---|
-| `POST /v1/mcp-server-instances/with-spec` | Default. Creates the reusable spec and one configured instance in a single call. |
-| `POST /v1/mcp-servers/` then `POST /v1/mcp-server-instances/` | You want one spec reused by several instances with different configuration. |
+| `POST /v1/workspaces/{workspace}/mcp-server-instances/with-spec` | Default. Creates the reusable spec and one configured instance in a single call. |
+| `POST /v1/workspaces/{workspace}/mcp-servers/` then `POST /v1/workspaces/{workspace}/mcp-server-instances/` | You want one spec reused by several instances with different configuration. |
 
 The spec describes *what the server is* — image, command, and the `env_schema`
 declaring the inputs it needs. The instance is *one configured copy* of it.
@@ -43,7 +43,7 @@ declaring the inputs it needs. The instance is *one configured copy* of it.
 <Steps titleSize="h3">
   <Step title="Option A — container image, one call">
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/with-spec" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/with-spec" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -79,7 +79,7 @@ declaring the inputs it needs. The instance is *one configured copy* of it.
     container, which listens on port 8080; you do not set a port.
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/with-spec" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/with-spec" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -110,7 +110,7 @@ declaring the inputs it needs. The instance is *one configured copy* of it.
     Create the spec once:
 
     ```bash
-    SPEC_ID=$(curl -s -X POST "$AGENTAREA_URL/v1/mcp-servers/" \
+    SPEC_ID=$(curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-servers/" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -124,7 +124,7 @@ declaring the inputs it needs. The instance is *one configured copy* of it.
     Then create each instance against it:
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{
@@ -140,7 +140,7 @@ declaring the inputs it needs. The instance is *one configured copy* of it.
     Run it explicitly after creating an instance:
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID/verify" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/$INSTANCE_ID/verify" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq
     ```
 
@@ -158,7 +158,7 @@ declaring the inputs it needs. The instance is *one configured copy* of it.
 The instance is usable when its verification succeeded and it discovered tools:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/$INSTANCE_ID" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" \
   | jq '{status: .verification.status, at: .verification.at, tools: (.tools | length)}'
 ```

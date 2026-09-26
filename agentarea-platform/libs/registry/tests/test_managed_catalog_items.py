@@ -70,6 +70,7 @@ async def test_create_managed_openapi_item_derives_gallery_facets_and_updates_co
     assert written["category"] == "analytics"
     assert written["sort_key"] == "yandex metrica"
     assert written["featured"] is True
+    assert written["protocol"] == "api"
     service.registry_repo.update.assert_awaited_once_with(registry.id, item_count=1)
 
 
@@ -154,6 +155,7 @@ async def test_update_recomputes_facets_from_the_new_definition():
         "category": None,
         "sort_key": "new name",
         "featured": True,
+        "protocol": "mcp",
     }
 
 

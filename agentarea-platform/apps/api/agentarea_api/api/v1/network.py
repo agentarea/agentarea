@@ -157,7 +157,8 @@ async def get_network_topology(
     from agentarea_agents.domain.skill_models import Skill, skill_members_table
     from agentarea_common.config.database import get_database
 
-    accessible_workspaces = user_context.accessible_workspaces or [user_context.workspace_id]
+    # The path selects one workspace; reaching others does not widen the view.
+    accessible_workspaces = [user_context.workspace_id]
 
     # --- Parallel fetches, each with its own session ---
 

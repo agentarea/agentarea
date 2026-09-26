@@ -12,14 +12,16 @@ from agentarea_common.artifacts import (
     DbArtifactEventRecorder,
     secure_download_headers,
 )
+from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config.app import get_app_settings
+from agentarea_common.workspaces.lookup import workspace_api_prefix
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
 from agentarea_projects.schemas.dto import ProjectCreate, ProjectUpdate
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 
@@ -142,8 +144,8 @@ async def create_project(
 async def list_projects(
     user_context: UserContextDep,
     service: ProjectServiceDep,
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
 ):
     """List all projects in the current workspace."""
     projects = await service.list(limit=limit, offset=offset)
@@ -325,10 +327,13 @@ def _project_path(project_id: UUID, rel: str = "") -> str:
     return f"projects/{project_id}/{rel}" if rel else f"projects/{project_id}/"
 
 
-def _project_file_download_url(project_id: UUID, file_path: str) -> str:
+async def _project_file_download_url(
+    user_context: UserContext, project_id: UUID, file_path: str
+) -> str:
     base = get_app_settings().API_BASE_URL.rstrip("/")
     encoded_path = quote(file_path.lstrip("/"), safe="/")
-    return f"{base}/v1/projects/{project_id}/files/download/{encoded_path}"
+    prefix = await workspace_api_prefix(user_context)
+    return f"{base}{prefix}/projects/{project_id}/files/download/{encoded_path}"
 
 
 @router.post(
@@ -445,7 +450,7 @@ async def download_project_file(
     full_path = _project_path(project_id, file_path)
     if not await svc.exists(user_context.workspace_id, full_path):
         raise HTTPException(status_code=404, detail="File not found")
-    url = _project_file_download_url(project_id, file_path)
+    url = await _project_file_download_url(user_context, project_id, file_path)
     return ProjectFileDownloadResponse(url=url, path=file_path)
 
 

@@ -22,7 +22,7 @@ def _app_for(
     task_service=None,
 ) -> FastAPI:
     app = FastAPI()
-    app.include_router(agents_tasks.router, prefix="/v1")
+    app.include_router(agents_tasks.router, prefix="/v1/workspaces/{workspace}")
 
     if task_service is None:
         # The endpoint resolves the task through the workspace-scoped TaskService
@@ -82,7 +82,7 @@ async def test_task_input_submit_stores_secrets_and_signals_refs_only():
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            f"/v1/agents/{agent_id}/tasks/{task_id}/input",
+            f"/v1/workspaces/acme/agents/{agent_id}/tasks/{task_id}/input",
             json={
                 "input_request_id": "input-1",
                 "answers": {"environment": "dev"},
@@ -127,7 +127,7 @@ async def test_task_input_submit_rejects_completed_task():
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            f"/v1/agents/{agent_id}/tasks/{task_id}/input",
+            f"/v1/workspaces/acme/agents/{agent_id}/tasks/{task_id}/input",
             json={"input_request_id": "input-1", "answers": {"environment": "dev"}},
         )
 
@@ -167,7 +167,7 @@ async def test_task_input_refuses_to_name_a_secret_after_a_connection(hijacked_n
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            f"/v1/agents/{agent_id}/tasks/{task_id}/input",
+            f"/v1/workspaces/acme/agents/{agent_id}/tasks/{task_id}/input",
             json={
                 "input_request_id": "input-1",
                 "answers": {},
@@ -195,7 +195,7 @@ async def test_task_input_still_allows_a_namespaced_name():
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            f"/v1/agents/{agent_id}/tasks/{task_id}/input",
+            f"/v1/workspaces/acme/agents/{agent_id}/tasks/{task_id}/input",
             json={
                 "input_request_id": "input-1",
                 "answers": {},

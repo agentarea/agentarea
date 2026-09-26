@@ -35,7 +35,7 @@ from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.config.app import get_app_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_common.utils.types import UtcDatetime
+from agentarea_common.utils.types import NaiveUtcDatetime, UtcDatetime
 from agentarea_secrets.catalog_service import (
     ManagedSecretError,
     SecretAccessDeniedError,
@@ -1045,8 +1045,12 @@ async def get_execution_history(
     status: str | None = Query(
         None, description="Filter by execution status (success, failed, timeout)"
     ),
-    start_time: datetime | None = Query(None, description="Filter executions after this time"),
-    end_time: datetime | None = Query(None, description="Filter executions before this time"),
+    start_time: NaiveUtcDatetime | None = Query(
+        None, description="Filter executions after this time"
+    ),
+    end_time: NaiveUtcDatetime | None = Query(
+        None, description="Filter executions before this time"
+    ),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
     db_session: AsyncSession = Depends(get_db_session),

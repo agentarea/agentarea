@@ -18,6 +18,7 @@ from agentarea_api.api.v1 import access_control, skill_collections
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.rebac import OpenFGAClient, OpenFGAError
 from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from agentarea_common.workspaces.models import Workspace, WorkspaceMembership
 from agentarea_mcp.domain.models import MCPServer
@@ -497,3 +498,31 @@ async def test_sync_grants_mirrors_workspace_members(session_factory, monkeypatc
         assert subjects == {"User:owner-1", "User:member-1"}
         assert {call.args[0].namespace for call in written} == {"Workspace"}
         assert {call.args[0].relation for call in written} == {"members"}
+
+
+async def test_sync_grants_is_idempotent_over_members_already_in_the_graph(
+    session_factory, monkeypatch
+):
+    async with session_factory() as session:
+        context = _context()
+        session.add(
+            Workspace(
+                id=context.workspace_id,
+                slug="workspace-a",
+                name="Workspace A",
+                owner_user_id="owner-1",
+            )
+        )
+        await session.commit()
+
+        graph = AsyncMock(spec=OpenFGAClient)
+        graph.write_tuple.side_effect = OpenFGAError(
+            'write failed (400): {"code":"write_failed_due_to_invalid_input","message":'
+            '"cannot write a tuple which already exists: tuple to be written already existed"}'
+        )
+        monkeypatch.setattr(access_control, "get_graph_client", lambda: graph)
+        monkeypatch.setattr(access_control, "_assert_workspace_admin", AsyncMock())
+
+        result = await access_control.sync_grants(context, session)
+
+        assert result.written == 1

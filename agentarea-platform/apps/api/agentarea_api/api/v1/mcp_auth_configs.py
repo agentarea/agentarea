@@ -106,8 +106,6 @@ async def create_mcp_auth_config(
         return MCPAuthConfigResponse.model_validate(config)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to create auth config: {exc}") from exc
 
 
 @router.get(
@@ -158,8 +156,6 @@ async def update_mcp_auth_config(
         return MCPAuthConfigResponse.model_validate(updated)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to update auth config: {exc}") from exc
 
 
 @router.delete("/{config_id}", status_code=204, dependencies=[requires_workspace_admin()])
@@ -177,5 +173,3 @@ async def delete_mcp_auth_config(
     except ValueError as exc:
         # Linked instances prevent deletion → 409 Conflict
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to delete auth config: {exc}") from exc

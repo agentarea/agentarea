@@ -305,7 +305,7 @@ async def test_registered_http_route_ignores_other_workspace_query_and_uses_acto
     agents = await seed(session)
     graph_with_members(monkeypatch, ["actor"])
     app = FastAPI()
-    app.include_router(network.router, prefix="/v1")
+    app.include_router(network.router, prefix="/v1/workspaces/{workspace}")
 
     async def current_user():
         return actor
@@ -317,7 +317,7 @@ async def test_registered_http_route_ignores_other_workspace_query_and_uses_acto
     app.dependency_overrides[network_people.get_db_session] = current_session
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(
-            "/v1/network/people-access?workspace_id=other&user_id=other-owner"
+            "/v1/workspaces/acme/network/people-access?workspace_id=other&user_id=other-owner"
         )
     assert response.status_code == 200
     payload = response.json()

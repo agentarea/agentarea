@@ -44,7 +44,6 @@ import httpx
 
 API_BASE_URL = os.getenv("AGENTAREA_API_URL", "http://localhost:8000")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-TEST_WORKSPACE = os.getenv("TEST_WORKSPACE", "e2e-test-workspace")
 
 # Use custom token if provided, otherwise generate test token
 CUSTOM_TOKEN = os.getenv("AGENTAREA_API_TOKEN")
@@ -85,7 +84,6 @@ def generate_test_token() -> str:
 
     payload = {
         "sub": "e2e-test-user",
-        "workspace_id": TEST_WORKSPACE,
         "iss": "https://agentarea.dev",
         "aud": "agentarea-api",
         "iat": datetime.now(UTC),
@@ -100,18 +98,17 @@ async def main():
     token = CUSTOM_TOKEN if CUSTOM_TOKEN else generate_test_token()
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": TEST_WORKSPACE,
     }
-    
+
     resources = {"agents": [], "skills": [], "mcp_instances": [], "provider_configs": []}
     suffix = uuid.uuid4().hex[:8]
-    
+
     print("=" * 60)
     print("🚀 E2E Pipeline Verification")
     print(f"   API: {API_BASE_URL}")
     print(f"   Auth: {'Custom token' if CUSTOM_TOKEN else 'Test token (local dev)'}")
     print("=" * 60)
-    
+
     async with httpx.AsyncClient(base_url=API_BASE_URL, timeout=60.0, headers=headers) as client:
         # Check API is running
         try:
@@ -121,15 +118,27 @@ async def main():
         except Exception as e:
             print(f"\n❌ API not accessible: {e}")
             return 1
-        
+
+        # Every /v1 endpoint below is workspace-scoped by path
+        # (/v1/workspaces/{workspace}/...); there is no header and no default.
+        # Listing workspaces auto-provisions and returns this token's personal one.
+        resp = await client.get("/v1/workspaces")
+        workspaces = resp.json()
+        if not workspaces:
+            print("\n❌ Token resolved to no workspace")
+            return 1
+        workspace = workspaces[0]["slug"]
+        print(f"   Workspace: {workspace}")
+        ws = f"/v1/workspaces/{workspace}"
+
         # Step 1: Provider Config (optional - test works without it)
         if OPENAI_API_KEY:
             print(f"\n📦 Creating OpenAI Provider Config...")
             try:
-                resp = await client.get("/v1/provider-specs/by-key/openai")
+                resp = await client.get(f"{ws}/v1/provider-specs/by-key/openai")
                 spec = resp.json()
-                
-                resp = await client.post("/v1/provider-configs/", json={
+
+                resp = await client.post(f"{ws}/v1/provider-configs/", json={
                     "provider_spec_id": spec["id"],
                     "name": f"E2E OpenAI {suffix}",
                     "api_key": OPENAI_API_KEY,
@@ -146,11 +155,11 @@ async def main():
         # Step 2: MCP Instance
         print(f"\n🔌 Creating MCP Instance...")
         try:
-            resp = await client.get("/v1/mcp-servers/")
+            resp = await client.get(f"{ws}/v1/mcp-servers/")
             servers = resp.json()
             fs_server = next((s for s in servers if s["name"].lower() == "filesystem"), None)
-            
-            resp = await client.post("/v1/mcp-server-instances/", json={
+
+            resp = await client.post(f"{ws}/v1/mcp-server-instances/", json={
                 "name": f"E2E Filesystem {suffix}",
                 "server_spec_id": fs_server["id"],
                 "json_spec": {
@@ -170,7 +179,7 @@ async def main():
         # Step 3: Skill
         print(f"\n📚 Creating Skill...")
         try:
-            resp = await client.post("/v1/skills", json={
+            resp = await client.post(f"{ws}/v1/skills", json={
                 "name": f"E2E Skill {suffix}",
                 "description": "E2E verification skill",
                 "source_type": "content",
@@ -186,7 +195,7 @@ async def main():
         # Step 4: Agent
         print(f"\n🤖 Creating Agent...")
         try:
-            resp = await client.post("/v1/agents/", json={
+            resp = await client.post(f"{ws}/v1/agents/", json={
                 "name": f"e2e-agent-{suffix}",
                 "description": "E2E test agent",
                 "instruction": "You are a test agent with filesystem access.",
@@ -196,9 +205,9 @@ async def main():
             })
             agent = resp.json()
             agent_id = agent["id"]
-            
+
             # Attach skill
-            await client.patch(f"/v1/agents/{agent_id}", json={"skill_ids": [skill["id"]]})
+            await client.patch(f"{ws}/v1/agents/{agent_id}", json={"skill_ids": [skill["id"]]})
             
             resources["agents"].append(agent_id)
             print(f"  ✅ {agent_id}")
@@ -211,7 +220,7 @@ async def main():
             print(f"\n🎯 Executing Task with Real LLM...")
             try:
                 # Create task
-                resp = await client.post(f"/v1/agents/{agent_id}/tasks/", json={
+                resp = await client.post(f"{ws}/v1/agents/{agent_id}/tasks/", json={
                     "description": "Say 'E2E test successful' and confirm you can access filesystem tools.",
                     "parameters": {"test_mode": True, "max_tokens": 200},
                 })
@@ -222,7 +231,7 @@ async def main():
                 import asyncio
                 start = asyncio.get_event_loop().time()
                 while asyncio.get_event_loop().time() - start < 120:
-                    resp = await client.get(f"/v1/agents/{agent_id}/tasks/{task['id']}/status")
+                    resp = await client.get(f"{ws}/v1/agents/{agent_id}/tasks/{task['id']}/status")
                     if resp.status_code == 200:
                         status = resp.json()
                         if status.get("status") == "completed":
@@ -246,28 +255,28 @@ async def main():
     async with httpx.AsyncClient(base_url=API_BASE_URL, timeout=30.0, headers=headers) as client:
         for agent_id in resources["agents"]:
             try:
-                await client.delete(f"/v1/agents/{agent_id}")
+                await client.delete(f"{ws}/v1/agents/{agent_id}")
                 print(f"  ✓ Deleted agent")
             except:
                 pass
-        
+
         for skill_id in resources["skills"]:
             try:
-                await client.delete(f"/v1/skills/{skill_id}")
+                await client.delete(f"{ws}/v1/skills/{skill_id}")
                 print(f"  ✓ Deleted skill")
             except:
                 pass
-        
+
         for mcp_id in resources["mcp_instances"]:
             try:
-                await client.delete(f"/v1/mcp-server-instances/{mcp_id}")
+                await client.delete(f"{ws}/v1/mcp-server-instances/{mcp_id}")
                 print(f"  ✓ Deleted MCP instance")
             except:
                 pass
-        
+
         for pc_id in resources["provider_configs"]:
             try:
-                await client.delete(f"/v1/provider-configs/{pc_id}")
+                await client.delete(f"{ws}/v1/provider-configs/{pc_id}")
                 print(f"  ✓ Deleted provider config")
             except:
                 pass

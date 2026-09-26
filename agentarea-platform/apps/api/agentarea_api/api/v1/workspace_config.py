@@ -13,7 +13,7 @@ from fastapi.responses import PlainTextResponse
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/workspace", tags=["workspace-config"])
+router = APIRouter(tags=["workspace-config"])
 
 
 @router.get("/export", response_class=PlainTextResponse, dependencies=[requires_workspace_admin()])

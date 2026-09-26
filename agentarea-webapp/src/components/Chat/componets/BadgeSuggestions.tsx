@@ -1,7 +1,7 @@
 "use client";
 
 import React, { use } from "react";
-import Link from "next/link";
+import Link from "@/components/WorkspaceLink";
 import { ArrowRight, Plug, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 

@@ -1,8 +1,8 @@
 "use client";
 
 import React, { Suspense } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link from "@/components/WorkspaceLink";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { useTranslations } from "next-intl";
 import { ArrowRight, Bot, Paperclip, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ export function WorkplaceOnboarding({
 }: WorkplaceOnboardingProps) {
   const t = useTranslations("WorkplacePage.onboarding");
   const tHero = useTranslations("Workplace.hero");
-  const router = useRouter();
+  const router = useWorkspaceRouter();
 
   const primaryHref = hasProviders ? "/agents/create" : "/models";
   const primaryLabel = hasProviders

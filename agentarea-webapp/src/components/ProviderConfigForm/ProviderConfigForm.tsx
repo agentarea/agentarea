@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle, Bot, Server } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
@@ -70,7 +70,7 @@ export default function ProviderConfigForm({
   autoRedirect = true,
   existingModelInstances = [],
 }: ProviderConfigFormProps) {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

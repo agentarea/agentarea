@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import type { OryPageParams } from "@/lib/ory";
+import { getPersonalWorkspacePath } from "@/lib/workspace-context";
 
 export default async function SettingsRedirect(props: OryPageParams) {
   const params = await props.searchParams;
@@ -11,5 +12,7 @@ export default async function SettingsRedirect(props: OryPageParams) {
     }
   }
 
-  redirect(`/settings${query.size ? `?${query}` : ""}`);
+  redirect(
+    await getPersonalWorkspacePath(`/settings${query.size ? `?${query}` : ""}`)
+  );
 }

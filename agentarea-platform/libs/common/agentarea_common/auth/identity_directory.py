@@ -17,6 +17,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
+from urllib.parse import quote
 
 import httpx
 
@@ -83,7 +84,8 @@ class KratosIdentityDirectory:
 
     async def _fetch_one(self, client: httpx.AsyncClient, user_id: str) -> IdentityRecord | None:
         try:
-            response = await client.get(f"/admin/identities/{user_id}")
+            # Ids arrive from callers: one encoded segment, never URL syntax.
+            response = await client.get(f"/admin/identities/{quote(user_id, safe='')}")
         except httpx.HTTPError:
             logger.warning("Identity lookup failed for user %s", user_id, exc_info=True)
             return None

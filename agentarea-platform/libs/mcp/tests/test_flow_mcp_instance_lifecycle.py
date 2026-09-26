@@ -28,7 +28,7 @@ from agentarea_mcp.schemas.dto import MCPServerInstanceCreate
 
 def _make_server_spec(spec_type: str = "url", endpoint_url: str = "https://mcp.example.com/mcp"):
     spec = MagicMock()
-    spec.id = "spec-" + str(uuid.uuid4())
+    spec.id = str(uuid.uuid4())
     if spec_type == "url":
         spec.remote_url = endpoint_url
         spec.cmd = None

@@ -3,6 +3,7 @@ import React from 'react';
 import {render} from 'ink';
 import meow from 'meow';
 import {handleCliCommand} from './cli-commands.js';
+import {setRuntimeWorkspace} from './services/apiRuntime.js';
 import App from './app.js';
 
 const cli = meow(
@@ -22,6 +23,7 @@ const cli = meow(
 	  agents list               Interactive agents view
 	  tasks submit <agentId> <description>   Submit a task
 	  tasks watch <agentId> <taskId>         Stream task events (SSE)
+	  workspace use <slug>      Save the workspace later commands run in
 	  connect codex|claude      Connect a harness to its client bundle
 	                            (creates the client if it does not exist)
 	  mcp sync                  Same, addressing an existing client by id
@@ -31,6 +33,8 @@ const cli = meow(
 	Options
 	  --token         Bearer token (or use AGENTAREA_TOKEN env var)
 	  --api-url       API server URL (default: http://localhost:8000)
+	  --workspace     Workspace slug for this command (overrides the one saved
+	                  with 'workspace use')
 	  --name          Client name to resolve or create (default: <host>-<harness>)
 	  --alias         Local MCP server name in the harness (default: agentarea)
 	  --mcp           MCP instance (name or id) to attach to the client
@@ -48,7 +52,7 @@ const cli = meow(
 	Examples
 	  $ agentarea-cli --token=eyJ...
 	  $ AGENTAREA_TOKEN=eyJ... agentarea-cli
-	  $ agentarea-cli agents list --token=eyJ...
+	  $ agentarea-cli agents list --workspace=acme --token=eyJ...
 	  $ agentarea-cli api --list
 	  $ agentarea-cli api listAgentsV1AgentsGet
 	  $ agentarea-cli api getAgentV1AgentsAgentIdGet --path='{"agent_id":"abc"}'
@@ -63,6 +67,9 @@ const cli = meow(
 			apiUrl: {
 				type: 'string',
 				default: 'http://localhost:8000',
+			},
+			workspace: {
+				type: 'string',
 			},
 			scope: {
 				type: 'string',
@@ -104,6 +111,7 @@ const cli = meow(
 );
 
 const token = cli.flags.token || process.env['AGENTAREA_TOKEN'];
+setRuntimeWorkspace(cli.flags.workspace);
 const command = cli.input[0];
 const subcommand = cli.input[1];
 

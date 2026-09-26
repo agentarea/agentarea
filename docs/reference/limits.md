@@ -20,7 +20,7 @@ A limit comes from one of three places, and that decides how you change it.
 
 | Source | Changed by | Scope |
 |---|---|---|
-| Policy rule | `POST /v1/policies`, or `task_policy` at task creation | Per workspace, agent, user or task, at runtime |
+| Policy rule | `POST /v1/workspaces/{workspace}/policies`, or `task_policy` at task creation | Per workspace, agent, user or task, at runtime |
 | Environment setting | Process environment or Helm values | Per deployment, at restart |
 | Code constant | Editing the source and redeploying | Global |
 

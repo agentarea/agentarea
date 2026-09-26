@@ -24,7 +24,10 @@ export async function GET(request: NextRequest) {
   const loginChallenge = searchParams.get("login_challenge");
 
   if (!loginChallenge) {
-    return NextResponse.json({ error: "Missing login_challenge" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing login_challenge" },
+      { status: 400 }
+    );
   }
 
   // Forward browser cookies to Kratos to check the session
@@ -82,7 +85,10 @@ export async function GET(request: NextRequest) {
     if (!acceptRes.ok) {
       const errBody = await acceptRes.text();
       console.error("[hydra/login] Failed to accept login challenge:", errBody);
-      return NextResponse.json({ error: "Failed to accept login challenge" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to accept login challenge" },
+        { status: 500 }
+      );
     }
 
     const { redirect_to } = await acceptRes.json();

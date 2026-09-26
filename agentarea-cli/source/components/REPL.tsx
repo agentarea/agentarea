@@ -1,6 +1,8 @@
 import React, {useEffect, useState} from 'react';
 import {Box, Text} from 'ink';
 import {apiClient} from '../services/apiClient.js';
+import {fillWorkspace} from '@agentarea/api-client';
+import {requireWorkspace} from '../services/apiRuntime.js';
 import {tokenStorage} from '../utils/storage.js';
 import readline from 'readline';
 
@@ -130,11 +132,14 @@ export function REPL({userEmail, token}: REPLProps) {
 
 	const handleAgentsCommand = async (): Promise<CommandResult> => {
 		try {
-			const response = await apiClient.getClient().get('/v1/agents', {
-				headers: {
-					'X-Workspace-ID': 'default',
-				},
-			});
+			const response = await apiClient
+				.getClient()
+				.get(
+					fillWorkspace(
+						'/v1/workspaces/{workspace}/agents',
+						requireWorkspace(),
+					),
+				);
 
 			const agents: Agent[] = response.data.data || response.data || [];
 

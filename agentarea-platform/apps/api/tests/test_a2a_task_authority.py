@@ -13,18 +13,20 @@ way a caller sees it: an HTTP 403, not a JSON-RPC error body.
 """
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import httpx
 import pytest
 from agentarea_api.api.deps.services import get_agent_service, get_secret_manager, get_task_service
-from agentarea_api.api.v1 import a2a_request_handler, agents_a2a
+from agentarea_api.api.v1 import a2a_auth, a2a_request_handler, agents_a2a, agents_well_known
 from agentarea_common.auth import access
 from agentarea_common.auth.access import EdgeDecision
 from agentarea_common.auth.authorization import AuthorizationService
-from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.dependencies import get_optional_user
+from agentarea_common.auth.context import UserPrincipal
+from agentarea_common.auth.dependencies import get_optional_principal
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.config.database import get_read_db_session
 from agentarea_common.di.container import register_singleton
 from agentarea_common.events.contract import TASK_COMPLETED
 from agentarea_common.events.task_stream import TaskEventEnvelope
@@ -111,6 +113,10 @@ class _AgentService:
         return AGENT
 
 
+async def _public_agent(agent_id, session):
+    return AGENT if agent_id == AGENT_ID else None
+
+
 def _task():
     task_parameters, _ = upsert_push_config({}, "https://existing.example/hook", "cfg-1")
     return AgentTask(
@@ -127,8 +133,8 @@ def _task():
     )
 
 
-def _subject(request: Request) -> UserContext:
-    return UserContext(user_id=request.headers["x-test-user"], workspace_id=WORKSPACE)
+def _subject(request: Request) -> UserPrincipal:
+    return UserPrincipal(user_id=request.headers["x-test-user"], accessible_workspaces=[WORKSPACE])
 
 
 async def _allow(subject, action, *, agent_workspace_id, agent_id):
@@ -145,6 +151,8 @@ def svc(monkeypatch):
     monkeypatch.setattr(access, "authorize_agent_action", _allow)
     monkeypatch.setattr(agents_a2a, "open_task_event_feed", feed)
     monkeypatch.setattr(a2a_request_handler, "validate_outbound_url", lambda url: None)
+    monkeypatch.setattr(agents_well_known, "get_public_agent", _public_agent)
+    monkeypatch.setattr(a2a_auth, "workspace_slug_for", AsyncMock(return_value="acme"))
     return _TaskService(_task())
 
 
@@ -152,9 +160,10 @@ def svc(monkeypatch):
 def call(svc):
     app = FastAPI()
     app.include_router(agents_a2a.router, prefix="/v1/agents/{agent_id}")
-    app.dependency_overrides[get_optional_user] = _subject
+    app.dependency_overrides[get_optional_principal] = _subject
     app.dependency_overrides[get_task_service] = lambda: svc
     app.dependency_overrides[get_agent_service] = _AgentService
+    app.dependency_overrides[get_read_db_session] = lambda: None
     app.dependency_overrides[get_secret_manager] = _SecretManager
 
     async def _call(user: str, method: str, params: dict) -> httpx.Response:

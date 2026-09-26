@@ -13,7 +13,7 @@ last_updated: 2026-07-29
 ---
 
 One `PolicyRule` row expresses one governance intent for one subject. Rules are
-managed under `/v1/policies`; see the generated API reference for request and
+managed under `/v1/workspaces/{workspace}/policies`; see the generated API reference for request and
 response shapes.
 
 ## Synopsis

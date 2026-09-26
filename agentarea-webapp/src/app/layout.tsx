@@ -120,9 +120,9 @@ export default async function RootLayout({
   const runtimeConfig = getRuntimeConfig();
   // Anonymous visitors (landing, auth) have no workspaces to switch between,
   // and listing them would provision a personal workspace for nobody.
-  const { workspaces, active } = session
+  const { workspaces } = session
     ? await getWorkspaceContext()
-    : { workspaces: [], active: null };
+    : { workspaces: [] };
 
   return (
     <html lang={locale} suppressHydrationWarning className={inter.variable}>
@@ -141,7 +141,6 @@ export default async function RootLayout({
                 <ConditionalLayout
                   sidebarDefaultOpen={sidebarDefaultOpen}
                   workspaces={workspaces}
-                  activeWorkspaceSlug={active?.slug ?? null}
                 >
                   {children}
                 </ConditionalLayout>

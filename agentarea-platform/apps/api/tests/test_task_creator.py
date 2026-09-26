@@ -6,7 +6,7 @@ same question as *who*: a webhook-fired task is still owned by whoever created
 the trigger. Both facts are recorded -- `tasks.created_by` has always held the
 author -- but the read models dropped it, so the UI could not show it.
 
-The id is all a task carries. Turning it into a name is GET /v1/principals'
+The id is all a task carries. Turning it into a name is GET /v1/workspaces/acme/principals'
 job (see test_principals_api): the name belongs to a resource with a different
 rate of change, and a task must not fail to load because the identity provider
 is slow.
@@ -92,7 +92,7 @@ def task_endpoint_overrides():
 
     task_service = AsyncMock()
     task_service.task_repository.get_by_id = AsyncMock(return_value=object())
-    task_service.task_repository.list_all = AsyncMock(return_value=[object()])
+    task_service.task_repository.list_page = AsyncMock(return_value=[object()])
     task_service.task_repository._orm_to_domain = MagicMock(return_value=task)
 
     agent = MagicMock()
@@ -120,7 +120,7 @@ def task_endpoint_overrides():
 async def test_the_task_list_endpoint_reports_who_started_each_task(
     async_client, task_endpoint_overrides
 ) -> None:
-    response = await async_client.get("/v1/tasks/")
+    response = await async_client.get("/v1/workspaces/acme/tasks/")
 
     assert response.status_code == 200, response.text
     assert response.json()[0]["created_by"] == CREATOR_ID
@@ -130,7 +130,7 @@ async def test_the_task_list_endpoint_reports_who_started_each_task(
 async def test_the_single_task_endpoint_reports_who_started_it(
     async_client, task_endpoint_overrides
 ) -> None:
-    response = await async_client.get(f"/v1/tasks/{task_endpoint_overrides.id}")
+    response = await async_client.get(f"/v1/workspaces/acme/tasks/{task_endpoint_overrides.id}")
 
     assert response.status_code == 200, response.text
     assert response.json()["created_by"] == CREATOR_ID
@@ -156,6 +156,8 @@ async def test_reading_tasks_never_calls_the_identity_provider(
 
     monkeypatch.setattr(identity_directory, "get_identity_directory", _fail_if_used)
 
-    assert (await async_client.get("/v1/tasks/")).status_code == 200
-    assert (await async_client.get(f"/v1/tasks/{task_endpoint_overrides.id}")).status_code == 200
+    assert (await async_client.get("/v1/workspaces/acme/tasks/")).status_code == 200
+    assert (
+        await async_client.get(f"/v1/workspaces/acme/tasks/{task_endpoint_overrides.id}")
+    ).status_code == 200
     assert not called

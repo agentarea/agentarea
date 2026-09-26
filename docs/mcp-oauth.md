@@ -277,7 +277,7 @@ MCP server instances can require authentication themselves — separate from the
 ### Create an Auth Config
 
 ```http
-POST /api/v1/mcp-auth-configs
+POST /v1/workspaces/{workspace}/mcp-auth-configs
 Authorization: Bearer <token>
 Content-Type: application/json
 
@@ -296,7 +296,7 @@ Content-Type: application/json
 ### Link Auth Config to an MCP Instance
 
 ```http
-PATCH /api/v1/mcp-server-instances/{instance_id}
+PATCH /v1/workspaces/{workspace}/mcp-server-instances/{instance_id}
 Authorization: Bearer <token>
 Content-Type: application/json
 
@@ -333,7 +333,7 @@ OAuth links let you share an MCP instance endpoint that enforces an Authorizatio
 <Steps>
   <Step title="Create the Link">
     ```http
-    POST /api/v1/mcp-oauth-links
+    POST /v1/workspaces/{workspace}/mcp-oauth-links
     Authorization: Bearer <token>
     Content-Type: application/json
 

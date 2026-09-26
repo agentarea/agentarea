@@ -33,6 +33,7 @@ class WorkspaceFilesToolset(Toolset):
         storage: StorageClient | None = None,
         workspace_repository: WorkspaceRepositoryClient | None = None,
         workspace_id: str | None = None,
+        workspace_slug: str | None = None,
         task_id: str | None = None,
         lease_owner: str | None = None,
         base_prefix: str = "",
@@ -46,6 +47,8 @@ class WorkspaceFilesToolset(Toolset):
                 "placeholder mixes one tenant's files into another's"
             )
         self.workspace_id = workspace_id
+        # Download paths name the workspace by slug (/v1/workspaces/{slug}/...).
+        self.workspace_slug = workspace_slug
         self.task_id = task_id or ""
         self.lease_owner = lease_owner or ""
         self.base_prefix = base_prefix.strip("/")
@@ -115,6 +118,8 @@ class WorkspaceFilesToolset(Toolset):
                 exists = await self.storage.exists(self.workspace_id, resolved_path)
             if not exists:
                 return json.dumps({"error": "File not found", "path": path})
+            if not self.workspace_slug:
+                raise ValueError("workspace_slug is required to build a download path")
             api_path = (
                 f"tasks/{self.task_id}/workspace/{resolved_path}"
                 if self.workspace_repository is not None
@@ -123,7 +128,7 @@ class WorkspaceFilesToolset(Toolset):
             encoded_path = quote(api_path, safe="/")
             return json.dumps(
                 {
-                    "url": f"/v1/files/download/{encoded_path}",
+                    "url": f"/v1/workspaces/{self.workspace_slug}/files/download/{encoded_path}",
                     "path": path,
                     "expires_in": expires_in,
                 }

@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { useQueryState } from "nuqs";
 import type { WorkspaceInvitationPreview } from "@/lib/api";
 import {
   INVITATION_QUERY_PARAM,
   type InvitationFailure,
 } from "@/lib/invitations";
+import { WORKSPACE_HOME, workspacePath } from "@/lib/workspace-routes";
 import {
   acceptInvitationAction,
   previewInvitationAction,
@@ -21,7 +22,7 @@ export type InvitationPreviewState =
 type ForToken<T> = { token: string; value: T };
 
 export function useInvitationDialog() {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
   const [token, setToken] = useQueryState(INVITATION_QUERY_PARAM);
   const [preview, setPreview] =
     useState<ForToken<InvitationPreviewState> | null>(null);
@@ -63,7 +64,7 @@ export function useInvitationDialog() {
         setAcceptFailure({ token, value: result.error });
         return;
       }
-      router.replace("/dashboard");
+      router.replace(workspacePath(result.slug, WORKSPACE_HOME));
       router.refresh();
     });
   };

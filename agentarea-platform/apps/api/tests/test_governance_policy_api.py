@@ -92,8 +92,8 @@ def _context(workspace_id: str = "workspace-a") -> UserContext:
 
 def _app_for(session: AsyncSession, context: UserContext) -> FastAPI:
     app = FastAPI()
-    app.include_router(policies.router, prefix="/v1")
-    app.include_router(governance.router, prefix="/v1")
+    app.include_router(policies.router, prefix="/v1/workspaces/{workspace}")
+    app.include_router(governance.router, prefix="/v1/workspaces/{workspace}")
 
     async def override_session():
         yield session
@@ -299,7 +299,7 @@ async def test_http_crud_and_audit(session_factory, audit_capture):
 
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             created = await client.post(
-                "/v1/policies",
+                "/v1/workspaces/acme/policies",
                 json={
                     "subject_type": "workspace",
                     "subject_id": context.workspace_id,
@@ -309,9 +309,11 @@ async def test_http_crud_and_audit(session_factory, audit_capture):
                 },
             )
             rule_id = created.json()["id"]
-            listed = await client.get("/v1/policies")
-            patched = await client.patch(f"/v1/policies/{rule_id}", json={"enabled": False})
-            deleted = await client.delete(f"/v1/policies/{rule_id}")
+            listed = await client.get("/v1/workspaces/acme/policies")
+            patched = await client.patch(
+                f"/v1/workspaces/acme/policies/{rule_id}", json={"enabled": False}
+            )
+            deleted = await client.delete(f"/v1/workspaces/acme/policies/{rule_id}")
 
         assert created.status_code == 201
         body = created.json()
@@ -337,7 +339,7 @@ async def test_http_filters_by_effect_and_subject(session_factory):
 
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             await client.post(
-                "/v1/policies",
+                "/v1/workspaces/acme/policies",
                 json={
                     "subject_type": "workspace",
                     "subject_id": context.workspace_id,
@@ -346,7 +348,7 @@ async def test_http_filters_by_effect_and_subject(session_factory):
                 },
             )
             await client.post(
-                "/v1/policies",
+                "/v1/workspaces/acme/policies",
                 json={
                     "subject_type": "workspace",
                     "subject_id": context.workspace_id,
@@ -354,7 +356,7 @@ async def test_http_filters_by_effect_and_subject(session_factory):
                     "effect": "allow",
                 },
             )
-            denied = await client.get("/v1/policies?effect=deny")
+            denied = await client.get("/v1/workspaces/acme/policies?effect=deny")
 
         assert denied.status_code == 200
         assert len(denied.json()) == 1
@@ -368,7 +370,7 @@ async def test_get_missing_rule_returns_404(session_factory):
         transport = ASGITransport(app=app)
 
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            missing = await client.get(f"/v1/policies/{uuid4()}")
+            missing = await client.get(f"/v1/workspaces/acme/policies/{uuid4()}")
 
         assert missing.status_code == 404
 
@@ -384,7 +386,7 @@ async def test_preview_returns_workspace_cap_from_rules(session_factory):
 
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             await client.post(
-                "/v1/policies",
+                "/v1/workspaces/acme/policies",
                 json={
                     "subject_type": "workspace",
                     "subject_id": context.workspace_id,
@@ -393,7 +395,9 @@ async def test_preview_returns_workspace_cap_from_rules(session_factory):
                     "params": {"amount_usd": "50.00", "period": "month"},
                 },
             )
-            preview = await client.post("/v1/governance/effective-policy/preview", json={})
+            preview = await client.post(
+                "/v1/workspaces/acme/governance/effective-policy/preview", json={}
+            )
 
         assert preview.status_code == 200
         body = preview.json()["effective_policy"]
@@ -409,7 +413,7 @@ async def test_preview_merges_workspace_and_agent_rules(session_factory):
 
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             await client.post(
-                "/v1/policies",
+                "/v1/workspaces/acme/policies",
                 json={
                     "subject_type": "workspace",
                     "subject_id": context.workspace_id,
@@ -419,7 +423,7 @@ async def test_preview_merges_workspace_and_agent_rules(session_factory):
                 },
             )
             await client.post(
-                "/v1/policies",
+                "/v1/workspaces/acme/policies",
                 json={
                     "subject_type": "agent",
                     "subject_id": agent_id,
@@ -429,7 +433,7 @@ async def test_preview_merges_workspace_and_agent_rules(session_factory):
                 },
             )
             preview = await client.post(
-                "/v1/governance/effective-policy/preview",
+                "/v1/workspaces/acme/governance/effective-policy/preview",
                 json={"agent_id": agent_id},
             )
 
@@ -445,7 +449,7 @@ async def test_preview_rejects_loosening_task_policy(session_factory):
 
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             await client.post(
-                "/v1/policies",
+                "/v1/workspaces/acme/policies",
                 json={
                     "subject_type": "workspace",
                     "subject_id": context.workspace_id,
@@ -455,7 +459,7 @@ async def test_preview_rejects_loosening_task_policy(session_factory):
                 },
             )
             preview = await client.post(
-                "/v1/governance/effective-policy/preview",
+                "/v1/workspaces/acme/governance/effective-policy/preview",
                 json={"task_policy": {"budget": {"monthly_spend_cap_usd": "100.00"}}},
             )
 
@@ -494,8 +498,12 @@ async def test_reads_task_policy_from_persisted_task_snapshot(session_factory):
         transport = ASGITransport(app=app)
 
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            found = await client.get(f"/v1/governance/task-policy-snapshots/{task_id}")
-            missing = await client.get(f"/v1/governance/task-policy-snapshots/{uuid4()}")
+            found = await client.get(
+                f"/v1/workspaces/acme/governance/task-policy-snapshots/{task_id}"
+            )
+            missing = await client.get(
+                f"/v1/workspaces/acme/governance/task-policy-snapshots/{uuid4()}"
+            )
 
         assert found.status_code == 200
         assert found.json()["effective_policy"]["budget"]["run_budget_usd"] == "1.25"

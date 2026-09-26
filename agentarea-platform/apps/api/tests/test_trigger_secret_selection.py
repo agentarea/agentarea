@@ -80,7 +80,7 @@ def harness():
     catalog.get_for_use.return_value = secret
     webhook_service = AsyncMock()
     app = FastAPI()
-    app.include_router(triggers.router, prefix="/v1")
+    app.include_router(triggers.router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_user_context] = lambda: UserContext(
         user_id="user-a", workspace_id="workspace-a"
     )
@@ -105,7 +105,7 @@ async def request(harness, operation, **body):
     ) as client:
         if operation == "create":
             return await client.post(
-                "/v1/triggers/",
+                "/v1/workspaces/acme/triggers/",
                 json={
                     "name": "Channel trigger",
                     "agent_id": str(harness.trigger.agent_id),
@@ -114,7 +114,7 @@ async def request(harness, operation, **body):
                     **body,
                 },
             )
-        return await client.put(f"/v1/triggers/{harness.trigger.id}", json=body)
+        return await client.put(f"/v1/workspaces/acme/triggers/{harness.trigger.id}", json=body)
 
 
 def assert_no_mutation(harness):

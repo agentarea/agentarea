@@ -113,7 +113,7 @@ def wire():
 
 async def _schedule(client, when, description="send the report"):
     return await client.post(
-        f"/v1/agents/{uuid4()}/tasks/schedule",
+        f"/v1/workspaces/acme/agents/{uuid4()}/tasks/schedule",
         json={"description": description, "scheduled_at": when},
     )
 

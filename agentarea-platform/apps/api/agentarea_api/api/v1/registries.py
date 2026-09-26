@@ -10,6 +10,7 @@ from agentarea_api.api.deps.services import get_registry_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import AUTHZ_ATTR, unrestricted
 from agentarea_common.utils.types import UtcDatetime
+from agentarea_registry.application.catalog_facets import PROTOCOL_REGISTRY_TYPE, CatalogProtocol
 from agentarea_registry.application.service import (
     VALID_REGISTRY_TYPES,
     CatalogItemAlreadyExistsError,
@@ -18,11 +19,7 @@ from agentarea_registry.application.service import (
     RegistryService,
 )
 from agentarea_registry.domain.models import Registry, RegistryItem
-from agentarea_registry.infrastructure.repository import (
-    CATALOG_SORTS,
-    PROTOCOL_REGISTRY_TYPE,
-    CatalogProtocol,
-)
+from agentarea_registry.infrastructure.repository import CATALOG_SORTS
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 

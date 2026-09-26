@@ -53,7 +53,7 @@ boundary is drawn where it is.
 
 ## The path a request takes
 
-Starting a task: `POST /v1/agents/{agent_id}/tasks/`.
+Starting a task: `POST /v1/workspaces/{workspace}/agents/{agent_id}/tasks/`.
 
 ```mermaid
 sequenceDiagram
@@ -62,7 +62,7 @@ sequenceDiagram
     participant T as Temporal
     participant W as Worker
     participant M as MCP manager
-    C->>A: POST /v1/agents/{id}/tasks/
+    C->>A: POST /v1/workspaces/{workspace}/agents/{id}/tasks/
     A->>A: Resolve UserContext, then effective policy
     A->>T: Start AgentExecutionWorkflow
     A-->>C: 200 with task id

@@ -184,7 +184,7 @@ class BundleInstaller:
             instance = await self._mcp_instance_service.create_instance(
                 MCPServerInstanceCreate(
                     name=mcp.name,
-                    server_spec_id=str(spec.id),
+                    server_spec_id=spec.id,
                     json_spec=instance_json,
                 )
             )

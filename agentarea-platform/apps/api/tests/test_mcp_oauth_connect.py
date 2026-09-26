@@ -48,10 +48,13 @@ def test_resolve_instance_remote_url_returns_none_without_remote_url():
 @pytest.mark.flow(MainFlow.MCP_OAUTH)
 def test_callback_returns_the_user_to_the_connection_page():
     """The page an MCP instance is shown on is /connections, not the retired
-    /mcp-servers — a user finishing OAuth must land on their connection."""
-    detail = _instance_detail_url("https://app.example", "d50241d7-eafe-4011-8479-b40f7a2aab3c")
+    /mcp-servers, inside the workspace the flow started in — a user finishing
+    OAuth must land on their connection."""
+    detail = _instance_detail_url(
+        "https://app.example", "acme", "d50241d7-eafe-4011-8479-b40f7a2aab3c"
+    )
 
-    assert detail == "https://app.example/connections/d50241d7-eafe-4011-8479-b40f7a2aab3c"
+    assert detail == "https://app.example/w/acme/connections/d50241d7-eafe-4011-8479-b40f7a2aab3c"
 
 
 # ---------------------------------------------------------------------------
@@ -544,7 +547,7 @@ async def test_callback_error_returns_to_the_frontend_with_the_reason_as_data(
     assert (location.scheme, location.netloc, location.path) == (
         "https",
         "app.agentarea.ai",
-        "/connections",
+        "/",
     )
     assert urllib.parse.parse_qs(location.query) == {"oauth": ["error"], "reason": [description]}
 

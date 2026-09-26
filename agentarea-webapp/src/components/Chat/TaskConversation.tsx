@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Loader2, Play } from "lucide-react";
 import { toast } from "sonner";
 import ActivityGroup from "@/components/Chat/ActivityGroup";
@@ -67,7 +67,7 @@ export function TaskConversation({
   onRefresh,
   onA2UIAction,
 }: TaskConversationProps) {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
   const [chatInput, setChatInput] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [continuationIterations, setContinuationIterations] = useState("10");

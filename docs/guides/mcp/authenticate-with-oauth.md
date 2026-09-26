@@ -46,7 +46,7 @@ supply per connection. Ask the preflight endpoint rather than guessing.
 <Steps titleSize="h3">
   <Step title="Ask what the provider needs">
     ```bash
-    curl -s "$AGENTAREA_URL/v1/mcp-oauth/preflight?instance_id=$INSTANCE_ID" \
+    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-oauth/preflight?instance_id=$INSTANCE_ID" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN"
     ```
 
@@ -80,7 +80,7 @@ supply per connection. Ask the preflight endpoint rather than guessing.
 
   <Step title="Start the flow">
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-oauth/authorize" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-oauth/authorize" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{\"instance_id\": \"$INSTANCE_ID\", \"return_to\": \"https://app.example.com\"}"
@@ -134,7 +134,7 @@ supply per connection. Ask the preflight endpoint rather than guessing.
     credentials with the authorize call:
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-oauth/authorize" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-oauth/authorize" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{\"instance_id\": \"$INSTANCE_ID\", \"credential_mode\": \"custom\", \"client_id\": \"$CLIENT_ID\", \"client_secret\": \"$CLIENT_SECRET\"}"
@@ -148,7 +148,7 @@ supply per connection. Ask the preflight endpoint rather than guessing.
     what to use when you rotate the app without re-authorizing every connection:
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-oauth/authorize" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-oauth/authorize" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{\"instance_id\": \"$INSTANCE_ID\", \"credential_mode\": \"custom\", \"client_id_secret_id\": \"$CLIENT_ID_SECRET_ID\", \"client_secret_secret_id\": \"$CLIENT_SECRET_SECRET_ID\"}"
@@ -167,7 +167,7 @@ Confirm the instance now carries an auth config and that a call through the
 governed proxy succeeds with an injected token.
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/$INSTANCE_ID" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" \
   | jq '{auth_config_id, status: .verification.status, tools: (.tools | length)}'
 ```

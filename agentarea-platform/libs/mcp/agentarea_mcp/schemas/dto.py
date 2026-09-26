@@ -9,8 +9,10 @@ for REST clients reading the OpenAPI doc.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
+from uuid import UUID
 
+from agentarea_common.utils.types import NotNull
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 INSTANCE_TRANSPORT_FIELDS = frozenset({"type", "endpoint_url", "image", "command", "args"})
@@ -99,18 +101,18 @@ class MCPServerUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-    description: str | None = None
+    name: Annotated[str | None, NotNull] = Field(default=None, min_length=1, max_length=255)
+    description: Annotated[str | None, NotNull] = None
     docker_image_url: str | None = None
     remote_url: str | None = None
-    version: str | None = None
-    tags: list[str] | None = None
-    is_public: bool | None = None
-    status: str | None = Field(
+    version: Annotated[str | None, NotNull] = None
+    tags: Annotated[list[str] | None, NotNull] = None
+    is_public: Annotated[bool | None, NotNull] = None
+    status: Annotated[str | None, NotNull] = Field(
         default=None,
         description="Lifecycle status of the spec (e.g. 'active', 'deprecated').",
     )
-    env_schema: list[dict[str, Any]] | None = None
+    env_schema: Annotated[list[dict[str, Any]] | None, NotNull] = None
     cmd: list[str] | None = None
     json_spec: dict[str, Any] | None = None
     registry_url: str | None = None
@@ -144,7 +146,7 @@ class MCPServerInstanceCreate(BaseModel):
         default=None,
         description="Optional human-readable description of the instance.",
     )
-    server_spec_id: str = Field(
+    server_spec_id: UUID = Field(
         description=(
             "ID of an existing MCP server spec to derive defaults from "
             "(env_schema, secret routing, etc.)."
@@ -169,14 +171,6 @@ class MCPServerInstanceCreate(BaseModel):
             raise ValueError("name cannot be empty or whitespace")
         return v
 
-    @field_validator("server_spec_id")
-    @classmethod
-    def _strip_server_spec_id(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("server_spec_id is required")
-        return v
-
     @model_validator(mode="after")
     def _reject_bundle_instances(self) -> MCPServerInstanceCreate:
         if (self.json_spec or {}).get("type") == "bundle":
@@ -189,9 +183,9 @@ class MCPServerInstanceUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str | None = Field(default=None, min_length=1, max_length=255)
+    name: Annotated[str | None, NotNull] = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
-    json_spec: dict[str, Any] | None = None
+    json_spec: Annotated[dict[str, Any] | None, NotNull] = None
 
     @field_validator("json_spec")
     @classmethod

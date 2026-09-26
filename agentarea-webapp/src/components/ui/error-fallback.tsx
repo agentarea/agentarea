@@ -4,6 +4,8 @@ import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { currentWorkspaceSlug } from "@/lib/workspace-browser";
+import { workspacePath } from "@/lib/workspace-routes";
 
 export interface ErrorFallbackProps {
   error?: Error | null;
@@ -30,7 +32,8 @@ export function ErrorFallback({
     if (onHomeClick) {
       onHomeClick();
     } else {
-      window.location.href = "/workplace";
+      const slug = currentWorkspaceSlug();
+      window.location.href = slug ? workspacePath(slug, "/workplace") : "/";
     }
   };
 

@@ -35,7 +35,7 @@ rejected delivery from a filtered one.
     and the internet.
 
     ```bash
-    curl -X POST "$AGENTAREA_URL/v1/triggers/" \
+    curl -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -79,7 +79,7 @@ rejected delivery from a filtered one.
     Configure the secret the provider signs with, then point the trigger at it:
 
     ```bash
-    curl -X PUT "$AGENTAREA_URL/v1/triggers/$TRIGGER_ID" \
+    curl -X PUT "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/$TRIGGER_ID" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{"webhook_config": {"signing_secret": "<the provider'\''s secret>"}}'
@@ -134,7 +134,7 @@ The execution history records every delivery that reached the trigger, including
 ones that produced no task:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/triggers/$TRIGGER_ID/executions" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/$TRIGGER_ID/executions" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '.[0] | {status, task_id, error_message}'
 ```
 
@@ -174,7 +174,7 @@ which is deliberately not returned to the caller in detail.
     nothing re-enables it automatically:
 
     ```bash
-    curl -X POST "$AGENTAREA_URL/v1/triggers/$TRIGGER_ID/enable" \
+    curl -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/$TRIGGER_ID/enable" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN"
     ```
   </Accordion>

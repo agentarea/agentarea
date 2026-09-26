@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import BaseModal from "@/components/BaseModal/BaseModal";
@@ -36,7 +36,7 @@ export default function DeleteButton({
   successMessage = "Item deleted successfully",
   size = "sm",
 }: DeleteButtonProps) {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
   const tCommon = useTranslations("Common");
 
   const defaultErrorMessages = {

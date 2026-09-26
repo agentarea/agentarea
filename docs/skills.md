@@ -48,7 +48,7 @@ Without progressive disclosure, all skill content is injected into the system pr
 ### Content-only Skill (Markdown)
 
 ```bash
-curl -X POST /v1/skills/ \
+curl -X POST /v1/workspaces/{workspace}/skills/ \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
     "name": "code-review",
@@ -60,7 +60,7 @@ curl -X POST /v1/skills/ \
 ### ZIP Package (with scripts)
 
 ```bash
-curl -X POST /v1/skills/upload \
+curl -X POST /v1/workspaces/{workspace}/skills/upload \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@skill-package.zip" \
   -F "name=data-analyzer" \
@@ -81,7 +81,7 @@ skill-package.zip
 ## Attaching Skills to Agents
 
 ```bash
-curl -X POST /v1/agents/ \
+curl -X POST /v1/workspaces/{workspace}/agents/ \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
     "name": "Data Agent",

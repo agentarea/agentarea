@@ -1,0 +1,2489 @@
+"use client";
+
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
+import Link from "@/components/WorkspaceLink";
+import {
+  AlertTriangle,
+  ArrowDownAZ,
+  BadgeCheck,
+  Blocks,
+  Bot,
+  CheckCircle2,
+  ChevronLeft,
+  Clock,
+  Compass,
+  ExternalLink,
+  FileText,
+  Globe,
+  Loader2,
+  Plug,
+  Puzzle,
+  Search,
+  Send,
+  ShieldCheck,
+  SlidersHorizontal,
+  Sparkles,
+  Star,
+  Telescope,
+} from "lucide-react";
+import { getCategoryIcon } from "@/lib/category-icons";
+import { isSafeRedirectUrl } from "@/lib/safe-redirect";
+import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
+import { Streamdown } from "streamdown";
+import type {
+  CatalogConnectionRequest,
+} from "@/api/client/types.gen";
+import { AgentAvatar } from "@/components/AgentAvatar";
+import { CustomOAuthAppFields } from "@/components/CustomOAuthAppFields";
+import EmptyState from "@/components/EmptyState";
+import EntityMark from "@/components/EntityMark";
+import HeaderTabs from "@/components/HeaderTabs";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import { HoverLink } from "@/components/ui/hover-link";
+import { Input } from "@/components/ui/input";
+import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
+import ModelBadge from "@/components/ui/model-badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { StartAgentButton } from "@/components/ui/start-agent-button";
+import { ToolbarButton } from "@/components/ui/toolbar";
+import { cn } from "@/lib/utils";
+import { getCookie, setCookie } from "@/utils/cookies";
+import {
+  addCatalogSkillToAgentAction,
+  connectCatalogConnectionAction,
+  fetchCatalogItemAction,
+  fetchCatalogPageAction,
+  getSkillFileUrlAction,
+  getSkillMarkdownAction,
+  installCatalogAgentAction,
+  installCatalogSkillAction,
+  listActiveModelInstancesAction,
+  listSkillFilesAction,
+  listWorkspaceAgentsAction,
+  type AgentLite,
+  type WorkspaceModel,
+} from "./actions";
+import { listWorkspaceSecretsAction } from "@/lib/server-actions";
+import { BundleInstallWizard } from "./BundleInstallWizard";
+import {
+  ALL,
+  arr,
+  DEFAULT_SORT,
+  EXPLORE_VIEW_COOKIE,
+  FEATURED_TAG,
+  isCatalogProtocol,
+  modelNameMatchesPreferred,
+  normalize,
+  PROTOCOL_LABELS,
+  SORT_KEYS,
+  SORT_LABELS,
+  str,
+  strArr,
+  TYPE_KEYS,
+  type CatalogEntry,
+  type CatalogProtocol,
+  type CatalogType,
+  type RawSpec,
+  type RegistryItem,
+  type SortMode,
+} from "./catalog-data";
+import {
+  canFetchMore,
+  catalogPagingReducer,
+  hasMore as hasMoreItems,
+  initialPaging,
+  type CategoryFacet,
+} from "./catalog-paging";
+
+// ── Registry types ──────────────────────────────────────────────────────────
+// One gallery for every catalog type. The look-and-feel is shared; the type is
+// just a tab. Each raw registry_item is normalized to a single CatalogEntry
+// (see catalog-data.ts, shared with the SSR page) so every card renders through
+// the same component regardless of type.
+
+type LucideIcon = React.ComponentType<{ className?: string }>;
+
+const TYPES: { key: CatalogType; label: string; icon: LucideIcon }[] = [
+  { key: "bundles", label: "Bundles", icon: Blocks },
+  { key: "agents", label: "Agents", icon: Bot },
+  { key: "skills", label: "Skills", icon: Puzzle },
+  { key: "connections", label: "Connections", icon: Plug },
+];
+
+/**
+ * The way out of the catalog when it does not have the thing.
+ *
+ * Shown only in the empty state: the catalog runs to thousands of entries and
+ * most searches land, so a standing banner above the list would tax everyone
+ * who is about to succeed in order to serve the few who do not.
+ *
+ * Every route here is a real page, and "ask an agent" is not a figure of
+ * speech either — `apps/api/agentarea_api/tools/mcp_servers_toolset.py`
+ * exposes `create_spec` to agents through `get_platform_tools()`.
+ */
+const BRING_YOUR_OWN: Record<CatalogType, { text: string; href?: string }[]> = {
+  connections: [
+    { text: "Connect your own MCP server", href: "/connections/add" },
+    { text: "Point at any REST API you already have", href: "/connections/add-openapi" },
+    { text: "Or describe it to an agent and have it wire the connection up", href: "/workplace" },
+  ],
+  skills: [{ text: "Write the skill yourself", href: "/skills/create" }],
+  agents: [{ text: "Build the agent yourself", href: "/agents/create" }],
+  bundles: [{ text: "Import a bundle you already have", href: "/bundles/import" }],
+};
+
+const BRING_YOUR_OWN_ACTION: Record<
+  CatalogType,
+  { label: string; href: string }
+> = {
+  connections: { label: "Add your own", href: "/connections/add" },
+  skills: { label: "Create a skill", href: "/skills/create" },
+  agents: { label: "Create an agent", href: "/agents/create" },
+  bundles: { label: "Import a bundle", href: "/bundles/import" },
+};
+
+const VIEW_KEYS = ["grid", "table"] as const;
+
+export type ViewMode = (typeof VIEW_KEYS)[number];
+
+// ── Data (client-side, for infinite-scroll "load more" only) ──
+// The first page of every filter combination is server-rendered (see
+// explore/page.tsx); this only runs for appends, so it can never race the
+// initial paint.
+
+type BrowseParams = {
+  type: CatalogType;
+  offset: number;
+  q: string;
+  category: string;
+  /** The nuqs value, so ALL or anything a hand-edited URL carries. */
+  protocol: string;
+  sort: SortMode;
+};
+
+async function fetchPage(params: BrowseParams) {
+  return fetchCatalogPageAction({
+    type: params.type,
+    offset: params.offset,
+    q: params.q || undefined,
+    category: params.category === ALL ? undefined : params.category,
+    // ALL, or junk from a hand-edited URL, means "don't filter" rather than a
+    // request the server would reject.
+    protocol: isCatalogProtocol(params.protocol) ? params.protocol : undefined,
+    sort: params.sort,
+  });
+}
+
+// ── Shared "type switch in flight" signal ──
+// The type tabs live in the ContentBlock subheader while the gallery lives in
+// the content area, so the transition that wraps the SSR round-trip is owned
+// here and consumed by both: the tabs trigger it, the gallery skeletons its
+// content on `isPending` for the whole round-trip. This keeps the persistent
+// chrome mounted and — crucially — avoids any flash of the previous type's data
+// mid-switch (React holds the old tree during a transition, so a type-vs-seed
+// comparison would briefly read stale; `isPending` doesn't).
+//
+// The kind of switch matters for how the wait is shown. Changing type makes the
+// current results wrong, so they're replaced by a skeleton. Changing a filter
+// within a type only narrows them, and search round-trips on every debounced
+// keystroke — skeletoning there would strobe the whole list while you type — so
+// the previous results stay on screen, dimmed, until the new page lands.
+type PendingKind = "type" | "filters" | null;
+
+type ExplorePending = {
+  isPending: boolean;
+  pendingKind: PendingKind;
+  startTypeTransition: React.TransitionStartFunction;
+  startFilterTransition: React.TransitionStartFunction;
+};
+const ExplorePendingContext = createContext<ExplorePending | null>(null);
+
+export function ExplorePendingProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [pendingKind, setPendingKind] = useState<PendingKind>(null);
+
+  const startTypeTransition = useCallback<React.TransitionStartFunction>(
+    (fn) => {
+      setPendingKind("type");
+      startTransition(fn);
+    },
+    [startTransition]
+  );
+  const startFilterTransition = useCallback<React.TransitionStartFunction>(
+    (fn) => {
+      setPendingKind("filters");
+      startTransition(fn);
+    },
+    [startTransition]
+  );
+
+  const value = useMemo(
+    () => ({
+      isPending,
+      pendingKind,
+      startTypeTransition,
+      startFilterTransition,
+    }),
+    [isPending, pendingKind, startTypeTransition, startFilterTransition]
+  );
+  return (
+    <ExplorePendingContext.Provider value={value}>
+      {children}
+    </ExplorePendingContext.Provider>
+  );
+}
+
+function useExplorePending() {
+  return useContext(ExplorePendingContext);
+}
+
+// ── Type switcher (lives in the ContentBlock subheader) ──
+// Lifted out of the gallery into the standard bordered subheader band — same
+// pattern as the agents / connections pages — so it no longer sits inside the
+// scrollable, padded content area. Shares the `type` URL state with the gallery
+// below (same nuqs key), so selecting a tab drives both in lock-step.
+export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
+  // shallow:false re-runs the explore Server Component. The transition is owned
+  // by ExplorePendingProvider (shared with the gallery) so its `isPending`
+  // drives the gallery's content skeleton for the whole round-trip.
+  const pending = useExplorePending();
+  const [type, setType] = useQueryState(
+    "type",
+    parseAsStringLiteral(TYPE_KEYS).withDefault(initialType).withOptions({
+      shallow: false,
+      startTransition: pending?.startTypeTransition,
+    })
+  );
+  const [, setCategory] = useQueryState(
+    "category",
+    parseAsString.withDefault(ALL)
+  );
+  const [, setItemId] = useQueryState("item", parseAsString);
+
+  return (
+    <CountSegmentedControl
+      items={TYPES.map((t) => {
+        const Icon = t.icon;
+        return {
+          value: t.key,
+          label: (
+            <span className="flex items-center gap-1.5">
+              <Icon className="h-4 w-4" />
+              {t.label}
+            </span>
+          ),
+        };
+      })}
+      value={type}
+      onChange={(next) => {
+        void setType(next);
+        void setCategory(ALL);
+        void setItemId(null);
+      }}
+      variant="solid"
+      layoutId="catalog-type-control"
+    />
+  );
+}
+
+// Grid/table switcher for the subheader (right side, paired with the type
+// tabs). Reuses the shared HeaderTabs control — same look as agents/connections.
+// Hidden while a detail item is open (?item=), where there's nothing to switch.
+export function ExploreViewToggle({
+  initialView = "grid",
+}: {
+  initialView?: ViewMode;
+}) {
+  const [view, setView] = useQueryState(
+    "view",
+    parseAsStringLiteral(VIEW_KEYS).withDefault(initialView)
+  );
+  const [itemId] = useQueryState("item", parseAsString);
+
+  // Restore the persisted view when landing on /explore without an explicit
+  // ?view param (e.g. via the sidebar link). The server seeds `initialView`
+  // from the same cookie to avoid a flash, but client-side restoration is the
+  // authoritative path: a cached RSC or auth-gated SSR can serve a stale
+  // default, so on mount we reconcile against the freshly-read cookie and write
+  // the param if the saved choice differs from what's shown.
+  useEffect(() => {
+    const hasParam = new URLSearchParams(window.location.search).has("view");
+    if (hasParam) return;
+    const saved = getCookie(EXPLORE_VIEW_COOKIE);
+    if ((saved === "table" || saved === "grid") && saved !== view) {
+      void setView(saved);
+    }
+    // Run once on mount — restoring the persisted choice for this visit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (itemId) return null;
+
+  return (
+    <HeaderTabs
+      tabs={[
+        { value: "table", label: "Table view" },
+        { value: "grid", label: "Grid view" },
+      ]}
+      value={view}
+      onChange={(v) => {
+        // Persist so the choice survives leaving and returning to /explore.
+        setCookie(EXPLORE_VIEW_COOKIE, v);
+        void setView(v as ViewMode);
+      }}
+    />
+  );
+}
+
+// ── Sort control (lives in the ContentBlock subheader) ──
+// Ordering is applied server-side over the whole catalog, so this drives the
+// same nuqs key the gallery reads and round-trips the Server Component
+// (shallow:false) rather than reordering the loaded prefix.
+export function ExploreSortSelect({
+  initialSort = DEFAULT_SORT,
+}: {
+  initialSort?: SortMode;
+}) {
+  const pending = useExplorePending();
+  const [sort, setSort] = useQueryState(
+    "sort",
+    parseAsStringLiteral(SORT_KEYS).withDefault(initialSort).withOptions({
+      shallow: false,
+      startTransition: pending?.startFilterTransition,
+    })
+  );
+  const [itemId] = useQueryState("item", parseAsString);
+
+  if (itemId) return null;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <ToolbarButton aria-label="Display options">
+          <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+          Display
+        </ToolbarButton>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-52 p-1.5">
+        <MenuSectionLabel>Ordering</MenuSectionLabel>
+        <MenuRow
+          icon={<Sparkles className="h-3.5 w-3.5" />}
+          label={SORT_LABELS.recommended}
+          selected={sort === "recommended"}
+          onClick={() => void setSort("recommended")}
+        />
+        <MenuRow
+          icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
+          label={SORT_LABELS.name}
+          selected={sort === "name"}
+          onClick={() => void setSort("name")}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ── Component ──
+
+type CatalogGalleryProps = {
+  initialType: CatalogType;
+  initialEntries: CatalogEntry[];
+  /** Items matching the active filters across the whole catalog. */
+  initialTotal: number;
+  initialCategories: CategoryFacet[];
+  /** MCP/API split; empty for every type but connections. */
+  initialProtocols: CategoryFacet[];
+  initialError?: string | null;
+  /** Persisted grid/table choice (cookie), seeds the view nuqs default. */
+  initialView?: ViewMode;
+};
+
+export default function CatalogGallery({
+  initialType,
+  initialEntries,
+  initialTotal,
+  initialCategories,
+  initialProtocols,
+  initialError = null,
+  initialView = "grid",
+}: CatalogGalleryProps) {
+  // Catalog UI state lives in the URL (nuqs) so views are shareable/back-able.
+  //
+  // Every browse dimension — type, search, category, sort — uses shallow:false,
+  // so changing any of them re-runs the explore Server Component and re-fetches
+  // page 1 with those filters applied in SQL. Nothing is filtered or reordered
+  // here: doing that over the loaded prefix hid matches that were never fetched
+  // and spliced later pages into the middle of the rendered list.
+  //
+  // These keys are read-only here — the switchers live in the subheader
+  // (ExploreTypeTabs / ExploreSortSelect / ExploreViewToggle) and drive the same
+  // nuqs keys. The component is NOT remounted; the effect below re-seeds state
+  // from the new SSR props, and `busy` skeletons the content while a switch is
+  // in flight, so the persistent chrome never flashes.
+  const [type] = useQueryState(
+    "type",
+    parseAsStringLiteral(TYPE_KEYS).withDefault(initialType).withOptions({
+      shallow: false,
+    })
+  );
+  const [sort] = useQueryState(
+    "sort",
+    parseAsStringLiteral(SORT_KEYS).withDefault(DEFAULT_SORT).withOptions({
+      shallow: false,
+    })
+  );
+  const explorePending = useExplorePending();
+  const [query, setQuery] = useQueryState(
+    "q",
+    parseAsString.withDefault("").withOptions({
+      shallow: false,
+      startTransition: explorePending?.startFilterTransition,
+    })
+  );
+  const [category, setCategory] = useQueryState(
+    "category",
+    parseAsString.withDefault(ALL).withOptions({
+      shallow: false,
+      startTransition: explorePending?.startFilterTransition,
+    })
+  );
+  const [protocol, setProtocol] = useQueryState(
+    "protocol",
+    parseAsString.withDefault(ALL).withOptions({
+      shallow: false,
+      startTransition: explorePending?.startFilterTransition,
+    })
+  );
+  const [view] = useQueryState(
+    "view",
+    parseAsStringLiteral(VIEW_KEYS).withDefault(initialView)
+  );
+  const [itemId, setItemId] = useQueryState("item", parseAsString);
+
+  // Paging bookkeeping, seeded from the server-rendered first page (no initial
+  // client fetch / flash). Kept in a reducer so the append/retry/exhaustion
+  // rules are testable apart from the component — see catalog-paging.ts.
+  const [paging, dispatch] = useReducer(
+    catalogPagingReducer,
+    undefined,
+    () => ({
+      ...initialPaging(),
+      entries: initialEntries,
+      total: initialTotal,
+      categories: initialCategories,
+      protocols: initialProtocols,
+      error: initialError,
+    })
+  );
+
+  // Typing shouldn't round-trip the server on every keystroke, so the input is
+  // local and the URL follows it on a short debounce.
+  const [draftQuery, setDraftQuery] = useState(query);
+  useEffect(() => setDraftQuery(query), [query]);
+  useEffect(() => {
+    if (draftQuery === query) return;
+    const t = setTimeout(() => void setQuery(draftQuery || null), 300);
+    return () => clearTimeout(t);
+  }, [draftQuery, query, setQuery]);
+
+  // Deep-link fallback for ?item= that points outside the loaded page(s).
+  const [deepItem, setDeepItem] = useState<CatalogEntry | null>(null);
+  const [deepLoading, setDeepLoading] = useState(false);
+  const [deepError, setDeepError] = useState<string | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Re-seed whenever a server round-trip lands with a different page. The props
+  // object identity changes on every SSR render, so a ref comparison is what
+  // tells "the server handed us something new" from a local re-render.
+  const seededFrom = useRef(initialEntries);
+  useEffect(() => {
+    if (seededFrom.current === initialEntries) return;
+    seededFrom.current = initialEntries;
+    dispatch({
+      type: "seed",
+      entries: initialEntries,
+      total: initialTotal,
+      categories: initialCategories,
+      protocols: initialProtocols,
+      error: initialError,
+    });
+  }, [
+    initialEntries,
+    initialTotal,
+    initialCategories,
+    initialProtocols,
+    initialError,
+  ]);
+
+  const loadMore = useCallback(async () => {
+    dispatch({ type: "appendStart" });
+    try {
+      const page = await fetchPage({
+        type,
+        // Entries are appended in server order, never reordered or
+        // filtered here, so the loaded count IS the next offset.
+        offset: paging.entries.length,
+        q: query,
+        category,
+        protocol,
+        sort,
+      });
+      dispatch({
+        type: "append",
+        entries: page.items.map((it) => normalize(type, it as RegistryItem)),
+        total: page.total,
+        categories: page.categories,
+        protocols: page.protocols,
+      });
+    } catch (e) {
+      dispatch({
+        type: "fail",
+        error: e instanceof Error ? e.message : "Failed to load",
+      });
+    }
+  }, [type, query, category, protocol, sort, paging.entries]);
+
+  // Infinite scroll: auto-load the next page when the sentinel nears the
+  // viewport. `canFetchMore` is the in-flight guard — a short page leaves the
+  // sentinel inside the viewport, so without it this fires page after page.
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !canFetchMore(paging)) return;
+    const io = new IntersectionObserver(
+      (obs) => {
+        if (obs[0]?.isIntersecting) void loadMore();
+      },
+      { rootMargin: "600px" }
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, [paging, loadMore]);
+
+  // Deep-link fallback: if ?item= points at an entry that isn't in the loaded
+  // page(s) (e.g. a shared link to something deep in the catalog), fetch that
+  // one item by id so the detail still opens instead of silently falling back
+  // to the grid.
+  useEffect(() => {
+    if (!itemId) {
+      setDeepItem(null);
+      setDeepError(null);
+      setDeepLoading(false);
+      return;
+    }
+    if (paging.entries.some((e) => e.id === itemId)) return; // already in the list
+    if (deepItem?.id === itemId) return; // already fetched
+    let alive = true;
+    setDeepLoading(true);
+    setDeepError(null);
+    fetchCatalogItemAction(itemId)
+      .then((it) => {
+        if (!alive) return;
+        setDeepItem(normalize(type, it));
+        setDeepLoading(false);
+      })
+      .catch((e) => {
+        if (!alive) return;
+        setDeepError(e instanceof Error ? e.message : "Failed to load");
+        setDeepLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [itemId, paging.entries, type, deepItem?.id]);
+
+  // Selected item (from ?item=) — resolved against the loaded page first, then
+  // the deep-link fallback. When set, the main column shows the detail in place
+  // — tabs + facets stay, so it feels like browsing a marketplace rather than a
+  // full-page takeover.
+  const active =
+    (itemId ? (paging.entries.find((e) => e.id === itemId) ?? null) : null) ??
+    (deepItem?.id === itemId ? deepItem : null);
+  // Drives the empty-state copy + "Clear filters" affordance.
+  const hasFilters =
+    query.trim() !== "" || category !== ALL || protocol !== ALL;
+
+  // A type switch invalidates the current results, so they're skeletoned. A
+  // filter change only narrows them: the list stays and dims, which is what
+  // keeps debounced search from strobing the page on every keystroke. Appends
+  // are neither — they add to the list rather than replacing it.
+  const pending = explorePending?.isPending ?? false;
+  const busy = pending && explorePending?.pendingKind === "type";
+  const refreshing = pending && !busy;
+  const categories = useMemo(
+    () => paging.categories.map((c) => [c.value, c.count] as [string, number]),
+    [paging.categories]
+  );
+  const protocols = useMemo(
+    () => paging.protocols.map((p) => [p.value, p.count] as [string, number]),
+    [paging.protocols]
+  );
+  const moreAvailable = hasMoreItems(paging);
+
+  return (
+    <div className="flex gap-6">
+      {/* Facet sidebar — always reserved on desktop so every catalog type keeps
+          the same content width. Types without category facets still render the
+          Category group with its All option. Counts come from the server and cover
+          the whole catalog, so they do not drift as more pages load. */}
+      <aside className="hidden w-52 shrink-0 lg:block">
+        {busy ? (
+          <FacetSkeleton />
+        ) : (
+          <>
+            {/* Connections are not all MCP — an entry may be a plain HTTP API —
+                so the split leads the sidebar when there is one to make. */}
+            {protocols.length > 1 && (
+              <FacetGroup
+                label="Protocol"
+                options={protocols}
+                labels={PROTOCOL_LABELS}
+                selected={protocol}
+                onSelect={(v) => {
+                  void setProtocol(v === ALL ? null : v);
+                  void setItemId(null);
+                }}
+              />
+            )}
+            <FacetGroup
+              label="Category"
+              options={categories}
+              icons={getCategoryIcon}
+              selected={category}
+              onSelect={(v) => {
+                void setCategory(v === ALL ? null : v);
+                void setItemId(null);
+              }}
+            />
+          </>
+        )}
+      </aside>
+
+      {/* Main */}
+      <div className="min-w-0 flex-1 space-y-4">
+        {active ? (
+          <DetailView entry={active} onBack={() => void setItemId(null)} />
+        ) : itemId ? (
+          <DeepItemStatus onBack={() => void setItemId(null)}>
+            {deepLoading ? (
+              <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading…
+              </span>
+            ) : (
+              <EmptyState
+                title="Item not found"
+                description={
+                  deepError ??
+                  "This item may have been removed or isn't available."
+                }
+                iconsType="404"
+                action={{
+                  label: "Back to catalog",
+                  onClick: () => void setItemId(null),
+                }}
+              />
+            )}
+          </DeepItemStatus>
+        ) : (
+          <>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={draftQuery}
+                onChange={(e) => setDraftQuery(e.target.value)}
+                placeholder={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}…`}
+                aria-label={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}`}
+                className="pl-9"
+              />
+            </div>
+
+            {paging.error && (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  {paging.error}
+                </span>
+                {/* A failed page used to end infinite scroll for good. It's a
+                  retry, not the end of the catalog. */}
+                {moreAvailable && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void loadMore()}
+                  >
+                    Retry
+                  </Button>
+                )}
+              </div>
+            )}
+            {busy && <ContentSkeleton view={view} />}
+            {!busy &&
+              !refreshing &&
+              paging.entries.length === 0 &&
+              !paging.error && (
+                <EmptyState
+                  title={hasFilters ? "No matches" : "Nothing published yet"}
+                  description={
+                    hasFilters
+                      ? "Nothing matches your search and filters."
+                      : "The catalog is synced from the platform registry. Entries of this type appear here once they are published."
+                  }
+                  icons={hasFilters ? [Telescope, Compass, Search] : undefined}
+                  // Failing to find something is the one moment where the way
+                  // out of the catalog is worth showing. "Clear filters" on its
+                  // own assumed the answer was always in here and you had
+                  // merely filtered wrong.
+                  hints={BRING_YOUR_OWN[type]}
+                  action={
+                    hasFilters
+                      ? {
+                          label: "Clear filters",
+                          onClick: () => {
+                            setDraftQuery("");
+                            void setQuery(null);
+                            void setCategory(null);
+                            void setProtocol(null);
+                          },
+                        }
+                      : undefined
+                  }
+                  additionAction={BRING_YOUR_OWN_ACTION[type]}
+                />
+              )}
+
+            {!busy && paging.entries.length > 0 && (
+              <div
+                className={cn(
+                  "transition-opacity",
+                  refreshing && "pointer-events-none opacity-50"
+                )}
+                aria-busy={refreshing}
+              >
+                {view === "grid" ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                    {paging.entries.map((e) => (
+                      <CatalogCard
+                        key={e.id}
+                        entry={e}
+                        onOpen={() => void setItemId(e.id)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <CatalogTable
+                    entries={paging.entries}
+                    onOpen={(e) => void setItemId(e.id)}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Infinite-scroll sentinel + manual fallback. Mounted whenever the
+              catalog has more, including when this page rendered nothing — a
+              filter whose matches all sit further in used to render "No matches"
+              here and strand the rest of the catalog. */}
+            {!busy && !refreshing && moreAvailable && (
+              <>
+                <div ref={sentinelRef} className="h-px" aria-hidden />
+                <div className="flex justify-center pt-2">
+                  {paging.status === "appending" ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  ) : (
+                    !paging.error && (
+                      <Button variant="outline" onClick={() => void loadMore()}>
+                        Load more
+                      </Button>
+                    )
+                  )}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Table view (compact, scannable; same click → drawer) ──
+
+function CatalogTable({
+  entries,
+  onOpen,
+}: {
+  entries: CatalogEntry[];
+  onOpen: (e: CatalogEntry) => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/60">
+      <table className="w-full table-fixed text-sm">
+        <colgroup>
+          <col className="w-10" />
+          <col className="md:w-[42%]" />
+          <col className="hidden md:table-column" />
+        </colgroup>
+        <tbody>
+          {entries.map((e) => (
+            <tr
+              key={e.id}
+              onClick={() => onOpen(e)}
+              className="cursor-pointer border-b border-border/40 last:border-0 hover:bg-muted/40"
+            >
+              <td className="w-10 py-2 pl-3 pr-0">
+                <EntityMark
+                  identity={e.identity}
+                  brandFallback={false}
+                  className="h-7 w-7 rounded-md border border-border/60 bg-white p-[3px] text-[10px] dark:bg-zinc-800"
+                />
+              </td>
+              {/* Title column is capped (responsive) so a long name
+                    truncates with an ellipsis instead of wrapping to multiple
+                    lines and blowing up the row height. `min-w-0` on the flex
+                    row + the name lets the name shrink; the badges stay
+                    `shrink-0` so they're never clipped. */}
+              <td className="max-w-[160px] py-2 pl-2 pr-3 align-middle sm:max-w-[240px] lg:max-w-[340px]">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="min-w-0 truncate font-medium">
+                    {e.title}
+                  </span>
+                  {e.verified && (
+                    <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+                  )}
+                  {e.category && <CategoryBadge category={e.category} />}
+                </div>
+              </td>
+              {/* Description absorbs the remaining row width and truncates
+                    with an ellipsis. `w-full` grabs the leftover space (pinning
+                    the title column to its content, no dead gap); `max-w-0` is
+                    what makes truncation actually work — without it auto table
+                    layout grows the column to fit the nowrap text and it spills
+                    past the edge with no ellipsis. Together they give the inner
+                    block a definite width to clip against. Hidden below md. */}
+              <td className="hidden w-full max-w-0 py-2 pr-4 md:table-cell">
+                <div className="table-description truncate">
+                  {e.description}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Facet group ──
+
+function FacetSkeleton() {
+  return (
+    <div className="mb-6">
+      <div className="mb-2 h-3 w-20 rounded bg-muted/60" />
+      <div className="space-y-1">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-7 animate-pulse rounded-md bg-muted/40" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FacetGroup({
+  label,
+  options,
+  labels,
+  icons,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  options: [string, number][];
+  /** Display names for machine values ("mcp" reads as "Mcp" otherwise). */
+  labels?: Record<string, string>;
+  /** Icon per option value. Omitted by facets whose values are not topics. */
+  icons?: (value: string) => LucideIcon;
+  selected: string;
+  onSelect: (v: string) => void;
+}) {
+  const rows: [string, number | null][] = [[ALL, null], ...options];
+  return (
+    <div className="mb-6">
+      <div className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="space-y-0.5">
+        {rows.map(([value, count]) => {
+          // "All" is the absence of a filter, not a topic, so it stays bare —
+          // but it still takes the icon's width so the labels line up.
+          const Icon = icons && value !== ALL ? icons(value) : null;
+          return (
+          <button
+            key={value}
+            onClick={() => onSelect(value)}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+              selected === value
+                ? "bg-muted font-medium text-foreground"
+                : "text-muted-foreground hover:bg-muted/50"
+            )}
+          >
+            {icons &&
+              (Icon ? (
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <span className="h-3.5 w-3.5 shrink-0" />
+              ))}
+            <span className="min-w-0 flex-1 truncate text-left capitalize">
+              {value === ALL ? "All" : (labels?.[value] ?? value)}
+            </span>
+            {count !== null && (
+              <span className="text-[10px] tabular-nums text-muted-foreground">
+                {count}
+              </span>
+            )}
+          </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Card (uniform across every type) ──
+
+/**
+ * A catalog entry's category, with the icon the sidebar files it under.
+ *
+ * The three sources spell categories differently ("Data & Analytics" vs
+ * "data"), so the text alone does not read as the same bucket across types.
+ * The icon does, and it matches the facet the entry is reachable through.
+ */
+function CategoryBadge({ category }: { category: string }) {
+  // createElement rather than a capitalised local: the lookup returns an
+  // existing icon, but assigning one to `const Icon` here reads to
+  // react-hooks/static-components as defining a component mid-render.
+  const icon = getCategoryIcon(category);
+  return (
+    <Badge
+      variant="light"
+      size="sm"
+      className="shrink-0 gap-1 whitespace-nowrap capitalize"
+    >
+      {React.createElement(icon, { className: "h-3 w-3" })}
+      {category}
+    </Badge>
+  );
+}
+
+/**
+ * What a connection speaks. The catalog tile shows the vendor's own logo, so
+ * without this an MCP server and an HTTP API to the same vendor are
+ * indistinguishable — and "Connections" no longer implies MCP.
+ */
+function ProtocolBadge({ protocol }: { protocol: CatalogProtocol }) {
+  return (
+    <Badge variant="secondary" size="sm" className="gap-1 font-normal">
+      {protocol === "mcp" ? (
+        // mcp.svg is fill="currentColor"; as a mask it inherits the badge's
+        // text colour instead of fighting the theme.
+        <span
+          aria-hidden
+          className="h-3 w-3 bg-current [mask-image:url(/mcp.svg)] [mask-position:center] [mask-repeat:no-repeat] [mask-size:contain] [-webkit-mask-image:url(/mcp.svg)] [-webkit-mask-position:center] [-webkit-mask-repeat:no-repeat] [-webkit-mask-size:contain]"
+        />
+      ) : (
+        <Globe className="h-3 w-3" />
+      )}
+      {PROTOCOL_LABELS[protocol]}
+    </Badge>
+  );
+}
+
+function CatalogCard({
+  entry,
+  onOpen,
+}: {
+  entry: CatalogEntry;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      onClick={onOpen}
+      className="group flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white text-left transition-shadow hover:shadow-md dark:border-zinc-700/60 dark:bg-zinc-900"
+    >
+      <div className="relative flex h-20 items-center justify-center gap-1.5 border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
+        {entry.verified ? (
+          <span className="absolute left-2 top-2">
+            <Badge variant="blue" size="sm" className="gap-1">
+              <BadgeCheck className="h-3 w-3" />
+              Verified
+            </Badge>
+          </span>
+        ) : entry.featured ? (
+          <span className="absolute left-2 top-2">
+            <Badge variant="blue" size="sm" className="gap-1">
+              <Star className="h-3 w-3 fill-current" />
+              Featured
+            </Badge>
+          </span>
+        ) : null}
+        {/* A bundle's value is the integrations it wires up, so when it has
+            no artwork of its own they say more than a monogram would. */}
+        {entry.identity.sources.length === 0 &&
+        entry.integrations.length > 0 ? (
+          entry.integrations.slice(0, 4).map((name) => (
+            <span
+              key={name}
+              title={name}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-white text-xs font-bold uppercase text-zinc-500 shadow-sm dark:bg-zinc-800"
+            >
+              {name.slice(0, 1)}
+            </span>
+          ))
+        ) : (
+          <EntityMark
+            identity={entry.identity}
+            brandFallback={false}
+            className="h-[52px] w-[52px] rounded-xl border border-border/60 bg-white p-1.5 text-xs shadow-sm dark:bg-zinc-800"
+          />
+        )}
+        <span className="absolute right-2 top-2">
+          <HoverLink text="View" />
+        </span>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-1 p-3">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-semibold">{entry.title}</span>
+          {entry.category && <CategoryBadge category={entry.category} />}
+        </div>
+        <p className="table-description line-clamp-2">{entry.description}</p>
+        {(entry.protocol || entry.meta.length > 0) && (
+          <div className="mt-auto flex flex-wrap items-center gap-1 pt-1.5">
+            {entry.protocol && <ProtocolBadge protocol={entry.protocol} />}
+            {entry.meta.map((m) => (
+              <Badge
+                key={m}
+                variant="secondary"
+                size="sm"
+                className="font-normal"
+              >
+                {m}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+// ── In-page detail view (look first; Connect runs the real setup) ──
+
+type InstallState =
+  | { phase: "idle" }
+  | { phase: "loading" }
+  | { phase: "connecting" }
+  | { phase: "needs_config" }
+  | { phase: "done"; created: number }
+  | { phase: "error"; message: string };
+
+// Setup tiers carried in curated metadata (see the catalog source). Drives what
+// the Connect action asks for before it can add the connection.
+type SetupTier =
+  | "one_click"
+  | "oauth"
+  | "needs_oauth_app"
+  | "needs_tenant_config"
+  | "unverified";
+
+type CustomOAuthAppInput = Pick<
+  CatalogConnectionRequest,
+  | "client_id"
+  | "client_secret"
+  | "client_id_secret_id"
+  | "client_secret_secret_id"
+>;
+
+function DetailView({
+  entry,
+  onBack,
+}: {
+  entry: CatalogEntry;
+  onBack: () => void;
+}) {
+  const [state, setState] = useState<InstallState>({ phase: "idle" });
+  // Bundles open an inline configure-then-install step rather than installing on
+  // the first click (pick model, skip connections, tune policies, then commit).
+  const [configuring, setConfiguring] = useState(false);
+
+  const spec = entry.spec;
+  const rawMeta = (spec.raw_spec as RawSpec | undefined)?.metadata as
+    | RawSpec
+    | undefined;
+  const tier = (str(rawMeta?.["agentarea:setup_tier"]) ??
+    "unverified") as SetupTier;
+  const isCatalogApi = entry.protocol === "api";
+
+  // Machine tags ("category:x", "repo:y", "featured"…) are provenance, not
+  // topical labels — keep them out of the chip row (surfaced elsewhere instead).
+  // Bundle capabilities get their own labeled row, so drop them here too.
+  const capabilitySet = new Set(bundleCapabilities(spec));
+  const topicalTags = entry.tags.filter(
+    (t) => !t.includes(":") && t !== FEATURED_TAG && !capabilitySet.has(t)
+  );
+
+  // Setup reuses the existing "create instance from spec" page — the catalog
+  // never configures inline. Each catalog connection links to an MCP spec.
+  const connectHref = entry.installEntityId
+    ? `/connections/create/${entry.installEntityId}`
+    : "/connections/add";
+
+  useEffect(() => {
+    // Reset only when the selected item changes.
+    setState({ phase: "idle" });
+    setConfiguring(false);
+  }, [entry.id]);
+
+  async function installAgent() {
+    setState({ phase: "loading" });
+    try {
+      // entry.id is the registry_item id; the endpoint forks a tenant copy
+      // (copy-on-write) and is idempotent if already installed.
+      await installCatalogAgentAction(entry.id);
+      setState({ phase: "done", created: 1 });
+    } catch (e) {
+      setState({
+        phase: "error",
+        message: e instanceof Error ? e.message : "Install failed",
+      });
+    }
+  }
+
+  async function connectCatalogApi(
+    credentialMode: "managed" | "custom",
+    custom?: CustomOAuthAppInput
+  ) {
+    setState({ phase: "connecting" });
+    try {
+      const result = await connectCatalogConnectionAction(entry.id, {
+        credential_mode: credentialMode,
+        ...custom,
+        return_to: window.location.origin,
+      });
+      if (!isSafeRedirectUrl(result.authorize_url)) {
+        throw new Error("Could not connect this account");
+      }
+      window.location.assign(result.authorize_url);
+    } catch (e) {
+      setState({
+        phase: "error",
+        message:
+          e instanceof Error ? e.message : "Could not connect this account",
+      });
+    }
+  }
+
+  const installing = state.phase === "loading";
+  const connecting = state.phase === "connecting";
+
+  // Bundles route through the configure-then-install wizard in place of the
+  // detail view; everything else keeps the look-first detail layout.
+  if (entry.type === "bundles" && configuring) {
+    return (
+      <BundleInstallWizard
+        source={JSON.stringify(spec)}
+        title={entry.title}
+        identity={entry.identity}
+        onBack={() => setConfiguring(false)}
+      />
+    );
+  }
+
+  return (
+    <div className="max-w-2xl space-y-8">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ChevronLeft className="h-4 w-4" />
+        Back to catalog
+      </button>
+
+      {/* header — icon, title/badges, description, primary action */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-start">
+        <div className="flex min-w-0 flex-1 items-start gap-4">
+          <EntityMark
+            identity={entry.identity}
+            brandFallback={false}
+            className="h-12 w-12 shrink-0 rounded-lg border border-border/60 bg-white p-1.5 text-sm shadow-sm dark:bg-zinc-800"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-semibold tracking-tight">
+                {entry.title}
+              </h2>
+              {entry.verified && (
+                <Badge variant="blue" size="sm" className="gap-1">
+                  <BadgeCheck className="h-3 w-3" />
+                  Verified
+                </Badge>
+              )}
+              {entry.protocol && <ProtocolBadge protocol={entry.protocol} />}
+              {entry.category && <CategoryBadge category={entry.category} />}
+            </div>
+            {entry.description && (
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                {entry.description}
+              </p>
+            )}
+          </div>
+        </div>
+        <CatalogActionSlot>
+          {entry.type === "skills" ? (
+            <AddSkillToAgent skillId={entry.id} />
+          ) : state.phase === "done" ? (
+            <Button asChild variant="outline">
+              <Link href="/agents">Go to Agents</Link>
+            </Button>
+          ) : entry.type === "connections" ? (
+            isCatalogApi ? (
+              <StartAgentButton
+                size="xs"
+                isLoading={connecting}
+                onClick={() => void connectCatalogApi("managed")}
+              >
+                Connect
+              </StartAgentButton>
+            ) : (
+              <StartAgentButton asChild size="xs">
+                <Link href={connectHref}>Connect</Link>
+              </StartAgentButton>
+            )
+          ) : (
+            <StartAgentButton
+              size="xs"
+              onClick={() =>
+                entry.type === "bundles" ? setConfiguring(true) : installAgent()
+              }
+              isLoading={installing}
+            >
+              {entry.type === "bundles"
+                ? "Use this bundle"
+                : "Add to workspace"}
+            </StartAgentButton>
+          )}
+        </CatalogActionSlot>
+      </div>
+
+      {/* install feedback */}
+      {state.phase === "error" && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          {state.message}
+        </div>
+      )}
+      {state.phase === "done" && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          {entry.type === "agents"
+            ? "Added to your workspace — it's now an editable copy you own."
+            : `Installed — ${state.created} entities created.`}
+        </div>
+      )}
+
+      {topicalTags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {topicalTags.slice(0, 12).map((t) => (
+            <Badge key={t} variant="light" size="sm">
+              {t}
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      {/* details */}
+      <div className="space-y-5 border-t border-border/60 pt-6">
+        {entry.type === "bundles" && <BundleContents spec={spec} />}
+        {entry.type === "agents" && <PreferredModels models={entry.meta} />}
+        {entry.type === "connections" && (
+          <>
+            <ConnectionSetup tier={tier} />
+            {isCatalogApi && (
+              <CustomOAuthApp
+                connecting={connecting}
+                onConnect={(credentials) =>
+                  void connectCatalogApi("custom", credentials)
+                }
+              />
+            )}
+          </>
+        )}
+        {entry.type === "skills" && (
+          <>
+            <SkillContent
+              skillId={entry.id}
+              sourceType={str(spec.source_type) ?? "content"}
+              sourceUrl={str(spec.source_url)}
+              content={str(spec.content)}
+            />
+            <SkillFacts entry={entry} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// A catalog agent declares model *preferences* (slugs); the backend never binds
+// a model on install (that's a per-workspace instance). This surfaces those
+// preferences and, by fetching the workspace's configured models, suggests which
+// one to pick — highlighting an available match or saying plainly when none fit.
+function PreferredModels({ models }: { models: string[] }) {
+  const [instances, setInstances] = useState<WorkspaceModel[] | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    listActiveModelInstancesAction()
+      .then((d) => active && setInstances(Array.isArray(d) ? d : []))
+      .catch(() => active && setInstances([]));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (models.length === 0) return null;
+
+  const matchFor = (slug: string) =>
+    (instances ?? []).filter((mi) =>
+      modelNameMatchesPreferred(str(mi.model_name) ?? "", slug)
+    );
+  const anyMatch =
+    instances != null && models.some((s) => matchFor(s).length > 0);
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <Bot className="h-3.5 w-3.5" />
+        Preferred models
+        <span className="tabular-nums">({models.length})</span>
+      </div>
+      <ul className="space-y-1">
+        {models.map((slug) => {
+          const best = matchFor(slug)[0];
+          return (
+            <li
+              key={slug}
+              className="flex items-center justify-between gap-2 rounded bg-muted/50 px-2 py-1.5 text-sm"
+            >
+              <span className="truncate">{slug}</span>
+              {instances == null ? null : best ? (
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <ModelBadge
+                    size="sm"
+                    className="bg-transparent px-0 py-0"
+                    providerName={best.provider_name ?? undefined}
+                    iconUrl={best.provider_icon_url ?? undefined}
+                    modelDisplayName={
+                      best.model_display_name || best.model_name || slug
+                    }
+                  />
+                  <Badge variant="success" size="sm" className="gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    In your workspace
+                  </Badge>
+                </span>
+              ) : (
+                <Badge
+                  variant="light"
+                  size="sm"
+                  className="shrink-0 text-muted-foreground"
+                >
+                  Not configured
+                </Badge>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-1.5 text-[11px] text-muted-foreground">
+        {instances == null
+          ? "Checking your workspace models…"
+          : anyMatch
+            ? "The agent is added without a model — pick a suggested one (or any other) before running it."
+            : "None are configured in your workspace yet — add a provider, then pick a model for this agent."}
+      </p>
+    </div>
+  );
+}
+
+function ConnectionSetup({ tier }: { tier: SetupTier }) {
+  const COPY: Record<
+    SetupTier,
+    { icon: LucideIcon; title: string; detail: string }
+  > = {
+    one_click: {
+      icon: BadgeCheck,
+      title: "One-click connect",
+      detail: "Authorize access in the next step — nothing to set up.",
+    },
+    oauth: {
+      icon: BadgeCheck,
+      title: "Ready to connect",
+      detail: "Click Connect, then sign in and approve access.",
+    },
+    needs_oauth_app: {
+      icon: AlertTriangle,
+      title: "Needs an OAuth app",
+      detail:
+        "This vendor requires a one-time OAuth app (client ID/secret). You can add it now and finish auth on the connection page.",
+    },
+    needs_tenant_config: {
+      icon: Plug,
+      title: "Enter your workspace URL",
+      detail:
+        "This connection is hosted in your own tenant — paste your full MCP URL.",
+    },
+    unverified: {
+      icon: AlertTriangle,
+      title: "Not verified yet",
+      detail: "We'll try to connect; you may need to finish setup manually.",
+    },
+  };
+  const c = COPY[tier];
+  const Icon = c.icon;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
+        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{c.title}</p>
+          <p className="text-xs text-muted-foreground">{c.detail}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CustomOAuthApp({
+  connecting,
+  onConnect,
+}: {
+  connecting: boolean;
+  onConnect: (credentials: CustomOAuthAppInput) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [credentials, setCredentials] = useState<CustomOAuthAppInput | null>(
+    null
+  );
+  const ready = Boolean(
+    credentials &&
+      Boolean(credentials.client_id || credentials.client_id_secret_id) &&
+      Boolean(credentials.client_secret || credentials.client_secret_secret_id)
+  );
+
+  return (
+    <details
+      className="group rounded-lg border border-border/60"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className="cursor-pointer list-none px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground">
+        Advanced
+      </summary>
+      <div className="space-y-3 border-t border-border/60 px-3 py-3">
+        <p className="text-xs text-muted-foreground">
+          Use your own OAuth app credentials instead of the AgentArea app.
+        </p>
+        {/* Mounted only once opened, so closed cards don't each fetch secrets. */}
+        {open && (
+          <CustomOAuthAppFields
+            loadSecrets={listWorkspaceSecretsAction}
+            onChange={setCredentials}
+            disabled={connecting}
+          />
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!ready || connecting}
+          onClick={() => credentials && onConnect(credentials)}
+        >
+          Connect with custom app
+        </Button>
+      </div>
+    </details>
+  );
+}
+
+function Inside({
+  icon: Icon,
+  label,
+  rows,
+  hint,
+}: {
+  icon: LucideIcon;
+  label: string;
+  rows: string[];
+  hint?: string;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+        <span className="tabular-nums">({rows.length})</span>
+      </div>
+      <ul className="space-y-1">
+        {rows.map((r) => (
+          <li
+            key={r}
+            className="truncate rounded bg-muted/50 px-2 py-1 text-sm"
+          >
+            {r}
+          </li>
+        ))}
+      </ul>
+      {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+// ── Bundle contents (rich breakdown of what's inside a bundle) ──
+
+// Each entity in a bundle carries far more than a name: agents have an
+// instruction, a model, and the skills/connections they wire up; skills carry a
+// source and a content preview; connections carry a transport and the secrets
+// they bind. The detail view surfaces all of it so you can judge a bundle
+// before installing — not just count its parts. Everything is referenced by
+// in-bundle `key` (portable; ids are resolved on install), so we resolve those
+// keys to display names against the bundle's own entity lists.
+
+// Presentation capabilities a bundle advertises ("interactive", "write"…),
+// carried in metadata — surfaced as their own labeled row, not loose tags.
+function bundleCapabilities(spec: RawSpec): string[] {
+  return strArr((spec.metadata as RawSpec | undefined)?.capabilities);
+}
+
+// Display name for an in-bundle reference key (e.g. an agent's skill/mcp key).
+function bundleRefName(items: Record<string, unknown>[], key: string): string {
+  const found = items.find((i) => str(i.key) === key);
+  return found ? String(found.name ?? key) : key;
+}
+
+// Models are literal ids ("gpt-4o") or "${setup.x}" placeholders. Resolve the
+// placeholder to the setup field's default so the card shows a real model name
+// instead of a raw template; hide it when nothing concrete is known.
+function resolveBundleModel(
+  model: string | null,
+  setup: Record<string, unknown>[]
+): string | null {
+  if (!model) return null;
+  const ref = model.match(/^\$\{setup\.([a-zA-Z0-9_]+)\}$/);
+  if (!ref) return model;
+  const field = setup.find((f) => str(f.key) === ref[1]);
+  return field ? str(field.default) : null;
+}
+
+// First meaningful line of a SKILL.md body, with the leading "# Heading" (which
+// just repeats the skill name) dropped.
+function skillPreview(content: string | null): string | null {
+  if (!content) return null;
+  const body = content
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l.length > 0 && !l.startsWith("#"));
+  return body ?? null;
+}
+
+function BundleSection({
+  icon: Icon,
+  label,
+  count,
+  hint,
+  children,
+}: {
+  icon: LucideIcon;
+  label: string;
+  count: number;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  if (count === 0) return null;
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+        <span className="tabular-nums">({count})</span>
+      </div>
+      <div className="space-y-2">{children}</div>
+      {hint && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">{hint}</p>
+      )}
+    </div>
+  );
+}
+
+// A small icon+text chip used to show an agent's wired skills/connections.
+function RefChip({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-border/60 bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground">
+      <Icon className="h-3 w-3 shrink-0" />
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
+
+function BundleContents({ spec }: { spec: RawSpec }) {
+  const agents = arr(spec.agents);
+  const skills = arr(spec.skills);
+  const mcps = arr(spec.mcps);
+  const channels = arr(spec.channels);
+  const setup = arr(spec.setup);
+  const automations = arr(spec.automations);
+  const policies = arr(spec.policies);
+  const capabilities = bundleCapabilities(spec);
+
+  // Tool-scoping surfaced from governance policies (allow/deny on `tool:X`).
+  const agentAllowedTools = (agentKey: string) =>
+    policies
+      .filter((p) => str(p.subject) === agentKey && str(p.effect) === "allow")
+      .map((p) => str(p.target)?.match(/^tool:(.+)$/)?.[1])
+      .filter((t): t is string => Boolean(t) && t !== "*");
+
+  const total =
+    agents.length +
+    skills.length +
+    mcps.length +
+    channels.length +
+    automations.length +
+    policies.length +
+    capabilities.length;
+  if (total === 0) return null;
+
+  return (
+    <>
+      {capabilities.length > 0 && (
+        <div>
+          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5" />
+            Capabilities
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {capabilities.map((c) => (
+              <Badge
+                key={c}
+                variant="light"
+                size="sm"
+                className="gap-1 capitalize"
+              >
+                <Sparkles className="h-3 w-3" />
+                {c.replace(/[-_]+/g, " ")}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <BundleSection icon={Bot} label="Agents" count={agents.length}>
+        {agents.map((a, i) => {
+          const usesSkills = strArr(a.skills).map((k) =>
+            bundleRefName(skills, k)
+          );
+          const usesMcps = strArr(a.mcps).map((k) => bundleRefName(mcps, k));
+          const model = resolveBundleModel(str(a.model), setup);
+          const instruction = str(a.instruction);
+          return (
+            <div
+              key={str(a.key) ?? i}
+              className="rounded-lg border border-border/60 bg-muted/20 p-3"
+            >
+              <div className="flex items-center gap-2">
+                <AgentAvatar
+                  agent={{
+                    id: String(a.key ?? a.name ?? i),
+                    name: str(a.name),
+                  }}
+                  size="sm"
+                />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {String(a.name ?? a.key)}
+                </span>
+                {model && (
+                  <ModelBadge
+                    modelDisplayName={model}
+                    size="sm"
+                    className="shrink-0"
+                  />
+                )}
+              </div>
+              {instruction && (
+                <p className="mt-2 line-clamp-3 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
+                  {instruction}
+                </p>
+              )}
+              {(usesSkills.length > 0 || usesMcps.length > 0) && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {usesSkills.map((s) => (
+                    <RefChip key={`s-${s}`} icon={Puzzle} label={s} />
+                  ))}
+                  {usesMcps.map((m) => (
+                    <RefChip key={`m-${m}`} icon={Plug} label={m} />
+                  ))}
+                </div>
+              )}
+              {(() => {
+                const allowed = agentAllowedTools(String(a.key ?? ""));
+                if (allowed.length === 0) return null;
+                return (
+                  <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                    <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                    Tools locked to{" "}
+                    <span className="font-medium">{allowed.join(", ")}</span>
+                  </p>
+                );
+              })()}
+            </div>
+          );
+        })}
+      </BundleSection>
+
+      <BundleSection icon={Puzzle} label="Skills" count={skills.length}>
+        {skills.map((s, i) => {
+          const source = str(s.source_type) ?? "content";
+          const preview =
+            source === "github"
+              ? str(s.source_url)
+              : skillPreview(str(s.content));
+          return (
+            <div
+              key={str(s.key) ?? i}
+              className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
+            >
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {String(s.name ?? s.key)}
+                </span>
+                <Badge variant="light" size="sm" className="shrink-0">
+                  {source}
+                </Badge>
+              </div>
+              {preview && (
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                  {preview}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </BundleSection>
+
+      <BundleSection
+        icon={Plug}
+        label="Connections"
+        count={mcps.length}
+        hint="Connected via OAuth or your credentials after install"
+      >
+        {mcps.map((m, i) => {
+          const transport = str((m.json_spec as RawSpec | undefined)?.type);
+          const binds = Object.keys(
+            (m.bindings as Record<string, unknown> | undefined) ?? {}
+          );
+          return (
+            <div
+              key={str(m.key) ?? i}
+              className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
+            >
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/60 bg-white dark:bg-zinc-800">
+                  <Plug className="h-3.5 w-3.5 text-zinc-400" />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {String(m.name ?? m.key)}
+                </span>
+                {transport && (
+                  <Badge variant="light" size="sm" className="shrink-0">
+                    {transport}
+                  </Badge>
+                )}
+              </div>
+              {binds.length > 0 && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Requires: {binds.join(", ")}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </BundleSection>
+
+      <Inside
+        icon={Send}
+        label="Channels"
+        rows={channels.map((c) => {
+          const name = String(c.name ?? c.key ?? "channel");
+          const type = str(c.type);
+          return type ? `${name} · ${type}` : name;
+        })}
+        hint="Chat with the agent here — connect after install"
+      />
+      <Inside
+        icon={Clock}
+        label="Automations"
+        rows={automations.map((a) => {
+          const kind =
+            str(a.type) ?? str(a.trigger) ?? str(a.kind) ?? str(a.cron);
+          const name = String(a.name ?? a.key ?? "automation");
+          return kind ? `${name} · ${kind}` : name;
+        })}
+        hint="Imported disabled — enable when ready"
+      />
+      <Inside
+        icon={ShieldCheck}
+        label="Policies"
+        rows={policies.map((p) => {
+          const msg = str(p.message);
+          if (msg) return msg;
+          const effect = str(p.effect);
+          const target = str(p.target);
+          return effect && target
+            ? `${effect} · ${target}`
+            : String(p.key ?? "policy");
+        })}
+        hint="Govern this bundle at runtime"
+      />
+    </>
+  );
+}
+
+// Primary action for a catalog skill: attach it to an agent. A workspace skill
+// that isn't attached to any agent does nothing, so the high-intent path is
+// "add to agent" — fork the catalog skill into the workspace (copy-on-write,
+// idempotent) and merge it into the chosen agent's skill set. "Add to
+// workspace" stays as a quiet secondary for the library case.
+function AddSkillToAgent({ skillId }: { skillId: string }) {
+  const [open, setOpen] = useState(false);
+  const [agents, setAgents] = useState<AgentLite[] | null>(null);
+  const [phase, setPhase] = useState<"idle" | "loading" | "done" | "error">(
+    "idle"
+  );
+  const [message, setMessage] = useState("");
+  const [result, setResult] = useState<{ label: string; href: string } | null>(
+    null
+  );
+
+  // Lazy-load the workspace agents the first time the picker opens.
+  useEffect(() => {
+    if (!open || agents !== null) return;
+    let active = true;
+    listWorkspaceAgentsAction()
+      .then((d) => active && setAgents(d))
+      .catch(() => active && setAgents([]));
+    return () => {
+      active = false;
+    };
+  }, [open, agents]);
+
+  // Materialize the catalog skill into the workspace; returns the tenant id.
+  async function fork(): Promise<string> {
+    return installCatalogSkillAction(skillId);
+  }
+
+  async function addToWorkspace() {
+    setPhase("loading");
+    try {
+      await fork();
+      setResult({ label: "Go to Skills", href: "/skills" });
+      setPhase("done");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Install failed");
+      setPhase("error");
+    }
+  }
+
+  async function addToAgent(agent: AgentLite) {
+    setOpen(false);
+    setPhase("loading");
+    try {
+      await addCatalogSkillToAgentAction(skillId, agent.id);
+      setResult({ label: `Open ${agent.name}`, href: `/agents/${agent.id}` });
+      setPhase("done");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not attach skill");
+      setPhase("error");
+    }
+  }
+
+  if (phase === "done" && result) {
+    return (
+      <div className="flex flex-col items-start gap-1.5 md:items-end">
+        <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
+          <CheckCircle2 className="h-4 w-4" />
+          Added
+        </span>
+        <Button asChild variant="outline" size="sm">
+          <Link href={result.href}>{result.label}</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const loading = phase === "loading";
+  return (
+    <div className="flex w-full flex-col items-start gap-1.5 md:items-end">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <StartAgentButton size="xs" isLoading={loading}>
+            Add to agent
+          </StartAgentButton>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-64 p-0">
+          <Command>
+            <CommandInput placeholder="Search agents…" />
+            <CommandList>
+              {agents === null ? (
+                <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading…
+                </div>
+              ) : (
+                <>
+                  <CommandEmpty>
+                    <div className="space-y-1.5 py-3 text-center text-sm text-muted-foreground">
+                      <p>No agents yet.</p>
+                      <Link href="/agents/create" className="block underline">
+                        Create an agent
+                      </Link>
+                    </div>
+                  </CommandEmpty>
+                  <CommandGroup>
+                    {agents.map((a) => (
+                      <CommandItem
+                        key={a.id}
+                        value={a.name}
+                        onSelect={() => addToAgent(a)}
+                      >
+                        <Bot className="mr-2 h-4 w-4 text-muted-foreground" />
+                        <span className="truncate">{a.name}</span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      <StartAgentButton
+        type="button"
+        size="xs"
+        light
+        onClick={addToWorkspace}
+        disabled={loading}
+        className="w-full"
+      >
+        Add to workspace
+      </StartAgentButton>
+      {phase === "error" && (
+        <span className="max-w-[15rem] text-xs text-red-600 md:text-right dark:text-red-400">
+          {message}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CatalogActionSlot({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="w-full pl-[60px] md:ml-auto md:max-w-[210px] md:pl-0">
+      {children}
+    </div>
+  );
+}
+
+type SkillFile = { path: string; size: number; url?: string | null };
+type FileBody =
+  | { kind: "md"; value: string }
+  | { kind: "text"; value: string }
+  | { kind: "link"; value: string };
+
+// Extensions we can safely preview inline as text. Anything else gets an
+// "open" link to its presigned URL instead of a garbled inline dump.
+const TEXT_EXT = new Set([
+  "md",
+  "markdown",
+  "txt",
+  "py",
+  "js",
+  "ts",
+  "tsx",
+  "jsx",
+  "json",
+  "yaml",
+  "yml",
+  "sh",
+  "bash",
+  "toml",
+  "ini",
+  "cfg",
+  "csv",
+  "html",
+  "css",
+  "xml",
+  "sql",
+  "env",
+]);
+
+function isTextFile(path: string): boolean {
+  return TEXT_EXT.has(path.split(".").pop()?.toLowerCase() ?? "");
+}
+
+function fmtSize(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Strip YAML frontmatter (name/description — already shown in the header) from
+// a SKILL.md body before rendering, matching the installed-skill viewer.
+function skillBody(content: string): string {
+  const m = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
+  return (m ? m[2] : content).trim();
+}
+
+// Skill contents. The catalog item id resolves on the backend to either a
+// tenant skill or a read-only catalog projection (see SkillService
+// `get_with_catalog`), so the existing skill-file endpoints serve
+// not-yet-installed catalog skills too:
+//   GET /v1/skills/{id}/files        → the file tree (a single synthetic
+//                                      SKILL.md for content skills; the real
+//                                      S3 tree for multi-file packages)
+//   GET /v1/skills/{id}/content      → the SKILL.md markdown
+//   GET /v1/skills/{id}/files/{path} → a presigned URL to any package file
+// We list the tree, render SKILL.md inline, and lazily load other text files on
+// click — falling back to an "open" link when a file can't be previewed inline.
+// A catalog skill is a read-only registry projection; its body comes from one of
+// three sources, each rendered by its own single-purpose view:
+//   github          → files are fetched on install, so link to the source
+//   inlined content → the SKILL.md lives in the registry spec; render it
+//   multi-file pkg  → browse the file tree via the skill-files API
+function SkillContent({
+  skillId,
+  sourceType,
+  sourceUrl,
+  content,
+}: {
+  skillId: string;
+  sourceType: string;
+  sourceUrl: string | null;
+  content: string | null;
+}) {
+  if (sourceType === "github") return <SkillSourceLink sourceUrl={sourceUrl} />;
+  if (content) return <SkillMarkdown content={content} />;
+  return <SkillPackageFiles skillId={skillId} />;
+}
+
+function SkillSourceLink({ sourceUrl }: { sourceUrl: string | null }) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
+      <Puzzle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 text-sm">
+        <p className="font-medium">Sourced from a repository</p>
+        <p className="text-xs text-muted-foreground">
+          The skill files are fetched from{" "}
+          {sourceUrl ? (
+            <a
+              href={sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="break-all underline"
+            >
+              {sourceUrl}
+            </a>
+          ) : (
+            "its source repository"
+          )}{" "}
+          on install.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SkillMarkdown({ content }: { content: string }) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <Puzzle className="h-3.5 w-3.5" />
+        Skill instructions
+      </div>
+      <div className="max-h-[480px] overflow-auto rounded-lg border border-border/60 bg-muted/20 p-4">
+        <Streamdown className="prose prose-sm max-w-none dark:prose-invert">
+          {skillBody(content)}
+        </Streamdown>
+      </div>
+    </div>
+  );
+}
+
+// Browse a materialized (installed / multi-file) skill package via the skill-files
+// API. Catalog content skills never reach here — their SKILL.md is inlined and
+// rendered by SkillMarkdown.
+function SkillPackageFiles({ skillId }: { skillId: string }) {
+  const [files, setFiles] = useState<SkillFile[] | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [bodies, setBodies] = useState<Record<string, FileBody>>({});
+  const [error, setError] = useState<string | null>(null);
+  const requested = useRef<Set<string>>(new Set());
+
+  // Load the file list once.
+  useEffect(() => {
+    let active = true;
+    listSkillFilesAction(skillId)
+      .then((skillFiles) => {
+        if (!active) return;
+        const fs = Array.isArray(skillFiles) ? skillFiles : [];
+        setFiles(fs);
+        const def =
+          fs.find((f) => f.path.toLowerCase() === "skill.md") ?? fs[0] ?? null;
+        setSelected(def?.path ?? null);
+      })
+      .catch((e) => {
+        if (!active) return;
+        console.error("Failed to load skill files:", e);
+        setFiles([]);
+        setError("Could not load skill files.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [skillId]);
+
+  // Lazily load the selected file's body. SKILL.md comes from /content; other
+  // files resolve to a presigned URL we then fetch (text) or link to.
+  useEffect(() => {
+    if (!selected || bodies[selected] || requested.current.has(selected))
+      return;
+    requested.current.add(selected);
+    let active = true;
+    void (async () => {
+      try {
+        if (selected.toLowerCase() === "skill.md") {
+          const md = await getSkillMarkdownAction(skillId);
+          if (active)
+            setBodies((b) => ({
+              ...b,
+              [selected]: { kind: "md", value: skillBody(md || "") },
+            }));
+          return;
+        }
+        const url = await getSkillFileUrlAction(skillId, selected);
+        if (isTextFile(selected)) {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error();
+            const text = await res.text();
+            if (active)
+              setBodies((b) => ({
+                ...b,
+                [selected]: { kind: "text", value: text },
+              }));
+            return;
+          } catch {
+            // Cross-origin / unreadable — fall through to a plain open link.
+          }
+        }
+        if (active)
+          setBodies((b) => ({
+            ...b,
+            [selected]: { kind: "link", value: url },
+          }));
+      } catch {
+        if (active)
+          setBodies((b) => ({ ...b, [selected]: { kind: "link", value: "" } }));
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [selected, skillId, bodies]);
+
+  if (files === null) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading skill…
+      </div>
+    );
+  }
+  if (files.length === 0) {
+    return error ? (
+      <p className="text-sm text-muted-foreground">{error}</p>
+    ) : null;
+  }
+
+  const single =
+    files.length === 1 && files[0].path.toLowerCase() === "skill.md";
+  const body = selected ? bodies[selected] : undefined;
+
+  const pane = (
+    <div className="max-h-[480px] min-w-0 overflow-auto rounded-lg border border-border/60 bg-muted/20 p-4">
+      {!body ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading…
+        </div>
+      ) : body.kind === "md" ? (
+        <Streamdown className="prose prose-sm max-w-none dark:prose-invert">
+          {body.value}
+        </Streamdown>
+      ) : body.kind === "text" ? (
+        <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed">
+          {body.value}
+        </pre>
+      ) : body.value ? (
+        <a
+          href={body.value}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm underline"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Open file
+        </a>
+      ) : (
+        <p className="text-sm text-muted-foreground">Preview unavailable.</p>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <Puzzle className="h-3.5 w-3.5" />
+        {single ? "Skill instructions" : "Skill files"}
+        {!single && <span className="tabular-nums">({files.length})</span>}
+      </div>
+      {single ? (
+        pane
+      ) : (
+        <div className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)]">
+          <ul className="space-y-0.5 self-start rounded-lg border border-border/60 p-1.5">
+            {files.map((f) => (
+              <li key={f.path}>
+                <button
+                  type="button"
+                  onClick={() => setSelected(f.path)}
+                  className={cn(
+                    "flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors",
+                    selected === f.path
+                      ? "bg-muted font-medium text-foreground"
+                      : "text-muted-foreground hover:bg-muted/50"
+                  )}
+                >
+                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{f.path}</span>
+                  <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                    {fmtSize(f.size)}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {pane}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Provenance facts for a catalog skill — source, repo, license, distribution.
+// These come in as machine "key:value" tags; rendered here as a clean key/value
+// list instead of loud chips. Hidden entirely when nothing useful is present.
+function SkillFacts({ entry }: { entry: CatalogEntry }) {
+  const tagVal = (prefix: string) =>
+    entry.tags.find((t) => t.startsWith(prefix))?.slice(prefix.length) || null;
+  const license = tagVal("license:");
+  const facts: [string, string | null][] = [
+    ["Source", entry.meta[0] ?? null],
+    ["Repository", tagVal("repo:")],
+    ["License", license === "NOASSERTION" ? "Not specified" : license],
+    ["Distribution", tagVal("distribution:")],
+  ];
+  const shown = facts.filter(([, v]) => v);
+  if (shown.length === 0) return null;
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/60">
+      <dl className="divide-y divide-border/60">
+        {shown.map(([k, v]) => (
+          <div key={k} className="flex gap-4 px-4 py-2.5 text-sm">
+            <dt className="w-28 shrink-0 text-muted-foreground">{k}</dt>
+            <dd className="min-w-0 truncate font-medium">{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+// ── Misc ──
+
+// Content placeholder that matches the selected view — grid of card-shaped
+// skeletons or table rows — so switching type never shifts the layout.
+function ContentSkeleton({ view }: { view: ViewMode }) {
+  if (view === "table") return <CatalogTableSkeleton />;
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+      {Array.from({ length: 10 }).map((_, i) => (
+        <CatalogCardSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
+// Route-level skeleton for explore/loading.tsx. Mirrors the in-component `busy`
+// layout (facet rail + search + content grid) so a hard refresh — where the SSR
+// page is still awaiting its first fetch and React hasn't mounted the gallery
+// yet — shows the same chrome-preserving skeleton instead of the generic
+// full-screen spinner. Reads `type`/`view` from the URL so it matches the
+// destination view exactly.
+export function CatalogGallerySkeleton({
+  initialView = "grid",
+}: {
+  initialView?: ViewMode;
+}) {
+  const [type] = useQueryState(
+    "type",
+    parseAsStringLiteral(TYPE_KEYS).withDefault("bundles")
+  );
+  // Match the view the page will actually restore (URL param > persisted cookie
+  // > server-seeded default), read on the client via a lazy initializer. The
+  // server seed alone is unreliable (a cached RSC / auth-gated SSR can serve a
+  // stale default), which made the skeleton flash card placeholders while a
+  // table view was loading. Reading the cookie here keeps the skeleton shape in
+  // sync without a flash or a hydration mismatch (server + client agree on a
+  // fresh load).
+  const [view] = useState<ViewMode>(() => {
+    if (typeof document === "undefined") return initialView;
+    const fromUrl = new URLSearchParams(window.location.search).get("view");
+    const saved = fromUrl ?? getCookie(EXPLORE_VIEW_COOKIE);
+    return saved === "table" || saved === "grid" ? saved : initialView;
+  });
+  const label = TYPES.find((t) => t.key === type)?.label.toLowerCase() ?? "";
+  return (
+    <div className="flex gap-6">
+      <aside className="hidden w-52 shrink-0 lg:block">
+        <FacetSkeleton />
+      </aside>
+      <div className="min-w-0 flex-1 space-y-4">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            disabled
+            placeholder={`Search ${label}…`}
+            aria-hidden
+            className="pl-9"
+          />
+        </div>
+        <ContentSkeleton view={view} />
+      </div>
+    </div>
+  );
+}
+
+// Mirrors CatalogCard: h-20 logo header + padded title/description body.
+function CatalogCardSkeleton() {
+  return (
+    <div
+      className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white dark:border-zinc-700/60 dark:bg-zinc-900"
+      aria-hidden="true"
+    >
+      <div className="flex h-20 items-center justify-center border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
+        <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
+      </div>
+      <div className="flex flex-1 flex-col gap-1 p-3">
+        <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+        <div className="h-3 w-full animate-pulse rounded bg-muted/60" />
+        <div className="h-3 w-2/3 animate-pulse rounded bg-muted/60" />
+      </div>
+    </div>
+  );
+}
+
+// Mirrors CatalogTable rows: icon + title + (md) description.
+function CatalogTableSkeleton() {
+  return (
+    <div
+      className="overflow-hidden rounded-lg border border-border/60"
+      aria-hidden="true"
+    >
+      <table className="w-full text-sm">
+        <tbody>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <tr key={i} className="border-b border-border/40 last:border-0">
+              <td className="w-10 py-2 pl-3 pr-0">
+                <div className="h-6 w-6 animate-pulse rounded bg-muted" />
+              </td>
+              <td className="py-2 pl-2 pr-3">
+                <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+              </td>
+              <td className="hidden w-full max-w-0 py-2 pr-4 md:table-cell">
+                <div className="h-3 w-64 animate-pulse rounded bg-muted/60" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Back-button shell for the deep-link states (loading / not-found), so an
+// ?item= link that isn't in the loaded page still shows chrome to return.
+function DeepItemStatus({
+  onBack,
+  children,
+}: {
+  onBack: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-6">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ChevronLeft className="h-4 w-4" />
+        Back to catalog
+      </button>
+      {children}
+    </div>
+  );
+}

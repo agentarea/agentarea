@@ -36,7 +36,6 @@ import {
   checkMCPServerInstanceConfiguration,
   continueAgentTask,
   createAgentWallet,
-  createWorkspaceDirectory,
   createClient,
   createMCPAuthConfig,
   createMCPServer,
@@ -46,6 +45,7 @@ import {
   createProject,
   createProviderConfig,
   createSkill,
+  createWorkspaceDirectory,
   deleteAgentWallet,
   deleteClient,
   deleteModelInstance,
@@ -134,7 +134,7 @@ import {
   updateWorkspaceSettings,
 } from "@/lib/api-dashboard";
 import { apiErrorMessage } from "@/lib/api-errors";
-import { workspaceFetch } from "@/lib/workspace-request";
+import { requestWorkspacePath, workspaceFetch } from "@/lib/workspace-request";
 
 function isUUID(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -257,7 +257,7 @@ export async function createSkillAction(skill: {
 }
 
 export async function uploadSkillAction(formData: FormData) {
-  const uploadUrl = `${env.API_URL}/v1/skills/upload`;
+  const uploadUrl = `${env.API_URL}/v1/workspaces/{workspace}/skills/upload`;
 
   const response = await workspaceFetch(uploadUrl, {
     method: "POST",
@@ -570,7 +570,7 @@ export async function createOpenAPIConnectionAction(
   if (!result.error) {
     // Invalidate the list so the new connection is present when the form
     // navigates to /connections (the client no longer calls router.refresh).
-    revalidatePath("/connections");
+    revalidatePath(await requestWorkspacePath("/connections"));
   }
   return result;
 }
@@ -593,7 +593,7 @@ export async function probeInstanceAuthAction(instanceId: string) {
   }
 
   const base = new URL(env.API_URL);
-  base.pathname = `/v1/mcp-server-instances/${encodeURIComponent(instanceId)}/probe`;
+  base.pathname = `/v1/workspaces/{workspace}/mcp-server-instances/${encodeURIComponent(instanceId)}/probe`;
 
   const res = await workspaceFetch(base.href, { method: "POST" });
   if (!res.ok) {
@@ -613,7 +613,9 @@ export async function probeInstanceAuthAction(instanceId: string) {
 export async function listWorkspaceSecretsAction(): Promise<SecretResponse[]> {
   const { data, error } = await listSecrets();
   if (error || !data) {
-    throw new Error(apiErrorMessage({ error }, "Failed to load workspace secrets"));
+    throw new Error(
+      apiErrorMessage({ error }, "Failed to load workspace secrets")
+    );
   }
   return zListSecretsV1SecretsGetResponse.parse(data);
 }
@@ -635,7 +637,7 @@ export async function mcpOAuthPreflightAction(
   }
 
   const base = new URL(env.API_URL);
-  base.pathname = "/v1/mcp-oauth/preflight";
+  base.pathname = "/v1/workspaces/{workspace}/mcp-oauth/preflight";
   base.search = new URLSearchParams({ [key]: id }).toString();
 
   const res = await workspaceFetch(base.href, { method: "GET" });
@@ -645,24 +647,22 @@ export async function mcpOAuthPreflightAction(
   return { data: await res.json(), error: null };
 }
 
-export async function oauthAuthorizeAction(
-  body: {
-    instance_id: string;
-    credential_mode?: "auto" | "custom";
-    client_id?: string;
-    client_secret?: string;
-    client_id_secret_id?: string;
-    client_secret_secret_id?: string;
-    return_to?: string;
-  }
-) {
+export async function oauthAuthorizeAction(body: {
+  instance_id: string;
+  credential_mode?: "auto" | "custom";
+  client_id?: string;
+  client_secret?: string;
+  client_id_secret_id?: string;
+  client_secret_secret_id?: string;
+  return_to?: string;
+}) {
   // Validate UUID to prevent SSRF/path injection in downstream fetch URL
   if (!isUUID(body.instance_id)) {
     return { data: null, error: "Invalid instance ID" };
   }
 
   const base = new URL(env.API_URL);
-  base.pathname = "/v1/mcp-oauth/authorize";
+  base.pathname = "/v1/workspaces/{workspace}/mcp-oauth/authorize";
 
   const res = await workspaceFetch(base.href, {
     method: "POST",
@@ -685,7 +685,10 @@ export async function oauthAuthorizeAction(
 async function readApiError(res: Response) {
   const text = await res.text();
   try {
-    return apiErrorMessage({ error: JSON.parse(text), status: res.status }, "Request failed");
+    return apiErrorMessage(
+      { error: JSON.parse(text), status: res.status },
+      "Request failed"
+    );
   } catch {
     return text || `Request failed (${res.status})`;
   }
@@ -697,7 +700,7 @@ export async function validateConnectionAction(
   serverId?: string
 ) {
   const res = await workspaceFetch(
-    `${env.API_URL}/v1/mcp-server-instances/validate-connection`,
+    `${env.API_URL}/v1/workspaces/{workspace}/mcp-server-instances/validate-connection`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -796,7 +799,7 @@ export async function createProjectAction(project: {
 export async function updateProjectAction(
   projectId: string,
   project: {
-    name?: string | null;
+    name?: string;
     description?: string | null;
     instructions?: string | null;
   }
@@ -865,7 +868,7 @@ export async function uploadProjectFileAction(
 
   // Build URL safely via URL API — base is a trusted server-only env var
   const base = new URL(env.API_URL);
-  base.pathname = `/v1/projects/${encodeURIComponent(projectId)}/files`;
+  base.pathname = `/v1/workspaces/{workspace}/projects/${encodeURIComponent(projectId)}/files`;
 
   const response = await workspaceFetch(base.href, {
     method: "POST",
@@ -901,14 +904,16 @@ export async function listWorkspaceFilesAction() {
   return await listWorkspaceFiles();
 }
 
-export async function createWorkspaceDirectoryAction(body: CreateWorkspaceDirectoryRequest) {
+export async function createWorkspaceDirectoryAction(
+  body: CreateWorkspaceDirectoryRequest
+) {
   const parsed = zCreateWorkspaceDirectoryRequest.safeParse(body);
   if (!parsed.success) return { data: null, error: parsed.error.flatten() };
   return await createWorkspaceDirectory(parsed.data);
 }
 
 export async function uploadWorkspaceFileAction(formData: FormData) {
-  const uploadUrl = `${env.API_URL}/v1/files`;
+  const uploadUrl = `${env.API_URL}/v1/workspaces/{workspace}/files`;
 
   const response = await workspaceFetch(uploadUrl, {
     method: "POST",
@@ -933,9 +938,12 @@ export async function deleteWorkspaceFileAction(filePath: string) {
     .map(encodeURIComponent)
     .join("/");
 
-  const response = await workspaceFetch(`${env.API_URL}/v1/files/${encoded}`, {
-    method: "DELETE",
-  });
+  const response = await workspaceFetch(
+    `${env.API_URL}/v1/workspaces/{workspace}/files/${encoded}`,
+    {
+      method: "DELETE",
+    }
+  );
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({
@@ -947,12 +955,18 @@ export async function deleteWorkspaceFileAction(filePath: string) {
   return { data: await response.json(), error: null };
 }
 
-export async function moveWorkspaceFileAction(source: string, destination: string) {
-  const response = await workspaceFetch(`${env.API_URL}/v1/files/move`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source, destination }),
-  });
+export async function moveWorkspaceFileAction(
+  source: string,
+  destination: string
+) {
+  const response = await workspaceFetch(
+    `${env.API_URL}/v1/workspaces/{workspace}/files/move`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source, destination }),
+    }
+  );
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({

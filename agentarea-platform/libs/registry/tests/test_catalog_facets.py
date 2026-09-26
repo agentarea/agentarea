@@ -122,6 +122,26 @@ class TestFeatured:
         assert derive_facets("skills", name="x", spec={}, tags=["category:other"]).featured is False
 
 
+class TestProtocol:
+    """Connections split into MCP servers and HTTP APIs; nothing else has a protocol."""
+
+    def test_an_openapi_connection_is_an_api(self):
+        f = derive_facets("mcp_servers", name="x", spec={"connection_type": "openapi"}, tags=[])
+        assert f.protocol == "api"
+
+    def test_any_other_transport_is_mcp(self):
+        f = derive_facets("mcp_servers", name="x", spec={"connection_type": "url"}, tags=[])
+        assert f.protocol == "mcp"
+
+    def test_a_connection_that_never_recorded_its_type_is_mcp(self):
+        # Managed publications predate connection_type.
+        assert derive_facets("mcp_servers", name="x", spec={}, tags=[]).protocol == "mcp"
+
+    def test_other_types_have_none(self):
+        f = derive_facets("skills", name="x", spec={"connection_type": "openapi"}, tags=[])
+        assert f.protocol is None
+
+
 class TestTolerance:
     def test_survives_null_spec_and_tags(self):
         f = derive_facets("skills", name="x", spec=None, tags=None)
@@ -152,13 +172,19 @@ class TestApplyFacets:
             self.category = "stale"
             self.sort_key = "stale"
             self.featured = True
+            self.protocol = "stale"
 
-    def test_rewrites_all_three_columns_from_current_content(self):
+    def test_rewrites_every_derived_column_from_current_content(self):
         from agentarea_registry.application.catalog_facets import apply_facets
 
         item = self._Item("csv-clean--acme--1", {}, ["category:data"])
         apply_facets(item, "skills")
-        assert (item.category, item.sort_key, item.featured) == ("data", "csv clean", False)
+        assert (item.category, item.sort_key, item.featured, item.protocol) == (
+            "data",
+            "csv clean",
+            False,
+            None,
+        )
 
     def test_clears_a_category_the_source_dropped(self):
         from agentarea_registry.application.catalog_facets import apply_facets

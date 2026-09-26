@@ -47,6 +47,7 @@ from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_database
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
+from agentarea_common.workspaces.lookup import workspace_slug_for
 from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.application.oauth_client_service import (
     AuthServerMetadata,
@@ -227,13 +228,13 @@ def _safe_frontend_base(return_to: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
-def _instance_detail_url(frontend_base: str, instance_id: str) -> str:
+def _instance_detail_url(frontend_base: str, workspace_slug: str, instance_id: str) -> str:
     """Where the browser lands once the authorization server sends it back.
 
     Named once because it used to be spelled inline at every redirect, all of
     them still pointing at /mcp-servers after the page moved to /connections.
     """
-    return f"{frontend_base}/connections/{instance_id}"
+    return f"{frontend_base}/w/{workspace_slug}/connections/{instance_id}"
 
 
 # ---------------------------------------------------------------------------
@@ -449,12 +450,11 @@ async def oauth_callback(
     remote AS). The state token proves the flow was initiated by our /authorize.
     """
     if error:
-        # The state is not read on this branch, so there is no stored return_to:
-        # land on the configured frontend, with the reason carried as query data.
+        # The state is not read on this branch, so neither the stored return_to
+        # nor the workspace is known: land on the frontend root, which opens the
+        # user's own workspace, with the reason carried as query data.
         query = urllib.parse.urlencode({"oauth": "error", "reason": error_description or error})
-        return RedirectResponse(
-            url=f"{_safe_frontend_base('')}/connections?{query}", status_code=302
-        )
+        return RedirectResponse(url=f"{_safe_frontend_base('')}/?{query}", status_code=302)
 
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state parameter")
@@ -466,7 +466,20 @@ async def oauth_callback(
     instance_id = state_data["instance_id"]
     # return_to is the frontend origin stored during /authorize
     frontend_base = _safe_frontend_base(state_data.get("return_to", ""))
-    detail_url = _instance_detail_url(frontend_base, instance_id)
+    try:
+        workspace_slug = await workspace_slug_for(state_data["workspace_id"])
+    except LookupError:
+        # Deleted while the user was at the authorization server: there is no
+        # workspace page to return to.
+        logger.warning(
+            "MCP OAuth callback for instance %s: workspace %s is gone",
+            instance_id,
+            state_data["workspace_id"],
+            exc_info=True,
+        )
+        query = urllib.parse.urlencode({"oauth": "error", "reason": "workspace_gone"})
+        return RedirectResponse(url=f"{frontend_base}/?{query}", status_code=302)
+    detail_url = _instance_detail_url(frontend_base, workspace_slug, instance_id)
     as_meta_dict = state_data["as_metadata"]
     as_metadata = AuthServerMetadata(
         issuer=as_meta_dict["issuer"],
@@ -478,6 +491,7 @@ async def oauth_callback(
     user_context = UserContext(
         user_id=state_data["user_id"],
         workspace_id=state_data["workspace_id"],
+        workspace_slug=workspace_slug,
     )
     secret_manager = get_real_secret_manager(session=db_session, user_context=user_context)
     auth_service = MCPAuthService(MCPAuthConfigRepository(db_session, user_context), secret_manager)

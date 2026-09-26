@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.context import UserContext, UserPrincipal
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_llm.domain.models import ModelInstance, ProviderConfig
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
@@ -179,24 +179,23 @@ async def test_model_instance_repo_create_scopes_to_current_workspace(monkeypatc
     session.commit.assert_awaited_once()
 
 
-def test_default_user_context_only_own_workspace():
-    """Without AuthorizationService, UserContext defaults to own workspace only."""
+def test_user_context_does_not_invent_its_reach():
+    """A UserContext minted outside the request boundary claims no other workspace."""
     user_context = UserContext(user_id="user-1", workspace_id="ws-1")
-    assert user_context.accessible_workspaces == ["ws-1"]
+    assert user_context.accessible_workspaces is None
 
 
 @pytest.mark.asyncio
-async def test_workspace_authorization_grants_only_own_workspace():
-    """WorkspaceScopedAuthorizationService grants access to the user's own workspace only.
+async def test_workspace_authorization_grants_nothing_beyond_ownership_and_membership():
+    """WorkspaceScopedAuthorizationService adds no workspace of its own.
 
-    Built-in/official content is no longer surfaced by injecting a magic
-    'platform' workspace here — it is globally readable by provenance instead.
+    Owned and joined workspaces are resolved at the request boundary. Built-in/
+    official content is not surfaced by injecting a magic 'platform' workspace
+    here — it is globally readable by provenance instead.
     """
     authz = WorkspaceScopedAuthorizationService()
-    user_context = UserContext(user_id="user-1", workspace_id="ws-1")
-    workspaces = await authz.get_accessible_workspaces(user_context)
-    assert workspaces == ["ws-1"]
-    assert "platform" not in workspaces
+    workspaces = await authz.get_accessible_workspaces(UserPrincipal(user_id="user-1"))
+    assert workspaces == []
 
 
 @pytest.mark.asyncio

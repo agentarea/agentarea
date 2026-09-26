@@ -97,7 +97,12 @@ function asStr(value: unknown): string | null {
   return text || null;
 }
 
-function terminalMessageFrom(canonical: string, data: EventData): string {
+/**
+ * The user-facing line for a terminal event, in the order the backend contract
+ * (agentarea_common/events/contract.py) fills `message`. The banner and the
+ * timeline row both read it, so they can never disagree.
+ */
+export function terminalMessage(canonical: string, data: EventData): string {
   const explicit = asStr(data.message);
   if (explicit) return explicit;
   if (canonical === TASK_COMPLETED || canonical === FOLLOW_UP_WAIT) {
@@ -274,7 +279,7 @@ export function applyEvent(state: EventState, event: EventInput): EventState {
       id: `run-${state.completedRuns.length + 1}`,
       partIds: runParts.map((part) => part.partId),
       terminalType: canonical,
-      terminalMessage: terminalMessageFrom(canonical, event.data),
+      terminalMessage: terminalMessage(canonical, event.data),
       terminalAnswer:
         typeof event.data.final_response === "string"
           ? event.data.final_response
@@ -282,6 +287,16 @@ export function applyEvent(state: EventState, event: EventInput): EventState {
             ? event.data.result
             : null,
     };
+    const lastRun = state.completedRuns[state.completedRuns.length - 1];
+    // A failure reported after the run already closed, with nothing run in
+    // between, is how that same run ended — not a run of its own.
+    const endsLastRun =
+      !hasNewParts &&
+      !hasNewRunBoundary &&
+      lastRun !== undefined &&
+      canonical !== TASK_COMPLETED &&
+      canonical !== FOLLOW_UP_WAIT &&
+      state.timeline[lastTerminalIndex]?.eventType !== FOLLOW_UP_WAIT;
     return {
       ...state,
       timeline,
@@ -291,11 +306,19 @@ export function applyEvent(state: EventState, event: EventInput): EventState {
         event.data.execution_status === "waiting"
           ? "waiting"
           : "finished",
-      terminalMessage: terminalMessageFrom(canonical, event.data),
-      completedRuns:
-        hasNewParts ||
-        (Boolean(completedRun.terminalAnswer) &&
-          (state.completedRuns.length === 0 || hasNewRunBoundary))
+      terminalMessage: completedRun.terminalMessage,
+      completedRuns: endsLastRun
+        ? [
+            ...state.completedRuns.slice(0, -1),
+            {
+              ...lastRun,
+              terminalType: canonical,
+              terminalMessage: completedRun.terminalMessage,
+            },
+          ]
+        : hasNewParts ||
+            (Boolean(completedRun.terminalAnswer) &&
+              (state.completedRuns.length === 0 || hasNewRunBoundary))
           ? [...state.completedRuns, completedRun]
           : state.completedRuns,
     };

@@ -21,7 +21,13 @@ import os
 import httpx
 import pytest
 
-from tests.e2e.api.conftest import _psql, create_agent, wait_for_workflow
+from tests.e2e.api.conftest import (
+    WorkspaceClient,
+    _psql,
+    create_agent,
+    personal_workspace_path,
+    wait_for_workflow,
+)
 
 ALLOW_ALL_TOOLS_TASK_POLICY = {"tools": {"allowed": ["*"]}}
 
@@ -77,7 +83,7 @@ def test_agent_uses_calculator_tool(
         tools=[{"type": "code", "name": "agentarea/math"}],
     )
     task_id = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={
             "description": "What is 17 * 23? Use the math tool.",
             "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
@@ -111,7 +117,7 @@ def test_agent_completion_tool_delivers_final_answer(
         ),
     )
     task_id = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={"description": "What colour is the sky on a clear day? One word."},
         timeout=30.0,
     ).raise_for_status().json()["id"]
@@ -175,7 +181,7 @@ def test_agent_file_tool_writes_persist_in_workspace_sandbox(
         tools=[{"type": "code", "name": "agentarea/files"}],
     )
     task_id = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={
             "description": (
                 f"Create a file named {file_name} with the exact content: "
@@ -260,7 +266,7 @@ def test_agent_file_tool_round_trip_read_after_write(
         tools=[{"type": "code", "name": "agentarea/files"}],
     )
     task_id = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={
             "description": (
                 f"Create file {file_name} with exact content: {sentinel}. "
@@ -349,7 +355,7 @@ def test_agent_file_tool_lists_its_own_writes(
         tools=[{"type": "code", "name": "agentarea/files"}],
     )
     task_id = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={
             "description": (
                 f"Create two files: {names[0]} with content 'A' and "
@@ -431,7 +437,7 @@ def test_agent_web_tool_persists_binary_fetch_as_artifact(
         tools=[{"type": "code", "name": "agentarea/web"}],
     )
     task_id = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={
             "description": f"fetch_webpage on {fetch_url} and return the result.",
             "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
@@ -490,7 +496,7 @@ def test_file_tool_sandbox_isolated_across_workspaces(
         tools=[{"type": "code", "name": "agentarea/files"}],
     )
     alice_task = alice_client.post(
-        f"/v1/agents/{alice_agent}/tasks/sync",
+        f"{alice_client.ws}/agents/{alice_agent}/tasks/sync",
         json={
             "description": (
                 f"Create file {file_name} with content: workspace-alpha-note."
@@ -509,11 +515,12 @@ def test_file_tool_sandbox_isolated_across_workspaces(
     # can't reach it — so we build her own chain through alice_client's API,
     # then mint a separate user and run a list_files probe from their client.
     eve = user_factory("eve")
-    eve_client = httpx.Client(
+    eve_client = WorkspaceClient(
         base_url=str(alice_client.base_url),
         headers={"Authorization": f"Bearer {eve.jwt}"},
         timeout=20.0,
     )
+    eve_client.ws = personal_workspace_path(eve_client)
     try:
         # Eve needs her own provider_config + model_instance — shortest path:
         # reuse the system-scoped provider_spec + model_spec by looking up
@@ -534,7 +541,7 @@ def test_file_tool_sandbox_isolated_across_workspaces(
             + "' ORDER BY created_at LIMIT 1;"
         )
         pc = eve_client.post(
-            "/v1/provider-configs/",
+            f"{eve_client.ws}/provider-configs/",
             json={
                 "provider_spec_id": spec_id,
                 "name": "eve-cfg",
@@ -543,7 +550,7 @@ def test_file_tool_sandbox_isolated_across_workspaces(
             },
         ).raise_for_status().json()
         mi = eve_client.post(
-            "/v1/model-instances/",
+            f"{eve_client.ws}/model-instances/",
             json={
                 "provider_config_id": pc["id"],
                 "model_spec_id": model_spec_id,
@@ -561,7 +568,7 @@ def test_file_tool_sandbox_isolated_across_workspaces(
             tools=[{"type": "code", "name": "agentarea/files"}],
         )
         eve_task = eve_client.post(
-            f"/v1/agents/{eve_agent}/tasks/sync",
+            f"{eve_client.ws}/agents/{eve_agent}/tasks/sync",
             json={
                 "description": "List all files you can see.",
                 "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
@@ -604,13 +611,13 @@ def test_tool_events_are_workspace_scoped(
         tools=[{"type": "code", "name": "agentarea/math"}],
     )
     task_id = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={"description": "2 + 2 = ?"},
         timeout=30.0,
     ).raise_for_status().json()["id"]
 
     cross = bob_client.get(
-        f"/v1/agents/{agent_id}/tasks/{task_id}/events"
+        f"{bob_client.ws}/agents/{agent_id}/tasks/{task_id}/events"
     )
     assert cross.status_code in (403, 404), (
         f"CRITICAL: Bob can read Alice's agent's tool events: {cross.status_code}"

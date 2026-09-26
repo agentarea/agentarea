@@ -1,5 +1,5 @@
 import { useTranslations } from "next-intl";
-import Link from "next/link";
+import Link from "@/components/WorkspaceLink";
 import { Activity, GitFork, Hash } from "lucide-react";
 import { AgentLink } from "@/components/AgentIdentity";
 import {

@@ -77,7 +77,7 @@ authorization endpoints, because they raise `HTTPException` directly. Branch on
 | Status | `detail` | Raised by |
 |---|---|---|
 | 403 | `Permission denied` | `require_permission`, when the graph check returns false or the verb is unmapped |
-| 403 | `Only a workspace admin may modify the authorization graph` | every `/v1/access-control` endpoint |
+| 403 | `Only a workspace admin may modify the authorization graph` | every `/v1/workspaces/{workspace}/access-control` endpoint |
 | 403 | `<Namespace>:<id> not found in your workspace` | object workspace assertion |
 | 403 | `Subject user is not in your workspace` | subject workspace assertion |
 | 403 | `Tool call denied: <tool>: <reason>` | MCP proxy tool authorization |

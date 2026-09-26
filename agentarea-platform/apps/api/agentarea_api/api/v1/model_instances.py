@@ -9,6 +9,7 @@ from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.money import Money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
@@ -181,19 +182,18 @@ async def create_model_instances_bulk(
                 is_public=item.is_public,
             )
             succeeded.append(ModelInstanceResponse.from_domain(instance))
-        except Exception as e:
-            logger.warning(
-                "Bulk create failed for item %d (model_spec_id=%s): %s",
+        except NotFoundError as e:
+            logger.info(
+                "Bulk create skipped item %d (model_spec_id=%s): %s",
                 index,
                 item.model_spec_id,
                 e,
-                exc_info=True,
             )
             failed.append(
                 ModelInstanceBulkFailure(
                     index=index,
                     model_spec_id=str(item.model_spec_id),
-                    error=str(e),
+                    error=e.detail,
                 )
             )
 

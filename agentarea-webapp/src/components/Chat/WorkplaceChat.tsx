@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Sparkles } from "lucide-react";
+import { useWorkspacePath } from "@/hooks/useWorkspaceNavigation";
 import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
 import { ChatWelcome } from "./componets/ChatWelcome";
 import FullChat, {
@@ -31,6 +32,7 @@ export function WorkplaceChat({
   badgeSuggestions,
 }: WorkplaceChatProps) {
   const t = useTranslations("Workplace.hero");
+  const workspaceHref = useWorkspacePath();
   const [selectedAgent, setSelectedAgent] = useState<Agent>(initialAgent);
 
   // The workspace chat starts without a task in the URL. Once the first message
@@ -42,11 +44,18 @@ export function WorkplaceChat({
   // unmounting this chat, so the in-flight event stream keeps going and the UI
   // doesn't flicker. A hard refresh still lands on /tasks/[id], which replays
   // history from the DB.
-  const handleTaskCreated = React.useCallback((taskId: string) => {
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", `/tasks/${taskId}`);
-    }
-  }, []);
+  const handleTaskCreated = React.useCallback(
+    (taskId: string) => {
+      if (typeof window !== "undefined") {
+        window.history.replaceState(
+          null,
+          "",
+          workspaceHref(`/tasks/${taskId}`)
+        );
+      }
+    },
+    [workspaceHref]
+  );
 
   return (
     <FullChat

@@ -1,8 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import {
   Dialog,
@@ -29,40 +28,40 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useWorkspaceSlug } from "@/hooks/useWorkspaceNavigation";
+import { createWorkspaceAction } from "@/lib/workspace-actions";
 import {
-  createWorkspaceAction,
-  switchWorkspaceAction,
-} from "@/lib/workspace-actions";
+  WORKSPACE_HOME,
+  workspacePath,
+  workspaceSection,
+} from "@/lib/workspace-routes";
 import type { Workspace } from "@/lib/workspaces";
-import { cn } from "@/lib/utils";
+import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
+import { deterministicHue } from "@/lib/avatar-hue";
 
 function WorkspaceIcon({
   workspace,
-  className,
+  size,
 }: {
   workspace: Workspace;
-  className?: string;
+  size: number;
 }) {
   return (
-    <Image
-      src="/Icon.svg"
+    <EntityAvatar
+      size={size}
+      variant="pigment"
+      hue={deterministicHue(workspace.id)}
       alt={workspace.name}
-      width={32}
-      height={32}
-      className={cn("rounded-md", className)}
+      text={nameInitials(workspace.name)}
     />
   );
 }
 
-export function TeamSwitcher({
-  workspaces,
-  activeSlug,
-}: {
-  workspaces: Workspace[];
-  activeSlug: string | null;
-}) {
+export function TeamSwitcher({ workspaces }: { workspaces: Workspace[] }) {
   const { isMobile } = useSidebar();
   const router = useRouter();
+  const pathname = usePathname();
+  const activeSlug = useWorkspaceSlug();
   const [isPending, startTransition] = React.useTransition();
   const [createOpen, setCreateOpen] = React.useState(false);
   const [name, setName] = React.useState("");
@@ -71,28 +70,23 @@ export function TeamSwitcher({
   const active =
     workspaces.find((workspace) => workspace.slug === activeSlug) ?? null;
 
+  // The ids below the section belong to the workspace being left.
   const switchTo = (slug: string) => {
     if (slug === activeSlug) return;
-    startTransition(async () => {
-      const result = await switchWorkspaceAction(slug);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      router.refresh();
-    });
+    router.push(workspacePath(slug, workspaceSection(pathname)));
   };
 
   const create = () => {
     setError(null);
     startTransition(async () => {
       const result = await createWorkspaceAction(name);
-      if (result.error) {
+      if (result.error !== undefined) {
         setError(result.error);
         return;
       }
       setName("");
       setCreateOpen(false);
+      router.push(workspacePath(result.data.slug, WORKSPACE_HOME));
       router.refresh();
     });
   };
@@ -114,7 +108,7 @@ export function TeamSwitcher({
                 className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground transition-all duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
               >
                 <div className="flex aspect-square size-8 items-center justify-center bg-transparent">
-                  <WorkspaceIcon workspace={active} className="size-8" />
+                  <WorkspaceIcon workspace={active} size={32} />
                 </div>
                 <span className="flex-1 truncate text-left text-sm font-semibold leading-tight tracking-tight text-zinc-900 dark:text-zinc-100">
                   {active.name}
@@ -139,7 +133,7 @@ export function TeamSwitcher({
                   className="gap-2 p-2 cursor-pointer"
                 >
                   <div className="flex size-6 items-center justify-center">
-                    <WorkspaceIcon workspace={workspace} className="size-6" />
+                    <WorkspaceIcon workspace={workspace} size={24} />
                   </div>
                   <span className="flex-1 truncate">{workspace.name}</span>
                   {workspace.slug === activeSlug && (

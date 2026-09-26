@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/WorkspaceLink";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";

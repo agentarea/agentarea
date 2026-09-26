@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from agentarea_common.auth.authorization import assert_workspace_admin
 from agentarea_common.events.broker import EventBroker
-from agentarea_common.exceptions.errors import NotFoundError
+from agentarea_common.exceptions.errors import BadRequestError, NotFoundError
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from sqlalchemy import delete, select
 
@@ -183,12 +183,12 @@ class ProviderService:
         )
         secret = result.scalar_one_or_none()
         if secret is None:
-            raise ValueError(f"No secret {secret_id} in this workspace")
+            raise NotFoundError(f"No secret {secret_id} in this workspace")
         if secret.owner_type is not None:
             # Managed secrets belong to the connection that minted them. Sharing
             # one would mean this config's key changes whenever that connection
             # rotates its own.
-            raise ValueError(
+            raise BadRequestError(
                 f"Secret '{secret.secret_name}' is managed by {secret.owner_type} and "
                 "cannot be reused as a provider API key."
             )

@@ -1,6 +1,6 @@
 import React from "react";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
+import Link from "@/components/WorkspaceLink";
 import HeaderTabs from "@/components/HeaderTabs";
 import Table from "@/components/Table/Table";
 import { TabsContent } from "@/components/ui/tabs";

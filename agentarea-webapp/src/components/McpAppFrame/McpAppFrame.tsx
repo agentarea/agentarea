@@ -10,7 +10,7 @@ import {
 import {
   callMcpAppToolAction,
   startMcpAppAction,
-} from "@/app/(main)/apps/actions";
+} from "@/app/w/[workspace]/(main)/apps/actions";
 import { parseMcpAppLink, type McpAppLink } from "@/lib/apps/links";
 import type { McpAppUiResource } from "@/lib/apps/mcp/tools";
 import {

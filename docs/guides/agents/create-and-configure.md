@@ -34,7 +34,7 @@ Do this through the API when you are scripting or testing. The dashboard at
 <Steps titleSize="h3">
   <Step title="Find a model instance">
     ```bash
-    curl -s http://localhost:8000/v1/model-instances/ \
+    curl -s http://localhost:8000/v1/workspaces/{workspace}/model-instances/ \
       -H "Authorization: Bearer $TOKEN"
     ```
 
@@ -47,7 +47,7 @@ Do this through the API when you are scripting or testing. The dashboard at
     Only `name` is required. Everything else has a default or is optional.
 
     ```bash
-    curl -X POST http://localhost:8000/v1/agents/ \
+    curl -X POST http://localhost:8000/v1/workspaces/{workspace}/agents/ \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -103,7 +103,7 @@ Do this through the API when you are scripting or testing. The dashboard at
 Run a task and watch it reach a terminal event:
 
 ```bash
-curl -X POST http://localhost:8000/v1/agents/<agent-id>/tasks/sync \
+curl -X POST http://localhost:8000/v1/workspaces/{workspace}/agents/<agent-id>/tasks/sync \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"description": "Say hello and stop."}'

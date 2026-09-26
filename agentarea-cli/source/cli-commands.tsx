@@ -62,6 +62,18 @@ export async function handleCliCommand(
 		return runLogout();
 	}
 
+	if (command === 'workspace' && subcommand === 'use') {
+		const slug = options.args?.[2];
+		if (!slug) {
+			console.error('Usage: agentarea workspace use <slug>');
+			await flushAndExit(1);
+		}
+
+		configManager.set('workspace', slug);
+		console.error(`Workspace-scoped commands now run in "${slug}".`);
+		await flushAndExit(0);
+	}
+
 	// Load token from CLI flag, environment, or the stored OAuth session
 	// (refreshed on the spot when it is about to expire).
 	let loadedToken = options.token || process.env['AGENTAREA_TOKEN'];

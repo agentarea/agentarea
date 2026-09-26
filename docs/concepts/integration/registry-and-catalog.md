@@ -101,8 +101,8 @@ Re-syncing an existing item overwrites its `name`, `description`, `spec`, and
 that version differs, `update_available` is set to true.
 
 Nothing is applied automatically. Applying is an explicit call —
-`POST /v1/registries/catalog/items/{item_id}/update` for one item, or
-`POST /v1/registries/{registry_id}/update-all` for every flagged item in a
+`POST /v1/workspaces/{workspace}/registries/catalog/items/{item_id}/update` for one item, or
+`POST /v1/workspaces/{workspace}/registries/{registry_id}/update-all` for every flagged item in a
 registry — which writes the new spec onto the installed entity and clears the
 flag.
 
@@ -150,7 +150,7 @@ have left two answers to "where does a built-in definition live".
   compromised source URL changes what every workspace sees.
 - **Nothing schedules a sync.** `sync_mode` defaults to `manual` and this service
   contains no scheduler. Syncs are triggered by an explicit call to
-  `POST /v1/registries/{registry_id}/sync`.
+  `POST /v1/workspaces/{workspace}/registries/{registry_id}/sync`.
 - **Version comparison is string inequality, not semver.** A version that differs
   in any direction sets `update_available`, including a downgrade.
 - **The catalog-only types have no "apply update" path.** `update_item_spec`

@@ -295,9 +295,7 @@ class RegistryService:
             version=version,
             spec=item_spec,
             tags=item_tags,
-            category=facets.category,
-            sort_key=facets.sort_key,
-            featured=facets.featured,
+            **facets._asdict(),
             # A managed registry has no source order to take a position from,
             # so an unranked publication goes to the end rather than tying with
             # the existing catalog and jumping it on the alphabetical tiebreak.
@@ -340,11 +338,7 @@ class RegistryService:
         spec = fields.get("spec", item.spec)
         tags = fields.get("tags", item.tags)
         facets = derive_facets(registry.registry_type, name, spec, tags)
-        fields.update(
-            category=facets.category,
-            sort_key=facets.sort_key,
-            featured=facets.featured,
-        )
+        fields.update(facets._asdict())
         updated = await self.item_repo.update(item_id, **fields)
         if updated is None:  # Defensive against a concurrent delete.
             raise CatalogItemNotFoundError(f"Catalog item {item_id} not found")
@@ -467,10 +461,8 @@ class RegistryService:
                             version=item_data.get("version"),
                             spec=item_data.get("spec", {}),
                             tags=item_data.get("tags", []),
-                            category=facets.category,
-                            sort_key=facets.sort_key,
                             recommendation_rank=item_data.get("recommendation_rank", 0),
-                            featured=facets.featured,
+                            **facets._asdict(),
                         )
                         try:
                             entity_id = await self._create_entity(

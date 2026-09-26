@@ -7,6 +7,17 @@ export type StatusTone =
   /** Brand accent. Reserved for "done", the way Linear colours a closed issue. */
   | "brand";
 
+/** The tones as CSS colours, for what a Tailwind class can't reach — chart
+ * strokes, inline marker styles. */
+export const STATUS_TONE_COLOR: Record<StatusTone, string> = {
+  success: "var(--status-success)",
+  warning: "var(--status-warning)",
+  danger: "var(--status-danger)",
+  info: "var(--status-info)",
+  neutral: "hsl(var(--muted-foreground))",
+  brand: "hsl(var(--primary))",
+};
+
 export type StatusIndicatorSize = "default" | "sm";
 
 /** Swaps the indicator's dot for a filled marker, Linear's "Done" check. */
@@ -301,6 +312,8 @@ export function getTriggerExecutionStatusPresentation(
       return { label: "Failed", tone: "danger" };
     case "error":
       return { label: "Error", tone: "danger" };
+    case "timeout":
+      return { label: "Timed out", tone: "danger" };
     case "cancelled":
       return { label: "Cancelled", tone: "neutral" };
     default:

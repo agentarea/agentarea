@@ -1,3 +1,4 @@
+import { currentWorkspaceHeaders } from "@/lib/workspace-browser";
 import { uploadAttachments } from "./uploadAttachments";
 
 function taskIdFromSseRecord(record: string): string | null {
@@ -64,7 +65,10 @@ export async function createFollowupAgentTask(
   const attachments = await uploadAttachments(files);
   const response = await fetch(`/api/agents/${agentId}/tasks/create`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...currentWorkspaceHeaders(),
+    },
     body: JSON.stringify({
       description:
         description || "Use the attached files to complete the task.",

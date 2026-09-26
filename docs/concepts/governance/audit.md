@@ -62,7 +62,7 @@ update and delete; MCP server create, update and delete; MCP instance create,
 update and delete; trigger create, update and delete; task create; and governance
 policy create, update, set-enabled and delete.
 
-Reads go through `GET /v1/audit-logs/`, scoped to the caller's workspace and
+Reads go through `GET /v1/workspaces/{workspace}/audit-logs/`, scoped to the caller's workspace and
 filterable by action, actor, resource type, resource id and a time range. It is
 cursor-paginated with a default of 50 and a maximum of 100 events per page,
 newest first.
@@ -113,7 +113,7 @@ are joined by workspace and timestamp, not by a shared identifier.
   policy denial, no budget denial and no approval produces an `audit_events` row.
   Those live only in the task event stream and in application logs.
 - **Authorization grant changes are not audited.** Writing or revoking a
-  relationship through `/v1/access-control/relationships`, and the automatic owner
+  relationship through `/v1/workspaces/{workspace}/access-control/relationships`, and the automatic owner
   grants written when a resource is created, produce no audit event. Who was given
   access to what is recorded in the graph itself, not in the audit log.
 - **API key lifecycle is not audited.** Creating and deleting API keys produces no

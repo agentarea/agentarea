@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Management router — JWT-protected (included in protected_v1_router)
+# Management router — JWT-protected (included in workspace_v1_router)
 # ---------------------------------------------------------------------------
 
 router = APIRouter(prefix="/api-keys", tags=["api-keys"])

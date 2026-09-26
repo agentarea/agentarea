@@ -4,6 +4,20 @@
 // (commands/router.ts) is generic over these specs; adding a command is a
 // data change, not new dispatch code.
 
+import type * as sdk from '@agentarea/api-client';
+
+/** Exports of @agentarea/api-client that are not generated operations. */
+export type NonOperationExport =
+	| 'configureApiClient'
+	| 'client'
+	| 'fillWorkspace'
+	| 'InvalidWorkspaceError'
+	| 'isWorkspaceScoped'
+	| 'MissingWorkspaceError';
+
+/** A generated SDK function name; a typo fails type-check. */
+export type SdkOperation = Exclude<keyof typeof sdk, NonOperationExport>;
+
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
 export interface CommandSpec {
@@ -14,7 +28,7 @@ export interface CommandSpec {
 	/** Alternate verbs that resolve to this spec (e.g. "rm" -> "delete"). */
 	aliases?: string[];
 	/** SDK export name from @agentarea/api-client. */
-	fn: string;
+	fn: SdkOperation;
 	method: HttpMethod;
 	/**
 	 * Path parameter names, in the order positional CLI args fill them.

@@ -1,15 +1,42 @@
 """Unit tests for MCP auth middleware."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.context import UserContext, UserPrincipal
 
 from agentarea_agents_sdk.mcp_server.auth import (
     PROTECTED_RESOURCE_SCOPE_KEY,
     MCPAuthMiddleware,
     _mcp_user_context_var,
 )
+
+WORKSPACES = {
+    "alice-workspace": SimpleNamespace(id="alice-workspace", slug="alice-workspace"),
+    "shared-workspace": SimpleNamespace(id="shared-workspace", slug="shared-workspace"),
+    "bob-workspace": SimpleNamespace(id="bob-workspace", slug="bob-workspace"),
+}
+
+
+async def _load_workspace(*, workspace_id=None, slug=None):
+    return WORKSPACES.get(slug or workspace_id)
+
+
+def _grant(*workspaces: str):
+    """Stub _resolve_access that grants a fixed workspace set."""
+
+    async def _resolve(principal: UserPrincipal, *, slug: str | None = None) -> None:
+        principal.accessible_workspaces = list(workspaces)
+        principal.admin_workspaces = []
+
+    return AsyncMock(side_effect=_resolve)
+
+
+@pytest.fixture(autouse=True)
+def _workspace_rows():
+    with patch("agentarea_common.workspaces.lookup.load_workspace", new=_load_workspace):
+        yield
 
 
 @pytest.mark.asyncio
@@ -18,19 +45,16 @@ async def test_mcp_auth_accepts_agentarea_pat_prefix():
     middleware = MCPAuthMiddleware(MagicMock())
     request = MagicMock()
     request.headers = {}
-    user_context = UserContext(user_id="user-1", workspace_id="workspace-1")
+    principal = UserPrincipal(user_id="user-1", bound_workspace_id="workspace-1")
     token = _mcp_user_context_var.set(None)
 
     try:
         with (
             patch(
                 "agentarea_common.auth.dependencies._validate_api_key",
-                new=AsyncMock(return_value=user_context),
+                new=AsyncMock(return_value=principal),
             ) as validate_api_key,
-            patch(
-                "agentarea_common.auth.dependencies._resolve_accessible_workspaces",
-                new=AsyncMock(),
-            ),
+            patch("agentarea_common.auth.dependencies._resolve_access", new=_grant()),
             patch("agentarea_common.auth.dependencies.get_auth_provider") as get_auth_provider,
         ):
             auth_provider = MagicMock()
@@ -41,18 +65,9 @@ async def test_mcp_auth_accepts_agentarea_pat_prefix():
 
         validate_api_key.assert_awaited_once_with("aat_valid-token", request)
         auth_provider.verify_token.assert_not_awaited()
-        assert _mcp_user_context_var.get(None) is user_context
+        assert _mcp_user_context_var.get(None) is principal
     finally:
         _mcp_user_context_var.reset(token)
-
-
-def _grant(*workspaces: str):
-    """Stub _resolve_accessible_workspaces that grants a fixed workspace set."""
-
-    async def _resolve(user_context: UserContext) -> None:
-        user_context.accessible_workspaces = list(workspaces)
-
-    return AsyncMock(side_effect=_resolve)
 
 
 def _jwt_auth_result(user_id: str) -> MagicMock:
@@ -60,21 +75,19 @@ def _jwt_auth_result(user_id: str) -> MagicMock:
     auth_result.is_authenticated = True
     auth_result.token = MagicMock()
     auth_result.token.user_id = user_id
+    auth_result.token.email = None
     return auth_result
 
 
 async def _authenticate_jwt(
     request, *, granted: tuple[str, ...], pinned: str | None = None
-) -> UserContext | None:
+) -> UserContext | UserPrincipal | None:
     """Run the JWT path of the middleware with a stubbed provider and grant set."""
     middleware = MCPAuthMiddleware(MagicMock())
     token = _mcp_user_context_var.set(None)
     try:
         with (
-            patch(
-                "agentarea_common.auth.dependencies._resolve_accessible_workspaces",
-                new=_grant(*granted),
-            ),
+            patch("agentarea_common.auth.dependencies._resolve_access", new=_grant(*granted)),
             patch("agentarea_common.auth.dependencies.get_auth_provider") as get_auth_provider,
         ):
             auth_provider = MagicMock()
@@ -89,21 +102,17 @@ async def _authenticate_jwt(
 
 async def _authenticate_hydra(
     request, *, granted: tuple[str, ...], pinned: str | None = None
-) -> UserContext | None:
+) -> UserContext | UserPrincipal | None:
     """Run the Hydra fallback path with a fixed OAuth subject and grant set."""
     middleware = MCPAuthMiddleware(MagicMock())
     token = _mcp_user_context_var.set(None)
-    hydra_context = UserContext(user_id="alice", workspace_id="alice")
     rejected = MagicMock(is_authenticated=False, token=None)
     try:
         with (
-            patch(
-                "agentarea_common.auth.dependencies._resolve_accessible_workspaces",
-                new=_grant(*granted),
-            ),
+            patch("agentarea_common.auth.dependencies._resolve_access", new=_grant(*granted)),
             patch(
                 "agentarea_common.auth.dependencies._try_hydra_token",
-                new=AsyncMock(return_value=hydra_context),
+                new=AsyncMock(return_value=UserPrincipal(user_id="alice")),
             ),
             patch("agentarea_common.auth.dependencies.get_auth_provider") as get_auth_provider,
         ):
@@ -120,9 +129,9 @@ async def _authenticate_hydra(
 class TestPinnedWorkspaceIsAuthorized:
     """`/mcp/w/<workspace>` must not serve a workspace the caller cannot reach.
 
-    The REST router enforces membership through `_apply_workspace_override`; the
-    MCP middleware is a separate auth path and must reuse that gate, or any
-    authenticated user could read another workspace by editing the URL.
+    The REST router enforces membership when it enters the workspace the path
+    names; the MCP middleware is a separate auth path and must reuse that gate,
+    or any authenticated user could read another workspace by editing the URL.
     """
 
     @pytest.mark.asyncio
@@ -130,7 +139,9 @@ class TestPinnedWorkspaceIsAuthorized:
         request = MagicMock()
         request.headers = {}
 
-        context = await _authenticate_jwt(request, granted=("alice",), pinned="bob-workspace")
+        context = await _authenticate_jwt(
+            request, granted=("alice-workspace",), pinned="bob-workspace"
+        )
 
         # Fail closed: no context at all, rather than a context on Bob's workspace.
         assert context is None
@@ -141,12 +152,13 @@ class TestPinnedWorkspaceIsAuthorized:
         request.headers = {}
 
         context = await _authenticate_jwt(
-            request, granted=("alice", "shared-workspace"), pinned="shared-workspace"
+            request, granted=("alice-workspace", "shared-workspace"), pinned="shared-workspace"
         )
 
-        assert context is not None
+        assert isinstance(context, UserContext)
         assert context.user_id == "alice"
         assert context.workspace_id == "shared-workspace"
+        assert context.workspace_slug == "shared-workspace"
 
     @pytest.mark.asyncio
     async def test_workspace_header_selects_nothing(self):
@@ -154,17 +166,17 @@ class TestPinnedWorkspaceIsAuthorized:
         request = MagicMock()
         request.headers = {"X-AgentArea-Workspace": "shared-workspace"}
 
-        context = await _authenticate_jwt(request, granted=("alice", "shared-workspace"))
+        caller = await _authenticate_jwt(request, granted=("alice-workspace", "shared-workspace"))
 
-        assert context is not None
-        assert context.workspace_id == "alice"
+        assert isinstance(caller, UserPrincipal)
+        assert not hasattr(caller, "workspace_id")
 
     @pytest.mark.asyncio
     async def test_api_key_path_also_rejects_foreign_pinned_workspace(self):
         middleware = MCPAuthMiddleware(MagicMock())
         request = MagicMock()
         request.headers = {}
-        issued_for = UserContext(user_id="alice", workspace_id="alice-workspace")
+        issued_for = UserPrincipal(user_id="alice", bound_workspace_id="alice-workspace")
         token = _mcp_user_context_var.set(None)
 
         try:
@@ -174,12 +186,8 @@ class TestPinnedWorkspaceIsAuthorized:
                     new=AsyncMock(return_value=issued_for),
                 ),
                 patch(
-                    "agentarea_common.auth.dependencies._resolve_accessible_workspaces",
+                    "agentarea_common.auth.dependencies._resolve_access",
                     new=_grant("alice-workspace"),
-                ),
-                patch(
-                    "agentarea_common.auth.dependencies._resolve_workspace_id_from_slug",
-                    new=AsyncMock(return_value=None),
                 ),
                 patch("agentarea_common.auth.dependencies.get_auth_provider"),
             ):
@@ -195,7 +203,7 @@ class TestPinnedWorkspaceIsAuthorized:
         request.headers = {}
 
         context = await _authenticate_hydra(
-            request, granted=("alice", "shared-workspace"), pinned="shared-workspace"
+            request, granted=("alice-workspace", "shared-workspace"), pinned="shared-workspace"
         )
 
         assert context is not None
@@ -206,11 +214,9 @@ class TestPinnedWorkspaceIsAuthorized:
         request = MagicMock()
         request.headers = {}
 
-        with patch(
-            "agentarea_common.auth.dependencies._resolve_workspace_id_from_slug",
-            new=AsyncMock(return_value=None),
-        ):
-            context = await _authenticate_hydra(request, granted=("alice",), pinned="bob-workspace")
+        context = await _authenticate_hydra(
+            request, granted=("alice-workspace",), pinned="no-such-workspace"
+        )
 
         assert context is None
 
@@ -285,7 +291,7 @@ async def test_each_protected_request_requires_its_own_bearer_token():
     middleware = MCPAuthMiddleware(inner)
 
     async def authenticate(_token, _request, _pinned_workspace=None):
-        _mcp_user_context_var.set(UserContext(user_id="alice", workspace_id="alice"))
+        _mcp_user_context_var.set(UserPrincipal(user_id="alice"))
         return False
 
     async def request(headers: list[tuple[bytes, bytes]]):

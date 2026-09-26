@@ -34,7 +34,7 @@ def _authz():
 def _client(context: UserContext) -> tuple[TestClient, AsyncMock]:
     catalog = AsyncMock()
     app = FastAPI()
-    app.include_router(router, prefix="/v1")
+    app.include_router(router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_secret_catalog_service] = lambda: catalog
     app.dependency_overrides[get_user_context] = lambda: context
     return TestClient(app), catalog
@@ -51,10 +51,10 @@ def _owner() -> UserContext:
 @pytest.mark.parametrize(
     ("method", "path", "body"),
     [
-        ("post", "/v1/secrets", {"name": "STRIPE_KEY", "value": "sk-live-x"}),
-        ("put", f"/v1/secrets/{SECRET_ID}/value", {"value": "sk-live-rotated"}),
-        ("delete", f"/v1/secrets/{SECRET_ID}", None),
-        ("patch", f"/v1/secrets/{SECRET_ID}", {"description": "renamed"}),
+        ("post", "/v1/workspaces/acme/secrets", {"name": "STRIPE_KEY", "value": "sk-live-x"}),
+        ("put", f"/v1/workspaces/acme/secrets/{SECRET_ID}/value", {"value": "sk-live-rotated"}),
+        ("delete", f"/v1/workspaces/acme/secrets/{SECRET_ID}", None),
+        ("patch", f"/v1/workspaces/acme/secrets/{SECRET_ID}", {"description": "renamed"}),
     ],
 )
 def test_a_member_cannot_mutate_workspace_secrets(method, path, body) -> None:
@@ -80,7 +80,9 @@ def test_the_owner_still_rotates_a_secret() -> None:
     )
     catalog.consumers.return_value = []
 
-    response = client.put(f"/v1/secrets/{SECRET_ID}/value", json={"value": "sk-live-rotated"})
+    response = client.put(
+        f"/v1/workspaces/acme/secrets/{SECRET_ID}/value", json={"value": "sk-live-rotated"}
+    )
 
     assert response.status_code == 200, response.text
     catalog.rotate_user_secret.assert_awaited()

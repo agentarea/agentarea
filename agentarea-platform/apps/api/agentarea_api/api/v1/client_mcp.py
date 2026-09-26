@@ -91,26 +91,32 @@ async def _resolve_client_scope(
     from agentarea_common.base.repository_factory import RepositoryFactory
     from agentarea_common.config.database import get_database
     from agentarea_common.infrastructure.connection_manager import get_connection_manager
+    from agentarea_common.workspaces.lookup import workspace_slug_for
     from agentarea_mcp.application.service import MCPServerInstanceService
     from agentarea_mcp.infrastructure.client_repository import ClientRepository
     from agentarea_secrets.secret_manager_factory import get_real_secret_manager
 
-    user_ctx = get_mcp_user_context()
+    principal = get_mcp_user_context()
     connection_manager = get_connection_manager()
     broker = await connection_manager.get_event_broker()
 
     async with get_database().read_session() as session:
-        client_repo = ClientRepository(session, user_ctx)
-        client = await client_repo.get_accessible_by_id(client_id)
-        if client is None:
+        workspace_id = await ClientRepository.locate_workspace(
+            session, client_id, principal.accessible_workspaces or []
+        )
+        if workspace_id is None:
             return None, {}
 
-        await _authorize_client_access(user_ctx, client_id)
+        await _authorize_client_access(principal, client_id)
 
-        # A client endpoint is itself a workspace reference. Bind before
+        # A client endpoint is itself a workspace reference. Enter it before
         # constructing workspace-scoped dependencies: secret managers may
         # capture the workspace id in their constructor.
-        user_ctx.workspace_id = str(client.workspace_id)
+        user_ctx = principal.enter(workspace_id, await workspace_slug_for(workspace_id))
+        client_repo = ClientRepository(session, user_ctx)
+        client = await client_repo.get_by_id(client_id)
+        if client is None:
+            return None, {}
         repo_factory = RepositoryFactory(session, user_ctx)
         secret = get_real_secret_manager(session=session, user_context=user_ctx)
 

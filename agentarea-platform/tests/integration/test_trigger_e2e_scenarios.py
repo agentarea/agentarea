@@ -167,7 +167,7 @@ class TestTriggerE2EScenarios:
         app.dependency_overrides[get_secret_manager] = lambda: mock_secret_manager
 
         # Include trigger router
-        app.include_router(triggers_router, prefix="/v1")
+        app.include_router(triggers_router, prefix="/v1/workspaces/{workspace}")
 
         # Webhook receiver is mounted outside /v1 in the real app (bypasses
         # auth middleware) -- see apps/api/agentarea_api/main.py.
@@ -385,14 +385,14 @@ class TestTriggerE2EScenarios:
             "conditions": {"test_mode": True},
         }
 
-        create_response = test_client.post("/v1/triggers/", json=create_data, headers=auth_headers)
+        create_response = test_client.post("/v1/workspaces/acme/triggers/", json=create_data, headers=auth_headers)
 
         assert create_response.status_code == 201
         created_trigger = create_response.json()
         trigger_id = created_trigger["id"]
 
         # Step 2: Get trigger via API
-        get_response = test_client.get(f"/v1/triggers/{trigger_id}", headers=auth_headers)
+        get_response = test_client.get(f"/v1/workspaces/acme/triggers/{trigger_id}", headers=auth_headers)
 
         assert get_response.status_code == 200
         retrieved_trigger = get_response.json()
@@ -407,7 +407,7 @@ class TestTriggerE2EScenarios:
         }
 
         update_response = test_client.put(
-            f"/v1/triggers/{trigger_id}", json=update_data, headers=auth_headers
+            f"/v1/workspaces/acme/triggers/{trigger_id}", json=update_data, headers=auth_headers
         )
 
         assert update_response.status_code == 200
@@ -416,7 +416,7 @@ class TestTriggerE2EScenarios:
         assert updated_trigger["cron_expression"] == "0 11 * * *"
 
         # Step 4: List triggers via API
-        list_response = test_client.get("/v1/triggers/", headers=auth_headers)
+        list_response = test_client.get("/v1/workspaces/acme/triggers/", headers=auth_headers)
 
         assert list_response.status_code == 200
         triggers_list = list_response.json()
@@ -425,7 +425,7 @@ class TestTriggerE2EScenarios:
 
         # Step 5: Disable trigger via API
         disable_response = test_client.post(
-            f"/v1/triggers/{trigger_id}/disable", headers=auth_headers
+            f"/v1/workspaces/acme/triggers/{trigger_id}/disable", headers=auth_headers
         )
 
         assert disable_response.status_code == 200
@@ -434,7 +434,7 @@ class TestTriggerE2EScenarios:
 
         # Step 6: Enable trigger via API
         enable_response = test_client.post(
-            f"/v1/triggers/{trigger_id}/enable", headers=auth_headers
+            f"/v1/workspaces/acme/triggers/{trigger_id}/enable", headers=auth_headers
         )
 
         assert enable_response.status_code == 200
@@ -442,12 +442,12 @@ class TestTriggerE2EScenarios:
         assert enable_result["is_active"] is True
 
         # Step 7: Delete trigger via API
-        delete_response = test_client.delete(f"/v1/triggers/{trigger_id}", headers=auth_headers)
+        delete_response = test_client.delete(f"/v1/workspaces/acme/triggers/{trigger_id}", headers=auth_headers)
 
         assert delete_response.status_code == 204
 
         # Verify trigger is deleted
-        get_deleted_response = test_client.get(f"/v1/triggers/{trigger_id}", headers=auth_headers)
+        get_deleted_response = test_client.get(f"/v1/workspaces/acme/triggers/{trigger_id}", headers=auth_headers)
         assert get_deleted_response.status_code == 404
 
     async def test_webhook_http_request_processing(

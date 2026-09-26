@@ -23,19 +23,21 @@ differ only in how the response reaches you.
 ## Prerequisites
 
 <Info>
+- Your workspace slug. Every endpoint below is scoped to one — see
+  [workspace scoping](/api-reference/introduction#workspace-scoping).
 - An agent that exists and has a model configured. An agent with no `model_id`
   is rejected at creation with 422, not at run time.
-- An API key. Create one with `POST /v1/api-keys/` and read `token` from the
+- An API key. Create one with `POST /v1/workspaces/{workspace}/api-keys/` and read `token` from the
   201 response — it is returned once and never again.
-- The agent's id. `GET /v1/agents/` lists them.
+- The agent's id. `GET /v1/workspaces/{workspace}/agents/` lists them.
 </Info>
 
 ## Choose an entry point
 
 | Option | Pick it when |
 |---|---|
-| `POST /v1/agents/{agent_id}/tasks/` | You want to watch the run live. Returns `text/event-stream`, not JSON. |
-| `POST /v1/agents/{agent_id}/tasks/sync` | You want a task id back immediately and will poll or stream separately. Returns JSON. |
+| `POST /v1/workspaces/{workspace}/agents/{agent_id}/tasks/` | You want to watch the run live. Returns `text/event-stream`, not JSON. |
+| `POST /v1/workspaces/{workspace}/agents/{agent_id}/tasks/sync` | You want a task id back immediately and will poll or stream separately. Returns JSON. |
 | CLI | You are at a terminal and want the same thing without writing a request. |
 | A2A JSON-RPC | The caller is another agent or an A2A-compatible client. |
 
@@ -51,7 +53,7 @@ workflow is dispatched, with `status` set to `running`.
 
     ```bash
     curl -N -X POST \
-      "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/" \
+      "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{"description": "Summarise the latest release notes and list breaking changes."}'
@@ -75,7 +77,7 @@ workflow is dispatched, with `status` set to `running`.
   <Step title="Option B — REST, JSON response">
     ```bash
     curl -X POST \
-      "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/sync" \
+      "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/sync" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{"description": "Summarise the latest release notes and list breaking changes."}'
@@ -163,7 +165,7 @@ workflow is dispatched, with `status` set to `running`.
 Fetch the task and confirm it has an `execution_id` and a live status:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '{status, execution_id, failure_reason}'
 ```
 
@@ -183,7 +185,7 @@ never dispatched.
 
 <AccordionGroup>
   <Accordion title="The streaming endpoint returns nothing parseable">
-    `POST /v1/agents/{agent_id}/tasks/` responds with `text/event-stream` .
+    `POST /v1/workspaces/{workspace}/agents/{agent_id}/tasks/` responds with `text/event-stream` .
     `curl` without `-N` buffers it and `jq` cannot parse it. Use `-N` , or
     switch to `/sync` .
   </Accordion>
@@ -195,7 +197,7 @@ never dispatched.
   <Accordion title="422 from the policy layer">
     A `task_policy` that widens any limit set at the workspace or agent scope is
     rejected — task policy may only tighten. Compare against
-    `POST /v1/governance/effective-policy/preview` before retrying.
+    `POST /v1/workspaces/{workspace}/governance/effective-policy/preview` before retrying.
   </Accordion>
   <Accordion title="The task exists but nothing happens and `execution_id` is null">
     The workflow dispatch failed, usually because no Temporal worker is running

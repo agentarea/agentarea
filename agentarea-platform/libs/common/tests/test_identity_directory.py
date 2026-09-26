@@ -145,3 +145,20 @@ def test_identity_for_never_borrows_the_callers_token_for_someone_else():
     identity = identity_for(BOB, {}, current_user_id=ALICE, current_user_email="alice@example.com")
 
     assert identity == IdentityRecord(user_id=BOB, email=None, display_name=None)
+
+
+@pytest.mark.parametrize("hostile", ["\r\nX-Injected: 1", "../../health", "a b?c#d"])
+async def test_an_id_is_one_path_segment_whatever_it_contains(hostile):
+    """Ids come from callers; each is sent as a single encoded segment, never parsed."""
+    seen: list[bytes] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.raw_path)
+        return httpx.Response(404)
+
+    resolved = await _directory(handler).resolve([hostile])
+
+    assert resolved == {}
+    assert len(seen) == 1
+    assert seen[0].startswith(b"/admin/identities/")
+    assert seen[0].count(b"/") == 3
