@@ -58,9 +58,12 @@ async def _item(session, registry_id, name, *, tags=(), spec=None, updated_at=No
     await session.execute(
         text(
             "INSERT INTO registry_items (id, registry_id, external_id, name, spec, tags, "
-            "sort_key, featured, created_at, updated_at) "
-            "VALUES (:id, :registry_id, :external_id, :name, CAST(:spec AS jsonb), "
-            "CAST(:tags AS jsonb), :name, false, now(), :updated_at)"
+            "sort_key, featured, registry_type, registry_priority, registry_active, "
+            "created_at, updated_at) "
+            "SELECT :id, r.id, :external_id, :name, CAST(:spec AS jsonb), "
+            "CAST(:tags AS jsonb), :name, false, r.registry_type, "
+            "r.recommendation_priority, r.is_active, now(), :updated_at "
+            "FROM registries r WHERE r.id = :registry_id"
         ),
         {
             "id": item_id,
