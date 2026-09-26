@@ -2,32 +2,86 @@
 
 ![AgentArea](images/agentarea-cover.jpg)
 
-# Run AI agents that act for other people, under rules you can prove.
+# The platform for building agent-based organizations
+
+Teams of AI agents that do real work, run reliably, and stay under your control.
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE.md)
 [![CI](https://github.com/agentarea/agentarea/actions/workflows/ci.yml/badge.svg)](https://github.com/agentarea/agentarea/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-docs.agentarea.ai-green.svg)](https://docs.agentarea.ai)
 [![Discord](https://img.shields.io/discord/1375237948982821005?color=5865F2&label=discord&logo=discord&logoColor=white)](https://discord.gg/5tduPwheYQ)
 
-[Quickstart](#quickstart) · [How a run works](#what-happens-when-an-agent-runs) · [Architecture](#architecture) · [Docs](https://docs.agentarea.ai) · [Discord](https://discord.gg/5tduPwheYQ)
+[Quickstart](#quickstart) · [What you build](#what-an-agent-organization-looks-like) · [How a run works](#what-happens-when-an-agent-runs) · [Architecture](#architecture) · [Docs](https://docs.agentarea.ai) · [Discord](https://discord.gg/5tduPwheYQ)
 
 </div>
 
-AgentArea is a self-hosted platform for running AI agents. Each run is a durable
-Temporal workflow. Before any model call or tool call executes, it passes a
-policy gate that can allow it, deny it, or park the run until a named person
-approves. Tools are reached through MCP servers and through sandboxes from a
-provider you choose. Credentials are resolved on the server, so the model never
-holds them. Every decision is written down.
+AgentArea is a self-hosted platform for running an organization of AI agents.
+Agents have roles, hand work to each other, share tools and skills, and act for
+the people in your workspace. They answer to rules you set: which tools they may
+call, what they may spend, and what a person has to approve first.
 
-**Frameworks give you the agent loop. AgentArea is where that loop runs once
-other people depend on it.**
+It is built to be relied on:
 
-| | Step | What you do |
-|---|---|---|
-| **01** | Connect | Add model providers, MCP servers and skills from the catalog, plus the secrets they need. |
-| **02** | Define | Create agents with instructions, a model and tools. Set the rules: which tools are denied, which need approval, what a workspace or a single task may spend. |
-| **03** | Run and supervise | Start tasks from the dashboard, the API, a schedule, a webhook or a chat message. Approve what the rules escalate. Read what happened. |
+- **Runs survive failures.** Every run is a durable Temporal workflow. A crash or
+  a deploy mid-task does not lose work; the run resumes where it stopped.
+- **Every action is checked before it happens.** Each model call and tool call
+  passes a policy gate that allows it, denies it, or holds the run until a named
+  person approves. The run can wait hours without holding anything open.
+- **Agents cannot reach what they should not.** Commands run in sandboxes,
+  credentials are resolved on the server, and access is a relationship graph
+  that fails closed.
+- **Every decision is on record.** Who started what, which call was allowed or
+  denied, who approved it, and what it cost.
+
+Getting one agent to work takes a weekend. Running a team of them where a
+mistake costs something is a different problem, and AgentArea makes it the
+platform's job.
+
+## Quickstart
+
+You need Docker with Docker Compose.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/agentarea/agentarea/main/scripts/install.sh | sh
+```
+
+The installer downloads the runtime bundle into `./agentarea`, generates the
+credentials the stack needs, and offers to start it. It does not clone the
+repository or install anything else. From then on it is plain
+`docker compose` in that directory.
+
+Then, at **http://localhost:3000**:
+
+1. Add a model provider key under **Models**.
+2. Create an agent and give it a tool.
+3. Under **Policies**, set that tool to *requires approval*.
+4. Start a task that needs the tool. The run pauses. Approve it in **Inbox**
+   and watch it finish.
+
+Full walkthrough: [Quickstart](https://docs.agentarea.ai/quickstart).
+
+**On Kubernetes:**
+
+```bash
+helm repo add agentarea https://agentarea.github.io/helm-charts
+helm install agentarea agentarea/agentarea --namespace agentarea --create-namespace -f values.yaml
+```
+
+See [Self-host](https://docs.agentarea.ai/self-host/requirements) for sizing,
+gVisor, networking and upgrades.
+
+## What an agent organization looks like
+
+| In your organization | In AgentArea |
+|---|---|
+| The company | A **workspace**: its members, agents, tools, policies and budget. Workspaces are isolated from each other. |
+| Teams | **Projects** group agents, MCP servers and skills. Access to them is granted per person. |
+| Employees | **Agents**, each with instructions, a model and tools. An agent can hand part of its task to another agent and wait for the result. |
+| Shared tools and know-how | A **catalog** of MCP servers and skills, installed once and attached to the agents that need them. |
+| Company rules | **Policies**: denied tools, tools that need approval, spend and token caps per workspace and per task. |
+| Managers | People who approve escalated actions from their **inbox**, in the dashboard or from Claude Code. |
+| Work coming in | **Triggers**: schedules, webhooks, Telegram, email, or a task started by hand or through the API. |
+| The paper trail | **Audit**: every run, call, decision and approval, persisted and browsable in the dashboard. |
 
 ## AgentArea is right for you if
 
@@ -144,39 +198,6 @@ OpenAI-compatible endpoint, with your keys.
 [How it works](https://docs.agentarea.ai/how-it-works) follows one request
 through all of them.
 
-## Quickstart
-
-You need Docker with Docker Compose.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/agentarea/agentarea/main/scripts/install.sh | sh
-```
-
-The installer downloads the runtime bundle into `./agentarea`, generates the
-credentials the stack needs, and offers to start it. It does not clone the
-repository or install anything else. From then on it is plain
-`docker compose` in that directory.
-
-Then, at **http://localhost:3000**:
-
-1. Add a model provider key under **Models**.
-2. Create an agent and give it a tool.
-3. Under **Policies**, set that tool to *requires approval*.
-4. Start a task that needs the tool. The run pauses. Approve it in **Inbox**
-   and watch it finish.
-
-Full walkthrough: [Quickstart](https://docs.agentarea.ai/quickstart).
-
-**On Kubernetes:**
-
-```bash
-helm repo add agentarea https://agentarea.github.io/helm-charts
-helm install agentarea agentarea/agentarea --namespace agentarea --create-namespace -f values.yaml
-```
-
-See [Self-host](https://docs.agentarea.ai/self-host/requirements) for sizing,
-gVisor, networking and upgrades.
-
 ## Use it from Claude Code, Codex or Cursor
 
 AgentArea serves MCP itself, on two surfaces.
@@ -203,33 +224,6 @@ AgentArea serves MCP itself, on two surfaces.
 | **Not an LLM gateway.** | It governs tool calls and runs, not only model traffic. Point a model provider at your gateway if you have one. |
 | **Not a hosted service.** | The documented path is self-hosting. |
 | **Not small.** | It is several services, a database, a workflow engine and an authorization server. That is the cost of the guarantees above. |
-
-<details>
-<summary><b>AgentArea vs. agent frameworks</b> (LangGraph, Mastra, Agno, CrewAI)</summary>
-
-Frameworks are libraries: you import them and the agent runs inside your
-process, with your credentials. That is the right tool for one agent, or for
-agent behaviour embedded in an existing service. AgentArea is what you operate
-when the agent acts for people who did not write it. You get durable execution,
-per-call policy, approvals and audit, at the price of running a platform.
-</details>
-
-<details>
-<summary><b>AgentArea vs. workflow builders</b> (n8n, Dify)</summary>
-
-Workflow builders are good when you can draw the steps in advance. AgentArea
-assumes you cannot: the model picks the next tool, so control has to sit at
-every call rather than in the shape of the graph.
-</details>
-
-<details>
-<summary><b>AgentArea vs. LLM gateways</b> (LiteLLM, Portkey)</summary>
-
-Gateways sit between your code and model providers. They route, retry, cache and
-filter model traffic. AgentArea sits one level up: it decides whether a tool may
-run, who must approve it, and what a task may spend, and it keeps the run alive
-while it waits. The two compose.
-</details>
 
 ## Status and limitations
 
