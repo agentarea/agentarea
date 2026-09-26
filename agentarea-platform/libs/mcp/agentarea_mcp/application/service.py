@@ -1412,6 +1412,13 @@ class MCPServerInstanceService:
             return {"status": "error", "message": "No endpoint URL configured"}
 
         try:
+            validate_outbound_url(mcp_url, policy=OutboundPolicy.from_env())
+            # OAuth from the shared classifier, before the GET status: a server
+            # may be POST-only (405) or list tools without a token and still
+            # require one for every call — the metadata is what says so.
+            if (await MCPOAuthClientService().assess(mcp_url)).advertises_oauth:
+                return {"status": "auth_required", "methods": ["oauth", "credentials"]}
+
             async with safe_async_client(timeout=httpx.Timeout(10.0)) as client:
                 resp = await client.get(mcp_url, follow_redirects=True)
 
@@ -1421,25 +1428,6 @@ class MCPServerInstanceService:
                 # 401 is the spec'd auth challenge; some servers (e.g. Vercel)
                 # answer an unauthenticated request with 403 — treat both the same.
                 if resp.status_code in (401, 403):
-                    www_auth = resp.headers.get("www-authenticate", "")
-                    has_oauth = (
-                        "resource_metadata" in www_auth.lower() or "bearer" in www_auth.lower()
-                    )
-
-                    if has_oauth:
-                        try:
-                            oauth_service = MCPOAuthClientService()
-                            await oauth_service.discover_auth_server(mcp_url)
-                            return {
-                                "status": "auth_required",
-                                "methods": ["oauth", "credentials"],
-                            }
-                        except Exception:
-                            logger.debug(
-                                "OAuth discovery failed for %s, falling back to credentials",
-                                mcp_url,
-                            )
-
                     hints = []
                     if instance.server_spec_id:
                         try:
