@@ -42,6 +42,14 @@ _KNOWN_PROVIDERS: dict[str, dict[str, str]] = {
     },
 }
 
+# Authorization parameters a provider requires beyond OAuth 2.1, keyed by issuer.
+# Google issues a refresh token only for access_type=offline (it ignores the
+# offline_access scope), and only on a fresh consent — prompt=consent keeps a
+# reconnect from coming back without one.
+_PROVIDER_AUTHORIZE_PARAMS: dict[str, dict[str, str]] = {
+    "https://accounts.google.com": {"access_type": "offline", "prompt": "consent"},
+}
+
 # Hosts allowed to advertise a plain-http endpoint — the same carve-out
 # mcp_oauth_as.py uses for native-client redirect_uris.
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
@@ -390,6 +398,7 @@ class MCPOAuthClientService:
             params["scope"] = " ".join(scope_list)
         if as_metadata.resource:
             params["resource"] = as_metadata.resource
+        params.update(_PROVIDER_AUTHORIZE_PARAMS.get(as_metadata.issuer.rstrip("/"), {}))
 
         return f"{as_metadata.authorization_endpoint}?{urlencode(params)}"
 

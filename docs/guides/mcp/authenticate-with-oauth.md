@@ -106,7 +106,9 @@ supply per connection. Ask the preflight endpoint rather than guessing.
     endpoint itself accepts. `offline_access` is added only when the authorization
     server advertises it — asking a provider for a scope it never claimed risks
     `invalid_scope` on the consent screen, which costs the whole authorization
-    rather than just its refresh token.
+    rather than just its refresh token. Google ignores `offline_access` altogether and
+    issues a refresh token only for `access_type=offline` on a fresh consent, so
+    its authorize URL carries `access_type=offline` and `prompt=consent` instead.
 
     `return_to` is where the browser lands afterwards. It is validated against an
     allowed base, so an arbitrary URL is rejected.
