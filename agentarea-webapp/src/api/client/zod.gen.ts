@@ -3753,7 +3753,7 @@ export const zListAgentTasksV1AgentsAgentIdTasksGetPath = z.object({
 export const zListAgentTasksV1AgentsAgentIdTasksGetQuery = z.object({
   status: z.string().nullish(),
   limit: z.number().int().gte(1).lte(1000).optional().default(100),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -4121,7 +4121,7 @@ export const zInstallBundleV1BundlesInstallPostResponse = zInstallResult;
 
 export const zListClientsV1ClientsGetQuery = z.object({
   limit: z.number().int().gte(1).lte(1000).optional().default(100),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -4863,7 +4863,7 @@ export const zListConnectionsV1OpenapiConnectionsGetQuery = z.object({
   status: z.string().nullish(),
   search: z.string().nullish(),
   limit: z.number().int().gte(1).lte(1000).optional().default(100),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -5001,7 +5001,7 @@ export const zResolvePrincipalsV1PrincipalsGetResponse =
 
 export const zListProjectsV1ProjectsGetQuery = z.object({
   limit: z.number().int().gte(1).lte(1000).optional().default(100),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -5350,7 +5350,7 @@ export const zBrowseCatalogV1RegistriesCatalogBrowseGetQuery = z.object({
   protocol: z.enum(["mcp", "api"]).nullish(),
   sort: z.string().nullish(),
   limit: z.number().int().gte(1).lte(500).optional().default(50),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -5404,7 +5404,7 @@ export const zSearchCatalogV1RegistriesCatalogSearchGetQuery = z.object({
   tag: z.string().nullish(),
   update_available: z.boolean().nullish(),
   limit: z.number().int().gte(1).lte(500).optional().default(50),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -5447,7 +5447,7 @@ export const zListRegistryItemsV1RegistriesRegistryIdItemsGetPath = z.object({
 
 export const zListRegistryItemsV1RegistriesRegistryIdItemsGetQuery = z.object({
   limit: z.number().int().gte(1).lte(500).optional().default(50),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -5813,7 +5813,7 @@ export const zGetAllTasksV1TasksGetQuery = z.object({
   created_by: z.string().nullish(),
   search: z.string().nullish(),
   limit: z.number().int().gte(1).lte(1000).optional().default(100),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**

@@ -15890,6 +15890,7 @@
             "schema": {
               "default": 0,
               "description": "Number of tasks to skip",
+              "maximum": 1000000000,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -18695,6 +18696,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "maximum": 1000000000,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -24168,6 +24170,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "maximum": 1000000000,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -25086,6 +25089,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "maximum": 1000000000,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -27366,6 +27370,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "maximum": 1000000000,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -27745,6 +27750,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "maximum": 1000000000,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -28028,6 +28034,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "maximum": 1000000000,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -30453,6 +30460,7 @@
             "schema": {
               "default": 0,
               "description": "Number of tasks to skip",
+              "maximum": 1000000000,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
