@@ -9,6 +9,9 @@ workspace scoping answers "whose data", never "which of us may see it".
 The full route table is covered by ``test_authz_ratchet``; this test proves the
 markers on the admin-grade reads actually deny, rather than merely being
 present.
+
+The API key reads are not here: a member now lists and reads their own keys
+(``test_api_key_visibility``), so only the scope of the answer is gated.
 """
 
 from __future__ import annotations
@@ -31,8 +34,6 @@ SOME_ID = str(uuid4())
 ADMIN_READS = [
     f"/v1/workspaces/{WORKSPACE}/access-control/graph",
     f"/v1/workspaces/{WORKSPACE}/access-control/relationships",
-    f"/v1/workspaces/{WORKSPACE}/api-keys/",
-    f"/v1/workspaces/{WORKSPACE}/api-keys/{SOME_ID}",
     f"/v1/workspaces/{WORKSPACE}/audit-logs/",
     f"/v1/workspaces/{WORKSPACE}/mcp-auth-configs/",
     f"/v1/workspaces/{WORKSPACE}/mcp-auth-configs/{SOME_ID}",
