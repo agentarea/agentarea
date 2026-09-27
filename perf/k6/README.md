@@ -13,8 +13,8 @@ hits it land in the same PR.
 set -a; . ~/.config/agentarea/ru.env; set +a
 
 cd perf/k6
-make smoke      # 1 VU, 1 iteration, every page once — correctness + single-request latency
-make baseline   # ramps to 5 VUs over 3 minutes, 1-3s think time — the real baseline
+WORKSPACE=<slug> make smoke      # 1 VU, 1 iteration, every page once — correctness + single-request latency
+WORKSPACE=<slug> make baseline   # ramps to 5 VUs over 3 minutes, 1-3s think time — the real baseline
 ```
 
 Both write a markdown table to stdout and to `results/<scenario>-report.md`,
@@ -27,7 +27,7 @@ Env vars, read from `__ENV`:
 |---|---|---|
 | `AGENTAREA_TOKEN` | none | required; the suite refuses to start without it |
 | `AGENTAREA_API_URL` | `https://api.agentarea.ru` | |
-| `WORKSPACE` | `user` | workspace slug the workspace-scoped routes hit |
+| `WORKSPACE` | none | required; workspace slug the workspace-scoped routes hit — no default, so a stale/wrong slug fails loudly instead of quietly hitting the wrong workspace |
 
 `k6 run` forwards the whole process environment into `__ENV` on its own
 (`--include-system-env-vars`, on by default), so exporting `AGENTAREA_TOKEN`
@@ -35,17 +35,17 @@ and `AGENTAREA_API_URL` is enough — running `k6 run scenarios/smoke.js`
 directly after sourcing `ru.env` works with no flags at all. **Don't** pass
 either through `-e`: that puts the value in the process's argv, which any
 local `ps`/`pgrep -fl` shows in plaintext to anyone with process-list access
-on the machine. `-e` is for `WORKSPACE` only, a non-secret knob the `make`
-targets pass explicitly:
+on the machine. `-e` is for `WORKSPACE` only, a non-secret but required knob
+(no default — see below) that the `make` targets pass explicitly:
 
 ```bash
-k6 run -e WORKSPACE=some-workspace scenarios/smoke.js
+k6 run -e WORKSPACE=<slug> scenarios/smoke.js
 ```
 
 (`k6 inspect` does *not* forward the environment the same way `k6 run`
 does — if you're validating a script with `k6 inspect`, pass
-`-e AGENTAREA_TOKEN=dummy` there, it's just for a syntax/threshold check and
-never talks to a real API.)
+`-e AGENTAREA_TOKEN=dummy -e WORKSPACE=dummy` there, it's just for a
+syntax/threshold check and never talks to a real API.)
 
 ## Safety rules
 
@@ -92,7 +92,7 @@ Everything endpoint-related lives in `lib/endpoints.js`:
 ```
 perf/k6/
   lib/
-    config.js      env vars, auth header, fail-fast if the token is missing
+    config.js      env vars, auth header, fail-fast if the token or workspace is missing
     http.js         get/getPublic/batchGet — tagging + checks in one place
     endpoints.js     NAMES + pages: what gets hit and how it's grouped
     thresholds.js    builds the threshold map from NAMES + pages
