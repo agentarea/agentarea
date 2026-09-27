@@ -3,6 +3,8 @@ import { getAgents } from "@/components/actions";
 import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
 import { WorkplaceOnboarding } from "@/components/Chat/WorkplaceOnboarding";
 import { getProvidersAndConfigs, listPolicies, listProjects } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
+import { getViewerCapabilities } from "@/lib/workspace-context";
 import type {
   AgentResponse,
   PolicyRuleResponse,
@@ -25,17 +27,18 @@ import { loadWorkplaceSuggestions } from "./loadWorkplaceSuggestions";
  *    and a <Suspense> fills them in afterwards.
  */
 export async function WorkplaceData() {
-  const tPage = await getTranslations("WorkplacePage");
-
-  const [
-    { data: agentsData, error },
-    { data: projectsData },
-    { data: policiesData },
-  ] = await Promise.all([
-    getAgents(),
-    listProjects(),
-    listPolicies({ enabled: true }),
+  const [tPage, tAdmin, { canAdminister }] = await Promise.all([
+    getTranslations("WorkplacePage"),
+    getTranslations("AdminOnly"),
+    getViewerCapabilities(),
   ]);
+
+  const [{ data: agentsData, error }, { data: projectsData }, policiesRes] =
+    await Promise.all([
+      getAgents(),
+      listProjects(),
+      canAdminister ? listPolicies({ enabled: true }) : null,
+    ]);
 
   if (error) {
     return (
@@ -61,8 +64,19 @@ export async function WorkplaceData() {
       description: project.description,
     })) || [];
 
+  let policiesNotice: { text: string; isError: boolean } | null = null;
+  if (!policiesRes) {
+    policiesNotice = { text: tAdmin("hints.pickTaskPolicy"), isError: false };
+  } else if (policiesRes.error || !policiesRes.data) {
+    console.error("Failed to load task policies", policiesRes.error);
+    policiesNotice = {
+      text: apiErrorMessage(policiesRes, tPage("policiesLoadFailed")),
+      isError: true,
+    };
+  }
+
   const taskPolicies =
-    (policiesData as PolicyRuleResponse[] | undefined)?.map((policy) => ({
+    (policiesRes?.data as PolicyRuleResponse[] | undefined)?.map((policy) => ({
       id: String(policy.id),
       name: formatPolicyName(policy),
       description: formatPolicyDescription(policy),
@@ -102,7 +116,21 @@ export async function WorkplaceData() {
   return (
     <div className="relative h-full w-full overflow-hidden">
       <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
-      <div className="relative z-1 h-full p-4">{body}</div>
+      <div className="relative z-1 flex h-full flex-col p-4">
+        <div className="min-h-0 flex-1">{body}</div>
+        {defaultAgent && policiesNotice && (
+          <p
+            role={policiesNotice.isError ? "alert" : undefined}
+            className={
+              policiesNotice.isError
+                ? "shrink-0 pt-2 text-center text-xs text-destructive"
+                : "shrink-0 pt-2 text-center text-xs text-muted-foreground"
+            }
+          >
+            {policiesNotice.text}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

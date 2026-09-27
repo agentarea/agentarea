@@ -3,7 +3,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
+import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import ContentBlock from "@/components/ContentBlock";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import type { WorkspaceInvitation } from "@/lib/api";
 import { InvitationsTable } from "./components/InvitationsTable";
 import { InviteButton, InviteDialog } from "./components/InviteDialog";
@@ -40,13 +42,14 @@ export default function MembersClient({
 }: MembersClientProps) {
   const t = useTranslations("MembersPage");
   const searchParams = useSearchParams();
+  const { canAdminister } = useViewerCapabilities();
 
   // The tab lives in client state so switching is instant; the URL is kept in
   // sync for deep links without a server round-trip (which re-fetched members
   // and identity profiles on every click).
   const tabParam = searchParams.get("tab");
   const [tab, setTabState] = useState<MembersTab>(
-    isMembersTab(tabParam) ? tabParam : "members"
+    canAdminister && isMembersTab(tabParam) ? tabParam : "members"
   );
   const setTab = useCallback((next: MembersTab) => {
     setTabState(next);
@@ -109,13 +112,21 @@ export default function MembersClient({
       header={{
         breadcrumb: [{ label: t("title") }],
         description: t("descriptionForWorkspace", { workspace: workspaceName }),
-        controls: <InviteButton onClick={openInvite} />,
+        controls: canAdminister ? (
+          <InviteButton onClick={openInvite} />
+        ) : (
+          <div className="flex items-center gap-3">
+            <AdminOnlyHint action="invitePeople" className="max-sm:hidden" />
+            <InviteButton onClick={openInvite} disabled />
+          </div>
+        ),
       }}
       subheader={
         <MembersToolbar
           tab={tab}
           onTabChange={setTab}
           counts={{ members: members.length, invitations: invitations.length }}
+          showInvitations={canAdminister}
           onQueryChange={setQuery}
           order={order}
           onOrderChange={setOrder}
@@ -131,7 +142,7 @@ export default function MembersClient({
           ownerUserId={ownerUserId}
           workspaceName={workspaceName}
           query={q}
-          onInvite={openInvite}
+          onInvite={canAdminister ? openInvite : undefined}
         />
       ) : (
         <InvitationsTable
@@ -141,12 +152,14 @@ export default function MembersClient({
         />
       )}
 
-      <InviteDialog
-        key={inviteSession}
-        open={inviteOpen}
-        onOpenChange={setInviteOpen}
-        onCreated={() => setTab("invitations")}
-      />
+      {canAdminister && (
+        <InviteDialog
+          key={inviteSession}
+          open={inviteOpen}
+          onOpenChange={setInviteOpen}
+          onCreated={() => setTab("invitations")}
+        />
+      )}
     </ContentBlock>
   );
 }

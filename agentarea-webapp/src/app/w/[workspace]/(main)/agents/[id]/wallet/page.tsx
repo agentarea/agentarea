@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { AdminOnlyState } from "@/components/AdminOnlyState";
 import { FormSkeleton } from "@/components/Skeleton";
+import { getViewerCapabilities } from "@/lib/workspace-context";
 import WalletFormContent from "./WalletFormContent";
 
 export const metadata: Metadata = {
@@ -16,7 +18,18 @@ interface AgentWalletPageProps {
 export default async function AgentWalletPage({
   params,
 }: AgentWalletPageProps) {
-  const resolvedParams = await params;
+  const [resolvedParams, { canAdminister }] = await Promise.all([
+    params,
+    getViewerCapabilities(),
+  ]);
+
+  if (!canAdminister) {
+    return (
+      <div className="h-full px-4 py-5">
+        <AdminOnlyState what="wallet" />
+      </div>
+    );
+  }
 
   return (
     <Suspense fallback={<FormSkeleton className="px-4 py-5" />}>

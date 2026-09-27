@@ -3264,7 +3264,7 @@ export const getPaymentHistoryV1AgentsAgentIdWalletPaymentsGet = <
 /**
  * List Api Keys
  *
- * List all API keys for the current workspace.
+ * List the API keys the caller may see: all of the workspace's for an admin, else their own.
  */
 export const listApiKeysV1ApiKeysGet = <ThrowOnError extends boolean = false>(
   options?: Options<ListApiKeysV1ApiKeysGetData, ThrowOnError>
@@ -3359,6 +3359,9 @@ export const revokeApiKeyV1ApiKeysTokenIdDelete = <
  * Get Api Key
  *
  * Get a single API key by ID.
+ *
+ * Someone else's key answers 404 to a member, as a missing one does, so the
+ * ids of colleagues' keys cannot be confirmed.
  */
 export const getApiKeyV1ApiKeysTokenIdGet = <
   ThrowOnError extends boolean = false,

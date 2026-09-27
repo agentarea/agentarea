@@ -125,45 +125,37 @@ function ActorCell({ event }: { event: AuditEvent }) {
 interface Props {
   initialEvents: AuditEvent[];
   initialCursor: string | null;
-  initialError: string | null;
 }
 
 export default function AuditLogClient({
   initialEvents,
   initialCursor,
-  initialError,
 }: Props) {
   const t = useTranslations("AuditLogPage");
   const [events, setEvents] = useState<AuditEvent[]>(initialEvents);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
   const [resourceFilter] = useState("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const loadMore = () => {
     if (!cursor) return;
     startTransition(async () => {
-      const { data } = await fetchAuditLogs({
+      const { data, error } = await fetchAuditLogs({
         resource_type: resourceFilter === "all" ? undefined : resourceFilter,
         cursor,
         limit: 50,
       });
-      if (data) {
-        setEvents((prev) => [...prev, ...data.events]);
-        setCursor(data.next_cursor);
+      if (!data) {
+        setLoadMoreError(error);
+        return;
       }
+      setLoadMoreError(null);
+      setEvents((prev) => [...prev, ...data.events]);
+      setCursor(data.next_cursor);
     });
   };
-
-  if (initialError) {
-    return (
-      <EmptyState
-        title={t("enterpriseFeature")}
-        description={t("enterpriseDescription")}
-        iconsType="audit"
-      />
-    );
-  }
 
   if (events.length === 0) {
     return <EmptyState title={t("noEvents")} iconsType="audit" />;
@@ -264,6 +256,12 @@ export default function AuditLogClient({
           setExpandedId(expandedId === event.id ? null : event.id)
         }
       />
+
+      {loadMoreError && (
+        <p role="alert" className="mt-4 text-center text-sm text-destructive">
+          {loadMoreError}
+        </p>
+      )}
 
       {cursor && (
         <div className="flex justify-center mt-4">

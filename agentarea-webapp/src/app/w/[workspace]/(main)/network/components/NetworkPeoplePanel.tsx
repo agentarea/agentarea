@@ -1,9 +1,10 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
 import { Check, HelpCircle, LockKeyhole, X } from "lucide-react";
 import type { NetworkPeopleAccessResponse } from "@/api/client/types.gen";
+import { AdminOnlyState } from "@/components/AdminOnlyState";
+import Link from "@/components/WorkspaceLink";
 import { EntityIcon } from "@/lib/entity-icons";
 import type { NetworkNodeData, TopologyResponse } from "../types";
 import type { PeopleStatus } from "./NetworkPeopleNode";
@@ -11,6 +12,7 @@ import type { PeopleStatus } from "./NetworkPeopleNode";
 interface Props {
   data: NetworkPeopleAccessResponse | null;
   status: PeopleStatus;
+  error: string | null;
   selectedId: string | null;
   topology: TopologyResponse;
   onSelect: (id: string) => void;
@@ -21,6 +23,7 @@ interface Props {
 export default function NetworkPeoplePanel({
   data,
   status,
+  error,
   selectedId,
   topology,
   onSelect,
@@ -58,11 +61,19 @@ export default function NetworkPeoplePanel({
             {t("loading")}
           </p>
         )}
+        {status === "adminOnly" && (
+          <AdminOnlyState what="networkPeopleAccess" />
+        )}
         {status === "error" && (
           <div role="alert">
             <p className="text-xs leading-5 text-muted-foreground">
               {t("unavailable")}
             </p>
+            {error && (
+              <p className="mt-1 break-words text-xs leading-5 text-destructive">
+                {error}
+              </p>
+            )}
             <button
               type="button"
               onClick={onRetry}

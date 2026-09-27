@@ -90,7 +90,7 @@ memory-bank/
 
 mcp-infrastructure/bin
 .specify
-specs
+/specs
 .serena
 
 # Agent harness config. `.agents/` is the shared, harness-neutral home for

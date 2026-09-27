@@ -3,9 +3,21 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { TriggerResponse } from "@/api/client/types.gen";
+import type { ReactNode } from "react";
+import { ViewerCapabilitiesProvider } from "@/components/ViewerCapabilities";
 import { IntlProvider } from "@/test/intl";
 import { installRadixJsdomStubs } from "@/test/radix-jsdom";
 import { CreateTriggerForm } from "./CreateTriggerForm";
+
+function Providers({ children }: { children: ReactNode }) {
+  return (
+    <IntlProvider>
+      <ViewerCapabilitiesProvider capabilities={{ canAdminister: true }}>
+        {children}
+      </ViewerCapabilitiesProvider>
+    </IntlProvider>
+  );
+}
 
 const listWorkspaceSecretsAction = vi.fn();
 const createSecretAction = vi.fn();
@@ -83,7 +95,7 @@ describe("channel credentials on the trigger form", () => {
 
     const user = userEvent.setup();
     render(<CreateTriggerForm agents={[]} initialData={telegramTrigger} />, {
-      wrapper: IntlProvider,
+      wrapper: Providers,
     });
 
     const picker = await screen.findByRole("combobox", { name: /Bot token/ });
@@ -112,7 +124,7 @@ describe("channel credentials on the trigger form", () => {
   it("picks a trigger type from the catalog and reveals its credential field", async () => {
     listWorkspaceSecretsAction.mockResolvedValue([]);
     const user = userEvent.setup();
-    render(<CreateTriggerForm agents={[]} />, { wrapper: IntlProvider });
+    render(<CreateTriggerForm agents={[]} />, { wrapper: Providers });
 
     const typePicker = await screen.findByRole("combobox", {
       name: /Trigger Type/,

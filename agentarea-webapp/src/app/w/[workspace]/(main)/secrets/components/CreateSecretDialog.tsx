@@ -2,9 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { FileText, Key, Loader2, Plus, Tag } from "lucide-react";
 import type { SecretResponse } from "@/api/client/types.gen";
+import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import {
   BlueprintDialogContent,
@@ -13,6 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { createSecretAction } from "../actions";
 
 type CreateSecretDialogProps = {
@@ -32,6 +34,7 @@ export function CreateSecretDialog({
 }: CreateSecretDialogProps = {}) {
   const t = useTranslations("SecretsPage");
   const router = useWorkspaceRouter();
+  const { canAdminister } = useViewerCapabilities();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
   const setOpen = onOpenChange ?? setUncontrolledOpen;
@@ -63,6 +66,18 @@ export function CreateSecretDialog({
       router.refresh();
     });
   };
+
+  if (!canAdminister) {
+    return showTrigger ? (
+      <div className="flex items-center gap-3">
+        <AdminOnlyHint action="createSecret" className="max-sm:hidden" />
+        <Button className="shrink-0" size="xs" disabled>
+          <Plus />
+          {t("newSecret")}
+        </Button>
+      </div>
+    ) : null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

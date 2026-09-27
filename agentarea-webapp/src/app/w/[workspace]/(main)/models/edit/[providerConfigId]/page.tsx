@@ -1,11 +1,13 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
+import { AdminOnlyState } from "@/components/AdminOnlyState";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { FormSkeleton } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import { getProviderConfig } from "@/lib/api";
 import { notFoundOnApi404 } from "@/lib/server-resource";
+import { getViewerCapabilities } from "@/lib/workspace-context";
 import ProviderConfigFormWrapper from "../../create/components/ProviderConfigFormWrapper";
 
 export const metadata: Metadata = {
@@ -17,10 +19,28 @@ export default async function EditProviderConfigPage({
 }: {
   params: Promise<{ providerConfigId: string }>;
 }) {
-  const resolvedParams = await params;
-  const { providerConfigId } = resolvedParams;
-  const t = await getTranslations("Models");
-  const tCommon = await getTranslations("Common");
+  const [{ providerConfigId }, t, tCommon, { canAdminister }] =
+    await Promise.all([
+      params,
+      getTranslations("Models"),
+      getTranslations("Common"),
+      getViewerCapabilities(),
+    ]);
+
+  if (!canAdminister) {
+    return (
+      <ContentBlock
+        header={{
+          breadcrumb: [
+            { label: t("title"), href: "/models" },
+            { label: tCommon("edit") },
+          ],
+        }}
+      >
+        <AdminOnlyState what="providerConfigs" />
+      </ContentBlock>
+    );
+  }
 
   // Load provider config to verify it exists and get name for breadcrumb
   let providerConfig;

@@ -13,7 +13,12 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getAgents } from "@/components/actions";
-import { listPoliciesAction, listProjectsAction } from "@/lib/server-actions";
+import { apiErrorMessage } from "@/lib/api-errors";
+import {
+  getViewerCapabilitiesAction,
+  listPoliciesAction,
+  listProjectsAction,
+} from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 
 export const QUICK_TASK_OPEN_EVENT = "workplace:quick-task-open";
@@ -69,12 +74,17 @@ function QuickTaskComposerSkeleton() {
 export default function QuickTaskDialog() {
   const router = useWorkspaceRouter();
   const t = useTranslations("QuickTask");
+  const tAdmin = useTranslations("AdminOnly");
 
   const [open, setOpen] = React.useState(false);
   const [dataLoaded, setDataLoaded] = React.useState(false);
   const [agents, setAgents] = React.useState<Agent[]>([]);
   const [projects, setProjects] = React.useState<ProjectOption[]>([]);
   const [policies, setPolicies] = React.useState<TaskPolicyOption[]>([]);
+  const [policiesNotice, setPoliciesNotice] = React.useState<{
+    text: string;
+    isError: boolean;
+  } | null>(null);
   const [selectedAgent, setSelectedAgent] = React.useState<Agent | null>(null);
 
   // Cmd+J & event listener
@@ -99,8 +109,13 @@ export default function QuickTaskDialog() {
   React.useEffect(() => {
     if (!open || dataLoaded) return;
     let cancelled = false;
-    Promise.all([getAgents(), listProjectsAction(), listPoliciesAction()])
-      .then(([agentsRes, projectsRes, policiesRes]) => {
+    Promise.all([
+      getAgents(),
+      listProjectsAction(),
+      getViewerCapabilitiesAction(),
+    ])
+      .then(async ([agentsRes, projectsRes, { canAdminister }]) => {
+        const policiesRes = canAdminister ? await listPoliciesAction() : null;
         if (cancelled) return;
         const agentList: Agent[] = ((agentsRes.data ?? []) as ApiAgent[]).map(
           (a) => ({
@@ -117,8 +132,20 @@ export default function QuickTaskDialog() {
           name: p.name,
           description: p.description ?? null,
         }));
+        if (!policiesRes) {
+          setPoliciesNotice({
+            text: tAdmin("hints.pickTaskPolicy"),
+            isError: false,
+          });
+        } else if (policiesRes.error || !policiesRes.data) {
+          console.error("Failed to load task policies", policiesRes.error);
+          setPoliciesNotice({
+            text: apiErrorMessage(policiesRes, t("policiesLoadFailed")),
+            isError: true,
+          });
+        }
         const policyList: TaskPolicyOption[] = (
-          (policiesRes.data ?? []) as ApiPolicy[]
+          (policiesRes?.data ?? []) as ApiPolicy[]
         ).map((p) => ({
           id: String(p.id),
           name: formatPolicyName(p),
@@ -136,14 +163,15 @@ export default function QuickTaskDialog() {
         setSelectedAgent((prev) => prev || agentList[0] || null);
         setDataLoaded(true);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        console.error("Failed to load quick task data", error);
         if (cancelled) return;
         setDataLoaded(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [open, dataLoaded]);
+  }, [open, dataLoaded, t, tAdmin]);
 
   const handleTaskCreated = React.useCallback(
     (taskId: string) => {
@@ -200,6 +228,18 @@ export default function QuickTaskDialog() {
               className="!h-auto min-w-0 !max-w-none !gap-0 !py-0"
             />
             <div className="mt-2 flex items-center justify-end gap-4 px-1 text-[11px] text-muted-foreground/70">
+              {policiesNotice && (
+                <span
+                  role={policiesNotice.isError ? "alert" : undefined}
+                  className={cn(
+                    "mr-auto min-w-0 truncate",
+                    policiesNotice.isError && "text-destructive"
+                  )}
+                  title={policiesNotice.text}
+                >
+                  {policiesNotice.text}
+                </span>
+              )}
               <span className="inline-flex items-center gap-1.5">
                 <Kbd keys={["↵"]} />
                 {t("toCreate")}

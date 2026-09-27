@@ -6,7 +6,6 @@ import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Clock, Key, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
 import type {
   ApiKeyCreateRequest,
   ApiKeyCreateResponse,
@@ -46,6 +45,7 @@ export default function CreateAPIKeyDialog({
   const router = useWorkspaceRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [created, setCreated] = useState<ApiKeyCreateResponse | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const {
     register,
@@ -62,6 +62,7 @@ export default function CreateAPIKeyDialog({
 
   const onSubmit = async (data: ApiKeyCreateRequest) => {
     setIsSubmitting(true);
+    setSubmitError(null);
 
     try {
       const result = await createAPIKeyAction({
@@ -70,14 +71,15 @@ export default function CreateAPIKeyDialog({
       });
 
       if (result.error) {
-        toast.error(t("error.createFailed"), { description: result.error });
+        setSubmitError(`${t("error.createFailed")}: ${result.error}`);
         return;
       }
 
       setCreated(result.data as ApiKeyCreateResponse);
       router.refresh();
-    } catch (_error) {
-      toast.error(t("error.createFailed"));
+    } catch (error) {
+      console.error("Failed to create API key", error);
+      setSubmitError(t("error.createFailed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -173,6 +175,11 @@ export default function CreateAPIKeyDialog({
                 </p>
               )}
             </div>
+            {submitError && (
+              <p className="form-error" role="alert">
+                {submitError}
+              </p>
+            )}
           </BlueprintFields>
         </form>
       </BlueprintDialogContent>

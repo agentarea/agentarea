@@ -10,6 +10,7 @@ import {
   zPreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponse,
 } from "@/api/client/zod.gen";
 import { getNetworkPeopleAccess, previewEffectivePolicy } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
 
 export async function previewNetworkPolicyAction(
   agentId: string
@@ -39,7 +40,16 @@ export async function previewNetworkPolicyAction(
 }
 
 export async function getNetworkPeopleAccessAction(): Promise<NetworkPeopleAccessResponse> {
-  const { data, error } = await getNetworkPeopleAccess();
-  if (error || !data) throw new Error("Unable to load workspace people access");
-  return zGetNetworkPeopleAccessV1NetworkPeopleAccessGetResponse.parse(data);
+  const result = await getNetworkPeopleAccess();
+  if (result.error || !result.data) {
+    const message = apiErrorMessage(
+      result,
+      "Unable to load workspace people access"
+    );
+    console.error(message);
+    throw new Error(message);
+  }
+  return zGetNetworkPeopleAccessV1NetworkPeopleAccessGetResponse.parse(
+    result.data
+  );
 }

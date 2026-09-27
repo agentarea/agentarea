@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Clock,
   CreditCard,
@@ -10,6 +11,7 @@ import {
   Shield,
   Wallet,
 } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
@@ -48,7 +50,9 @@ interface WalletFormContentProps {
 }
 
 export default function WalletFormContent({ agentId }: WalletFormContentProps) {
-  const { wallet, loading, refetch } = useAgentWallet(agentId);
+  const tCommon = useTranslations("Common");
+  const { wallet, loading, error, refetch } = useAgentWallet(agentId);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const { createWallet } = useCreateWallet(agentId);
   const { updateWallet } = useUpdateWallet(agentId);
   const { deleteWallet, loading: deleting } = useDeleteWallet(agentId);
@@ -91,6 +95,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
   const showMpp = walletType === "mpp" || walletType === "dual";
 
   const handleSave = async () => {
+    setSaveError(null);
     const x402Config = showX402
       ? {
           network,
@@ -113,25 +118,31 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
     if (x402PrivateKey) credentials.x402_private_key = x402PrivateKey;
     if (mppTempoKey) credentials.mpp_tempo_key = mppTempoKey;
 
-    if (wallet) {
-      await updateWallet({
-        wallet_type: walletType,
-        x402_config: x402Config,
-        mpp_config: mppConfig,
-        ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
-        ...(serviceBudget ? { service_budget_usd: serviceBudget } : {}),
-        service_budget_period: budgetPeriod,
-      });
-    } else {
-      await createWallet({
-        wallet_type: walletType,
-        x402_config: x402Config,
-        mpp_config: mppConfig,
-        credentials:
-          Object.keys(credentials).length > 0 ? credentials : undefined,
-        ...(serviceBudget ? { service_budget_usd: serviceBudget } : {}),
-        service_budget_period: budgetPeriod,
-      });
+    try {
+      if (wallet) {
+        await updateWallet({
+          wallet_type: walletType,
+          x402_config: x402Config,
+          mpp_config: mppConfig,
+          ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
+          ...(serviceBudget ? { service_budget_usd: serviceBudget } : {}),
+          service_budget_period: budgetPeriod,
+        });
+      } else {
+        await createWallet({
+          wallet_type: walletType,
+          x402_config: x402Config,
+          mpp_config: mppConfig,
+          credentials:
+            Object.keys(credentials).length > 0 ? credentials : undefined,
+          ...(serviceBudget ? { service_budget_usd: serviceBudget } : {}),
+          service_budget_period: budgetPeriod,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to save wallet", err);
+      setSaveError(err instanceof Error ? err.message : String(err));
+      return;
     }
     setX402PrivateKey("");
     setMppTempoKey("");
@@ -139,7 +150,14 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
   };
 
   const handleDelete = async () => {
-    await deleteWallet();
+    setSaveError(null);
+    try {
+      await deleteWallet();
+    } catch (err) {
+      console.error("Failed to remove wallet", err);
+      setSaveError(err instanceof Error ? err.message : String(err));
+      return;
+    }
     refetch();
   };
 
@@ -148,6 +166,16 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
       <div className="flex h-32 items-center justify-center">
         <LoadingSpinner />
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title={error}
+        iconsType="payments"
+        action={{ label: tCommon("retry"), onClick: () => refetch() }}
+      />
     );
   }
 
@@ -160,6 +188,11 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
       }}
       className="form-content mx-auto w-full max-w-2xl"
     >
+      {saveError && (
+        <p role="alert" className="form-error">
+          {saveError}
+        </p>
+      )}
       <div className="grid gap-6">
         <AnimatedTabs
           activeTab={walletType}

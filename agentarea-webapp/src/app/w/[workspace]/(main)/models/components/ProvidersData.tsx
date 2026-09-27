@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
 import { listProviderConfigsWithModelInstances } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
+import { getViewerCapabilities } from "@/lib/workspace-context";
 import PlatformProviderConfigsView from "./PlatformProviderConfigsView";
 import ProviderConfigsView from "./ProviderConfigsView";
 import { ProviderConfig, ProviderSpec } from "./types";
@@ -24,11 +25,17 @@ export default async function ProvidersData({
   searchQuery = "",
   viewMode = "grid",
 }: ProvidersDataProps) {
-  const t = await getTranslations("Models");
-
-  // Fetch provider specs and configs with model instances
-  const { specs: specsResponse, configs: configsResponse } =
-    await listProviderConfigsWithModelInstances();
+  const [
+    t,
+    tAdmin,
+    { canAdminister },
+    { specs: specsResponse, configs: configsResponse },
+  ] = await Promise.all([
+    getTranslations("Models"),
+    getTranslations("AdminOnly"),
+    getViewerCapabilities(),
+    listProviderConfigsWithModelInstances(),
+  ]);
 
   // Handle API errors
   if (specsResponse.error || configsResponse.error) {
@@ -128,15 +135,21 @@ export default async function ProvidersData({
         title="No models connected"
         description="Agents cannot run without a model. Connect a provider with your own key — OpenAI, Anthropic, or any compatible endpoint."
         hints={[
-          {
-            text: "Add a provider and paste its API key",
-            href: "/models/create",
-          },
+          canAdminister
+            ? {
+                text: "Add a provider and paste its API key",
+                href: "/models/create",
+              }
+            : { text: tAdmin("hints.manageProvider") },
           { text: "Choose which of its models this workspace may use" },
           { text: "Agents then pick a model from what you allowed" },
         ]}
         iconsType="llm"
-        action={{ label: "Add provider", href: "/models/create" }}
+        action={
+          canAdminister
+            ? { label: "Add provider", href: "/models/create" }
+            : undefined
+        }
       />
     );
   }

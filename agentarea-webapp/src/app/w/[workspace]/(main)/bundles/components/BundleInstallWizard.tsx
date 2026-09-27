@@ -38,6 +38,7 @@ import type {
   InstallResult,
   SetupField,
 } from "@/api/client/types.gen";
+import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import ConfigSheet from "@/components/ConfigSheet";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
@@ -61,6 +62,7 @@ import {
 } from "@/components/ui/popover";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { Switch } from "@/components/ui/switch";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { cn } from "@/lib/utils";
 import {
   analyzeBundleAction,
@@ -213,6 +215,7 @@ export function BundleInstallWizard({
   identity: EntityIdentity;
   onBack: () => void;
 }) {
+  const { canAdminister } = useViewerCapabilities();
   const [phase, setPhase] = useState<Phase>({ kind: "analyzing" });
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [models, setModels] = useState<WorkspaceModel[]>([]);
@@ -303,6 +306,7 @@ export function BundleInstallWizard({
   const toolScope = (agentKey: string) => {
     const allowed: string[] = [];
     const denied: string[] = [];
+    if (!canAdminister) return { allowed, denied };
     for (const p of policies) {
       if (p.subject !== agentKey) continue;
       const m = (p.target ?? "").match(/^tool:(.+)$/);
@@ -393,9 +397,11 @@ export function BundleInstallWizard({
       const finalAutomations: BundleAutomation[] = automations
         .filter((a) => keptAgentKeys.has(a.agent))
         .map((a) => ({ ...a, enabled: autoEnabled[a.key] ?? false }));
-      const finalPolicies: BundlePolicy[] = policies
-        .filter((p) => !policyOff.has(p.key))
-        .map((p) => ({ ...p, enabled: policyEnabled[p.key] !== false }));
+      const finalPolicies: BundlePolicy[] = canAdminister
+        ? policies
+            .filter((p) => !policyOff.has(p.key))
+            .map((p) => ({ ...p, enabled: policyEnabled[p.key] !== false }))
+        : [];
 
       const bundle = {
         ...preview.bundle,
@@ -735,9 +741,12 @@ export function BundleInstallWizard({
                 Governance rules applied at runtime. Uncheck to skip, or toggle
                 enabled.
               </p>
+              {!canAdminister && (
+                <AdminOnlyHint action="importPolicies" className="mb-2" />
+              )}
               <div className="space-y-2">
                 {policies.map((p) => {
-                  const included = !policyOff.has(p.key);
+                  const included = canAdminister && !policyOff.has(p.key);
                   return (
                     <div
                       key={p.key}
@@ -746,6 +755,7 @@ export function BundleInstallWizard({
                       <Checkbox
                         className="mt-0.5"
                         checked={included}
+                        disabled={!canAdminister}
                         onCheckedChange={(c) =>
                           togglePolicyInclude(p.key, Boolean(c))
                         }

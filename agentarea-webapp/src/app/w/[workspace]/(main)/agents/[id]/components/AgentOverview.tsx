@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { policyToRule } from "@/app/w/[workspace]/(main)/policies/components/policy-rules";
 import { resolveAgentIdentity } from "@/lib/agent-identity";
 import {
@@ -12,8 +13,10 @@ import {
   type TaskResponse,
 } from "@/lib/api";
 import { getAgentOverview, getWorkspaceSettings } from "@/lib/api-dashboard";
+import { apiErrorMessage } from "@/lib/api-errors";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
 import { getAgentStatusPresentation } from "@/lib/status";
+import { getViewerCapabilities } from "@/lib/workspace-context";
 import type { Agent } from "@/types/agent";
 import type { Policy, PolicyEffect } from "@/types/policies";
 import {
@@ -55,6 +58,10 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
 
   // Use the resolved UUID for endpoints that require it (list_agent_tasks, etc.).
   const realId: string = agent.id;
+  const [{ canAdminister }, t] = await Promise.all([
+    getViewerCapabilities(),
+    getTranslations("AgentOverviewPage"),
+  ]);
 
   const [
     overview,
@@ -72,9 +79,14 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     listMCPServerInstances().catch(() => ({ data: [] })),
     listMCPServers({ page_size: 100 }).catch(() => ({ data: [] })),
     listOpenAPIConnections().catch(() => ({ data: [] })),
-    listPolicies({ subject_type: "agent", subject_id: realId }).catch(() => ({
-      data: [],
-    })),
+    canAdminister
+      ? listPolicies({ subject_type: "agent", subject_id: realId }).catch(
+          (error: unknown) => {
+            console.error("Failed to load agent policies", error);
+            return { data: undefined, error, status: undefined };
+          }
+        )
+      : null,
     agent.model_id
       ? getModelInstance(agent.model_id).catch(() => ({ data: undefined }))
       : Promise.resolve({ data: undefined }),
@@ -112,15 +124,30 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
   });
 
   // Agent-scoped governance rules, summarised by effect.
-  const policyRules = ((policiesRes?.data as Policy[]) ?? [])
-    .filter((p) => p.enabled !== false)
-    .map(policyToRule);
-  const effectCounts = policyRules.reduce<
-    Partial<Record<PolicyEffect, number>>
-  >((acc, rule) => {
-    acc[rule.effect] = (acc[rule.effect] ?? 0) + 1;
-    return acc;
-  }, {});
+  let policies: AgentOverviewModel["policies"];
+  if (!policiesRes) {
+    policies = { status: "adminOnly" };
+  } else if (policiesRes.error || !policiesRes.data) {
+    policies = {
+      status: "error",
+      message: apiErrorMessage(policiesRes, t("guardrailsLoadFailed")),
+    };
+  } else {
+    const policyRules = (policiesRes.data as Policy[])
+      .filter((p) => p.enabled !== false)
+      .map(policyToRule);
+    policies = {
+      status: "ok",
+      count: policyRules.length,
+      effectCounts: policyRules.reduce<Partial<Record<PolicyEffect, number>>>(
+        (acc, rule) => {
+          acc[rule.effect] = (acc[rule.effect] ?? 0) + 1;
+          return acc;
+        },
+        {}
+      ),
+    };
+  }
 
   const { hue, iconKey } = resolveAgentIdentity(agent);
 
@@ -189,8 +216,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     pendingApprovals: tasks.filter(isAwaitingUserTask),
     skills: (agent.skills ?? []).map((s) => s.name),
     connections: toolIcons.map((tool) => tool.label),
-    policyCount: policyRules.length,
-    effectCounts,
+    policies,
   };
 
   return <AgentOverviewView model={model} />;

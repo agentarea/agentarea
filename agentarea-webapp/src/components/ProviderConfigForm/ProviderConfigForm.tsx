@@ -2,11 +2,9 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle, Bot, Server } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
-import { toast } from "sonner";
 import { z } from "zod";
 import type {
   ProviderConfigCreate,
@@ -17,11 +15,14 @@ import {
   zProviderConfigCreate,
   zProviderConfigUpdate,
 } from "@/api/client/zod.gen";
+import { AdminOnlyState } from "@/components/AdminOnlyState";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage } from "@/lib/api-errors";
 import {
   bulkCreateModelInstancesAction as bulkCreateModelInstances,
@@ -71,8 +72,10 @@ export default function ProviderConfigForm({
   existingModelInstances = [],
 }: ProviderConfigFormProps) {
   const router = useWorkspaceRouter();
+  const { canAdminister } = useViewerCapabilities();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const t = useTranslations("ProviderConfigForm");
   const tCommon = useTranslations("Common");
@@ -137,8 +140,8 @@ export default function ProviderConfigForm({
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : t("error.failedToLoadData");
-        setError(errorMessage);
-        toast.error(errorMessage);
+        console.error("Failed to load provider specifications", err);
+        setLoadError(errorMessage);
       } finally {
         setIsLoading(false);
       }
@@ -147,8 +150,8 @@ export default function ProviderConfigForm({
   );
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (canAdminister) loadData();
+  }, [loadData, canAdminister]);
 
   // Initialize react-hook-form
   const {
@@ -243,17 +246,21 @@ export default function ProviderConfigForm({
     }
   }, [isEdit, existingModelInstances, modelSpecs]);
 
+  if (!canAdminister) {
+    return <AdminOnlyState what="providerConfigs" />;
+  }
+
   // Handle loading state
   if (isLoading) {
     return <LoadingSpinner />;
   }
 
   // Handle error state
-  if (error) {
+  if (loadError) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>{error}</AlertDescription>
+        <AlertDescription>{loadError}</AlertDescription>
       </Alert>
     );
   }
@@ -371,79 +378,71 @@ export default function ProviderConfigForm({
             .slice(0, 3)
             .map((f) => f.error)
             .join("; ");
-          toast.error(
-            `Failed to create ${result.failed_count} of ${rows.length} model instances. ${sample}`
+          throw new Error(
+            t("error.modelInstancesPartial", {
+              failed: result.failed_count,
+              total: rows.length,
+              sample,
+            })
           );
         }
-        return { created: result.succeeded_count };
       };
 
-      if (!isEdit && selectedModels.length > 0 && showModelSelection) {
-        const { created } = await bulkCreate(selectedModels);
-        toast.success(t("toast.configurationCreated", { modelCount: created }));
-      } else if (isEdit && showModelSelection) {
-        // Handle model instances for edit mode
-        const existingModelSpecIds = existingModelInstances.map(
-          (instance) => instance.model_spec_id
-        );
-        const selectedModelSpecIds = selectedModels.map(
-          (model) => model.modelSpecId
-        );
-
-        // Find models to create (new selections)
-        const modelsToCreate = selectedModels.filter(
-          (model) => !existingModelSpecIds.includes(model.modelSpecId)
-        );
-
-        // Find models to delete (removed selections)
-        const modelsToDelete = existingModelInstances.filter(
-          (instance) => !selectedModelSpecIds.includes(instance.model_spec_id)
-        );
-
-        // Create new model instances in one bulk request
-        if (modelsToCreate.length > 0) {
-          await bulkCreate(modelsToCreate);
-        }
-
-        // Delete removed model instances
-        if (modelsToDelete.length > 0) {
-          const deletePromises = modelsToDelete.map(async (instance) => {
-            const { error } = await deleteModelInstance(instance.id);
-
-            if (error) {
-              throw new Error(
-                apiErrorMessage(
-                  { error },
-                  `Failed to delete model instance "${instance.name}"`
-                )
-              );
-            }
-          });
-
-          await Promise.all(deletePromises);
-        }
-
-        const changes = [];
-        if (modelsToCreate.length > 0)
-          changes.push(`+${modelsToCreate.length} ${t("toast.added")}`);
-        if (modelsToDelete.length > 0)
-          changes.push(`-${modelsToDelete.length} ${t("toast.removed")}`);
-
-        if (changes.length > 0) {
-          toast.success(
-            t("toast.modelInstancesUpdated") + `: ${changes.join(", ")}`
+      // The config is saved from here on: a model-instance failure must not
+      // throw, or a retry re-creates the config and the rows that succeeded.
+      let instancesError: string | null = null;
+      try {
+        if (!isEdit && selectedModels.length > 0 && showModelSelection) {
+          await bulkCreate(selectedModels);
+        } else if (isEdit && showModelSelection) {
+          // Handle model instances for edit mode
+          const existingModelSpecIds = existingModelInstances.map(
+            (instance) => instance.model_spec_id
           );
-        } else {
-          toast.success(t("toast.configurationUpdatedSuccessfully"));
+          const selectedModelSpecIds = selectedModels.map(
+            (model) => model.modelSpecId
+          );
+
+          // Find models to create (new selections)
+          const modelsToCreate = selectedModels.filter(
+            (model) => !existingModelSpecIds.includes(model.modelSpecId)
+          );
+
+          // Find models to delete (removed selections)
+          const modelsToDelete = existingModelInstances.filter(
+            (instance) => !selectedModelSpecIds.includes(instance.model_spec_id)
+          );
+
+          // Create new model instances in one bulk request
+          if (modelsToCreate.length > 0) {
+            await bulkCreate(modelsToCreate);
+          }
+
+          // Delete removed model instances
+          if (modelsToDelete.length > 0) {
+            const deletePromises = modelsToDelete.map(async (instance) => {
+              const { error } = await deleteModelInstance(instance.id);
+
+              if (error) {
+                throw new Error(
+                  apiErrorMessage(
+                    { error },
+                    `Failed to delete model instance "${instance.name}"`
+                  )
+                );
+              }
+            });
+
+            await Promise.all(deletePromises);
+          }
         }
-      } else {
-        // These messages are ICU plurals on {modelCount}; passing the arg avoids
-        // next-intl returning the raw key (e.g. "ProviderConfigForm.toast.…").
-        toast.success(
-          isEdit
-            ? t("toast.configurationUpdated", { modelCount: 0 })
-            : t("toast.configurationCreated", { modelCount: 0 })
+      } catch (err) {
+        console.error(
+          "Provider configuration saved, but its model instances were not fully applied",
+          err
         );
+        instancesError =
+          err instanceof Error ? err.message : t("error.unexpectedError");
       }
 
       // Call custom after submit handler if provided
@@ -451,9 +450,19 @@ export default function ProviderConfigForm({
         await onAfterSubmit(providerConfig);
       }
 
+      if (instancesError) {
+        setError(instancesError);
+        if (isEdit) {
+          router.refresh();
+          return;
+        }
+      }
+
       // Redirect if autoRedirect is enabled and no custom handler
       if (autoRedirect && !onAfterSubmit) {
-        router.push("/models");
+        router.push(
+          instancesError ? `/models/edit/${providerConfig.id}` : "/models"
+        );
         return;
       }
 
@@ -471,8 +480,8 @@ export default function ProviderConfigForm({
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : t("error.unexpectedError");
+      console.error("Failed to save provider configuration", err);
       setError(errorMessage);
-      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

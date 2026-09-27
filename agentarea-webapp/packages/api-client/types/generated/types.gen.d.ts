@@ -7486,6 +7486,10 @@ export type WorkspaceFileListResponse = {
  */
 export type WorkspaceResponse = {
     /**
+     * Can Administer
+     */
+    can_administer: boolean;
+    /**
      * Id
      */
     id: string;

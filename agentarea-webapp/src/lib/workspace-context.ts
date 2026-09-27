@@ -72,6 +72,30 @@ async function getWorkspaceContextImpl(): Promise<WorkspaceContext> {
 
 export const getWorkspaceContext = cache(getWorkspaceContextImpl);
 
+export interface ViewerCapabilities {
+  canAdminister: boolean;
+}
+
+/**
+ * What the caller may do in the workspace of this request, as the API decided
+ * it. Throws when the request names no workspace the caller belongs to.
+ */
+async function getViewerCapabilitiesImpl(): Promise<ViewerCapabilities> {
+  const [workspaces, slug] = await Promise.all([
+    getWorkspaces(),
+    getRequestWorkspaceSlug(),
+  ]);
+  const active = workspaces.find((workspace) => workspace.slug === slug);
+  if (!active) {
+    throw new Error(
+      `No workspace of the caller matches the request workspace "${slug}"`
+    );
+  }
+  return { canAdminister: active.can_administer };
+}
+
+export const getViewerCapabilities = cache(getViewerCapabilitiesImpl);
+
 /**
  * `path` inside the caller's personal workspace: where `/`, a fresh sign-in
  * and links from outside any workspace (invitations, Ory settings) land.

@@ -6,6 +6,7 @@ The toolset itself acts on no single workspace, so it opts out of that argument.
 """
 
 import json
+from dataclasses import replace
 
 from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
@@ -14,18 +15,17 @@ from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.dependencies import ensure_not_workspace_bound
 from agentarea_common.config import get_database, get_settings
 
-from agentarea_api.api.v1.workspaces import get_workspace_service, list_reachable_workspaces
+from agentarea_api.api.v1.workspaces import (
+    WorkspaceResponse,
+    describe_workspaces,
+    get_workspace_service,
+    list_reachable_workspaces,
+)
 
 
-def _describe(workspace) -> dict:
+def _describe(workspace: WorkspaceResponse) -> dict:
     api_base = get_settings().app.API_BASE_URL.rstrip("/")
-    return {
-        "id": workspace.id,
-        "slug": workspace.slug,
-        "name": workspace.name,
-        "owner_user_id": workspace.owner_user_id,
-        "mcp_url": f"{api_base}/mcp/w/{workspace.slug}",
-    }
+    return {**workspace.model_dump(), "mcp_url": f"{api_base}/mcp/w/{workspace.slug}"}
 
 
 @toolset(
@@ -57,7 +57,7 @@ class WorkspacesToolset(Toolset):
             workspaces = [
                 w for w in workspaces if needle in w.slug.lower() or needle in w.name.lower()
             ]
-        return json.dumps([_describe(w) for w in workspaces])
+        return json.dumps([_describe(w) for w in await describe_workspaces(user_ctx, workspaces)])
 
     @tool_method(effect="write")
     @unrestricted("anyone may create a workspace; they become its owner, as POST /v1/workspaces")
@@ -74,4 +74,9 @@ class WorkspacesToolset(Toolset):
             workspace = await get_workspace_service(session, user_ctx).create_shared(
                 owner_user_id=user_ctx.user_id, name=name
             )
-        return json.dumps(_describe(workspace))
+        # Access was resolved before this row existed; its creator owns it.
+        creator = replace(
+            user_ctx, admin_workspaces=[*(user_ctx.admin_workspaces or []), workspace.id]
+        )
+        [described] = await describe_workspaces(creator, [workspace])
+        return json.dumps(_describe(described))

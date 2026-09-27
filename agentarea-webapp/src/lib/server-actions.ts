@@ -135,6 +135,7 @@ import {
   updateWorkspaceSettings,
 } from "@/lib/api-dashboard";
 import { apiErrorMessage } from "@/lib/api-errors";
+import { getViewerCapabilities } from "@/lib/workspace-context";
 import { requestWorkspacePath, workspaceFetch } from "@/lib/workspace-request";
 
 function isUUID(value: string): boolean {
@@ -787,6 +788,10 @@ export async function listProjectsAction() {
 
 export async function listPoliciesAction() {
   return await listPolicies({ enabled: true });
+}
+
+export async function getViewerCapabilitiesAction() {
+  return await getViewerCapabilities();
 }
 
 export async function getProjectAction(projectId: string) {

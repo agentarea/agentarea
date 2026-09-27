@@ -25,7 +25,7 @@ export function visiblePeople(
 export function peopleRosterHeight(count: number) {
   return 84 + Math.max(1, Math.min(4, count)) * 44;
 }
-export type PeopleStatus = "loading" | "ready" | "error";
+export type PeopleStatus = "loading" | "ready" | "error" | "adminOnly";
 export interface NetworkPeopleNodeData extends Record<string, unknown> {
   status: PeopleStatus;
   people: NetworkPerson[];
@@ -42,6 +42,7 @@ export default function NetworkPeopleNode({
   data,
 }: NodeProps<Node<NetworkPeopleNodeData>>) {
   const t = useTranslations("NetworkPage.people");
+  const adminOnly = useTranslations("AdminOnly");
   const people = visiblePeople(data.people, data.selectedId);
   const update = useUpdateNodeInternals();
   const signature = people.map((person) => person.user_id).join("|");
@@ -102,15 +103,17 @@ export default function NetworkPeopleNode({
           className="flex h-11 items-center px-3 text-[11px] text-muted-foreground"
           role="status"
         >
-          {t(
-            data.status === "loading"
-              ? "loading"
-              : data.status === "error"
-                ? "unavailableShort"
-                : data.directoryDisabled
-                  ? "unknownRoster"
-                  : "empty"
-          )}
+          {data.status === "adminOnly"
+            ? adminOnly("areas.networkPeopleAccess.title")
+            : t(
+                data.status === "loading"
+                  ? "loading"
+                  : data.status === "error"
+                    ? "unavailableShort"
+                    : data.directoryDisabled
+                      ? "unknownRoster"
+                      : "empty"
+              )}
         </p>
       )}
       <button

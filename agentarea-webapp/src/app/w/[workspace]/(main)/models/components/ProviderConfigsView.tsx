@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import Table from "@/components/Table/Table";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 import ModelsList from "./ModelsList";
@@ -24,7 +25,9 @@ export default function ProviderConfigsView({
   hasNoData,
 }: ProviderConfigsViewProps) {
   const t = useTranslations("Models.table");
+  const tAdmin = useTranslations("AdminOnly");
   const router = useWorkspaceRouter();
+  const { canAdminister } = useViewerCapabilities();
 
   // Define table columns for configs
   const configColumns = [
@@ -73,10 +76,12 @@ export default function ProviderConfigsView({
           hints={
             hasNoData
               ? [
-                  {
-                    text: "Add a provider and paste its API key",
-                    href: "/models/create",
-                  },
+                  canAdminister
+                    ? {
+                        text: "Add a provider and paste its API key",
+                        href: "/models/create",
+                      }
+                    : { text: tAdmin("hints.manageProvider") },
                   { text: "Enable only the models you want agents to reach" },
                   { text: "The key is stored as a secret, never shown again" },
                 ]
@@ -85,7 +90,9 @@ export default function ProviderConfigsView({
           iconsType="llm"
           action={
             hasNoData
-              ? { label: "Add provider", href: "/models/create" }
+              ? canAdminister
+                ? { label: "Add provider", href: "/models/create" }
+                : undefined
               : { label: "Clear search", href: "/models" }
           }
         />

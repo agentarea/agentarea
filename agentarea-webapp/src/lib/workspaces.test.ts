@@ -11,18 +11,21 @@ const personal: Workspace = {
   slug: "user-1",
   name: "Personal",
   owner_user_id: "user-1",
+  can_administer: true,
 };
 const acme: Workspace = {
   id: "ws-acme",
   slug: "acme",
   name: "Acme",
   owner_user_id: "user-1",
+  can_administer: true,
 };
 const globex: Workspace = {
   id: "ws-globex",
   slug: "globex",
   name: "Globex",
   owner_user_id: "user-2",
+  can_administer: false,
 };
 
 describe("isPersonalWorkspace", () => {

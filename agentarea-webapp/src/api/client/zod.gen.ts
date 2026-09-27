@@ -3336,6 +3336,7 @@ export const zWorkspaceFileListResponse = z.object({
  * WorkspaceResponse
  */
 export const zWorkspaceResponse = z.object({
+  can_administer: z.boolean(),
   id: z.string(),
   name: z.string(),
   owner_user_id: z.string(),

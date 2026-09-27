@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { CreateSecretDialog } from "./CreateSecretDialog";
 
 /**
@@ -10,6 +12,8 @@ import { CreateSecretDialog } from "./CreateSecretDialog";
  */
 export function SecretsEmptyState() {
   const [open, setOpen] = useState(false);
+  const { canAdminister } = useViewerCapabilities();
+  const tAdmin = useTranslations("AdminOnly");
 
   return (
     <>
@@ -17,9 +21,25 @@ export function SecretsEmptyState() {
         title="No secrets yet"
         description="Nothing here holds a credential. Create a secret to reuse it across LLM providers and API connections, instead of pasting the same key into each one."
         iconsType="mcp"
-        action={{ label: "Create secret", onClick: () => setOpen(true) }}
+        action={
+          canAdminister
+            ? { label: "Create secret", onClick: () => setOpen(true) }
+            : undefined
+        }
+        hints={
+          canAdminister
+            ? undefined
+            : [
+                { text: tAdmin("hints.createSecret") },
+                { text: tAdmin("membersLink"), href: "/members" },
+              ]
+        }
       />
-      <CreateSecretDialog open={open} onOpenChange={setOpen} showTrigger={false} />
+      <CreateSecretDialog
+        open={open}
+        onOpenChange={setOpen}
+        showTrigger={false}
+      />
     </>
   );
 }
