@@ -26,6 +26,7 @@ env:
   REDIS_URL: redis://localhost:6379/0
   WORKFLOW__TEMPORAL_SERVER_URL: localhost:7233
   TEMPORAL_HOST: localhost:7233
+  AGENTAREA_DB_TENANT_SCOPE: enforce
 
 jobs:
   # Decides whether a PR touches what the live-stack jobs exercise. They used
