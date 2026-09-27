@@ -16,7 +16,7 @@ import hashlib
 import logging
 import re
 from pathlib import PurePosixPath
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -36,9 +36,11 @@ from agentarea_common.artifacts import (
 )
 from agentarea_common.artifacts.workspace import DEFAULT_MAX_FILE_BYTES
 from agentarea_common.artifacts.workspace_writes import (
+    MAX_UPLOADS_PER_PLAN,
     ensure_no_file_ancestors,
     ensure_writable_file,
     is_reserved_path,
+    plan_uploads,
     resolve_write_path,
 )
 from agentarea_common.auth.context import UserContext
@@ -115,6 +117,32 @@ class PresignUploadResponse(BaseModel):
     ref: str
     upload_url: str
     expires_in: int
+
+
+class UploadPlanEntry(BaseModel):
+    path: str
+    sha256: str
+    content_type: str | None = None
+
+
+class UploadPlanRequest(BaseModel):
+    files: list[UploadPlanEntry] = Field(..., min_length=1, max_length=MAX_UPLOADS_PER_PLAN)
+
+    model_config = {"extra": "forbid"}
+
+
+class PlannedUpload(BaseModel):
+    path: str
+    status: Literal["unchanged", "upload", "error"]
+    upload_url: str | None = None
+    method: str | None = None
+    headers: dict[str, str] | None = None
+    expires_in: int | None = None
+    error: str | None = None
+
+
+class UploadPlanResponse(BaseModel):
+    uploads: list[PlannedUpload]
 
 
 class MoveWorkspaceFileRequest(BaseModel):
@@ -383,6 +411,33 @@ async def create_attachment_upload_url(
         expires_in=expires_in,
     )
     return PresignUploadResponse(ref=path, upload_url=upload_url, expires_in=expires_in)
+
+
+@router.post(
+    "/upload-urls",
+    response_model=UploadPlanResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
+async def plan_workspace_uploads(
+    body: UploadPlanRequest,
+    user_context: UserContextDep,
+) -> UploadPlanResponse:
+    """Diff a client's ``{path, sha256}`` manifest against workspace storage.
+
+    Files already stored under the same digest come back ``unchanged``; the
+    rest get a presigned PUT bound to their digest, so the bytes go straight to
+    the object store. This is what ``agentarea files sync`` calls, and the same
+    plan the MCP ``workspace_files.upload_urls`` tool returns.
+    """
+    svc = ArtifactService(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    )
+    entries = [entry.model_dump(exclude_none=True) for entry in body.files]
+    planned = await plan_uploads(svc, user_context.workspace_id, entries)
+    return UploadPlanResponse(uploads=[PlannedUpload(**p) for p in planned])
 
 
 @router.post(

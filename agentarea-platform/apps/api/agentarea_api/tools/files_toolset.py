@@ -11,9 +11,8 @@ from agentarea_common.artifacts import (
     ArtifactActor,
     ArtifactService,
     DbArtifactEventRecorder,
-    WorkspaceError,
 )
-from agentarea_common.artifacts.workspace_writes import ensure_writable_file, resolve_write_path
+from agentarea_common.artifacts.workspace_writes import MAX_UPLOADS_PER_PLAN, plan_uploads
 from agentarea_common.auth.context import UserContext
 from agentarea_common.config.app import get_app_settings
 from agentarea_common.workspaces.lookup import workspace_api_prefix
@@ -25,35 +24,6 @@ async def _workspace_file_download_url(user_context: UserContext, path: str) -> 
     base = get_app_settings().API_BASE_URL.rstrip("/")
     encoded_path = quote(path.lstrip("/"), safe="/")
     return f"{base}{await workspace_api_prefix(user_context)}/files/download/{encoded_path}"
-
-
-MAX_UPLOADS_PER_CALL = 100
-
-
-async def _authorize_one(svc: ArtifactService, workspace_id: str, entry: object) -> dict:
-    if not isinstance(entry, dict):
-        return {"error": "each entry must be an object with path and sha256"}
-    path = str(entry.get("path") or "")
-    if not path:
-        return {"path": path, "error": "path is required"}
-    try:
-        resolved = resolve_write_path(path)
-        await ensure_writable_file(svc, workspace_id, resolved)
-        put = await svc.authorize_put(
-            workspace_id,
-            resolved,
-            sha256_hex=str(entry.get("sha256") or ""),
-            content_type=entry.get("content_type") or None,
-        )
-    except (WorkspaceError, ValueError) as exc:
-        return {"path": path, "error": str(exc)}
-    return {
-        "path": resolved,
-        "upload_url": put.url,
-        "method": "PUT",
-        "headers": put.headers,
-        "expires_in": put.expires_in,
-    }
 
 
 @toolset(
@@ -105,22 +75,24 @@ class FilesToolset(Toolset):
         """Get presigned PUT URLs that write files into workspace storage.
 
         Each entry is ``{"path", "sha256", "content_type"?}``, where ``sha256``
-        is the file's lowercase hex digest; at most 100 per call. For every
-        accepted entry, send the bytes with the returned ``method`` and
-        ``headers`` to ``upload_url``; the store rejects a body that does not
-        hash to ``sha256``. An existing file at ``path`` is overwritten. An
-        entry that cannot be written comes back with ``error`` instead.
+        is the file's lowercase hex digest; at most 100 per call. Every entry
+        comes back with a ``status``: ``unchanged`` when the same bytes are
+        already stored, ``upload`` with an ``upload_url`` to PUT the bytes to
+        using the returned ``method`` and ``headers`` (the store rejects a body
+        that does not hash to ``sha256``), or ``error``. To sync a whole
+        folder, prefer ``agentarea files sync`` from a shell: it hashes locally
+        and keeps the URLs out of the conversation.
         """
         if not files:
             return json.dumps({"error": "files must not be empty"})
-        if len(files) > MAX_UPLOADS_PER_CALL:
-            return json.dumps({"error": f"at most {MAX_UPLOADS_PER_CALL} files per call"})
+        if len(files) > MAX_UPLOADS_PER_PLAN:
+            return json.dumps({"error": f"at most {MAX_UPLOADS_PER_PLAN} files per call"})
         async with platform_context() as (_session, user_ctx, _repo, _broker, _secret):
             svc = ArtifactService(
                 recorder=DbArtifactEventRecorder(),
                 actor=ArtifactActor(user_id=user_ctx.user_id),
             )
-            results = [await _authorize_one(svc, user_ctx.workspace_id, entry) for entry in files]
+            results = await plan_uploads(svc, user_ctx.workspace_id, files)
         return json.dumps({"uploads": results})
 
     @tool_method(effect="destructive")

@@ -280,3 +280,49 @@ async def test_restore_rejects_a_path_outside_the_trash(monkeypatch) -> None:
 
     assert exc.value.status_code == 400
     service.copy.assert_not_awaited()
+
+
+SHA = "a" * 64
+
+
+@pytest.mark.asyncio
+async def test_upload_plan_skips_stored_files_and_presigns_the_rest(monkeypatch) -> None:
+    digests = {"wiki/index.md": SHA}
+    service = _install_service(
+        monkeypatch,
+        head=AsyncMock(
+            side_effect=lambda _ws, path: (
+                {"sha256": digests[path]} if path in digests else None
+            )
+        ),
+        authorize_put=AsyncMock(
+            return_value=SimpleNamespace(url="https://store/put", headers={"h": "v"}, expires_in=600)
+        ),
+    )
+    body = files.UploadPlanRequest(
+        files=[
+            files.UploadPlanEntry(path="wiki/index.md", sha256=SHA),
+            files.UploadPlanEntry(path="wiki/new.md", sha256=SHA, content_type="text/markdown"),
+            files.UploadPlanEntry(path="tasks/t/out.md", sha256=SHA),
+        ]
+    )
+
+    plan = await files.plan_workspace_uploads(body, WS)
+
+    assert [(u.path, u.status) for u in plan.uploads] == [
+        ("wiki/index.md", "unchanged"),
+        ("wiki/new.md", "upload"),
+        ("tasks/t/out.md", "error"),
+    ]
+    assert plan.uploads[1].upload_url == "https://store/put"
+    service.authorize_put.assert_awaited_once_with(
+        "ws-1", "wiki/new.md", sha256_hex=SHA, content_type="text/markdown"
+    )
+
+
+def test_upload_plan_is_bounded() -> None:
+    entry = {"path": "a.md", "sha256": SHA}
+    with pytest.raises(ValueError):
+        files.UploadPlanRequest(files=[])
+    with pytest.raises(ValueError):
+        files.UploadPlanRequest(files=[entry] * 101)

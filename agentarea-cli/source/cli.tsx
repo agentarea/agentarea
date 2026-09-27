@@ -24,6 +24,9 @@ const cli = meow(
 	  tasks submit <agentId> <description>   Submit a task
 	  tasks watch <agentId> <taskId>         Stream task events (SSE)
 	  workspace use <slug>      Save the workspace later commands run in
+	  files sync <dir> [prefix] Upload a folder into workspace storage; only
+	                            files whose content changed are sent
+	                            (--exclude=a,b skips names or paths)
 	  connect codex|claude      Connect a harness to its client bundle
 	                            (creates the client if it does not exist)
 	  mcp sync                  Same, addressing an existing client by id

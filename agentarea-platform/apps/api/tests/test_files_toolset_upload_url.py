@@ -32,6 +32,7 @@ def service(monkeypatch):
     service = SimpleNamespace(
         exists=AsyncMock(return_value=False),
         list=AsyncMock(return_value=[]),
+        head=AsyncMock(return_value=None),
         authorize_put=AsyncMock(
             return_value=SimpleNamespace(
                 url="https://store.example/put",
@@ -68,6 +69,7 @@ async def test_it_returns_a_presigned_put_for_each_requested_path(service) -> No
         "uploads": [
             {
                 "path": "wiki/index.md",
+                "status": "upload",
                 "upload_url": "https://store.example/put",
                 "method": "PUT",
                 "headers": {"Content-Type": "text/markdown", "x-amz-checksum-sha256": "qg=="},
@@ -87,7 +89,7 @@ async def test_it_returns_a_presigned_put_for_each_requested_path(service) -> No
 async def test_a_path_outside_the_writable_workspace_is_refused(service, bad_path) -> None:
     result = await _upload({"path": bad_path, "sha256": SHA})
 
-    assert "error" in result["uploads"][0]
+    assert result["uploads"][0]["status"] == "error"
     service.authorize_put.assert_not_awaited()
 
 
@@ -97,7 +99,7 @@ async def test_a_file_cannot_become_a_folder(service) -> None:
 
     result = await _upload({"path": "wiki/index.md", "sha256": SHA})
 
-    assert "error" in result["uploads"][0]
+    assert result["uploads"][0]["status"] == "error"
     service.authorize_put.assert_not_awaited()
 
 
@@ -108,9 +110,9 @@ async def test_one_bad_entry_does_not_block_the_rest(service) -> None:
         {"path": "wiki/index.md", "sha256": SHA},
     )
 
-    assert [("error" in r, r["path"]) for r in result["uploads"]] == [
-        (True, "../escape.md"),
-        (False, "wiki/index.md"),
+    assert [(r["status"], r["path"]) for r in result["uploads"]] == [
+        ("error", "../escape.md"),
+        ("upload", "wiki/index.md"),
     ]
 
 
@@ -120,7 +122,7 @@ async def test_a_malformed_entry_is_reported_on_its_own(service) -> None:
         await FilesToolset().upload_urls(files=["wiki/index.md", {"path": "a.md", "sha256": SHA}])
     )
 
-    assert "error" in result["uploads"][0]
+    assert result["uploads"][0]["status"] == "error"
     assert result["uploads"][1]["path"] == "a.md"
 
 
@@ -130,4 +132,14 @@ async def test_the_batch_size_is_bounded(service, count) -> None:
     result = await _upload(*[{"path": f"f{i}.md", "sha256": SHA} for i in range(count)])
 
     assert "error" in result
+    service.authorize_put.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_file_already_stored_is_not_uploaded_again(service) -> None:
+    service.head = AsyncMock(return_value={"sha256": SHA, "size": 1, "content_type": None})
+
+    result = await _upload({"path": "wiki/index.md", "sha256": SHA})
+
+    assert result == {"uploads": [{"path": "wiki/index.md", "status": "unchanged"}]}
     service.authorize_put.assert_not_awaited()
