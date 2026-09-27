@@ -1,4 +1,4 @@
-.PHONY: smoke baseline stress env-check
+.PHONY: smoke baseline stress env-check journey-smoke journey-nightly journey-stress
 
 # No default: a wrong-but-plausible slug silently hits someone else's
 # workspace instead of failing loudly (the old default, "user", stopped being
@@ -26,3 +26,15 @@ baseline: env-check
 stress: env-check
 	@mkdir -p results
 	@k6 run -e WORKSPACE="$(WORKSPACE)" -e ALLOW_STRESS=1 scenarios/stress.js
+
+# Journey suite (scenarios/journeys/) — write journeys only run when
+# WORKSPACE=perf-k6; against anything else these are read-only.
+journey-smoke: env-check
+	@k6 run -e WORKSPACE="$(WORKSPACE)" scenarios/journeys/smoke.js
+
+journey-nightly: env-check
+	@k6 run -e WORKSPACE="$(WORKSPACE)" scenarios/journeys/nightly.js
+
+# Never point this at prod — see scenarios/journeys/stress.js.
+journey-stress: env-check
+	@k6 run -e WORKSPACE="$(WORKSPACE)" -e ALLOW_STRESS=1 scenarios/journeys/stress.js
