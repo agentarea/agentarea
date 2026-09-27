@@ -164,6 +164,14 @@ class AgentAreaWorker:
 
         discover_extensions()
 
+        # Resolve now, after discovery, and let a failure stop startup. An installed
+        # pricing extension that cannot be resolved leaves the currency unknown, and
+        # a process running anyway would record amounts in a different currency from
+        # its siblings; exiting lets the orchestrator restart it instead.
+        from agentarea_common.extensions.customer_pricing import get_customer_pricing
+
+        logger.info("Billing currency: %s", get_customer_pricing().currency())
+
         app_settings = get_app_settings()
         mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
         register_singleton(FeatureService, FeatureService(mode=mode))

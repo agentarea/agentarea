@@ -499,7 +499,21 @@ class LLMCallResult(BaseModel):
     content: str = ""
     thinking: str = ""
     tool_calls: list[dict[str, Any]] | None = None
+    # What the customer pays, in the billing currency (see customer_pricing).
     cost: Money = ZERO
+    # What the provider charged, in USD, before that conversion. Carried alongside
+    # so margin and provider spend stay readable once `cost` is no longer USD.
+    # None only on results recorded before this field existed.
+    provider_cost_usd: Money | None = None
+    # ISO 4217 code of `cost`, so the workflow can name the currency in budget
+    # messages without asking the pricing extension. None on older results.
+    currency: str | None = None
+    # Whose credentials this call ran on, as resolved by the activity that made it
+    # and priced it. The workflow's cached resolved_model can be missing (model
+    # resolution failed and the activity fell back to the database), so the event
+    # must report this value, not the cache's. Absent on results recorded before
+    # the field existed; see AgentExecutionWorkflow._call_managed_by.
+    managed_by: str | None = None
     usage: LLMUsage | None = None
 
 
@@ -648,6 +662,10 @@ class MonthlySpendCapResult(BaseModel):
     exceeded: bool
     month_to_date_usd: Money
     cap_usd: Money
+    # ISO 4217 code of both amounts (the billing currency). The cap check runs
+    # before any priced call, so the workflow has no other way to name it yet.
+    # None on results recorded before the field existed.
+    currency: str | None = None
 
 
 class CompactMessagesRequest(BaseModel):

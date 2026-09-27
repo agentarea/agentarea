@@ -66,7 +66,8 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
                 if error.type != "BudgetExceeded":
                     raise
                 reason = (
-                    f"Budget exceeded (${self._budget.cost:.2f}/${self._budget.budget_limit:.2f})"
+                    f"Budget exceeded ({self._budget.describe(self._budget.cost, 2)}/"
+                    f"{self._budget.describe(self._budget.budget_limit, 2)})"
                 )
                 if await self._await_continuation("budget_exceeded", reason):
                     await self._check_monthly_spend_cap()
@@ -300,7 +301,8 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
             return (
                 False,
                 "budget_exceeded",
-                f"Budget exceeded (${self.budget_tracker.cost:.2f}/${self.budget_tracker.budget_limit:.2f})",
+                f"Budget exceeded ({self.budget_tracker.describe(self.budget_tracker.cost, 2)}/"
+                f"{self.budget_tracker.describe(self.budget_tracker.budget_limit, 2)})",
             )
 
         # Check for cancellation (this could be extended for other cancellation conditions)

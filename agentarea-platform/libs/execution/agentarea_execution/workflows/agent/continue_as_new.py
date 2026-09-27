@@ -162,7 +162,7 @@ class ContinueAsNewMixin(CompactionMixin):
         workflow.logger.info(
             f"Restored from run {state.continued_from_run_id}, "
             f"iteration {state.current_iteration}, "
-            f"cost ${state.total_cost:.4f}, "
+            f"cost {state.total_cost:.4f}, "
             f"{len(self.state.messages)} messages, "
             f"{len(self._agent_tool_registry)} agent tools"
         )

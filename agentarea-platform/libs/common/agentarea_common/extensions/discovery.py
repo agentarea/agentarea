@@ -22,5 +22,10 @@ def discover_extensions() -> None:
             factory = ep.load()
             ExtensionRegistry.register(ep.name, factory)
             logger.info("Discovered extension: %s from %s", ep.name, ep.value)
-        except Exception:
+        except Exception as error:
             logger.exception("Failed to load extension: %s", ep.name)
+            # Only record it when nothing registered this point: a second distribution
+            # advertising the same name and loading fine still wins, as it would
+            # have before.
+            if not ExtensionRegistry.has(ep.name):
+                ExtensionRegistry.record_failure(ep.name, f"{type(error).__name__}: {error}")

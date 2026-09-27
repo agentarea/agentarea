@@ -52,7 +52,8 @@ class BudgetMixin(AgentWorkflowBase):
         if self._budget.cost > self._budget.budget_limit:
             raise ApplicationError(
                 f"{source} exceeded the resolved run budget: "
-                f"${self._budget.cost}/${self._budget.budget_limit}",
+                f"{self._budget.describe(self._budget.cost)}/"
+                f"{self._budget.describe(self._budget.budget_limit)}",
                 type="BudgetExceeded",
                 non_retryable=True,
             )
@@ -125,7 +126,8 @@ class BudgetMixin(AgentWorkflowBase):
             retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
         if result.exceeded:
+            unit = f" {result.currency}" if result.currency else ""
             self._monthly_cap_message = (
                 f"Workspace monthly spend cap reached "
-                f"(${result.month_to_date_usd:.2f}/${result.cap_usd:.2f})"
+                f"({result.month_to_date_usd:.2f}{unit}/{result.cap_usd:.2f}{unit})"
             )

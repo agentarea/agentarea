@@ -261,7 +261,8 @@ class DelegationMixin(ToolApprovalMixin):
 
             workflow.logger.info(
                 f"Agent delegation to '{agent_name}' completed "
-                f"(success={child_result.success}, cost=${child_result.total_cost:.4f})"
+                f"(success={child_result.success}, "
+                f"cost={self._budget.describe(child_result.total_cost, 4)})"
             )
 
         except Exception as e:

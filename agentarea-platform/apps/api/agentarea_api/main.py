@@ -58,6 +58,14 @@ async def initialize_services():
 
         discover_extensions()
 
+        # Resolve now, after discovery, and let a failure stop startup. An installed
+        # pricing extension that cannot be resolved leaves the currency unknown, and
+        # a process running anyway would record amounts in a different currency from
+        # its siblings; exiting lets the orchestrator restart it instead.
+        from agentarea_common.extensions.customer_pricing import get_customer_pricing
+
+        logger.info("Billing currency: %s", get_customer_pricing().currency())
+
         app_settings = get_app_settings()
         mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
         register_singleton(FeatureService, FeatureService(mode=mode))
@@ -571,6 +579,7 @@ def create_app() -> FastAPI:
             extra={
                 "current_mtd_usd": exc.current_mtd_usd,
                 "cap_usd": exc.cap_usd,
+                "currency": exc.currency,
                 "workspace_id": exc.workspace_id,
             },
         )

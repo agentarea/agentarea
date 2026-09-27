@@ -50,6 +50,7 @@ from . import (
     network,
     openapi_connections,
     policies,
+    pricing,
     principals,
     projects,
     provider_configs,
@@ -95,6 +96,9 @@ principal_v1_router = APIRouter(
 
 principal_v1_router.include_router(workspaces.router)
 principal_v1_router.include_router(workspace_invitations.principal_router)
+# Billing currency of every money amount. Deployment-wide, so it belongs to no
+# workspace: every workspace on a deployment is billed in the same currency.
+principal_v1_router.include_router(pricing.router)
 
 
 # ============================================================================
