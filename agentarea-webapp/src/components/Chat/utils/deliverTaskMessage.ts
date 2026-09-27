@@ -1,3 +1,5 @@
+import type { FollowupTaskResult } from "./createFollowupAgentTask";
+
 interface DeliveryActionResult {
   error?: unknown;
 }
@@ -6,7 +8,7 @@ interface TaskMessageActions {
   createFollowupTask: (
     description: string,
     files?: readonly File[]
-  ) => Promise<string | null>;
+  ) => Promise<FollowupTaskResult>;
   queueMessage: (message: string) => Promise<DeliveryActionResult>;
   submitInput: (
     inputRequestId: string,
@@ -24,7 +26,12 @@ export interface DeliverTaskMessageOptions {
 }
 
 export type TaskMessageDelivery =
-  | { route: "followup"; taskId: string | null }
+  | {
+      route: "followup";
+      taskId: string | null;
+      error?: unknown;
+      status?: number;
+    }
   | { route: "input"; error?: unknown }
   | { route: "queue"; error?: unknown };
 
@@ -41,10 +48,11 @@ export async function deliverTaskMessage({
   queueOnCurrentTask,
 }: DeliverTaskMessageOptions): Promise<TaskMessageDelivery> {
   if (files.length > 0 || (!pendingInputId && !queueOnCurrentTask)) {
-    return {
-      route: "followup",
-      taskId: await actions.createFollowupTask(message, files),
-    };
+    const { data, error, status } = await actions.createFollowupTask(
+      message,
+      files
+    );
+    return { route: "followup", taskId: data ?? null, error, status };
   }
 
   if (pendingInputId) {

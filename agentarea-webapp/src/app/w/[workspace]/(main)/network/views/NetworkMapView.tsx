@@ -29,6 +29,7 @@ import type {
 } from "@/api/client/types.gen";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { cn } from "@/lib/utils";
+import type { NetworkActionResult } from "../actions";
 import DirectionalEdge from "../components/edges/DirectionalEdge";
 import NetworkConnectionPanel from "../components/NetworkConnectionPanel";
 import NetworkPeopleNode, {
@@ -66,8 +67,12 @@ import { getPersonRoute, withPeopleRoster } from "../utils/peopleLayout";
 export interface NetworkMapProps {
   mode?: "network" | "organization" | "access";
   topology: TopologyResponse;
-  loadPolicy?: (agentId: string) => Promise<EffectivePolicy>;
-  loadPeopleAccess?: () => Promise<NetworkPeopleAccessResponse>;
+  loadPolicy?: (
+    agentId: string
+  ) => Promise<NetworkActionResult<EffectivePolicy>>;
+  loadPeopleAccess?: () => Promise<
+    NetworkActionResult<NetworkPeopleAccessResponse>
+  >;
   onNodeClick?: (node: NetworkNodeData) => void;
   highlightId?: string | null;
   onPaneClick?: () => void;

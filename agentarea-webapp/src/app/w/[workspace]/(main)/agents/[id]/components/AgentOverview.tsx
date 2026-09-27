@@ -1,5 +1,5 @@
-import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { notFound } from "next/navigation";
 import { policyToRule } from "@/app/w/[workspace]/(main)/policies/components/policy-rules";
 import { resolveAgentIdentity } from "@/lib/agent-identity";
 import {
@@ -13,15 +13,15 @@ import {
   type TaskResponse,
 } from "@/lib/api";
 import { getAgentOverview, getWorkspaceSettings } from "@/lib/api-dashboard";
-import { apiErrorMessage } from "@/lib/api-errors";
+import { apiErrorMessage, isApiNotFound } from "@/lib/api-errors";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
 import { getAgentStatusPresentation } from "@/lib/status";
 import { getViewerCapabilities } from "@/lib/workspace-context";
 import type { Agent } from "@/types/agent";
 import type { Policy, PolicyEffect } from "@/types/policies";
 import {
-  type OpenApiConnectionRef,
   resolveAgentToolIcons,
+  type OpenApiConnectionRef,
 } from "@/utils/agentToolIcons";
 import { isAwaitingUserTask, isRunningTask } from "../../shared/taskStatus";
 import {
@@ -63,35 +63,79 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     getTranslations("AgentOverviewPage"),
   ]);
 
+  // A section whose data failed to load says so instead of rendering zeros.
+  const thrown = (label: string) => (error: unknown) => {
+    console.error(label, error);
+    return { data: undefined, error, status: undefined };
+  };
+
   const [
-    overview,
+    overviewRes,
     tasksRes,
-    settings,
+    settingsRes,
     mcpInstancesRes,
     mcpServersRes,
     openApiConnectionsRes,
     policiesRes,
     modelInstanceRes,
   ] = await Promise.all([
-    getAgentOverview(realId).catch(() => null),
-    listAgentTasks(realId).catch(() => ({ data: null, error: "load failed" })),
-    getWorkspaceSettings().catch(() => null),
-    listMCPServerInstances().catch(() => ({ data: [] })),
-    listMCPServers({ page_size: 100 }).catch(() => ({ data: [] })),
-    listOpenAPIConnections().catch(() => ({ data: [] })),
+    getAgentOverview(realId).catch(thrown("Failed to load agent overview")),
+    listAgentTasks(realId).catch(thrown("Failed to load agent tasks")),
+    getWorkspaceSettings().catch(
+      thrown("Failed to load workspace settings")
+    ),
+    listMCPServerInstances().catch(thrown("Failed to load MCP instances")),
+    listMCPServers({ page_size: 100 }).catch(
+      thrown("Failed to load MCP servers")
+    ),
+    listOpenAPIConnections().catch(
+      thrown("Failed to load OpenAPI connections")
+    ),
     canAdminister
       ? listPolicies({ subject_type: "agent", subject_id: realId }).catch(
-          (error: unknown) => {
-            console.error("Failed to load agent policies", error);
-            return { data: undefined, error, status: undefined };
-          }
+          thrown("Failed to load agent policies")
         )
       : null,
     agent.model_id
-      ? getModelInstance(agent.model_id).catch(() => ({ data: undefined }))
-      : Promise.resolve({ data: undefined }),
+      ? getModelInstance(agent.model_id).catch((error: unknown) => ({
+          data: undefined,
+          error,
+          status: undefined,
+        }))
+      : Promise.resolve({ data: undefined, error: undefined }),
   ]);
-  const tasks = (tasksRes?.data as TaskResponse[]) || [];
+
+  const overview = overviewRes.data;
+  const settings = settingsRes.data;
+  const tasks = (tasksRes.data as TaskResponse[] | undefined) ?? [];
+
+  const registryFailure = [
+    mcpInstancesRes,
+    mcpServersRes,
+    openApiConnectionsRes,
+  ].find((res) => res.error);
+  const loadErrors: AgentOverviewModel["loadErrors"] = {
+    overview:
+      overviewRes.error || !overviewRes.data
+        ? apiErrorMessage(overviewRes, t("activityLoadFailed"))
+        : undefined,
+    settings:
+      settingsRes.error || !settingsRes.data
+        ? apiErrorMessage(settingsRes, t("capLoadFailed"))
+        : undefined,
+    tasks:
+      tasksRes.error || !tasksRes.data
+        ? apiErrorMessage(tasksRes, t("tasksLoadFailed"))
+        : undefined,
+    connections: registryFailure
+      ? apiErrorMessage(registryFailure, t("connectionsLoadFailed"))
+      : undefined,
+  };
+  // The hero label falls back to the agent's own model info; a deleted
+  // instance (404) is expected, anything else is worth a log line.
+  if (modelInstanceRes.error && !isApiNotFound(modelInstanceRes)) {
+    console.error("Failed to load model instance", modelInstanceRes.error);
+  }
 
   const completedValues = (overview?.daily_tasks ?? []).map((d) => d.completed);
   const failedValues = (overview?.daily_tasks ?? []).map((d) => d.failed);
@@ -217,6 +261,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     skills: (agent.skills ?? []).map((s) => s.name),
     connections: toolIcons.map((tool) => tool.label),
     policies,
+    loadErrors,
   };
 
   return <AgentOverviewView model={model} />;

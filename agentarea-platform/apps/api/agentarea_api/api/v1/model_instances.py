@@ -15,6 +15,7 @@ from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
 from agentarea_llm.domain.provider_profiles import profile_for
+from agentarea_llm.infrastructure.model_spec_repository import ModelPricingNotConfiguredError
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -182,7 +183,7 @@ async def create_model_instances_bulk(
                 is_public=item.is_public,
             )
             succeeded.append(ModelInstanceResponse.from_domain(instance))
-        except NotFoundError as e:
+        except (NotFoundError, ModelPricingNotConfiguredError) as e:
             logger.info(
                 "Bulk create skipped item %d (model_spec_id=%s): %s",
                 index,

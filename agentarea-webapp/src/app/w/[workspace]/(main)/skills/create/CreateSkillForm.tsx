@@ -28,13 +28,15 @@ import { Button } from "@/components/ui/button";
 import { BlueprintBadge } from "@/components/ui/blueprint-badge";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
+import BaseModal from "@/components/BaseModal";
+import FormError from "@/components/FormError";
 import {
   createSkillAction as createSkill,
   getSkillAction as getSkill,
   getSkillContentAction as getSkillContent,
   uploadSkillAction as uploadSkill,
 } from "@/lib/server-actions";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
 import type { Skill, SkillContent } from "@/types/skill";
 
@@ -185,10 +187,10 @@ function SegPill<T extends string>({
 }
 
 export function CreateSkillForm() {
-  const { toast } = useToast();
   const router = useWorkspaceRouter();
   const searchParams = useSearchParams();
   const tCreate = useTranslations("SkillsPage.create");
+  const tCommon = useTranslations("Common");
   const sourceSkillId = searchParams.get("from");
 
   const [source, setSource] = useState<Source>("content");
@@ -202,6 +204,7 @@ export function CreateSkillForm() {
   // Content source.
   const [contentMarkdown, setContentMarkdown] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("split");
+  const [templateConfirmOpen, setTemplateConfirmOpen] = useState(false);
 
   const parsedContent = useMemo(
     () => parseFrontmatter(contentMarkdown),
@@ -215,13 +218,47 @@ export function CreateSkillForm() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
+  const [duplicateAttempt, setDuplicateAttempt] = useState(0);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const form = document.getElementById("create-skill-form");
+    if (!form) return;
+    form.setAttribute("data-submitting", String(isSubmitting));
+    form.dispatchEvent(
+      new CustomEvent("form-submitting", {
+        detail: { isSubmitting },
+      })
+    );
+  }, [isSubmitting]);
+
+  const submit = async (
+    request: () => Promise<{ error?: unknown; status?: number }>,
+    failedLabel: string
+  ) => {
+    setIsSubmitting(true);
+    try {
+      const result = await request();
+      if (result.error) {
+        setSubmitError(apiErrorMessage(result, failedLabel));
+        setIsSubmitting(false);
+        return;
+      }
+      // Stays submitting until the navigation replaces the form.
+      router.push("/skills");
+    } catch (err) {
+      console.error(failedLabel, err);
+      setSubmitError(`${failedLabel}: ${formatApiError(err)}`);
+      setIsSubmitting(false);
+    }
+  };
+
   const handleContentSubmit = async () => {
     if (!contentMarkdown.trim()) {
-      toast({
-        title: tCreate("validationError"),
-        description: tCreate("contentRequired"),
-        variant: "destructive",
-      });
+      setFieldError(tCreate("contentRequired"));
       return;
     }
 
@@ -231,122 +268,58 @@ export function CreateSkillForm() {
       description.trim() || undefined
     );
 
-    try {
-      const { error } = await createSkill({
-        content: finalContent,
-        name: name.trim() || undefined,
-        description: description.trim() || undefined,
-      });
-
-      if (error) {
-        toast({
-          title: tCreate("error.createFailed"),
-          description: (error as { detail?: string })?.detail || tCreate("error.createFailed"),
-          variant: "destructive",
-        });
-        return;
-      }
-
-      toast({ title: tCreate("success.skillCreated"), variant: "success" });
-      router.push("/skills");
-    } catch {
-      toast({
-        title: tCreate("error.createFailed"),
-        description: tCreate("error.createFailed"),
-        variant: "destructive",
-      });
-    }
+    await submit(
+      () =>
+        createSkill({
+          content: finalContent,
+          name: name.trim() || undefined,
+          description: description.trim() || undefined,
+        }),
+      tCreate("error.createFailed")
+    );
   };
 
   const handleGithubSubmit = async () => {
     const githubUrl = normalizeGithubUrl(githubRepo);
     if (!githubUrl) {
-      toast({
-        title: tCreate("validationError"),
-        description: tCreate("githubUrlRequired"),
-        variant: "destructive",
-      });
+      setFieldError(tCreate("githubUrlRequired"));
       return;
     }
 
+    let hostname: string | null = null;
     try {
-      const url = new URL(githubUrl);
-      if (url.hostname !== "github.com" && url.hostname !== "www.github.com") {
-        throw new Error("Invalid GitHub URL");
-      }
+      hostname = new URL(githubUrl).hostname;
     } catch {
-      toast({
-        title: tCreate("validationError"),
-        description: tCreate("githubUrlInvalid"),
-        variant: "destructive",
-      });
+      hostname = null;
+    }
+    if (hostname !== "github.com" && hostname !== "www.github.com") {
+      setFieldError(tCreate("githubUrlInvalid"));
       return;
     }
 
-    try {
-      const { error } = await createSkill({
-        github_url: githubUrl,
-        name: name.trim() || undefined,
-        description: description.trim() || undefined,
-      });
-
-      if (error) {
-        toast({
-          title: tCreate("error.githubImportFailed"),
-          description:
-            (error as { detail?: string })?.detail || tCreate("error.githubImportFailed"),
-          variant: "destructive",
-        });
-        return;
-      }
-
-      toast({ title: tCreate("success.skillImported"), variant: "success" });
-      router.push("/skills");
-    } catch {
-      toast({
-        title: tCreate("error.githubImportFailed"),
-        description: tCreate("error.githubImportFailed"),
-        variant: "destructive",
-      });
-    }
+    await submit(
+      () =>
+        createSkill({
+          github_url: githubUrl,
+          name: name.trim() || undefined,
+          description: description.trim() || undefined,
+        }),
+      tCreate("error.githubImportFailed")
+    );
   };
 
   const handleUploadSubmit = async () => {
     if (!uploadFile) {
-      toast({
-        title: tCreate("validationError"),
-        description: tCreate("error.zipRequired"),
-        variant: "destructive",
-      });
+      setFieldError(tCreate("error.zipRequired"));
       return;
     }
 
-    try {
-      const formData = new FormData();
-      formData.append("file", uploadFile);
-      if (name.trim()) formData.append("name", name.trim());
-      if (description.trim()) formData.append("description", description.trim());
+    const formData = new FormData();
+    formData.append("file", uploadFile);
+    if (name.trim()) formData.append("name", name.trim());
+    if (description.trim()) formData.append("description", description.trim());
 
-      const { error } = await uploadSkill(formData);
-
-      if (error) {
-        toast({
-          title: tCreate("error.uploadFailed"),
-          description: (error as { detail?: string })?.detail || tCreate("error.uploadFailed"),
-          variant: "destructive",
-        });
-        return;
-      }
-
-      toast({ title: tCreate("success.skillUploaded"), variant: "success" });
-      router.push("/skills");
-    } catch {
-      toast({
-        title: tCreate("error.uploadFailed"),
-        description: tCreate("error.uploadFailed"),
-        variant: "destructive",
-      });
-    }
+    await submit(() => uploadSkill(formData), tCreate("error.uploadFailed"));
   };
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -364,15 +337,12 @@ export function CreateSkillForm() {
       if (!file) return;
       if (file.name.endsWith(".zip")) {
         setUploadFile(file);
+        setFieldError(null);
       } else {
-        toast({
-          title: tCreate("error.invalidFile"),
-          description: tCreate("error.zipRequired"),
-          variant: "destructive",
-        });
+        setFieldError(tCreate("error.zipRequired"));
       }
     },
-    [tCreate, toast]
+    [tCreate]
   );
 
   const onDrop = useCallback(
@@ -390,8 +360,17 @@ export function CreateSkillForm() {
     acceptFile(file);
   };
 
+  const handleSourceChange = (next: Source) => {
+    setSource(next);
+    setFieldError(null);
+    setSubmitError(null);
+  };
+
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (isSubmitting) return;
+    setSubmitError(null);
+    setFieldError(null);
     if (source === "content") handleContentSubmit();
     else if (source === "github") handleGithubSubmit();
     else if (source === "upload") handleUploadSubmit();
@@ -415,11 +394,15 @@ export function CreateSkillForm() {
         const sourceContent = contentRes.data as SkillContent | undefined;
 
         if (skillRes.error || !sourceSkill) {
-          toast({
-            title: tCreate("error.duplicateLoadFailed"),
-            description: tCreate("error.duplicateLoadFailedDescription"),
-            variant: "destructive",
-          });
+          setDuplicateError(
+            apiErrorMessage(skillRes, tCreate("error.duplicateLoadFailed"))
+          );
+          return;
+        }
+        if (sourceSkill.source_type !== "github" && contentRes.error) {
+          setDuplicateError(
+            apiErrorMessage(contentRes, tCreate("error.duplicateLoadFailed"))
+          );
           return;
         }
 
@@ -437,13 +420,13 @@ export function CreateSkillForm() {
         }
 
         setDuplicatedFromId(sourceSkillId);
-      } catch {
+        setDuplicateError(null);
+      } catch (err) {
         if (cancelled) return;
-        toast({
-          title: tCreate("error.duplicateLoadFailed"),
-          description: tCreate("error.duplicateLoadFailedDescription"),
-          variant: "destructive",
-        });
+        console.error("Failed to load skill for duplication", err);
+        setDuplicateError(
+          `${tCreate("error.duplicateLoadFailed")}: ${formatApiError(err)}`
+        );
       } finally {
         if (!cancelled) setIsDuplicating(false);
       }
@@ -453,17 +436,20 @@ export function CreateSkillForm() {
     return () => {
       cancelled = true;
     };
-  }, [duplicatedFromId, sourceSkillId, tCreate, toast]);
+  }, [duplicatedFromId, sourceSkillId, tCreate, duplicateAttempt]);
 
-  const useTemplate = () => {
-    if (
-      contentMarkdown.trim() &&
-      !window.confirm(tCreate("templateOverwriteConfirm"))
-    ) {
-      return;
-    }
+  const applyTemplate = () => {
     setContentMarkdown(SKILL_TEMPLATE);
     setViewMode("split");
+    setFieldError(null);
+  };
+
+  const useTemplate = () => {
+    if (contentMarkdown.trim()) {
+      setTemplateConfirmOpen(true);
+      return;
+    }
+    applyTemplate();
   };
 
   const sourceHints: Record<Source, string> = {
@@ -478,11 +464,30 @@ export function CreateSkillForm() {
       onSubmit={handleSubmit}
       className="mx-auto flex w-full max-w-[1120px] flex-col"
     >
+      {duplicateError && (
+        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-start">
+          <FormError className="flex-1">{duplicateError}</FormError>
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            className="self-start"
+            onClick={() => {
+              setDuplicateError(null);
+              setDuplicateAttempt((n) => n + 1);
+            }}
+          >
+            {tCommon("retry")}
+          </Button>
+        </div>
+      )}
+      {submitError && <FormError className="mb-6">{submitError}</FormError>}
+
       {/* ---------------- source switcher + hint ---------------- */}
       <div className="mb-6 flex flex-wrap items-center gap-x-3.5 gap-y-2">
         <SegmentedControl<Source>
           value={source}
-          onChange={setSource}
+          onChange={handleSourceChange}
           layoutId="skill-source-control"
           items={[
             {
@@ -527,7 +532,10 @@ export function CreateSkillForm() {
             id="skill-name"
             placeholder={tCreate("namePlaceholder")}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setSubmitError(null);
+            }}
             autoComplete="off"
           />
         </div>
@@ -539,7 +547,10 @@ export function CreateSkillForm() {
             id="skill-description"
             placeholder={tCreate("descriptionPlaceholder")}
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => {
+              setDescription(e.target.value);
+              setSubmitError(null);
+            }}
             autoComplete="off"
           />
         </div>
@@ -622,7 +633,11 @@ export function CreateSkillForm() {
                   placeholder={CONTENT_PLACEHOLDER}
                   className="min-h-0 flex-1 resize-none bg-background p-[17px_19px] font-mono text-[12.5px] leading-[1.75] outline-none focus:outline-none"
                   value={contentMarkdown}
-                  onChange={(e) => setContentMarkdown(e.target.value)}
+                  onChange={(e) => {
+                    setContentMarkdown(e.target.value);
+                    setFieldError(null);
+                    setSubmitError(null);
+                  }}
                   spellCheck={false}
                 />
               </div>
@@ -653,6 +668,11 @@ export function CreateSkillForm() {
               </div>
             )}
           </div>
+          {fieldError && (
+            <p role="alert" className="mt-1.5 text-xs text-destructive">
+              {fieldError}
+            </p>
+          )}
         </>
       )}
 
@@ -668,13 +688,29 @@ export function CreateSkillForm() {
               className="h-10 flex-1"
               placeholder={tCreate("githubRepoPlaceholder")}
               value={githubRepo}
-              onChange={(e) => setGithubRepo(e.target.value)}
+              onChange={(e) => {
+                setGithubRepo(e.target.value);
+                setFieldError(null);
+                setSubmitError(null);
+              }}
               autoComplete="off"
             />
-            <Button type="submit" variant="outline" size="sm" className="h-10">
+            <Button
+              type="submit"
+              variant="outline"
+              size="sm"
+              className="h-10"
+              isLoading={isSubmitting}
+              disabled={isSubmitting}
+            >
               <Search />
               {tCreate("browseRepo")}
             </Button>
+            {fieldError && (
+              <p role="alert" className="basis-full text-xs text-destructive">
+                {fieldError}
+              </p>
+            )}
           </div>
           <div className="relative flex flex-1 flex-col items-center justify-center gap-2.5 overflow-hidden p-8 text-center">
             {/* brand: diagonal hatch band fading up from the bottom */}
@@ -796,6 +832,7 @@ export function CreateSkillForm() {
                   onClick={(e) => {
                     e.preventDefault();
                     setUploadFile(null);
+                    setSubmitError(null);
                   }}
                 >
                   <X className="h-3 w-3" />
@@ -812,6 +849,11 @@ export function CreateSkillForm() {
               </div>
             )}
           </div>
+          {fieldError && (
+            <p role="alert" className="mt-2 text-xs text-destructive">
+              {fieldError}
+            </p>
+          )}
         </div>
       )}
 
@@ -828,6 +870,15 @@ export function CreateSkillForm() {
           {tCreate("metaWorkspace")}
         </b>
       </div>
+
+      <BaseModal
+        type="confirm"
+        open={templateConfirmOpen}
+        onOpenChange={setTemplateConfirmOpen}
+        title={tCreate("useTemplate")}
+        description={tCreate("templateOverwriteConfirm")}
+        onConfirm={applyTemplate}
+      />
     </form>
   );
 }

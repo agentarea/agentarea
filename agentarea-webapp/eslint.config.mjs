@@ -35,6 +35,12 @@ const eslintConfig = [
       "no-throw-literal": "error",
       "no-unneeded-ternary": "error",
       "object-shorthand": ["error", "properties"],
+      // Feedback for an action renders where the action is (FormError), not in
+      // a toast that vanishes with the API's reason.
+      "no-restricted-imports": [
+        "error",
+        { paths: [{ name: "sonner", message: "No toasts: render <FormError> next to the action." }] },
+      ],
 
       // TypeScript
       "@typescript-eslint/no-explicit-any": "error",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import { Loader2, Upload } from "lucide-react";
 import {
@@ -8,10 +9,10 @@ import {
   useFileBrowserState,
   type BrowsedFile,
 } from "@/components/files/file-browser";
-import type { ArtifactEvent } from "@/components/files/file-viewer";
+import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/hooks/use-toast";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { apiProxyUrl } from "@/lib/api-proxy-url";
 import {
   downloadProjectFileAction,
@@ -23,51 +24,69 @@ import {
 export default function ProjectFilesPage() {
   const params = useParams();
   const projectId = params.id as string;
-  const { toast } = useToast();
+  const t = useTranslations("ProjectFilesPage");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [files, setFiles] = useState<BrowsedFile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [browserState, setBrowserState] = useFileBrowserState(
     `project:${projectId}`
   );
 
   const fetchFiles = useCallback(async () => {
-    const { data } = await listProjectFilesAction(projectId);
-    setFiles((data as { files?: BrowsedFile[] } | undefined)?.files || []);
-  }, [projectId]);
+    setLoadError(null);
+    try {
+      const result = await listProjectFilesAction(projectId);
+      if (result.error) {
+        setLoadError(apiErrorMessage(result, t("loadFailed")));
+        return;
+      }
+      setFiles(
+        (result.data as { files?: BrowsedFile[] } | undefined)?.files || []
+      );
+    } catch (err) {
+      console.error("Failed to load project files", err);
+      setLoadError(`${t("loadFailed")}: ${formatApiError(err)}`);
+    }
+  }, [projectId, t]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      await fetchFiles();
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchFiles]);
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        await fetchFiles();
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [fetchFiles]);
+    void load();
+  }, [load]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setUploadError(null);
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const { error } = await uploadProjectFileAction(projectId, formData);
-      if (error) {
-        toast({
-          title: "Upload failed",
-          description:
-            (error as { detail?: string })?.detail || "Upload failed",
-          variant: "destructive",
-        });
+      const result = await uploadProjectFileAction(projectId, formData);
+      if (result.error) {
+        setUploadError(
+          apiErrorMessage(result, t("uploadFailed", { name: file.name }))
+        );
         return;
       }
       await fetchFiles();
+    } catch (err) {
+      console.error("Failed to upload project file", err);
+      setUploadError(
+        `${t("uploadFailed", { name: file.name })}: ${formatApiError(err)}`
+      );
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -76,20 +95,22 @@ export default function ProjectFilesPage() {
 
   const fetchUrl = useCallback(
     async (path: string) => {
-      const { data } = await downloadProjectFileAction(projectId, path);
-      const fileData = data as { url?: string } | undefined;
-      if (!fileData?.url) return null;
-      return apiProxyUrl(fileData.url);
+      const result = await downloadProjectFileAction(projectId, path);
+      const fileData = result.data as { url?: string } | undefined;
+      return {
+        ...result,
+        data: fileData?.url ? apiProxyUrl(fileData.url) : null,
+      };
     },
     [projectId]
   );
 
   const fetchHistory = useCallback(
     async (path: string) => {
-      const { data } = await workspaceFileHistoryAction(
+      const result = await workspaceFileHistoryAction(
         `projects/${projectId}/${path}`
       );
-      return (data as { events?: ArtifactEvent[] } | undefined)?.events ?? [];
+      return { ...result, data: result.data?.events };
     },
     [projectId]
   );
@@ -118,28 +139,35 @@ export default function ProjectFilesPage() {
 
   return (
     <>
+      {uploadError && <FormError className="m-4 mb-0">{uploadError}</FormError>}
       <FileBrowser
         files={files}
         state={browserState}
         onChange={setBrowserState}
         fetchUrl={fetchUrl}
         fetchHistory={fetchHistory}
-        emptyMessage="No files uploaded yet."
+        error={loadError}
+        onRetry={() => void load()}
+        emptyMessage={t("empty")}
         className="h-[calc(100vh-8rem)]"
-        title={<h2 className="text-sm font-medium">Files ({files.length})</h2>}
+        title={
+          <h2 className="text-sm font-medium">
+            {t("title", { count: files.length })}
+          </h2>
+        }
         actions={
           <Button
             size="xs"
             variant="outline"
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
+            disabled={uploading || Boolean(loadError)}
           >
             {uploading ? (
               <Loader2 className="mr-1.5 animate-spin" />
             ) : (
               <Upload className="mr-1.5" />
             )}
-            Upload File
+            {t("upload")}
           </Button>
         }
       />

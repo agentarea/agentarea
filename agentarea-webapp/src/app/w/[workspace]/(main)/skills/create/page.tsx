@@ -1,9 +1,7 @@
-import Link from "@/components/WorkspaceLink";
 import { useTranslations } from "next-intl";
-import { Plus } from "lucide-react";
 import { CreateSkillForm } from "./CreateSkillForm";
+import CreateSkillHeaderControls from "./CreateSkillHeaderControls";
 import ContentBlock from "@/components/ContentBlock";
-import { Button } from "@/components/ui/button";
 
 export default function CreateSkillPage() {
   const t = useTranslations("SkillsPage.create");
@@ -15,17 +13,7 @@ export default function CreateSkillPage() {
           { label: useTranslations("SkillsPage")("title"), href: "/skills" },
           { label: t("title") },
         ],
-        controls: (
-          <div className="flex items-center gap-2 py-1">
-            <Button asChild size="xs" variant="outline">
-              <Link href="/skills">{t("cancel")}</Link>
-            </Button>
-            <Button size="xs" type="submit" form="create-skill-form">
-              <Plus />
-              {t("createSkill")}
-            </Button>
-          </div>
-        ),
+        controls: <CreateSkillHeaderControls />,
       }}
     >
       <CreateSkillForm />

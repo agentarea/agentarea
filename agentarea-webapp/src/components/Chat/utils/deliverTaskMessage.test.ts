@@ -3,7 +3,7 @@ import { deliverTaskMessage } from "./deliverTaskMessage";
 
 function actions() {
   return {
-    createFollowupTask: vi.fn(async () => "new-task"),
+    createFollowupTask: vi.fn(async () => ({ data: "new-task" })),
     queueMessage: vi.fn(async () => ({})),
     submitInput: vi.fn(async () => ({})),
   };

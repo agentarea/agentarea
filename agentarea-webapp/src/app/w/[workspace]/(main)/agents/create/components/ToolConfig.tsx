@@ -1,5 +1,5 @@
 import type { McpServerResponse, ToolResponse } from "@/api/client/types.gen";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { ArrowRight, Globe, Wrench } from "lucide-react";
@@ -13,7 +13,7 @@ import {
   UseFormSetValue,
   useWatch,
 } from "react-hook-form";
-import { toast } from "sonner";
+import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import { Accordion } from "@/components/ui/accordion";
@@ -27,6 +27,7 @@ import {
   updateMCPServerInstanceAction as updateMCPServerInstance,
 } from "@/lib/server-actions";
 import { listOpenAPIConnectionsAction as listOpenAPIConnections } from "@/lib/server-actions";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { getMCPConnectionIconSrc } from "@/lib/entity-identity";
 import {
   McpAvailableTool,
@@ -157,6 +158,7 @@ const ToolConfig = ({
     name: "tools_config.openapi_configs",
   });
   const tMcp = useTranslations("MCPServersPage.createInstance");
+  const tCommon = useTranslations("Common");
 
   // Configure server overlay (like marketplace, but in sheet)
   const [configureServerSheetOpen, setConfigureServerSheetOpen] =
@@ -176,6 +178,8 @@ const ToolConfig = ({
     errors: string[];
     warnings: string[];
   } | null>(null);
+  const [sheetError, setSheetError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Keep a local copy of active instances so the list updates immediately after creation
   const [activeInstances, setActiveInstances] = useState<McpInstance[]>(
@@ -189,21 +193,36 @@ const ToolConfig = ({
   // OpenAPI connections state
   const [openapiConnections, setOpenapiConnections] = useState<OpenAPIConnection[]>([]);
   const [loadingOpenapiConnections, setLoadingOpenapiConnections] = useState(false);
+  const [openapiLoadError, setOpenapiLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadOpenapiConnections = useCallback(() => {
     setLoadingOpenapiConnections(true);
+    setOpenapiLoadError(null);
     listOpenAPIConnections()
-      .then(({ data }) => {
-        const items = (data || []) as OpenAPIConnection[];
+      .then((result) => {
+        if (result.error) {
+          setOpenapiLoadError(
+            apiErrorMessage(result, t("create.loadOpenapiConnectionsFailed"))
+          );
+          return;
+        }
+        const items = (result.data || []) as OpenAPIConnection[];
         setOpenapiConnections(Array.isArray(items) ? items : []);
       })
       .catch((err) => {
         console.error("Failed to load OpenAPI connections:", err);
+        setOpenapiLoadError(
+          `${t("create.loadOpenapiConnectionsFailed")}: ${formatApiError(err)}`
+        );
       })
       .finally(() => {
         setLoadingOpenapiConnections(false);
       });
-  }, []);
+  }, [t]);
+
+  useEffect(() => {
+    loadOpenapiConnections();
+  }, [loadOpenapiConnections]);
 
   // Initialize selectedMethods for sheet (all methods selected by default)
   useEffect(() => {
@@ -565,23 +584,26 @@ const ToolConfig = ({
     });
     setEnvVars(initialEnv);
     setValidationResult(null);
+    setSheetError(null);
     setConfigureServerSheetOpen(true);
   };
 
   const editTool = async (index: number) => {
     const tool = toolFields[index];
     if (!tool) return;
+    setEditError(null);
     try {
       const instanceId = tool.mcp_server_id as unknown as string;
-      const { data: instance, error } = await getMCPServerInstance(instanceId);
-      if (error || !instance) {
-        toast.error("Failed to load instance for editing");
+      const result = await getMCPServerInstance(instanceId);
+      const instance = result.data;
+      if (result.error || !instance) {
+        setEditError(apiErrorMessage(result, t("create.loadInstanceFailed")));
         return;
       }
       const serverSpec =
         mcpServers.find((s) => s.id === instance.server_spec_id) || null;
       if (!serverSpec) {
-        toast.error("Server specification not found");
+        setEditError(tMcp("errors.specNotFound"));
         return;
       }
       setSelectedServer(serverSpec);
@@ -593,10 +615,11 @@ const ToolConfig = ({
         (instance.json_spec?.environment as Record<string, string>) || {};
       setEnvVars(env);
       setValidationResult(null);
+      setSheetError(null);
       setConfigureServerSheetOpen(true);
     } catch (e) {
-      console.error(e);
-      toast.error("Could not open edit form");
+      console.error("Failed to open MCP instance edit form", e);
+      setEditError(`${t("create.loadInstanceFailed")}: ${formatApiError(e)}`);
     }
   };
 
@@ -725,8 +748,20 @@ const ToolConfig = ({
               </div>
               {loadingOpenapiConnections ? (
                 <Note>
-                  <p>Loading OpenAPI connections...</p>
+                  <p>{t("create.loadingOpenapiConnections")}</p>
                 </Note>
+              ) : openapiLoadError ? (
+                <div className="flex flex-col items-start gap-2">
+                  <FormError className="w-full">{openapiLoadError}</FormError>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={loadOpenapiConnections}
+                  >
+                    {tCommon("retry")}
+                  </Button>
+                </div>
               ) : openapiConnections.length > 0 ? (
                 <SelectableList
                   items={openapiConnections}
@@ -1223,6 +1258,7 @@ const ToolConfig = ({
         </div>
       </AccordionControl>
 
+      {editError && <FormError className="mt-2">{editError}</FormError>}
       {getNestedErrorMessage(errors, "tools_config.mcp_server_configs") && (
         <p className="form-error">
           {getNestedErrorMessage(errors, "tools_config.mcp_server_configs")}
@@ -1254,21 +1290,45 @@ const ToolConfig = ({
       >
         {selectedServer && (
           <div className="flex flex-col gap-4 overflow-y-auto pb-4">
+            {sheetError && <FormError>{sheetError}</FormError>}
+            {validationResult &&
+              (validationResult.valid ? (
+                <p className="text-xs text-muted-foreground">
+                  {tMcp("success.valid")}
+                </p>
+              ) : (
+                <FormError>
+                  {tMcp("warnings.hasErrors", {
+                    count: validationResult.errors?.length || 0,
+                  })}
+                  {validationResult.errors?.length
+                    ? `: ${validationResult.errors.join(", ")}`
+                    : ""}
+                </FormError>
+              ))}
             <MCPInstanceConfigForm
               renderAsForm={false}
               server={selectedServer}
               instanceName={instanceName}
               instanceDescription={instanceDescription}
               envVars={envVars}
-              onChangeName={setInstanceName}
-              onChangeDescription={setInstanceDescription}
+              onChangeName={(value) => {
+                setInstanceName(value);
+                setSheetError(null);
+              }}
+              onChangeDescription={(value) => {
+                setInstanceDescription(value);
+                setSheetError(null);
+              }}
               onChangeEnvVar={(name, value) => {
                 setEnvVars((prev) => ({ ...prev, [name]: value }));
+                setSheetError(null);
                 if (validationResult) setValidationResult(null);
               }}
               onValidate={async () => {
                 if (!selectedServer) return;
                 setIsChecking(true);
+                setSheetError(null);
                 try {
                   const check = await checkMCPServerInstanceConfiguration({
                     json_spec: {
@@ -1278,24 +1338,23 @@ const ToolConfig = ({
                     },
                   });
                   if (check.error) {
-                    toast.error("Failed to validate configuration");
+                    setSheetError(
+                      apiErrorMessage(check, tMcp("errors.validateFailed"))
+                    );
                   } else {
-                    const validationData = check.data as {
-                      valid: boolean;
-                      errors: string[];
-                      warnings: string[];
-                    } | null;
-                    setValidationResult(validationData);
-                    if (validationData?.valid)
-                      toast.success("Configuration is valid!");
-                    else
-                      toast.warning(
-                        `Configuration has ${validationData?.errors?.length || 0} error(s)`
-                      );
+                    setValidationResult(
+                      check.data as {
+                        valid: boolean;
+                        errors: string[];
+                        warnings: string[];
+                      } | null
+                    );
                   }
                 } catch (err) {
-                  console.error(err);
-                  toast.error("Validation failed");
+                  console.error("MCP instance validation failed", err);
+                  setSheetError(
+                    `${tMcp("errors.validateFailed")}: ${formatApiError(err)}`
+                  );
                 } finally {
                   setIsChecking(false);
                 }
@@ -1306,6 +1365,7 @@ const ToolConfig = ({
                   : async () => {
                       if (!selectedServer) return;
                       setIsCreating(true);
+                      setSheetError(null);
                       try {
                         const res = await createMCPServerInstance({
                           name: instanceName,
@@ -1317,13 +1377,12 @@ const ToolConfig = ({
                             environment: envVars,
                           },
                         });
-                        if (res.error)
-                          throw new Error(
-                            typeof res.error.detail === "string"
-                              ? res.error.detail
-                              : "Failed to create instance"
+                        if (res.error) {
+                          setSheetError(
+                            apiErrorMessage(res, tMcp("errors.createFailed"))
                           );
-                        toast.success(`Successfully created ${instanceName}`);
+                          return;
+                        }
                         if (res.data?.id) {
                           const created = res.data;
                           setActiveInstances((prev) => {
@@ -1343,10 +1402,9 @@ const ToolConfig = ({
                         }
                         setConfigureServerSheetOpen(false);
                       } catch (err) {
-                        console.error(err);
-                        toast.error(
-                          (err instanceof Error ? err.message : undefined) ||
-                            "Failed to create instance"
+                        console.error("MCP instance creation failed", err);
+                        setSheetError(
+                          `${tMcp("errors.createFailed")}: ${formatApiError(err)}`
                         );
                       } finally {
                         setIsCreating(false);
@@ -1357,17 +1415,16 @@ const ToolConfig = ({
                 if (!selectedServer) return;
                 if (!isEditingInstance) {
                   if (!validationResult) {
-                    toast.warning("Please validate the configuration first");
+                    setSheetError(tMcp("warnings.validateFirst"));
                     return;
                   }
                   if (validationResult && !validationResult.valid) {
-                    toast.error(
-                      'Configuration validation failed. Use "Force Create" to proceed.'
-                    );
+                    setSheetError(tMcp("errors.validationFailedForceCreate"));
                     return;
                   }
                 }
                 setIsCreating(true);
+                setSheetError(null);
                 try {
                   if (isEditingInstance && editingInstanceId) {
                     const payload = {
@@ -1379,22 +1436,19 @@ const ToolConfig = ({
                         environment: envVars,
                       },
                     };
-                    const { error } = await updateMCPServerInstance(
+                    const updated = await updateMCPServerInstance(
                       editingInstanceId,
                       payload
                     );
-                    if (error) {
-                      const detail =
-                        error && typeof error === "object" && "detail" in error
-                          ? (error as { detail?: unknown }).detail
-                          : undefined;
-                      throw new Error(
-                        typeof detail === "string"
-                          ? detail
-                          : "Failed to update instance"
+                    if (updated.error) {
+                      setSheetError(
+                        apiErrorMessage(
+                          updated,
+                          t("create.updateInstanceFailed")
+                        )
                       );
+                      return;
                     }
-                    toast.success(`Successfully updated ${instanceName}`);
                     setActiveInstances((prev) =>
                       prev.map((i) =>
                         i.id === editingInstanceId
@@ -1418,13 +1472,12 @@ const ToolConfig = ({
                         environment: envVars,
                       },
                     });
-                    if (res.error)
-                      throw new Error(
-                        typeof res.error.detail === "string"
-                          ? res.error.detail
-                          : "Failed to create instance"
+                    if (res.error) {
+                      setSheetError(
+                        apiErrorMessage(res, tMcp("errors.createFailed"))
                       );
-                    toast.success(`Successfully created ${instanceName}`);
+                      return;
+                    }
                     if (res.data?.id) {
                       const created = res.data;
                       setActiveInstances((prev) => {
@@ -1445,12 +1498,13 @@ const ToolConfig = ({
                   setIsEditingInstance(false);
                   setEditingInstanceId(null);
                 } catch (err) {
-                  console.error(err);
-                  toast.error(
-                    (err instanceof Error ? err.message : undefined) ||
-                      (isEditingInstance
-                        ? "Failed to update instance"
-                        : "Failed to create instance")
+                  console.error("MCP instance save failed", err);
+                  setSheetError(
+                    `${
+                      isEditingInstance
+                        ? t("create.updateInstanceFailed")
+                        : tMcp("errors.createFailed")
+                    }: ${formatApiError(err)}`
                   );
                 } finally {
                   setIsCreating(false);

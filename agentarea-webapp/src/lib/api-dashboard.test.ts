@@ -59,4 +59,29 @@ describe("dashboard API client", () => {
       );
     }
   );
+
+  it("reports the status and the API's reason when a request fails", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({ detail: "Workspace admin role required" }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    await expect(updateWorkspaceSettings(25)).resolves.toEqual({
+      error: { detail: "Workspace admin role required" },
+      status: 403,
+    });
+  });
+
+  it("keeps a plain-text error body as the reason", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response("upstream timeout", { status: 502 })
+    );
+
+    await expect(getDashboard()).resolves.toEqual({
+      error: "upstream timeout",
+      status: 502,
+    });
+  });
 });

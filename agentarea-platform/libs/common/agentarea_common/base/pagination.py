@@ -1,6 +1,11 @@
 from fastapi import Query
 from pydantic import BaseModel
 
+# Postgres takes OFFSET as a bigint: bounding the query parameters keeps an
+# out-of-range page a 422 instead of an overflow inside the database.
+MAX_PAGE = 100_000
+MAX_OFFSET = 10_000_000
+
 
 class PaginatedResponse[T](BaseModel):
     items: list[T]

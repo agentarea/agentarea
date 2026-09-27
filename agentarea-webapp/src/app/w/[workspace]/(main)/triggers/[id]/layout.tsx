@@ -22,8 +22,17 @@ export default async function TriggerLayout({ params, children }: Props) {
   // hides the number.
   const [triggerResponse, metricsResponse] = await Promise.all([
     getTrigger(id),
-    getTriggerMetrics(id).catch(() => ({ data: undefined })),
+    getTriggerMetrics(id).catch((error: unknown) => ({
+      data: undefined,
+      error,
+    })),
   ]);
+  if (metricsResponse.error) {
+    console.error(
+      "Failed to load trigger metrics for the tab count",
+      metricsResponse.error
+    );
+  }
   const trigger = requireApiData(triggerResponse, "trigger") as TriggerResponse;
   const executionCount = (
     metricsResponse.data as ExecutionMetricsResponse | undefined

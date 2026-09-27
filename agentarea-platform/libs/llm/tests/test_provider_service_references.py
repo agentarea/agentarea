@@ -41,6 +41,7 @@ def _service(*, config=None, spec=None) -> tuple[ProviderService, MagicMock]:
     config_repo.session.execute = AsyncMock(return_value=missing_secret)
     spec_repo = MagicMock()
     spec_repo.get_usable = AsyncMock(return_value=spec)
+    spec_repo.get_or_copy_catalog_spec = AsyncMock(return_value=None)
     instance_repo = MagicMock()
     instance_repo.create_instance = AsyncMock()
     service = ProviderService(

@@ -33,7 +33,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
-import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   composeTaskParameters,
@@ -67,6 +66,14 @@ const HTTP_METHODS = [
   "HEAD",
   "OPTIONS",
 ] as const;
+const INLINE_ERROR_FIELDS = new Set([
+  "name",
+  "trigger_type",
+  "task_parameters",
+  "cron_expression",
+  "description",
+  "agent_id",
+]);
 const KIND_ORDER: TriggerCatalogEntry["kind"][] = [
   "schedule",
   "messaging",
@@ -99,11 +106,9 @@ export function CreateTriggerForm({
   agents,
   initialData,
 }: CreateTriggerFormProps) {
-  const { toast } = useToast();
   const router = useWorkspaceRouter();
   const t = useTranslations("TriggersPage.create");
   const tError = useTranslations("TriggersPage.error");
-  const tSuccess = useTranslations("TriggersPage.success");
 
   const isEditing = !!initialData;
   const action = isEditing ? updateTriggerAction : createTriggerAction;
@@ -130,6 +135,14 @@ export function CreateTriggerForm({
     )
       setRunSettingsOpen(true);
   }, [state.errors]);
+  // Field errors the form has no inline slot for (e.g. `config.*` from the
+  // schema) are listed in the banner with their path, not dropped.
+  const unplacedErrors = Object.entries(state.errors ?? {}).filter(
+    ([key]) =>
+      key !== "_form" &&
+      !INLINE_ERROR_FIELDS.has(key) &&
+      !key.startsWith("credential_secret_")
+  );
   const [typeMissing, setTypeMissing] = useState(false);
   const [selectedMethods, setSelectedMethods] = useState<string[]>(
     initialData?.allowed_methods ?? ["POST"]
@@ -270,21 +283,11 @@ export function CreateTriggerForm({
 
   useEffect(() => {
     if (state.success) {
-      toast({
-        title: isEditing ? tSuccess("updated") : tSuccess("created"),
-        variant: "success",
-      });
       // The action revalidated both paths, so the destination renders fresh.
       // A `router.refresh()` here cancels this navigation instead.
       router.push(initialData ? `/triggers/${initialData.id}` : "/triggers");
-    } else if (state.errors) {
-      toast({
-        title: isEditing ? tError("updateFailed") : tError("createFailed"),
-        description: state.message,
-        variant: "destructive",
-      });
     }
-  }, [state, toast, router, isEditing, initialData, tSuccess, tError]);
+  }, [state, router, initialData]);
 
   // Kind is only a grouping header inside the type dropdown.
   const kindLabels: Record<string, string> = {
@@ -751,11 +754,31 @@ export function CreateTriggerForm({
               </div>
             </div>
           </details>
-          {state.errors?._form && (
-            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {state.errors._form.map((error, index) => (
-                <p key={index}>{error}</p>
-              ))}
+          {state.errors && (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+            >
+              {state.errors._form ? (
+                state.errors._form.map((error, index) => (
+                  <p key={index}>{error}</p>
+                ))
+              ) : (
+                <p>
+                  {isEditing ? tError("updateFailed") : tError("createFailed")}
+                  {state.message ? `: ${state.message}` : ""}
+                </p>
+              )}
+              {unplacedErrors.length > 0 && (
+                <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                  {unplacedErrors.map(([path, messages]) => (
+                    <li key={path}>
+                      <span className="font-mono">{path}</span>:{" "}
+                      {messages.join(", ")}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </div>

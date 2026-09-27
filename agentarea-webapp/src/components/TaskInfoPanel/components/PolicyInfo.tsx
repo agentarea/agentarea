@@ -6,11 +6,13 @@ import {
   UserCheck,
   Wrench,
 } from "lucide-react";
+import FormError from "@/components/FormError";
 import type { EffectivePolicy, Money } from "@/types/policies";
 import Section from "./Section";
 
 interface PolicyInfoProps {
   policy?: EffectivePolicy | null;
+  error?: string | null;
 }
 
 function money(v: Money | null | undefined): string | null {
@@ -57,8 +59,16 @@ function Chips({ items }: { items: string[] }) {
 }
 
 /** Governance policy snapshot resolved for the task (budget gauge is separate). */
-export default function PolicyInfo({ policy }: PolicyInfoProps) {
+export default function PolicyInfo({ policy, error }: PolicyInfoProps) {
   const t = useTranslations("TaskInfoPanel");
+
+  if (error) {
+    return (
+      <Section title={t("policy")} contentClassName="text-xs">
+        <FormError>{error}</FormError>
+      </Section>
+    );
+  }
 
   if (!policy) return null;
 

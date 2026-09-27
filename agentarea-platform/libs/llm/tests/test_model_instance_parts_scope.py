@@ -117,13 +117,20 @@ async def rows(session_factory):
     return ids
 
 
+class _NoCatalog:
+    async def get_item(self, item_id):
+        return None
+
+
 async def _create(session_factory, provider_config_id: UUID, model_spec_id: UUID):
     context = UserContext(user_id="member", workspace_id=WORKSPACE)
     async with session_factory() as session:
+        model_spec_repo = ModelSpecRepository(session, context)
+        model_spec_repo._get_catalog_repository = lambda: _NoCatalog()
         service = ProviderService(
             provider_spec_repo=ProviderSpecRepository(session, context),
             provider_config_repo=ProviderConfigRepository(session, context),
-            model_spec_repo=ModelSpecRepository(session, context),
+            model_spec_repo=model_spec_repo,
             model_instance_repo=ModelInstanceRepository(session, context),
             event_broker=AsyncMock(),
             secret_manager=MagicMock(),

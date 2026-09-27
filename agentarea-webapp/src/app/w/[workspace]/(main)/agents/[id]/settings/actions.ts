@@ -1,6 +1,7 @@
 "use server";
 
 import type { AgentUpdate } from "@/api/client/types.gen";
+import { getTranslations } from "next-intl/server";
 import { zAgentUpdate } from "@/api/client/zod.gen";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { updateAgent as updateAgentAPI } from "@/lib/api";
@@ -12,6 +13,7 @@ export async function updateAgentSettings(
   agentId: string,
   input: AgentFormValues
 ): Promise<AddAgentFormState> {
+  const t = await getTranslations("AgentsPage.form");
   const parsed = zAgentUpdate.safeParse(toAgentUpdate(input));
 
   if (!parsed.success) {
@@ -21,7 +23,8 @@ export async function updateAgentSettings(
       (errors[path] ??= []).push(issue.message);
     }
     return {
-      message: "Validation failed. Please check the fields.",
+      ok: false,
+      message: t("validationFailed"),
       errors,
       fieldValues: input,
     };
@@ -29,16 +32,18 @@ export async function updateAgentSettings(
 
   const result = await updateAgentAPI(agentId, parsed.data as AgentUpdate);
 
-  if (!result.data) {
+  if (result.error || !result.data) {
+    const message = apiErrorMessage(result, t("saveFailed"));
     return {
-      message: "Failed to update agent",
-      errors: { _form: [apiErrorMessage(result, "Failed to update agent")] },
+      ok: false,
+      message,
+      errors: { _form: [message] },
       fieldValues: input,
     };
   }
 
   return {
-    message: "Agent updated successfully!",
+    ok: true,
     fieldValues: input,
   };
 }

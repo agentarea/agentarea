@@ -11,6 +11,7 @@ import {
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { ChevronDown, FolderUp, Upload } from "lucide-react";
+import BaseModal from "@/components/BaseModal";
 import ContentBlock from "@/components/ContentBlock";
 import {
   FileBrowser,
@@ -18,6 +19,7 @@ import {
 } from "@/components/files/file-browser";
 import type { BrowsedFile } from "@/components/files/file-tree";
 import { useFileTabs } from "@/components/files/use-file-tabs";
+import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,8 +37,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { apiProxyUrl } from "@/lib/api-proxy-url";
 import type { DroppedFile } from "@/lib/file-drop";
 import {
@@ -51,7 +53,6 @@ import {
 
 export default function WorkspaceFilesPage() {
   const t = useTranslations("FilesPage");
-  const { toast } = useToast();
   const router = useWorkspaceRouter();
   const searchParams = useSearchParams();
   const currentFolder = searchParams.get("folder") || "";
@@ -61,27 +62,33 @@ export default function WorkspaceFilesPage() {
   const [files, setFiles] = useState<BrowsedFile[]>([]);
   const [directories, setDirectories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [moving, setMoving] = useState(false);
   const [folderDialog, setFolderDialog] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [folderError, setFolderError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<BrowsedFile | null>(null);
 
   const fetchFiles = useCallback(async () => {
-    setLoadError(false);
+    setLoadError(null);
     try {
-      const { data, error } = await listWorkspaceFilesAction();
-      if (error || !data) throw new Error("Files unavailable");
-      setFiles(data.files);
-      setDirectories(data.directories ?? []);
-    } catch {
-      setLoadError(true);
+      const result = await listWorkspaceFilesAction();
+      if (result.error || !result.data) {
+        setLoadError(apiErrorMessage(result, t("loadFailed")));
+        return;
+      }
+      setFiles(result.data.files);
+      setDirectories(result.data.directories ?? []);
+    } catch (err) {
+      console.error("Failed to load workspace files", err);
+      setLoadError(`${t("loadFailed")}: ${formatApiError(err)}`);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
   useEffect(() => {
     void fetchFiles();
   }, [fetchFiles]);
@@ -129,6 +136,7 @@ export default function WorkspaceFilesPage() {
     async (selected: DroppedFile[], destination: string) => {
       if (!selected.length) return;
       setUploading(true);
+      setActionError(null);
       const failed: string[] = [];
       try {
         for (const { file, relativePath } of selected) {
@@ -140,27 +148,27 @@ export default function WorkspaceFilesPage() {
               [destination, relativePath].filter(Boolean).join("/")
             );
             const { error } = await uploadWorkspaceFileAction(formData);
-            if (error) failed.push(relativePath);
-          } catch {
-            failed.push(relativePath);
+            if (error)
+              failed.push(`${relativePath} (${formatApiError(error)})`);
+          } catch (err) {
+            console.error("Failed to upload workspace file", err);
+            failed.push(`${relativePath} (${formatApiError(err)})`);
           }
         }
         if (failed.length)
-          toast({
-            title: t("uploadFailed"),
-            description: t("uploadFailedDescription", {
+          setActionError(
+            `${t("uploadFailed")}: ${t("uploadFailedDescription", {
               count: failed.length,
               total: selected.length,
               names: failed.join(", "),
-            }),
-            variant: "destructive",
-          });
+            })}`
+          );
         await fetchFiles();
       } finally {
         setUploading(false);
       }
     },
-    [fetchFiles, t, toast]
+    [fetchFiles, t]
   );
   const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.target;
@@ -182,18 +190,22 @@ export default function WorkspaceFilesPage() {
       const destination = [destinationFolder, name].filter(Boolean).join("/");
       if (destination === source) return;
       setMoving(true);
+      setActionError(null);
       try {
-        const { error } = await moveWorkspaceFileAction(source, destination);
-        if (error) {
-          toast({ title: t("moveFailed", { name }), variant: "destructive" });
+        const result = await moveWorkspaceFileAction(source, destination);
+        if (result.error) {
+          setActionError(apiErrorMessage(result, t("moveFailed", { name })));
           return;
         }
         await fetchFiles();
+      } catch (err) {
+        console.error("Failed to move workspace file", err);
+        setActionError(`${t("moveFailed", { name })}: ${formatApiError(err)}`);
       } finally {
         setMoving(false);
       }
     },
-    [fetchFiles, t, toast]
+    [fetchFiles, t]
   );
 
   const handleCreateFolder = async (event: FormEvent<HTMLFormElement>) => {
@@ -224,41 +236,51 @@ export default function WorkspaceFilesPage() {
     }
     setCreating(true);
     setFolderError(null);
+    setActionError(null);
     try {
-      const { data, error } = await createWorkspaceDirectoryAction({ path });
-      if (error || !data) {
-        setFolderError(t("createFailed"));
+      const result = await createWorkspaceDirectoryAction({ path });
+      if (result.error || !result.data) {
+        setFolderError(apiErrorMessage(result, t("createFailed")));
         return;
       }
-      setDirectories((previous) => [...new Set([...previous, data.path])]);
+      const created = result.data.path;
+      setDirectories((previous) => [...new Set([...previous, created])]);
       setFolderDialog(false);
       setFolderName("");
       await fetchFiles();
-    } catch {
-      setFolderError(t("createFailed"));
+    } catch (err) {
+      console.error("Failed to create workspace folder", err);
+      setFolderError(`${t("createFailed")}: ${formatApiError(err)}`);
     } finally {
       setCreating(false);
     }
   };
 
-  const handleDelete = async (file: BrowsedFile) => {
-    if (!window.confirm(t("confirmDelete", { name: file.path }))) return;
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    setActionError(null);
     try {
-      const { error } = await deleteWorkspaceFileAction(file.path);
-      if (error) throw new Error("Delete failed");
+      const result = await deleteWorkspaceFileAction(pendingDelete.path);
+      if (result.error) {
+        setActionError(apiErrorMessage(result, t("deleteFailed")));
+        return;
+      }
       await fetchFiles();
-    } catch {
-      toast({ title: t("deleteFailed"), variant: "destructive" });
+    } catch (err) {
+      console.error("Failed to delete workspace file", err);
+      setActionError(`${t("deleteFailed")}: ${formatApiError(err)}`);
     }
   };
   const fetchUrl = useCallback(async (path: string) => {
-    const { data } = await downloadWorkspaceFileAction(path);
-    if (!data?.url) return null;
-    return apiProxyUrl(data.url);
+    const result = await downloadWorkspaceFileAction(path);
+    return {
+      ...result,
+      data: result.data?.url ? apiProxyUrl(result.data.url) : null,
+    };
   }, []);
   const fetchHistory = useCallback(async (path: string) => {
-    const { data } = await workspaceFileHistoryAction(path);
-    return data?.events ?? [];
+    const result = await workspaceFileHistoryAction(path);
+    return { ...result, data: result.data?.events };
   }, []);
 
   return (
@@ -266,18 +288,20 @@ export default function WorkspaceFilesPage() {
       header={{ breadcrumb: [{ label: t("title") }] }}
       className="min-h-0 overflow-hidden p-0"
     >
+      {actionError && <FormError className="m-3 mb-0">{actionError}</FormError>}
       <FileBrowser
         files={files}
         directories={directories}
         state={browserState}
         onChange={setBrowserState}
         loading={loading}
-        error={loadError ? t("loadFailed") : null}
+        error={loadError}
         onRetry={() => {
+          setActionError(null);
           setLoading(true);
           void fetchFiles();
         }}
-        onDelete={handleDelete}
+        onDelete={setPendingDelete}
         fetchUrl={fetchUrl}
         fetchHistory={fetchHistory}
         onUploadFiles={uploadFiles}
@@ -291,7 +315,7 @@ export default function WorkspaceFilesPage() {
             <Button
               size="sm"
               className="rounded-r-none"
-              disabled={loading || creating || loadError}
+              disabled={loading || creating || Boolean(loadError)}
               isLoading={uploading}
               onClick={() => chooseUpload(false)}
             >
@@ -303,7 +327,9 @@ export default function WorkspaceFilesPage() {
                 <Button
                   size="sm"
                   className="rounded-l-none border-l border-primary-foreground/25 px-2"
-                  disabled={loading || uploading || creating || loadError}
+                  disabled={
+                    loading || uploading || creating || Boolean(loadError)
+                  }
                   aria-label={t("uploadOptions")}
                 >
                   <ChevronDown />
@@ -339,6 +365,16 @@ export default function WorkspaceFilesPage() {
         aria-label={t("uploadFolder")}
         onChange={handleUpload}
         {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+      />
+      <BaseModal
+        type="delete"
+        title={t("deleteFile", { name: pendingDelete?.path ?? "" })}
+        description={t("confirmDelete", { name: pendingDelete?.path ?? "" })}
+        onConfirm={handleDelete}
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
       />
       <Dialog
         open={folderDialog}

@@ -2,13 +2,14 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { toast } from "sonner";
 import type { PolicyDocument } from "@/api/client/types.gen";
 import type { HumanInputSecretValue } from "@/components/Chat/types";
+import FormError from "@/components/FormError";
 import type { TaskResourceRef } from "@/components/ResourcePicker/TaskResourceAttach";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useMentions } from "@/hooks/useMentions";
 import { useTaskActions } from "@/hooks/useTaskActions";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { canonicalType, type Part } from "@/lib/events/contract";
 import { normalizeSSEEvent } from "@/lib/events/normalize";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
@@ -277,6 +278,7 @@ export default function FullChat({
     setUserEntries([]);
     setInput("");
     setInputDisplay("");
+    setComposerError(null);
     clearFilesRef.current();
     return () => {
       const reader = activeStreamRef.current;
@@ -295,10 +297,8 @@ export default function FullChat({
     }
   );
 
-  const { dispatchAction: dispatchA2UIAction } = useA2UIActions(
-    agent.id,
-    currentTaskId
-  );
+  const { dispatchAction: dispatchA2UIAction, error: a2uiError } =
+    useA2UIActions(agent.id, currentTaskId);
 
   const {
     messagesContainerRef,
@@ -329,6 +329,9 @@ export default function FullChat({
   const [isLoading, setIsLoading] = React.useState(false);
   const [isPausing, setIsPausing] = React.useState(false);
   const [isResuming, setIsResuming] = React.useState(false);
+  const [composerError, setComposerError] = React.useState<string | null>(
+    null
+  );
   const [taskLifecycleStatus, setTaskLifecycleStatus] = React.useState<
     string | null
   >(null);
@@ -407,6 +410,7 @@ export default function FullChat({
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const displayValue = e.target.value;
     setInputDisplay(displayValue);
+    setComposerError(null);
 
     // Convert display value back to storage format
     const mentionsInInput = input.match(/@\[[^\]]+\]/g) || [];
@@ -440,14 +444,19 @@ export default function FullChat({
       answers: Record<string, unknown>,
       secrets: Record<string, HumanInputSecretValue>
     ) => {
-      const { error } = await actions.submitInput(
+      setComposerError(null);
+      const result = await actions.submitInput(
         inputRequestId,
         answers,
         secrets
       );
-      if (error) toast.error("Failed to submit response");
+      if (result.error) {
+        setComposerError(
+          apiErrorMessage(result, t("errors.submitResponseFailed"))
+        );
+      }
     },
-    [actions]
+    [actions, t]
   );
 
   // SSE handler: adopt the task id on creation (lifecycle callbacks + URL
@@ -547,6 +556,7 @@ export default function FullChat({
     };
 
     setIsLoading(true);
+    setComposerError(null);
 
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -566,8 +576,10 @@ export default function FullChat({
           pendingInputId: route.pendingInputId,
           queueOnCurrentTask: true,
         });
-        if ("error" in delivery && delivery.error)
-          throw new Error("The task did not accept the message.");
+        if ("error" in delivery && delivery.error) {
+          setComposerError(apiErrorMessage(delivery, t("errors.sendFailed")));
+          return;
+        }
         addUserMessage(userMessage);
         setInput("");
         setInputDisplay("");
@@ -635,9 +647,8 @@ export default function FullChat({
     } catch (error) {
       if (!streamReader || activeStreamRef.current === streamReader) {
         setIsLoading(false);
-        toast.error("Failed to send message", {
-          description: error instanceof Error ? error.message : String(error),
-        });
+        console.error("Failed to send message", error);
+        setComposerError(`${t("errors.sendFailed")}: ${formatApiError(error)}`);
       }
     } finally {
       if (!streamReader || activeStreamRef.current === streamReader) {
@@ -653,25 +664,20 @@ export default function FullChat({
 
     try {
       setIsPausing(true);
-      const { error } = await pauseAgentTask(agent.id, currentTaskId);
+      setComposerError(null);
+      const result = await pauseAgentTask(agent.id, currentTaskId);
 
-      if (error) {
-        const errorMessage =
-          error.detail?.[0]?.msg || "An error occurred while pausing the task";
-        toast.error("Failed to pause task", {
-          description: errorMessage,
-        });
+      if (result.error) {
+        setComposerError(apiErrorMessage(result, t("errors.pauseFailed")));
       } else {
-        toast.success("Task paused successfully");
         // We keep isLoading true until we get a confirmation or the stream ends?
         // If we pause, the stream might stop sending events.
         // Let's allow the user to interact again by stopping the loading state.
         setIsLoading(false);
       }
-    } catch (_err) {
-      toast.error("Failed to pause task", {
-        description: "An unexpected error occurred",
-      });
+    } catch (err) {
+      console.error("Failed to pause task", err);
+      setComposerError(`${t("errors.pauseFailed")}: ${formatApiError(err)}`);
     } finally {
       setIsPausing(false);
     }
@@ -682,23 +688,18 @@ export default function FullChat({
 
     try {
       setIsResuming(true);
-      const { error } = await resumeAgentTask(agent.id, currentTaskId);
+      setComposerError(null);
+      const result = await resumeAgentTask(agent.id, currentTaskId);
 
-      if (error) {
-        const errorMessage =
-          error.detail?.[0]?.msg || "An error occurred while resuming the task";
-        toast.error("Failed to resume task", {
-          description: errorMessage,
-        });
+      if (result.error) {
+        setComposerError(apiErrorMessage(result, t("errors.resumeFailed")));
       } else {
         setTaskLifecycleStatus("running");
         setIsLoading(true);
-        toast.success("Task resumed successfully");
       }
-    } catch (_err) {
-      toast.error("Failed to resume task", {
-        description: "An unexpected error occurred",
-      });
+    } catch (err) {
+      console.error("Failed to resume task", err);
+      setComposerError(`${t("errors.resumeFailed")}: ${formatApiError(err)}`);
     } finally {
       setIsResuming(false);
     }
@@ -944,6 +945,12 @@ export default function FullChat({
           ref={cardContainerRef}
           className={cn("relative w-full cursor-auto", !embedded && "pb-3")}
         >
+          {(composerError || a2uiError) && (
+            <div className="mb-2 space-y-2">
+              {composerError && <FormError>{composerError}</FormError>}
+              {a2uiError && <FormError>{a2uiError}</FormError>}
+            </div>
+          )}
           <ChatInputArea
             input={input}
             inputDisplay={inputDisplay}

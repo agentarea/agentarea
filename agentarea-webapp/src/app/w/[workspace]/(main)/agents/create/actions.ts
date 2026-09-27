@@ -1,16 +1,19 @@
 "use server";
 
 import type { AgentCreateRequest } from "@/api/client/types.gen";
+import { getTranslations } from "next-intl/server";
 import { zAgentCreateRequest } from "@/api/client/zod.gen";
 import { createAgent } from "@/lib/api";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { toAgentCreate } from "../shared/agentContract";
 import type { AgentFormValues } from "./types";
 
 // Form-state contract consumed by AgentForm (and the edit form): drives error
-// display and the "success" / created-id detection. Input to the action is the
+// display and the created-id detection. Input to the action is the
 // typed RHF object (AgentFormValues) directly — no FormData round-trip.
 export interface AddAgentFormState {
-  message: string;
+  ok: boolean;
+  message?: string;
   errors?: { [key: string]: string[] };
   fieldValues?: {
     name?: string;
@@ -48,6 +51,7 @@ export interface AddAgentFormState {
 export async function addAgent(
   input: AgentFormValues
 ): Promise<AddAgentFormState> {
+  const t = await getTranslations("AgentsPage.form");
   // Map the UI form to the backend contract, then validate against the
   // GENERATED schema. zAgentCreateRequest is generated from the backend OpenAPI spec,
   // so any drift between frontend and backend fails here at the boundary
@@ -62,49 +66,38 @@ export async function addAgent(
       (errors[path] ??= []).push(issue.message);
     }
     return {
-      message: "Validation failed. Please check the fields.",
+      ok: false,
+      message: t("validationFailed"),
       errors,
       fieldValues: input,
     };
   }
 
   try {
-    const { data, error } = await createAgent(parsed.data as AgentCreateRequest);
+    const result = await createAgent(parsed.data as AgentCreateRequest);
 
-    if (error) {
-      const apiErr = error as { message?: string; detail?: Array<{ msg: string }> };
-      const errorMessage =
-        apiErr?.message ||
-        apiErr?.detail?.[0]?.msg ||
-        "Unknown error";
+    if (result.error || !result.data) {
+      const message = apiErrorMessage(result, t("createFailed"));
       return {
-        message: "Failed to create agent",
-        errors: { _form: [`API error: ${errorMessage}`] },
+        ok: false,
+        message,
+        errors: { _form: [message] },
         fieldValues: input,
       };
     }
 
-    if (data) {
-      return {
-        message: "Agent created successfully!",
-        fieldValues: { ...input, id: data.id },
-      };
-    }
-  } catch (err) {
     return {
-      message: "Failed to create agent",
-      errors: {
-        _form: [
-          `Unexpected error: ${err instanceof Error ? err.message : "Unknown error"}`,
-        ],
-      },
+      ok: true,
+      fieldValues: { ...input, id: result.data.id },
+    };
+  } catch (err) {
+    console.error("Failed to create agent", err);
+    const message = `${t("createFailed")}: ${formatApiError(err)}`;
+    return {
+      ok: false,
+      message,
+      errors: { _form: [message] },
       fieldValues: input,
     };
   }
-
-  return {
-    message: "Unknown error occurred",
-    errors: { _form: ["Unknown error occurred"] },
-    fieldValues: input,
-  };
 }

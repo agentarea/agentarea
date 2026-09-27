@@ -1,9 +1,8 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { LogOut, Search, Trash2, User, Users } from "lucide-react";
-import { toast } from "sonner";
 import BaseModal from "@/components/BaseModal";
 import EmptyState from "@/components/EmptyState";
 import Table, { type Column } from "@/components/Table/Table";
@@ -12,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { BlueprintBadge } from "@/components/ui/blueprint-badge";
 import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import { formatApiError } from "@/lib/api-errors";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { removeMemberAction } from "../actions";
 import {
@@ -100,16 +100,19 @@ function MemberRowActions({
   access,
   ownerUserId,
   workspaceName,
+  onRemovalPending,
 }: {
   member: DisplayMember;
   currentUser: CurrentUser;
   access: MemberAccess;
   ownerUserId: string | null;
   workspaceName: string;
+  onRemovalPending: (pending: { userId: string; label: string }) => void;
 }) {
   const t = useTranslations("MembersPage");
   const router = useWorkspaceRouter();
   const [, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   const isSelf = member.user_id === currentUser.id;
   const label = isAnonymousMember(member, currentUser)
@@ -124,25 +127,24 @@ function MemberRowActions({
   if (!canLeave && !canRemove) return null;
 
   const remove = async () => {
-    const res = await removeMemberAction(member.user_id);
-    if (res.error) {
-      toast.error(isSelf ? t("leaveFailed") : t("removeFailed"), {
-        description: res.error,
-      });
+    setError(null);
+    let res: Awaited<ReturnType<typeof removeMemberAction>>;
+    try {
+      res = await removeMemberAction(member.user_id);
+    } catch (err) {
+      console.error("Failed to remove member", err);
+      setError(
+        `${isSelf ? t("leaveFailed") : t("removeFailed")}: ${formatApiError(err)}`
+      );
       return;
     }
-    if (res.pending) {
-      toast(t("removalInProgress"), {
-        description: isSelf
-          ? t("leaveInProgressText")
-          : t("removalInProgressText", { member: label }),
-      });
-    } else if (isSelf) {
-      toast.success(t("youLeft"));
-    } else {
-      toast.success(t("memberRemoved"), {
-        description: t("memberRemovedText", { member: label }),
-      });
+    if (res.error) {
+      setError(res.error);
+      return;
+    }
+    // The row disappears on refresh; the table keeps the notice.
+    if (res.pending && !isSelf) {
+      onRemovalPending({ userId: member.user_id, label });
     }
     if (isSelf) {
       router.push("/");
@@ -152,24 +154,31 @@ function MemberRowActions({
   };
 
   return (
-    <BaseModal
-      type="delete"
-      title={isSelf ? t("leaveWorkspace") : t("removeMemberTitle")}
-      description={
-        isSelf
-          ? t("leaveText", { workspace: workspaceName })
-          : t("removeMemberText", { member: label, workspace: workspaceName })
-      }
-      confirmLabel={isSelf ? t("leave") : t("remove")}
-      onConfirm={remove}
-    >
-      <TableRowAction
-        variant="destructiveOutline"
-        icon={isSelf ? <LogOut /> : <Trash2 />}
+    <span className="inline-flex items-center gap-2">
+      {error && (
+        <span className="form-error max-w-xs text-left" role="alert">
+          {error}
+        </span>
+      )}
+      <BaseModal
+        type="delete"
+        title={isSelf ? t("leaveWorkspace") : t("removeMemberTitle")}
+        description={
+          isSelf
+            ? t("leaveText", { workspace: workspaceName })
+            : t("removeMemberText", { member: label, workspace: workspaceName })
+        }
+        confirmLabel={isSelf ? t("leave") : t("remove")}
+        onConfirm={remove}
       >
-        {isSelf ? t("leave") : t("remove")}
-      </TableRowAction>
-    </BaseModal>
+        <TableRowAction
+          variant="destructiveOutline"
+          icon={isSelf ? <LogOut /> : <Trash2 />}
+        >
+          {isSelf ? t("leave") : t("remove")}
+        </TableRowAction>
+      </BaseModal>
+    </span>
   );
 }
 
@@ -182,6 +191,17 @@ export function MembersTable({
   onInvite,
 }: MembersTableProps) {
   const t = useTranslations("MembersPage");
+  const [removalPending, setRemovalPending] = useState<{
+    userId: string;
+    label: string;
+  } | null>(null);
+  // The notice covers the gap until the member leaves the list.
+  if (
+    removalPending &&
+    !members.some((member) => member.user_id === removalPending.userId)
+  ) {
+    setRemovalPending(null);
+  }
 
   if (members.length === 0) {
     return query ? (
@@ -243,10 +263,20 @@ export function MembersTable({
             access={getMemberAccess(member, ownerUserId)}
             ownerUserId={ownerUserId}
             workspaceName={workspaceName}
+            onRemovalPending={setRemovalPending}
           />
         ) : null,
     },
   ];
 
-  return <Table data={members} columns={columns} />;
+  return (
+    <>
+      {removalPending && (
+        <p className="mb-3 text-xs text-muted-foreground" role="status">
+          {t("removalInProgressText", { member: removalPending.label })}
+        </p>
+      )}
+      <Table data={members} columns={columns} />
+    </>
+  );
 }

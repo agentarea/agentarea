@@ -2,15 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { Pencil, RefreshCw, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { FileX, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import BaseModal from "@/components/BaseModal";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import FormError from "@/components/FormError";
 import { DetailSkeleton } from "@/components/Skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { formatApiError } from "@/lib/api-errors";
+import { apiErrorMessage, formatApiError, isApiNotFound } from "@/lib/api-errors";
 import {
   getOpenApiConnectionDisplayStatus,
   getOpenApiConnectionStatusPresentation,
@@ -30,77 +33,82 @@ import { OpenAPIConnection } from "../../types";
 export default function OpenAPIConnectionDetailPage() {
   const params = useParams();
   const router = useWorkspaceRouter();
+  const t = useTranslations("MCPServersPage.openapiDetail");
+  const tPage = useTranslations("MCPServersPage");
+  const tCommon = useTranslations("Common");
   const connectionId = params.id as string;
 
   const [connection, setConnection] = useState<OpenAPIConnection | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [discovering, setDiscovering] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editingHeaders, setEditingHeaders] = useState(false);
   const [savingHeaders, setSavingHeaders] = useState(false);
+  // The callback's query is dropped from the URL right away, so the failure is
+  // captured once and stays on the page.
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const oauthResult = searchParams.get("oauth");
-    if (oauthResult === "success") {
-      toast.success("Account connected");
-      router.replace(`/connections/openapi/${connectionId}`, { scroll: false });
-    } else if (oauthResult === "error") {
-      toast.error("Could not connect account", {
-        description: searchParams.get("reason") || "OAuth authorization failed",
-      });
-      router.replace(`/connections/openapi/${connectionId}`, { scroll: false });
+    if (!oauthResult) return;
+    if (oauthResult === "error") {
+      setOauthError(searchParams.get("reason") || "unknown");
     }
+    router.replace(`/connections/openapi/${connectionId}`, { scroll: false });
   }, [connectionId, router]);
 
   useEffect(() => {
     const load = async () => {
+      setLoading(true);
+      setLoadError(null);
+      setNotFound(false);
       try {
         const result = await getOpenAPIConnection(connectionId);
         if (result.error || !result.data) {
-          setError(
-            result.status === 404
-              ? "Connection not found"
-              : `Failed to load connection${result.status ? ` (${result.status})` : ""}: ${formatApiError(result)}`
-          );
+          if (isApiNotFound(result)) setNotFound(true);
+          else setLoadError(apiErrorMessage(result, t("errors.loadFailed")));
         } else {
           setConnection(result.data as OpenAPIConnection);
         }
       } catch (err) {
         console.error("Failed to load OpenAPI connection", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to load connection"
-        );
+        setLoadError(`${t("errors.loadFailed")}: ${formatApiError(err)}`);
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [connectionId]);
+  }, [connectionId, reloadKey, t]);
+
+  const reloadConnection = async () => {
+    const result = await getOpenAPIConnection(connectionId);
+    if (result.error || !result.data) {
+      setError(apiErrorMessage(result, t("errors.reloadFailed")));
+      return false;
+    }
+    setConnection(result.data as OpenAPIConnection);
+    return true;
+  };
 
   const handleDiscover = async () => {
     setDiscovering(true);
     setError(null);
+    setOauthError(null);
     try {
-      const { error: discoverError } = await discoverOpenAPITools(connectionId);
-      if (discoverError) {
-        setError(formatApiError(discoverError));
+      const result = await discoverOpenAPITools(connectionId);
+      if (result.error) {
+        setError(apiErrorMessage(result, t("errors.discoverFailed")));
         return;
       }
-      const result = await getOpenAPIConnection(connectionId);
-      if (result.error || !result.data) {
-        setError(
-          result.status === 404
-            ? "Connection not found"
-            : `Failed to reload connection${result.status ? ` (${result.status})` : ""}: ${formatApiError(result)}`
-        );
-      } else {
-        setConnection(result.data as OpenAPIConnection);
-      }
+      await reloadConnection();
     } catch (err) {
       console.error("Failed to discover tools", err);
-      setError(err instanceof Error ? err.message : "Failed to discover tools");
+      setError(`${t("errors.discoverFailed")}: ${formatApiError(err)}`);
     } finally {
       setDiscovering(false);
     }
@@ -110,41 +118,29 @@ export default function OpenAPIConnectionDetailPage() {
     setSavingHeaders(true);
     setError(null);
     try {
-      const { error: saveError } = await updateOpenAPIConnection(connectionId, {
+      const result = await updateOpenAPIConnection(connectionId, {
         custom_headers: rows,
       });
-      if (saveError) {
-        setError(formatApiError(saveError));
+      if (result.error) {
+        setError(apiErrorMessage(result, t("errors.saveHeadersFailed")));
         return;
       }
-      const result = await getOpenAPIConnection(connectionId);
-      if (result.error || !result.data) {
-        setError(
-          result.status === 404
-            ? "Connection not found"
-            : `Failed to reload connection${result.status ? ` (${result.status})` : ""}: ${formatApiError(result)}`
-        );
-      } else {
-        setConnection(result.data as OpenAPIConnection);
-        setEditingHeaders(false);
-      }
+      if (await reloadConnection()) setEditingHeaders(false);
     } catch (err) {
       console.error("Failed to save headers", err);
-      setError(err instanceof Error ? err.message : "Failed to save headers");
+      setError(`${t("errors.saveHeadersFailed")}: ${formatApiError(err)}`);
     } finally {
       setSavingHeaders(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm("Delete this connection?")) return;
     setDeleting(true);
     setError(null);
     try {
-      const { error: deleteError } =
-        await deleteOpenAPIConnection(connectionId);
-      if (deleteError) {
-        setError(formatApiError(deleteError));
+      const result = await deleteOpenAPIConnection(connectionId);
+      if (result.error) {
+        setError(apiErrorMessage(result, t("errors.deleteFailed")));
         setDeleting(false);
         return;
       }
@@ -152,26 +148,48 @@ export default function OpenAPIConnectionDetailPage() {
       router.refresh();
     } catch (err) {
       console.error("Failed to delete connection", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to delete connection"
-      );
+      setError(`${t("errors.deleteFailed")}: ${formatApiError(err)}`);
       setDeleting(false);
     }
   };
 
-  if (loading) {
-    return <DetailSkeleton className="p-6" />;
-  }
+  const breadcrumbRoot = { label: tPage("title"), href: "/connections" };
 
-  if (error && !connection) {
-    return <div className="p-8 text-center text-destructive">{error}</div>;
+  if (loading) {
+    return (
+      <ContentBlock header={{ breadcrumb: [breadcrumbRoot] }}>
+        <DetailSkeleton />
+      </ContentBlock>
+    );
   }
 
   if (!connection) {
     return (
-      <div className="p-8 text-center text-muted-foreground">
-        Connection not found
-      </div>
+      <ContentBlock header={{ breadcrumb: [breadcrumbRoot] }}>
+        <div className="flex h-64 items-center justify-center">
+          {loadError ? (
+            <EmptyState
+              title={t("errors.loadFailed")}
+              description={loadError}
+              icons={[FileX]}
+              action={{
+                label: tCommon("retry"),
+                onClick: () => setReloadKey((key) => key + 1),
+              }}
+            />
+          ) : (
+            <EmptyState
+              title={notFound ? t("notFound") : t("errors.loadFailed")}
+              description=""
+              icons={[FileX]}
+              action={{
+                label: t("back"),
+                onClick: () => router.push("/connections"),
+              }}
+            />
+          )}
+        </div>
+      </ContentBlock>
     );
   }
 
@@ -185,12 +203,9 @@ export default function OpenAPIConnectionDetailPage() {
   return (
     <ContentBlock
       header={{
-        breadcrumb: [
-          { label: "Connections", href: "/connections" },
-          { label: connection.name },
-        ],
+        breadcrumb: [breadcrumbRoot, { label: connection.name }],
         description: connection.description || connection.base_url,
-        backLink: { label: "Back to Connections", href: "/connections" },
+        backLink: { label: t("back"), href: "/connections" },
         controls: (
           <div className="flex gap-2">
             {connection.spec_url && (
@@ -203,34 +218,36 @@ export default function OpenAPIConnectionDetailPage() {
                 <RefreshCw
                   className={`mr-1 ${discovering ? "animate-spin" : ""}`}
                 />
-                {discovering ? "Refreshing..." : "Refresh from Spec URL"}
+                {discovering ? t("refreshing") : t("refreshFromSpec")}
               </Button>
             )}
-            <Button
-              size="xs"
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleting}
+            <BaseModal
+              type="delete"
+              title={t("deleteTitle")}
+              description={tCommon("deleteDescription", {
+                itemName: connection.name,
+              })}
+              onConfirm={handleDelete}
             >
-              <Trash2 className="mr-1" />
-              {deleting ? "Deleting..." : "Delete"}
-            </Button>
+              <Button size="xs" variant="destructive" disabled={deleting}>
+                <Trash2 className="mr-1" />
+                {deleting ? t("deleting") : tCommon("delete")}
+              </Button>
+            </BaseModal>
           </div>
         ),
       }}
     >
       <div className="space-y-6">
-        {/* Error banner */}
-        {error && (
-          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </div>
+        {oauthError && (
+          <FormError>{t("oauthError", { reason: oauthError })}</FormError>
         )}
+        {error && <FormError>{error}</FormError>}
 
         {/* Info */}
         <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
           <div>
-            <p className="text-xs text-muted-foreground">Type</p>
+            <p className="text-xs text-muted-foreground">{t("type")}</p>
             <div className="mt-1 flex items-center gap-1.5">
               <OpenAPIConnectionMark
                 connection={connection}
@@ -245,7 +262,7 @@ export default function OpenAPIConnectionDetailPage() {
             </div>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Status</p>
+            <p className="text-xs text-muted-foreground">{t("status")}</p>
             <div className="mt-1">
               <StatusIndicator
                 tone={statusPresentation.tone}
@@ -256,11 +273,11 @@ export default function OpenAPIConnectionDetailPage() {
             </div>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Base URL</p>
+            <p className="text-xs text-muted-foreground">{t("baseUrl")}</p>
             <p className="mt-1 font-mono text-sm">{connection.base_url}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Spec URL</p>
+            <p className="text-xs text-muted-foreground">{t("specUrl")}</p>
             <p className="mt-1 font-mono text-sm truncate">
               {connection.spec_url || "—"}
             </p>
@@ -280,7 +297,9 @@ export default function OpenAPIConnectionDetailPage() {
             <>
               <div className="flex items-center justify-between">
                 <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {`Custom Headers (${connection.custom_headers?.length ?? 0})`}
+                  {t("customHeaders", {
+                    count: connection.custom_headers?.length ?? 0,
+                  })}
                 </div>
                 <Button
                   size="xs"
@@ -290,8 +309,8 @@ export default function OpenAPIConnectionDetailPage() {
                   <Pencil className="mr-1" />
                   {connection.custom_headers &&
                   connection.custom_headers.length > 0
-                    ? "Edit"
-                    : "Add"}
+                    ? tCommon("edit")
+                    : tCommon("add")}
                 </Button>
               </div>
               {connection.custom_headers &&
@@ -299,8 +318,7 @@ export default function OpenAPIConnectionDetailPage() {
                 <CustomHeadersList headers={connection.custom_headers} />
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  No custom headers. Click Add to set Authorization or any other
-                  request header your provider needs.
+                  {t("noCustomHeaders")}
                 </p>
               )}
             </>
@@ -310,14 +328,14 @@ export default function OpenAPIConnectionDetailPage() {
         {/* Tools */}
         {connection.available_tools.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {connection.spec_url
-              ? "No tools discovered yet. Click \u201CRefresh from Spec URL\u201D to re-parse the spec."
-              : "No tools parsed from this spec."}
+            {connection.spec_url ? t("noToolsWithSpec") : t("noTools")}
           </p>
         ) : (
           <ToolsTable
             tools={connection.available_tools}
-            label={`Available Tools (${connection.available_tools.length})`}
+            label={t("availableTools", {
+              count: connection.available_tools.length,
+            })}
           />
         )}
       </div>

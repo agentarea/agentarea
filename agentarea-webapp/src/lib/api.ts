@@ -79,18 +79,18 @@ function withStatus<TData, TError>(result: {
 }
 
 export const listAgents = async () => {
-  const { data, error } = await sdk.listAgentsV1AgentsGet({
+  const result = await sdk.listAgentsV1AgentsGet({
     client: serverClient,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const createAgent = async (agent: AgentCreateRequest) => {
-  const { data, error } = await sdk.createAgentV1AgentsPost({
+  const result = await sdk.createAgentV1AgentsPost({
     client: serverClient,
     body: agent,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const listAgentPresets = async () => {
@@ -125,12 +125,12 @@ export const installAgent = async (agentId: string) => {
 };
 
 export const updateAgent = async (agentId: string, agent: AgentUpdate) => {
-  const { data, error } = await sdk.updateAgentV1AgentsAgentIdPatch({
+  const result = await sdk.updateAgentV1AgentsAgentIdPatch({
     client: serverClient,
     path: { agent_id: agentId },
     body: agent,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const listRegistries = async (params?: {
@@ -158,12 +158,11 @@ export const listRegistryItems = async (
 };
 
 export const getCatalogItem = async (itemId: string) => {
-  const { data, error } =
-    await sdk.getCatalogItemV1RegistriesCatalogItemsItemIdGet({
-      client: serverClient,
-      path: { item_id: itemId },
-    });
-  return { data, error };
+  const result = await sdk.getCatalogItemV1RegistriesCatalogItemsItemIdGet({
+    client: serverClient,
+    path: { item_id: itemId },
+  });
+  return withStatus(result);
 };
 
 export const connectCatalogItem = async (
@@ -180,19 +179,19 @@ export const connectCatalogItem = async (
 };
 
 export const analyzeBundle = async (body: AnalyzeRequest) => {
-  const { data, error } = await sdk.analyzeBundleV1BundlesAnalyzePost({
+  const result = await sdk.analyzeBundleV1BundlesAnalyzePost({
     client: serverClient,
     body,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const installBundle = async (body: InstallRequest) => {
-  const { data, error } = await sdk.installBundleV1BundlesInstallPost({
+  const result = await sdk.installBundleV1BundlesInstallPost({
     client: serverClient,
     body,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const listAgentTasks = async (agentId: string) => {
@@ -244,38 +243,32 @@ export const cancelAgentTask = async (agentId: string, taskId: string) => {
 };
 
 export const getAgentTaskStatus = async (agentId: string, taskId: string) => {
-  try {
-    const response =
-      await sdk.getAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGet({
-        client: serverClient,
-        path: { agent_id: agentId, task_id: taskId },
-      });
-    return {
-      data: response.data as
-        | {
-            task_id: string;
-            agent_id: string;
-            execution_id: string;
-            status: string;
-            start_time?: string;
-            end_time?: string;
-            execution_time?: string;
-            error?: string;
-            result?: unknown;
-            message?: string;
-            artifacts?: unknown;
-            session_id?: string;
-            usage_metadata?: unknown;
-          }
-        | undefined,
-      error: response.error,
-    };
-  } catch (error) {
-    return {
-      data: undefined,
-      error: error as Error,
-    };
-  }
+  const response =
+    await sdk.getAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGet({
+      client: serverClient,
+      path: { agent_id: agentId, task_id: taskId },
+    });
+  return {
+    data: response.data as
+      | {
+          task_id: string;
+          agent_id: string;
+          execution_id: string;
+          status: string;
+          start_time?: string;
+          end_time?: string;
+          execution_time?: string;
+          error?: string;
+          result?: unknown;
+          message?: string;
+          artifacts?: unknown;
+          session_id?: string;
+          usage_metadata?: unknown;
+        }
+      | undefined,
+    error: response.error,
+    status: response.response?.status,
+  };
 };
 
 export const listTaskArtifacts = async (agentId: string, taskId: string) => {
@@ -358,13 +351,13 @@ export const sendA2UIAction = async (
   taskId: string,
   payload: A2UiActionPayload
 ) => {
-  const { data, error } =
+  const result =
     await sdk.sendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPost({
       client: serverClient,
       path: { agent_id: agentId, task_id: taskId },
       body: payload,
     });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const resolveEscalation = async (
@@ -551,34 +544,34 @@ export const getMCPServerInstance = async (instanceId: string) => {
 };
 
 export const deleteMCPServerInstance = async (instanceId: string) => {
-  const { data, error } =
+  const result =
     await sdk.deleteMcpServerInstanceV1McpServerInstancesInstanceIdDelete({
       client: serverClient,
       path: { instance_id: instanceId },
     });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const updateMCPServerInstance = async (
   instanceId: string,
   instance: McpServerInstanceUpdate
 ) => {
-  const { data, error } =
+  const result =
     await sdk.updateMcpServerInstanceV1McpServerInstancesInstanceIdPatch({
       client: serverClient,
       path: { instance_id: instanceId },
       body: instance,
     });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const verifyMCPServerInstance = async (instanceId: string) => {
-  const { data, error } =
+  const result =
     await sdk.verifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPost({
       client: serverClient,
       path: { instance_id: instanceId },
     });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const validateMCPServerInstanceSpec = async (spec: ValidateRequest) => {
@@ -647,11 +640,11 @@ export const listProviderConfigs = async (params?: {
 };
 
 export const createProviderConfig = async (config: ProviderConfigCreate) => {
-  const { data, error } = await sdk.createProviderConfigV1ProviderConfigsPost({
+  const result = await sdk.createProviderConfigV1ProviderConfigsPost({
     client: serverClient,
     body: config,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const getProviderConfig = async (
@@ -677,13 +670,12 @@ export const updateProviderConfig = async (
   configId: string,
   config: ProviderConfigUpdate
 ) => {
-  const { data, error } =
-    await sdk.updateProviderConfigV1ProviderConfigsConfigIdPut({
-      client: serverClient,
-      path: { config_id: configId },
-      body: config,
-    });
-  return { data, error };
+  const result = await sdk.updateProviderConfigV1ProviderConfigsConfigIdPut({
+    client: serverClient,
+    path: { config_id: configId },
+    body: config,
+  });
+  return withStatus(result);
 };
 
 export const deleteProviderConfig = async (configId: string) => {
@@ -803,11 +795,11 @@ export const listModelInstances = async (params?: {
   model_spec_id?: string;
   is_active?: boolean;
 }) => {
-  const { data, error } = await sdk.listModelInstancesV1ModelInstancesGet({
+  const result = await sdk.listModelInstancesV1ModelInstancesGet({
     client: serverClient,
     query: params,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const createModelInstance = async (instance: ModelInstanceCreate) => {
@@ -843,12 +835,11 @@ export const testModelInstance = async (testRequest: {
 };
 
 export const getModelInstance = async (instanceId: string) => {
-  const { data, error } =
-    await sdk.getModelInstanceV1ModelInstancesInstanceIdGet({
-      client: serverClient,
-      path: { instance_id: instanceId },
-    });
-  return { data, error };
+  const result = await sdk.getModelInstanceV1ModelInstancesInstanceIdGet({
+    client: serverClient,
+    path: { instance_id: instanceId },
+  });
+  return withStatus(result);
 };
 
 export const deleteModelInstance = async (instanceId: string) => {
@@ -881,23 +872,15 @@ export const listAllTools = async (options?: {
 
 export type MCPInstanceConsumer = McpInstanceConsumer;
 
-export const getMCPInstanceConsumers = async (
-  instanceId: string
-): Promise<MCPInstanceConsumer[]> => {
-  try {
-    const { data, error } =
-      await sdk.listMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGet(
-        {
-          client: serverClient,
-          path: { instance_id: instanceId },
-        }
-      );
-    if (error || !data) return [];
-    return data;
-  } catch (error) {
-    console.warn("Failed to fetch MCP instance consumers:", error);
-    return [];
-  }
+export const getMCPInstanceConsumers = async (instanceId: string) => {
+  const result =
+    await sdk.listMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGet(
+      {
+        client: serverClient,
+        path: { instance_id: instanceId },
+      }
+    );
+  return withStatus(result);
 };
 
 type ListSkillsOptions = {
@@ -982,23 +965,23 @@ export const getSkill = async (skillId: string) => {
 };
 
 export const getSkillContent = async (skillId: string) => {
-  const { data, error } = await sdk.getSkillContentV1SkillsSkillIdContentGet({
+  const result = await sdk.getSkillContentV1SkillsSkillIdContentGet({
     client: serverClient,
     path: { skill_id: skillId },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const getSkillFiles = async (
   skillId: string,
   includeUrls: boolean = false
 ) => {
-  const { data, error } = await sdk.listSkillFilesV1SkillsSkillIdFilesGet({
+  const result = await sdk.listSkillFilesV1SkillsSkillIdFilesGet({
     client: serverClient,
     path: { skill_id: skillId },
     query: { include_urls: includeUrls },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const getSkillFile = async (
@@ -1006,7 +989,7 @@ export const getSkillFile = async (
   filePath: string,
   options?: { redirect?: boolean }
 ) => {
-  const { data, error } = await sdk.getSkillFileV1SkillsSkillIdFilesPathGet({
+  const result = await sdk.getSkillFileV1SkillsSkillIdFilesPathGet({
     client: serverClient,
     path: { skill_id: skillId, path: filePath },
     query:
@@ -1014,7 +997,7 @@ export const getSkillFile = async (
         ? undefined
         : { redirect: options.redirect },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const createSkill = async (skill: {
@@ -1047,19 +1030,19 @@ export const updateSkill = async (
 };
 
 export const installSkill = async (skillId: string) => {
-  const { data, error } = await sdk.installSkillV1SkillsSkillIdInstallPost({
+  const result = await sdk.installSkillV1SkillsSkillIdInstallPost({
     client: serverClient,
     path: { skill_id: skillId },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const deleteSkill = async (skillId: string) => {
-  const { data, error } = await sdk.deleteSkillV1SkillsSkillIdDelete({
+  const result = await sdk.deleteSkillV1SkillsSkillIdDelete({
     client: serverClient,
     path: { skill_id: skillId },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const listMCPAuthConfigs = async () => {
@@ -1191,36 +1174,35 @@ export const updateTrigger = async (triggerId: string, body: TriggerUpdate) => {
 };
 
 export const deleteTrigger = async (triggerId: string) => {
-  const { data, error } = await sdk.deleteTriggerV1TriggersTriggerIdDelete({
+  const result = await sdk.deleteTriggerV1TriggersTriggerIdDelete({
     client: serverClient,
     path: { trigger_id: triggerId },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const enableTrigger = async (triggerId: string) => {
-  const { data, error } = await sdk.enableTriggerV1TriggersTriggerIdEnablePost({
+  const result = await sdk.enableTriggerV1TriggersTriggerIdEnablePost({
     client: serverClient,
     path: { trigger_id: triggerId },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const disableTrigger = async (triggerId: string) => {
-  const { data, error } =
-    await sdk.disableTriggerV1TriggersTriggerIdDisablePost({
-      client: serverClient,
-      path: { trigger_id: triggerId },
-    });
-  return { data, error };
-};
-
-export const runTriggerNow = async (triggerId: string) => {
-  const { data, error } = await sdk.runTriggerNowV1TriggersTriggerIdRunPost({
+  const result = await sdk.disableTriggerV1TriggersTriggerIdDisablePost({
     client: serverClient,
     path: { trigger_id: triggerId },
   });
-  return { data, error };
+  return withStatus(result);
+};
+
+export const runTriggerNow = async (triggerId: string) => {
+  const result = await sdk.runTriggerNowV1TriggersTriggerIdRunPost({
+    client: serverClient,
+    path: { trigger_id: triggerId },
+  });
+  return withStatus(result);
 };
 
 export const getTriggerStatus = async (triggerId: string) => {
@@ -1349,11 +1331,11 @@ export const acceptWorkspaceInvitation = async (token: string) => {
 };
 
 export const discoverMCPInstanceTools = async (instanceId: string) => {
-  const { data, error } =
+  const result =
     await sdk.discoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPost(
       { client: serverClient, path: { instance_id: instanceId } }
     );
-  return { data, error };
+  return withStatus(result);
 };
 
 export const testMCPInstanceAuth = async (instanceId: string) => {
@@ -1447,12 +1429,12 @@ export const createOpenAPIConnection = async (
 };
 
 export const deleteOpenAPIConnection = async (connectionId: string) => {
-  const { data, error } =
+  const result =
     await sdk.deleteConnectionV1OpenapiConnectionsConnectionIdDelete({
       client: serverClient,
       path: { connection_id: connectionId },
     });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const getOpenAPIConnection = async (connectionId: string) => {
@@ -1533,11 +1515,11 @@ export const updateProject = async (
 };
 
 export const deleteProject = async (projectId: string) => {
-  const { data, error } = await sdk.deleteProjectV1ProjectsProjectIdDelete({
+  const result = await sdk.deleteProjectV1ProjectsProjectIdDelete({
     client: serverClient,
     path: { project_id: projectId },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const addSkillToProject = async (projectId: string, skillId: string) => {
@@ -1655,11 +1637,11 @@ export const updateClient = async (
 };
 
 export const deleteClient = async (clientId: string) => {
-  const { data, error } = await sdk.deleteClientV1ClientsClientIdDelete({
+  const result = await sdk.deleteClientV1ClientsClientIdDelete({
     client: serverClient,
     path: { client_id: clientId },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const addSkillToClient = async (clientId: string, skillId: string) => {
@@ -1771,11 +1753,11 @@ export const downloadWorkspaceFile = async (filePath: string) => {
 };
 
 export const workspaceFileHistory = async (filePath: string) => {
-  const { data, error } = await sdk.workspaceFileHistoryV1FilesHistoryGet({
+  const result = await sdk.workspaceFileHistoryV1FilesHistoryGet({
     client: serverClient,
     query: { path: filePath },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const getAgentWallet = async (agentId: string) => {
@@ -1869,11 +1851,11 @@ export const getAllTasks = async (
 export const getInbox = async (
   params?: GetInboxItemsV1InboxGetData["query"]
 ) => {
-  const { data, error } = await sdk.getInboxItemsV1InboxGet({
+  const result = await sdk.getInboxItemsV1InboxGet({
     client: serverClient,
     query: params,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const getTask = async (taskId: string) => {
@@ -1926,21 +1908,12 @@ export const previewEffectivePolicy = async (body?: {
   agent_id?: string;
   task_policy?: Record<string, unknown>;
 }) => {
-  const { data, error } =
+  const result =
     await sdk.previewEffectivePolicyV1GovernanceEffectivePolicyPreviewPost({
       client: serverClient,
       body: body ?? {},
     });
-  return { data, error };
-};
-
-export const getTaskPolicySnapshot = async (taskId: string) => {
-  const { data, error } =
-    await sdk.getTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGet({
-      client: serverClient,
-      path: { task_id: taskId },
-    });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const getAccessControlGraph = async () => {
@@ -2103,18 +2076,19 @@ export const browseCatalog = async (params: {
   limit: number;
   offset: number;
 }) => {
-  const { data, error } = await sdk.browseCatalogV1RegistriesCatalogBrowseGet({
-    client: serverClient,
-    query: {
-      registry_type: params.registryType,
-      q: params.q || undefined,
-      category: params.category || undefined,
-      protocol: params.protocol || undefined,
-      sort: params.sort || undefined,
-      limit: params.limit,
-      offset: params.offset,
-    },
-  });
+  const { data, error, response } =
+    await sdk.browseCatalogV1RegistriesCatalogBrowseGet({
+      client: serverClient,
+      query: {
+        registry_type: params.registryType,
+        q: params.q || undefined,
+        category: params.category || undefined,
+        protocol: params.protocol || undefined,
+        sort: params.sort || undefined,
+        limit: params.limit,
+        offset: params.offset,
+      },
+    });
   if (error || !data) {
     return {
       items: [],
@@ -2122,6 +2096,7 @@ export const browseCatalog = async (params: {
       categories: [],
       protocols: [],
       error: error ?? "Failed to load catalog",
+      status: response?.status,
     };
   }
   return {
@@ -2130,6 +2105,7 @@ export const browseCatalog = async (params: {
     categories: data.categories,
     protocols: data.protocols,
     error: null,
+    status: response?.status,
   };
 };
 

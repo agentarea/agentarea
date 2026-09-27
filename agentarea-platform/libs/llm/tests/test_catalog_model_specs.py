@@ -2,9 +2,9 @@
 
 Built-in model specs live in the registry catalog (``registry_items`` of
 ``registry_type='llm_models'``) and are merged into the model-spec list
-read-only. Unlike agents/skills there is no copy-on-write fork: built-in specs
-are reference specs users instantiate via ``model_instances``. These tests
-exercise the repository merge with light fakes, no database.
+read-only, one entry per model, hidden once the workspace has its own row for
+it. These tests exercise the repository merge with light fakes, no database;
+``test_catalog_model_instance_db.py`` covers adding one to a workspace.
 """
 
 from datetime import datetime
@@ -12,7 +12,6 @@ from uuid import uuid4
 
 import pytest
 from agentarea_common.auth.context import UserContext
-from agentarea_llm.domain.models import ModelSpec
 from agentarea_llm.infrastructure.catalog_model_spec_repository import CatalogModelSpecItem
 from agentarea_llm.infrastructure.model_spec_repository import (
     ModelSpecRepository,
@@ -20,6 +19,7 @@ from agentarea_llm.infrastructure.model_spec_repository import (
 )
 
 _TS = datetime(2024, 1, 2, 3, 4, 5)
+_PRICES = {"input_cost_per_token": "0.000001", "output_cost_per_token": "0.000002"}
 
 
 def _item(item_id=None, name="GPT-4", spec=None, provider_spec_id=None, is_active=True, ts=_TS):
@@ -34,6 +34,7 @@ def _item(item_id=None, name="GPT-4", spec=None, provider_spec_id=None, is_activ
             "context_window": 128000,
             "provider_key": "openai",
             "is_active": is_active,
+            **_PRICES,
         },
         provider_spec_id=provider_spec_id or str(uuid4()),
         provider_key="openai",
@@ -91,17 +92,22 @@ def test_catalog_projection_rejects_missing_context_window():
         _project_catalog_model_spec(item)
 
 
-async def test_catalog_projections_shadows_instantiated_and_projects_rest():
-    item_unforked = _item(name="Unforked")
-    item_shadowed = _item(name="Shadowed")
-    tenant_spec = ModelSpec(
-        provider_spec_id=str(uuid4()), model_name="custom", display_name="Custom"
-    )
-    tenant_spec.registry_item_id = item_shadowed.id  # type: ignore[attr-defined]
+def _spec(model_name):
+    return {
+        "model_name": model_name,
+        "context_window": 128000,
+        "provider_key": "openai",
+        **_PRICES,
+    }
+
+
+async def test_catalog_projections_shadows_the_workspaces_own_models_and_projects_rest():
+    item_unforked = _item(name="Unforked", spec=_spec("gpt-4"))
+    item_shadowed = _item(name="Shadowed", spec=_spec("gpt-5"))
 
     repo = _repo(FakeCatalogRepo([item_unforked, item_shadowed]))
     projections = await repo._catalog_projections(
-        [tenant_spec], provider_spec_id=None, is_active=None
+        {(item_shadowed.provider_spec_id, "gpt-5")}, provider_spec_id=None, is_active=None
     )
     ids = [str(s.id) for s in projections]
 
@@ -110,18 +116,59 @@ async def test_catalog_projections_shadows_instantiated_and_projects_rest():
     assert all(getattr(s, "is_catalog", False) for s in projections)
 
 
+async def test_catalog_projections_project_a_model_in_several_registries_once():
+    pid = str(uuid4())
+    first = _item(name="GPT-4", provider_spec_id=pid)
+    second = _item(name="GPT-4", provider_spec_id=pid)
+
+    repo = _repo(FakeCatalogRepo([first, second]))
+    projections = await repo._catalog_projections(set(), provider_spec_id=None, is_active=None)
+
+    assert [str(s.id) for s in projections] == [first.id]
+
+
+async def test_catalog_projections_leave_out_a_model_without_a_price():
+    pid = str(uuid4())
+    priced = _item(name="Priced", provider_spec_id=pid, spec=_spec("gpt-4"))
+    unpriced = _item(
+        name="Unpriced",
+        provider_spec_id=pid,
+        spec={**_spec("router"), "output_cost_per_token": None},
+    )
+
+    repo = _repo(FakeCatalogRepo([priced, unpriced]))
+    projections = await repo._catalog_projections(set(), provider_spec_id=None, is_active=None)
+
+    assert [str(s.id) for s in projections] == [priced.id]
+
+
+async def test_an_unpriced_preferred_copy_is_not_replaced_by_a_lesser_registrys():
+    pid = str(uuid4())
+    preferred = _item(provider_spec_id=pid, spec={**_spec("gpt-4"), "input_cost_per_token": None})
+    lesser = _item(provider_spec_id=pid, spec=_spec("gpt-4"))
+
+    repo = _repo(FakeCatalogRepo([preferred, lesser]))
+    projections = await repo._catalog_projections(set(), provider_spec_id=None, is_active=None)
+
+    assert projections == []
+
+
 async def test_catalog_projections_filter_by_provider_and_active():
     pid = str(uuid4())
     item = _item(name="Active", provider_spec_id=pid, is_active=True)
-    inactive = _item(name="Inactive", provider_spec_id=pid, is_active=False)
+    inactive = _item(
+        name="Inactive",
+        provider_spec_id=pid,
+        spec={**_spec("gpt-3"), "is_active": False},
+    )
     repo = _repo(FakeCatalogRepo([item, inactive]))
 
     from uuid import UUID
 
-    active_only = await repo._catalog_projections([], provider_spec_id=UUID(pid), is_active=True)
+    active_only = await repo._catalog_projections(set(), provider_spec_id=UUID(pid), is_active=True)
     assert {str(s.id) for s in active_only} == {item.id}
 
-    other_provider = await repo._catalog_projections([], provider_spec_id=uuid4(), is_active=None)
+    other_provider = await repo._catalog_projections(set(), provider_spec_id=uuid4(), is_active=None)
     assert other_provider == []
 
 
@@ -130,5 +177,5 @@ async def test_isolation_builtin_visible_no_foreign_custom_leak():
     workspace's custom spec is NOT (only catalog items are merged in)."""
     item_builtin = _item(name="Shared built-in")
     repo = _repo(FakeCatalogRepo([item_builtin]))
-    projections = await repo._catalog_projections([], provider_spec_id=None, is_active=None)
+    projections = await repo._catalog_projections(set(), provider_spec_id=None, is_active=None)
     assert [str(s.id) for s in projections] == [item_builtin.id]

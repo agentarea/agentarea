@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "@/components/WorkspaceLink";
 import { useParams } from "next/navigation";
 import { ArrowUpRight, FileText, Network } from "lucide-react";
@@ -12,9 +13,12 @@ import {
   hydrateAttachments,
   type AttachmentItem,
 } from "@/components/AttachmentSection";
+import EmptyState from "@/components/EmptyState";
+import FormError from "@/components/FormError";
 import { DetailSkeleton } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import Divider from "@/components/ui/divider";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { ENTITY_ICONS, EntityIcon } from "@/lib/entity-icons";
 import {
   addAgentToProjectAction,
@@ -35,9 +39,14 @@ export default function ProjectOverviewPage() {
   const params = useParams();
   const projectId = params.id as string;
 
+  const t = useTranslations("ProjectOverviewPage");
+  const tCommon = useTranslations("Common");
   const [project, setProject] = useState<ProjectResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [allAgents, setAllAgents] = useState<AgentResponse[]>([]);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const resources = useAttachableResources();
   const {
     skills: allSkills,
@@ -45,33 +54,61 @@ export default function ProjectOverviewPage() {
     mcpServers,
   } = resources;
 
+  // Refetch after an attachment change: a failure throws so the section shows it.
   const fetchProject = useCallback(async () => {
-    const { data } = await getProjectAction(projectId);
-    if (data) setProject(data);
-  }, [projectId]);
+    const result = await getProjectAction(projectId);
+    if (result.error || !result.data) {
+      throw new Error(apiErrorMessage(result, t("loadFailed")));
+    }
+    setProject(result.data);
+  }, [projectId, t]);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
+      setLoadError(null);
+      setAgentsError(null);
       try {
         const [projectRes, agentsRes] = await Promise.all([
           getProjectAction(projectId),
           listAgentsAction(),
         ]);
-        if (projectRes.data) setProject(projectRes.data);
-        setAllAgents(agentsRes.data || []);
+        if (projectRes.error || !projectRes.data) {
+          setLoadError(apiErrorMessage(projectRes, t("loadFailed")));
+        } else {
+          setProject(projectRes.data);
+        }
+        if (agentsRes.error || !agentsRes.data) {
+          setAgentsError(apiErrorMessage(agentsRes, t("agentsLoadFailed")));
+        } else {
+          setAllAgents(agentsRes.data);
+        }
+      } catch (err) {
+        console.error("Failed to load project", err);
+        setLoadError(`${t("loadFailed")}: ${formatApiError(err)}`);
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [projectId]);
+  }, [projectId, t, attempt]);
 
   if (loading) {
     return <DetailSkeleton />;
   }
 
-  if (!project) return null;
+  if (loadError || !project) {
+    return (
+      <EmptyState
+        title={t("loadFailed")}
+        description={loadError ?? undefined}
+        action={{
+          label: tCommon("retry"),
+          onClick: () => setAttempt((n) => n + 1),
+        }}
+      />
+    );
+  }
 
   const instanceIconSrc = (instance: AttachmentItem) => {
     const resolved = resolveMcpRef(instance.id, allMcpInstances, mcpServers);
@@ -198,6 +235,19 @@ export default function ProjectOverviewPage() {
         </div>
 
         <div className="mt-5">
+          {agentsError && (
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start">
+              <FormError className="flex-1">{agentsError}</FormError>
+              <Button
+                size="xs"
+                variant="outline"
+                className="self-start"
+                onClick={() => setAttempt((n) => n + 1)}
+              >
+                {tCommon("retry")}
+              </Button>
+            </div>
+          )}
           <AttachmentSection
             id="project-agents"
             title="Agents"

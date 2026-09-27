@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from botocore.exceptions import ClientError
+from fastapi import status
 
 from agentarea_common.artifacts.audit import (
     ACTION_ARCHIVED,
@@ -36,6 +37,7 @@ from agentarea_common.config.aws import (
     get_s3_client,
     get_s3_public_client,
 )
+from agentarea_common.exceptions.errors import AppError
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,13 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 # destroyed. Every listing that shows the workspace to a human or an agent must
 # filter it out, so the prefix is defined once here and imported by callers.
 TRASH_PREFIX = ".trash/"
+
+
+class InvalidArtifactPathError(AppError, ValueError):
+    """A path that cannot name an object: a control character or a ``..`` segment."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    code = "invalid_artifact_path"
 
 
 def sha256_hex_from_head(head: Mapping[str, Any]) -> str | None:
@@ -149,7 +158,9 @@ class ArtifactService:
             raise ValueError("workspace_id is required")
         clean = path.lstrip("/")
         if ".." in clean.split("/"):
-            raise ValueError(f"path may not contain '..' segments: {path!r}")
+            raise InvalidArtifactPathError(f"path may not contain '..' segments: {path!r}")
+        if any(ord(character) < 0x20 or ord(character) == 0x7F for character in clean):
+            raise InvalidArtifactPathError(f"path may not contain control characters: {path!r}")
         return f"{_WORKSPACE_PREFIX}/{workspace_id}/{clean}"
 
     def _prefix(self, workspace_id: str, path: str = "") -> str:

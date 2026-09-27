@@ -129,24 +129,31 @@ async function buildActorIndex(events: AuditEvent[]): Promise<{
   const agents = new Map<string, ResourceRecord>();
 
   await Promise.all([
-    listWorkspaceMembers()
-      .then((result) => {
-        for (const member of asArray<ResourceRecord>(result.data)) {
+    fetchData(listWorkspaceMembers())
+      .then((records) => {
+        for (const member of asArray<ResourceRecord>(records)) {
           if (typeof member.user_id === "string") {
             members.set(member.user_id, member);
           }
         }
       })
-      .catch(() => undefined),
+      .catch((err) =>
+        console.error("Failed to load audit actor labels", err)
+      ),
     events.some((event) => event.actor_type === "agent")
       ? listAgents()
           .then((result) => {
+            if (result.error) {
+              console.error("Failed to load audit actor labels", result.error);
+            }
             for (const agent of asArray<ResourceRecord>(result.data)) {
               const id = getString(agent.id);
               if (id) agents.set(id, agent);
             }
           })
-          .catch(() => undefined)
+          .catch((err) =>
+            console.error("Failed to load audit actor labels", err)
+          )
       : Promise.resolve(),
   ]);
 
@@ -204,7 +211,9 @@ async function buildResourceIndex(
           for (const type of types)
             addRecords(type, typeLabel, hrefFor, records);
         })
-        .catch(() => undefined)
+        .catch((err) =>
+          console.error("Failed to load audit resource labels", err)
+        )
     );
   };
 

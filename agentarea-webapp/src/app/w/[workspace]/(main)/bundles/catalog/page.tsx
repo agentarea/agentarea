@@ -1,16 +1,18 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
 import { browseCatalog } from "@/lib/api";
-import CatalogGallery from "../components/CatalogGallery";
+import { apiErrorMessage } from "@/lib/api-errors";
 import {
+  normalize,
   PAGE,
   REGISTRY_TYPE,
-  normalize,
   toCatalogType,
   type CatalogEntry,
   type CatalogType,
   type RegistryItem,
 } from "../components/catalog-data";
+import CatalogGallery from "../components/CatalogGallery";
 
 export const metadata: Metadata = {
   title: "Bundle Catalog",
@@ -30,11 +32,13 @@ export default async function BundleCatalogPage({
   const sp = await searchParams;
   const type: CatalogType = toCatalogType(sp.type) ?? "bundles";
 
-  const { items, total, categories, protocols, error } = await browseCatalog({
-    registryType: REGISTRY_TYPE[type],
-    limit: PAGE,
-    offset: 0,
-  });
+  const { items, total, categories, protocols, error, status } =
+    await browseCatalog({
+      registryType: REGISTRY_TYPE[type],
+      limit: PAGE,
+      offset: 0,
+    });
+  const tBundle = await getTranslations("BundleInstall");
   const entries: CatalogEntry[] = (items as RegistryItem[]).map((it) =>
     normalize(type, it)
   );
@@ -46,7 +50,8 @@ export default async function BundleCatalogPage({
           { label: "Bundles", href: "/bundles" },
           { label: "Catalog" },
         ],
-        description: "Browse installable bundles. Filter by use case or integration.",
+        description:
+          "Browse installable bundles. Filter by use case or integration.",
       }}
     >
       <CatalogGallery
@@ -56,7 +61,11 @@ export default async function BundleCatalogPage({
         initialTotal={total}
         initialCategories={categories}
         initialProtocols={protocols}
-        initialError={error ? "Failed to load catalog." : null}
+        initialError={
+          error
+            ? apiErrorMessage({ error, status }, tBundle("catalogLoadFailed"))
+            : null
+        }
       />
     </ContentBlock>
   );

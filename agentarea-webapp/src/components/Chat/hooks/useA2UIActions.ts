@@ -6,8 +6,9 @@
  * the Temporal workflow so the agent can respond.
  */
 
-import { useCallback } from "react";
-import { toast } from "sonner";
+import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { A2UIAction } from "../types";
 import { sendA2UIActionAction } from "./actions";
 
@@ -19,19 +20,29 @@ export interface A2UIActionPayload {
 }
 
 export function useA2UIActions(agentId: string, taskId: string | null) {
+  const t = useTranslations("Chat.errors");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setError(null);
+  }, [agentId, taskId]);
+
   const sendAction = useCallback(
     async (payload: A2UIActionPayload) => {
       if (!taskId) return;
 
+      setError(null);
       try {
-        await sendA2UIActionAction(agentId, taskId, payload);
+        const result = await sendA2UIActionAction(agentId, taskId, payload);
+        if (result.error) {
+          setError(apiErrorMessage(result, t("actionRejected")));
+        }
       } catch (err) {
-        toast.error("The task did not accept the action", {
-          description: err instanceof Error ? err.message : String(err),
-        });
+        console.error("A2UI action failed", err);
+        setError(`${t("actionRejected")}: ${formatApiError(err)}`);
       }
     },
-    [agentId, taskId]
+    [agentId, taskId, t]
   );
 
   /** Build and send an action from component interaction */
@@ -56,5 +67,5 @@ export function useA2UIActions(agentId: string, taskId: string | null) {
     [sendAction]
   );
 
-  return { sendAction, dispatchAction };
+  return { sendAction, dispatchAction, error };
 }

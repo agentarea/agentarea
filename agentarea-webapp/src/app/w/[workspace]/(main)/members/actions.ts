@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getTranslations } from "next-intl/server";
 import {
   createWorkspaceInvitation,
   removeWorkspaceMember,
@@ -19,7 +20,8 @@ export async function createInvitationAction(input: {
 
   const result = await createWorkspaceInvitation(body);
   if (result.error) {
-    return { error: apiErrorMessage(result, "Failed to create invitation") };
+    const t = await getTranslations("MembersPage");
+    return { error: apiErrorMessage(result, t("createInvitationFailed")) };
   }
   return { data: result.data };
 }
@@ -27,7 +29,8 @@ export async function createInvitationAction(input: {
 export async function revokeInvitationAction(invitationId: string) {
   const result = await revokeWorkspaceInvitation(invitationId);
   if (result.error) {
-    return { error: apiErrorMessage(result, "Failed to revoke invitation") };
+    const t = await getTranslations("MembersPage");
+    return { error: apiErrorMessage(result, t("revokeFailed")) };
   }
   return { ok: true };
 }
@@ -35,13 +38,21 @@ export async function revokeInvitationAction(invitationId: string) {
 export async function removeMemberAction(userId: string) {
   const { userId: callerId } = await getAuthContext();
 
+  const isSelf = Boolean(callerId) && userId === callerId;
+
   const result = await removeWorkspaceMember(userId);
   if (result.error) {
-    return { error: apiErrorMessage(result, "Failed to remove member") };
+    const t = await getTranslations("MembersPage");
+    return {
+      error: apiErrorMessage(
+        result,
+        isSelf ? t("leaveFailed") : t("removeFailed")
+      ),
+    };
   }
 
   // The switcher in the root layout still lists the workspace just left.
-  if (callerId && userId === callerId) {
+  if (isSelf) {
     revalidatePath("/", "layout");
   }
 

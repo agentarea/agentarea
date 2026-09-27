@@ -9,6 +9,7 @@ import {
   discoverModelsAction,
   discoverModelsPreviewAction,
 } from "@/lib/server-actions";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { ModelSpec, ProviderSpec } from "@/types/provider";
 import type { SkippedModelResponse } from "@/api/client";
 import { filterModelsByDiscovery } from "./modelDiscovery";
@@ -105,41 +106,28 @@ export default function ModelInstances({
       let skipped: SkippedModelResponse[] = [];
 
       if (providerConfigId) {
-        const { data, error } = await discoverModelsAction(providerConfigId);
-        if (error) {
-          const detail = (error as { detail?: unknown })?.detail;
-          setDiscoverError(
-            typeof detail === "string" ? detail : t("failedToDiscover")
-          );
+        const result = await discoverModelsAction(providerConfigId);
+        if (result.error) {
+          setDiscoverError(apiErrorMessage(result, t("failedToDiscover")));
           return;
         }
+        const data = result.data;
         totalCount = data?.discovered ?? 0;
         newCount = data?.new_models ?? 0;
         discoveredNames = data?.models.map((model) => model.model_name) ?? [];
         skipped = data?.skipped ?? [];
       } else {
-        const { data, error } = await discoverModelsPreviewAction({
+        const result = await discoverModelsPreviewAction({
           provider_key: providerKey ?? "",
           api_key: apiKey?.trim() || "",
           endpoint_url: endpointUrl || null,
         });
-        if (error) {
-          // Surface the real backend error. Only fall back to a NEUTRAL generic
-          // message — never blame the API key for non-auth failures (e.g. a 500
-          // would otherwise be reported as "Check API key", which is misleading).
-          const e = error as { detail?: unknown; message?: unknown };
-          const d = e?.detail;
-          const msg =
-            typeof d === "string" && d
-              ? d
-              : Array.isArray(d) && typeof d[0]?.msg === "string"
-                ? d[0].msg
-                : typeof e?.message === "string"
-                  ? e.message
-                  : t("failedToDiscover");
-          setDiscoverError(msg);
+        // The backend's reason, never a guess: a 500 is not a bad API key.
+        if (result.error) {
+          setDiscoverError(apiErrorMessage(result, t("failedToDiscover")));
           return;
         }
+        const data = result.data;
         totalCount = data?.discovered ?? 0;
         newCount = data?.new_models ?? 0;
         discoveredNames = data?.models.map((model) => model.model_name) ?? [];
@@ -166,7 +154,7 @@ export default function ModelInstances({
       await onModelsDiscovered?.();
     } catch (err) {
       console.error("discover models failed", err);
-      setDiscoverError(t("failedToDiscover"));
+      setDiscoverError(`${t("failedToDiscover")}: ${formatApiError(err)}`);
     } finally {
       setIsDiscovering(false);
     }

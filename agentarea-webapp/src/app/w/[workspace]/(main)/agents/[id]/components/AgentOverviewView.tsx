@@ -1,6 +1,5 @@
 import { createElement } from "react";
 import { getTranslations } from "next-intl/server";
-import Link from "@/components/WorkspaceLink";
 import {
   Boxes,
   Clock,
@@ -11,6 +10,7 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
+import SectionLoadError from "@/components/SectionLoadError";
 import { formatRelTime } from "@/app/w/[workspace]/(main)/dashboard/components/relTime";
 import { HeroDescription } from "@/components/Overview/HeroDescription";
 import {
@@ -29,6 +29,7 @@ import { CollapsibleGroup } from "@/components/ui/group-header";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { ProviderIcon } from "@/components/ui/provider-icon";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import Link from "@/components/WorkspaceLink";
 import { getAgentIconComponent } from "@/lib/agent-identity";
 import type { TaskResponse } from "@/lib/api";
 import type { AvatarHue } from "@/lib/avatar-hue";
@@ -91,6 +92,13 @@ export type AgentOverviewModel = {
       }
     | { status: "adminOnly" }
     | { status: "error"; message: string };
+  /** Sections whose data failed to load, with the reason. */
+  loadErrors: {
+    overview?: string;
+    settings?: string;
+    tasks?: string;
+    connections?: string;
+  };
 };
 
 const fmtUsd = (v: number) =>
@@ -158,7 +166,7 @@ export async function AgentOverviewView({
   const t = await getTranslations("AgentOverviewPage");
   const tAdmin = await getTranslations("AdminOnly");
   const { policies } = model;
-  const { agentRef, stats } = model;
+  const { agentRef, stats, loadErrors } = model;
 
   const totalRuns = stats.completed7d + stats.failed7d;
   const reliability = totalRuns > 0 ? (stats.completed7d / totalRuns) * 100 : 0;
@@ -248,11 +256,15 @@ export async function AgentOverviewView({
                 {model.triggers.count > 0 && (
                   <HeroMeta icon={<Zap />}>{triggerText}</HeroMeta>
                 )}
-                <HeroMeta icon={<Clock />}>
-                  {t("lastActive")}{" "}
-                  <b className="font-medium text-foreground/80">{lastActive}</b>
-                  {lastActiveHasAgo && <> {t("ago")}</>}
-                </HeroMeta>
+                {!loadErrors.overview && (
+                  <HeroMeta icon={<Clock />}>
+                    {t("lastActive")}{" "}
+                    <b className="font-medium text-foreground/80">
+                      {lastActive}
+                    </b>
+                    {lastActiveHasAgo && <> {t("ago")}</>}
+                  </HeroMeta>
+                )}
               </div>
             </div>
           </div>
@@ -261,57 +273,72 @@ export async function AgentOverviewView({
 
       <div className="w-full bg-muted/20 px-4 pb-11 pt-[18px] md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
         {/* ===== stat strip ===== */}
-        <StatStrip>
-          <Stat
-            icon={<Shield />}
-            label={t("reliability")}
-            value={totalRuns > 0 ? reliability.toFixed(0) : "—"}
-            unit={totalRuns > 0 ? t("successUnit") : undefined}
-            bar={totalRuns > 0 ? { pct: reliability } : null}
-            sub={
-              totalRuns > 0
-                ? t("ofTasks", {
-                    completed: stats.completed7d,
-                    total: totalRuns,
-                  })
-                : t("noRuns7d")
-            }
-          />
-          <Stat
-            icon={<Gauge />}
-            label={t("throughput")}
-            value={stats.throughput7d.toFixed(1)}
-            unit={t("perDay")}
-            bar={{
-              pct: (stats.throughput7d / Math.max(stats.maxDaily, 1)) * 100,
-            }}
-            sub={
-              stats.throughput7d > 0 || stats.throughputPrev > 0
-                ? t("vsLastWeek", {
-                    delta: `${throughputDiff >= 0 ? "+" : ""}${throughputDiff.toFixed(1)}`,
-                  })
-                : t("noThroughput")
-            }
-            subTone={throughputDiff > 0 ? "up" : "muted"}
-          />
-          <Stat
-            icon={<Wallet />}
-            label={t("spendMonth")}
-            value={fmtUsd(stats.costMtd)}
-            bar={capPct != null ? { pct: capPct } : null}
-            sub={
-              stats.cap ? t("ofCap", { cap: fmtUsd(stats.cap) }) : t("noCap")
-            }
-          />
-          <Stat
-            icon={<SquareCheckBig />}
-            label={t("today")}
-            value={stats.doneToday}
-            unit={t("todayUnit", { failed: stats.failedToday })}
-            bar={null}
-            sub={t("runningNow", { count: model.runningTasks.length })}
-          />
-        </StatStrip>
+        {loadErrors.overview ? (
+          <SectionLoadError message={loadErrors.overview} />
+        ) : (
+          <StatStrip>
+            <Stat
+              icon={<Shield />}
+              label={t("reliability")}
+              value={totalRuns > 0 ? reliability.toFixed(0) : "—"}
+              unit={totalRuns > 0 ? t("successUnit") : undefined}
+              bar={totalRuns > 0 ? { pct: reliability } : null}
+              sub={
+                totalRuns > 0
+                  ? t("ofTasks", {
+                      completed: stats.completed7d,
+                      total: totalRuns,
+                    })
+                  : t("noRuns7d")
+              }
+            />
+            <Stat
+              icon={<Gauge />}
+              label={t("throughput")}
+              value={stats.throughput7d.toFixed(1)}
+              unit={t("perDay")}
+              bar={{
+                pct: (stats.throughput7d / Math.max(stats.maxDaily, 1)) * 100,
+              }}
+              sub={
+                stats.throughput7d > 0 || stats.throughputPrev > 0
+                  ? t("vsLastWeek", {
+                      delta: `${throughputDiff >= 0 ? "+" : ""}${throughputDiff.toFixed(1)}`,
+                    })
+                  : t("noThroughput")
+              }
+              subTone={throughputDiff > 0 ? "up" : "muted"}
+            />
+            <Stat
+              icon={<Wallet />}
+              label={t("spendMonth")}
+              value={fmtUsd(stats.costMtd)}
+              bar={capPct != null ? { pct: capPct } : null}
+              sub={
+                loadErrors.settings ? (
+                  <span title={loadErrors.settings}>{loadErrors.settings}</span>
+                ) : stats.cap ? (
+                  t("ofCap", { cap: fmtUsd(stats.cap) })
+                ) : (
+                  t("noCap")
+                )
+              }
+              subTone={loadErrors.settings ? "down" : "muted"}
+            />
+            <Stat
+              icon={<SquareCheckBig />}
+              label={t("today")}
+              value={stats.doneToday}
+              unit={t("todayUnit", { failed: stats.failedToday })}
+              bar={null}
+              sub={
+                loadErrors.tasks
+                  ? t("tasksLoadFailed")
+                  : t("runningNow", { count: model.runningTasks.length })
+              }
+            />
+          </StatStrip>
+        )}
 
         {/* ===== two-column body ===== */}
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
@@ -329,7 +356,9 @@ export async function AgentOverviewView({
               sticky={false}
               headerClassName="h-[30px] px-[15px]"
             >
-              {model.upcoming.length === 0 ? (
+              {loadErrors.overview ? (
+                <SectionError message={loadErrors.overview} />
+              ) : model.upcoming.length === 0 ? (
                 <EmptyRow text={t("nothingUpcoming")} />
               ) : (
                 model.upcoming.map((item) => (
@@ -337,42 +366,53 @@ export async function AgentOverviewView({
                 ))
               )}
             </CollapsibleGroup>
-            <CollapsibleGroup
-              label={t("running")}
-              count={model.runningTasks.length}
-              color="hsl(var(--primary))"
-              sticky={false}
-              headerClassName="h-[30px] px-[15px]"
-            >
-              {model.runningTasks.length === 0 ? (
-                <EmptyRow text={t("nothingRunning")} />
-              ) : (
-                model.runningTasks.map((task) => (
-                  <TaskRow key={task.id} task={task} t={t} hideRunningStatus />
-                ))
-              )}
-            </CollapsibleGroup>
-            <CollapsibleGroup
-              label={t("recent")}
-              count={model.recentTasks.length}
-              color="hsl(var(--muted-foreground) / 0.6)"
-              sticky={false}
-              headerClassName="h-[30px] px-[15px]"
-            >
-              {model.recentTasks.length === 0 ? (
-                <EmptyRow
-                  text={t("noTasksYet")}
-                  action={{
-                    label: t("startOne"),
-                    href: `/agents/${agentRef}/new-task`,
-                  }}
-                />
-              ) : (
-                model.recentTasks.map((task) => (
-                  <TaskRow key={task.id} task={task} t={t} />
-                ))
-              )}
-            </CollapsibleGroup>
+            {loadErrors.tasks ? (
+              <SectionError message={loadErrors.tasks} />
+            ) : (
+              <>
+                <CollapsibleGroup
+                  label={t("running")}
+                  count={model.runningTasks.length}
+                  color="hsl(var(--primary))"
+                  sticky={false}
+                  headerClassName="h-[30px] px-[15px]"
+                >
+                  {model.runningTasks.length === 0 ? (
+                    <EmptyRow text={t("nothingRunning")} />
+                  ) : (
+                    model.runningTasks.map((task) => (
+                      <TaskRow
+                        key={task.id}
+                        task={task}
+                        t={t}
+                        hideRunningStatus
+                      />
+                    ))
+                  )}
+                </CollapsibleGroup>
+                <CollapsibleGroup
+                  label={t("recent")}
+                  count={model.recentTasks.length}
+                  color="hsl(var(--muted-foreground) / 0.6)"
+                  sticky={false}
+                  headerClassName="h-[30px] px-[15px]"
+                >
+                  {model.recentTasks.length === 0 ? (
+                    <EmptyRow
+                      text={t("noTasksYet")}
+                      action={{
+                        label: t("startOne"),
+                        href: `/agents/${agentRef}/new-task`,
+                      }}
+                    />
+                  ) : (
+                    model.recentTasks.map((task) => (
+                      <TaskRow key={task.id} task={task} t={t} />
+                    ))
+                  )}
+                </CollapsibleGroup>
+              </>
+            )}
           </SectionCard>
 
           {/* right rail */}
@@ -418,9 +458,10 @@ export async function AgentOverviewView({
                 tile={<SoftTile icon={<ENTITY_ICONS.client />} />}
                 title={t("connections")}
                 sub={
-                  model.connections.length > 0
+                  loadErrors.connections ??
+                  (model.connections.length > 0
                     ? summarize(model.connections, 3, t)
-                    : t("noneConnected")
+                    : t("noneConnected"))
                 }
                 count={model.connections.length}
               />
@@ -438,14 +479,20 @@ export async function AgentOverviewView({
                   <span className="text-[12px] font-medium text-foreground/80">
                     {t("spendThisMonth")}
                   </span>
-                  <span className="text-[11.5px] text-muted-foreground">
-                    <b className="font-semibold text-foreground tabular-nums">
-                      {fmtUsd(stats.costMtd)}
-                    </b>
-                    {stats.cap ? ` / ${fmtUsd(stats.cap)}` : ""}
-                  </span>
+                  {!loadErrors.overview && (
+                    <span className="text-[11.5px] text-muted-foreground">
+                      <b className="font-semibold text-foreground tabular-nums">
+                        {fmtUsd(stats.costMtd)}
+                      </b>
+                      {stats.cap ? ` / ${fmtUsd(stats.cap)}` : ""}
+                    </span>
+                  )}
                 </div>
-                {capPct != null ? (
+                {loadErrors.overview ? (
+                  <SectionLoadError message={loadErrors.overview} />
+                ) : loadErrors.settings ? (
+                  <SectionLoadError message={loadErrors.settings} />
+                ) : capPct != null ? (
                   <div className="h-1.5 overflow-hidden rounded-[2px] bg-muted">
                     <span
                       className="block h-full rounded-[2px] bg-foreground"
@@ -476,16 +523,18 @@ export async function AgentOverviewView({
                 }
                 title={t("approvalsPending")}
                 sub={
-                  model.pendingApprovals.length > 0
-                    ? summarize(
-                        model.pendingApprovals.map(
-                          (task) => task.description || task.id
-                        ),
-                        2,
-                        t,
-                        " · "
-                      )
-                    : t("nonePending")
+                  loadErrors.tasks
+                    ? t("tasksLoadFailed")
+                    : model.pendingApprovals.length > 0
+                      ? summarize(
+                          model.pendingApprovals.map(
+                            (task) => task.description || task.id
+                          ),
+                          2,
+                          t,
+                          " · "
+                        )
+                      : t("nonePending")
                 }
                 trailing={
                   model.pendingApprovals.length > 0 ? (
@@ -558,6 +607,14 @@ export async function AgentOverviewView({
 
 /* ------------------------- subcomponents ------------------------- */
 
+function SectionError({ message }: { message: string }) {
+  return (
+    <div className="px-[15px] pt-3">
+      <SectionLoadError message={message} />
+    </div>
+  );
+}
+
 /** "a, b +3" — the first `max` names and a count of the rest. */
 function summarize(
   names: string[],
@@ -593,7 +650,13 @@ function UpcomingRow({
           size={20}
           rounded={5}
           color="hsl(var(--muted-foreground))"
-          icon={isTrigger ? <Clock strokeWidth={1.8} /> : <ListChecks strokeWidth={1.8} />}
+          icon={
+            isTrigger ? (
+              <Clock strokeWidth={1.8} />
+            ) : (
+              <ListChecks strokeWidth={1.8} />
+            )
+          }
           aria-hidden
         />
       }

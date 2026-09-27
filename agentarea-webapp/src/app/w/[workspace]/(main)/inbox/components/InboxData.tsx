@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { getInbox, type TaskWithAgent } from "@/lib/api";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { InboxClient } from "./InboxClient";
 
 /**
@@ -16,13 +17,15 @@ export async function InboxData() {
   try {
     const res = await getInbox();
     if (res.error) {
-      error = t("loadFailed");
+      console.error("Failed to load inbox", res.error);
+      error = apiErrorMessage(res, t("loadFailed"));
     } else {
       items =
         (res.data as { items?: TaskWithAgent[] } | undefined)?.items ?? [];
     }
-  } catch {
-    error = t("loadFailed");
+  } catch (err) {
+    console.error("Failed to load inbox", err);
+    error = `${t("loadFailed")}: ${formatApiError(err)}`;
   }
 
   return <InboxClient items={items} error={error} />;

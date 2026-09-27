@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import { browseCatalog } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
 import {
   ALL,
   DEFAULT_SORT,
@@ -66,15 +68,17 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         ? "table"
         : "grid";
 
-  const { items, total, categories, protocols, error } = await browseCatalog({
-    registryType: REGISTRY_TYPE[type],
-    q: query,
-    category,
-    protocol,
-    sort,
-    limit: PAGE,
-    offset: 0,
-  });
+  const { items, total, categories, protocols, error, status } =
+    await browseCatalog({
+      registryType: REGISTRY_TYPE[type],
+      q: query,
+      category,
+      protocol,
+      sort,
+      limit: PAGE,
+      offset: 0,
+    });
+  const tBundle = await getTranslations("BundleInstall");
   const entries: CatalogEntry[] = (items as RegistryItem[]).map((it) =>
     normalize(type, it)
   );
@@ -105,7 +109,11 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
           initialTotal={total}
           initialCategories={categories}
           initialProtocols={protocols}
-          initialError={error ? "Failed to load catalog." : null}
+          initialError={
+            error
+              ? apiErrorMessage({ error, status }, tBundle("catalogLoadFailed"))
+              : null
+          }
           initialView={initialView}
         />
       </ContentBlock>

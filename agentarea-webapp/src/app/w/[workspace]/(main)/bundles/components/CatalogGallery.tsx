@@ -11,6 +11,7 @@ import React, {
   useState,
   useTransition,
 } from "react";
+import { useTranslations } from "next-intl";
 import Link from "@/components/WorkspaceLink";
 import {
   AlertTriangle,
@@ -36,6 +37,11 @@ import {
   Star,
   Telescope,
 } from "lucide-react";
+import {
+  apiErrorMessage,
+  formatApiError,
+  isApiNotFound,
+} from "@/lib/api-errors";
 import { getCategoryIcon } from "@/lib/category-icons";
 import { isSafeRedirectUrl } from "@/lib/safe-redirect";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
@@ -47,6 +53,7 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import { CustomOAuthAppFields } from "@/components/CustomOAuthAppFields";
 import EmptyState from "@/components/EmptyState";
 import EntityMark from "@/components/EntityMark";
+import FormError from "@/components/FormError";
 import HeaderTabs from "@/components/HeaderTabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -518,6 +525,10 @@ export default function CatalogGallery({
   const [deepItem, setDeepItem] = useState<CatalogEntry | null>(null);
   const [deepLoading, setDeepLoading] = useState(false);
   const [deepError, setDeepError] = useState<string | null>(null);
+  const [deepNotFound, setDeepNotFound] = useState(false);
+  const [deepAttempt, setDeepAttempt] = useState(0);
+  const tBundle = useTranslations("BundleInstall");
+  const tCommon = useTranslations("Common");
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Re-seed whenever a server round-trip lands with a different page. The props
@@ -556,20 +567,30 @@ export default function CatalogGallery({
         protocol,
         sort,
       });
+      if (page.error || !page.data) {
+        dispatch({
+          type: "fail",
+          error: apiErrorMessage(page, tBundle("catalogLoadFailed")),
+        });
+        return;
+      }
       dispatch({
         type: "append",
-        entries: page.items.map((it) => normalize(type, it as RegistryItem)),
-        total: page.total,
-        categories: page.categories,
-        protocols: page.protocols,
+        entries: page.data.items.map((it) =>
+          normalize(type, it as RegistryItem)
+        ),
+        total: page.data.total,
+        categories: page.data.categories,
+        protocols: page.data.protocols,
       });
     } catch (e) {
+      console.error("Failed to load catalog page", e);
       dispatch({
         type: "fail",
-        error: e instanceof Error ? e.message : "Failed to load",
+        error: `${tBundle("catalogLoadFailed")}: ${formatApiError(e)}`,
       });
     }
-  }, [type, query, category, protocol, sort, paging.entries]);
+  }, [type, query, category, protocol, sort, paging.entries, tBundle]);
 
   // Infinite scroll: auto-load the next page when the sentinel nears the
   // viewport. `canFetchMore` is the in-flight guard — a short page leaves the
@@ -595,6 +616,7 @@ export default function CatalogGallery({
     if (!itemId) {
       setDeepItem(null);
       setDeepError(null);
+      setDeepNotFound(false);
       setDeepLoading(false);
       return;
     }
@@ -603,21 +625,28 @@ export default function CatalogGallery({
     let alive = true;
     setDeepLoading(true);
     setDeepError(null);
+    setDeepNotFound(false);
     fetchCatalogItemAction(itemId)
-      .then((it) => {
+      .then((result) => {
         if (!alive) return;
-        setDeepItem(normalize(type, it));
+        if (result.error || !result.data) {
+          if (isApiNotFound(result)) setDeepNotFound(true);
+          else setDeepError(apiErrorMessage(result, tBundle("itemLoadFailed")));
+        } else {
+          setDeepItem(normalize(type, result.data));
+        }
         setDeepLoading(false);
       })
-      .catch((e) => {
+      .catch((e: unknown) => {
         if (!alive) return;
-        setDeepError(e instanceof Error ? e.message : "Failed to load");
+        console.error("Failed to load catalog item", e);
+        setDeepError(`${tBundle("itemLoadFailed")}: ${formatApiError(e)}`);
         setDeepLoading(false);
       });
     return () => {
       alive = false;
     };
-  }, [itemId, paging.entries, type, deepItem?.id]);
+  }, [itemId, paging.entries, type, deepItem?.id, deepAttempt, tBundle]);
 
   // Selected item (from ?item=) — resolved against the loaded page first, then
   // the deep-link fallback. When set, the main column shows the detail in place
@@ -697,13 +726,25 @@ export default function CatalogGallery({
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading…
               </span>
+            ) : deepError && !deepNotFound ? (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                <FormError className="flex-1">{deepError}</FormError>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="self-start"
+                  onClick={() => {
+                    setDeepError(null);
+                    setDeepAttempt((n) => n + 1);
+                  }}
+                >
+                  {tCommon("retry")}
+                </Button>
+              </div>
             ) : (
               <EmptyState
                 title="Item not found"
-                description={
-                  deepError ??
-                  "This item may have been removed or isn't available."
-                }
+                description="This item may have been removed or isn't available."
                 iconsType="404"
                 action={{
                   label: "Back to catalog",
@@ -739,7 +780,7 @@ export default function CatalogGallery({
                     size="sm"
                     onClick={() => void loadMore()}
                   >
-                    Retry
+                    {tCommon("retry")}
                   </Button>
                 )}
               </div>
@@ -1139,6 +1180,7 @@ function DetailView({
   onBack: () => void;
 }) {
   const [state, setState] = useState<InstallState>({ phase: "idle" });
+  const tBundle = useTranslations("BundleInstall");
   // Bundles open an inline configure-then-install step rather than installing on
   // the first click (pick model, skip connections, tune policies, then commit).
   const [configuring, setConfiguring] = useState(false);
@@ -1176,12 +1218,20 @@ function DetailView({
     try {
       // entry.id is the registry_item id; the endpoint forks a tenant copy
       // (copy-on-write) and is idempotent if already installed.
-      await installCatalogAgentAction(entry.id);
+      const result = await installCatalogAgentAction(entry.id);
+      if (result.error || !result.data) {
+        setState({
+          phase: "error",
+          message: apiErrorMessage(result, tBundle("agentInstallFailed")),
+        });
+        return;
+      }
       setState({ phase: "done", created: 1 });
     } catch (e) {
+      console.error("Failed to install catalog agent", e);
       setState({
         phase: "error",
-        message: e instanceof Error ? e.message : "Install failed",
+        message: `${tBundle("agentInstallFailed")}: ${formatApiError(e)}`,
       });
     }
   }
@@ -1197,15 +1247,26 @@ function DetailView({
         ...custom,
         return_to: window.location.origin,
       });
-      if (!isSafeRedirectUrl(result.authorize_url)) {
-        throw new Error("Could not connect this account");
+      if (result.error || !result.data) {
+        setState({
+          phase: "error",
+          message: apiErrorMessage(result, tBundle("connectFailed")),
+        });
+        return;
       }
-      window.location.assign(result.authorize_url);
+      if (!isSafeRedirectUrl(result.data.authorize_url)) {
+        setState({
+          phase: "error",
+          message: `${tBundle("connectFailed")}: ${tBundle("unsafeRedirect")}`,
+        });
+        return;
+      }
+      window.location.assign(result.data.authorize_url);
     } catch (e) {
+      console.error("Failed to connect catalog connection", e);
       setState({
         phase: "error",
-        message:
-          e instanceof Error ? e.message : "Could not connect this account",
+        message: `${tBundle("connectFailed")}: ${formatApiError(e)}`,
       });
     }
   }
@@ -1366,17 +1427,33 @@ function DetailView({
 // preferences and, by fetching the workspace's configured models, suggests which
 // one to pick — highlighting an available match or saying plainly when none fit.
 function PreferredModels({ models }: { models: string[] }) {
+  const t = useTranslations("BundleInstall");
+  const tCommon = useTranslations("Common");
   const [instances, setInstances] = useState<WorkspaceModel[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
     listActiveModelInstancesAction()
-      .then((d) => active && setInstances(Array.isArray(d) ? d : []))
-      .catch(() => active && setInstances([]));
+      .then((result) => {
+        if (!active) return;
+        if (result.error || !result.data) {
+          setError(apiErrorMessage(result, t("modelsLoadFailed")));
+          return;
+        }
+        setInstances(result.data);
+      })
+      .catch((err: unknown) => {
+        console.error("Failed to load workspace models", err);
+        if (active) {
+          setError(`${t("modelsLoadFailed")}: ${formatApiError(err)}`);
+        }
+      });
     return () => {
       active = false;
     };
-  }, []);
+  }, [t, attempt]);
 
   if (models.length === 0) return null;
 
@@ -1432,13 +1509,30 @@ function PreferredModels({ models }: { models: string[] }) {
           );
         })}
       </ul>
-      <p className="mt-1.5 text-[11px] text-muted-foreground">
-        {instances == null
-          ? "Checking your workspace models…"
-          : anyMatch
-            ? "The agent is added without a model — pick a suggested one (or any other) before running it."
-            : "None are configured in your workspace yet — add a provider, then pick a model for this agent."}
-      </p>
+      {error ? (
+        <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-start">
+          <FormError className="flex-1">{error}</FormError>
+          <Button
+            size="xs"
+            variant="outline"
+            className="self-start"
+            onClick={() => {
+              setError(null);
+              setAttempt((n) => n + 1);
+            }}
+          >
+            {tCommon("retry")}
+          </Button>
+        </div>
+      ) : (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          {instances == null
+            ? "Checking your workspace models…"
+            : anyMatch
+              ? "The agent is added without a model — pick a suggested one (or any other) before running it."
+              : "None are configured in your workspace yet — add a provider, then pick a model for this agent."}
+        </p>
+      )}
     </div>
   );
 }
@@ -1895,35 +1989,53 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
     "idle"
   );
   const [message, setMessage] = useState("");
+  const [agentsError, setAgentsError] = useState<string | null>(null);
+  const [agentsAttempt, setAgentsAttempt] = useState(0);
   const [result, setResult] = useState<{ label: string; href: string } | null>(
     null
   );
+  const tBundle = useTranslations("BundleInstall");
+  const tCommon = useTranslations("Common");
 
   // Lazy-load the workspace agents the first time the picker opens.
   useEffect(() => {
     if (!open || agents !== null) return;
     let active = true;
+    setAgentsError(null);
     listWorkspaceAgentsAction()
-      .then((d) => active && setAgents(d))
-      .catch(() => active && setAgents([]));
+      .then((res) => {
+        if (!active) return;
+        if (res.error || !res.data) {
+          setAgentsError(apiErrorMessage(res, tBundle("agentsLoadFailed")));
+          return;
+        }
+        setAgents(res.data);
+      })
+      .catch((e: unknown) => {
+        console.error("Failed to load workspace agents", e);
+        if (active) {
+          setAgentsError(`${tBundle("agentsLoadFailed")}: ${formatApiError(e)}`);
+        }
+      });
     return () => {
       active = false;
     };
-  }, [open, agents]);
-
-  // Materialize the catalog skill into the workspace; returns the tenant id.
-  async function fork(): Promise<string> {
-    return installCatalogSkillAction(skillId);
-  }
+  }, [open, agents, agentsAttempt, tBundle]);
 
   async function addToWorkspace() {
     setPhase("loading");
     try {
-      await fork();
+      const installed = await installCatalogSkillAction(skillId);
+      if (installed.error || !installed.data) {
+        setMessage(apiErrorMessage(installed, tBundle("skillInstallFailed")));
+        setPhase("error");
+        return;
+      }
       setResult({ label: "Go to Skills", href: "/skills" });
       setPhase("done");
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Install failed");
+      console.error("Failed to install catalog skill", e);
+      setMessage(`${tBundle("skillInstallFailed")}: ${formatApiError(e)}`);
       setPhase("error");
     }
   }
@@ -1931,12 +2043,19 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
   async function addToAgent(agent: AgentLite) {
     setOpen(false);
     setPhase("loading");
+    const label = tBundle("skillAttachFailed", { agent: agent.name });
     try {
-      await addCatalogSkillToAgentAction(skillId, agent.id);
+      const attached = await addCatalogSkillToAgentAction(skillId, agent.id);
+      if (attached.error || !attached.data) {
+        setMessage(apiErrorMessage(attached, label));
+        setPhase("error");
+        return;
+      }
       setResult({ label: `Open ${agent.name}`, href: `/agents/${agent.id}` });
       setPhase("done");
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Could not attach skill");
+      console.error("Failed to add catalog skill to agent", e);
+      setMessage(`${label}: ${formatApiError(e)}`);
       setPhase("error");
     }
   }
@@ -1968,7 +2087,18 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
           <Command>
             <CommandInput placeholder="Search agents…" />
             <CommandList>
-              {agents === null ? (
+              {agentsError ? (
+                <div className="space-y-2 p-3">
+                  <FormError>{agentsError}</FormError>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    onClick={() => setAgentsAttempt((n) => n + 1)}
+                  >
+                    {tCommon("retry")}
+                  </Button>
+                </div>
+              ) : agents === null ? (
                 <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Loading…
@@ -2032,7 +2162,8 @@ type SkillFile = { path: string; size: number; url?: string | null };
 type FileBody =
   | { kind: "md"; value: string }
   | { kind: "text"; value: string }
-  | { kind: "link"; value: string };
+  | { kind: "link"; value: string }
+  | { kind: "error"; value: string };
 
 // Extensions we can safely preview inline as text. Anything else gets an
 // "open" link to its presigned URL instead of a garbled inline dump.
@@ -2157,34 +2288,44 @@ function SkillMarkdown({ content }: { content: string }) {
 // API. Catalog content skills never reach here — their SKILL.md is inlined and
 // rendered by SkillMarkdown.
 function SkillPackageFiles({ skillId }: { skillId: string }) {
+  const t = useTranslations("BundleInstall");
+  const tCommon = useTranslations("Common");
   const [files, setFiles] = useState<SkillFile[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [bodies, setBodies] = useState<Record<string, FileBody>>({});
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const requested = useRef<Set<string>>(new Set());
 
-  // Load the file list once.
   useEffect(() => {
     let active = true;
     listSkillFilesAction(skillId)
-      .then((skillFiles) => {
+      .then((result) => {
         if (!active) return;
-        const fs = Array.isArray(skillFiles) ? skillFiles : [];
+        if (result.error || !result.data) {
+          setError(apiErrorMessage(result, t("skillFilesLoadFailed")));
+          return;
+        }
+        const fs = result.data;
         setFiles(fs);
         const def =
           fs.find((f) => f.path.toLowerCase() === "skill.md") ?? fs[0] ?? null;
         setSelected(def?.path ?? null);
       })
-      .catch((e) => {
+      .catch((e: unknown) => {
         if (!active) return;
         console.error("Failed to load skill files:", e);
-        setFiles([]);
-        setError("Could not load skill files.");
+        setError(`${t("skillFilesLoadFailed")}: ${formatApiError(e)}`);
       });
     return () => {
       active = false;
     };
-  }, [skillId]);
+  }, [skillId, t, attempt]);
+
+  const retryFile = (path: string) => {
+    requested.current.delete(path);
+    setBodies(({ [path]: _failed, ...rest }) => rest);
+  };
 
   // Lazily load the selected file's body. SKILL.md comes from /content; other
   // files resolve to a presigned URL we then fetch (text) or link to.
@@ -2195,20 +2336,35 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
     let active = true;
     void (async () => {
       try {
+        const failed = (result: {
+          error?: unknown;
+          status?: number;
+        }): FileBody => ({
+          kind: "error",
+          value: apiErrorMessage(result, t("skillFileLoadFailed")),
+        });
         if (selected.toLowerCase() === "skill.md") {
           const md = await getSkillMarkdownAction(skillId);
           if (active)
             setBodies((b) => ({
               ...b,
-              [selected]: { kind: "md", value: skillBody(md || "") },
+              [selected]:
+                md.error || md.data === undefined
+                  ? failed(md)
+                  : { kind: "md", value: skillBody(md.data) },
             }));
           return;
         }
-        const url = await getSkillFileUrlAction(skillId, selected);
+        const fileUrl = await getSkillFileUrlAction(skillId, selected);
+        if (fileUrl.error || !fileUrl.data) {
+          if (active) setBodies((b) => ({ ...b, [selected]: failed(fileUrl) }));
+          return;
+        }
+        const url = fileUrl.data;
         if (isTextFile(selected)) {
           try {
             const res = await fetch(url);
-            if (!res.ok) throw new Error();
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const text = await res.text();
             if (active)
               setBodies((b) => ({
@@ -2216,8 +2372,9 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
                 [selected]: { kind: "text", value: text },
               }));
             return;
-          } catch {
-            // Cross-origin / unreadable — fall through to a plain open link.
+          } catch (err) {
+            // Cross-origin / unreadable: offer the plain open link instead.
+            console.warn("Skill file preview unavailable", err);
           }
         }
         if (active)
@@ -2225,16 +2382,41 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
             ...b,
             [selected]: { kind: "link", value: url },
           }));
-      } catch {
+      } catch (err) {
+        console.error("Failed to load skill file", err);
         if (active)
-          setBodies((b) => ({ ...b, [selected]: { kind: "link", value: "" } }));
+          setBodies((b) => ({
+            ...b,
+            [selected]: {
+              kind: "error",
+              value: `${t("skillFileLoadFailed")}: ${formatApiError(err)}`,
+            },
+          }));
       }
     })();
     return () => {
       active = false;
     };
-  }, [selected, skillId, bodies]);
+  }, [selected, skillId, bodies, t]);
 
+  if (error) {
+    return (
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+        <FormError className="flex-1">{error}</FormError>
+        <Button
+          size="xs"
+          variant="outline"
+          className="self-start"
+          onClick={() => {
+            setError(null);
+            setAttempt((n) => n + 1);
+          }}
+        >
+          {tCommon("retry")}
+        </Button>
+      </div>
+    );
+  }
   if (files === null) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -2243,11 +2425,7 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
       </div>
     );
   }
-  if (files.length === 0) {
-    return error ? (
-      <p className="text-sm text-muted-foreground">{error}</p>
-    ) : null;
-  }
+  if (files.length === 0) return null;
 
   const single =
     files.length === 1 && files[0].path.toLowerCase() === "skill.md";
@@ -2268,6 +2446,20 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
         <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed">
           {body.value}
         </pre>
+      ) : body.kind === "error" ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+          <FormError className="flex-1">{body.value}</FormError>
+          {selected && (
+            <Button
+              size="xs"
+              variant="outline"
+              className="self-start"
+              onClick={() => retryFile(selected)}
+            >
+              {tCommon("retry")}
+            </Button>
+          )}
+        </div>
       ) : body.value ? (
         <a
           href={body.value}

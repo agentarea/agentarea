@@ -7,11 +7,8 @@ import {
   UiNode,
   UiNodeGroupEnum,
 } from "@ory/client-fetch"
-import { useEffect } from "react"
 import { useIntl } from "react-intl"
-import { Toaster } from "sonner"
 import { useComponents, useOryFlow } from "../../context"
-import { showToast } from "../../util/showToast"
 import { useNodesGroups } from "../../util/ui"
 import { Node } from "../form/nodes/node"
 import { OrySettingsFormSection } from "../form/settings-section"
@@ -184,28 +181,6 @@ export function OrySettingsCard() {
           <SettingsSectionContent key={group} group={group} nodes={nodes} />
         )
       })}
-      <SettingsMessageToaster />
     </>
   )
-}
-
-function SettingsMessageToaster() {
-  const { flow } = useOryFlow()
-  const { Message } = useComponents()
-
-  useEffect(() => {
-    if (!flow.ui.messages) {
-      return
-    }
-    flow.ui.messages.forEach((message) => {
-      showToast(
-        {
-          message,
-        },
-        Message.Toast,
-      )
-    })
-  }, [flow.ui.messages, Message.Toast])
-
-  return <Toaster />
 }

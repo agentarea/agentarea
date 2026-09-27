@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useLocale } from "next-intl";
+import FormError from "@/components/FormError";
 import { InfoPanelBody, InfoPanelShell } from "@/components/InfoPanel";
 import type { EffectivePolicy } from "@/types/policies";
 import ActivitySummary, {
@@ -34,6 +35,8 @@ interface TaskInfoPanelProps {
   totalCost?: number | null;
   budgetLimit?: number | null;
   policy?: EffectivePolicy | null;
+  policyError?: string | null;
+  statusError?: string | null;
 }
 
 export default function TaskInfoPanel({
@@ -50,6 +53,8 @@ export default function TaskInfoPanel({
   totalCost,
   budgetLimit,
   policy,
+  policyError,
+  statusError,
 }: TaskInfoPanelProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "model">("overview");
   const locale = useLocale();
@@ -91,6 +96,7 @@ export default function TaskInfoPanel({
                   : executionStatus}
               </p>
             )}
+            {statusError && <FormError>{statusError}</FormError>}
             <KeyMetrics
               currentStatus={currentStatus}
               isActive={isActive}
@@ -106,7 +112,7 @@ export default function TaskInfoPanel({
               />
             )}
 
-            <PolicyInfo policy={policy} />
+            <PolicyInfo policy={policy} error={policyError} />
 
             <ActivitySummary summary={activitySummary} />
             <Participants

@@ -42,12 +42,15 @@ export function OAuthConnectPanel({
   target,
   isUrlType,
   onStateChange,
+  onConnectStart,
   compact,
 }: {
   target: OAuthConnectTarget;
   isUrlType: boolean;
   /** Lets the page describe the connection ("reachable, not authorized"). */
   onStateChange?: (state: OAuthConnectState) => void;
+  /** A new attempt supersedes the page's report of the previous one. */
+  onConnectStart?: () => void;
   compact?: boolean;
 }) {
   const t = useTranslations("MCPServersPage.instanceDetail.oauth");
@@ -100,6 +103,7 @@ export function OAuthConnectPanel({
 
     setIsConnecting(true);
     setConnectError(null);
+    onConnectStart?.();
     try {
       const instanceId =
         target.kind === "instance"
@@ -127,7 +131,7 @@ export function OAuthConnectPanel({
     } finally {
       setIsConnecting(false);
     }
-  }, [credentials, state, t, target]);
+  }, [credentials, state, t, target, onConnectStart]);
 
   if (state.kind === "hidden") return null;
 

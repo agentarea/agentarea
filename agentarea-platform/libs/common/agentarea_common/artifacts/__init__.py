@@ -27,6 +27,7 @@ from .service import (
     ArtifactIntegrityError,
     ArtifactObject,
     ArtifactService,
+    InvalidArtifactPathError,
     PresignedPut,
 )
 from .workspace import (
@@ -60,6 +61,7 @@ __all__ = [
     "ArtifactObject",
     "ArtifactService",
     "DbArtifactEventRecorder",
+    "InvalidArtifactPathError",
     "PresignedPut",
     "S3WorkspaceRepository",
     "WorkspaceConflictError",

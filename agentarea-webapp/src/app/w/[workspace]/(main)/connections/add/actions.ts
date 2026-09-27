@@ -1,5 +1,6 @@
 "use server";
 
+import { getTranslations } from "next-intl/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createMcpServerConnectionV1McpServerInstancesWithSpecPost } from "@/api/client/sdk.gen";
@@ -8,6 +9,7 @@ import type {
   McpServerCreate,
 } from "@/api/client/types.gen";
 import { zCreateMcpServerConnectionV1McpServerInstancesWithSpecPostBody } from "@/api/client/zod.gen";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { getServerClient } from "@/lib/server-client";
 import { requestWorkspacePath } from "@/lib/workspace-request";
 
@@ -285,19 +287,24 @@ export async function addMCPServer(
     if (response.data) {
       revalidatePath(await requestWorkspacePath("/connections"));
     } else if (response.error) {
-      const errorMessage = response.error.detail?.[0]?.msg || "Unknown error";
+      const t = await getTranslations("MCPServersPage.newServer");
+      const message = apiErrorMessage(
+        { error: response.error, status: response.response?.status },
+        t("addFailed")
+      );
       return {
-        message: `Failed to add server: ${errorMessage}`,
-        errors: { _form: [`API Error: ${errorMessage}`] },
+        message,
+        errors: { _form: [message] },
         fieldValues: fieldValues(input),
       };
     }
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "An unexpected error occurred.";
+    console.error("Failed to add MCP server", error);
+    const t = await getTranslations("MCPServersPage.newServer");
+    const message = `${t("addFailed")}: ${formatApiError(error)}`;
     return {
-      message: "An error occurred while adding the MCP server.",
-      errors: { _form: [errorMessage] },
+      message,
+      errors: { _form: [message] },
       fieldValues: fieldValues(input),
     };
   }
@@ -306,9 +313,15 @@ export async function addMCPServer(
     redirect(await requestWorkspacePath(`/connections/${response.data.id}`));
   }
 
+  // Neither data nor an error body: still say so, with the status we got.
+  const t = await getTranslations("MCPServersPage.newServer");
+  const message = apiErrorMessage(
+    { error: response.error, status: response.response?.status },
+    t("addFailed")
+  );
   return {
-    message: "Failed to add server after API call.",
-    errors: { _form: ["Post-API call check failed."] },
+    message,
+    errors: { _form: [message] },
     fieldValues: fieldValues(input),
   };
 }
