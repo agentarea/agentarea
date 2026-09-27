@@ -4,7 +4,7 @@ import asyncio
 import inspect
 import logging
 import socket
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -335,8 +335,12 @@ class MCPServerService(BaseCrudService[MCPServer]):
         limit: int = 100,
         offset: int = 0,
         ids: set[str] | None = None,
+        spec_ids: Collection[str] | None = None,
     ) -> tuple[list[MCPServer], int]:
-        """List server specs, narrowed to ``ids`` when the caller has a readable set."""
+        """List server specs, narrowed to ``ids`` when the caller has a readable set.
+
+        ``spec_ids`` asks for exactly those specs, tenant or catalog.
+        """
         return await self.repository.list_servers(
             status=status,
             is_public=is_public,
@@ -345,6 +349,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
             limit=limit,
             offset=offset,
             ids=ids,
+            spec_ids=spec_ids,
         )
 
     async def get(self, id: UUID) -> MCPServer | None:

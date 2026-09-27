@@ -10,10 +10,15 @@ class PaginatedResponse[T](BaseModel):
     has_next: bool
 
 
+# The highest page any list accepts, so the OFFSET it becomes always fits the
+# database's integer. Routes that declare their own ``page`` use it too.
+MAX_PAGE = 1_000_000
+
+
 class PaginationParams:
     def __init__(
         self,
-        page: int = Query(1, ge=1),
+        page: int = Query(1, ge=1, le=MAX_PAGE),
         page_size: int = Query(50, ge=1, le=100),
         search: str | None = Query(None),
     ):

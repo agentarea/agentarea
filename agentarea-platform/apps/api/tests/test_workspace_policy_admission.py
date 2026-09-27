@@ -40,7 +40,9 @@ async def session_factory():
     "create",
     [
         pytest.param(lambda s: s.create_shared(owner_user_id=OWNER, name="Acme"), id="shared"),
-        pytest.param(lambda s: s.ensure_personal(OWNER), id="personal"),
+        pytest.param(
+            lambda s: s.ensure_personal(OWNER, email="owner@example.com"), id="personal"
+        ),
     ],
 )
 async def test_a_failed_policy_baseline_leaves_no_workspace_row(

@@ -26,6 +26,7 @@ dependencies = [
     "aiosmtplib>=3.0",
     "opentelemetry-sdk>=1.30.0",
     "opentelemetry-exporter-otlp>=1.30.0",
+    "prometheus-client>=0.23.0",
 ]
 
 [tool.hatch.build.targets.wheel]

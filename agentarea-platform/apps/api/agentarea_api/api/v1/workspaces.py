@@ -11,6 +11,7 @@ from typing import Annotated
 
 from agentarea_common.auth.context import UserContext, UserPrincipal
 from agentarea_common.auth.dependencies import PrincipalDep, UnboundPrincipalDep
+from agentarea_common.auth.identity_directory import get_identity_directory
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_database
@@ -92,6 +93,7 @@ def get_workspace_service(session: SessionDep, user: PrincipalDep) -> WorkspaceS
         WorkspaceRepository(session),
         on_created=on_workspace_created,
         before_insert=seed_authorization_graph,
+        identities=get_identity_directory(),
     )
 
 
@@ -118,7 +120,8 @@ async def list_reachable_workspaces(
 ) -> list[Workspace]:
     """Every workspace *user* can reach: personal (provisioned on first call) + joined.
 
-    An API key reaches only the workspace it was issued for.
+    An API key reaches only the workspace it was issued for, so it provisions
+    nothing: a personal workspace minted for it could never be listed.
     """
     graph = get_workspace_membership_graph()
     member_workspace_ids = (
@@ -128,6 +131,7 @@ async def list_reachable_workspaces(
         user.user_id,
         email=user.email,
         member_workspace_ids=member_workspace_ids,
+        provision_personal=user.bound_workspace_id is None,
     )
     if user.bound_workspace_id is not None:
         return [w for w in workspaces if w.id == user.bound_workspace_id]

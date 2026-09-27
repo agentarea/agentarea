@@ -37,6 +37,7 @@ from agentarea_api.api.v1._trigger_creation import (
 )
 from agentarea_common.auth.dependencies import UserContext, get_user_context
 from agentarea_common.auth.route_authz import requires, unrestricted
+from agentarea_common.base.pagination import MAX_PAGE
 from agentarea_common.config.database import get_db_session
 from agentarea_common.utils.types import NaiveUtcDatetime, UtcDatetime
 from agentarea_tasks.infrastructure.orm import TaskORM
@@ -932,7 +933,7 @@ async def disable_trigger(
 )
 async def get_execution_history(
     trigger_id: UUID,
-    page: int = Query(1, ge=1, description="Page number"),
+    page: int = Query(1, ge=1, le=MAX_PAGE, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of executions per page"),
     status: str | None = Query(
         None, description="Filter by execution status (success, failed, timeout)"
@@ -1216,7 +1217,7 @@ async def get_execution_timeline(
 )
 async def get_execution_correlations(
     trigger_id: UUID,
-    page: int = Query(1, ge=1, description="Page number"),
+    page: int = Query(1, ge=1, le=MAX_PAGE, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of executions per page"),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),

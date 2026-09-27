@@ -47,6 +47,8 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #     index that serves it, a property of the migrated indexes and the planner.
 #   agent presets: presets are a jsonb containment query on catalog tags, and a
 #     preset's skill key is matched against hashed catalog names with LIKE.
+#   MCP spec list: tenant specs and catalog items are paged, filtered and
+#     looked up by id in SQL; the catalog is never materialized per request.
 PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL USAGE_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
@@ -60,6 +62,7 @@ PY_SUITES=(
   apps/api/tests/test_membership_backfill_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
   libs/agents/tests/test_catalog_presets_db.py
+  libs/mcp/tests/test_mcp_spec_list_db.py
 )
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, the secret

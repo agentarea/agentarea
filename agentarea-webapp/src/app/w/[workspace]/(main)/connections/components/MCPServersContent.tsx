@@ -1,8 +1,13 @@
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
-import type { PaginatedResponseMcpServerResponse } from "@/api/client/types.gen";
 import EmptyState from "@/components/EmptyState";
-import { listAgents, listMCPServerInstances, listMCPServers, listOpenAPIConnections } from "@/lib/api";
+import { formatApiError } from "@/lib/api-errors";
+import {
+  listAgents,
+  listMCPServerInstances,
+  listMCPServerSpecs,
+  listOpenAPIConnections,
+} from "@/lib/api";
 import MCPSkeleton, { mcpSkeletonColumns } from "./MCPSkeleton";
 import { MyMCPsSection } from "./MyMCPsSection";
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
@@ -19,22 +24,6 @@ export default async function MCPServersContent({
 }: MCPServersContentProps) {
   const t = await getTranslations("MCPServersPage");
 
-  const serversResponse = await listMCPServers({ page_size: 100 });
-  if (serversResponse.error) {
-    const errorMessage =
-      (serversResponse.error as { detail?: Array<{ msg?: string }> })?.detail?.[0]
-        ?.msg || "Unknown error occurred";
-
-    return (
-      <div className="py-10 text-center">
-        <p className="text-destructive">Error loading data: {errorMessage}</p>
-      </div>
-    );
-  }
-
-  const serversData = serversResponse.data as PaginatedResponseMcpServerResponse | null;
-  const mcpServers = (serversData?.items ?? []) as MCPServer[];
-
   // Only your configured connections live here — discovery is in Explore.
   return (
     <div id="my-connections">
@@ -47,11 +36,7 @@ export default async function MCPServersContent({
           />
         }
       >
-        <MyConnectionsSectionServer
-          searchQuery={searchQuery}
-          viewMode={viewMode}
-          mcpServers={mcpServers}
-        />
+        <MyConnectionsSectionServer searchQuery={searchQuery} viewMode={viewMode} />
       </Suspense>
     </div>
   );
@@ -60,11 +45,9 @@ export default async function MCPServersContent({
 async function MyConnectionsSectionServer({
   searchQuery,
   viewMode,
-  mcpServers,
 }: {
   searchQuery: string;
   viewMode: string;
-  mcpServers: MCPServer[];
 }) {
   const t = await getTranslations("MCPServersPage");
 
@@ -94,6 +77,22 @@ async function MyConnectionsSectionServer({
   }
 
   const mcpInstances = (instancesResponse.data || []) as MCPInstance[];
+
+  // Exactly the specs these instances use: the paged spec list would leave out
+  // any whose spec is not on its first page, and with it their icon.
+  const specsResponse = await listMCPServerSpecs(
+    mcpInstances.map((instance) => instance.server_spec_id)
+  );
+  if (specsResponse.error) {
+    return (
+      <div className="py-10 text-center">
+        <p className="text-destructive">
+          Error loading data: {formatApiError(specsResponse.error)}
+        </p>
+      </div>
+    );
+  }
+  const mcpServers = (specsResponse.data ?? []) as MCPServer[];
   const openApiConnections = (openApiResponse.data || []) as OpenAPIConnection[];
   const usage = buildConnectionUsage(
     agentsResponse.error ? [] : (agentsResponse.data ?? []),

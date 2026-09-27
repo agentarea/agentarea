@@ -11,6 +11,7 @@ from agentarea_api.api.deps.services import get_read_agent_service, get_read_tas
 from agentarea_api.api.v1.agents_tasks import TaskWithAgent
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
+from agentarea_common.base.pagination import MAX_PAGE
 from agentarea_tasks.domain.statuses import INBOX_STATUSES, InboxStatus
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -82,7 +83,7 @@ async def get_inbox_items(
     user_context: UserContextDep,
     status: InboxStatus | None = Query(None, description="Filter to a specific inbox status"),
     agent_id: UUID | None = Query(None, description="Filter by agent ID"),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(100, ge=1, le=1000),
     agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),

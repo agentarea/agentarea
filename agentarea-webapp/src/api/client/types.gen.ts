@@ -12385,6 +12385,12 @@ export type ListMcpServersV1McpServersGetData = {
      */
     tag?: string | null;
     /**
+     * Ids
+     *
+     * Return exactly these specs, workspace or catalog, e.g. the specs of the instances a page shows. At most 100 per request.
+     */
+    ids?: Array<string> | null;
+    /**
      * Page
      */
     page?: number;

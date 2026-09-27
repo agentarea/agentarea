@@ -120,10 +120,10 @@ Rendered only when `rustfs.enabled` is true.
 | `FRONTEND_BASE_URL` | derived from the frontend ingress | `http://localhost:3000` |
 | `SMTP_CONNECTION_URI` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME` | `kratos.smtp.*` | empty (invitations are link-only) |
 
-`METRICS_ENABLED`, `METRICS_PORT`, `HEALTH_CHECK_ENABLED`, and
-`HEALTH_CHECK_PORT` are rendered by the chart but have no reader in the Python
-source. The API serves `/health` on its normal port unconditionally and exposes
-no `/metrics` endpoint. See [observability](/self-host/observability).
+`METRICS_ENABLED` serves Prometheus metrics on `METRICS_PORT`, never on the API
+port. `HEALTH_CHECK_ENABLED` and `HEALTH_CHECK_PORT` are rendered by the chart
+but have no reader in the Python source: the API serves `/health` on its normal
+port unconditionally. See [observability](/self-host/observability).
 
 `API_BASE_URL` is the URL the backend advertises for itself — provider icon URLs,
 OAuth protected-resource metadata, and the MCP `WWW-Authenticate` header. It must
