@@ -18,9 +18,7 @@ from fastapi import HTTPException
 
 
 def _settings(backend: str):
-    return SimpleNamespace(
-        access_control=SimpleNamespace(ACCESS_CONTROL_BACKEND=backend),
-    )
+    return SimpleNamespace(ACCESS_CONTROL_BACKEND=backend)
 
 
 class _Container:
@@ -39,7 +37,10 @@ def graph(monkeypatch):
     """Install a container and settings the ownership module will resolve."""
 
     def _install(client=None, error: Exception | None = None):
-        monkeypatch.setattr("agentarea_common.config.get_settings", lambda: _settings("openfga"))
+        monkeypatch.setattr(
+            "agentarea_common.config.access_control.AccessControlSettings",
+            lambda: _settings("openfga"),
+        )
         monkeypatch.setattr(
             "agentarea_common.di.container.get_container",
             lambda: _Container(client=client, error=error),
