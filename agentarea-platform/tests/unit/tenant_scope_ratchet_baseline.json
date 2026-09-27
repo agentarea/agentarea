@@ -14,6 +14,13 @@
     "libs/tasks/agentarea_tasks/infrastructure/orm.py": 1,
     "libs/wallet/agentarea_wallet/domain/models.py": 1
   },
+  "repository_text": {
+    "libs/agents/agentarea_agents/infrastructure/catalog_agent_repository.py": 4,
+    "libs/agents/agentarea_agents/infrastructure/catalog_skill_repository.py": 7,
+    "libs/llm/agentarea_llm/infrastructure/catalog_model_spec_repository.py": 2,
+    "libs/mcp/agentarea_mcp/infrastructure/catalog_mcp_repository.py": 3,
+    "libs/mcp/agentarea_mcp/infrastructure/repository.py": 2
+  },
   "session_execute": {
     "apps/api/agentarea_api/api/v1/_secret_owners.py": 1,
     "apps/api/agentarea_api/api/v1/access_control.py": 6,
