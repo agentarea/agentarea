@@ -4,6 +4,9 @@ This toolset intentionally avoids importing ``agentarea_api``. The API process
 also exposes a platform MCP tool with the same user-facing surface, but the
 agent worker needs a pure SDK implementation so code-tool execution does not
 depend on the API package being installed in the worker image.
+
+``upload_urls`` exists only on the API side: it hands out presigned PUTs to MCP
+clients, while an agent writes files through its sandbox instead.
 """
 
 from __future__ import annotations

@@ -84,6 +84,13 @@ class ArtifactObject:
     last_modified: str | None = None
 
 
+@dataclass(frozen=True)
+class PresignedPut:
+    url: str
+    headers: dict[str, str]
+    expires_in: int
+
+
 class ArtifactService:
     """Workspace-scoped object store wrapper.
 
@@ -419,6 +426,7 @@ class ArtifactService:
         *,
         content_type: str | None = None,
         sha256_b64: str | None = None,
+        metadata: dict[str, str] | None = None,
         expires_in: int = 3600,
     ) -> str:
         """Sign a direct-upload URL against the externally reachable endpoint.
@@ -436,6 +444,8 @@ class ArtifactService:
                 params["ContentType"] = content_type
             if sha256_b64 is not None:
                 params["ChecksumSHA256"] = sha256_b64
+            if metadata:
+                params["Metadata"] = metadata
             return self._public_client.generate_presigned_url(
                 "put_object",
                 Params=params,
@@ -443,6 +453,48 @@ class ArtifactService:
             )
 
         return await asyncio.to_thread(_call)
+
+    async def authorize_put(
+        self,
+        workspace_id: str,
+        path: str,
+        *,
+        sha256_hex: str,
+        content_type: str | None = None,
+        expires_in: int = 600,
+    ) -> PresignedPut:
+        """Presign a direct write of one file and record it as the actor's write.
+
+        The digest is bound into the signature twice: as ``ChecksumSHA256`` so
+        the store accepts only the declared bytes, and as the ``sha256``
+        metadata that :meth:`stream` verifies downloads against. That binding
+        is what lets provenance be recorded when the URL is minted rather than
+        after an upload the API never sees; the short expiry bounds how long a
+        URL can re-PUT those bytes over a later write.
+        """
+        if not _SHA256_RE.fullmatch(sha256_hex):
+            raise ValueError("sha256 must be a 64-character lowercase hex digest")
+        ct = content_type or self._guess_content_type(path)
+        sha256_b64 = base64.b64encode(bytes.fromhex(sha256_hex)).decode("ascii")
+        existed = await self.exists(workspace_id, path)
+        url = await self.presigned_put_url(
+            workspace_id,
+            path,
+            content_type=ct,
+            sha256_b64=sha256_b64,
+            metadata={"sha256": sha256_hex},
+            expires_in=expires_in,
+        )
+        await self._record(workspace_id, path, ACTION_MODIFIED if existed else ACTION_CREATED)
+        return PresignedPut(
+            url=url,
+            headers={
+                "Content-Type": ct,
+                "x-amz-checksum-sha256": sha256_b64,
+                "x-amz-meta-sha256": sha256_hex,
+            },
+            expires_in=expires_in,
+        )
 
     async def head(self, workspace_id: str, path: str) -> dict[str, Any] | None:
         """Return ``{size, content_type, metadata}`` or ``None`` when absent."""

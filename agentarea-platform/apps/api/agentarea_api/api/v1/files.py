@@ -28,12 +28,19 @@ from agentarea_common.artifacts import (
     ArtifactIntegrityError,
     ArtifactService,
     DbArtifactEventRecorder,
+    WorkspaceConflictError,
     WorkspaceRepository,
     WorkspaceValidationError,
     normalize_workspace_path,
     secure_download_headers,
 )
 from agentarea_common.artifacts.workspace import DEFAULT_MAX_FILE_BYTES
+from agentarea_common.artifacts.workspace_writes import (
+    ensure_no_file_ancestors,
+    ensure_writable_file,
+    is_reserved_path,
+    resolve_write_path,
+)
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
@@ -167,44 +174,18 @@ def _task_workspace_path(file_path: str) -> tuple[str, str] | None:
     return parts[1], relative_path
 
 
-def _is_hidden_storage_path(file_path: str) -> bool:
-    """Paths the workspace view never shows and manual writes may never touch.
-
-    ``staging/`` holds half-finished attachment uploads, ``tasks/`` is the
-    task-owned surface reached through committed manifests, and ``.trash/``
-    holds archived files that only the restore endpoint may resurrect.
-    """
-    clean = file_path.lstrip("/")
-    parts = PurePosixPath(clean).parts
-    return bool(parts and parts[0] in {"tasks", "staging", TRASH_PREFIX.rstrip("/")})
-
-
 def _resolve_upload_path(path: str, filename: str) -> str:
-    """Resolve where an upload lands, rejecting anything outside the workspace.
-
-    An explicit ``path`` keeps the directory structure the client sent, which is
-    what makes folder uploads and prefix-scoped reads possible. Without one the
-    file lands at the workspace root under its own name.
-    """
-    if not path:
-        path = PurePosixPath(filename or "unnamed").name or "unnamed"
     try:
-        resolved = normalize_workspace_path(path)
+        return resolve_write_path(path, filename)
     except WorkspaceValidationError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
-    if _is_hidden_storage_path(resolved):
-        raise HTTPException(
-            status_code=422,
-            detail=f"{resolved!r} is a reserved prefix and cannot be written directly",
-        )
-    return resolved
 
 
 async def _ensure_no_file_ancestors(service: ArtifactService, workspace_id: str, path: str) -> None:
-    """Prevent an existing file from also becoming a parent folder."""
-    for parent in PurePosixPath(path).parents:
-        if parent != PurePosixPath(".") and await service.exists(workspace_id, str(parent)):
-            raise HTTPException(status_code=409, detail=f"A file already exists at {str(parent)!r}")
+    try:
+        await ensure_no_file_ancestors(service, workspace_id, path)
+    except WorkspaceConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
 
 
 async def _workspace_file_download_url(user_context: UserContext, file_path: str) -> str:
@@ -242,7 +223,7 @@ async def list_workspace_files(
     """
     svc = _get_artifact_service()
     objects = await svc.list(user_context.workspace_id)
-    visible_objects = [obj for obj in objects if not _is_hidden_storage_path(obj.path)]
+    visible_objects = [obj for obj in objects if not is_reserved_path(obj.path)]
     files = [
         WorkspaceFileInfo(
             path=obj.path,
@@ -327,9 +308,10 @@ async def upload_file(
     )
     if purpose == "workspace":
         resolved_path = _resolve_upload_path(path, filename)
-        await _ensure_no_file_ancestors(svc, user_context.workspace_id, resolved_path)
-        if await svc.list(user_context.workspace_id, prefix=f"{resolved_path}/", max_items=1):
-            raise HTTPException(status_code=409, detail="A folder already exists at this path")
+        try:
+            await ensure_writable_file(svc, user_context.workspace_id, resolved_path)
+        except WorkspaceConflictError as e:
+            raise HTTPException(status_code=409, detail=str(e)) from e
         await svc.put(
             user_context.workspace_id,
             resolved_path,
@@ -472,7 +454,7 @@ async def delete_workspace_file(
     workspace library.
     """
     clean = file_path.lstrip("/")
-    if _is_hidden_storage_path(clean):
+    if is_reserved_path(clean):
         raise HTTPException(
             status_code=400,
             detail=f"{clean!r} is not a workspace library file",
@@ -569,7 +551,7 @@ async def stream_workspace_file(
                 user_context.workspace_id, task_id, relative_path
             )
         else:
-            if _is_hidden_storage_path(file_path):
+            if is_reserved_path(file_path):
                 raise FileNotFoundError(file_path)
             body, content_type, size = await _get_artifact_service().stream(
                 user_context.workspace_id, file_path
@@ -604,9 +586,9 @@ async def download_workspace_file(
                 user_context.workspace_id, task_id, relative_path
             )
         else:
-            exists = not _is_hidden_storage_path(
-                file_path
-            ) and await _get_artifact_service().exists(user_context.workspace_id, file_path)
+            exists = not is_reserved_path(file_path) and await _get_artifact_service().exists(
+                user_context.workspace_id, file_path
+            )
     except WorkspaceValidationError:
         exists = False
     if not exists:
