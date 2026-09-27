@@ -33,6 +33,7 @@ from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.auth.tool_authorization import caller_can_approve
 from agentarea_common.base import ReadRepositoryFactoryDep
+from agentarea_common.base.pagination import MAX_PAGE
 from agentarea_common.channel_origin import reject_channel_origin
 from agentarea_common.config import get_settings
 from agentarea_common.events.contract import (
@@ -2111,7 +2112,7 @@ async def get_task_events(
     agent_id: UUID,
     task_id: UUID,
     repository_factory: ReadRepositoryFactoryDep,
-    page: int = Query(1, ge=1, description="Page number"),
+    page: int = Query(1, ge=1, le=MAX_PAGE, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of events per page"),
     event_type: str | None = Query(None, description="Filter by event type"),
     task_service: TaskService = Depends(get_read_task_service),

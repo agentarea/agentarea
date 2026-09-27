@@ -19,6 +19,7 @@ from agentarea_common.auth.route_authz import (
     enforced_in_handler,
     requires_workspace_admin,
 )
+from agentarea_common.base.pagination import MAX_PAGE
 from agentarea_common.money import ZERO, Money
 from agentarea_common.utils.types import NaiveUtcDatetime, UtcDatetime
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -334,7 +335,7 @@ async def get_payment_history(
     status: str | None = Query(None, description="Filter by status"),
     from_date: NaiveUtcDatetime | None = Query(None, description="Filter from date"),
     to_date: NaiveUtcDatetime | None = Query(None, description="Filter to date"),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(50, ge=1, le=200),
 ):
     """Get paginated payment history for an agent."""

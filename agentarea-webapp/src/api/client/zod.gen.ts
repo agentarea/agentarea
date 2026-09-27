@@ -3880,7 +3880,7 @@ export const zGetTaskEventsV1AgentsAgentIdTasksTaskIdEventsGetPath = z.object({
 });
 
 export const zGetTaskEventsV1AgentsAgentIdTasksTaskIdEventsGetQuery = z.object({
-  page: z.number().int().gte(1).optional().default(1),
+  page: z.number().int().gte(1).lte(1000000).optional().default(1),
   page_size: z.number().int().gte(1).lte(100).optional().default(50),
   event_type: z.string().nullish(),
 });
@@ -4046,7 +4046,7 @@ export const zGetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetQuery = z.object(
     status: z.string().nullish(),
     from_date: z.string().datetime().nullish(),
     to_date: z.string().datetime().nullish(),
-    page: z.number().int().gte(1).optional().default(1),
+    page: z.number().int().gte(1).lte(1000000).optional().default(1),
     page_size: z.number().int().gte(1).lte(200).optional().default(50),
   }
 );
@@ -4356,7 +4356,7 @@ export const zGetInboxItemsV1InboxGetQuery = z.object({
     .enum(["waiting_for_approval", "waiting_for_input", "completed", "failed"])
     .nullish(),
   agent_id: z.string().uuid().nullish(),
-  page: z.number().int().gte(1).optional().default(1),
+  page: z.number().int().gte(1).lte(1000000).optional().default(1),
   page_size: z.number().int().gte(1).lte(1000).optional().default(100),
 });
 
@@ -5923,7 +5923,7 @@ export const zGetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetPath =
 
 export const zGetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetQuery =
   z.object({
-    page: z.number().int().gte(1).optional().default(1),
+    page: z.number().int().gte(1).lte(1000000).optional().default(1),
     page_size: z.number().int().gte(1).lte(100).optional().default(50),
   });
 
@@ -5982,7 +5982,7 @@ export const zGetExecutionHistoryV1TriggersTriggerIdExecutionsGetPath =
 
 export const zGetExecutionHistoryV1TriggersTriggerIdExecutionsGetQuery =
   z.object({
-    page: z.number().int().gte(1).optional().default(1),
+    page: z.number().int().gte(1).lte(1000000).optional().default(1),
     page_size: z.number().int().gte(1).lte(100).optional().default(50),
     status: z.string().nullish(),
     start_time: z.string().datetime().nullish(),
