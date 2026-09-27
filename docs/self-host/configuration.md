@@ -109,8 +109,8 @@ Rendered only when `rustfs.enabled` is true.
 | `MCP_MANAGER_URL` | the MCP Manager service and `mcpManager.service.port` | derived |
 | `MCP_CLIENT_TIMEOUT` | fixed | `30` |
 | `PUBLIC_S3_ENDPOINT` | `global.storage.publicEndpoint` | `""` |
-| `METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `false` |
-| `METRICS_PORT` | `global.monitoring.prometheus.port` | `9464` |
+| `METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
+| `METRICS_PORT` | `global.monitoring.prometheus.port` | `9090` |
 | `HEALTH_CHECK_ENABLED` | `global.monitoring.health.enabled` | `true` |
 | `HEALTH_CHECK_PORT` | `global.monitoring.health.port` | `8001` |
 | `KRATOS_ISSUER` | `kratos.jwt.issuer` | `https://agentarea.dev` |
@@ -235,7 +235,7 @@ be weakened from these values.
 | `ORY_SDK_URL` | `kratos.urls.public`, else the internal service | derived |
 | `ORY_BROWSER_URL` | `kratos.urls.publicBrowser`, else `kratos.urls.public` | derived |
 | `ORY_ADMIN_URL` | `kratos.urls.admin`, else the internal service | derived |
-| `METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `false` |
+| `METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
 | `HEALTH_CHECK_ENABLED` | `global.monitoring.health.enabled` | `true` |
 | `APPS_SANDBOX_ORIGIN` | `global.webapp.appsSandboxUrl` | empty |
 | `WEBAPP_PUBLIC_ORIGIN` | `global.webapp.url`, else the internal frontend service URL | derived |

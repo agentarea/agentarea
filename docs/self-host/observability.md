@@ -14,10 +14,11 @@ last_updated: 2026-07-29
 AgentArea emits structured JSON logs on stdout from every Python service, and
 optional OpenTelemetry traces over OTLP. Both are real and configurable.
 
-Metrics are limited to the API. With `global.monitoring.prometheus.enabled`
-set (off by default), the API serves Prometheus metrics at `/metrics` on
-`global.monitoring.prometheus.port` (9464), a port of its own that the public
-API port never answers for:
+Metrics are limited to the API. While `global.monitoring.prometheus.enabled` is
+set (the chart default), the API serves Prometheus metrics at `/metrics` on
+`global.monitoring.prometheus.port` (9090), a port of its own that the public
+API port never answers for. Outside the chart, set `METRICS_ENABLED=true`
+(`METRICS_PORT` defaults to 9090):
 
 - `agentarea_http_request_duration_seconds{method, route, status}` — request
   latency. `route` is the route template (`/v1/workspaces/{workspace}/mcp-servers/`),
@@ -315,7 +316,7 @@ curl -s http://localhost:8000/health | jq .
   </Accordion>
   <Accordion title="A Prometheus scrape of the API returns 404">
     The scrape went to the API port. Metrics are served only on
-    `global.monitoring.prometheus.port` (9464), and only while
+    `global.monitoring.prometheus.port` (9090), and only while
     `global.monitoring.prometheus.enabled` is set.
   </Accordion>
   <Accordion title="Setting `global.monitoring.health.port` did not move the health endpoint">

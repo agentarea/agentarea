@@ -260,8 +260,8 @@ global:
     # its own that the public API port never answers for. Needs
     # backend.workers: 1 -- each worker process would bind the port.
     prometheus:
-      enabled: false
-      port: 9464
+      enabled: true
+      port: 9090
       path: "/metrics"
     # Health checks
     health:

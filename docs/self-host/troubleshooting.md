@@ -281,7 +281,7 @@ Failures that look like one problem and are another:
   </Accordion>
   <Accordion title="A Prometheus scrape returns 404">
     Only the API serves `/metrics`, and only on
-    `global.monitoring.prometheus.port` (9464) while
+    `global.monitoring.prometheus.port` (9090) while
     `global.monitoring.prometheus.enabled` is set; the API port answers 404.
     See [observability](/self-host/observability).
   </Accordion>

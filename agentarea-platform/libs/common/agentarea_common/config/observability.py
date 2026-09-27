@@ -16,6 +16,6 @@ class ObservabilitySettings(BaseSettings):
     OTEL_SERVICE_NAME: str = ""
     OTEL_EXPORTER_OTLP_PROTOCOL: str = "grpc"
     METRICS_ENABLED: bool = False
-    METRICS_PORT: int = 9464
+    METRICS_PORT: int = 9090
 
     model_config = {"env_file": ".env", "extra": "ignore"}
