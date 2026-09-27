@@ -6,6 +6,7 @@ import logging
 from uuid import uuid4
 
 from agentarea_common.auth.context import UserContext
+from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config.database import get_db_session
 from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.infrastructure.repository import TaskRepository
@@ -35,28 +36,29 @@ async def test_temporal_workflow():
     logger.info(f"Created test task: {task.id}")
 
     # Create task manager
-    async for db_session in get_db_session():
-        user_context = UserContext(user_id="test_user", workspace_id="test-workspace-456")
-        task_repository = TaskRepository(db_session, user_context)
-        task_manager = TemporalTaskManager(task_repository)
+    with workspace_scope("test-workspace-456"):
+        async for db_session in get_db_session():
+            user_context = UserContext(user_id="test_user", workspace_id="test-workspace-456")
+            task_repository = TaskRepository(db_session, user_context)
+            task_manager = TemporalTaskManager(task_repository)
 
-        # Persist the task first: submit_task only updates an existing row's status.
-        await task_repository.create_task(task_manager._agent_task_to_task(task))
+            # Persist the task first: submit_task only updates an existing row's status.
+            await task_repository.create_task(task_manager._agent_task_to_task(task))
 
-        # Submit task
-        logger.info("Submitting task to Temporal...")
-        submitted_task = await task_manager.submit_task(task)
+            # Submit task
+            logger.info("Submitting task to Temporal...")
+            submitted_task = await task_manager.submit_task(task)
 
-        logger.info(f"Task submitted with status: {submitted_task.status}")
+            logger.info(f"Task submitted with status: {submitted_task.status}")
 
-        # Check task status
-        retrieved_task = await task_manager.get_task(task.id)
-        if retrieved_task:
-            logger.info(f"Retrieved task status: {retrieved_task.status}")
-        else:
-            logger.error("Failed to retrieve task")
+            # Check task status
+            retrieved_task = await task_manager.get_task(task.id)
+            if retrieved_task:
+                logger.info(f"Retrieved task status: {retrieved_task.status}")
+            else:
+                logger.error("Failed to retrieve task")
 
-        return submitted_task
+            return submitted_task
 
 
 if __name__ == "__main__":
