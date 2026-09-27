@@ -86,9 +86,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
   ] = await Promise.all([
     getAgentOverview(realId).catch(thrown("Failed to load agent overview")),
     listAgentTasks(realId).catch(thrown("Failed to load agent tasks")),
-    getWorkspaceSettings().catch(
-      thrown("Failed to load workspace settings")
-    ),
+    getWorkspaceSettings().catch(thrown("Failed to load workspace settings")),
     listMCPServerInstances().catch(thrown("Failed to load MCP instances")),
     listMCPServers({ page_size: 100 }).catch(
       thrown("Failed to load MCP servers")

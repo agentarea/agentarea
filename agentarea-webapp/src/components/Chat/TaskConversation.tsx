@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Play } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Loader2, Play } from "lucide-react";
 import ActivityGroup from "@/components/Chat/ActivityGroup";
 import {
   buildActivitySegments,

@@ -10,7 +10,6 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import SectionLoadError from "@/components/SectionLoadError";
 import { formatRelTime } from "@/app/w/[workspace]/(main)/dashboard/components/relTime";
 import { HeroDescription } from "@/components/Overview/HeroDescription";
 import {
@@ -23,6 +22,7 @@ import {
   Stat,
   StatStrip,
 } from "@/components/Overview/OverviewCard";
+import SectionLoadError from "@/components/SectionLoadError";
 import { TaskStatus, useTaskStatusLabel } from "@/components/TaskStatus";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { CollapsibleGroup } from "@/components/ui/group-header";
@@ -328,7 +328,9 @@ export async function AgentOverviewView({
                   t("noCap")
                 )
               }
-              subTone={loadErrors.settings || loadErrors.currency ? "down" : "muted"}
+              subTone={
+                loadErrors.settings || loadErrors.currency ? "down" : "muted"
+              }
             />
             <Stat
               icon={<SquareCheckBig />}
