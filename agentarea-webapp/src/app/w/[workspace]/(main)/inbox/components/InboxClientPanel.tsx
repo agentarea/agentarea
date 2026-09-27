@@ -1,8 +1,6 @@
 "use client";
 
-import { useFormatter, useNow, useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import { useFormatter, useLocale, useNow, useTranslations } from "next-intl";
 import {
   Check,
   ChevronRight,
@@ -22,6 +20,9 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import { TaskConversation } from "@/components/Chat/TaskConversation";
 import { TaskStatus } from "@/components/TaskStatus";
 import { Button } from "@/components/ui/button";
+import Link from "@/components/WorkspaceLink";
+import { useCurrency } from "@/hooks/useCurrency";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { EscalationArguments } from "./EscalationArguments";
 import { extractInboxResult } from "./inboxResult";
 import { InboxResultMessage } from "./InboxResultMessage";
@@ -41,6 +42,8 @@ export function InboxClientPanel({
   const t = useTranslations("InboxPage");
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
+  const locale = useLocale();
+  const { currency } = useCurrency();
 
   // The empty reading pane is InboxDetailEmpty; a null task only reaches here
   // while the mobile sheet slides shut.
@@ -134,7 +137,7 @@ export function InboxClientPanel({
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 font-mono text-muted-foreground">
             <Wallet size={13} aria-hidden />
-            <span>{fmtCost(task.total_cost)}</span>
+            <span>{fmtCost(task.total_cost, currency, locale)}</span>
           </span>
         </div>
       </header>

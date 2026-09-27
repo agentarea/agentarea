@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useLocale } from "next-intl";
 import {
   Coins,
   Settings2,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import Table from "@/components/Table/Table";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { useCurrency } from "@/hooks/useCurrency";
 import { getPolicyStatusPresentation } from "@/lib/status";
 import type { Policy } from "@/types/policies";
 import { policyToRule } from "./policy-rules";
@@ -20,7 +22,6 @@ interface AgentOption {
   id: string;
   name: string;
   icon?: string | null;
- 
 }
 
 const CATEGORY_ICON: Record<string, LucideIcon> = {
@@ -73,12 +74,14 @@ export default function PoliciesList({
     () => new Map(agents.map((a) => [a.id, a.name])),
     [agents]
   );
+  const locale = useLocale();
+  const { currency } = useCurrency();
 
   const rows = useMemo<PolicyRow[]>(() => {
     const list = policies
       .filter((p): p is Policy & { id: string } => Boolean(p.id))
       .map((policy) => {
-        const rule = policyToRule(policy);
+        const rule = policyToRule(policy, currency, locale);
         const subject = subjectOf(policy, agentNameById);
         return {
           id: policy.id,
@@ -98,7 +101,7 @@ export default function PoliciesList({
         a.label.localeCompare(b.label)
     );
     return list;
-  }, [policies, agentNameById]);
+  }, [policies, agentNameById, currency, locale]);
 
   const columns = [
     {
@@ -171,7 +174,7 @@ export default function PoliciesList({
             pulse={status.pulse}
             className="whitespace-nowrap"
           >
-          {item.enabled ? "Enabled" : "Disabled"}
+            {item.enabled ? "Enabled" : "Disabled"}
           </StatusIndicator>
         );
       },

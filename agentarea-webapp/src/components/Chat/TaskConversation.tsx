@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { Loader2, Play } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Loader2, Play } from "lucide-react";
 import ActivityGroup from "@/components/Chat/ActivityGroup";
 import {
   buildActivitySegments,
@@ -27,7 +26,9 @@ import { buildActivitySummary } from "@/components/TaskInfoPanel/buildActivitySu
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { useCurrency } from "@/hooks/useCurrency";
 import { useTaskActions } from "@/hooks/useTaskActions";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import type { TaskWithAgent } from "@/lib/api";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import type { Part } from "@/lib/events/contract";
@@ -71,6 +72,7 @@ export function TaskConversation({
 }: TaskConversationProps) {
   const router = useWorkspaceRouter();
   const t = useTranslations("Chat.errors");
+  const { currency } = useCurrency();
   const [chatInput, setChatInput] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [composerError, setComposerError] = useState<string | null>(null);
@@ -382,7 +384,7 @@ export function TaskConversation({
                   />
                 </label>
                 <label className="space-y-1 text-xs font-medium">
-                  Budget top-up (USD, optional)
+                  Budget top-up ({currency ?? "¤"}, optional)
                   <input
                     className="block h-9 w-44 rounded-md border bg-background px-3 text-sm"
                     min="0.01"

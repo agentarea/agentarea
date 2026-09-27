@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import Link from "@/components/WorkspaceLink";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import { useLocale } from "next-intl";
 import { Link as LinkIcon, Plus, UsersRound, X } from "lucide-react";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { AgentSelect } from "@/components/AgentSelect";
@@ -18,11 +17,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import Link from "@/components/WorkspaceLink";
+import { useCurrency } from "@/hooks/useCurrency";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import {
   resolveMcpRef,
   type McpInstance,
   type McpServer,
 } from "@/lib/mcp/resolveMcpRef";
+import { getCurrencySymbol } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { Policy, PolicyEffect } from "@/types/policies";
 import {
@@ -43,7 +46,7 @@ interface AgentOption {
   id: string;
   name: string;
   icon?: string | null;
- 
+
   tools?: ToolConfigLike[] | null;
   tools_config?: ToolsConfigLike | null;
 }
@@ -1089,18 +1092,23 @@ function MoneyField({
   label,
   value,
   onChange,
+  currencySymbol,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
+  // Required, not defaulted to "$" — the caller must pass whatever
+  // getCurrencySymbol() resolved (including "¤" while the workspace's
+  // currency is loading/unavailable), never a guessed symbol.
+  currencySymbol: string;
 }) {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
       <div className="relative">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-          $
+          {currencySymbol}
         </span>
         <Input
           id={id}
@@ -1221,6 +1229,12 @@ export default function PolicyEditor({
   returnHref = "/policies",
 }: PolicyEditorProps) {
   const router = useWorkspaceRouter();
+  const locale = useLocale();
+  const { currency } = useCurrency();
+  const currencySymbol = useMemo(
+    () => getCurrencySymbol(currency, locale),
+    [currency, locale]
+  );
   const [drafts, setDrafts] = useState<PolicyDraft[]>(() => [
     newDraft("draft-1"),
   ]);
@@ -1814,6 +1828,7 @@ export default function PolicyEditor({
                       label="Amount"
                       value={form.amountUsd}
                       onChange={(v) => update("amountUsd", v)}
+                      currencySymbol={currencySymbol}
                     />
                     {form.capKind === "spend" && (
                       <div className="space-y-1.5">

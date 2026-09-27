@@ -3,6 +3,7 @@
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -19,16 +20,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { resetCurrencyCache } from "@/hooks/useCurrency";
 import { useWorkspaceSlug } from "@/hooks/useWorkspaceNavigation";
+import { deterministicHue } from "@/lib/avatar-hue";
 import { createWorkspaceAction } from "@/lib/workspace-actions";
 import {
   WORKSPACE_HOME,
@@ -36,8 +39,6 @@ import {
   workspaceSection,
 } from "@/lib/workspace-routes";
 import type { Workspace } from "@/lib/workspaces";
-import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
-import { deterministicHue } from "@/lib/avatar-hue";
 
 function WorkspaceIcon({
   workspace,
@@ -73,6 +74,12 @@ export function TeamSwitcher({ workspaces }: { workspaces: Workspace[] }) {
   // The ids below the section belong to the workspace being left.
   const switchTo = (slug: string) => {
     if (slug === activeSlug) return;
+    // A different workspace can bill in a different currency. Navigating to
+    // /w/{slug}/... remounts the routed subtree, but useCurrency's cache is a
+    // module-level singleton that outlives any single component's lifetime —
+    // without this, a freshly mounted instance would still read the previous
+    // workspace's cached currency.
+    resetCurrencyCache();
     router.push(workspacePath(slug, workspaceSection(pathname)));
   };
 
@@ -86,6 +93,9 @@ export function TeamSwitcher({ workspaces }: { workspaces: Workspace[] }) {
       }
       setName("");
       setCreateOpen(false);
+      // Creating a workspace also makes it the active one — same
+      // currency-staleness risk as switchTo above.
+      resetCurrencyCache();
       router.push(workspacePath(result.data.slug, WORKSPACE_HOME));
       router.refresh();
     });

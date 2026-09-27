@@ -126,7 +126,10 @@ import {
   updateSkill,
   workspaceFileHistory,
 } from "@/lib/api";
-import { updateWorkspaceSettings } from "@/lib/api-dashboard";
+import {
+  getPricingCurrency,
+  updateWorkspaceSettings,
+} from "@/lib/api-dashboard";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { getViewerCapabilities } from "@/lib/workspace-context";
 import { requestWorkspacePath, workspaceFetch } from "@/lib/workspace-request";
@@ -540,7 +543,9 @@ export async function listMCPServersAction(params?: {
   return await listMCPServers(params);
 }
 
-export async function listMCPServerSpecsAction(specIds: (string | null | undefined)[]) {
+export async function listMCPServerSpecsAction(
+  specIds: (string | null | undefined)[]
+) {
   return await listMCPServerSpecs(specIds);
 }
 
@@ -1051,4 +1056,16 @@ export async function updateWorkspaceSettingsAction(
     console.error("Failed to update workspace settings", err);
     return { data: undefined, error: formatApiError(err), status: undefined };
   }
+}
+
+// getPricingCurrency() never guesses a currency on failure — pass that
+// failure through as an explicit error rather than papering over it here.
+// Callers (useCurrency()) must treat a null/error result as "unknown", never
+// as USD.
+export async function getPricingCurrencyAction() {
+  const result = await getPricingCurrency();
+  if (!result.ok) {
+    return { data: null, error: "Currency unavailable" };
+  }
+  return { data: { currency: result.currency }, error: null };
 }

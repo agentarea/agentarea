@@ -1,4 +1,4 @@
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { policyToRule } from "@/app/w/[workspace]/(main)/policies/components/policy-rules";
 import { resolveAgentIdentity } from "@/lib/agent-identity";
@@ -12,7 +12,11 @@ import {
   listPolicies,
   type TaskResponse,
 } from "@/lib/api";
-import { getAgentOverview, getWorkspaceSettings } from "@/lib/api-dashboard";
+import {
+  getAgentOverview,
+  getPricingCurrency,
+  getWorkspaceSettings,
+} from "@/lib/api-dashboard";
 import { apiErrorMessage, isApiNotFound } from "@/lib/api-errors";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
 import { getAgentStatusPresentation } from "@/lib/status";
@@ -78,12 +82,11 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     openApiConnectionsRes,
     policiesRes,
     modelInstanceRes,
+    pricingCurrency,
   ] = await Promise.all([
     getAgentOverview(realId).catch(thrown("Failed to load agent overview")),
     listAgentTasks(realId).catch(thrown("Failed to load agent tasks")),
-    getWorkspaceSettings().catch(
-      thrown("Failed to load workspace settings")
-    ),
+    getWorkspaceSettings().catch(thrown("Failed to load workspace settings")),
     listMCPServerInstances().catch(thrown("Failed to load MCP instances")),
     listMCPServers({ page_size: 100 }).catch(
       thrown("Failed to load MCP servers")
@@ -103,6 +106,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
           status: undefined,
         }))
       : Promise.resolve({ data: undefined, error: undefined }),
+    getPricingCurrency(),
   ]);
 
   const overview = overviewRes.data;
@@ -130,6 +134,9 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     connections: registryFailure
       ? apiErrorMessage(registryFailure, t("connectionsLoadFailed"))
       : undefined,
+    // getPricingCurrency() never throws (it catches internally), so there's
+    // no raw error to feed apiErrorMessage — just the one translated line.
+    currency: !pricingCurrency.ok ? t("currencyLoadFailed") : undefined,
   };
   // The hero label falls back to the agent's own model info; a deleted
   // instance (404) is expected, anything else is worth a log line.
@@ -167,7 +174,11 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
       (openApiConnectionsRes?.data as OpenApiConnectionRef[]) ?? [],
   });
 
-  // Agent-scoped governance rules, summarised by effect.
+  // Agent-scoped governance rules, summarised by effect. Never guess a
+  // currency: a failed lookup threads through as null (see @/lib/money for
+  // how that renders) rather than assuming USD.
+  const locale = await getLocale();
+  const currency = pricingCurrency.ok ? pricingCurrency.currency : null;
   let policies: AgentOverviewModel["policies"];
   if (!policiesRes) {
     policies = { status: "adminOnly" };
@@ -179,7 +190,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
   } else {
     const policyRules = (policiesRes.data as Policy[])
       .filter((p) => p.enabled !== false)
-      .map(policyToRule);
+      .map((p) => policyToRule(p, currency, locale));
     policies = {
       status: "ok",
       count: policyRules.length,
@@ -262,6 +273,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     connections: toolIcons.map((tool) => tool.label),
     policies,
     loadErrors,
+    currency,
   };
 
   return <AgentOverviewView model={model} />;

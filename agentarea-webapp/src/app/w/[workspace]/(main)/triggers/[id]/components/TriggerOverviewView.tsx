@@ -1,5 +1,4 @@
-import { getTranslations } from "next-intl/server";
-import Link from "@/components/WorkspaceLink";
+import { getLocale, getTranslations } from "next-intl/server";
 import {
   Boxes,
   CalendarClock,
@@ -27,6 +26,8 @@ import {
 import { CopyableText } from "@/components/ui/copyable-text";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import Link from "@/components/WorkspaceLink";
+import { getPricingCurrency } from "@/lib/api-dashboard";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import {
   getTriggerExecutionStatusPresentation,
@@ -36,7 +37,7 @@ import { cn } from "@/lib/utils";
 import type { TaskParameterRef } from "../../components/taskParameters";
 import {
   formatCompactDistance,
-  formatTriggerCost as fmtUsd,
+  formatTriggerCost,
 } from "../../components/triggerDisplay";
 
 /**
@@ -119,6 +120,12 @@ export async function TriggerOverviewView({
   model: TriggerOverviewModel;
 }) {
   const t = await getTranslations("TriggersPage.detail");
+  const locale = await getLocale();
+  // Never guess a currency: a failed lookup threads through as null (see
+  // formatMoney in @/lib/money for how that renders) rather than USD.
+  const pricingCurrency = await getPricingCurrency();
+  const currency = pricingCurrency.ok ? pricingCurrency.currency : null;
+  const fmtCost = (value: number) => formatTriggerCost(value, currency, locale);
   const { triggerId, metrics, failure } = model;
 
   const editHref = `/triggers/${triggerId}/edit`;
@@ -258,11 +265,11 @@ export async function TriggerOverviewView({
           <Stat
             icon={<Wallet />}
             label={t("spend")}
-            value={fmtUsd(metrics?.totalCost ?? 0)}
+            value={fmtCost(metrics?.totalCost ?? 0)}
             bar={null}
             sub={
               total > 0
-                ? t("spendPerRun", { cost: fmtUsd(metrics?.avgCost ?? 0) })
+                ? t("spendPerRun", { cost: fmtCost(metrics?.avgCost ?? 0) })
                 : t("noRuns")
             }
           />
@@ -319,6 +326,8 @@ export async function TriggerOverviewView({
                     key={execution.id}
                     execution={execution}
                     t={t}
+                    currency={currency}
+                    locale={locale}
                   />
                 ))
               )}
@@ -454,9 +463,13 @@ export async function TriggerOverviewView({
 function ExecutionRow({
   execution,
   t,
+  currency,
+  locale,
 }: {
   execution: TriggerExecutionResponse;
   t: Translator;
+  currency: string | null;
+  locale: string;
 }) {
   const presentation = getTriggerExecutionStatusPresentation(execution.status);
   const when = formatCompactDistance(execution.executed_at);
@@ -470,8 +483,7 @@ function ExecutionRow({
   // The error is the whole story when there is one; otherwise the second line
   // carries how the run started and how long it took.
   const sub =
-    execution.error_message ||
-    [source, duration].filter(Boolean).join(" · ");
+    execution.error_message || [source, duration].filter(Boolean).join(" · ");
   const cost = execution.cost_usd;
 
   const row = (
@@ -488,7 +500,7 @@ function ExecutionRow({
               cost != null && cost > 0 && "font-medium text-foreground/80"
             )}
           >
-            {cost != null ? fmtUsd(cost) : "—"}
+            {cost != null ? formatTriggerCost(cost, currency, locale) : "—"}
           </span>
           <StatusIndicator
             size="sm"

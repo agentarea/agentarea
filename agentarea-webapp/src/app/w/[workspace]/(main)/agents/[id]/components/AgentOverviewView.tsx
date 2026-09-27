@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import {
   Boxes,
   Clock,
@@ -10,7 +10,6 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import SectionLoadError from "@/components/SectionLoadError";
 import { formatRelTime } from "@/app/w/[workspace]/(main)/dashboard/components/relTime";
 import { HeroDescription } from "@/components/Overview/HeroDescription";
 import {
@@ -23,6 +22,7 @@ import {
   Stat,
   StatStrip,
 } from "@/components/Overview/OverviewCard";
+import SectionLoadError from "@/components/SectionLoadError";
 import { TaskStatus, useTaskStatusLabel } from "@/components/TaskStatus";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { CollapsibleGroup } from "@/components/ui/group-header";
@@ -34,6 +34,7 @@ import { getAgentIconComponent } from "@/lib/agent-identity";
 import type { TaskResponse } from "@/lib/api";
 import type { AvatarHue } from "@/lib/avatar-hue";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
+import { formatMoney } from "@/lib/money";
 import type { StatusPresentation } from "@/lib/status";
 import type { PolicyEffect } from "@/types/policies";
 import { isRunningTask } from "../../shared/taskStatus";
@@ -98,16 +99,16 @@ export type AgentOverviewModel = {
     settings?: string;
     tasks?: string;
     connections?: string;
+    /** Set when the billing-currency lookup (C2) failed. */
+    currency?: string;
   };
+  /**
+   * Billing currency for every money value above (C2). Null when the lookup
+   * failed — never assume USD; formatMoney renders a null currency without
+   * a currency symbol.
+   */
+  currency: string | null;
 };
-
-const fmtUsd = (v: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-    maximumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-  }).format(v);
 
 type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
@@ -165,8 +166,10 @@ export async function AgentOverviewView({
 }) {
   const t = await getTranslations("AgentOverviewPage");
   const tAdmin = await getTranslations("AdminOnly");
-  const { policies } = model;
+  const { policies, currency } = model;
   const { agentRef, stats, loadErrors } = model;
+  const locale = await getLocale();
+  const fmtCost = (v: number) => formatMoney(v, currency, locale);
 
   const totalRuns = stats.completed7d + stats.failed7d;
   const reliability = totalRuns > 0 ? (stats.completed7d / totalRuns) * 100 : 0;
@@ -312,18 +315,22 @@ export async function AgentOverviewView({
             <Stat
               icon={<Wallet />}
               label={t("spendMonth")}
-              value={fmtUsd(stats.costMtd)}
+              value={fmtCost(stats.costMtd)}
               bar={capPct != null ? { pct: capPct } : null}
               sub={
                 loadErrors.settings ? (
                   <span title={loadErrors.settings}>{loadErrors.settings}</span>
+                ) : loadErrors.currency ? (
+                  <span title={loadErrors.currency}>{loadErrors.currency}</span>
                 ) : stats.cap ? (
-                  t("ofCap", { cap: fmtUsd(stats.cap) })
+                  t("ofCap", { cap: fmtCost(stats.cap) })
                 ) : (
                   t("noCap")
                 )
               }
-              subTone={loadErrors.settings ? "down" : "muted"}
+              subTone={
+                loadErrors.settings || loadErrors.currency ? "down" : "muted"
+              }
             />
             <Stat
               icon={<SquareCheckBig />}
@@ -385,6 +392,8 @@ export async function AgentOverviewView({
                         key={task.id}
                         task={task}
                         t={t}
+                        currency={currency}
+                        locale={locale}
                         hideRunningStatus
                       />
                     ))
@@ -407,7 +416,13 @@ export async function AgentOverviewView({
                     />
                   ) : (
                     model.recentTasks.map((task) => (
-                      <TaskRow key={task.id} task={task} t={t} />
+                      <TaskRow
+                        key={task.id}
+                        task={task}
+                        t={t}
+                        currency={currency}
+                        locale={locale}
+                      />
                     ))
                   )}
                 </CollapsibleGroup>
@@ -482,9 +497,9 @@ export async function AgentOverviewView({
                   {!loadErrors.overview && (
                     <span className="text-[11.5px] text-muted-foreground">
                       <b className="font-semibold text-foreground tabular-nums">
-                        {fmtUsd(stats.costMtd)}
+                        {fmtCost(stats.costMtd)}
                       </b>
-                      {stats.cap ? ` / ${fmtUsd(stats.cap)}` : ""}
+                      {stats.cap ? ` / ${fmtCost(stats.cap)}` : ""}
                     </span>
                   )}
                 </div>
@@ -492,6 +507,8 @@ export async function AgentOverviewView({
                   <SectionLoadError message={loadErrors.overview} />
                 ) : loadErrors.settings ? (
                   <SectionLoadError message={loadErrors.settings} />
+                ) : loadErrors.currency ? (
+                  <SectionLoadError message={loadErrors.currency} />
                 ) : capPct != null ? (
                   <div className="h-1.5 overflow-hidden rounded-[2px] bg-muted">
                     <span
@@ -684,10 +701,14 @@ function UpcomingRow({
 function TaskRow({
   task,
   t,
+  currency,
+  locale,
   hideRunningStatus = false,
 }: {
   task: TaskResponse;
   t: Translator;
+  currency: string | null;
+  locale: string;
   hideRunningStatus?: boolean;
 }) {
   const status = String(task.status ?? "unknown");
@@ -727,7 +748,7 @@ function TaskRow({
           <span className="flex items-center gap-3 text-[11.5px] text-muted-foreground">
             <span className="whitespace-nowrap">{timeText}</span>
             <span className="w-[46px] text-right tabular-nums">
-              {cost > 0 ? fmtUsd(cost) : "—"}
+              {cost > 0 ? formatMoney(cost, currency, locale) : "—"}
             </span>
           </span>
         }
