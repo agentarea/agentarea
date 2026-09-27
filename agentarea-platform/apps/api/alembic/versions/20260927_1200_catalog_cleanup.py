@@ -16,11 +16,12 @@ Four things made /explore hard to read:
    ``catalog_facets.SKILL_CATEGORIES``; the mapping below is a frozen copy.
 3. Connections sorted by their registry id (``ai.agentarea.catalog/...``);
    they now sort by the title the gallery shows.
-4. The 124k bulk-imported skills (``skills-shards``) predate recommendation
-   ranks and all sit at 0, so "recommended" was alphabetical: the gallery
-   opened on "0000", "001 polish and pu...". The hand-curated skills registry
-   now outranks the bulk mirror, and bulk skills rank by their GitHub-star
-   bucket until the next sync writes real per-source ranks.
+4. The 124k bulk-imported skills (``skills-shards``, a May snapshot) predate
+   recommendation ranks and all sit at 0, so "recommended" was alphabetical:
+   the gallery opened on "0000", "001 polish and pu...". The backoffice now
+   publishes the fresh community catalog (``skills-community``, imported daily
+   with explicit ranks), so the snapshot registries are deactivated like the
+   legacy MCP rows, and the hand-curated skills outrank the community mirror.
 
 Revision ID: 20260927_1200_catalog_cleanup
 Revises: 20260926_1200_drop_events_cfg
@@ -41,11 +42,9 @@ depends_on: str | Sequence[str] | None = None
 
 LEGACY_MCP_REGISTRY = "builtin://mcp_servers"
 CURATED_SKILLS = "%/registry/system/skills.json"
-BULK_SKILLS = "%/registry/system/skills-shards/%"
+SNAPSHOT_SKILLS = "%/registry/system/skills-shards/%"
 # Lower sorts first; registries default to 100.
 CURATED_PRIORITY = 10
-_STAR_BUCKET_RANK = (("stars:1000+", 1), ("stars:100+", 2), ("stars:10+", 3), ("stars:1+", 4))
-UNRATED_RANK = 5
 
 _GROUPS: dict[str, tuple[str, ...]] = {
     "development": (
@@ -165,13 +164,14 @@ def upgrade() -> None:
         f"(SELECT id FROM registries WHERE registry_type = 'skills' "
         f" AND source_url LIKE '{CURATED_SKILLS}')"
     )
-    buckets = " ".join(
-        f"WHEN tags @> '[\"{tag}\"]'::jsonb THEN {rank}" for tag, rank in _STAR_BUCKET_RANK
+    op.execute(
+        f"UPDATE registries SET is_active = false, updated_at = now() "
+        f"WHERE registry_type = 'skills' AND source_url LIKE '{SNAPSHOT_SKILLS}'"
     )
     op.execute(
-        f"UPDATE registry_items SET recommendation_rank = CASE {buckets} ELSE {UNRATED_RANK} END "
-        f"WHERE registry_type = 'skills' AND recommendation_rank = 0 AND registry_id IN "
-        f"(SELECT id FROM registries WHERE source_url LIKE '{BULK_SKILLS}')"
+        f"UPDATE registry_items SET registry_active = false WHERE registry_id IN "
+        f"(SELECT id FROM registries WHERE registry_type = 'skills' "
+        f" AND source_url LIKE '{SNAPSHOT_SKILLS}')"
     )
 
     # Mirrors catalog_facets._connection_title.
@@ -200,8 +200,13 @@ def downgrade() -> None:
         f" AND source_url LIKE '{CURATED_SKILLS}')"
     )
     op.execute(
-        f"UPDATE registry_items SET recommendation_rank = 0 WHERE registry_type = 'skills' "
-        f"AND registry_id IN (SELECT id FROM registries WHERE source_url LIKE '{BULK_SKILLS}')"
+        f"UPDATE registries SET is_active = true, updated_at = now() "
+        f"WHERE registry_type = 'skills' AND source_url LIKE '{SNAPSHOT_SKILLS}'"
+    )
+    op.execute(
+        f"UPDATE registry_items SET registry_active = true WHERE registry_id IN "
+        f"(SELECT id FROM registries WHERE registry_type = 'skills' "
+        f" AND source_url LIKE '{SNAPSHOT_SKILLS}')"
     )
     op.execute(
         f"UPDATE registries SET is_active = true, updated_at = now() "
