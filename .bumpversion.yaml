@@ -82,9 +82,9 @@ files:
     search: 'appVersion: "{current_version}"'
     replace: 'appVersion: "{new_version}"'
 
-  - filename: agentarea-mcp-manager/cmd/mcp-manager/main.go
-    search: 'const version = "{current_version}"'
-    replace: 'const version = "{new_version}"'
+  - filename: agentarea-mcp-manager/internal/managerapp/app.go
+    search: 'const Version = "{current_version}"'
+    replace: 'const Version = "{new_version}"'
 
   - filename: agentarea-event-service/cmd/server/main.go
     search: 'const version = "{current_version}"'

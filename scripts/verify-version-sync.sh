@@ -49,13 +49,13 @@ done < <(find "$PROJECT_ROOT" -name "pyproject.toml" -type f)
 
 # Check Go version constants
 GO_VERSION_FILES=(
-  "$PROJECT_ROOT/agentarea-mcp-manager/cmd/mcp-manager/main.go"
+  "$PROJECT_ROOT/agentarea-mcp-manager/internal/managerapp/app.go"
   "$PROJECT_ROOT/agentarea-event-service/cmd/server/main.go"
 )
 
 for file in "${GO_VERSION_FILES[@]}"; do
   if [ -f "$file" ]; then
-    GO_VERSION=$(grep 'const version = ' "$file" | sed 's/const version = "\(.*\)"/\1/')
+    GO_VERSION=$(grep -E 'const [Vv]ersion = ' "$file" | sed -E 's/const [Vv]ersion = "(.*)"/\1/')
     REL_PATH=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
     if [ "$GO_VERSION" != "$EXPECTED_VERSION" ]; then
       echo "❌ $REL_PATH: $GO_VERSION (expected: $EXPECTED_VERSION)"
