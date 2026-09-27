@@ -119,8 +119,9 @@ class Database:
     def get_instance(cls, settings: DatabaseSettings | None = None) -> "Database":
         """Get the singleton instance of Database."""
         if cls._instance is None:
-            cls._instance = cls.__new__(cls)
-            cls._instance.__init__(settings)
+            instance = cls.__new__(cls)
+            instance.__init__(settings)
+            cls._instance = instance
         return cls._instance
 
     def _setup_engines(self) -> None:

@@ -90,3 +90,20 @@ def test_read_engine_is_dedicated_pool_with_replica():
 
     db = Database(DatabaseSettings(POSTGRES_READ_HOST="replica.invalid"))
     assert db.read_engine.pool is not db.engine.pool
+
+
+def test_failed_initialization_is_not_cached(monkeypatch):
+    """A failed build must fail every time, not hand out a half-built instance."""
+    from agentarea_common.config import database as database_module
+    from agentarea_common.config.database import Database
+
+    def missing_setting():
+        raise RuntimeError("AGENTAREA_DB_TENANT_SCOPE is required")
+
+    monkeypatch.setattr(Database, "_instance", None)
+    monkeypatch.setattr(database_module, "get_tenant_scope_settings", missing_setting)
+
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="AGENTAREA_DB_TENANT_SCOPE"):
+            Database.get_instance()
+    assert Database._instance is None
