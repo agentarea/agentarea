@@ -4,7 +4,7 @@
 // mcp-server-instances reference a server_spec_id, so children go first.
 import { del, get } from "../http.js";
 import { assertWriteAllowed, PERF_WORKSPACE } from "./guard.js";
-import { isOurs } from "./naming.js";
+import { isOurs, SUITE_TAG } from "./naming.js";
 import { tag } from "./tags.js";
 import { BASE_URL, WORKSPACE } from "../config.js";
 
@@ -29,16 +29,12 @@ function sweep(listPath, deletePathFor, label, extraFilter) {
 
 // `GET /mcp-servers/` mixes this workspace's own specs with platform/catalog
 // projections — its own dependency comment says as much ("tenant specs are
-// narrowed to what the graph says is readable; the catalog is not"). The
-// response model (MCPServerResponse) exposes no registry_item_id/is_builtin/
-// workspace_id to filter on directly — checked the source, they're on the
-// domain model but never serialized to the API. `is_public` is what's
-// actually available: it defaults to false on the domain model and this
-// suite's own connection_lifecycle.js never sets it true, so requiring it be
-// false is a real (if indirect) tenant-vs-catalog signal, on top of the
-// strict name regex isOurs() already applies.
-function ownedMcpSpec(item) {
-  return item.is_public === false;
+// narrowed to what the graph says is readable; the catalog is not"), and the
+// response model exposes no ownership field to filter on directly. SUITE_TAG
+// (naming.js) is a tag only this suite ever writes; required here on top of
+// (never instead of) the strict name regex isOurs() already applies.
+export function ownedMcpSpec(item) {
+  return Array.isArray(item.tags) && item.tags.includes(SUITE_TAG);
 }
 
 export function runJanitor() {

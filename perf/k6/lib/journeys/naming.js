@@ -15,6 +15,14 @@ import { TESTID } from "../config.js";
 
 export const RESOURCE_PREFIX = "k6-";
 
+// A marker only this suite ever writes, for list endpoints where the name
+// regex alone isn't enough to prove ownership (see janitor.js's ownedMcpSpec:
+// `is_public` looked like a tenant-vs-catalog signal but isn't — catalog
+// projections default to is_public=false too, confirmed live). Anything this
+// suite creates that has a `tags` field gets this tag; the janitor requires
+// both the name regex AND this tag before deleting such a resource.
+export const SUITE_TAG = "k6-perf-suite";
+
 // The complete, closed set of `kind` values resourceName() is ever called
 // with — keep this in sync with every resourceName("...") call site (there's
 // a self-test in scenarios/journeys/smoke.js that will fail loudly if it

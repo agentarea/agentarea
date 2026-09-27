@@ -3,7 +3,8 @@
 // journeys to run; against any other workspace they're skipped, not failed).
 import { check } from "k6";
 import { allJourneysOnce, IS_PERF_WORKSPACE, runJanitor, taskRunJourney } from "../../lib/journeys/index.js";
-import { KINDS, isOurs, resourceName } from "../../lib/journeys/naming.js";
+import { ownedMcpSpec } from "../../lib/journeys/janitor.js";
+import { KINDS, SUITE_TAG, isOurs, resourceName } from "../../lib/journeys/naming.js";
 import { buildJourneyThresholds } from "../../lib/journeys/thresholds.js";
 
 // Pure logic, no network: guards the janitor's ownership check against ever
@@ -25,6 +26,19 @@ function selfTestNaming() {
   // suite-generated shape.
   check(null, {
     'isOurs() rejects a catalog-shaped "k6-something-42-1"': () => !isOurs("k6-something-42-1"),
+  });
+
+  // The name regex alone isn't the janitor's whole story for resources whose
+  // list endpoint mixes in platform/catalog rows (MCP specs) — ownedMcpSpec()
+  // also requires SUITE_TAG. A regex-shaped name with no tag must still be
+  // rejected: a catalog sync could in principle produce a same-shaped name
+  // by coincidence, and the tag is what actually proves this suite wrote it.
+  const specName = resourceName("mcp-spec");
+  check(null, {
+    "ownedMcpSpec() rejects a regex-shaped name with no tag": () =>
+      !ownedMcpSpec({ name: specName, tags: [] }),
+    "ownedMcpSpec() accepts a regex-shaped name with SUITE_TAG": () =>
+      ownedMcpSpec({ name: specName, tags: [SUITE_TAG] }),
   });
 }
 

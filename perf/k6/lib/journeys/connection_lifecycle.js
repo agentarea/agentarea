@@ -28,7 +28,7 @@ import { check, group } from "k6";
 import { BASE_URL, WORKSPACE } from "../config.js";
 import { get, postJson, del } from "../http.js";
 import { assertWriteAllowed } from "./guard.js";
-import { resourceName, isOurs } from "./naming.js";
+import { resourceName, isOurs, SUITE_TAG } from "./naming.js";
 import { tag } from "./tags.js";
 
 const ws = (suffix) => `${BASE_URL}/v1/workspaces/${encodeURIComponent(WORKSPACE)}${suffix}`;
@@ -69,11 +69,9 @@ function createOwnSpecSource() {
       description: "Disposable spec created by the k6 perf suite.",
       remote_url: MCP_REMOTE_URL,
       env_schema: [],
-      // Explicit, not just relying on the domain default: is_public is the
-      // signal the janitor's ownedMcpSpec() checks before ever deleting a
-      // spec (registry_item_id/is_builtin aren't exposed on this response),
-      // so this suite's own specs must never be public.
-      is_public: false,
+      // The marker janitor.js's ownedMcpSpec() requires before ever
+      // deleting a spec (see naming.js's SUITE_TAG).
+      tags: [SUITE_TAG],
     },
     "create_spec",
     tag("connection_lifecycle", "create_mcp_spec")

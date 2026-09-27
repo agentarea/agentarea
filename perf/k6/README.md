@@ -213,16 +213,16 @@ failures until things catch up:
    Check whether its list endpoint returns a plain array or a
    `PaginatedResponse` (`.items`) first — they're mixed in this API. More
    importantly: check whether that list endpoint mixes in platform/catalog
-   rows (several do — their own dependency comments say so) and, if the
-   response model exposes no clean ownership field (several don't:
-   `registry_item_id`/`is_builtin`/`workspace_id` exist on the domain model
-   but aren't always serialized — checked this for MCP specs, see
-   `ownedMcpSpec()` in `janitor.js`), find whatever field IS exposed that's
-   true for what this suite creates and false for shared/catalog rows
-   (`is_public` served that purpose for specs), and pass it as `sweep()`'s
-   `extraFilter`. `isOurs()`'s regex is strict, not a prefix, precisely so
-   this kind of accidental collision with a real catalog item can't happen —
-   don't undo that by loosening it back to a prefix check.
+   rows (several do — their own dependency comments say so). If it does, tag
+   whatever this suite creates there with `SUITE_TAG` (`naming.js`) at create
+   time and pass a filter checking for that tag as `sweep()`'s `extraFilter`
+   (see `ownedMcpSpec()` in `janitor.js` for the pattern) — don't reach for a
+   response field that merely *looks* like a tenant-vs-catalog signal without
+   verifying it against a real catalog row first (`is_public` looked right
+   and wasn't: catalog-synced rows default to it too). `isOurs()`'s regex is
+   strict, not a prefix, precisely so this kind of accidental collision with
+   a real catalog item can't happen — don't undo that by loosening it back to
+   a prefix check.
 
 ## Layout
 
