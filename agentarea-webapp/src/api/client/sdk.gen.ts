@@ -630,6 +630,9 @@ import type {
   PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostData,
   PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostErrors,
   PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostResponses,
+  PlanWorkspaceUploadsV1FilesUploadUrlsPostData,
+  PlanWorkspaceUploadsV1FilesUploadUrlsPostErrors,
+  PlanWorkspaceUploadsV1FilesUploadUrlsPostResponses,
   PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostData,
   PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors,
   PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses,
@@ -4196,6 +4199,45 @@ export const createAttachmentUploadUrlV1FilesUploadUrlPost = <
       },
     ],
     url: "/v1/workspaces/{workspace}/files/upload-url",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Plan Workspace Uploads
+ *
+ * Diff a client's ``{path, sha256}`` manifest against workspace storage.
+ *
+ * Files already stored under the same digest come back ``unchanged``; the
+ * rest get a presigned PUT bound to their digest, so the bytes go straight to
+ * the object store. This is what ``agentarea files sync`` calls, and the same
+ * plan the MCP ``workspace_files.upload_urls`` tool returns.
+ */
+export const planWorkspaceUploadsV1FilesUploadUrlsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<PlanWorkspaceUploadsV1FilesUploadUrlsPostData, ThrowOnError>
+): RequestResult<
+  PlanWorkspaceUploadsV1FilesUploadUrlsPostResponses,
+  PlanWorkspaceUploadsV1FilesUploadUrlsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    PlanWorkspaceUploadsV1FilesUploadUrlsPostResponses,
+    PlanWorkspaceUploadsV1FilesUploadUrlsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/files/upload-urls",
     ...options,
     headers: {
       "Content-Type": "application/json",

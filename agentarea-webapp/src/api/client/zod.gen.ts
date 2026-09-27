@@ -1735,6 +1735,19 @@ export const zPendingEscalationResponse = z.object({
 });
 
 /**
+ * PlannedUpload
+ */
+export const zPlannedUpload = z.object({
+  error: z.string().nullish(),
+  expires_in: z.number().int().nullish(),
+  headers: z.record(z.string()).nullish(),
+  method: z.string().nullish(),
+  path: z.string(),
+  status: z.enum(["unchanged", "upload", "error"]),
+  upload_url: z.string().nullish(),
+});
+
+/**
  * PolicyEffect
  *
  * What a rule does when it applies.
@@ -3180,6 +3193,29 @@ export const zUpdateAllResponse = z.object({
 });
 
 /**
+ * UploadPlanEntry
+ */
+export const zUploadPlanEntry = z.object({
+  content_type: z.string().nullish(),
+  path: z.string(),
+  sha256: z.string(),
+});
+
+/**
+ * UploadPlanRequest
+ */
+export const zUploadPlanRequest = z.object({
+  files: z.array(zUploadPlanEntry).min(1).max(100),
+});
+
+/**
+ * UploadPlanResponse
+ */
+export const zUploadPlanResponse = z.object({
+  uploads: z.array(zPlannedUpload),
+});
+
+/**
  * UsageEventResponse
  */
 export const zUsageEventResponse = z.object({
@@ -4311,6 +4347,15 @@ export const zCreateAttachmentUploadUrlV1FilesUploadUrlPostBody =
  */
 export const zCreateAttachmentUploadUrlV1FilesUploadUrlPostResponse =
   zPresignUploadResponse;
+
+export const zPlanWorkspaceUploadsV1FilesUploadUrlsPostBody =
+  zUploadPlanRequest;
+
+/**
+ * Successful Response
+ */
+export const zPlanWorkspaceUploadsV1FilesUploadUrlsPostResponse =
+  zUploadPlanResponse;
 
 export const zDeleteWorkspaceFileV1FilesFilePathDeletePath = z.object({
   file_path: z.string(),

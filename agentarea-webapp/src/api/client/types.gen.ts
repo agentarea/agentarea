@@ -4436,6 +4436,42 @@ export type PendingEscalationResponse = {
 };
 
 /**
+ * PlannedUpload
+ */
+export type PlannedUpload = {
+  /**
+   * Error
+   */
+  error?: string | null;
+  /**
+   * Expires In
+   */
+  expires_in?: number | null;
+  /**
+   * Headers
+   */
+  headers?: {
+    [key: string]: string;
+  } | null;
+  /**
+   * Method
+   */
+  method?: string | null;
+  /**
+   * Path
+   */
+  path: string;
+  /**
+   * Status
+   */
+  status: "unchanged" | "upload" | "error";
+  /**
+   * Upload Url
+   */
+  upload_url?: string | null;
+};
+
+/**
  * PolicyDocument
  *
  * Source policy document stored per scope.
@@ -7489,6 +7525,44 @@ export type UpdateWalletRequest = {
    */
   wallet_type?: string | null;
   x402_config?: X402ConfigSchema | null;
+};
+
+/**
+ * UploadPlanEntry
+ */
+export type UploadPlanEntry = {
+  /**
+   * Content Type
+   */
+  content_type?: string | null;
+  /**
+   * Path
+   */
+  path: string;
+  /**
+   * Sha256
+   */
+  sha256: string;
+};
+
+/**
+ * UploadPlanRequest
+ */
+export type UploadPlanRequest = {
+  /**
+   * Files
+   */
+  files: Array<UploadPlanEntry>;
+};
+
+/**
+ * UploadPlanResponse
+ */
+export type UploadPlanResponse = {
+  /**
+   * Uploads
+   */
+  uploads: Array<PlannedUpload>;
 };
 
 /**
@@ -11195,6 +11269,33 @@ export type CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses = {
 
 export type CreateAttachmentUploadUrlV1FilesUploadUrlPostResponse =
   CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses[keyof CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses];
+
+export type PlanWorkspaceUploadsV1FilesUploadUrlsPostData = {
+  body: UploadPlanRequest;
+  path?: never;
+  query?: never;
+  url: "/v1/workspaces/{workspace}/files/upload-urls";
+};
+
+export type PlanWorkspaceUploadsV1FilesUploadUrlsPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type PlanWorkspaceUploadsV1FilesUploadUrlsPostError =
+  PlanWorkspaceUploadsV1FilesUploadUrlsPostErrors[keyof PlanWorkspaceUploadsV1FilesUploadUrlsPostErrors];
+
+export type PlanWorkspaceUploadsV1FilesUploadUrlsPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: UploadPlanResponse;
+};
+
+export type PlanWorkspaceUploadsV1FilesUploadUrlsPostResponse =
+  PlanWorkspaceUploadsV1FilesUploadUrlsPostResponses[keyof PlanWorkspaceUploadsV1FilesUploadUrlsPostResponses];
 
 export type DeleteWorkspaceFileV1FilesFilePathDeleteData = {
   body?: never;

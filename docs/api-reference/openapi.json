@@ -7520,6 +7520,87 @@
         "title": "PendingEscalationResponse",
         "type": "object"
       },
+      "PlannedUpload": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "expires_in": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires In"
+          },
+          "headers": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headers"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "unchanged",
+              "upload",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "upload_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upload Url"
+          }
+        },
+        "required": [
+          "path",
+          "status"
+        ],
+        "title": "PlannedUpload",
+        "type": "object"
+      },
       "PolicyDocument": {
         "additionalProperties": false,
         "description": "Source policy document stored per scope.",
@@ -12667,6 +12748,70 @@
           }
         },
         "title": "UpdateWalletRequest",
+        "type": "object"
+      },
+      "UploadPlanEntry": {
+        "properties": {
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "title": "UploadPlanEntry",
+        "type": "object"
+      },
+      "UploadPlanRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/UploadPlanEntry"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "UploadPlanRequest",
+        "type": "object"
+      },
+      "UploadPlanResponse": {
+        "properties": {
+          "uploads": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedUpload"
+            },
+            "title": "Uploads",
+            "type": "array"
+          }
+        },
+        "required": [
+          "uploads"
+        ],
+        "title": "UploadPlanResponse",
         "type": "object"
       },
       "UsageEventListResponse": {
@@ -20001,6 +20146,70 @@
           }
         ],
         "summary": "Create Attachment Upload Url",
+        "tags": [
+          "v1",
+          "protected",
+          "files"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/files/upload-urls": {
+      "post": {
+        "description": "Diff a client's ``{path, sha256}`` manifest against workspace storage.\n\nFiles already stored under the same digest come back ``unchanged``; the\nrest get a presigned PUT bound to their digest, so the bytes go straight to\nthe object store. This is what ``agentarea files sync`` calls, and the same\nplan the MCP ``workspace_files.upload_urls`` tool returns.",
+        "operationId": "plan_workspace_uploads_v1_files_upload_urls_post",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadPlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Plan Workspace Uploads",
         "tags": [
           "v1",
           "protected",
