@@ -21,7 +21,7 @@ from agentarea_llm.infrastructure.catalog_model_spec_repository import (
 class ModelPricingNotConfiguredError(AppError):
     """A catalog model without an input or output price cannot be run, so it cannot be added."""
 
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     code = "model_pricing_not_configured"
 
 
