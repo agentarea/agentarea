@@ -9,7 +9,10 @@ workspace is not created.
 from unittest.mock import AsyncMock
 
 import pytest
-from agentarea_common.auth.identity_directory import IdentityRecord
+from agentarea_common.auth.identity_directory import (
+    IdentityDirectoryUnavailableError,
+    IdentityRecord,
+)
 from agentarea_common.workspaces import Workspace
 from agentarea_common.workspaces.service import (
     PersonalWorkspaceIdentityError,
@@ -18,10 +21,14 @@ from agentarea_common.workspaces.service import (
 
 
 class _Repo:
-    def __init__(self, existing: Workspace | None = None) -> None:
+    def __init__(self, existing: Workspace | None = None, joined: list[Workspace] = ()) -> None:
         self._existing = existing
+        self._joined = list(joined)
         self.added: list[Workspace] = []
         self.session = AsyncMock()
+
+    async def list_for_user(self, user_id: str, *, member_workspace_ids: list[str]):
+        return [*self.added, *(w for w in self._joined if w.id in member_workspace_ids)]
 
     async def get(self, workspace_id: str) -> Workspace | None:
         return self._existing
@@ -35,17 +42,21 @@ class _Repo:
 
 
 class _Directory:
-    def __init__(self, emails: dict[str, str]) -> None:
+    def __init__(self, emails: dict[str, str], *, down: bool = False) -> None:
         self.emails = emails
+        self.down = down
         self.asked: list[str] = []
 
     async def resolve(self, user_ids):
-        self.asked.extend(user_ids)
-        return {
-            uid: IdentityRecord(user_id=uid, email=self.emails[uid], display_name=None)
-            for uid in user_ids
-            if uid in self.emails
-        }
+        raise AssertionError("provisioning must use lookup, which tells an outage apart")
+
+    async def lookup(self, user_id):
+        self.asked.append(user_id)
+        if self.down:
+            raise IdentityDirectoryUnavailableError("kratos is down")
+        if user_id not in self.emails:
+            return None
+        return IdentityRecord(user_id=user_id, email=self.emails[user_id], display_name=None)
 
 
 @pytest.mark.asyncio
@@ -97,3 +108,24 @@ async def test_an_existing_personal_workspace_needs_no_name():
 
     assert await service.ensure_personal("u1") is existing
     assert directory.asked == []
+
+
+@pytest.mark.asyncio
+async def test_an_identity_provider_outage_is_not_read_as_a_missing_email():
+    repo = _Repo()
+    service = WorkspaceService(repo, identities=_Directory({}, down=True))
+
+    with pytest.raises(PersonalWorkspaceIdentityError, match="unavailable") as raised:
+        await service.ensure_personal("u1")
+    assert isinstance(raised.value.__cause__, IdentityDirectoryUnavailableError)
+    assert repo.added == []
+
+
+@pytest.mark.asyncio
+async def test_joined_workspaces_are_listed_when_the_personal_one_cannot_be_named():
+    team = Workspace(id="team-1", slug="team", name="Team", owner_user_id="someone")
+    service = WorkspaceService(_Repo(joined=[team]), identities=_Directory({}, down=True))
+
+    workspaces = await service.list_for_user("u1", member_workspace_ids=["team-1"])
+
+    assert workspaces == [team]

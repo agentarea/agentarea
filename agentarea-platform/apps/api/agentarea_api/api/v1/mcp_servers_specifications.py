@@ -114,22 +114,25 @@ async def list_mcp_servers(
     ),
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
+    # Asking by id means "these specs", all of them, whatever the page says.
+    page, page_size = (1, len(ids)) if ids is not None else (pagination.page, pagination.page_size)
+    offset = (page - 1) * page_size
     servers, total = await mcp_server_service.list_servers(
         status=status,
         is_public=is_public,
         tag=tag,
         search=pagination.search,
-        limit=pagination.limit,
-        offset=pagination.offset,
+        limit=page_size,
+        offset=offset,
         ids=await readable_resource_ids(user_context.user_id),
         spec_ids=[str(spec_id) for spec_id in ids] if ids is not None else None,
     )
     return PaginatedResponse(
         items=[MCPServerResponse.from_domain(server) for server in servers],
         total=total,
-        page=pagination.page,
-        page_size=pagination.page_size,
-        has_next=(pagination.offset + pagination.page_size) < total,
+        page=page,
+        page_size=page_size,
+        has_next=(offset + page_size) < total,
     )
 
 

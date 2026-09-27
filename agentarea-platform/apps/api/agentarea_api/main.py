@@ -205,14 +205,8 @@ async def app_lifespan(app: FastAPI):
 
     # NOTE: Don't override signal handlers - let uvicorn handle them for proper reload
 
-    # Startup
-    get_container()
-    await initialize_services()
-
-    from agentarea_api.api.events.events_router import start_events_router
-
-    await start_events_router()
-
+    # Startup. The metrics port first: failing to bind it must not leave the
+    # events router running with nothing to stop it.
     from agentarea_common.config import ObservabilitySettings
     from agentarea_common.observability.metrics import start_metrics_server
 
@@ -220,6 +214,13 @@ async def app_lifespan(app: FastAPI):
     metrics_server = (
         start_metrics_server(observability.METRICS_PORT) if observability.METRICS_ENABLED else None
     )
+
+    get_container()
+    await initialize_services()
+
+    from agentarea_api.api.events.events_router import start_events_router
+
+    await start_events_router()
 
     logger.info("Application started successfully")
 

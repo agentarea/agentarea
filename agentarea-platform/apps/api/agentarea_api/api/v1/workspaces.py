@@ -22,7 +22,6 @@ from agentarea_common.rebac import (
     OpenFGAUnavailableError,
 )
 from agentarea_common.workspaces import (
-    PersonalWorkspaceIdentityError,
     Workspace,
     WorkspaceRepository,
     WorkspaceService,
@@ -207,14 +206,7 @@ async def list_workspaces(
     new user always gets at least one entry. Baseline governance policies are
     seeded by the workspace-creation hook (see ``get_workspace_service``).
     """
-    try:
-        workspaces = await list_reachable_workspaces(user, service)
-    except PersonalWorkspaceIdentityError as exc:
-        logger.error("Could not provision a personal workspace: %s", exc, exc_info=True)
-        raise HTTPException(
-            status_code=503,
-            detail="Could not look up your identity to create your personal workspace",
-        ) from exc
+    workspaces = await list_reachable_workspaces(user, service)
     return [
         WorkspaceResponse(id=w.id, slug=w.slug, name=w.name, owner_user_id=w.owner_user_id)
         for w in workspaces

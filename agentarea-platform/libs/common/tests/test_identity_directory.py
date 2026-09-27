@@ -8,6 +8,7 @@ must *not* invent a value when the directory has nothing to say.
 import httpx
 import pytest
 from agentarea_common.auth.identity_directory import (
+    IdentityDirectoryUnavailableError,
     IdentityRecord,
     KratosIdentityDirectory,
     identity_for,
@@ -82,6 +83,8 @@ async def test_directory_failure_degrades_to_unresolved_and_logs(caplog):
 
     assert resolved == {}
     assert "identity" in caplog.text.lower()
+    assert {r.levelname for r in caplog.records} == {"ERROR"}
+    assert all(r.exc_info for r in caplog.records)
 
 
 async def test_one_failure_does_not_discard_the_others():
@@ -108,6 +111,32 @@ async def test_resolve_deduplicates_and_skips_empty_input():
     await directory.resolve([ALICE, ALICE, ALICE])
 
     assert len(calls) == 1
+
+
+async def test_lookup_reports_an_unreachable_directory_as_unavailable():
+    def handler(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("kratos unreachable")
+
+    with pytest.raises(IdentityDirectoryUnavailableError):
+        await _directory(handler).lookup(ALICE)
+
+
+async def test_lookup_reports_a_server_error_as_unavailable():
+    with pytest.raises(IdentityDirectoryUnavailableError):
+        await _directory(lambda _r: httpx.Response(503)).lookup(ALICE)
+
+
+async def test_lookup_of_an_unknown_identity_is_none():
+    assert await _directory(lambda _r: httpx.Response(404)).lookup(ALICE) is None
+
+
+async def test_lookup_returns_the_identity():
+    record = await _directory(lambda _r: _identity(ALICE, {"email": "alice@example.com"})).lookup(
+        ALICE
+    )
+
+    assert record is not None
+    assert record.email == "alice@example.com"
 
 
 @pytest.mark.parametrize("admin_url", ["", "   "])

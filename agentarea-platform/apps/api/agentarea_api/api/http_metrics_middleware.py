@@ -16,6 +16,9 @@ from starlette.routing import Match
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 UNMATCHED_ROUTE = "<unmatched>"
+# h11 accepts any token as a method, so the label is folded onto a fixed set.
+KNOWN_METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
+OTHER_METHOD = "OTHER"
 
 
 def route_template(scope: Scope) -> str:
@@ -41,7 +44,7 @@ class HTTPMetricsMiddleware:
             await self.app(scope, receive, send)
             return
 
-        method = scope["method"]
+        method = scope["method"] if scope["method"] in KNOWN_METHODS else OTHER_METHOD
         route = route_template(scope)
         # A request that dies before sending a response is answered 500 by the
         # server, so that is what it counts as.

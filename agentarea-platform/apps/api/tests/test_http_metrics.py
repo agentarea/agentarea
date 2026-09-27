@@ -35,3 +35,14 @@ def test_a_path_no_route_matches_is_recorded_as_unmatched():
     assert response.status_code == 404
     assert _count(method="GET", route="<unmatched>", status="4xx") == before + 1
     assert _count(method="GET", route="/no/such/route/for-metrics", status="4xx") == 0
+
+
+def test_an_unknown_method_is_recorded_as_other():
+    """h11 accepts any token as a method, so a raw label would be unbounded."""
+    before = _count(method="OTHER", route="/health", status="4xx")
+
+    response = TestClient(app, raise_server_exceptions=False).request("FOO", "/health")
+
+    assert response.status_code == 405
+    assert _count(method="OTHER", route="/health", status="4xx") == before + 1
+    assert _count(method="FOO", route="/health", status="4xx") == 0

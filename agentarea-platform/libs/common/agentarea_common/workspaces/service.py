@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.authorization import assert_workspace_admin_of
 from ..auth.context import UserContext
-from ..auth.identity_directory import IdentityDirectory
+from ..auth.identity_directory import IdentityDirectory, IdentityDirectoryUnavailableError
 from ..events.base_events import EventEnvelope
 from ..events.outbox_relay import OutboxHandler
 from ..rebac import KetoError, OpenFGAError
@@ -481,7 +481,13 @@ class WorkspaceService:
                 f"User {user_id} has no email on their credential and KRATOS_ADMIN_URL is "
                 "unset, so their personal workspace cannot be named"
             )
-        identity = (await self.identities.resolve([user_id])).get(user_id)
+        try:
+            identity = await self.identities.lookup(user_id)
+        except IdentityDirectoryUnavailableError as exc:
+            raise PersonalWorkspaceIdentityError(
+                f"The identity provider is unavailable, so the personal workspace of user "
+                f"{user_id} cannot be named yet"
+            ) from exc
         if identity is None or not identity.email:
             raise PersonalWorkspaceIdentityError(
                 f"The identity provider returned no email for user {user_id}; "
@@ -518,10 +524,19 @@ class WorkspaceService:
         """List every workspace the user can reach.
 
         Provisions the personal workspace first, unless told not to, so a
-        brand-new user always gets at least one entry.
+        brand-new user always gets at least one entry. When it cannot be named
+        yet, the workspaces the user joined are still listed: they exist either
+        way, and the next call retries the provisioning.
         """
         if provision_personal:
-            await self.ensure_personal(user_id, email=email)
+            try:
+                await self.ensure_personal(user_id, email=email)
+            except PersonalWorkspaceIdentityError:
+                logger.error(
+                    "Listing workspaces of user %s without their personal one",
+                    user_id,
+                    exc_info=True,
+                )
         return await self.workspace_repo.list_for_user(
             user_id,
             member_workspace_ids=member_workspace_ids or [],

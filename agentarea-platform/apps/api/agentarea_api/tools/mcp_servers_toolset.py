@@ -218,7 +218,14 @@ class MCPServersToolset(Toolset):
         limit: int = 100,
         offset: int = 0,
     ) -> str:
-        """List MCP server specs (templates) available in the workspace."""
+        """List MCP server specs (templates) available in the workspace.
+
+        ``limit`` is 1..100; page further with ``offset``.
+        """
+        if not 1 <= limit <= 100:
+            return json.dumps({"error": f"limit must be between 1 and 100, got {limit}"})
+        if offset < 0:
+            return json.dumps({"error": f"offset must not be negative, got {offset}"})
         async with platform_read_context() as (
             _session,
             user_ctx,
