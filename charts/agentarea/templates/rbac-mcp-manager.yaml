@@ -105,37 +105,4 @@ subjects:
     name: {{ include "agentarea.sandboxRunnerServiceAccountName" . }}
     namespace: {{ .Release.Namespace }}
 {{- end }}
----
-# Pod metrics are namespaced. No node metrics, proxy or exec access is needed.
-# Read only by the manager's usage sampler (cmd/mcp-manager/usage.go); the
-# sandbox runner never calls it, so it is not bound to this Role.
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: {{ include "agentarea.fullname" . }}-runtime-metrics
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "agentarea.labels" . | nindent 4 }}
-    app.kubernetes.io/component: mcp-manager
-rules:
-  - apiGroups: ["metrics.k8s.io"]
-    resources: ["pods"]
-    verbs: ["get", "list"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: {{ include "agentarea.fullname" . }}-runtime-metrics
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "agentarea.labels" . | nindent 4 }}
-    app.kubernetes.io/component: mcp-manager
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: {{ include "agentarea.fullname" . }}-runtime-metrics
-subjects:
-  - kind: ServiceAccount
-    name: {{ include "agentarea.mcpManagerServiceAccountName" . }}
-    namespace: {{ .Release.Namespace }}
 {{- end }}

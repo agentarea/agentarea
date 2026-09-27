@@ -596,9 +596,6 @@ import type {
   ListTriggersV1TriggersGetData,
   ListTriggersV1TriggersGetErrors,
   ListTriggersV1TriggersGetResponses,
-  ListUsageEventsV1UsageEventsGetData,
-  ListUsageEventsV1UsageEventsGetErrors,
-  ListUsageEventsV1UsageEventsGetResponses,
   ListWorkspaceFilesV1FilesGetData,
   ListWorkspaceFilesV1FilesGetErrors,
   ListWorkspaceFilesV1FilesGetResponses,
@@ -10082,36 +10079,6 @@ export const getExecutionTimelineV1TriggersTriggerIdTimelineGet = <
       },
     ],
     url: "/v1/workspaces/{workspace}/triggers/{trigger_id}/timeline",
-    ...options,
-  });
-
-/**
- * List Usage Events
- *
- * Return newest persisted facts first, scoped to the current workspace.
- */
-export const listUsageEventsV1UsageEventsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<ListUsageEventsV1UsageEventsGetData, ThrowOnError>
-): RequestResult<
-  ListUsageEventsV1UsageEventsGetResponses,
-  ListUsageEventsV1UsageEventsGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListUsageEventsV1UsageEventsGetResponses,
-    ListUsageEventsV1UsageEventsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace}/usage/events",
     ...options,
   });
 

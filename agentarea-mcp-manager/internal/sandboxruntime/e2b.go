@@ -532,7 +532,7 @@ func (p *E2BProvider) List(ctx context.Context, workspaceID string) ([]SandboxSt
 	return p.listInventory(ctx, workspaceID)
 }
 
-func (p *E2BProvider) listUsage(ctx context.Context) ([]SandboxStatus, string, error) {
+func (p *E2BProvider) ListAllocations(ctx context.Context) ([]SandboxStatus, string, error) {
 	items, err := p.listInventory(ctx, "")
 	return items, "provider_readback", err
 }

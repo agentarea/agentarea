@@ -60,8 +60,7 @@ spec:
           {{- end }}
           workingDir: /app/apps/api
           command:
-            - agentarea-api
-            - migrate
+            {{- toYaml .Values.global.database.migrations.command | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: {{ include "agentarea.fullname" . }}-env-databasejobs

@@ -17,7 +17,7 @@ standard priority), which reproduces today's ordering exactly — `sort_key` and
 the real ranks and applies configured priorities.
 
 Revision ID: 20260919_1000_catalog_rank
-Revises: 20260918_1200_resource_usage
+Revises: 20260917_1100_exec_fired_by
 Create Date: 2026-09-19
 """
 
@@ -27,7 +27,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260919_1000_catalog_rank"
-down_revision: str | None = "20260918_1200_resource_usage"
+down_revision: str | None = "20260917_1100_exec_fired_by"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

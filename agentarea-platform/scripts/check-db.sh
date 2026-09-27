@@ -41,8 +41,6 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #   catalog model instances: a built-in model is added by copying it into the
 #     workspace's model_specs, the table the instance's foreign key references,
 #     and the catalog query is jsonb.
-#   usage events: raw facts are append-only (a trigger) and paging never crosses
-#     workspaces.
 #   membership backfill: the migration and the reconcile script insert rows with
 #     SQL that leans on the (workspace, user) unique constraint and the
 #     invitation and outbox tables.
@@ -54,7 +52,7 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #     looked up by id in SQL; the catalog is never materialized per request.
 #   tenant scope: every workspace-scoped model stays in its workspace through
 #     the ORM hook, against the migrated schema rather than create_all.
-PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL USAGE_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL)
+PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
   libs/llm/tests/test_provider_secret_lifecycle_db.py
@@ -64,7 +62,6 @@ PY_SUITES=(
   libs/llm/tests/test_model_spec_price_precision_db.py
   libs/llm/tests/test_platform_managed_providers_db.py
   libs/llm/tests/test_catalog_model_instance_db.py
-  libs/common/tests/test_usage_events_db.py
   apps/api/tests/test_membership_backfill_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
   libs/agents/tests/test_catalog_presets_db.py
@@ -74,9 +71,8 @@ PY_SUITES=(
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, the secret
 # resolver's join that keeps one workspace's secrets out of another's
-# containers, and the usage store's idempotent, precision-preserving writes.
-# MCP_GATEWAY_REQUIRE_DB and USAGE_REQUIRE_DB turn a skipped test into a failure.
-GO_PACKAGES=(./internal/mcpgateway/... ./internal/secrets/... ./internal/usage/... ./cmd/mcp-manager/)
+# containers. MCP_GATEWAY_REQUIRE_DB turns a skipped test into a failure.
+GO_PACKAGES=(./internal/mcpgateway/... ./internal/secrets/...)
 
 # The operator's hand-written provider-config SQL; its unit tests mock the
 # connection away, which is how it once named a column no migration created.
@@ -101,7 +97,6 @@ echo "==> MCP manager SQL against the migrated schema"
 (
   cd "$REPO_DIR/agentarea-mcp-manager"
   MCP_GATEWAY_TEST_DATABASE_URL="postgres://$DSN?sslmode=disable" MCP_GATEWAY_REQUIRE_DB=1 \
-  USAGE_TEST_DATABASE_URL="postgres://$DSN?sslmode=disable" USAGE_REQUIRE_DB=1 \
     go test -v -count=1 "${GO_PACKAGES[@]}"
 )
 
