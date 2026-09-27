@@ -23,7 +23,7 @@ export default async function TriggerMetricsPage({ params }: Props) {
   // formatMoney in @/lib/money for how that renders) rather than USD.
   const pricingCurrency = await getPricingCurrency();
   const currency = pricingCurrency.ok ? pricingCurrency.currency : null;
-  const fmtUsd = (value: number) => formatTriggerCost(value, currency, locale);
+  const fmtCost = (value: number) => formatTriggerCost(value, currency, locale);
 
   const { data, error } = await getTriggerMetrics(id, { hours: WINDOW_HOURS });
 
@@ -92,11 +92,11 @@ export default async function TriggerMetricsPage({ params }: Props) {
         <Stat
           icon={<Wallet />}
           label={t("spend")}
-          value={fmtUsd(totalCost)}
+          value={fmtCost(totalCost)}
           bar={null}
           sub={
             (metrics.costed_executions ?? 0) > 0
-              ? t("spendPerRun", { cost: fmtUsd(metrics.avg_cost_usd ?? 0) })
+              ? t("spendPerRun", { cost: fmtCost(metrics.avg_cost_usd ?? 0) })
               : t("noCostedRuns")
           }
         />

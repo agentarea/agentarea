@@ -27,7 +27,7 @@ export default function ExecutionsTable({
   const t = useTranslations("TriggersPage.detail");
   const locale = useLocale();
   const { currency } = useCurrency();
-  const fmtUsd = (value: number) => formatTriggerCost(value, currency, locale);
+  const fmtCost = (value: number) => formatTriggerCost(value, currency, locale);
   const columns = [
     {
       accessor: "id",
@@ -101,7 +101,7 @@ export default function ExecutionsTable({
       // cost yet — different from a run that genuinely cost nothing.
       render: (value: number | null) => (
         <span className="tabular-nums text-muted-foreground">
-          {value != null ? fmtUsd(value) : "-"}
+          {value != null ? fmtCost(value) : "-"}
         </span>
       ),
     },

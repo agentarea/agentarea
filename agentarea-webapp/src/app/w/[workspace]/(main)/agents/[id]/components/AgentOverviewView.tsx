@@ -169,7 +169,7 @@ export async function AgentOverviewView({
   const { policies, currency } = model;
   const { agentRef, stats, loadErrors } = model;
   const locale = await getLocale();
-  const fmtUsd = (v: number) => formatMoney(v, currency, locale);
+  const fmtCost = (v: number) => formatMoney(v, currency, locale);
 
   const totalRuns = stats.completed7d + stats.failed7d;
   const reliability = totalRuns > 0 ? (stats.completed7d / totalRuns) * 100 : 0;
@@ -315,7 +315,7 @@ export async function AgentOverviewView({
             <Stat
               icon={<Wallet />}
               label={t("spendMonth")}
-              value={fmtUsd(stats.costMtd)}
+              value={fmtCost(stats.costMtd)}
               bar={capPct != null ? { pct: capPct } : null}
               sub={
                 loadErrors.settings ? (
@@ -323,7 +323,7 @@ export async function AgentOverviewView({
                 ) : loadErrors.currency ? (
                   <span title={loadErrors.currency}>{loadErrors.currency}</span>
                 ) : stats.cap ? (
-                  t("ofCap", { cap: fmtUsd(stats.cap) })
+                  t("ofCap", { cap: fmtCost(stats.cap) })
                 ) : (
                   t("noCap")
                 )
@@ -497,9 +497,9 @@ export async function AgentOverviewView({
                   {!loadErrors.overview && (
                     <span className="text-[11.5px] text-muted-foreground">
                       <b className="font-semibold text-foreground tabular-nums">
-                        {fmtUsd(stats.costMtd)}
+                        {fmtCost(stats.costMtd)}
                       </b>
-                      {stats.cap ? ` / ${fmtUsd(stats.cap)}` : ""}
+                      {stats.cap ? ` / ${fmtCost(stats.cap)}` : ""}
                     </span>
                   )}
                 </div>

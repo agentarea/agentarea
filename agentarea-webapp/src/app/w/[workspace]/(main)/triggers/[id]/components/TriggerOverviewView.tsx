@@ -125,7 +125,7 @@ export async function TriggerOverviewView({
   // formatMoney in @/lib/money for how that renders) rather than USD.
   const pricingCurrency = await getPricingCurrency();
   const currency = pricingCurrency.ok ? pricingCurrency.currency : null;
-  const fmtUsd = (value: number) => formatTriggerCost(value, currency, locale);
+  const fmtCost = (value: number) => formatTriggerCost(value, currency, locale);
   const { triggerId, metrics, failure } = model;
 
   const editHref = `/triggers/${triggerId}/edit`;
@@ -265,11 +265,11 @@ export async function TriggerOverviewView({
           <Stat
             icon={<Wallet />}
             label={t("spend")}
-            value={fmtUsd(metrics?.totalCost ?? 0)}
+            value={fmtCost(metrics?.totalCost ?? 0)}
             bar={null}
             sub={
               total > 0
-                ? t("spendPerRun", { cost: fmtUsd(metrics?.avgCost ?? 0) })
+                ? t("spendPerRun", { cost: fmtCost(metrics?.avgCost ?? 0) })
                 : t("noRuns")
             }
           />
