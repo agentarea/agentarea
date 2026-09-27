@@ -23,10 +23,6 @@ export const HARNESS_OPTIONS = [
   { value: "codex", label: "Codex" },
 ];
 
-export const HARNESS_LABELS: Record<string, string> = Object.fromEntries(
-  Object.entries(HARNESSES).map(([kind, { label }]) => [kind, label])
-);
-
 export function harnessOf(kind?: string | null) {
   return HARNESSES[kind ?? ""] ?? { label: kind || "Generic", icon: Plug };
 }

@@ -10,6 +10,7 @@ import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { Input } from "@/components/ui/input";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import { apiErrorMessage } from "@/lib/api-errors";
 import { updateWorkspaceSettingsAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 
@@ -85,10 +86,11 @@ export function BudgetCapPanel({
     setMessage(null);
 
     startTransition(async () => {
-      const { data, error } = await updateWorkspaceSettingsAction(parsed.value);
-      if (error || !data) {
+      const result = await updateWorkspaceSettingsAction(parsed.value);
+      const data = result.data;
+      if (result.error || !data) {
         setStatus("error");
-        setMessage(error || t("capUpdateFailed"));
+        setMessage(apiErrorMessage(result, t("capUpdateFailed")));
         return;
       }
 

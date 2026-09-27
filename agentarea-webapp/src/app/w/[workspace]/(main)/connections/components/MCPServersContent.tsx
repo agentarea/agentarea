@@ -1,15 +1,17 @@
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
-import { formatApiError } from "@/lib/api-errors";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import {
   listAgents,
   listMCPServerInstances,
   listMCPServerSpecs,
   listOpenAPIConnections,
 } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
 import MCPSkeleton, { mcpSkeletonColumns } from "./MCPSkeleton";
 import { MyMCPsSection } from "./MyMCPsSection";
+import SectionLoadError from "@/components/SectionLoadError";
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 import { buildConnectionUsage } from "../usage";
 
@@ -62,19 +64,24 @@ async function MyConnectionsSectionServer({
   ]);
 
   if (instancesResponse.error) {
-    const errorMessage =
-      (instancesResponse.error as { detail?: Array<{ msg?: string }> })?.detail?.[0]
-        ?.msg || "Unknown error occurred";
     return (
-      <div className="py-10 text-center">
-        <p className="text-destructive">Error loading data: {errorMessage}</p>
-      </div>
+      <RetryEmptyState
+        title={t("loadErrors.title")}
+        description={apiErrorMessage(instancesResponse, t("loadErrors.instances"))}
+        iconsType="mcp"
+      />
     );
   }
 
-  if (openApiResponse.error) {
-    console.error("Failed to load OpenAPI connections:", openApiResponse.error);
-  }
+  // A failed part is reported where the list starts, never rendered as a
+  // shorter list or as "unused" connections.
+  const openApiError = openApiResponse.error
+    ? apiErrorMessage(openApiResponse, t("loadErrors.openapi"))
+    : null;
+  const usageError =
+    agentsResponse.error || !agentsResponse.data
+      ? apiErrorMessage(agentsResponse, t("loadErrors.usage"))
+      : null;
 
   const mcpInstances = (instancesResponse.data || []) as MCPInstance[];
 
@@ -85,18 +92,31 @@ async function MyConnectionsSectionServer({
   );
   if (specsResponse.error) {
     return (
-      <div className="py-10 text-center">
-        <p className="text-destructive">
-          Error loading data: {formatApiError(specsResponse.error)}
-        </p>
-      </div>
+      <RetryEmptyState
+        title={t("loadErrors.title")}
+        description={apiErrorMessage(specsResponse, t("loadErrors.servers"))}
+        iconsType="mcp"
+      />
     );
   }
   const mcpServers = (specsResponse.data ?? []) as MCPServer[];
   const openApiConnections = (openApiResponse.data || []) as OpenAPIConnection[];
-  const usage = buildConnectionUsage(
-    agentsResponse.error ? [] : (agentsResponse.data ?? []),
-    mcpInstances.map((instance) => ({ id: instance.id, name: instance.name }))
+  // Without the agents there is no usage to show: no row may read "unused".
+  const usage =
+    agentsResponse.error || !agentsResponse.data
+      ? {}
+      : buildConnectionUsage(
+          agentsResponse.data,
+          mcpInstances.map((instance) => ({
+            id: instance.id,
+            name: instance.name,
+          }))
+        );
+  const loadErrors = (
+    <>
+      {openApiError && <SectionLoadError message={openApiError} />}
+      {usageError && <SectionLoadError message={usageError} />}
+    </>
   );
 
   // Filter MCP instances based on search query
@@ -127,12 +147,25 @@ async function MyConnectionsSectionServer({
 
   const totalConnections = filteredInstances.length + filteredOpenApi.length;
 
+  if (openApiError && mcpInstances.length === 0) {
+    return (
+      <>
+        <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+          {t("myConnections")}
+        </h4>
+        {loadErrors}
+      </>
+    );
+  }
+
   if (searchQuery.trim() && totalConnections === 0) {
     return (
       <div className="py-1">
         <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-          {t("myConnections")} (0)
+          {t("myConnections")}
+          {!openApiError && " (0)"}
         </h4>
+        {loadErrors}
         <EmptyState
           title="No matching connections"
           description={`No connections match your search query: "${searchQuery}"`}
@@ -146,8 +179,10 @@ async function MyConnectionsSectionServer({
   return (
     <>
       <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-        {t("myConnections")} ({totalConnections})
+        {t("myConnections")}
+        {!openApiError && ` (${totalConnections})`}
       </h4>
+      {loadErrors}
       <MyMCPsSection
         mcpInstances={filteredInstances}
         mcpServers={mcpServers}

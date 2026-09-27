@@ -5,9 +5,10 @@ import { useState, useTransition } from "react";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { useTranslations } from "next-intl";
 import { Users } from "lucide-react";
+import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { apiErrorMessage } from "@/lib/api-errors";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { updateAgentAction } from "@/lib/server-actions";
 import { withDelegates } from "../../shared/delegationTools";
 
@@ -32,18 +33,21 @@ export function DelegationConfig({
   currentTools,
 }: DelegationConfigProps) {
   const t = useTranslations("AgentsPage");
+  const tCommon = useTranslations("Common");
   const router = useWorkspaceRouter();
   const [isPending, startTransition] = useTransition();
   const [connected, setConnected] = useState<Set<string>>(
     () => new Set(initialConnected)
   );
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const hasChanges =
     connected.size !== initialConnected.size ||
     [...connected].some((name) => !initialConnected.has(name));
 
   function toggleAgent(agentName: string) {
+    setError(null);
     setConnected((prev) => {
       const next = new Set(prev);
       if (next.has(agentName)) {
@@ -57,16 +61,21 @@ export function DelegationConfig({
 
   async function handleSave() {
     setIsSaving(true);
+    setError(null);
     try {
       const result = await updateAgentAction(agentId, {
         tools: withDelegates(currentTools, connected),
       });
-      if (!result.data) {
-        throw new Error(apiErrorMessage(result, "Failed to save delegation"));
+      if (result.error || !result.data) {
+        setError(apiErrorMessage(result, t("delegationPage.saveFailed")));
+        return;
       }
       startTransition(() => {
         router.refresh();
       });
+    } catch (err) {
+      console.error("Failed to save delegation", err);
+      setError(`${t("delegationPage.saveFailed")}: ${formatApiError(err)}`);
     } finally {
       setIsSaving(false);
     }
@@ -77,7 +86,7 @@ export function DelegationConfig({
       <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
         <Users className="h-10 w-10 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">
-          No other agents in this workspace to delegate to.
+          {t("delegationPage.noOtherAgents")}
         </p>
       </div>
     );
@@ -89,8 +98,7 @@ export function DelegationConfig({
         <div>
           <h3 className="text-sm font-medium">{t("delegation")}</h3>
           <p className="text-xs text-muted-foreground">
-            Enable delegation to allow this agent to start tasks on other
-            agents.
+            {t("delegationPage.description")}
           </p>
         </div>
         {hasChanges && (
@@ -99,10 +107,12 @@ export function DelegationConfig({
             onClick={handleSave}
             disabled={isSaving || isPending}
           >
-            {isSaving ? "Saving..." : "Save"}
+            {isSaving ? t("delegationPage.saving") : tCommon("save")}
           </Button>
         )}
       </div>
+
+      {error && <FormError>{error}</FormError>}
 
       <div className="divide-y divide-border rounded-md border">
         {otherAgents.map((agent) => (

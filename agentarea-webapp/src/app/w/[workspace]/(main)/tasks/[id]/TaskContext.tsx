@@ -7,11 +7,13 @@ import {
   useEffect,
   useState,
 } from "react";
+import { useTranslations } from "next-intl";
+import { apiErrorMessage, formatApiError, isApiNotFound } from "@/lib/api-errors";
 import {
   getAgentTaskStatusAction as getAgentTaskStatus,
   getTaskAction as getTask,
-  getTaskPolicySnapshotAction as getTaskPolicySnapshot,
 } from "@/lib/server-actions";
+import { getTaskPolicySnapshotAction as getTaskPolicySnapshot } from "./actions";
 import type {
   EffectivePolicy,
   EffectivePolicyResponse,
@@ -51,6 +53,8 @@ interface TaskContextType {
   task: TaskData | null;
   taskStatus: TaskStatus | null;
   policy: EffectivePolicy | null;
+  policyError: string | null;
+  statusError: string | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -100,7 +104,10 @@ export function TaskProvider({
     parseTaskData(initialTask)
   );
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
+  const t = useTranslations("TaskInfoPanel");
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [policy, setPolicy] = useState<EffectivePolicy | null>(null);
+  const [policyError, setPolicyError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!initialTask && !initialError);
   const [error, setError] = useState<string | null>(initialError ?? null);
 
@@ -114,22 +121,28 @@ export function TaskProvider({
       setLoading(true);
       setError(null);
 
-      const { data: foundTask, error: taskError } = await getTask(taskId);
-      if (taskError || !foundTask) {
-        throw new Error("Task not found");
+      const result = await getTask(taskId);
+      if (result.error || !result.data) {
+        setError(
+          isApiNotFound(result)
+            ? null
+            : apiErrorMessage(result, t("taskLoadFailed"))
+        );
+        setTask(null);
+        setTaskStatus(null);
+        return;
       }
 
-      setTask(parseTaskData(foundTask));
+      setTask(parseTaskData(result.data));
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to load task";
-      setError(errorMessage);
+      console.error("Failed to load task", err);
+      setError(`${t("taskLoadFailed")}: ${formatApiError(err)}`);
       setTask(null);
       setTaskStatus(null);
     } finally {
       setLoading(false);
     }
-  }, [taskId]);
+  }, [taskId, t]);
 
   const statusTaskId = task?.id;
   const statusAgentId = task?.agent_id;
@@ -138,36 +151,49 @@ export function TaskProvider({
   useEffect(() => {
     if (!statusTaskId || !statusAgentId) return;
     const loadStatus = async () => {
+      setStatusError(null);
       try {
         const res = await getAgentTaskStatus(statusAgentId, statusTaskId);
-        if (!res.error) setTaskStatus(res.data as TaskStatus);
-      } catch {
-        // Status is optional — page works without it
+        if (res.error) {
+          setStatusError(apiErrorMessage(res, t("statusLoadFailed")));
+          return;
+        }
+        setTaskStatus(res.data as TaskStatus);
+      } catch (err) {
+        console.error("Failed to load task status", err);
+        setStatusError(`${t("statusLoadFailed")}: ${formatApiError(err)}`);
       }
     };
     loadStatus();
-  }, [statusAgentId, statusTaskId]);
+  }, [statusAgentId, statusTaskId, t]);
 
   const policyTaskId = task?.id;
 
-  // Load the immutable governance policy snapshot for the task (best-effort:
-  // tasks without a snapshot return 404, which we treat as "no policy").
+  // Tasks without a snapshot return 404, which means "no policy".
   useEffect(() => {
     if (!policyTaskId) return;
     const loadPolicy = async () => {
+      setPolicyError(null);
       try {
         const res = await getTaskPolicySnapshot(policyTaskId);
-        if (!res.error && res.data) {
-          setPolicy(
-            (res.data as EffectivePolicyResponse).effective_policy ?? null
-          );
+        if (res.error) {
+          setPolicy(null);
+          if (!isApiNotFound(res)) {
+            setPolicyError(apiErrorMessage(res, t("policyLoadFailed")));
+          }
+          return;
         }
-      } catch {
-        // Policy is optional — page works without it
+        setPolicy(
+          (res.data as EffectivePolicyResponse | undefined)?.effective_policy ??
+            null
+        );
+      } catch (err) {
+        console.error("Failed to load task policy", err);
+        setPolicyError(`${t("policyLoadFailed")}: ${formatApiError(err)}`);
       }
     };
     loadPolicy();
-  }, [policyTaskId]);
+  }, [policyTaskId, t]);
 
   // Only fetch client-side if no server data was provided
   useEffect(() => {
@@ -178,7 +204,16 @@ export function TaskProvider({
 
   return (
     <TaskContext.Provider
-      value={{ task, taskStatus, policy, loading, error, refresh: loadTask }}
+      value={{
+        task,
+        taskStatus,
+        policy,
+        policyError,
+        statusError,
+        loading,
+        error,
+        refresh: loadTask,
+      }}
     >
       {children}
     </TaskContext.Provider>

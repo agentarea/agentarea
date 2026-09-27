@@ -53,15 +53,12 @@ import {
   deleteProject,
   deleteProjectFile,
   deleteSkill,
-  deleteTrigger,
-  disableTrigger,
   discoverMCPInstanceTools,
   discoverModels,
   discoverModelsPreview,
   discoverOpenAPITools,
   downloadProjectFile,
   downloadWorkspaceFile,
-  enableTrigger,
   flattenSkill,
   fundAgentWallet,
   getAgent,
@@ -81,7 +78,6 @@ import {
   getSkillFile,
   getSkillFiles,
   getTask,
-  getTaskPolicySnapshot,
   installAgent,
   installSkill,
   listAgents,
@@ -130,11 +126,8 @@ import {
   updateSkill,
   workspaceFileHistory,
 } from "@/lib/api";
-import {
-  getWorkspaceSettings,
-  updateWorkspaceSettings,
-} from "@/lib/api-dashboard";
-import { apiErrorMessage } from "@/lib/api-errors";
+import { updateWorkspaceSettings } from "@/lib/api-dashboard";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { getViewerCapabilities } from "@/lib/workspace-context";
 import { requestWorkspacePath, workspaceFetch } from "@/lib/workspace-request";
 
@@ -245,10 +238,6 @@ export async function listTaskSandboxFilesAction(
   return await listTaskSandboxFiles(agentId, taskId, prefix);
 }
 
-export async function getTaskPolicySnapshotAction(taskId: string) {
-  return await getTaskPolicySnapshot(taskId);
-}
-
 export async function createSkillAction(skill: {
   content?: string | null;
   github_url?: string | null;
@@ -353,7 +342,15 @@ export async function listProviderSpecsWithModelsAction(params?: {
 export async function createProviderConfigAction(config: ProviderConfigCreate) {
   const parsed = zProviderConfigCreate.safeParse(config);
   if (!parsed.success) {
-    return { data: undefined, error: parsed.error };
+    return {
+      data: undefined,
+      error: {
+        detail: parsed.error.issues.map((issue) => ({
+          msg: `${issue.path.join(".")}: ${issue.message}`,
+        })),
+      },
+      status: undefined,
+    };
   }
   return await createProviderConfig(parsed.data as ProviderConfigCreate);
 }
@@ -364,7 +361,15 @@ export async function updateProviderConfigAction(
 ) {
   const parsed = zProviderConfigUpdate.safeParse(config);
   if (!parsed.success) {
-    return { data: undefined, error: parsed.error };
+    return {
+      data: undefined,
+      error: {
+        detail: parsed.error.issues.map((issue) => ({
+          msg: `${issue.path.join(".")}: ${issue.message}`,
+        })),
+      },
+      status: undefined,
+    };
   }
   return await updateProviderConfig(
     configId,
@@ -522,18 +527,6 @@ export async function listTriggersAction(params?: {
   active_only?: boolean;
 }) {
   return await listTriggers(params);
-}
-
-export async function enableTriggerAction(triggerId: string) {
-  return await enableTrigger(triggerId);
-}
-
-export async function disableTriggerAction(triggerId: string) {
-  return await disableTrigger(triggerId);
-}
-
-export async function deleteTriggerAction(triggerId: string) {
-  return await deleteTrigger(triggerId);
 }
 
 export async function listMCPServersAction(params?: {
@@ -1049,34 +1042,13 @@ export async function fundAgentWalletAction(
   return await fundAgentWallet(agentId, body);
 }
 
-export async function getWorkspaceSettingsAction() {
-  try {
-    const data = await getWorkspaceSettings();
-    return { data, error: null };
-  } catch (err) {
-    return {
-      data: null,
-      error:
-        err instanceof Error
-          ? err.message
-          : "Failed to load workspace settings",
-    };
-  }
-}
-
 export async function updateWorkspaceSettingsAction(
   monthly_cap_usd: number | null
 ) {
   try {
-    const data = await updateWorkspaceSettings(monthly_cap_usd);
-    return { data, error: null };
+    return await updateWorkspaceSettings(monthly_cap_usd);
   } catch (err) {
-    return {
-      data: null,
-      error:
-        err instanceof Error
-          ? err.message
-          : "Failed to update workspace settings",
-    };
+    console.error("Failed to update workspace settings", err);
+    return { data: undefined, error: formatApiError(err), status: undefined };
   }
 }

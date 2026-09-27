@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AlertTriangle, Loader2, XCircle } from "lucide-react";
 import {
   Dialog,
@@ -9,8 +10,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
 import { getMCPServerInstance, deleteMCPServerInstance } from "@/lib/api";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 
 const POLL_INTERVAL_MS = 2000;
 const TIMEOUT_MS = 90_000;
@@ -34,6 +37,8 @@ export function VerifyingModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const t = useTranslations("MCPServersPage.instanceDetail");
   const startedAt = useRef(Date.now());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -66,8 +71,9 @@ export function VerifyingModal({
           setErrorCode(verification.error?.code ?? null);
           setPhase("failed");
         }
-      } catch {
-        // network hiccup — keep polling
+      } catch (err) {
+        // A network hiccup: keep polling until the timeout.
+        console.warn("Failed to poll MCP instance verification", err);
       }
     };
 
@@ -82,10 +88,18 @@ export function VerifyingModal({
 
   const handleDelete = async () => {
     setIsDeleting(true);
+    setDeleteError(null);
     try {
-      await deleteMCPServerInstance(instanceId);
+      const result = await deleteMCPServerInstance(instanceId);
+      if (result.error) {
+        setDeleteError(apiErrorMessage(result, t("errors.deleteFailed")));
+        setIsDeleting(false);
+        return;
+      }
       onDelete();
-    } catch {
+    } catch (err) {
+      console.error("Failed to delete MCP instance", err);
+      setDeleteError(`${t("errors.deleteFailed")}: ${formatApiError(err)}`);
       setIsDeleting(false);
     }
   };
@@ -132,6 +146,8 @@ export function VerifyingModal({
               )}
             </div>
           )}
+
+          {deleteError && <FormError>{deleteError}</FormError>}
 
           <div className="flex gap-2 justify-end pt-1">
             {phase === "timeout" && (

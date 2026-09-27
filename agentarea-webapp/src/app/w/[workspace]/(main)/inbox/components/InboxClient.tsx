@@ -25,6 +25,8 @@ import {
 import { InboxTaskList } from "@/app/w/[workspace]/(main)/inbox/components/InboxTaskList";
 import { InboxToolbar } from "@/app/w/[workspace]/(main)/inbox/components/InboxToolbar";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
+import FormError from "@/components/FormError";
 import {
   Sheet,
   SheetContent,
@@ -33,6 +35,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { resolveEscalationAction } from "@/lib/server-actions";
 
 interface InboxClientProps {
@@ -53,6 +56,7 @@ export function InboxClient({ items, error }: InboxClientProps) {
   const [resolved, setResolved] = useState<
     Record<string, typeof RESOLVED_ESCALATION_STATUS>
   >({});
+  const [resolveError, setResolveError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
@@ -144,24 +148,37 @@ export function InboxClient({ items, error }: InboxClientProps) {
       next.delete(id);
       return next;
     });
+    setResolveError(null);
+
+    const label = t("resolveFailed", {
+      task: task.description || t("row.untitled"),
+    });
+    const revert = () =>
+      setResolved((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
 
     try {
-      const { error: err } = await resolveEscalationAction(
+      const result = await resolveEscalationAction(
         task.agent_id,
         id,
         task.escalation_id,
         approved,
         ""
       );
-      if (err) throw err;
+      if (result.error) {
+        console.error("Failed to resolve escalation:", result.error);
+        revert();
+        setResolveError(apiErrorMessage(result, label));
+        return;
+      }
       startTransition(() => router.refresh());
     } catch (e) {
       console.error("Failed to resolve escalation:", e);
-      setResolved((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
+      revert();
+      setResolveError(`${label}: ${formatApiError(e)}`);
     }
   }
 
@@ -180,24 +197,49 @@ export function InboxClient({ items, error }: InboxClientProps) {
     });
     setChecked(new Set());
     setSelectedId(null);
+    setResolveError(null);
 
-    try {
-      await Promise.all(
-        targets.map((task) =>
-          resolveEscalationAction(
-            task.agent_id,
-            String(task.id),
-            task.escalation_id as string,
-            approved,
-            ""
-          )
+    const outcomes = await Promise.allSettled(
+      targets.map((task) =>
+        resolveEscalationAction(
+          task.agent_id,
+          String(task.id),
+          task.escalation_id as string,
+          approved,
+          ""
         )
+      )
+    );
+    const failures: { task: InboxTask; reason: string }[] = [];
+    outcomes.forEach((outcome, index) => {
+      const task = targets[index];
+      if (outcome.status === "rejected") {
+        failures.push({ task, reason: formatApiError(outcome.reason) });
+      } else if (outcome.value.error) {
+        failures.push({ task, reason: formatApiError(outcome.value.error) });
+      }
+    });
+
+    if (failures.length > 0) {
+      console.error("Failed to resolve escalations:", failures);
+      setResolved((prev) => {
+        const next = { ...prev };
+        for (const { task } of failures) delete next[String(task.id)];
+        return next;
+      });
+      setResolveError(
+        `${t("resolveManyFailed", {
+          failed: failures.length,
+          total: targets.length,
+        })}: ${failures
+          .map(
+            ({ task, reason }) =>
+              `${task.description || t("row.untitled")} (${reason})`
+          )
+          .join(", ")}`
       );
-      startTransition(() => router.refresh());
-    } catch (e) {
-      console.error("Failed to resolve escalations:", e);
-      startTransition(() => router.refresh());
     }
+    startTransition(() => router.refresh());
   }
 
   const approveAll =
@@ -225,9 +267,7 @@ export function InboxClient({ items, error }: InboxClientProps) {
       className="flex min-h-0 flex-1 flex-col overflow-hidden p-0"
     >
       {error ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-red-500">
-          {error}
-        </div>
+        <RetryEmptyState title={t("loadFailed")} description={error} />
       ) : (
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <Sheet
@@ -270,6 +310,10 @@ export function InboxClient({ items, error }: InboxClientProps) {
                 }
                 onClear={() => setChecked(new Set())}
               />
+            )}
+
+            {resolveError && (
+              <FormError className="m-3 mb-0">{resolveError}</FormError>
             )}
 
             <div className="min-h-0 flex-1 overflow-y-auto">

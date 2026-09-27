@@ -1,36 +1,41 @@
 "use server";
 
+import { getTranslations } from "next-intl/server";
 import {
   enableTrigger,
   disableTrigger,
   deleteTrigger,
   runTriggerNow,
-  updateTrigger,
 } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 
 export async function enableTriggerAction(triggerId: string) {
-  const { data, error } = await enableTrigger(triggerId);
-  if (error) {
-    return { success: false, error: "Failed to enable trigger" };
+  const result = await enableTrigger(triggerId);
+  if (result.error) {
+    const t = await getTranslations("TriggersPage.error");
+    return { success: false, error: apiErrorMessage(result, t("enableFailed")) };
   }
-  return { success: true, data };
+  return { success: true, data: result.data };
 }
 
 export async function disableTriggerAction(triggerId: string) {
-  const { data, error } = await disableTrigger(triggerId);
-  if (error) {
-    return { success: false, error: "Failed to disable trigger" };
+  const result = await disableTrigger(triggerId);
+  if (result.error) {
+    const t = await getTranslations("TriggersPage.error");
+    return {
+      success: false,
+      error: apiErrorMessage(result, t("disableFailed")),
+    };
   }
-  return { success: true, data };
+  return { success: true, data: result.data };
 }
 
 export async function deleteTriggerAction(triggerId: string) {
-  const { data, error } = await deleteTrigger(triggerId);
-  if (error) {
-    return { success: false, error: "Failed to delete trigger" };
+  const result = await deleteTrigger(triggerId);
+  if (result.error) {
+    return { success: false, error: result.error, status: result.status };
   }
-  return { success: true, data };
+  return { success: true, data: result.data };
 }
 
 /**
@@ -41,9 +46,10 @@ export async function deleteTriggerAction(triggerId: string) {
 export async function runTriggerNowAction(triggerId: string) {
   const result = await runTriggerNow(triggerId);
   if (result.error || !result.data) {
+    const t = await getTranslations("TriggersPage.error");
     return {
       success: false as const,
-      error: apiErrorMessage(result, "Failed to run trigger"),
+      error: apiErrorMessage(result, t("runFailed")),
     };
   }
   return {
@@ -51,20 +57,4 @@ export async function runTriggerNowAction(triggerId: string) {
     taskId: result.data.task_id ?? null,
     reason: result.data.reason ?? null,
   };
-}
-
-export async function updateTriggerAction(
-  triggerId: string,
-  body: {
-    name?: string;
-    config?: Record<string, unknown>;
-    task_parameters?: Record<string, unknown>;
-    failure_threshold?: number;
-  }
-) {
-  const { data, error } = await updateTrigger(triggerId, body);
-  if (error) {
-    return { success: false, error: "Failed to update trigger" };
-  }
-  return { success: true, data };
 }

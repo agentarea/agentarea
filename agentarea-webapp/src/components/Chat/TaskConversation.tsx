@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Loader2, Play } from "lucide-react";
-import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import ActivityGroup from "@/components/Chat/ActivityGroup";
 import {
   buildActivitySegments,
@@ -21,6 +21,7 @@ import type {
 } from "@/components/Chat/types";
 import { deliverTaskMessage } from "@/components/Chat/utils/deliverTaskMessage";
 import EmptyState from "@/components/EmptyState";
+import FormError from "@/components/FormError";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { buildActivitySummary } from "@/components/TaskInfoPanel/buildActivitySummary";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import type { TaskWithAgent } from "@/lib/api";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import type { Part } from "@/lib/events/contract";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
 import { useTaskEvents } from "@/lib/events/useTaskEvents";
@@ -68,11 +70,14 @@ export function TaskConversation({
   onA2UIAction,
 }: TaskConversationProps) {
   const router = useWorkspaceRouter();
+  const t = useTranslations("Chat.errors");
   const [chatInput, setChatInput] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [composerError, setComposerError] = useState<string | null>(null);
   const [continuationIterations, setContinuationIterations] = useState("10");
   const [continuationBudget, setContinuationBudget] = useState("");
   const [continuing, setContinuing] = useState(false);
+  const [continueError, setContinueError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const {
     selectedFiles,
@@ -100,7 +105,10 @@ export function TaskConversation({
     autoConnect: true,
   });
   const actions = useTaskActions(task.agent_id, task.id);
-  const { dispatchAction } = useA2UIActions(task.agent_id, task.id);
+  const { dispatchAction, error: a2uiError } = useA2UIActions(
+    task.agent_id,
+    task.id
+  );
   const dispatchA2UIAction = onA2UIAction ?? dispatchAction;
   const activitySummary = useMemo(
     () => buildActivitySummary(parts, parts.length),
@@ -155,14 +163,17 @@ export function TaskConversation({
       answers: Record<string, unknown>,
       secrets: Record<string, HumanInputSecretValue>
     ) => {
-      const { error } = await actions.submitInput(
+      setComposerError(null);
+      const result = await actions.submitInput(
         inputRequestId,
         answers,
         secrets
       );
-      if (error) toast.error("Failed to submit response");
+      if (result.error) {
+        setComposerError(apiErrorMessage(result, t("submitResponseFailed")));
+      }
     },
-    [actions]
+    [actions, t]
   );
 
   const handleSendMessage = async (event: React.FormEvent) => {
@@ -172,6 +183,7 @@ export function TaskConversation({
     if ((!message && selectedFiles.length === 0) || sendingMessage) return;
 
     setSendingMessage(true);
+    setComposerError(null);
     try {
       const delivery = await deliverTaskMessage({
         actions,
@@ -185,15 +197,15 @@ export function TaskConversation({
           executionStatus !== "finished" && QUEUEABLE_STATUSES.includes(status),
       });
       if (delivery.route === "followup" && !delivery.taskId) {
-        toast.error("Failed to create new task");
+        setComposerError(apiErrorMessage(delivery, t("createTaskFailed")));
         return;
       }
       if (delivery.route === "input" && delivery.error) {
-        toast.error("Failed to submit response");
+        setComposerError(apiErrorMessage(delivery, t("submitResponseFailed")));
         return;
       }
       if (delivery.route === "queue" && delivery.error) {
-        toast.error("Failed to send message");
+        setComposerError(apiErrorMessage(delivery, t("sendFailed")));
         return;
       }
 
@@ -203,9 +215,8 @@ export function TaskConversation({
         router.push(`/tasks/${delivery.taskId}`);
       }
     } catch (error) {
-      toast.error("Failed to send message", {
-        description: error instanceof Error ? error.message : String(error),
-      });
+      console.error("Failed to send message", error);
+      setComposerError(`${t("sendFailed")}: ${formatApiError(error)}`);
     } finally {
       setSendingMessage(false);
     }
@@ -214,36 +225,32 @@ export function TaskConversation({
   const handleContinueTask = async () => {
     const iterations = Number.parseInt(continuationIterations, 10);
     const budget = continuationBudget.trim();
+    setContinueError(null);
     if (
       !Number.isInteger(iterations) ||
       iterations < 0 ||
       (iterations === 0 && !budget)
     ) {
-      toast.error("Grant at least one iteration or a budget top-up.");
+      setContinueError(t("continueGrantRequired"));
       return;
     }
 
     setContinuing(true);
     try {
       const { continueAgentTaskAction } = await import("@/lib/server-actions");
-      const { error } = await continueAgentTaskAction(
+      const result = await continueAgentTaskAction(
         task.id,
         iterations,
         budget || undefined
       );
-      if (error) {
-        toast.error("Couldn't continue task", {
-          description:
-            "The task is no longer waiting, or the grant does not lift its limit.",
-        });
+      if (result.error) {
+        setContinueError(apiErrorMessage(result, t("continueFailed")));
         return;
       }
-      toast.success("Task continued");
       await onRefresh?.();
-    } catch {
-      toast.error("Couldn't continue task", {
-        description: "An unexpected error occurred.",
-      });
+    } catch (error) {
+      console.error("Failed to continue task", error);
+      setContinueError(`${t("continueFailed")}: ${formatApiError(error)}`);
     } finally {
       setContinuing(false);
     }
@@ -368,9 +375,10 @@ export function TaskConversation({
                     max="1000"
                     type="number"
                     value={continuationIterations}
-                    onChange={(event) =>
-                      setContinuationIterations(event.target.value)
-                    }
+                    onChange={(event) => {
+                      setContinuationIterations(event.target.value);
+                      setContinueError(null);
+                    }}
                   />
                 </label>
                 <label className="space-y-1 text-xs font-medium">
@@ -381,9 +389,10 @@ export function TaskConversation({
                     step="0.01"
                     type="number"
                     value={continuationBudget}
-                    onChange={(event) =>
-                      setContinuationBudget(event.target.value)
-                    }
+                    onChange={(event) => {
+                      setContinuationBudget(event.target.value);
+                      setContinueError(null);
+                    }}
                   />
                 </label>
                 <Button onClick={handleContinueTask} disabled={continuing}>
@@ -395,12 +404,22 @@ export function TaskConversation({
                   Continue task
                 </Button>
               </div>
+              {continueError && <FormError>{continueError}</FormError>}
             </div>
           ) : (
             <div>
+              {(composerError || a2uiError) && (
+                <div className="mb-2 space-y-2">
+                  {composerError && <FormError>{composerError}</FormError>}
+                  {a2uiError && <FormError>{a2uiError}</FormError>}
+                </div>
+              )}
               <ChatInputArea
                 input={chatInput}
-                onInputChange={(event) => setChatInput(event.target.value)}
+                onInputChange={(event) => {
+                  setChatInput(event.target.value);
+                  setComposerError(null);
+                }}
                 onSubmit={handleSendMessage}
                 isLoading={sendingMessage}
                 isSubmitDisabled={!historyReady}

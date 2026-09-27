@@ -2,55 +2,40 @@ import { getTranslations } from "next-intl/server";
 import { SpendCard } from "@/app/w/[workspace]/(main)/dashboard/components/SpendCard";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { getDashboard, getWorkspaceSettings } from "@/lib/api-dashboard";
+import { apiErrorMessage } from "@/lib/api-errors";
 import { BudgetCapPanel } from "./BudgetCapPanel";
 import { BudgetsBoard } from "./BudgetsBoard";
 import { MonthOutlook } from "./MonthOutlook";
 
 export async function BudgetsData() {
-  let data: Awaited<ReturnType<typeof getDashboard>> | null = null;
-  let settings: Awaited<ReturnType<typeof getWorkspaceSettings>> | null = null;
-  let error: string | null = null;
-  let settingsError: string | null = null;
+  const failed = (label: string) => (e: unknown) => {
+    console.error(label, e);
+    return { data: undefined, error: e, status: undefined };
+  };
+  const [dashboardResult, settingsResult, t] = await Promise.all([
+    getDashboard().catch(failed("Failed to load budgets data")),
+    getWorkspaceSettings().catch(failed("Failed to load workspace settings")),
+    getTranslations("BudgetsPage"),
+  ]);
+  const data = dashboardResult.data;
 
-  try {
-    const [dashboardResult, settingsResult] = await Promise.allSettled([
-      getDashboard(),
-      getWorkspaceSettings(),
-    ]);
-
-    if (dashboardResult.status === "fulfilled") {
-      data = dashboardResult.value;
-    } else {
-      throw dashboardResult.reason;
-    }
-
-    if (settingsResult.status === "fulfilled") {
-      settings = settingsResult.value;
-    } else {
-      settingsError =
-        settingsResult.reason instanceof Error
-          ? settingsResult.reason.message
-          : "Failed to load workspace settings";
-    }
-  } catch (e) {
-    console.error("Failed to load budgets data:", e);
-    error = e instanceof Error ? e.message : "Failed to load budget data";
-  }
-
-  if (error) {
-    const t = await getTranslations("BudgetsPage");
+  if (dashboardResult.error || !data) {
     return (
       <div className="p-6">
         <RetryEmptyState
           title={t("couldntLoadTitle")}
-          description={error}
+          description={apiErrorMessage(dashboardResult, t("couldntLoadTitle"))}
           iconsType="payments"
         />
       </div>
     );
   }
 
-  if (!data) return null;
+  const settings = settingsResult.data;
+  const settingsError =
+    settingsResult.error || !settings
+      ? apiErrorMessage(settingsResult, t("settingsLoadFailed"))
+      : null;
 
   const cap = settings?.monthly_cap_usd ?? data.spend.cap_usd;
 

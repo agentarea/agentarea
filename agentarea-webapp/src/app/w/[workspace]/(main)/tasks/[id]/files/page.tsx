@@ -64,17 +64,18 @@ export default function TaskFilesPage() {
   }, [loadFiles]);
 
   const fetchUrl = useCallback(
-    async (path: string) => {
-      if (!task) return null;
-      return fillWorkspace(
-        `/api/proxy/v1/workspaces/{workspace}/agents/${encodeURIComponent(
-          task.agent_id
-        )}/tasks/${encodeURIComponent(task.id)}/sandbox/files/${encodeFilePath(
-          path
-        )}`,
-        workspaceSlug
-      );
-    },
+    async (path: string) => ({
+      data: task
+        ? fillWorkspace(
+            `/api/proxy/v1/workspaces/{workspace}/agents/${encodeURIComponent(
+              task.agent_id
+            )}/tasks/${encodeURIComponent(task.id)}/sandbox/files/${encodeFilePath(
+              path
+            )}`,
+            workspaceSlug
+          )
+        : null,
+    }),
     [task, workspaceSlug]
   );
 

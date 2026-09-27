@@ -28,7 +28,6 @@ export default function MCPInstanceHeaderControls({
         redirectPath="/connections"
         title={t("confirm.deleteTitle")}
         description={t("confirm.deleteDescription", { instanceName })}
-        successMessage={t("success.deleted", { instanceName })}
         errorMessages={{
           failedToDelete: t("errors.deleteFailed"),
           unexpectedError: t("errors.deleteFailed"),

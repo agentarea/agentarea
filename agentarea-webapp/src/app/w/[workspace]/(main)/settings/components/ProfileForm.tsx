@@ -9,10 +9,10 @@ import {
   type OryFormSectionContentProps,
   type OryFormSectionFooterProps,
   type OryNodeInputProps,
-  type OryToastProps,
 } from "@ory/elements-react";
 import { useSession } from "@ory/elements-react/client";
 import { getOryComponents, Settings } from "@ory/elements-react/theme";
+import FormError from "@/components/FormError";
 
 const DefaultInput = getOryComponents().Node.Input;
 
@@ -54,15 +54,27 @@ function SettingsSectionFooter({ children, text }: OryFormSectionFooterProps) {
   );
 }
 
-// Ory notifications also render in the app's global toaster, outside its locale provider.
-function SettingsToast({ message }: OryToastProps) {
+function SettingsMessages() {
+  const { flow } = useOryFlow();
+  const messages = flow.ui.messages ?? [];
+  if (messages.length === 0) return null;
+
   return (
-    <div
-      role={message.type === "error" ? "alert" : "status"}
-      data-testid={`ory/message/${message.id}`}
-      className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-foreground shadow-lg"
-    >
-      {message.text}
+    <div className="space-y-2">
+      {messages.map((message, index) =>
+        message.type === "error" ? (
+          <FormError key={`${message.id}-${index}`}>{message.text}</FormError>
+        ) : (
+          <p
+            key={`${message.id}-${index}`}
+            role="status"
+            data-testid={`ory/message/${message.id}`}
+            className="text-xs text-muted-foreground"
+          >
+            {message.text}
+          </p>
+        )
+      )}
     </div>
   );
 }
@@ -94,10 +106,10 @@ export default function ProfileForm({
       components={{
         Card: { SettingsSectionContent, SettingsSectionFooter },
         Node: { Input: ProfileInput },
-        Message: { Toast: SettingsToast },
       }}
     >
       <div className="ory-elements space-y-6">
+        <SettingsMessages />
         <OrySettingsCard />
       </div>
       <SyncProfileSession />

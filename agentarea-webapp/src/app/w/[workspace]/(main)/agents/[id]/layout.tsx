@@ -28,7 +28,16 @@ export default async function AgentLayout({ params, children }: Props) {
   // just hides the number.
   let runningCount = 0;
   if (!isCatalog) {
-    const tasksRes = await listAgentTasks(agent.id).catch(() => null);
+    const tasksRes = await listAgentTasks(agent.id).catch((error: unknown) => {
+      console.error("Failed to load agent tasks for the tab count", error);
+      return null;
+    });
+    if (tasksRes?.error) {
+      console.error(
+        "Failed to load agent tasks for the tab count",
+        tasksRes.error
+      );
+    }
     const tasks = (tasksRes?.data as TaskResponse[] | null | undefined) ?? [];
     runningCount = tasks.filter(isRunningTask).length;
   }

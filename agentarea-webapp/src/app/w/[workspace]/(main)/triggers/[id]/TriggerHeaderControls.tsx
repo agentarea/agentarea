@@ -4,10 +4,10 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Play, Power, PowerOff } from "lucide-react";
-import { toast } from "sonner";
 import { useFormSubmittingState } from "@/app/w/[workspace]/(main)/agents/shared/useFormSubmittingState";
 import DeleteButton from "@/components/DeleteButton/DeleteButton";
 import { Button } from "@/components/ui/button";
+import { formatApiError } from "@/lib/api-errors";
 import {
   deleteTriggerAction,
   disableTriggerAction,
@@ -28,6 +28,7 @@ export default function TriggerHeaderControls({
   const pathname = useWorkspacePathname();
   const tCreate = useTranslations("TriggersPage.create");
   const t = useTranslations("TriggersPage.detail");
+  const tError = useTranslations("TriggersPage.error");
   // The form only lives on the edit route; the overview, executions and
   // metrics tabs share this header and have nothing to submit.
   const isEditing = pathname === `/triggers/${triggerId}/edit`;
@@ -35,30 +36,28 @@ export default function TriggerHeaderControls({
   const [isToggling, setIsToggling] = useState(false);
   const [active, setActive] = useState(isActive);
   const [isRunning, setIsRunning] = useState(false);
-  // Why a run produced no task. Shown next to the button rather than in a toast:
+  // Why a run produced no task. Shown next to the button:
   // it is the answer to what was just asked, and it is worth re-reading.
   const [skipped, setSkipped] = useState<string | null>(null);
-  const handleDelete = async (id: string) => {
-    const result = await deleteTriggerAction(id);
-    return result.error
-      ? { error: { detail: [{ msg: result.error }] } }
-      : { error: undefined };
-  };
+  const [error, setError] = useState<string | null>(null);
 
   const handleToggle = async () => {
     setIsToggling(true);
+    setError(null);
     try {
       const action = active ? disableTriggerAction : enableTriggerAction;
-      const { error } = await action(triggerId);
-      if (error) {
-        toast.error(
-          active ? "Failed to disable trigger" : "Failed to enable trigger"
-        );
+      const result = await action(triggerId);
+      if (result.error) {
+        setError(result.error);
       } else {
         setActive(!active);
-        toast.success(active ? "Trigger disabled" : "Trigger enabled");
         router.refresh();
       }
+    } catch (err) {
+      console.error("Failed to toggle trigger", err);
+      setError(
+        `${active ? tError("disableFailed") : tError("enableFailed")}: ${formatApiError(err)}`
+      );
     } finally {
       setIsToggling(false);
     }
@@ -67,10 +66,11 @@ export default function TriggerHeaderControls({
   const handleRunNow = async () => {
     setIsRunning(true);
     setSkipped(null);
+    setError(null);
     try {
       const result = await runTriggerNowAction(triggerId);
       if (!result.success) {
-        toast.error(result.error);
+        setError(result.error);
         return;
       }
       if (result.taskId) {
@@ -79,6 +79,9 @@ export default function TriggerHeaderControls({
         return;
       }
       setSkipped(result.reason ?? t("runSkipped"));
+    } catch (err) {
+      console.error("Failed to run trigger", err);
+      setError(formatApiError(err));
     } finally {
       setIsRunning(false);
     }
@@ -86,6 +89,11 @@ export default function TriggerHeaderControls({
 
   return (
     <div className="flex flex-wrap items-center gap-2 py-1 sm:flex-nowrap">
+      {error && (
+        <span className="form-error max-w-md break-words" role="alert">
+          {error}
+        </span>
+      )}
       {skipped && (
         <span className="text-xs text-muted-foreground" role="status">
           {skipped}
@@ -118,12 +126,12 @@ export default function TriggerHeaderControls({
         {active ? (
           <>
             <PowerOff />
-            Disable
+            {t("disable")}
           </>
         ) : (
           <>
             <Power />
-            Enable
+            {t("enable")}
           </>
         )}
       </Button>
@@ -142,15 +150,10 @@ export default function TriggerHeaderControls({
         size="xs"
         itemId={triggerId}
         itemName={triggerName}
-        onDelete={handleDelete}
+        onDelete={deleteTriggerAction}
         redirectPath="/triggers"
-        title="Delete Trigger"
-        description={`Are you sure you want to delete "${triggerName}"? This action cannot be undone.`}
-        successMessage="Trigger deleted"
-        errorMessages={{
-          failedToDelete: "Failed to delete trigger",
-          unexpectedError: "Failed to delete trigger",
-        }}
+        title={t("delete")}
+        errorMessages={{ failedToDelete: tError("deleteFailed") }}
       />
     </div>
   );

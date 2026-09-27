@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link2, Loader2, Mail, Search, Unlink } from "lucide-react";
-import { toast } from "sonner";
 import EmptyState from "@/components/EmptyState";
 import Table, { type Column } from "@/components/Table/Table";
 import { TableRowAction } from "@/components/Table/TableRowAction";
@@ -14,6 +13,7 @@ import {
 } from "@/components/ui/status-indicator";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import type { WorkspaceInvitation } from "@/lib/api";
+import { formatApiError } from "@/lib/api-errors";
 import { formatDate } from "@/utils/dateUtils";
 import { revokeInvitationAction } from "../actions";
 import { getInvitationStatus, type InvitationStatusKey } from "./membersShared";
@@ -82,37 +82,47 @@ function RevokeButton({ invitation }: { invitation: WorkspaceInvitation }) {
   const router = useWorkspaceRouter();
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const revoke = () => {
     setBusy(true);
+    setError(null);
     startTransition(async () => {
-      const res = await revokeInvitationAction(invitation.id);
-      setBusy(false);
-      if (res.error) {
-        toast.error(t("revokeFailed"), { description: res.error });
-        return;
+      try {
+        const res = await revokeInvitationAction(invitation.id);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        console.error("Failed to revoke invitation", err);
+        setError(`${t("revokeFailed")}: ${formatApiError(err)}`);
+      } finally {
+        setBusy(false);
       }
-      toast.success(t("invitationRevoked"), {
-        description: invitation.email
-          ? t("invitationRevokedEmail", { email: invitation.email })
-          : t("invitationRevokedLink"),
-      });
-      router.refresh();
     });
   };
 
   const isBusy = busy && pending;
   return (
-    <TableRowAction
-      variant="destructiveOutline"
-      className="data-[busy=true]:opacity-100"
-      data-busy={isBusy}
-      disabled={isBusy}
-      onClick={revoke}
-      icon={isBusy ? <Loader2 className="animate-spin" /> : <Unlink />}
-    >
-      {t("revoke")}
-    </TableRowAction>
+    <span className="inline-flex items-center gap-2">
+      {error && (
+        <span className="form-error max-w-xs text-left" role="alert">
+          {error}
+        </span>
+      )}
+      <TableRowAction
+        variant="destructiveOutline"
+        className="data-[busy=true]:opacity-100"
+        data-busy={isBusy}
+        disabled={isBusy}
+        onClick={revoke}
+        icon={isBusy ? <Loader2 className="animate-spin" /> : <Unlink />}
+      >
+        {t("revoke")}
+      </TableRowAction>
+    </span>
   );
 }
 

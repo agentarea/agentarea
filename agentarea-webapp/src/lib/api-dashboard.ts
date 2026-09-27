@@ -116,43 +116,47 @@ async function authedFetch(path: string, init?: RequestInit) {
   });
 }
 
-export async function getDashboard(): Promise<DashboardData> {
-  const res = await authedFetch("/v1/workspaces/{workspace}/dashboard");
-  if (!res.ok) {
-    throw new Error(`Dashboard fetch failed: ${res.status}`);
+export type DashboardResult<T> = {
+  data?: T;
+  error?: unknown;
+  status: number;
+};
+
+/** A failed request keeps its status and the API's own error body. */
+async function request<T>(
+  path: string,
+  init?: RequestInit
+): Promise<DashboardResult<T>> {
+  const res = await authedFetch(path, init);
+  if (res.ok) return { data: (await res.json()) as T, status: res.status };
+
+  const body = await res.text();
+  let error: unknown = body || undefined;
+  try {
+    error = body ? JSON.parse(body) : undefined;
+  } catch {
+    // Not JSON: the raw text is the reason.
   }
-  return res.json();
+  return { error, status: res.status };
 }
 
-export async function getWorkspaceSettings(): Promise<WorkspaceSettings> {
-  const res = await authedFetch("/v1/workspaces/{workspace}/settings");
-  if (!res.ok) {
-    throw new Error(`Workspace settings fetch failed: ${res.status}`);
-  }
-  return res.json();
+export function getDashboard() {
+  return request<DashboardData>("/v1/workspaces/{workspace}/dashboard");
 }
 
-export async function getAgentOverview(
-  agentId: string
-): Promise<AgentOverviewData> {
-  const res = await authedFetch(
+export function getWorkspaceSettings() {
+  return request<WorkspaceSettings>("/v1/workspaces/{workspace}/settings");
+}
+
+export function getAgentOverview(agentId: string) {
+  return request<AgentOverviewData>(
     `/v1/workspaces/{workspace}/agents/${encodeURIComponent(agentId)}/overview`
   );
-  if (!res.ok) {
-    throw new Error(`Agent overview fetch failed: ${res.status}`);
-  }
-  return res.json();
 }
 
-export async function updateWorkspaceSettings(
-  monthly_cap_usd: number | null
-): Promise<WorkspaceSettings> {
-  const res = await authedFetch("/v1/workspaces/{workspace}/settings", {
+export function updateWorkspaceSettings(monthly_cap_usd: number | null) {
+  return request<WorkspaceSettings>("/v1/workspaces/{workspace}/settings", {
     method: "PUT",
     body: JSON.stringify({ monthly_cap_usd }),
   });
-  if (!res.ok) {
-    throw new Error(`Workspace settings update failed: ${res.status}`);
-  }
-  return res.json();
 }

@@ -2,35 +2,31 @@ import { getTranslations } from "next-intl/server";
 import { BoardGrid } from "@/components/board";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { getDashboard } from "@/lib/api-dashboard";
+import { apiErrorMessage } from "@/lib/api-errors";
 import { ActivityStrip } from "./ActivityStrip";
 import { AgentRows } from "./AgentRows";
 import { BlockersPanel } from "./BlockersPanel";
 import { SpendCard } from "./SpendCard";
 
 export async function DashboardData() {
-  let data: Awaited<ReturnType<typeof getDashboard>> | null = null;
-  let error: string | null = null;
+  const result = await getDashboard().catch((e: unknown) => {
+    console.error("Failed to load dashboard", e);
+    return { data: undefined, error: e, status: undefined };
+  });
+  const data = result.data;
 
-  try {
-    data = await getDashboard();
-  } catch (e) {
-    error = e instanceof Error ? e.message : "Failed to load dashboard";
-  }
-
-  if (error) {
+  if (result.error || !data) {
     const t = await getTranslations("DashboardPage");
     return (
       <div className="p-6">
         <RetryEmptyState
           title={t("couldntLoadTitle")}
-          description={error}
+          description={apiErrorMessage(result, t("couldntLoadTitle"))}
           iconsType="tasks"
         />
       </div>
     );
   }
-
-  if (!data) return null;
 
   return (
     <BoardGrid

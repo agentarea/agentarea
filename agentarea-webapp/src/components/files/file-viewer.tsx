@@ -13,7 +13,13 @@ import {
   User,
   X,
 } from "lucide-react";
+import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
+import {
+  apiErrorMessage,
+  formatApiError,
+  type ApiResultLike,
+} from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
 import { looksTextual, mediaKind, type MediaKind } from "./content-sniff";
 import { TextPreview } from "./text-preview";
@@ -70,7 +76,7 @@ function concat(chunks: Uint8Array[]): Uint8Array {
   return merged;
 }
 
-export type FetchUrlFn = (path: string) => Promise<string | null>;
+export type FetchUrlFn = (path: string) => Promise<ApiResultLike<string>>;
 
 export type ArtifactEvent = {
   action: string;
@@ -81,7 +87,9 @@ export type ArtifactEvent = {
   created_at: string;
 };
 
-export type FetchHistoryFn = (path: string) => Promise<ArtifactEvent[]>;
+export type FetchHistoryFn = (
+  path: string
+) => Promise<ApiResultLike<ArtifactEvent[]>>;
 
 /** Actions the artifact audit log records. An action added to the backend and
  * not yet listed here shows its own verb rather than a missing-key label. */
@@ -93,30 +101,46 @@ const ACTION_KEYS: Record<string, string> = {
 };
 
 function useProvenance(file: BrowsedFile, fetchHistory?: FetchHistoryFn) {
+  const t = useTranslations("FilesPage");
   const [events, setEvents] = useState<ArtifactEvent[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(fetchHistory));
 
   useEffect(() => {
     if (!fetchHistory) return;
     let cancelled = false;
     setEvents(null);
+    setError(null);
     setLoading(true);
     (async () => {
-      const result = await fetchHistory(file.path).catch(() => []);
-      if (cancelled) return;
-      // Newest first regardless of the order the endpoint happens to return,
-      // so the summary line always names the most recent change.
-      setEvents(
-        [...result].sort((a, b) => b.created_at.localeCompare(a.created_at))
-      );
-      setLoading(false);
+      try {
+        const result = await fetchHistory(file.path);
+        if (cancelled) return;
+        if (result.error || !result.data) {
+          setError(apiErrorMessage(result, t("historyLoadFailed")));
+        } else {
+          // Newest first regardless of the order the endpoint happens to
+          // return, so the summary line always names the most recent change.
+          setEvents(
+            [...result.data].sort((a, b) =>
+              b.created_at.localeCompare(a.created_at)
+            )
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load file history", err);
+        if (!cancelled) {
+          setError(`${t("historyLoadFailed")}: ${formatApiError(err)}`);
+        }
+      }
+      if (!cancelled) setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [file.path, fetchHistory]);
+  }, [file.path, fetchHistory, t]);
 
-  return { events, loading };
+  return { events, error, loading };
 }
 
 function ProvenanceStrip({
@@ -128,7 +152,7 @@ function ProvenanceStrip({
 }) {
   const t = useTranslations("FilesPage");
   const format = useFormatter();
-  const { events, loading } = useProvenance(file, fetchHistory);
+  const { events, error, loading } = useProvenance(file, fetchHistory);
   const [expanded, setExpanded] = useState(false);
 
   const describe = (event: ArtifactEvent) => {
@@ -153,6 +177,14 @@ function ProvenanceStrip({
       <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground">
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
         {t("historyLoading")}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="shrink-0 border-b p-2">
+        <FormError>{error}</FormError>
       </div>
     );
   }
@@ -247,11 +279,22 @@ export function FileViewerContent({
     setLoading(true);
 
     (async () => {
-      const href = await fetchUrl(file.path).catch(() => null);
-      if (cancelled) return;
-      if (!href) {
-        setError(t("loadFileFailed"));
-        setLoading(false);
+      let href: string;
+      try {
+        const result = await fetchUrl(file.path);
+        if (cancelled) return;
+        if (result.error || !result.data) {
+          setError(apiErrorMessage(result, t("fileLoadFailed")));
+          setLoading(false);
+          return;
+        }
+        href = result.data;
+      } catch (err) {
+        console.error("Failed to resolve file URL", err);
+        if (!cancelled) {
+          setError(`${t("fileLoadFailed")}: ${formatApiError(err)}`);
+          setLoading(false);
+        }
         return;
       }
       setUrl(href);
@@ -270,7 +313,7 @@ export function FileViewerContent({
 
       try {
         const response = await fetch(href);
-        if (!response.ok) throw new Error(String(response.status));
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const seen = await inspect(
           response,
           declared ?? response.headers.get("content-type")
@@ -278,8 +321,11 @@ export function FileViewerContent({
         if (cancelled) return;
         setKind(seen.kind);
         setText(seen.text);
-      } catch {
-        if (!cancelled) setError(t("readFileFailed"));
+      } catch (err) {
+        console.error("Failed to read file", err);
+        if (!cancelled) {
+          setError(`${t("readFileFailed")}: ${formatApiError(err)}`);
+        }
       }
       if (!cancelled) setLoading(false);
     })();

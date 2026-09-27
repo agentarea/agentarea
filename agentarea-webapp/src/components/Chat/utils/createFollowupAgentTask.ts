@@ -1,13 +1,22 @@
 import { currentWorkspaceHeaders } from "@/lib/workspace-browser";
 import { uploadAttachments } from "./uploadAttachments";
 
-function taskIdFromSseRecord(record: string): string | null {
+export interface FollowupTaskResult {
+  /** The created task's id. */
+  data?: string;
+  error?: unknown;
+  status?: number;
+}
+
+type SseOutcome = { taskId: string } | { error: unknown } | null;
+
+function parseSseRecord(record: string): SseOutcome {
   const lines = record.split(/\r?\n/);
   const eventType = lines
     .find((line) => line.startsWith("event:"))
     ?.slice("event:".length)
     .trim();
-  if (eventType !== "task_created") return null;
+  if (eventType !== "task_created" && eventType !== "error") return null;
 
   const data = lines
     .filter((line) => line.startsWith("data:"))
@@ -15,19 +24,21 @@ function taskIdFromSseRecord(record: string): string | null {
     .join("\n");
   if (!data) return null;
 
+  let payload: { task_id?: unknown; error?: unknown };
   try {
-    const payload = JSON.parse(data) as { task_id?: unknown };
-    return typeof payload.task_id === "string" && payload.task_id
-      ? payload.task_id
-      : null;
+    payload = JSON.parse(data) as { task_id?: unknown; error?: unknown };
   } catch {
-    return null;
+    return eventType === "error" ? { error: data } : null;
   }
+  if (eventType === "error") return { error: payload };
+  return typeof payload.task_id === "string" && payload.task_id
+    ? { taskId: payload.task_id }
+    : null;
 }
 
 async function readCreatedTaskId(
   reader: ReadableStreamDefaultReader<Uint8Array>
-): Promise<string | null> {
+): Promise<SseOutcome> {
   const decoder = new TextDecoder();
   let buffer = "";
 
@@ -40,20 +51,30 @@ async function readCreatedTaskId(
       while (boundary?.index !== undefined) {
         const record = buffer.slice(0, boundary.index);
         buffer = buffer.slice(boundary.index + boundary[0].length);
-        const taskId = taskIdFromSseRecord(record);
-        if (taskId) {
+        const outcome = parseSseRecord(record);
+        if (outcome) {
           // This closes only the SSE transport. Task creation already dispatched
           // the workflow, and no task-control cancellation command is sent.
           await reader.cancel("task id received").catch(() => undefined);
-          return taskId;
+          return outcome;
         }
         boundary = buffer.match(/\r?\n\r?\n/);
       }
 
-      if (done) return taskIdFromSseRecord(buffer);
+      if (done) return parseSseRecord(buffer);
     }
   } finally {
     reader.releaseLock();
+  }
+}
+
+async function responseError(response: Response): Promise<unknown> {
+  const body = await response.text();
+  if (!body) return response.statusText || `HTTP ${response.status}`;
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    return body;
   }
 }
 
@@ -61,7 +82,7 @@ export async function createFollowupAgentTask(
   agentId: string,
   description: string,
   files: readonly File[] = []
-): Promise<string | null> {
+): Promise<FollowupTaskResult> {
   const attachments = await uploadAttachments(files);
   const response = await fetch(`/api/agents/${agentId}/tasks/create`, {
     method: "POST",
@@ -82,9 +103,12 @@ export async function createFollowupAgentTask(
     }),
   });
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    return { error: await responseError(response), status: response.status };
   }
   const reader = response.body?.getReader();
-  if (!reader) return null;
-  return readCreatedTaskId(reader);
+  if (!reader) return {};
+  const outcome = await readCreatedTaskId(reader);
+  if (!outcome) return {};
+  if ("error" in outcome) return { error: outcome.error };
+  return { data: outcome.taskId };
 }

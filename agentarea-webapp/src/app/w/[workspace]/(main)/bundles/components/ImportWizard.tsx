@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "@/components/WorkspaceLink";
 import { AlertTriangle, CheckCircle2, PackagePlus, RotateCcw } from "lucide-react";
 import { AdminOnlyHint } from "@/components/AdminOnlyState";
@@ -9,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import SetupForm from "@/components/SetupForm";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
 import type {
   ImportPreview,
@@ -165,6 +167,7 @@ function setupFields(fields: ApiSetupField[] | undefined): SetupField[] {
 
 export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {}) {
   const { canAdminister } = useViewerCapabilities();
+  const t = useTranslations("BundleInstall");
   const [step, setStep] = useState<WizardStep>("source");
 
   // Source step
@@ -198,19 +201,22 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
       setAnalyzeError(null);
 
       try {
-        const data = await analyzeBundleAction(body);
-        setPreview(data);
-        initSetupValues(data);
+        const result = await analyzeBundleAction(body);
+        if (result.error || !result.data) {
+          setAnalyzeError(apiErrorMessage(result, t("analyzeFailed")));
+          return;
+        }
+        setPreview(result.data);
+        initSetupValues(result.data);
         setStep("review");
       } catch (error) {
-        setAnalyzeError(
-          error instanceof Error ? error.message : "Failed to analyze package."
-        );
+        console.error("Failed to analyze bundle", error);
+        setAnalyzeError(`${t("analyzeFailed")}: ${formatApiError(error)}`);
       } finally {
         setAnalyzeLoading(false);
       }
     },
-    []
+    [t]
   );
 
   function handleAnalyze() {
@@ -243,18 +249,21 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
     setSetupErrors({});
 
     try {
-      const data = await installBundleAction({
+      const installed = await installBundleAction({
         bundle: canAdminister
           ? preview.bundle
           : { ...preview.bundle, policies: [] },
         setup_values: setupValues,
       });
-      setResult(data);
+      if (installed.error || !installed.data) {
+        setInstallError(apiErrorMessage(installed, t("installFailed")));
+        return;
+      }
+      setResult(installed.data);
       setStep("result");
     } catch (error) {
-      setInstallError(
-        error instanceof Error ? error.message : "Installation failed."
-      );
+      console.error("Failed to install bundle", error);
+      setInstallError(`${t("installFailed")}: ${formatApiError(error)}`);
     } finally {
       setInstallLoading(false);
     }

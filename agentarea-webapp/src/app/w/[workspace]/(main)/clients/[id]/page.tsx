@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { notFound, useParams } from "next/navigation";
 import { Link as LinkIcon, Loader2, Pencil, Terminal } from "lucide-react";
-import { toast } from "sonner";
 import type { ClientResponse } from "@/api/client";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
 import { resolveMcpRef } from "@/lib/mcp/resolveMcpRef";
@@ -14,6 +14,8 @@ import {
 } from "@/components/AttachmentSection";
 import ContentBlock from "@/components/ContentBlock";
 import DeleteButton from "@/components/DeleteButton";
+import EmptyState from "@/components/EmptyState";
+import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { DetailSkeleton } from "@/components/Skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +31,11 @@ import {
 import Divider from "@/components/ui/divider";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  apiErrorMessage,
+  formatApiError,
+  isApiNotFound,
+} from "@/lib/api-errors";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import {
   addMcpInstanceToClientAction,
@@ -39,7 +46,7 @@ import {
   removeSkillFromClientAction,
   updateClientAction,
 } from "@/lib/server-actions";
-import { HARNESS_LABELS, harnessOf } from "../harnesses";
+import { harnessOf } from "../harnesses";
 
 const McpIcon = ENTITY_ICONS.mcp;
 const SkillIcon = ENTITY_ICONS.skill;
@@ -47,9 +54,13 @@ const SkillIcon = ENTITY_ICONS.skill;
 export default function ClientDetailPage() {
   const params = useParams();
   const clientId = params.id as string;
+  const t = useTranslations("ClientsPage");
+  const tCommon = useTranslations("Common");
 
   const [client, setClient] = useState<ClientResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [missing, setMissing] = useState(false);
   const resources = useAttachableResources();
   const {
     skills: allSkills,
@@ -61,27 +72,55 @@ export default function ClientDetailPage() {
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
+  // Refetch after an edit: a failure throws so the caller shows it inline.
   const fetchClient = useCallback(async () => {
-    const { data } = await getClientAction(clientId);
-    if (data) setClient(data);
-  }, [clientId]);
+    const result = await getClientAction(clientId);
+    if (result.error || !result.data) {
+      throw new Error(apiErrorMessage(result, t("loadOneFailed")));
+    }
+    setClient(result.data);
+  }, [clientId, t]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const result = await getClientAction(clientId);
+      if (isApiNotFound(result)) {
+        setMissing(true);
+        return;
+      }
+      if (result.error || !result.data) {
+        setLoadError(apiErrorMessage(result, t("loadOneFailed")));
+        return;
+      }
+      setClient(result.data);
+    } catch (err) {
+      console.error("Failed to load harness", err);
+      setLoadError(`${t("loadOneFailed")}: ${formatApiError(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [clientId, t]);
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const { data } = await getClientAction(clientId);
-        if (data) setClient(data);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [clientId]);
+    void load();
+  }, [load]);
 
+  if (missing) notFound();
   if (loading) return <DetailSkeleton />;
-  if (!client) return null;
+  if (loadError || !client) {
+    return (
+      <EmptyState
+        title={t("loadOneFailed")}
+        description={loadError ?? undefined}
+        action={{ label: tCommon("retry"), onClick: () => void load() }}
+      />
+    );
+  }
 
   const harness = harnessOf(client.kind);
   const HarnessGlyph = harness.icon;
@@ -94,19 +133,34 @@ export default function ClientDetailPage() {
   const handleSave = async () => {
     if (!editName.trim()) return;
     setSaving(true);
+    setSaveError(null);
     try {
-      const { error } = await updateClientAction(clientId, {
+      const result = await updateClientAction(clientId, {
         name: editName.trim(),
         description: editDescription || null,
       });
-      if (error) {
-        toast.error("Failed to update harness");
+      if (result.error) {
+        setSaveError(apiErrorMessage(result, t("updateFailed")));
         return;
       }
-      setShowEdit(false);
-      await fetchClient();
+    } catch (err) {
+      console.error("Failed to update harness", err);
+      setSaveError(`${t("updateFailed")}: ${formatApiError(err)}`);
+      return;
     } finally {
       setSaving(false);
+    }
+    setShowEdit(false);
+    await refresh();
+  };
+
+  const refresh = async () => {
+    setRefreshError(null);
+    try {
+      await fetchClient();
+    } catch (err) {
+      console.error("Failed to reload harness", err);
+      setRefreshError(formatApiError(err));
     }
   };
 
@@ -118,7 +172,7 @@ export default function ClientDetailPage() {
     <ContentBlock
       header={{
         breadcrumb: [
-          { label: "Harnesses", href: "/clients" },
+          { label: t("title"), href: "/clients" },
           { label: client.name },
         ],
         controls: (
@@ -129,11 +183,12 @@ export default function ClientDetailPage() {
               onClick={() => {
                 setEditName(client.name);
                 setEditDescription(client.description || "");
+                setSaveError(null);
                 setShowEdit(true);
               }}
             >
               <Pencil />
-              Edit
+              {tCommon("edit")}
             </Button>
             <DeleteButton
               size="xs"
@@ -141,15 +196,27 @@ export default function ClientDetailPage() {
               itemName={client.name}
               onDelete={deleteClientAction}
               redirectPath="/clients"
-              title="Delete harness"
-              description={`Delete "${client.name}"? The scoped MCP endpoint stops working for any harness connected to it. This cannot be undone.`}
-              successMessage="Harness deleted"
+              title={t("deleteTitle")}
+              description={t("deleteDescription", { name: client.name })}
             />
           </div>
         ),
       }}
     >
       <div className="mx-auto w-full max-w-4xl overflow-auto p-4 sm:p-6">
+        {refreshError && (
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start">
+            <FormError className="flex-1">{refreshError}</FormError>
+            <Button
+              size="xs"
+              variant="outline"
+              className="self-start"
+              onClick={() => void refresh()}
+            >
+              {tCommon("retry")}
+            </Button>
+          </div>
+        )}
         <div className="flex items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background text-muted-foreground">
             <HarnessGlyph aria-hidden="true" className="h-5 w-5" />
@@ -244,27 +311,31 @@ export default function ClientDetailPage() {
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit harness</DialogTitle>
+            <DialogTitle>{t("edit")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {saveError && <FormError>{saveError}</FormError>}
             <div className="space-y-1.5">
               <FormLabel htmlFor="client-name" required>
-                Name
+                {t("name")}
               </FormLabel>
               <Input
                 id="client-name"
                 placeholder="my-codex"
                 value={editName}
-                onChange={(e) => setEditName(e.target.value)}
+                onChange={(e) => {
+                  setEditName(e.target.value);
+                  setSaveError(null);
+                }}
               />
             </div>
             <div className="space-y-1.5">
               <FormLabel htmlFor="client-description" optional>
-                Description
+                {t("descriptionLabel")}
               </FormLabel>
               <Textarea
                 id="client-description"
-                placeholder={`What this ${HARNESS_LABELS[client.kind] ?? "harness"} connection is for`}
+                placeholder={t("descriptionPlaceholder")}
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
               />
@@ -276,7 +347,7 @@ export default function ClientDetailPage() {
               size="sm"
               onClick={() => setShowEdit(false)}
             >
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button
               size="sm"
@@ -284,7 +355,7 @@ export default function ClientDetailPage() {
               disabled={!editName.trim() || saving}
             >
               {saving && <Loader2 className="animate-spin" />}
-              Save
+              {tCommon("save")}
             </Button>
           </DialogFooter>
         </DialogContent>

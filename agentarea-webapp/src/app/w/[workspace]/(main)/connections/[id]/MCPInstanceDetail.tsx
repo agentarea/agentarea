@@ -21,14 +21,14 @@ import {
   Server,
   XCircle,
 } from "lucide-react";
-import { toast } from "sonner";
 import EntityMark from "@/components/EntityMark";
+import FormError from "@/components/FormError";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { formatApiError } from "@/lib/api-errors";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { mcpIdentity } from "@/lib/entity-identity";
 import { getMCPInstanceConsumers, type MCPInstanceConsumer } from "@/lib/api";
 import { getMcpVerificationStatusPresentation } from "@/lib/status";
@@ -76,27 +76,42 @@ interface McpServerJsonSpec {
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const t = useTranslations("MCPServersPage.instanceDetail");
+  const tCommon = useTranslations("Common");
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text);
+      setCopyFailed(false);
       setCopied(true);
-      toast.success(t("success.copied", { label: label || t("labels.value") }));
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error(t("errors.copyFailed"));
+    } catch (err) {
+      console.error("Failed to copy to clipboard", err);
+      setCopyFailed(true);
     }
   };
 
   return (
-    <Button variant="outline" size="xs" onClick={handleCopy}>
-      {copied ? (
-        <Check className="text-green-500" />
-      ) : (
-        <Copy />
+    <>
+      <Button
+        variant="outline"
+        size="xs"
+        onClick={handleCopy}
+        aria-label={label || t("labels.value")}
+      >
+        {copied ? (
+          <Check className="text-green-500" />
+        ) : (
+          <Copy />
+        )}
+      </Button>
+      {copyFailed && (
+        <span role="alert" className="text-xs text-destructive">
+          {tCommon("copyFailed")}
+        </span>
       )}
-    </Button>
+    </>
   );
 }
 
@@ -106,8 +121,22 @@ export default function MCPInstanceDetail({
   memberNames = {},
 }: Props) {
   const t = useTranslations("MCPServersPage.instanceDetail");
+  const tCommon = useTranslations("Common");
   const router = useWorkspaceRouter();
+  const searchParams = useSearchParams();
   const [isRefreshingTools, setIsRefreshingTools] = useState(false);
+  const [discovery, setDiscovery] = useState<
+    { kind: "succeeded"; count: number } | { kind: "failed"; message: string } | null
+  >(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [saveConfigError, setSaveConfigError] = useState<string | null>(null);
+  // The callback's query is dropped from the URL right away, so the failure is
+  // captured once and stays on the page.
+  const [oauthError, setOauthError] = useState<string | null>(() =>
+    searchParams.get("oauth") === "error"
+      ? searchParams.get("reason") || "unknown"
+      : null
+  );
 
   // Stuck detection: in_progress verification older than 30s
   const verification = instance.verification as
@@ -133,23 +162,48 @@ export default function MCPInstanceDetail({
   // section (tools per agent) — the endpoint scans every agent in the
   // workspace, so it must not be called twice for the same page.
   const [consumers, setConsumers] = useState<MCPInstanceConsumer[] | null>(null);
+  const [consumersError, setConsumersError] = useState<string | null>(null);
+  const [consumersAttempt, setConsumersAttempt] = useState(0);
   useEffect(() => {
     let active = true;
-    getMCPInstanceConsumers(instance.id).then((data) => {
-      if (active) setConsumers(data);
-    });
+    setConsumersError(null);
+    getMCPInstanceConsumers(instance.id)
+      .then((result) => {
+        if (!active) return;
+        if (result.error || !result.data) {
+          setConsumersError(
+            apiErrorMessage(result, t("errors.consumersLoadFailed"))
+          );
+          return;
+        }
+        setConsumers(result.data);
+      })
+      .catch((err) => {
+        console.error("Failed to load MCP instance consumers", err);
+        if (active) {
+          setConsumersError(
+            `${t("errors.consumersLoadFailed")}: ${formatApiError(err)}`
+          );
+        }
+      });
     return () => {
       active = false;
     };
-  }, [instance.id]);
+  }, [instance.id, consumersAttempt, t]);
 
   const handleVerify = async () => {
     setIsVerifying(true);
+    setVerifyError(null);
     try {
-      await verifyInstance(instance.id);
+      const result = await verifyInstance(instance.id);
+      if (result.error) {
+        setVerifyError(apiErrorMessage(result, t("errors.verifyFailed")));
+        return;
+      }
       router.refresh();
-    } catch {
-      // error visible through page refresh
+    } catch (err) {
+      console.error("Failed to verify MCP instance", err);
+      setVerifyError(`${t("errors.verifyFailed")}: ${formatApiError(err)}`);
     } finally {
       setIsVerifying(false);
     }
@@ -164,20 +218,30 @@ export default function MCPInstanceDetail({
 
   const handleSaveConfig = async () => {
     setIsSavingConfig(true);
+    setSaveConfigError(null);
     try {
       const { updateMCPServerInstanceAction } = await import(
         "@/lib/server-actions"
       );
-      await updateMCPServerInstanceAction(instance.id, {
+      const result = await updateMCPServerInstanceAction(instance.id, {
         json_spec: {
           ...instance.json_spec,
           headers: editHeaders,
         },
       });
+      if (result.error) {
+        setSaveConfigError(
+          apiErrorMessage(result, t("errors.saveConfigFailed"))
+        );
+        return;
+      }
       setIsEditingConfig(false);
       router.refresh();
-    } catch {
-      // Error is visible through unchanged config on page
+    } catch (err) {
+      console.error("Failed to save MCP instance config", err);
+      setSaveConfigError(
+        `${t("errors.saveConfigFailed")}: ${formatApiError(err)}`
+      );
     } finally {
       setIsSavingConfig(false);
     }
@@ -185,47 +249,54 @@ export default function MCPInstanceDetail({
 
   const handleRefreshTools = async () => {
     setIsRefreshingTools(true);
+    setDiscovery(null);
     try {
-      const { data, error } = await discoverMCPInstanceTools(instance.id);
-      if (error) throw new Error(formatApiError(error));
+      const response = await discoverMCPInstanceTools(instance.id);
+      if (response.error) {
+        setDiscovery({
+          kind: "failed",
+          message: apiErrorMessage(response, t("tools.discoverFailed")),
+        });
+        return;
+      }
       // The endpoint returns 200 with {tools, verification} even when verification
-      // failed — so report based on the actual result, not the HTTP status.
-      const result = data as
+      // failed, so report based on the actual result, not the HTTP status.
+      const result = response.data as
         | {
             tools?: unknown[];
             verification?: { status?: string; error?: { message?: string } };
           }
         | undefined;
-      const status = result?.verification?.status;
-      if (status === "succeeded") {
-        toast.success(`Discovered ${result?.tools?.length ?? 0} tool(s)`);
+      if (result?.verification?.status === "succeeded") {
+        setDiscovery({ kind: "succeeded", count: result.tools?.length ?? 0 });
       } else {
-        toast.error(
-          result?.verification?.error?.message ||
-            "Tool discovery failed — verification did not succeed",
-        );
+        const reason = result?.verification?.error?.message;
+        setDiscovery({
+          kind: "failed",
+          message: reason
+            ? `${t("tools.discoverFailed")}: ${reason}`
+            : t("tools.discoverUnverified"),
+        });
       }
       router.refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to refresh tools");
+    } catch (err) {
+      console.error("Failed to discover MCP instance tools", err);
+      setDiscovery({
+        kind: "failed",
+        message: `${t("tools.discoverFailed")}: ${formatApiError(err)}`,
+      });
     } finally {
       setIsRefreshingTools(false);
     }
   };
 
-  // Handle OAuth redirect result
-  const searchParams = useSearchParams();
+  // Drop the OAuth callback's query; the panel shows the authorized state and
+  // a failure stays on the page through `oauthError`.
   useEffect(() => {
-    const oauthResult = searchParams.get("oauth");
-    if (oauthResult === "success") {
-      toast.success(t("oauth.connectSuccess"));
-      router.replace(`/connections/${instance.id}`, { scroll: false });
-    } else if (oauthResult === "error") {
-      const reason = searchParams.get("reason") || "unknown";
-      toast.error(t("oauth.connectError", { reason }));
+    if (searchParams.get("oauth")) {
       router.replace(`/connections/${instance.id}`, { scroll: false });
     }
-  }, [searchParams, instance.id, router, t]);
+  }, [searchParams, instance.id, router]);
 
   // Poll while verification is in_progress
   useEffect(() => {
@@ -323,6 +394,15 @@ export default function MCPInstanceDetail({
   const websiteUrl = specJson?.websiteUrl as string | undefined;
   const displayDescription = instance.description || serverSpec?.description;
 
+  const discoveryResult =
+    discovery?.kind === "failed" ? (
+      <FormError>{discovery.message}</FormError>
+    ) : discovery?.kind === "succeeded" ? (
+      <p className="text-xs text-muted-foreground">
+        {t("tools.discovered", { count: discovery.count })}
+      </p>
+    ) : null;
+
   return (
     <div className="relative h-full overflow-auto px-4 py-5">
       <div className="mx-auto w-full max-w-5xl space-y-6">
@@ -409,6 +489,10 @@ export default function MCPInstanceDetail({
                 Rendered from the API preflight, so a provider that needs the
                 workspace's own OAuth app asks for it here instead of offering a
                 Connect that can only fail. */}
+            {oauthError && (
+              <FormError>{t("oauth.connectError", { reason: oauthError })}</FormError>
+            )}
+
             {isUrlType && (
               <div className="space-y-2">
                 {authorization.reachableButUnauthorized && (
@@ -420,6 +504,7 @@ export default function MCPInstanceDetail({
                   target={{ kind: "instance", instanceId: instance.id }}
                   isUrlType={isUrlType}
                   onStateChange={setOauthState}
+                  onConnectStart={() => setOauthError(null)}
                 />
               </div>
             )}
@@ -447,6 +532,8 @@ export default function MCPInstanceDetail({
                 </Button>
               </div>
             )}
+
+            {verifyError && <FormError>{verifyError}</FormError>}
 
             {/* Failed verification banner */}
             {verification?.status === "failed" && verification.error && (
@@ -568,23 +655,28 @@ export default function MCPInstanceDetail({
                               }
                               value={val}
                               placeholder={fieldMeta?.placeholder || ""}
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                setSaveConfigError(null);
                                 setEditHeaders((prev) => ({
                                   ...prev,
                                   [key]: e.target.value,
-                                }))
-                              }
+                                }));
+                              }}
                             />
                           </div>
                         );
                       })}
+                      {saveConfigError && (
+                        <FormError>{saveConfigError}</FormError>
+                      )}
                       <div className="flex gap-2">
                         <Button
                           size="sm"
                           onClick={handleSaveConfig}
+                          isLoading={isSavingConfig}
                           disabled={isSavingConfig}
                         >
-                          {isSavingConfig ? "Saving..." : "Save"}
+                          {tCommon("save")}
                         </Button>
                         <Button
                           size="sm"
@@ -592,9 +684,10 @@ export default function MCPInstanceDetail({
                           onClick={() => {
                             setIsEditingConfig(false);
                             setEditHeaders(customHeaders);
+                            setSaveConfigError(null);
                           }}
                         >
-                          Cancel
+                          {tCommon("cancel")}
                         </Button>
                       </div>
                     </div>
@@ -666,33 +759,52 @@ export default function MCPInstanceDetail({
                     <RefreshCw
                       className={`mr-1.5 ${isRefreshingTools ? "animate-spin" : ""}`}
                     />
-                    Refresh
+                    {t("tools.refresh")}
                   </Button>
                 </div>
+                {discoveryResult}
                 <ToolsTable tools={tools} consumers={consumers} />
               </div>
             )}
 
             {tools.length === 0 && (
-              <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
-                <span className="text-sm text-muted-foreground">
-                  No tools discovered yet
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleRefreshTools}
-                  disabled={isRefreshingTools}
-                >
-                  <RefreshCw
-                    className={`mr-1.5 ${isRefreshingTools ? "animate-spin" : ""}`}
-                  />
-                  Discover Tools
-                </Button>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+                  <span className="text-sm text-muted-foreground">
+                    {t("tools.noneDiscovered")}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRefreshTools}
+                    disabled={isRefreshingTools}
+                  >
+                    <RefreshCw
+                      className={`mr-1.5 ${isRefreshingTools ? "animate-spin" : ""}`}
+                    />
+                    {t("tools.discover")}
+                  </Button>
+                </div>
+                {discoveryResult}
               </div>
             )}
 
-            <ConsumersSection consumers={consumers} />
+            {consumersError ? (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                <FormError className="flex-1">{consumersError}</FormError>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="self-start"
+                  onClick={() => setConsumersAttempt((n) => n + 1)}
+                >
+                  <RefreshCw />
+                  {tCommon("retry")}
+                </Button>
+              </div>
+            ) : (
+              <ConsumersSection consumers={consumers} />
+            )}
 
             <InstanceActivitySection instanceId={instance.id} />
 

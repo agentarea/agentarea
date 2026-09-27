@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
-import { toast } from "sonner";
 import type { ClientResponse } from "@/api/client/types.gen";
 import ContentBlock from "@/components/ContentBlock";
 import EmptyState from "@/components/EmptyState/EmptyState";
+import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { createClientAction, listClientsAction } from "@/lib/server-actions";
 import { HARNESS_OPTIONS, HarnessBadge, HarnessIcon } from "./harnesses";
@@ -64,39 +66,52 @@ function NameChips({
 
 export default function ClientsPage() {
   const searchParams = useSearchParams();
+  const t = useTranslations("ClientsPage");
+  const tCommon = useTranslations("Common");
   const [clients, setClients] = useState<ClientResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState("harness");
   const [creating, setCreating] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      const { data } = await listClientsAction();
-      setClients((data as ClientResponse[]) || []);
+      const result = await listClientsAction();
+      if (result.error || !result.data) {
+        setLoadError(apiErrorMessage(result, t("loadFailed")));
+        return;
+      }
+      setClients(result.data as ClientResponse[]);
+    } catch (err) {
+      console.error("Failed to load harnesses", err);
+      setLoadError(`${t("loadFailed")}: ${formatApiError(err)}`);
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const handleCreate = async () => {
     if (!name.trim()) return;
     setCreating(true);
+    setCreateError(null);
     try {
-      const { error } = await createClientAction({
+      const result = await createClientAction({
         name: name.trim(),
         description: description || null,
         kind,
       });
-      if (error) {
-        toast.error("Failed to add harness");
+      if (result.error) {
+        setCreateError(apiErrorMessage(result, t("createFailed")));
         return;
       }
       setShowCreate(false);
@@ -104,14 +119,22 @@ export default function ClientsPage() {
       setDescription("");
       setKind("harness");
       await load();
+    } catch (err) {
+      console.error("Failed to add harness", err);
+      setCreateError(`${t("createFailed")}: ${formatApiError(err)}`);
     } finally {
       setCreating(false);
     }
   };
 
+  const openCreate = () => {
+    setCreateError(null);
+    setShowCreate(true);
+  };
+
   const columns = [
     {
-      header: "Harness",
+      header: t("columnHarness"),
       accessor: "name",
       render: (name: string, client: ClientResponse) => (
         <div className="flex items-center gap-2">
@@ -131,7 +154,7 @@ export default function ClientsPage() {
       ),
     },
     {
-      header: "Type",
+      header: t("type"),
       accessor: "kind",
       render: (value: string) => <HarnessBadge kind={value} />,
     },
@@ -143,7 +166,7 @@ export default function ClientsPage() {
       ),
     },
     {
-      header: "Skills",
+      header: t("columnSkills"),
       accessor: "skills",
       render: (value: ClientResponse["skills"]) => <NameChips items={value} />,
     },
@@ -152,13 +175,12 @@ export default function ClientsPage() {
   return (
     <ContentBlock
       header={{
-        breadcrumb: [{ label: "Harnesses" }],
-        description:
-          "Connect external agent harnesses to your workspace's tools and skills.",
+        breadcrumb: [{ label: t("title") }],
+        description: t("description"),
         controls: (
-          <Button className="shrink-0" size="xs" onClick={() => setShowCreate(true)}>
+          <Button className="shrink-0" size="xs" onClick={openCreate}>
             <Plus />
-            Add harness
+            {t("add")}
           </Button>
         ),
       }}
@@ -168,6 +190,12 @@ export default function ClientsPage() {
           <div className="flex justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
+        ) : loadError ? (
+          <EmptyState
+            title={t("loadFailed")}
+            description={loadError}
+            action={{ label: tCommon("retry"), onClick: () => void load() }}
+          />
         ) : (
           <GridAndTableViews
             searchParams={{ tab: searchParams.get("tab") ?? undefined }}
@@ -177,17 +205,17 @@ export default function ClientsPage() {
             itemLink={(client: ClientResponse) => `/clients/${client.id}`}
             emptyState={
               <EmptyState
-                title="No harnesses yet"
-                description="A harness is a coding agent running outside this workspace — Claude Code, Codex — that you let reach in for tools."
+                title={t("emptyTitle")}
+                description={t("emptyDescription")}
                 hints={[
-                  { text: "Register the harness to get its connection command" },
-                  { text: "Pick the skills and connections it may use" },
-                  { text: "It gets that bundle and nothing else" },
+                  { text: t("emptyHintRegister") },
+                  { text: t("emptyHintPick") },
+                  { text: t("emptyHintScope") },
                 ]}
                 iconsType="mcp"
                 action={{
-                  label: "Add harness",
-                  onClick: () => setShowCreate(true),
+                  label: t("add"),
+                  onClick: openCreate,
                 }}
               />
             }
@@ -218,11 +246,11 @@ export default function ClientsPage() {
                   <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-2 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1.5">
                       <McpIcon className="h-3.5 w-3.5" />
-                      {mcpCount === 1 ? "1 connection" : `${mcpCount} connections`}
+                      {t("connectionsCount", { count: mcpCount })}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <SkillIcon className="h-3.5 w-3.5" />
-                      {skillCount === 1 ? "1 skill" : `${skillCount} skills`}
+                      {t("skillsCount", { count: skillCount })}
                     </span>
                   </div>
                 </div>
@@ -235,33 +263,37 @@ export default function ClientsPage() {
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add harness</DialogTitle>
+            <DialogTitle>{t("add")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {createError && <FormError>{createError}</FormError>}
             <div className="space-y-1.5">
               <FormLabel htmlFor="new-client-name" required>
-                Name
+                {t("name")}
               </FormLabel>
               <Input
                 id="new-client-name"
                 placeholder="my-codex"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setCreateError(null);
+                }}
               />
             </div>
             <div className="space-y-1.5">
               <FormLabel htmlFor="new-client-description" optional>
-                Description
+                {t("descriptionLabel")}
               </FormLabel>
               <Textarea
                 id="new-client-description"
-                placeholder="What this connection is for"
+                placeholder={t("descriptionPlaceholder")}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
             <div className="space-y-1.5">
-              <FormLabel htmlFor="new-client-kind">Type</FormLabel>
+              <FormLabel htmlFor="new-client-kind">{t("type")}</FormLabel>
               <Select value={kind} onValueChange={setKind}>
                 <SelectTrigger id="new-client-kind">
                   <SelectValue />
@@ -282,11 +314,11 @@ export default function ClientsPage() {
               size="sm"
               onClick={() => setShowCreate(false)}
             >
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button onClick={handleCreate} disabled={!name.trim() || creating}>
               {creating ? <Loader2 className="mr-2 animate-spin" /> : null}
-              Add harness
+              {t("add")}
             </Button>
           </DialogFooter>
         </DialogContent>

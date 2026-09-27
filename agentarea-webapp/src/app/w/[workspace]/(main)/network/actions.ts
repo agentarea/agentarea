@@ -10,46 +10,62 @@ import {
   zPreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponse,
 } from "@/api/client/zod.gen";
 import { getNetworkPeopleAccess, previewEffectivePolicy } from "@/lib/api";
-import { apiErrorMessage } from "@/lib/api-errors";
+
+export type NetworkActionResult<T> = {
+  data?: T;
+  error?: unknown;
+  status?: number;
+};
+
+function invalid(issues: { path: PropertyKey[]; message: string }[]) {
+  return {
+    error: {
+      detail: issues.map((issue) => ({
+        msg: `${issue.path.map(String).join(".") || "response"}: ${issue.message}`,
+      })),
+    },
+  };
+}
 
 export async function previewNetworkPolicyAction(
   agentId: string
-): Promise<EffectivePolicy> {
-  try {
-    const body =
-      zPreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostBody.parse({
-        agent_id: agentId,
-      });
-    if (!body.agent_id) {
-      throw new Error("Agent is required");
-    }
-
-    const { data, error } = await previewEffectivePolicy({
-      agent_id: body.agent_id,
-    });
-    if (error || !data) {
-      throw new Error("Policy preview is unavailable");
-    }
-
-    return zPreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponse.parse(
-      data
-    ).effective_policy;
-  } catch {
-    throw new Error("Unable to load agent policy preview");
+): Promise<NetworkActionResult<EffectivePolicy>> {
+  const body =
+    zPreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostBody.safeParse(
+      { agent_id: agentId }
+    );
+  if (!body.success) return invalid(body.error.issues);
+  if (!body.data.agent_id) {
+    return invalid([{ path: ["agent_id"], message: "Required" }]);
   }
+
+  const result = await previewEffectivePolicy({
+    agent_id: body.data.agent_id,
+  });
+  if (result.error || !result.data) {
+    console.error("Policy preview failed", result.status, result.error);
+    return { error: result.error, status: result.status };
+  }
+  const parsed =
+    zPreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponse.safeParse(
+      result.data
+    );
+  if (!parsed.success) return invalid(parsed.error.issues);
+  return { data: parsed.data.effective_policy, status: result.status };
 }
 
-export async function getNetworkPeopleAccessAction(): Promise<NetworkPeopleAccessResponse> {
+export async function getNetworkPeopleAccessAction(): Promise<
+  NetworkActionResult<NetworkPeopleAccessResponse>
+> {
   const result = await getNetworkPeopleAccess();
   if (result.error || !result.data) {
-    const message = apiErrorMessage(
-      result,
-      "Unable to load workspace people access"
-    );
-    console.error(message);
-    throw new Error(message);
+    console.error("People access failed", result.status, result.error);
+    return { error: result.error, status: result.status };
   }
-  return zGetNetworkPeopleAccessV1NetworkPeopleAccessGetResponse.parse(
-    result.data
-  );
+  const parsed =
+    zGetNetworkPeopleAccessV1NetworkPeopleAccessGetResponse.safeParse(
+      result.data
+    );
+  if (!parsed.success) return invalid(parsed.error.issues);
+  return { data: parsed.data, status: result.status };
 }

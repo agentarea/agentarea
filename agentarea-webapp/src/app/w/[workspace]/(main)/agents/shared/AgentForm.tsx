@@ -7,10 +7,11 @@ import type {
   ModelInstanceResponse,
 } from "@/api/client/types.gen";
 import React, { useEffect, useRef, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { useFieldArray, useForm } from "react-hook-form";
-import { toast } from "sonner";
 import FullChat from "@/components/Chat/FullChat";
+import FormError from "@/components/FormError";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import Divider from "@/components/ui/divider";
 import {
@@ -25,6 +26,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { formatApiError } from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
 import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/create/actions";
 import {
@@ -95,6 +97,10 @@ export default function AgentForm({
   const formRef = useRef<HTMLFormElement>(null);
   const isMobile = useIsMobile();
   const { isChatSheetOpen, setIsChatSheetOpen } = useChat();
+  const t = useTranslations("AgentsPage.form");
+  const tCommon = useTranslations("Common");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const {
     register,
     control,
@@ -169,6 +175,20 @@ export default function AgentForm({
     setAgentName(watchedName || "New Agent");
   }, [watchedName]);
 
+  useEffect(() => {
+    const subscription = watch(() => {
+      setFormError(null);
+      setSaved(false);
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
+
+  const handleSkillsChange = (skills: AgentSkill[]) => {
+    setSelectedSkills(skills);
+    setFormError(null);
+    setSaved(false);
+  };
+
   const applyPreset = (preset: AgentPresetResponse | null) => {
     const values = presetFormValues(preset);
     if (values.instruction !== undefined) {
@@ -210,6 +230,9 @@ export default function AgentForm({
       return;
     }
 
+    setFormError(null);
+    setSaved(false);
+
     // Set form data attribute and dispatch event SYNCHRONOUSLY before async operations
     form.setAttribute("data-submitting", "true");
     form.dispatchEvent(
@@ -228,11 +251,8 @@ export default function AgentForm({
       try {
         const result = await onSubmit(dataWithSkills);
 
-        if (result?.message?.includes("success")) {
-          toast.success("Agent saved successfully!", {
-            description: `Agent "${data.name}" has been updated.`,
-            duration: 3000,
-          });
+        if (result.ok) {
+          if (!create) setSaved(true);
 
           if (onSuccess) {
             // Check if this is a creation (has id in result) - keep submitting state until navigation
@@ -242,20 +262,16 @@ export default function AgentForm({
             }
             onSuccess(result);
           }
-        } else if (result?.errors?._form && result.errors._form.length > 0) {
-          toast.error("Failed to save agent", {
-            description: result.errors._form.join(", "),
-            duration: 5000,
-          });
-
-          if (onError) {
-            onError(result);
-          }
-        } else if (result?.message && !result.message.includes("success")) {
-          toast.error("Error", {
-            description: result.message,
-            duration: 5000,
-          });
+        } else {
+          const formErrors = result.errors?._form ?? [];
+          const fieldErrors = Object.entries(result.errors ?? {})
+            .filter(([path]) => path !== "_form")
+            .map(([path, messages]) => `${path}: ${messages.join(", ")}`);
+          setFormError(
+            formErrors.length > 0
+              ? formErrors.join(", ")
+              : [result.message ?? "", ...fieldErrors].join(" ")
+          );
 
           if (onError) {
             onError(result);
@@ -263,10 +279,7 @@ export default function AgentForm({
         }
       } catch (error) {
         console.error("Agent save failed", error);
-        toast.error("Unexpected error", {
-          description: "An unexpected error occurred while saving the agent.",
-          duration: 5000,
-        });
+        setFormError(`${t("saveFailed")}: ${formatApiError(error)}`);
 
         if (onError) {
           onError(error);
@@ -326,6 +339,12 @@ export default function AgentForm({
             onSubmit={handleSubmit(handleFormSubmit)}
             className="overflow-auto h-full py-5 pr-5"
           >
+            {formError && <FormError className="mb-4">{formError}</FormError>}
+            {saved && (
+              <p className="mb-4 text-xs text-muted-foreground" role="status">
+                {tCommon("saved")}
+              </p>
+            )}
             {create && create.presets?.length !== 0 && (
               <>
                 <PresetPicker
@@ -385,7 +404,7 @@ export default function AgentForm({
             <Divider />
             <SkillsConfig
               selectedSkills={selectedSkills}
-              onSkillsChange={setSelectedSkills}
+              onSkillsChange={handleSkillsChange}
             />
             {/* Submit button moved to header controls */}
           </form>

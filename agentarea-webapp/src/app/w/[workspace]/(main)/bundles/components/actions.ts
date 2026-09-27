@@ -72,32 +72,24 @@ export type WorkspaceModel = Pick<
 // it also dragged this whole module into the bundle of anything that wanted
 // one function out of it.
 
-function errorMessage(error: unknown, fallback: string): string {
-  if (!error) return fallback;
-  if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && "detail" in error) {
-    const detail = (error as { detail?: unknown }).detail;
-    if (typeof detail === "string") return detail;
-    if (
-      detail &&
-      typeof detail === "object" &&
-      "message" in detail &&
-      typeof (detail as { message?: unknown }).message === "string"
-    ) {
-      return (detail as { message: string }).message;
-    }
-    if (Array.isArray(detail)) {
-      return detail
-        .map((item) =>
-          item && typeof item === "object" && "msg" in item
-            ? String((item as { msg: unknown }).msg)
-            : String(item)
-        )
-        .join(", ");
-    }
-  }
-  return fallback;
+export type ActionResult<T> = { data?: T; error?: unknown; status?: number };
+
+/** A response that does not match the contract is a failure, with the path. */
+function checked<S extends z.ZodTypeAny>(
+  schema: S,
+  value: unknown,
+  status?: number
+): ActionResult<z.infer<S>> {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return { data: parsed.data, status };
+  return {
+    error: {
+      detail: parsed.error.issues.map((issue) => ({
+        msg: `${issue.path.join(".") || "response"}: ${issue.message}`,
+      })),
+    },
+    status,
+  };
 }
 
 function assertCatalogType(type: CatalogType): CatalogType {
@@ -128,180 +120,190 @@ export async function fetchCatalogPageAction(params: {
   category?: string;
   protocol?: CatalogProtocol;
   sort?: string;
-}): Promise<CatalogPageResult> {
-  const { items, total, categories, protocols, error } = await browseCatalog({
-    registryType: REGISTRY_TYPE[assertCatalogType(params.type)],
-    q: params.q,
-    category: params.category,
-    protocol: params.protocol,
-    sort: params.sort,
-    limit: PAGE,
-    offset: params.offset,
-  });
-  if (error) {
-    throw new Error(errorMessage(error, "Failed to load catalog items"));
-  }
-  const parsed = zBrowseCatalogV1RegistriesCatalogBrowseGetResponse.parse({
-    items,
-    total,
-    categories,
-    protocols,
-  });
+}): Promise<ActionResult<CatalogPageResult>> {
+  const { items, total, categories, protocols, error, status } =
+    await browseCatalog({
+      registryType: REGISTRY_TYPE[assertCatalogType(params.type)],
+      q: params.q,
+      category: params.category,
+      protocol: params.protocol,
+      sort: params.sort,
+      limit: PAGE,
+      offset: params.offset,
+    });
+  if (error) return { error, status };
+  const parsed = checked(
+    zBrowseCatalogV1RegistriesCatalogBrowseGetResponse,
+    { items, total, categories, protocols },
+    status
+  );
+  if (!parsed.data) return { error: parsed.error, status: parsed.status };
   return {
-    items: parsed.items,
-    total: parsed.total,
-    categories: parsed.categories,
-    protocols: parsed.protocols ?? [],
+    data: {
+      items: parsed.data.items,
+      total: parsed.data.total,
+      categories: parsed.data.categories,
+      protocols: parsed.data.protocols ?? [],
+    },
+    status,
   };
 }
 
 export async function fetchCatalogItemAction(
   itemId: string
-): Promise<RegistryItemResponse> {
-  const { data, error } = await getCatalogItem(itemId);
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Failed to load catalog item"));
-  }
-  return zGetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse.parse(data);
+): Promise<ActionResult<RegistryItemResponse>> {
+  const { data, error, status } = await getCatalogItem(itemId);
+  if (error || !data) return { error, status };
+  return checked(
+    zGetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse,
+    data,
+    status
+  );
 }
 
 export async function connectCatalogConnectionAction(
   itemId: string,
   input: CatalogConnectionRequest
-): Promise<CatalogConnectionResponse> {
-  const body = zCatalogConnectionRequest.parse(input);
-  const { data, error } = await connectCatalogItem(itemId, body);
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Could not connect this account"));
-  }
-  return zCatalogConnectionResponse.parse(data);
+): Promise<ActionResult<CatalogConnectionResponse>> {
+  const body = checked(zCatalogConnectionRequest, input);
+  if (!body.data) return { error: body.error, status: body.status };
+  const { data, error, status } = await connectCatalogItem(itemId, body.data);
+  if (error || !data) return { error, status };
+  return checked(zCatalogConnectionResponse, data, status);
 }
 
 export async function analyzeBundleAction(
   input: AnalyzeRequest
-): Promise<ImportPreview> {
-  const body = zAnalyzeBundleV1BundlesAnalyzePostBody.parse(input);
-  const { data, error } = await analyzeBundle(body);
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Analyze failed"));
-  }
-  return zAnalyzeBundleV1BundlesAnalyzePostResponse.parse(data);
+): Promise<ActionResult<ImportPreview>> {
+  const body = checked(zAnalyzeBundleV1BundlesAnalyzePostBody, input);
+  if (!body.data) return { error: body.error, status: body.status };
+  const { data, error, status } = await analyzeBundle(body.data);
+  if (error || !data) return { error, status };
+  return checked(zAnalyzeBundleV1BundlesAnalyzePostResponse, data, status);
 }
 
 export async function installBundleAction(
   input: InstallRequest
-): Promise<InstallResult> {
-  const body = zInstallBundleV1BundlesInstallPostBody.parse(input);
-  const { data, error } = await installBundle(body);
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Install failed"));
-  }
-  return zInstallBundleV1BundlesInstallPostResponse.parse(data);
+): Promise<ActionResult<InstallResult>> {
+  const body = checked(zInstallBundleV1BundlesInstallPostBody, input);
+  if (!body.data) return { error: body.error, status: body.status };
+  const { data, error, status } = await installBundle(body.data);
+  if (error || !data) return { error, status };
+  return checked(zInstallBundleV1BundlesInstallPostResponse, data, status);
 }
 
 export async function installCatalogAgentAction(
   agentId: string
-): Promise<AgentResponse> {
-  const { data, error } = await installAgent(agentId);
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Install failed"));
-  }
-  return zInstallAgentV1AgentsAgentIdInstallPostResponse.parse(data);
+): Promise<ActionResult<AgentResponse>> {
+  const { data, error, status } = await installAgent(agentId);
+  if (error || !data) return { error, status };
+  return checked(zInstallAgentV1AgentsAgentIdInstallPostResponse, data, status);
 }
 
-export async function listWorkspaceAgentsAction(): Promise<AgentLite[]> {
-  const { data, error } = await listAgents();
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Failed to load agents"));
-  }
-  const agents = zListAgentsV1AgentsGetResponse.parse(data);
-  return agents.map((agent) => ({ id: agent.id, name: agent.name }));
-}
-
-export async function listActiveModelInstancesAction(): Promise<
-  WorkspaceModel[]
+export async function listWorkspaceAgentsAction(): Promise<
+  ActionResult<AgentLite[]>
 > {
-  const { data, error } = await listModelInstances({ is_active: true });
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Failed to load models"));
-  }
-  return zListModelInstancesV1ModelInstancesGetResponse
-    .parse(data)
-    .map((model) => ({
-      id: model.id,
-      model_name: model.model_name,
-      model_display_name: model.model_display_name,
-      provider_name: model.provider_name,
-      provider_icon_url: model.provider_icon_url,
-    }));
+  const { data, error, status } = await listAgents();
+  if (error || !data) return { error, status };
+  const agents = checked(zListAgentsV1AgentsGetResponse, data, status);
+  if (!agents.data) return { error: agents.error, status: agents.status };
+  return {
+    data: agents.data.map((agent) => ({ id: agent.id, name: agent.name })),
+    status,
+  };
 }
 
+export async function listActiveModelInstancesAction() {
+  const result = await listModelInstances({ is_active: true });
+  const data: WorkspaceModel[] | undefined = result.data
+    ? zListModelInstancesV1ModelInstancesGetResponse
+        .parse(result.data)
+        .map((model) => ({
+          id: model.id,
+          model_name: model.model_name,
+          model_display_name: model.model_display_name,
+          provider_name: model.provider_name,
+          provider_icon_url: model.provider_icon_url,
+        }))
+    : undefined;
+  return { data, error: result.error, status: result.status };
+}
+
+/** Resolves to the tenant skill id the install created. */
 export async function installCatalogSkillAction(
   skillId: string
-): Promise<string> {
-  const { data, error } = await installSkill(skillId);
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Install failed"));
-  }
-  return zInstallSkillV1SkillsSkillIdInstallPostResponse.parse(data).id;
+): Promise<ActionResult<string>> {
+  const { data, error, status } = await installSkill(skillId);
+  if (error || !data) return { error, status };
+  const skill = checked(
+    zInstallSkillV1SkillsSkillIdInstallPostResponse,
+    data,
+    status
+  );
+  if (!skill.data) return { error: skill.error, status: skill.status };
+  return { data: skill.data.id, status };
 }
 
 export async function addCatalogSkillToAgentAction(
   skillId: string,
   agentId: string
-): Promise<string> {
-  const tenantSkillId = await installCatalogSkillAction(skillId);
-  const { data: agentData, error: agentError } = await getAgent(agentId);
-  if (agentError || !agentData) {
-    throw new Error(errorMessage(agentError, "Could not load agent"));
-  }
+): Promise<ActionResult<string>> {
+  const installed = await installCatalogSkillAction(skillId);
+  if (!installed.data) return { error: installed.error, status: installed.status };
+  const tenantSkillId = installed.data;
 
-  const agent = zGetAgentV1AgentsAgentIdGetResponse.parse(agentData);
-  const currentSkillIds = (agent.skills ?? [])
+  const agentRes = await getAgent(agentId);
+  if (agentRes.error || !agentRes.data) {
+    return { error: agentRes.error, status: agentRes.status };
+  }
+  const agent = checked(
+    zGetAgentV1AgentsAgentIdGetResponse,
+    agentRes.data,
+    agentRes.status
+  );
+  if (!agent.data) return { error: agent.error, status: agent.status };
+
+  const currentSkillIds = (agent.data.skills ?? [])
     .map((skill) => (typeof skill.id === "string" ? skill.id : null))
     .filter((id): id is string => Boolean(id));
-  const body = zAgentUpdate.parse({
+  const body = checked(zAgentUpdate, {
     skill_ids: Array.from(new Set([...currentSkillIds, tenantSkillId])),
   });
-  const { data: updatedData, error: updateError } = await updateAgent(
-    agentId,
-    body
+  if (!body.data) return { error: body.error, status: body.status };
+  const updated = await updateAgent(agentId, body.data);
+  if (updated.error || !updated.data) {
+    return { error: updated.error, status: updated.status };
+  }
+  const parsed = checked(
+    zUpdateAgentV1AgentsAgentIdPatchResponse,
+    updated.data,
+    updated.status
   );
-  if (updateError || !updatedData) {
-    throw new Error(errorMessage(updateError, "Could not attach skill"));
-  }
-
-  zUpdateAgentV1AgentsAgentIdPatchResponse.parse(updatedData);
-  return tenantSkillId;
+  if (!parsed.data) return { error: parsed.error, status: parsed.status };
+  return { data: tenantSkillId, status: updated.status };
 }
 
-export async function listSkillFilesAction(
-  skillId: string
-): Promise<SkillFileResponse[]> {
-  const { data, error } = await getSkillFiles(skillId);
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Could not load skill files"));
-  }
-  return zListSkillFilesV1SkillsSkillIdFilesGetResponse.parse(data).files;
+export async function listSkillFilesAction(skillId: string) {
+  const result = await getSkillFiles(skillId);
+  const data: SkillFileResponse[] | undefined = result.data
+    ? zListSkillFilesV1SkillsSkillIdFilesGetResponse.parse(result.data).files
+    : undefined;
+  return { data, error: result.error, status: result.status };
 }
 
-export async function getSkillMarkdownAction(skillId: string): Promise<string> {
-  const { data, error } = await getSkillContent(skillId);
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Could not load skill content"));
-  }
-  return zGetSkillContentV1SkillsSkillIdContentGetResponse.parse(data).content;
+export async function getSkillMarkdownAction(skillId: string) {
+  const result = await getSkillContent(skillId);
+  const data = result.data
+    ? zGetSkillContentV1SkillsSkillIdContentGetResponse.parse(result.data)
+        .content
+    : undefined;
+  return { data, error: result.error, status: result.status };
 }
 
-export async function getSkillFileUrlAction(
-  skillId: string,
-  path: string
-): Promise<string> {
-  const { data, error } = await getSkillFile(skillId, path, {
-    redirect: false,
-  });
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Could not load skill file"));
-  }
-  return z.object({ url: z.string() }).parse(data).url;
+export async function getSkillFileUrlAction(skillId: string, path: string) {
+  const result = await getSkillFile(skillId, path, { redirect: false });
+  const data = result.data
+    ? z.object({ url: z.string() }).parse(result.data).url
+    : undefined;
+  return { data, error: result.error, status: result.status };
 }

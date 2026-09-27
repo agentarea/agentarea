@@ -12,6 +12,7 @@ import {
   Wallet,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
@@ -53,6 +54,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
   const tCommon = useTranslations("Common");
   const { wallet, loading, error, refetch } = useAgentWallet(agentId);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const { createWallet } = useCreateWallet(agentId);
   const { updateWallet } = useUpdateWallet(agentId);
   const { deleteWallet, loading: deleting } = useDeleteWallet(agentId);
@@ -91,11 +93,21 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
     }
   }, [wallet]);
 
+  // "Saved" and a save error stand until the next edit, from any control.
+  const edit =
+    <T,>(set: (value: T) => void) =>
+    (value: T) => {
+      setSaved(false);
+      setSaveError(null);
+      set(value);
+    };
+
   const showX402 = walletType === "x402" || walletType === "dual";
   const showMpp = walletType === "mpp" || walletType === "dual";
 
   const handleSave = async () => {
     setSaveError(null);
+    setSaved(false);
     const x402Config = showX402
       ? {
           network,
@@ -146,11 +158,13 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
     }
     setX402PrivateKey("");
     setMppTempoKey("");
+    setSaved(true);
     refetch();
   };
 
   const handleDelete = async () => {
     setSaveError(null);
+    setSaved(false);
     try {
       await deleteWallet();
     } catch (err) {
@@ -188,15 +202,16 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
       }}
       className="form-content mx-auto w-full max-w-2xl"
     >
-      {saveError && (
-        <p role="alert" className="form-error">
-          {saveError}
+      {saveError && <FormError>{saveError}</FormError>}
+      {saved && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {tCommon("saved")}
         </p>
       )}
       <div className="grid gap-6">
         <AnimatedTabs
           activeTab={walletType}
-          onChange={setWalletType}
+          onChange={edit(setWalletType)}
           size="md"
           tabs={[
             {
@@ -230,7 +245,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
                 <FormLabel htmlFor="x402-network" icon={Network}>
                   Network
                 </FormLabel>
-                <Select value={network} onValueChange={setNetwork}>
+                <Select value={network} onValueChange={edit(setNetwork)}>
                   <SelectTrigger id="x402-network">
                     <SelectValue />
                   </SelectTrigger>
@@ -247,7 +262,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
                 <FormLabel htmlFor="signer-type" icon={Network}>
                   Signer Type
                 </FormLabel>
-                <Select value={signerType} onValueChange={setSignerType}>
+                <Select value={signerType} onValueChange={edit(setSignerType)}>
                   <SelectTrigger id="signer-type">
                     <SelectValue />
                   </SelectTrigger>
@@ -265,7 +280,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
               <Input
                 id="facilitator-url"
                 value={facilitatorUrl}
-                onChange={(e) => setFacilitatorUrl(e.target.value)}
+                onChange={(e) => edit(setFacilitatorUrl)(e.target.value)}
               />
             </div>
             <div className="grid gap-2">
@@ -279,7 +294,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
                     type="password"
                     placeholder="Configured - enter new key to update"
                     value={x402PrivateKey}
-                    onChange={(e) => setX402PrivateKey(e.target.value)}
+                    onChange={(e) => edit(setX402PrivateKey)(e.target.value)}
                   />
                   <Shield className="h-4 w-4 text-green-500" />
                 </div>
@@ -289,7 +304,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
                   type="password"
                   placeholder="Enter private key (hex)"
                   value={x402PrivateKey}
-                  onChange={(e) => setX402PrivateKey(e.target.value)}
+                  onChange={(e) => edit(setX402PrivateKey)(e.target.value)}
                 />
               )}
               <p className="text-xs text-muted-foreground">
@@ -318,7 +333,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
                 <Input
                   id="payment-methods"
                   value={mppPaymentMethods}
-                  onChange={(e) => setMppPaymentMethods(e.target.value)}
+                  onChange={(e) => edit(setMppPaymentMethods)(e.target.value)}
                   placeholder="charge"
                 />
               </div>
@@ -330,7 +345,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
                   id="session-budget"
                   type="number"
                   value={mppSessionBudget}
-                  onChange={(e) => setMppSessionBudget(e.target.value)}
+                  onChange={(e) => edit(setMppSessionBudget)(e.target.value)}
                   min="0"
                   step="0.01"
                   required
@@ -348,7 +363,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
                     type="password"
                     placeholder="Configured - enter new key to update"
                     value={mppTempoKey}
-                    onChange={(e) => setMppTempoKey(e.target.value)}
+                    onChange={(e) => edit(setMppTempoKey)(e.target.value)}
                   />
                   <Shield className="h-4 w-4 text-green-500" />
                 </div>
@@ -358,7 +373,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
                   type="password"
                   placeholder="Enter Tempo account key"
                   value={mppTempoKey}
-                  onChange={(e) => setMppTempoKey(e.target.value)}
+                  onChange={(e) => edit(setMppTempoKey)(e.target.value)}
                 />
               )}
               <p className="text-xs text-muted-foreground">
@@ -388,7 +403,7 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
                 id="service-budget"
                 type="number"
                 value={serviceBudget}
-                onChange={(e) => setServiceBudget(e.target.value)}
+                onChange={(e) => edit(setServiceBudget)(e.target.value)}
                 min="0"
                 step="0.01"
               />
@@ -397,7 +412,10 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
               <FormLabel htmlFor="budget-period" icon={Clock}>
                 Period
               </FormLabel>
-              <Select value={budgetPeriod} onValueChange={setBudgetPeriod}>
+              <Select
+                value={budgetPeriod}
+                onValueChange={edit(setBudgetPeriod)}
+              >
                 <SelectTrigger id="budget-period">
                   <SelectValue />
                 </SelectTrigger>

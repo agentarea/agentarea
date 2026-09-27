@@ -13,6 +13,7 @@
 // the analyzed bundle in place and send the result.
 import React, { useEffect, useMemo, useReducer, useState } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import Link from "@/components/WorkspaceLink";
 import {
   AlertTriangle,
@@ -25,6 +26,7 @@ import {
   Plug,
   Plus,
   Puzzle,
+  RefreshCw,
   Send,
   ShieldCheck,
 } from "lucide-react";
@@ -41,6 +43,7 @@ import type {
 import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import ConfigSheet from "@/components/ConfigSheet";
+import FormError from "@/components/FormError";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -63,6 +66,7 @@ import {
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { Switch } from "@/components/ui/switch";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
 import {
   analyzeBundleAction,
@@ -219,6 +223,9 @@ export function BundleInstallWizard({
   const [phase, setPhase] = useState<Phase>({ kind: "analyzing" });
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [models, setModels] = useState<WorkspaceModel[]>([]);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const t = useTranslations("BundleInstall");
+  const tCommon = useTranslations("Common");
   const [providerSheetOpen, setProviderSheetOpen] = useState(false);
 
   // Edit state — one reducer keyed by the analyzed bundle, rebuilt into the
@@ -240,12 +247,35 @@ export function BundleInstallWizard({
     setPhase({ kind: "analyzing" });
     Promise.all([
       analyzeBundleAction({ source }),
-      listActiveModelInstancesAction().catch(() => [] as WorkspaceModel[]),
+      listActiveModelInstancesAction().then(
+        (result) => ({
+          ms: result.data ?? [],
+          error: result.error
+            ? apiErrorMessage(result, t("modelsLoadFailed"))
+            : null,
+        }),
+        (error: unknown) => {
+          console.error("Failed to load workspace models", error);
+          return {
+            ms: [] as WorkspaceModel[],
+            error: `${t("modelsLoadFailed")}: ${formatApiError(error)}`,
+          };
+        }
+      ),
     ])
-      .then(([pv, ms]) => {
+      .then(([analyzed, { ms, error: msError }]) => {
         if (!active) return;
+        const pv = analyzed.data;
+        if (analyzed.error || !pv) {
+          setPhase({
+            kind: "error",
+            message: apiErrorMessage(analyzed, t("analyzeFailed")),
+          });
+          return;
+        }
         setPreview(pv);
         setModels(ms);
+        setModelsError(msError);
         const bundle = pv.bundle;
         const sv: Record<string, unknown> = {};
         for (const f of pv.setup ?? []) {
@@ -269,15 +299,16 @@ export function BundleInstallWizard({
       })
       .catch((e: unknown) => {
         if (!active) return;
+        console.error("Failed to analyze bundle", e);
         setPhase({
           kind: "error",
-          message: e instanceof Error ? e.message : "Analyze failed",
+          message: `${t("analyzeFailed")}: ${formatApiError(e)}`,
         });
       });
     return () => {
       active = false;
     };
-  }, [source]);
+  }, [source, t]);
 
   // Which setup keys feed an agent's model → render those as a workspace model
   // picker instead of a plain text field.
@@ -370,9 +401,16 @@ export function BundleInstallWizard({
   // so the new model is immediately selectable without leaving the wizard.
   async function refreshModels() {
     try {
-      setModels(await listActiveModelInstancesAction());
-    } catch {
-      /* keep the current list on failure */
+      const result = await listActiveModelInstancesAction();
+      if (result.error || !result.data) {
+        setModelsError(apiErrorMessage(result, t("modelsLoadFailed")));
+        return;
+      }
+      setModels(result.data);
+      setModelsError(null);
+    } catch (error) {
+      console.error("Failed to reload workspace models", error);
+      setModelsError(`${t("modelsLoadFailed")}: ${formatApiError(error)}`);
     }
   }
 
@@ -412,15 +450,23 @@ export function BundleInstallWizard({
         policies: finalPolicies,
       };
 
-      const result = await installBundleAction({
+      const installed = await installBundleAction({
         bundle: bundle as never,
         setup_values: setupValues,
       });
-      setPhase({ kind: "done", result });
+      if (installed.error || !installed.data) {
+        setPhase({
+          kind: "error",
+          message: apiErrorMessage(installed, t("installFailed")),
+        });
+        return;
+      }
+      setPhase({ kind: "done", result: installed.data });
     } catch (e) {
+      console.error("Failed to install bundle", e);
       setPhase({
         kind: "error",
-        message: e instanceof Error ? e.message : "Install failed",
+        message: `${t("installFailed")}: ${formatApiError(e)}`,
       });
     }
   }
@@ -500,6 +546,22 @@ export function BundleInstallWizard({
           {setup.length > 0 && (
             <Section title="Configuration">
               <div className="space-y-4">
+                {modelsError && modelFieldKeys.size > 0 ? (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                    <FormError className="flex-1">
+                      {modelsError}
+                    </FormError>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      className="self-start"
+                      onClick={refreshModels}
+                    >
+                      <RefreshCw />
+                      {tCommon("retry")}
+                    </Button>
+                  </div>
+                ) : null}
                 {setup.map((f) => (
                   <SetupFieldInput
                     key={f.key}

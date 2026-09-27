@@ -1,6 +1,8 @@
 import { getTranslations } from "next-intl/server";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
+import FormError from "@/components/FormError";
 import {
   listAgents,
   listModelInstances,
@@ -9,6 +11,7 @@ import {
   listOpenAPIConnections,
   getAllTasks,
 } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
 import type { Agent } from "@/types";
 import {
@@ -30,12 +33,12 @@ export default async function AgentsContent({
   const tCommon = await getTranslations("Common");
 
   const [
-    { data: agents = [] },
-    { data: modelInstances = [] },
-    { data: mcpInstances = [] },
-    { data: mcpServersData },
-    { data: openApiConnections = [] },
-    { data: tasks = [] },
+    agentsResult,
+    modelInstancesResult,
+    mcpInstancesResult,
+    mcpServersResult,
+    openApiConnectionsResult,
+    tasksResult,
   ] = await Promise.all([
     listAgents(),
     listModelInstances(),
@@ -44,6 +47,38 @@ export default async function AgentsContent({
     listOpenAPIConnections(),
     getAllTasks(),
   ]);
+
+  if (agentsResult.error) {
+    return (
+      <RetryEmptyState
+        title={t("list.loadFailed")}
+        description={apiErrorMessage(agentsResult, t("list.loadFailed"))}
+        iconsType="agent"
+      />
+    );
+  }
+
+  const partialErrors = [
+    [modelInstancesResult, t("list.loadModelsFailed")],
+    [mcpInstancesResult, t("list.loadMcpInstancesFailed")],
+    [mcpServersResult, t("list.loadMcpServersFailed")],
+    [openApiConnectionsResult, t("list.loadOpenapiFailed")],
+    [tasksResult, t("list.loadTasksFailed")],
+  ] as const;
+  const partialErrorMessages = partialErrors
+    .filter(([result]) => result.error)
+    .map(([result, label]) => apiErrorMessage(result, label));
+  const partialErrorBlock =
+    partialErrorMessages.length > 0 ? (
+      <FormError>{partialErrorMessages.join("; ")}</FormError>
+    ) : null;
+
+  const agents = agentsResult.data ?? [];
+  const modelInstances = modelInstancesResult.data ?? [];
+  const mcpInstances = mcpInstancesResult.data ?? [];
+  const mcpServersData = mcpServersResult.data;
+  const openApiConnections = openApiConnectionsResult.data ?? [];
+  const tasks = tasksResult.data ?? [];
 
   const mcpServers: McpServer[] = Array.isArray(mcpServersData)
     ? (mcpServersData as McpServer[])
@@ -111,6 +146,7 @@ export default async function AgentsContent({
   if (enrichedAgents.length === 0) {
     return (
       <div className="space-y-4">
+        {partialErrorBlock}
         <EmptyState
           title={t("noAgentsTitle")}
           description={t("noAgentsDescription")}
@@ -129,12 +165,24 @@ export default async function AgentsContent({
 
   if (filteredAgents.length === 0) {
     return (
-      <EmptyState
-        title={t("noMatchingAgents")}
-        description={`${t("noMatchingAgentsDescription")}: "${searchQuery}"`}
-        iconsType="agent"
-        action={{ label: tCommon("clearSearch"), href: "/agents" }}
-      />
+      <div className="space-y-4">
+        {partialErrorBlock}
+        <EmptyState
+          title={t("noMatchingAgents")}
+          description={`${t("noMatchingAgentsDescription")}: "${searchQuery}"`}
+          iconsType="agent"
+          action={{ label: tCommon("clearSearch"), href: "/agents" }}
+        />
+      </div>
+    );
+  }
+
+  if (partialErrorBlock) {
+    return (
+      <div className="space-y-4">
+        {partialErrorBlock}
+        <AgentsList initialAgents={filteredAgents} viewMode={viewMode} />
+      </div>
     );
   }
 

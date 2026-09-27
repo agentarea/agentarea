@@ -16,7 +16,9 @@ import {
 } from "lucide-react";
 import type { EffectivePolicy } from "@/api/client/types.gen";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { EntityIcon, type EntityKind } from "@/lib/entity-icons";
+import type { NetworkActionResult } from "../actions";
 import type { NetworkNodeData, TopologyResponse } from "../types";
 import {
   getAgentConnections,
@@ -29,7 +31,9 @@ interface Props {
   onSelect: (node: NetworkNodeData) => void;
   onClose: () => void;
   onFocus: (agentId: string) => void;
-  loadPolicy?: (agentId: string) => Promise<EffectivePolicy>;
+  loadPolicy?: (
+    agentId: string
+  ) => Promise<NetworkActionResult<EffectivePolicy>>;
 }
 const kinds: Record<NetworkNodeData["type"], EntityKind> = {
   agent: "agent",
@@ -52,29 +56,39 @@ export default function NetworkConnectionPanel({
   const [attempt, setAttempt] = useState(0);
   const [policy, setPolicy] = useState<EffectivePolicy | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (node.type !== "agent") return;
     let cancelled = false;
     setState("loading");
     setPolicy(null);
+    setError(null);
     if (!loadPolicy) {
       setState("error");
       return;
     }
     void loadPolicy(node.id)
       .then((result) => {
-        if (!cancelled) {
-          setPolicy(result);
-          setState("ready");
+        if (cancelled) return;
+        if (result.error || !result.data) {
+          setError(apiErrorMessage(result, t("policyLoadFailed")));
+          setState("error");
+          return;
         }
+        setPolicy(result.data);
+        setState("ready");
       })
-      .catch(() => {
-        if (!cancelled) setState("error");
+      .catch((reason: unknown) => {
+        console.error("Failed to load agent policy preview:", reason);
+        if (!cancelled) {
+          setError(`${t("policyLoadFailed")}: ${formatApiError(reason)}`);
+          setState("error");
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [node.id, node.type, loadPolicy, attempt]);
+  }, [node.id, node.type, loadPolicy, attempt, t]);
   const connections = getAgentConnections(topology, node.id);
   const scope = getNetworkScope(node);
   const ScopeIcon =
@@ -163,8 +177,14 @@ export default function NetworkConnectionPanel({
               </div>
             )}
             {state === "error" && (
-              <div className="rounded-md border border-border p-3 text-xs">
+              <div
+                role="alert"
+                className="rounded-md border border-border p-3 text-xs"
+              >
                 <p>{t("unavailable")}</p>
+                {error && (
+                  <p className="mt-1 break-words text-destructive">{error}</p>
+                )}
                 <button
                   type="button"
                   onClick={() => setAttempt((value) => value + 1)}

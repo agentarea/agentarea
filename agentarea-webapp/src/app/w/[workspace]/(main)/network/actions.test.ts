@@ -16,9 +16,9 @@ const id = "a557769a-682f-4a54-a661-597b4e60de34";
 describe("network policy preview", () => {
   beforeEach(() => preview.mockReset());
   it("validates the agent before requesting policy", async () => {
-    await expect(previewNetworkPolicyAction("invalid-id")).rejects.toThrow(
-      "Unable to load agent policy preview"
-    );
+    const result = await previewNetworkPolicyAction("invalid-id");
+    expect(result.data).toBeUndefined();
+    expect(result.error).toBeTruthy();
     expect(preview).not.toHaveBeenCalled();
   });
   it("preserves tool restrictions and approval requirements from the resolver", async () => {
@@ -31,24 +31,29 @@ describe("network policy preview", () => {
         },
       },
     });
-    const policy = await previewNetworkPolicyAction(id);
+    const { data: policy } = await previewNetworkPolicyAction(id);
     expect(preview).toHaveBeenCalledWith({ agent_id: id });
+    if (!policy) throw new Error("expected a policy");
     expect(policy.tools?.denied).toEqual(["delete_*"]);
     expect(policy.tools?.allowed).toEqual(["read_*"]);
     expect(policy.approval?.requires_human_approval).toBe(true);
   });
   it("does not turn a failed or malformed response into an unrestricted policy", async () => {
     preview
-      .mockResolvedValueOnce({ error: { detail: "backend unavailable" } })
+      .mockResolvedValueOnce({
+        error: { detail: "backend unavailable" },
+        status: 503,
+      })
       .mockResolvedValueOnce({
         data: { effective_policy: { tools: { denied: 42 } } },
       });
-    await expect(previewNetworkPolicyAction(id)).rejects.toThrow(
-      "Unable to load agent policy preview"
-    );
-    await expect(previewNetworkPolicyAction(id)).rejects.toThrow(
-      "Unable to load agent policy preview"
-    );
+    const failed = await previewNetworkPolicyAction(id);
+    expect(failed.data).toBeUndefined();
+    expect(failed.error).toEqual({ detail: "backend unavailable" });
+    expect(failed.status).toBe(503);
+    const malformed = await previewNetworkPolicyAction(id);
+    expect(malformed.data).toBeUndefined();
+    expect(malformed.error).toBeTruthy();
   });
 });
 
@@ -73,16 +78,18 @@ describe("network people access", () => {
         decision_source: "agent_edge_admission",
       },
     });
-    const response = await getNetworkPeopleAccessAction();
+    const { data: response } = await getNetworkPeopleAccessAction();
+    if (!response) throw new Error("expected people access");
     expect(response.access[0].allowed).toBe(false);
     expect(response.complete).toBe(false);
     expect(people).toHaveBeenCalledWith();
   });
   it("does not turn admin or service failures into an empty directory", async () => {
-    people.mockResolvedValue({ error: { detail: "forbidden" } });
-    await expect(getNetworkPeopleAccessAction()).rejects.toThrow(
-      "Unable to load workspace people access"
-    );
+    people.mockResolvedValue({ error: { detail: "forbidden" }, status: 403 });
+    const result = await getNetworkPeopleAccessAction();
+    expect(result.data).toBeUndefined();
+    expect(result.error).toEqual({ detail: "forbidden" });
+    expect(result.status).toBe(403);
   });
   it("rejects malformed permission decisions", async () => {
     people.mockResolvedValue({
@@ -97,7 +104,9 @@ describe("network people access", () => {
         total_agents: 1,
       },
     });
-    await expect(getNetworkPeopleAccessAction()).rejects.toThrow();
+    const result = await getNetworkPeopleAccessAction();
+    expect(result.data).toBeUndefined();
+    expect(result.error).toBeTruthy();
   });
   it("preserves an unknown directory total with a verified owner", async () => {
     people.mockResolvedValue({
@@ -111,7 +120,8 @@ describe("network people access", () => {
         complete: false,
       },
     });
-    const result = await getNetworkPeopleAccessAction();
+    const { data: result } = await getNetworkPeopleAccessAction();
+    if (!result) throw new Error("expected people access");
     expect(result.total_people).toBeNull();
     expect(result.people[0].user_id).toBe("owner");
     expect(result.directory_status).toBe("disabled");

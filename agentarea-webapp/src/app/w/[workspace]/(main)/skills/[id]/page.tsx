@@ -34,14 +34,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
-import { useToast } from "@/hooks/use-toast";
+import FormError from "@/components/FormError";
 import type {
   Skill,
   SkillContent,
   SkillFile,
   SkillUpdateRequest,
 } from "@/lib/api";
-import { formatApiError, isApiNotFound } from "@/lib/api-errors";
+import { apiErrorMessage, formatApiError, isApiNotFound } from "@/lib/api-errors";
 import {
   addSkillMemberAction as addSkillMember,
   deleteSkillAction as deleteSkill,
@@ -84,9 +84,10 @@ function parseFrontmatter(content: string): {
 export default function SkillDetailPage() {
   const params = useParams();
   const router = useWorkspaceRouter();
-  const { toast } = useToast();
   const t = useTranslations("SkillsPage");
   const tDetail = useTranslations("SkillsPage.detail");
+  const tChildren = useTranslations("SkillsPage.children");
+  const tCommon = useTranslations("Common");
   const skillId = params.id as string;
 
   const [skill, setSkill] = useState<Skill | null>(null);
@@ -94,7 +95,12 @@ export default function SkillDetailPage() {
   const [files, setFiles] = useState<SkillFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [filesError, setFilesError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [installing, setInstalling] = useState(false);
 
   const [editName, setEditName] = useState("");
@@ -104,6 +110,7 @@ export default function SkillDetailPage() {
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [loadingFile, setLoadingFile] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -114,11 +121,15 @@ export default function SkillDetailPage() {
   const [addingChildId, setAddingChildId] = useState<string>("");
   const [isAddingChild, setIsAddingChild] = useState(false);
   const [removingChildId, setRemovingChildId] = useState<string | null>(null);
+  const [childrenError, setChildrenError] = useState<string | null>(null);
+  const [allSkillsError, setAllSkillsError] = useState<string | null>(null);
+  const [addChildError, setAddChildError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setLoadError(null);
+      setNotFound(false);
       try {
         const [skillRes, contentRes, filesRes, membersRes, allSkillsRes] =
           await Promise.all([
@@ -130,30 +141,39 @@ export default function SkillDetailPage() {
           ]);
 
         if (skillRes.error || !skillRes.data) {
-          if (!isApiNotFound(skillRes)) {
-            setLoadError(formatApiError(skillRes));
-            return;
+          if (isApiNotFound(skillRes)) {
+            setNotFound(true);
+          } else {
+            setLoadError(apiErrorMessage(skillRes, t("error.loadSkill")));
           }
-
-          toast({
-            title: t("error.loadSkills"),
-            description: t("error.skillNotFound"),
-            variant: "destructive",
-          });
-          router.push("/skills");
+          return;
+        }
+        if (contentRes.error) {
+          setLoadError(apiErrorMessage(contentRes, t("error.loadSkill")));
           return;
         }
 
         const skillData = skillRes.data as Skill;
         const contentData = contentRes.data as SkillContent;
-        const filesData =
-          (filesRes.data as { files: SkillFile[] })?.files || [];
 
         setSkill(skillData);
         setContent(contentData);
-        setFiles(filesData);
+        setFiles((filesRes.data as { files: SkillFile[] })?.files || []);
+        setFilesError(
+          filesRes.error ? apiErrorMessage(filesRes, t("error.loadFiles")) : null
+        );
         setChildSkills((membersRes.data as Skill[]) || []);
+        setChildrenError(
+          membersRes.error
+            ? apiErrorMessage(membersRes, tChildren("loadFailed"))
+            : null
+        );
         setAllSkills((allSkillsRes.data as Skill[]) || []);
+        setAllSkillsError(
+          allSkillsRes.error
+            ? apiErrorMessage(allSkillsRes, tChildren("loadOptionsFailed"))
+            : null
+        );
 
         setEditName(skillData.name);
         setEditDescription(skillData.description || "");
@@ -163,13 +183,16 @@ export default function SkillDetailPage() {
           setSelectedFile("SKILL.md");
           setFileContent(contentData.content);
         }
+      } catch (err) {
+        console.error("Failed to load skill", err);
+        setLoadError(`${t("error.loadSkill")}: ${formatApiError(err)}`);
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [skillId, router, toast, t]);
+  }, [skillId, reloadKey, t, tChildren]);
 
   useEffect(() => {
     if (!skill || !content) return;
@@ -180,37 +203,49 @@ export default function SkillDetailPage() {
       skill.source_type === "content" &&
       editContent !== (content?.content || "");
 
-    setHasChanges(nameChanged || descChanged || contentChanged);
+    const changed = nameChanged || descChanged || contentChanged;
+    setHasChanges(changed);
+    if (changed) {
+      setSaved(false);
+      setActionError(null);
+    }
   }, [editName, editDescription, editContent, skill, content]);
 
   const handleFileSelect = async (path: string) => {
     setSelectedFile(path);
     setLoadingFile(true);
     setIsEditing(false);
+    setFileError(null);
 
     try {
       if (path === "SKILL.md") {
         setFileContent(editContent || content?.content || "");
       } else {
-        const { data, error } = await getSkillFile(skillId, path);
-        if (error) {
-          toast({
-            title: t("error.loadSkills"),
-            description: t("error.loadFileContent"),
-            variant: "destructive",
-          });
+        const result = await getSkillFile(skillId, path);
+        if (result.error) {
+          setFileError(apiErrorMessage(result, t("error.loadFileContent")));
           setFileContent(null);
         } else {
-          const fileData = data as { url?: string };
+          const fileData = result.data as { url?: string };
           if (fileData?.url) {
             const response = await fetch(fileData.url);
-            const text = await response.text();
-            setFileContent(text);
+            if (!response.ok) {
+              setFileError(
+                `${t("error.loadFileContent")} (${response.status})`
+              );
+              setFileContent(null);
+            } else {
+              setFileContent(await response.text());
+            }
           } else {
             setFileContent(null);
           }
         }
       }
+    } catch (err) {
+      console.error("Failed to load skill file", err);
+      setFileError(`${t("error.loadFileContent")}: ${formatApiError(err)}`);
+      setFileContent(null);
     } finally {
       setLoadingFile(false);
     }
@@ -220,6 +255,7 @@ export default function SkillDetailPage() {
     if (!skill) return;
 
     setSaving(true);
+    setActionError(null);
     try {
       const updateData: SkillUpdateRequest = {
         name: editName,
@@ -230,23 +266,15 @@ export default function SkillDetailPage() {
         updateData.content = editContent;
       }
 
-      const { data, error } = await updateSkill(skillId, updateData);
+      const result = await updateSkill(skillId, updateData);
 
-      if (error) {
-        toast({
-          title: t("error.loadSkills"),
-          description: t("error.updateSkill"),
-          variant: "destructive",
-        });
+      if (result.error) {
+        setActionError(apiErrorMessage(result, t("error.saveSkill")));
         return;
       }
 
-      const updatedSkill = data as Skill | undefined;
+      const updatedSkill = result.data as Skill | undefined;
       if (updatedSkill?.id && updatedSkill.id !== skillId) {
-        toast({
-          title: t("success.skillUpdated"),
-          description: t("success.skillUpdated"),
-        });
         router.replace(`/skills/${updatedSkill.id}`);
         router.refresh();
         return;
@@ -257,6 +285,14 @@ export default function SkillDetailPage() {
         getSkillContent(skillId),
       ]);
 
+      if (skillRes.error || contentRes.error) {
+        setActionError(
+          apiErrorMessage(
+            skillRes.error ? skillRes : contentRes,
+            t("error.reloadAfterSave")
+          )
+        );
+      }
       if (skillRes.data) {
         setSkill(skillRes.data as Skill);
       }
@@ -264,12 +300,12 @@ export default function SkillDetailPage() {
         setContent(contentRes.data as SkillContent);
       }
 
-      toast({
-        title: t("success.skillUpdated"),
-        description: t("success.skillUpdated"),
-      });
       setHasChanges(false);
       setIsEditing(false);
+      setSaved(true);
+    } catch (err) {
+      console.error("Failed to save skill", err);
+      setActionError(`${t("error.saveSkill")}: ${formatApiError(err)}`);
     } finally {
       setSaving(false);
     }
@@ -279,25 +315,21 @@ export default function SkillDetailPage() {
     if (!skill) return;
 
     setInstalling(true);
+    setActionError(null);
     try {
-      const { data, error } = await installSkill(skillId);
-      const installed = data as Skill | undefined;
+      const result = await installSkill(skillId);
+      const installed = result.data as Skill | undefined;
 
-      if (error || !installed?.id) {
-        toast({
-          title: t("error.installSkill"),
-          description: t("error.installSkill"),
-          variant: "destructive",
-        });
+      if (result.error || !installed?.id) {
+        setActionError(apiErrorMessage(result, t("error.installSkill")));
         return;
       }
 
-      toast({
-        title: t("success.skillInstalled"),
-        description: t("success.skillInstalled"),
-      });
       router.replace(`/skills/${installed.id}`);
       router.refresh();
+    } catch (err) {
+      console.error("Failed to install skill", err);
+      setActionError(`${t("error.installSkill")}: ${formatApiError(err)}`);
     } finally {
       setInstalling(false);
     }
@@ -306,21 +338,25 @@ export default function SkillDetailPage() {
   const handleAddChildSkill = async () => {
     if (!addingChildId) return;
     setIsAddingChild(true);
+    setAddChildError(null);
     try {
-      const { error } = await addSkillMember(skillId, addingChildId);
-      if (error) {
-        toast({
-          title: "Error",
-          description: "Failed to add child skill",
-          variant: "destructive",
-        });
+      const result = await addSkillMember(skillId, addingChildId);
+      if (result.error) {
+        setAddChildError(apiErrorMessage(result, tChildren("addFailed")));
         return;
       }
-      const { data } = await listSkillMembers(skillId);
-      setChildSkills((data as Skill[]) || []);
       setShowAddChildDialog(false);
       setAddingChildId("");
-      toast({ title: "Child skill added" });
+      const membersRes = await listSkillMembers(skillId);
+      if (membersRes.error) {
+        setChildrenError(apiErrorMessage(membersRes, tChildren("loadFailed")));
+        return;
+      }
+      setChildrenError(null);
+      setChildSkills((membersRes.data as Skill[]) || []);
+    } catch (err) {
+      console.error("Failed to add child skill", err);
+      setAddChildError(`${tChildren("addFailed")}: ${formatApiError(err)}`);
     } finally {
       setIsAddingChild(false);
     }
@@ -328,18 +364,17 @@ export default function SkillDetailPage() {
 
   const handleRemoveChildSkill = async (childId: string) => {
     setRemovingChildId(childId);
+    setChildrenError(null);
     try {
-      const { error } = await removeSkillMember(skillId, childId);
-      if (error) {
-        toast({
-          title: "Error",
-          description: "Failed to remove child skill",
-          variant: "destructive",
-        });
+      const result = await removeSkillMember(skillId, childId);
+      if (result.error) {
+        setChildrenError(apiErrorMessage(result, tChildren("removeFailed")));
         return;
       }
       setChildSkills((prev) => prev.filter((s) => s.id !== childId));
-      toast({ title: "Child skill removed" });
+    } catch (err) {
+      console.error("Failed to remove child skill", err);
+      setChildrenError(`${tChildren("removeFailed")}: ${formatApiError(err)}`);
     } finally {
       setRemovingChildId(null);
     }
@@ -371,15 +406,31 @@ export default function SkillDetailPage() {
         }}
       >
         <div className="flex h-64 items-center justify-center">
-          <EmptyState
-            title={t("error.loadSkills")}
-            description={loadError || t("error.skillNotFound")}
-            icons={[FileX]}
-            action={{
-              label: t("title"),
-              onClick: () => router.push("/skills"),
-            }}
-          />
+          {notFound || !loadError ? (
+            <EmptyState
+              title={t("error.skillNotFound")}
+              description=""
+              icons={[FileX]}
+              action={{
+                label: t("backToSkills"),
+                onClick: () => router.push("/skills"),
+              }}
+            />
+          ) : (
+            <EmptyState
+              title={t("error.loadSkill")}
+              description={loadError}
+              icons={[FileX]}
+              action={{
+                label: tCommon("retry"),
+                onClick: () => setReloadKey((key) => key + 1),
+              }}
+              additionAction={{
+                label: t("backToSkills"),
+                onClick: () => router.push("/skills"),
+              }}
+            />
+          )}
         </div>
       </ContentBlock>
     );
@@ -420,6 +471,11 @@ export default function SkillDetailPage() {
               </Button>
             ) : (
               <>
+                {saved && !hasChanges && (
+                  <span className="text-xs text-muted-foreground">
+                    {tCommon("saved")}
+                  </span>
+                )}
                 <Button
                   variant="outline"
                   size="xs"
@@ -443,7 +499,6 @@ export default function SkillDetailPage() {
                   description={t("confirm.deleteSkill", {
                     skillName: skill.name,
                   })}
-                  successMessage={t("success.skillDeleted")}
                 />
               </>
             )}
@@ -454,7 +509,9 @@ export default function SkillDetailPage() {
       <div className="flex h-full w-full overflow-hidden">
         {/* Main Content Area */}
         <div className="flex-1 overflow-auto p-4 md:p-6">
-          <div className="h-full max-w-4xl mx-auto">
+          <div className="h-full max-w-4xl mx-auto flex flex-col gap-3">
+            {actionError && <FormError>{actionError}</FormError>}
+            {filesError && <FormError>{filesError}</FormError>}
             <Card className="h-full flex flex-col overflow-hidden p-0 cursor-default hover:shadow-none">
               <CardHeader className="border-b border-border/70 bg-sidebar p-3 flex flex-row items-center justify-between shrink-0 space-y-0">
                 <CardTitle className="text-xs font-mono">
@@ -528,6 +585,10 @@ export default function SkillDetailPage() {
                   <div className="absolute inset-0 flex items-center justify-center">
                     <LoadingSpinner />
                   </div>
+                ) : fileError ? (
+                  <div className="p-4">
+                    <FormError>{fileError}</FormError>
+                  </div>
                 ) : !selectedFile ? (
                   <div className="absolute inset-0 flex items-center justify-center p-6">
                     <EmptyState
@@ -596,21 +657,27 @@ export default function SkillDetailPage() {
         <div className="border-t px-6 py-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium">
-              Child Skills ({childSkills.length})
+              {tChildren("title", { count: childSkills.length })}
             </h3>
             <Button
               size="xs"
               variant="outline"
-              onClick={() => setShowAddChildDialog(true)}
+              onClick={() => {
+                setAddChildError(null);
+                setShowAddChildDialog(true);
+              }}
             >
               <Plus className="mr-1.5" />
-              Add Child Skill
+              {tChildren("add")}
             </Button>
           </div>
+          {childrenError && <FormError>{childrenError}</FormError>}
           {childSkills.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No child skills yet.
-            </p>
+            !childrenError && (
+              <p className="text-sm text-muted-foreground">
+                {tChildren("empty")}
+              </p>
+            )
           ) : (
             <ul className="space-y-1">
               {childSkills.map((child) => (
@@ -642,15 +709,20 @@ export default function SkillDetailPage() {
       <Dialog open={showAddChildDialog} onOpenChange={setShowAddChildDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Child Skill</DialogTitle>
+            <DialogTitle>{tChildren("add")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
+            {allSkillsError && <FormError>{allSkillsError}</FormError>}
+            {addChildError && <FormError>{addChildError}</FormError>}
             <select
               className="w-full rounded border bg-background px-3 py-2 text-sm"
               value={addingChildId}
-              onChange={(e) => setAddingChildId(e.target.value)}
+              onChange={(e) => {
+                setAddingChildId(e.target.value);
+                setAddChildError(null);
+              }}
             >
-              <option value="">Select a skill...</option>
+              <option value="">{tChildren("selectPlaceholder")}</option>
               {allSkills
                 .filter(
                   (s) =>
@@ -669,7 +741,7 @@ export default function SkillDetailPage() {
               variant="outline"
               onClick={() => setShowAddChildDialog(false)}
             >
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button
               onClick={handleAddChildSkill}
@@ -678,7 +750,7 @@ export default function SkillDetailPage() {
               {isAddingChild ? (
                 <Loader2 className="mr-2 animate-spin" />
               ) : null}
-              Add
+              {tCommon("add")}
             </Button>
           </DialogFooter>
         </DialogContent>

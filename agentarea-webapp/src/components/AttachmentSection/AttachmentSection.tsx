@@ -1,17 +1,23 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { Loader2, Trash2, type LucideIcon } from "lucide-react";
-import { toast } from "sonner";
 import AccordionControl from "@/components/AccordionControl";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
 import ConfigSheet from "@/components/ConfigSheet";
+import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { SelectableList } from "@/components/SelectableList";
 import { Accordion } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import Note from "@/components/ui/note";
+import {
+  apiErrorMessage,
+  formatApiError,
+  type ApiResultLike,
+} from "@/lib/api-errors";
 
 export type AttachmentItem = {
   id: string;
@@ -94,6 +100,8 @@ export function AttachmentSection<T extends AttachmentItem>({
   const [accordionValue, setAccordionValue] = useState<string>(id);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const t = useTranslations("AttachmentSection");
 
   const Icon = icon;
   const attachedIds = attached.map((item) => item.id);
@@ -103,16 +111,31 @@ export function AttachmentSection<T extends AttachmentItem>({
     action: (item: T) => Promise<MutationResult>,
     verb: "add" | "remove"
   ) => {
+    const label =
+      verb === "add"
+        ? t("addFailed", { item: item.name })
+        : t("removeFailed", { item: item.name });
     setPendingId(item.id);
+    setError(null);
     try {
       const result = await action(item);
       if (result && result.error) {
-        toast.error(`Failed to ${verb} ${triggerText.toLowerCase()}`);
+        setError(apiErrorMessage(result as ApiResultLike, label));
         return;
       }
-      await onChanged?.();
+    } catch (err) {
+      console.error(`Failed to ${verb} attachment`, err);
+      setError(`${label}: ${formatApiError(err)}`);
+      return;
     } finally {
       setPendingId(null);
+    }
+    // The write went through; a failed refetch is its own error, not the write's.
+    try {
+      await onChanged?.();
+    } catch (err) {
+      console.error("Failed to reload after attachment change", err);
+      setError(formatApiError(err));
     }
   };
 
@@ -169,9 +192,13 @@ export function AttachmentSection<T extends AttachmentItem>({
           triggerText={triggerText}
           className="ml-auto"
           open={isSheetOpen}
-          onOpenChange={setIsSheetOpen}
+          onOpenChange={(open) => {
+            setIsSheetOpen(open);
+            if (!open) setError(null);
+          }}
         >
           <div className="flex flex-col space-y-4 overflow-y-auto">
+            {error && isSheetOpen && <FormError>{error}</FormError>}
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Icon className="h-4 w-4 text-muted-foreground" />
               {availableTitle}
@@ -200,6 +227,9 @@ export function AttachmentSection<T extends AttachmentItem>({
       }
     >
       <div className="space-y-4">
+        {error && !isSheetOpen && (
+          <FormError className="mt-2">{error}</FormError>
+        )}
         {attached.length > 0 ? (
           <Accordion type="multiple" id={`${id}-items`} className="space-y-2">
             {attached.map((item) => (
