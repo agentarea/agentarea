@@ -1373,6 +1373,7 @@ export const zModelInstanceTestRequest = z.object({
  */
 export const zModelInstanceTestResponse = z.object({
   cost: z.string().nullish(),
+  currency: z.literal("USD").optional().default("USD"),
   error_type: z.string().nullish(),
   message: z.string(),
   model_name: z.string().nullish(),
@@ -1874,6 +1875,13 @@ export const zPreviewIssue = z.object({
   entity_key: z.string().nullish(),
   message: z.string(),
   severity: zIssueSeverity,
+});
+
+/**
+ * PricingCurrencyResponse
+ */
+export const zPricingCurrencyResponse = z.object({
+  currency: z.string(),
 });
 
 /**
@@ -3627,6 +3635,12 @@ export const zProxyInstanceV1McpInstanceIdMcpGetPath = z.object({
 export const zProxyInstanceV1McpInstanceIdMcpPostPath = z.object({
   instance_id: z.string(),
 });
+
+/**
+ * Successful Response
+ */
+export const zGetPricingCurrencyV1PricingCurrencyGetResponse =
+  zPricingCurrencyResponse;
 
 /**
  * Response List Workspaces V1 Workspaces Get

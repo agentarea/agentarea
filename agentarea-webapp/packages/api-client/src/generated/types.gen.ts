@@ -3676,6 +3676,10 @@ export type ModelInstanceTestResponse = {
      */
     cost?: string | null;
     /**
+     * Currency
+     */
+    currency?: 'USD';
+    /**
      * Error Type
      */
     error_type?: string | null;
@@ -4690,6 +4694,16 @@ export type PreviewIssue = {
      */
     message: string;
     severity: IssueSeverity;
+};
+
+/**
+ * PricingCurrencyResponse
+ */
+export type PricingCurrencyResponse = {
+    /**
+     * Currency
+     */
+    currency: string;
 };
 
 /**
@@ -8696,6 +8710,22 @@ export type ProxyInstanceV1McpInstanceIdMcpPostResponses = {
      */
     200: unknown;
 };
+
+export type GetPricingCurrencyV1PricingCurrencyGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/pricing/currency';
+};
+
+export type GetPricingCurrencyV1PricingCurrencyGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PricingCurrencyResponse;
+};
+
+export type GetPricingCurrencyV1PricingCurrencyGetResponse = GetPricingCurrencyV1PricingCurrencyGetResponses[keyof GetPricingCurrencyV1PricingCurrencyGetResponses];
 
 export type ListWorkspacesV1WorkspacesGetData = {
     body?: never;
