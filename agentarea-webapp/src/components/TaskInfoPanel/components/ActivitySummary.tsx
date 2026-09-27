@@ -3,7 +3,7 @@ import Image from "next/image";
 import { Clock, Sparkles, SquareTerminal } from "lucide-react";
 import { describeToolCall } from "@/components/Chat/utils/describeToolCall";
 import { scrollToToolCall } from "@/components/Chat/utils/scrollToToolCall";
-import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { formatMoney } from "@/lib/money";
 import Section from "./Section";
 
 export interface ToolUsage {
@@ -49,7 +49,7 @@ export interface TaskActivitySummary {
 
 interface ActivitySummaryProps {
   summary?: TaskActivitySummary;
-  currency?: string;
+  currency?: string | null;
   locale?: string;
 }
 
@@ -85,7 +85,7 @@ function ServiceIcon({ service }: { service: ServiceGroup }) {
 
 export default function ActivitySummary({
   summary,
-  currency = DEFAULT_CURRENCY,
+  currency = null,
   locale = "en",
 }: ActivitySummaryProps) {
   const t = useTranslations("TaskInfoPanel");

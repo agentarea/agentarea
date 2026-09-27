@@ -2,7 +2,7 @@ import type {
   TaskEvent as ApiTaskEvent,
   TaskEventResponse as ApiTaskEventResponse,
 } from "@/api/client/types.gen";
-import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { formatMoney } from "@/lib/money";
 
 // Base types from API schema
 export type TaskEvent = ApiTaskEvent;
@@ -327,7 +327,7 @@ export const EVENT_TYPE_CONFIG: Record<
 export const mapSSEToDisplayEvent = (
   sseEvent: SSEMessage,
   id?: string,
-  currency: string = DEFAULT_CURRENCY,
+  currency: string | null = null,
   locale: string = "en"
 ): DisplayEvent => {
   // Map event names to our internal event types - handle both PascalCase and snake_case

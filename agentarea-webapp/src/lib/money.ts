@@ -1,5 +1,3 @@
-export const DEFAULT_CURRENCY = "USD";
-
 export interface FormatMoneyOptions {
   /**
    * Whole-unit amounts drop the trailing ".00" (e.g. "$100" instead of
@@ -11,9 +9,17 @@ export interface FormatMoneyOptions {
 }
 
 /**
- * Format a money amount in the billing currency the workspace actually pays
- * in (see `useCurrency()` in `@/hooks/useCurrency`, backed by C2
- * `GET /v1/pricing/currency`) — never assume USD.
+ * Format a money amount in the given billing currency (see `useCurrency()`
+ * in `@/hooks/useCurrency`, backed by C2 `GET /v1/pricing/currency`) via
+ * Intl.NumberFormat.
+ *
+ * `currency` is required and nullable on purpose: pass `null` while the
+ * workspace's billing currency is loading or failed to resolve. This never
+ * guesses — a null currency is never rendered as USD or any other assumed
+ * currency. Instead the bare number is formatted (no currency symbol) and
+ * prefixed with "¤" (U+00A4, the Unicode placeholder currency sign), so the
+ * amount visibly reads as "currency unavailable" rather than a plain,
+ * unlabeled number that could be mistaken for the workspace's real currency.
  *
  * A per-task LLM cost is routinely a fraction of a cent, so:
  * - amounts under one minor unit (a cent, for USD/RUB) keep 4 fraction
@@ -30,7 +36,7 @@ export interface FormatMoneyOptions {
  */
 export function formatMoney(
   amount: number,
-  currency: string = DEFAULT_CURRENCY,
+  currency: string | null,
   locale: string = "en",
   options?: FormatMoneyOptions
 ): string {
@@ -44,34 +50,39 @@ export function formatMoney(
       : abs > 0 && abs < 0.01
         ? 4
         : 2;
+
   const format = (v: number) =>
     new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
+      ...(currency == null
+        ? { style: "decimal" as const }
+        : { style: "currency" as const, currency }),
       minimumFractionDigits: fractionDigits,
       maximumFractionDigits: fractionDigits,
     }).format(v);
 
+  const unknownPrefix = currency == null ? "¤" : "";
   const smallestUnit = 10 ** -fractionDigits;
   if (abs > 0 && abs < smallestUnit / 2) {
     return value < 0
-      ? `> ${format(-smallestUnit)}`
-      : `< ${format(smallestUnit)}`;
+      ? `${unknownPrefix}> ${format(-smallestUnit)}`
+      : `${unknownPrefix}< ${format(smallestUnit)}`;
   }
 
-  return format(value);
+  return `${unknownPrefix}${format(value)}`;
 }
 
 /**
  * The currency's own symbol/sign (e.g. "$", "₽"), for places that render an
  * amount input with the symbol as a prefix rather than through
  * `formatMoney`. Falls back to the currency code itself if Intl has no
- * narrower symbol for it.
+ * narrower symbol for it. `currency: null` (loading/unavailable — never
+ * guess) returns the "¤" placeholder currency sign, same as `formatMoney`.
  */
 export function getCurrencySymbol(
-  currency: string = DEFAULT_CURRENCY,
+  currency: string | null,
   locale: string = "en"
 ): string {
+  if (currency == null) return "¤";
   const parts = new Intl.NumberFormat(locale, {
     style: "currency",
     currency,

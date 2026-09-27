@@ -1058,10 +1058,14 @@ export async function updateWorkspaceSettingsAction(
   }
 }
 
-// Never assume USD: a failed lookup returns { data: null, error } instead of
-// silently defaulting — useCurrency() must render "currency unknown", not USD.
+// getPricingCurrency() never guesses a currency on failure — pass that
+// failure through as an explicit error rather than papering over it here.
+// Callers (useCurrency()) must treat a null/error result as "unknown", never
+// as USD.
 export async function getPricingCurrencyAction() {
   const result = await getPricingCurrency();
-  if (!result.ok) return { data: null, error: "Currency unavailable" };
+  if (!result.ok) {
+    return { data: null, error: "Currency unavailable" };
+  }
   return { data: { currency: result.currency }, error: null };
 }

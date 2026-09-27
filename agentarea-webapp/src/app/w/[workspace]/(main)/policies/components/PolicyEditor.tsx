@@ -1092,13 +1092,16 @@ function MoneyField({
   label,
   value,
   onChange,
-  currencySymbol = "$",
+  currencySymbol,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
-  currencySymbol?: string;
+  // Required, not defaulted to "$" — the caller must pass whatever
+  // getCurrencySymbol() resolved (including "¤" while the workspace's
+  // currency is loading/unavailable), never a guessed symbol.
+  currencySymbol: string;
 }) {
   return (
     <div className="space-y-1.5">

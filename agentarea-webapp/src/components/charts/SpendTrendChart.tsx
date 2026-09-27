@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { formatMoney } from "@/lib/money";
 
 const fmtDateShort = (iso: string, locale: string) => {
   const d = new Date(iso + "T00:00:00Z");
@@ -34,14 +34,14 @@ export function SpendTrendChart({
   data,
   height = 190,
   locale = "en",
-  currency = DEFAULT_CURRENCY,
+  currency = null,
   seriesLabel = "Spend",
   cumulativeLabel = "cumulative",
 }: {
   data: Point[];
   height?: number | `${number}%`;
   locale?: string;
-  currency?: string;
+  currency?: string | null;
   seriesLabel?: string;
   cumulativeLabel?: string;
 }) {
@@ -54,12 +54,11 @@ export function SpendTrendChart({
   const total = cumulative.length ? cumulative[cumulative.length - 1].cum : 0;
   const maxY = Math.max(10, Math.ceil(total / 10) * 10);
   const ticks = [0, maxY / 2, maxY];
+  // Every tick here is a whole number (0, maxY/2, maxY are all multiples of
+  // 5), so `compact` always drops the decimals — and formatMoney's
+  // null-currency handling means the axis never guesses a currency either.
   const fmtAxis = (v: number) =>
-    new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(v);
+    formatMoney(v, currency, locale, { compact: true });
 
   return (
     <ResponsiveContainer width="100%" height={height}>

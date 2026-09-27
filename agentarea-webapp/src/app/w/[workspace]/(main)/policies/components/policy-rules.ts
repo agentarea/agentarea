@@ -1,4 +1,4 @@
-import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { formatMoney } from "@/lib/money";
 import type {
   Policy,
   PolicyDocument,
@@ -27,7 +27,7 @@ const STAGE = {
 // truth instead of drifting via a second Intl.NumberFormat copy here.
 function fmtMoney(
   value: unknown,
-  currency: string = DEFAULT_CURRENCY,
+  currency: string | null = null,
   locale: string = "en"
 ): string {
   if (value === null || value === undefined) return "";
@@ -76,7 +76,7 @@ function str(value: unknown): string | undefined {
  */
 export function documentToRules(
   doc: PolicyDocument | null | undefined,
-  currency: string = DEFAULT_CURRENCY,
+  currency: string | null = null,
   locale: string = "en"
 ): PolicyRule[] {
   if (!doc) return [];
@@ -267,7 +267,7 @@ const STAGE_BY_DIMENSION: Record<MatrixDimensionKey, string> = {
 function describeRule(
   policy: Policy,
   dimension: MatrixDimensionKey,
-  currency: string,
+  currency: string | null,
   locale: string
 ): {
   label: string;
@@ -350,7 +350,7 @@ function describeRule(
 // Decompose a single backend Policy into the UI rule row shown in the drawer.
 export function policyToRule(
   policy: Policy,
-  currency: string = DEFAULT_CURRENCY,
+  currency: string | null = null,
   locale: string = "en"
 ): PolicyRule {
   const dimension = ruleDimension(policy);
@@ -436,7 +436,7 @@ function emptyDimensions(): MatrixDimensions {
 // drawer (via `rules`). Resilient to malformed params — never throws.
 function buildDimensions(
   rules: Policy[],
-  currency: string,
+  currency: string | null,
   locale: string
 ): {
   dimensions: MatrixDimensions;
@@ -534,7 +534,7 @@ const WORKSPACE_SUBJECT_KEY = "__workspace__";
 export function policiesToMatrix(
   policies: Policy[],
   agents: AgentLike[],
-  currency: string = DEFAULT_CURRENCY,
+  currency: string | null = null,
   locale: string = "en"
 ): PolicyMatrix {
   const agentNameById = new Map(agents.map((a) => [a.id, a.name]));

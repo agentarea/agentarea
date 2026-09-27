@@ -13,6 +13,15 @@ function intl(value: number, currency: string, locale: string, digits: number) {
   }).format(value);
 }
 
+/** Same, for the no-currency (decimal) path. */
+function decimal(value: number, locale: string, digits: number) {
+  return new Intl.NumberFormat(locale, {
+    style: "decimal",
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
 describe("formatMoney", () => {
   it("formats whole and one-cent-and-up amounts with 2 decimals", () => {
     expect(formatMoney(12.5, "USD", "en-US")).toBe("$12.50");
@@ -42,8 +51,8 @@ describe("formatMoney", () => {
     );
   });
 
-  it("defaults to USD/en when currency and locale are omitted", () => {
-    expect(formatMoney(3)).toBe("$3.00");
+  it("defaults to the 'en' locale when omitted (a display preference, not a currency guess)", () => {
+    expect(formatMoney(3, "USD")).toBe("$3.00");
   });
 
   it("treats non-finite input as zero rather than throwing or printing NaN", () => {
@@ -93,6 +102,35 @@ describe("formatMoney", () => {
       );
     });
   });
+
+  describe("currency: null (loading or a failed currency lookup)", () => {
+    it("never guesses a currency — formats the bare number, no symbol", () => {
+      expect(formatMoney(12.5, null, "en-US")).toBe(
+        `¤${decimal(12.5, "en-US", 2)}`
+      );
+    });
+
+    it("still applies sub-cent precision", () => {
+      expect(formatMoney(0.0071, null, "en-US")).toBe(
+        `¤${decimal(0.0071, "en-US", 4)}`
+      );
+    });
+
+    it("still floors a too-tiny amount, prefixed as unknown", () => {
+      expect(formatMoney(0.00001, null, "en-US")).toBe(
+        `¤< ${decimal(0.0001, "en-US", 4)}`
+      );
+      expect(formatMoney(-0.00001, null, "en-US")).toBe(
+        `¤> ${decimal(-0.0001, "en-US", 4)}`
+      );
+    });
+
+    it("still respects the compact option", () => {
+      expect(formatMoney(100, null, "en-US", { compact: true })).toBe(
+        `¤${decimal(100, "en-US", 0)}`
+      );
+    });
+  });
 });
 
 describe("getCurrencySymbol", () => {
@@ -104,8 +142,12 @@ describe("getCurrencySymbol", () => {
     expect(getCurrencySymbol("RUB", "ru-RU")).toBe("₽");
   });
 
-  it("defaults to USD/en when omitted", () => {
-    expect(getCurrencySymbol()).toBe("$");
+  it("defaults to the 'en' locale when omitted", () => {
+    expect(getCurrencySymbol("USD")).toBe("$");
+  });
+
+  it("returns the placeholder currency sign for a null (unknown) currency", () => {
+    expect(getCurrencySymbol(null)).toBe("¤");
   });
 
   it("falls back to the currency code for an unrecognized locale/currency Intl still accepts", () => {

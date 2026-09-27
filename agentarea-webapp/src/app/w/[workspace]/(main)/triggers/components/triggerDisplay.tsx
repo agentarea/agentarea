@@ -3,7 +3,7 @@ import { Clock, Zap } from "lucide-react";
 import type { TriggerResponse } from "@/api/client/types.gen";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { deterministicHue } from "@/lib/avatar-hue";
-import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 export interface TriggerCatalogEntry {
@@ -309,12 +309,12 @@ export function getTriggerHealth(trigger: TriggerLike): TriggerHealth {
 
 /**
  * Cost of one run, or of a trigger's history, in the workspace's billing
- * currency (see `useCurrency()` / C2). Defaults to USD/en for callers that
- * have not threaded a currency through yet.
+ * currency (see `useCurrency()` / C2). `currency: null` (loading, or a
+ * failed lookup) renders without a currency symbol — never guesses USD.
  */
 export function formatTriggerCost(
   value: number,
-  currency: string = DEFAULT_CURRENCY,
+  currency: string | null = null,
   locale: string = "en"
 ): string {
   return formatMoney(value, currency, locale);

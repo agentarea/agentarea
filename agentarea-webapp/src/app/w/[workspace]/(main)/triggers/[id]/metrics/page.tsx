@@ -19,7 +19,10 @@ export default async function TriggerMetricsPage({ params }: Props) {
   const { id } = await params;
   const t = await getTranslations("TriggersPage.detail");
   const locale = await getLocale();
-  const { currency } = await getPricingCurrency();
+  // Never guess a currency: a failed lookup threads through as null (see
+  // formatMoney in @/lib/money for how that renders) rather than USD.
+  const pricingCurrency = await getPricingCurrency();
+  const currency = pricingCurrency.ok ? pricingCurrency.currency : null;
   const fmtUsd = (value: number) => formatTriggerCost(value, currency, locale);
 
   const { data, error } = await getTriggerMetrics(id, { hours: WINDOW_HOURS });

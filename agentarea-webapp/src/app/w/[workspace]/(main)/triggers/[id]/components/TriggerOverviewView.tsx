@@ -121,7 +121,10 @@ export async function TriggerOverviewView({
 }) {
   const t = await getTranslations("TriggersPage.detail");
   const locale = await getLocale();
-  const { currency } = await getPricingCurrency();
+  // Never guess a currency: a failed lookup threads through as null (see
+  // formatMoney in @/lib/money for how that renders) rather than USD.
+  const pricingCurrency = await getPricingCurrency();
+  const currency = pricingCurrency.ok ? pricingCurrency.currency : null;
   const fmtUsd = (value: number) => formatTriggerCost(value, currency, locale);
   const { triggerId, metrics, failure } = model;
 
@@ -465,7 +468,7 @@ function ExecutionRow({
 }: {
   execution: TriggerExecutionResponse;
   t: Translator;
-  currency: string;
+  currency: string | null;
   locale: string;
 }) {
   const presentation = getTriggerExecutionStatusPresentation(execution.status);

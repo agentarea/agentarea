@@ -54,7 +54,7 @@ vi.mock("@/hooks/useTaskActions", () => ({
 }));
 
 vi.mock("@/hooks/useCurrency", () => ({
-  useCurrency: () => ({ currency: "USD", isLoading: false }),
+  useCurrency: () => ({ currency: "USD", status: "ready" }),
 }));
 
 vi.mock("@/components/Chat/hooks/useScrollManagement", () => ({

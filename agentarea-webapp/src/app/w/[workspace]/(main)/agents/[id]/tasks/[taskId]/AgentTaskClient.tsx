@@ -299,7 +299,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-gray-700 dark:text-gray-200">
-                Budget top-up ({currency}, optional)
+                Budget top-up ({currency ?? "¤"}, optional)
                 <input
                   className="block h-9 w-44 rounded-md border border-gray-300 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
                   min="0.01"
