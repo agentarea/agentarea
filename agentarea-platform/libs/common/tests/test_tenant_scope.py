@@ -25,7 +25,7 @@ from agentarea_common.config.database import (
     get_database,
 )
 from pydantic import ValidationError
-from sqlalchemy import String, select
+from sqlalchemy import String, column, select, table, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -55,13 +55,14 @@ async def _sessions(mode: TenantScopeMode) -> async_sessionmaker[AsyncSession]:
         engine, sync_session_class=tenant_scoped_session_class(mode), expire_on_commit=False
     )
     async with sessions() as session:
-        session.add_all(
-            [
-                _Note(id=1, body="a", workspace_id="ws-a", created_by="u"),
-                _Note(id=2, body="b", workspace_id="ws-b", created_by="u"),
-            ]
-        )
-        await session.commit()
+        with unscoped("the fixture seeds both workspaces"):
+            session.add_all(
+                [
+                    _Note(id=1, body="a", workspace_id="ws-a", created_by="u"),
+                    _Note(id=2, body="b", workspace_id="ws-b", created_by="u"),
+                ]
+            )
+            await session.commit()
     return sessions
 
 
@@ -138,6 +139,59 @@ async def test_log_mode_runs_unfiltered_and_warns_once_per_call_site(
     assert len(warnings) == 1
     assert "_Note" in warnings[0].getMessage()
     assert "test_tenant_scope.py" in warnings[0].getMessage()
+
+
+async def test_core_statements_on_scoped_tables_are_refused(enforcing) -> None:
+    notes = table("tenant_scope_notes", column("body"), column("workspace_id"))
+    async with enforcing() as session:
+        with workspace_scope("ws-a"):
+            with pytest.raises(UnscopedQueryError, match="tenant_scope_notes"):
+                await session.execute(select(_Note.__table__))
+            with pytest.raises(UnscopedQueryError, match="tenant_scope_notes"):
+                await session.execute(update(notes).values(body="x"))
+        with pytest.raises(UnscopedQueryError, match="tenant_scope_notes"):
+            await session.execute(update(_Note.__table__).values(body="x"))
+
+
+async def test_core_statements_run_under_unscoped(enforcing) -> None:
+    async with enforcing() as session:
+        with unscoped("the test rewrites both workspaces on purpose"):
+            result = await session.execute(update(_Note.__table__).values(body="x"))
+        assert result.rowcount == 2
+        assert (await session.execute(select(_Unscoped.__table__))).all() == []
+
+
+async def test_a_flush_writes_only_the_bound_workspace(enforcing) -> None:
+    async with enforcing() as session:
+        with workspace_scope("ws-a"):
+            session.add(_Note(id=3, body="c", workspace_id="ws-a", created_by="u"))
+            await session.flush()
+            session.add(_Note(id=4, body="d", workspace_id="ws-b", created_by="u"))
+            with pytest.raises(UnscopedQueryError, match="_Note"):
+                await session.flush()
+
+
+async def test_a_flush_refuses_moving_a_row_out_of_the_workspace(enforcing) -> None:
+    async with enforcing() as session:
+        with workspace_scope("ws-a"):
+            note = (await session.execute(select(_Note))).scalar_one()
+            note.workspace_id = "ws-b"
+            with pytest.raises(UnscopedQueryError, match="_Note"):
+                await session.flush()
+
+
+async def test_a_flush_with_no_scope_is_refused(enforcing) -> None:
+    async with enforcing() as session:
+        session.add(_Note(id=5, body="e", workspace_id="ws-a", created_by="u"))
+        with pytest.raises(UnscopedQueryError, match="_Note"):
+            await session.flush()
+
+
+async def test_a_flush_under_unscoped_writes_anywhere(enforcing) -> None:
+    async with enforcing() as session:
+        with unscoped("the test writes both workspaces on purpose"):
+            session.add(_Note(id=6, body="f", workspace_id="ws-b", created_by="u"))
+            await session.flush()
 
 
 def test_the_mode_is_required(monkeypatch) -> None:
