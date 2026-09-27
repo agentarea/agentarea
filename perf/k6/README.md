@@ -165,12 +165,23 @@ names and tags. Run with `-o experimental-prometheus-rw` and
   via `-e TESTID=<value>` so resource names carry it too — two different k6
   mechanisms, same value, both needed)
 
-Predicted resulting series (not yet verified against a real remote-write
-target — confirm against the first real nightly run and fix this section if
-names differ): `k6_page_load_p95{journey,page,testid}`,
-`k6_task_accepted_p95{journey,testid}`, `k6_task_first_event_p95{...}`,
-`k6_task_completed_p95{...}`, `k6_http_req_duration_p95{name,journey,step,kind,page?,testid}`,
-`k6_page_visits_total{...}`, `k6_task_runs_total{...}`.
+Resulting series, confirmed against k6 v2.3.0 source
+(`internal/output/prometheusrw/remotewrite`) by perf-dashboards — note the
+two things that aren't obvious from the metric names above: **Rate metrics
+get a `_rate` suffix**, and **all time Trends (custom and built-in) convert
+to seconds**, not the milliseconds this suite's own thresholds compare
+against internally (k6 evaluates thresholds in its own native unit before
+export; only the exported Prometheus values are in seconds):
+
+- `k6_page_load_p95{journey,page,testid}` (seconds)
+- `k6_task_accepted_p95{journey,testid}`, `k6_task_first_event_p95{...}`,
+  `k6_task_completed_p95{...}` (seconds)
+- `k6_http_req_duration_p95{name,journey,step,kind,page?,testid}` (seconds)
+- `k6_page_visits_total{...}`, `k6_task_runs_total{...}`, `k6_http_reqs_total{...}` (counters)
+- `k6_http_req_failed_rate{...}`, `k6_checks_rate{...}` (rates)
+
+perf-dashboards' alerts use the same thresholds as the list below, taking
+the max over each step's series.
 
 SLO thresholds (`lib/journeys/thresholds.js`) — encode the target, expect
 failures until things catch up:
@@ -188,19 +199,30 @@ failures until things catch up:
 
 1. Write it in `lib/journeys/<name>.js` as `{ name, run }`. Read-only? Just
    call `lib/http.js`'s `get`/`getPublic`/`batchGet`. Writes anything? Call
-   `assertWriteAllowed("<name>")` (from `guard.js`) first, name every created
-   resource with `resourceName("<kind>")` (from `naming.js`), and clean up
-   inline at the end — the janitor is a safety net for crashes, not a
-   substitute for cleaning up.
+   `assertWriteAllowed("<name>")` (from `guard.js`) first, add its `kind`
+   string to `KINDS` in `naming.js`, name every created resource with
+   `resourceName("<kind>")`, and clean up inline at the end — the janitor is
+   a safety net for crashes, not a substitute for cleaning up.
 2. Tag every request with `tag(journey, step, page?)` from `lib/journeys/tags.js`.
 3. Wire it into `lib/journeys/index.js`: read-only browse pages go in
    `browse.js`'s `pages` array; a lifecycle-style write journey goes in
    `writeJourneys`; anything with a real external cost (like `task_run`)
    stays out of every pool and gets its own dedicated executor in
    `scenarios/journeys/*.js` instead.
-4. If it deletes something, add its resource type to `janitor.js`'s sweep —
-   check whether its list endpoint returns a plain array or a
-   `PaginatedResponse` (`.items`) first, they're mixed in this API.
+4. If it deletes something, add its resource type to `janitor.js`'s sweep.
+   Check whether its list endpoint returns a plain array or a
+   `PaginatedResponse` (`.items`) first — they're mixed in this API. More
+   importantly: check whether that list endpoint mixes in platform/catalog
+   rows (several do — their own dependency comments say so) and, if the
+   response model exposes no clean ownership field (several don't:
+   `registry_item_id`/`is_builtin`/`workspace_id` exist on the domain model
+   but aren't always serialized — checked this for MCP specs, see
+   `ownedMcpSpec()` in `janitor.js`), find whatever field IS exposed that's
+   true for what this suite creates and false for shared/catalog rows
+   (`is_public` served that purpose for specs), and pass it as `sweep()`'s
+   `extraFilter`. `isOurs()`'s regex is strict, not a prefix, precisely so
+   this kind of accidental collision with a real catalog item can't happen —
+   don't undo that by loosening it back to a prefix check.
 
 ## Layout
 
@@ -215,7 +237,7 @@ perf/k6/
     summary.js          handleSummary: markdown table + JSON dump (endpoint suite only)
     journeys/
       guard.js           hard-coded perf-k6 workspace check for every write journey
-      naming.js           k6-<testid>-<kind>-... resource names + the janitor's prefix match
+      naming.js           k6-<testid>-<kind>-... resource names + isOurs()'s strict ownership regex
       tags.js              {journey, step, page?} tag builder
       metrics.js           page_load/page_visits/task_* custom metrics
       thresholds.js        SLO thresholds for the journey suite

@@ -28,7 +28,7 @@ import { check, group } from "k6";
 import { BASE_URL, WORKSPACE } from "../config.js";
 import { get, postJson, del } from "../http.js";
 import { assertWriteAllowed } from "./guard.js";
-import { resourceName } from "./naming.js";
+import { resourceName, isOurs } from "./naming.js";
 import { tag } from "./tags.js";
 
 const ws = (suffix) => `${BASE_URL}/v1/workspaces/${encodeURIComponent(WORKSPACE)}${suffix}`;
@@ -69,6 +69,11 @@ function createOwnSpecSource() {
       description: "Disposable spec created by the k6 perf suite.",
       remote_url: MCP_REMOTE_URL,
       env_schema: [],
+      // Explicit, not just relying on the domain default: is_public is the
+      // signal the janitor's ownedMcpSpec() checks before ever deleting a
+      // spec (registry_item_id/is_builtin aren't exposed on this response),
+      // so this suite's own specs must never be public.
+      is_public: false,
     },
     "create_spec",
     tag("connection_lifecycle", "create_mcp_spec")
@@ -76,7 +81,7 @@ function createOwnSpecSource() {
   check(specRes, { "mcp spec create -> 200/201": (r) => r.status === 200 || r.status === 201 });
   if (specRes.status >= 300) return null;
   const spec = specRes.json();
-  return { serverSpecId: spec.id, remoteUrl: MCP_REMOTE_URL, ownsSpec: true };
+  return { serverSpecId: spec.id, specName, remoteUrl: MCP_REMOTE_URL, ownsSpec: true };
 }
 
 function mcpInstanceLifecycle() {
@@ -118,8 +123,10 @@ function mcpInstanceLifecycle() {
   }
 
   // Only delete the spec if this run created it — a catalog-derived spec is
-  // shared platform state, not ours to remove.
-  if (source.ownsSpec) {
+  // shared platform state, not ours to remove. isOurs() re-checks the exact
+  // name this call itself generated, the same rule the janitor applies —
+  // belt-and-suspenders on top of ownsSpec already tracking provenance.
+  if (source.ownsSpec && isOurs(source.specName)) {
     const deleteSpecRes = del(
       ws(`/mcp-servers/${source.serverSpecId}`),
       "delete_spec",
