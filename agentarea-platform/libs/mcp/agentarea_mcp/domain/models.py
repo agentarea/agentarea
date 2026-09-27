@@ -15,6 +15,7 @@ from sqlalchemy import (
     or_,
     table,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 
@@ -59,7 +60,9 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
         PG_UUID(as_uuid=True), nullable=True, default=None
     )
     # Raw ServerJSON spec from MCP registry — source of truth for icons, headers, variables, etc.
-    json_spec: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True, default=None)
+    json_spec: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"), nullable=True, default=None
+    )
     # Source registry URL (e.g. https://registry.modelcontextprotocol.io)
     registry_url: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
 
