@@ -1,8 +1,6 @@
 "use client";
 
 import { useFormatter, useLocale, useNow, useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import {
   Check,
   ChevronRight,
@@ -22,7 +20,9 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import { TaskConversation } from "@/components/Chat/TaskConversation";
 import { TaskStatus } from "@/components/TaskStatus";
 import { Button } from "@/components/ui/button";
+import Link from "@/components/WorkspaceLink";
 import { useCurrency } from "@/hooks/useCurrency";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { EscalationArguments } from "./EscalationArguments";
 import { extractInboxResult } from "./inboxResult";
 import { InboxResultMessage } from "./InboxResultMessage";

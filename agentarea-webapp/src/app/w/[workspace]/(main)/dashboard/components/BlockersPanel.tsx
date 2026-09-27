@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
 import { Clock, Shield, TriangleAlert, Wallet } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { BoardSectionHeader } from "@/components/board";
 import EmptyState from "@/components/EmptyState";
 import { CollapsibleGroup } from "@/components/ui/group-header";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
+import Link from "@/components/WorkspaceLink";
 import { useCurrency } from "@/hooks/useCurrency";
 import type { DashboardData } from "@/lib/api-dashboard";
 import { formatMoney } from "@/lib/money";

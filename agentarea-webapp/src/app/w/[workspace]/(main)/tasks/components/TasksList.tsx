@@ -1,15 +1,15 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
 import { AgentLink } from "@/components/AgentIdentity";
 import Table from "@/components/Table/Table";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { TaskItem } from "@/components/TaskItem";
 import { TaskSourceBadge } from "@/components/TaskSourceBadge";
-import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
 import { TaskStatus } from "@/components/TaskStatus";
 import { useCurrency } from "@/hooks/useCurrency";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { TaskWithAgent } from "@/lib/api";
 import { CARD_GRID_WIDE } from "@/lib/collectionGrids";
 import { formatMoney } from "@/lib/money";

@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocale } from "next-intl";
-import Link from "@/components/WorkspaceLink";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Link as LinkIcon, Plus, UsersRound, X } from "lucide-react";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { AgentSelect } from "@/components/AgentSelect";
@@ -19,7 +17,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import Link from "@/components/WorkspaceLink";
 import { useCurrency } from "@/hooks/useCurrency";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import {
   resolveMcpRef,
   type McpInstance,

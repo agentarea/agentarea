@@ -20,6 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/sidebar";
 import { resetCurrencyCache } from "@/hooks/useCurrency";
 import { useWorkspaceSlug } from "@/hooks/useWorkspaceNavigation";
+import { deterministicHue } from "@/lib/avatar-hue";
 import { createWorkspaceAction } from "@/lib/workspace-actions";
 import {
   WORKSPACE_HOME,
@@ -37,8 +39,6 @@ import {
   workspaceSection,
 } from "@/lib/workspace-routes";
 import type { Workspace } from "@/lib/workspaces";
-import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
-import { deterministicHue } from "@/lib/avatar-hue";
 
 function WorkspaceIcon({
   workspace,

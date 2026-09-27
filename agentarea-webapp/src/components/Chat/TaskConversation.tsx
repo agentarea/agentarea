@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Loader2, Play } from "lucide-react";
 import { useTranslations } from "next-intl";
 import ActivityGroup from "@/components/Chat/ActivityGroup";
@@ -29,6 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useTaskActions } from "@/hooks/useTaskActions";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import type { TaskWithAgent } from "@/lib/api";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import type { Part } from "@/lib/events/contract";

@@ -1,12 +1,12 @@
 import { Fragment, type ReactElement } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
 import { ArrowUpRight, Bot } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { BoardSectionHeader } from "@/components/board";
 import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
+import Link from "@/components/WorkspaceLink";
 import { useCurrency } from "@/hooks/useCurrency";
 import type { DashboardAgentRow } from "@/lib/api-dashboard";
 import { formatMoney } from "@/lib/money";

@@ -1,5 +1,4 @@
 import { getLocale, getTranslations } from "next-intl/server";
-import Link from "@/components/WorkspaceLink";
 import {
   Boxes,
   CalendarClock,
@@ -27,6 +26,7 @@ import {
 import { CopyableText } from "@/components/ui/copyable-text";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import Link from "@/components/WorkspaceLink";
 import { getPricingCurrency } from "@/lib/api-dashboard";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import {

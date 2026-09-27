@@ -543,7 +543,9 @@ export async function listMCPServersAction(params?: {
   return await listMCPServers(params);
 }
 
-export async function listMCPServerSpecsAction(specIds: (string | null | undefined)[]) {
+export async function listMCPServerSpecsAction(
+  specIds: (string | null | undefined)[]
+) {
   return await listMCPServerSpecs(specIds);
 }
 
