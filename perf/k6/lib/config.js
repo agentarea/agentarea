@@ -4,7 +4,7 @@
 
 const rawUrl = __ENV.AGENTAREA_API_URL || "https://api.agentarea.ru";
 export const BASE_URL = rawUrl.replace(/\/+$/, "");
-export const WORKSPACE = __ENV.WORKSPACE || "user";
+export const WORKSPACE = __ENV.WORKSPACE;
 export const TOKEN = __ENV.AGENTAREA_TOKEN;
 
 if (!TOKEN) {
@@ -14,6 +14,16 @@ if (!TOKEN) {
       "-e puts the value in argv, which any local `ps`/`pgrep -fl` shows in plaintext.\n" +
       "  set -a; . ~/.config/agentarea/ru.env; set +a\n" +
       "  make smoke   # or: k6 run scenarios/smoke.js"
+  );
+}
+
+if (!WORKSPACE) {
+  // No default on purpose: a wrong-but-plausible slug (the old default was
+  // "user", since renamed to "jamakase54") silently hits someone else's
+  // workspace instead of failing loudly.
+  throw new Error(
+    "WORKSPACE is not set. There is no default — pass the workspace slug explicitly:\n" +
+      "  WORKSPACE=<slug> make smoke   # or: k6 run -e WORKSPACE=<slug> scenarios/smoke.js"
   );
 }
 
