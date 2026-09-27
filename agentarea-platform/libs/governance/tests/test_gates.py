@@ -94,7 +94,6 @@ class TestCostBudgetGuard:
         result = await guard.execute(ctx)
         assert result.action == InterceptorAction.DENY
 
-
     @pytest.mark.asyncio
     async def test_decimal_state_denies_at_exact_exhaustion(self):
         guard = CostBudgetGuard()
