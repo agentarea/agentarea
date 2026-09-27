@@ -38,6 +38,9 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #   model prices: a per-token price survives the numeric column exactly.
 #   platform-managed providers: a platform config is readable from every
 #     workspace and writable from none, a rule only the WHERE clause enforces.
+#   catalog model instances: a built-in model is added by copying it into the
+#     workspace's model_specs, the table the instance's foreign key references,
+#     and the catalog query is jsonb.
 #   usage events: raw facts are append-only (a trigger) and paging never crosses
 #     workspaces.
 #   membership backfill: the migration and the reconcile script insert rows with
@@ -60,6 +63,7 @@ PY_SUITES=(
   libs/wallet/tests/test_payment_ledger_db.py
   libs/llm/tests/test_model_spec_price_precision_db.py
   libs/llm/tests/test_platform_managed_providers_db.py
+  libs/llm/tests/test_catalog_model_instance_db.py
   libs/common/tests/test_usage_events_db.py
   apps/api/tests/test_membership_backfill_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
