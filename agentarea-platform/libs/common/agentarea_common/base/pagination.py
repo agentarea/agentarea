@@ -13,6 +13,9 @@ class PaginatedResponse[T](BaseModel):
 # The highest page any list accepts, so the OFFSET it becomes always fits the
 # database's integer. Routes that declare their own ``page`` use it too.
 MAX_PAGE = 1_000_000
+# The same bound for routes that page by ``offset``: past int64 the database
+# rejects the query and the route answered 500 instead of 422.
+MAX_OFFSET = 1_000_000_000
 
 
 class PaginationParams:

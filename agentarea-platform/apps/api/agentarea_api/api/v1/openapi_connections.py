@@ -8,6 +8,7 @@ from uuid import UUID
 import httpx
 from agentarea_api.api.deps.services import get_openapi_connection_service
 from agentarea_common.auth.route_authz import requires, unrestricted
+from agentarea_common.base.pagination import MAX_OFFSET
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_openapi.application.service import OpenAPIConnectionService, fetch_and_parse_spec
@@ -192,7 +193,7 @@ async def list_connections(
     status: str | None = Query(None),
     search: str | None = Query(None),
     limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
 ):
     connections, _total = await service.list_connections(

@@ -247,6 +247,49 @@ def reconcile(registries_config: str | None, source: tuple[str, ...], config_fil
     asyncio.run(_reconcile(registries_config, source, config_file))
 
 
+async def _register_graph_client() -> None:
+    """Register the authorization-graph client the API and worker register.
+
+    Materializing a catalog skill creates a Skill row, and
+    ``WorkspaceScopedRepository.create`` records its owner in the graph. Without
+    a registered client every new skill failed with "no client is registered"
+    and was skipped. The model is the API's to apply; here only the store is
+    resolved.
+    """
+    from agentarea_common.config import get_settings
+    from agentarea_common.di.container import register_singleton
+
+    settings = get_settings()
+    backend = settings.access_control.ACCESS_CONTROL_BACKEND
+    if backend == "openfga":
+        from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
+        from agentarea_common.rebac.openfga_client import OpenFGAClient
+
+        await bootstrap_openfga(settings.openfga)
+        register_singleton(
+            OpenFGAClient,
+            OpenFGAClient(
+                api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
+                store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
+                authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
+                timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
+                api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
+            ),
+        )
+    elif backend == "keto":
+        from agentarea_common.rebac.keto_client import KetoClient
+
+        register_singleton(
+            KetoClient,
+            KetoClient(
+                read_url=settings.keto.ACCESS_CONTROL_KETO_READ_URL,
+                write_url=settings.keto.ACCESS_CONTROL_KETO_WRITE_URL,
+                timeout_seconds=settings.keto.ACCESS_CONTROL_KETO_TIMEOUT_SECONDS,
+            ),
+        )
+    click.echo(f"Authorization graph: {backend}")
+
+
 async def _reconcile(
     registries_config: str | None,
     sources: tuple[str, ...],
@@ -305,6 +348,8 @@ async def _reconcile(
     if not configs:
         click.echo("No registry config provided (set REGISTRIES_CONFIG or use --source)")
         return
+
+    await _register_graph_client()
 
     # Validate up front so a malformed entry reports a clear message instead of
     # failing deep inside the per-registry loop with a bare KeyError.

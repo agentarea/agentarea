@@ -33,7 +33,7 @@ from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.auth.tool_authorization import caller_can_approve
 from agentarea_common.base import ReadRepositoryFactoryDep
-from agentarea_common.base.pagination import MAX_PAGE
+from agentarea_common.base.pagination import MAX_OFFSET, MAX_PAGE
 from agentarea_common.channel_origin import reject_channel_origin
 from agentarea_common.config import get_settings
 from agentarea_common.events.contract import (
@@ -451,7 +451,7 @@ async def get_all_tasks(
         None, description="Case-insensitive match on the description or the agent name"
     ),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks to return"),
-    offset: int = Query(0, ge=0, description="Number of tasks to skip"),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET, description="Number of tasks to skip"),
     agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
 ):
@@ -1039,7 +1039,7 @@ async def list_agent_tasks(
     user_context: UserContextDep,
     status: str | None = Query(None, description="Filter by task status"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks to return"),
-    offset: int = Query(0, ge=0, description="Number of tasks to skip"),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET, description="Number of tasks to skip"),
     agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
 ):

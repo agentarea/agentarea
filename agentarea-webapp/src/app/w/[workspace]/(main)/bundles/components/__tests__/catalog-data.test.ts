@@ -171,6 +171,21 @@ describe("catalog data normalization", () => {
     "facets: falls back to the featured tag when the server sent no flag"
   );
 
+  // ── connection titles ──
+  assertEqual(
+    normalize(
+      "connections",
+      item({ name: "ai.agentarea.catalog/ahrefs", spec: { raw_spec: { title: "Ahrefs" } } })
+    ).title,
+    "Ahrefs",
+    "titles: a connection shows its own title, not the registry id"
+  );
+  assertEqual(
+    normalize("connections", item({ name: "io.github.acme/weather-mcp" })).title,
+    "weather mcp",
+    "titles: without a title the namespace is dropped"
+  );
+
   // ── icon candidates (the card falls through these on a 404) ──
   // One URL was not enough: the curated connection catalog ships a local icon
   // *and* a hosted fallback, and a card that gave up on the first failure

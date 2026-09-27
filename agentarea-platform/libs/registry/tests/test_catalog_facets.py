@@ -32,6 +32,18 @@ class TestCategory:
         )
         assert f.category == "other"
 
+    def test_skill_categories_fold_into_the_closed_set(self):
+        def cat(raw):
+            return derive_facets("skills", name="x", spec={}, tags=[f"category:{raw}"]).category
+
+        assert cat("ai-llm") == "agents"
+        assert cat("Quality") == "testing"
+        assert cat("research-analysis") == "data"
+
+    def test_unknown_skill_categories_are_other(self):
+        f = derive_facets("skills", name="x", spec={}, tags=["category:war-room-2"])
+        assert f.category == "other"
+
     def test_mcp_servers_read_the_curated_metadata_key(self):
         f = derive_facets(
             "mcp_servers",
@@ -147,6 +159,23 @@ class TestTolerance:
         f = derive_facets("skills", name="x", spec=None, tags=None)
         assert (f.category, f.sort_key, f.featured) == (None, "x", False)
 
+    def test_mcp_servers_sort_by_their_title(self):
+        f = derive_facets(
+            "mcp_servers",
+            name="ai.agentarea.catalog/ahrefs",
+            spec={"raw_spec": {"title": "Ahrefs"}},
+            tags=[],
+        )
+        assert f.sort_key == "ahrefs"
+
+    def test_mcp_servers_without_a_title_drop_the_namespace(self):
+        f = derive_facets("mcp_servers", name="io.github.acme/weather-mcp", spec={}, tags=[])
+        assert f.sort_key == "weather mcp"
+
+    def test_sort_key_fits_its_column(self):
+        f = derive_facets("mcp_servers", name="x", spec={"raw_spec": {"title": "a" * 400}}, tags=[])
+        assert len(f.sort_key) == 255
+
     def test_survives_non_mapping_nested_spec(self):
         # Sources are external; raw_spec/metadata are whatever the upstream
         # served. A string where a mapping was expected must not raise.
@@ -154,8 +183,8 @@ class TestTolerance:
         assert f.category is None
 
     def test_survives_non_string_tags(self):
-        f = derive_facets("skills", name="x", spec={}, tags=["category:ok", 5, None])
-        assert f.category == "ok"
+        f = derive_facets("skills", name="x", spec={}, tags=["category:data", 5, None])
+        assert f.category == "data"
 
 
 class TestApplyFacets:
