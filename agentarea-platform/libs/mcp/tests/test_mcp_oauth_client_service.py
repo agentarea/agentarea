@@ -905,3 +905,40 @@ class TestDiscoveryStaysOnPublicAddresses:
         with pytest.raises(UnsafeUrlError):
             await MCPOAuthClientService().discover_auth_server("https://mcp.example.com/mcp")
         assert fetched == ["mcp.example.com"]
+
+
+class TestProviderAuthorizeParams:
+    """Refresh tokens are how a connection survives its first hour."""
+
+    def _url(self, issuer: str) -> dict[str, list[str]]:
+        meta = AuthServerMetadata(
+            issuer=issuer,
+            authorization_endpoint=f"{issuer.rstrip('/')}/authorize",
+            token_endpoint=f"{issuer.rstrip('/')}/token",
+        )
+        url = MCPOAuthClientService().build_authorize_url(
+            meta,
+            client_id="cid",
+            redirect_uri="https://app/cb",
+            pkce=PKCEPair(verifier="v", challenge="c"),
+            state="s",
+        )
+        return parse_qs(urlparse(url).query)
+
+    def test_google_is_asked_for_offline_access_its_own_way(self):
+        """Google ignores the offline_access scope and issues a refresh token only
+        for access_type=offline; prompt=consent makes it issue one again when an
+        already-approved user reconnects, instead of silently omitting it."""
+        params = self._url("https://accounts.google.com")
+
+        assert params["access_type"] == ["offline"]
+        assert params["prompt"] == ["consent"]
+
+    def test_issuer_matching_tolerates_a_trailing_slash(self):
+        assert self._url("https://accounts.google.com/")["access_type"] == ["offline"]
+
+    def test_other_providers_get_no_provider_specific_params(self):
+        params = self._url("https://as.example.com")
+
+        assert "access_type" not in params
+        assert "prompt" not in params
