@@ -74,6 +74,122 @@ def _prettify_skill_name(name: str, repo: str | None) -> str:
     return re.sub(r"[-_]+", " ", head).strip()
 
 
+# Skills arrive with whatever category their source invented: 74 distinct values
+# in the current import, half of them used by a single skill ("war-room",
+# "wix-extensions"). A facet list that long is unbrowsable, so skill categories
+# fold into a closed set. Keys are the source spellings; anything unlisted is
+# "other".
+SKILL_CATEGORIES: dict[str, str] = {
+    **dict.fromkeys(
+        (
+            "development",
+            "development-tools",
+            "engineering",
+            "programming-languages",
+            "language",
+            "framework",
+            "bash",
+            "string",
+            "core",
+            "foundation",
+            "extended",
+            "applied",
+            "github-integration",
+            "github-skills",
+        ),
+        "development",
+    ),
+    **dict.fromkeys(
+        (
+            "testing",
+            "quality",
+            "performance",
+            "testing-methodologies",
+            "specialized-testing",
+            "test",
+        ),
+        "testing",
+    ),
+    **dict.fromkeys(("devops", "platform", "system", "local-ai-infrastructure"), "devops"),
+    **dict.fromkeys(
+        (
+            "data",
+            "analysis",
+            "analysis-methods",
+            "research-analysis",
+            "story-analysis",
+            "forensics",
+        ),
+        "data",
+    ),
+    **dict.fromkeys(
+        (
+            "agent",
+            "agents",
+            "agent-coordination",
+            "orchestration",
+            "context-management",
+            "ai-llm",
+            "ai-ml",
+            "generation",
+            "artifact-generation",
+            "skills",
+            "meta",
+            "adb-meta-automation",
+        ),
+        "agents",
+    ),
+    **dict.fromkeys(("design", "creative"), "design"),
+    **dict.fromkeys(("documents", "document-processing", "docs", "writing"), "documents"),
+    **dict.fromkeys(
+        ("security", "security-compliance", "security-operations", "war-room"), "security"
+    ),
+    "marketing": "marketing",
+    **dict.fromkeys(
+        ("product", "planning", "project", "business", "business-monetization", "c-level"),
+        "product",
+    ),
+    **dict.fromkeys(
+        ("productivity", "workflow", "personal-development", "utility", "travel"),
+        "productivity",
+    ),
+    **dict.fromkeys(
+        (
+            "integration",
+            "api",
+            "messaging",
+            "communication",
+            "technical-integration",
+            "wix-extensions",
+        ),
+        "integration",
+    ),
+    "gaming": "gaming",
+}
+SKILL_FALLBACK_CATEGORY = "other"
+
+
+def skill_category(raw: str | None) -> str:
+    """The closed-set category for a skill's source category."""
+    return SKILL_CATEGORIES.get((raw or "").strip().lower(), SKILL_FALLBACK_CATEGORY)
+
+
+def _connection_title(name: str, spec: dict[str, Any]) -> str:
+    """What a person calls an MCP server.
+
+    ``name`` is a registry id (``ai.agentarea.catalog/ahrefs``,
+    ``io.github.owner/repo-mcp``): unique, but the reverse-DNS namespace makes
+    every curated entry read the same. The server's own ``title`` wins; without
+    one, the part after the namespace is the name.
+    """
+    raw = _mapping(spec.get("raw_spec"))
+    title = _text(raw.get("title")) or _text(spec.get("title"))
+    if title:
+        return title
+    tail = name.rsplit("/", 1)[-1]
+    return re.sub(r"[-_]+", " ", tail).strip() or name
+
+
 def _category(registry_type: str, spec: dict[str, Any], tags: list[Any]) -> str | None:
     if registry_type == "bundles":
         return _text(_mapping(spec.get("metadata")).get("category"))
@@ -82,7 +198,8 @@ def _category(registry_type: str, spec: dict[str, Any], tags: list[Any]) -> str 
         # first one is the category, same as the cards show.
         return _text(tags[0]) if tags else None
     if registry_type == "skills":
-        return _tag_value(tags, _CATEGORY_TAG_PREFIX)
+        source = _tag_value(tags, _CATEGORY_TAG_PREFIX)
+        return skill_category(source) if source else None
     if registry_type == "mcp_servers":
         raw_meta = _mapping(_mapping(spec.get("raw_spec")).get("metadata"))
         return _text(raw_meta.get("agentarea:category"))
@@ -105,6 +222,8 @@ def _title(registry_type: str, name: str, spec: dict[str, Any], tags: list[Any])
             )
             or name
         )
+    if registry_type == "mcp_servers":
+        return _connection_title(name, spec)
     return name
 
 

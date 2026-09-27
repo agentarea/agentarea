@@ -289,6 +289,19 @@ function prettifySkillName(name: string, repo?: string | null): string {
   );
 }
 
+// Connection names are registry ids ("ai.agentarea.catalog/ahrefs",
+// "io.github.owner/weather-mcp"): unique, but the reverse-DNS namespace makes
+// whole runs of cards read alike. The server's own title wins; without one the
+// part after the namespace is the name. Mirrors `_connection_title` in the
+// platform's catalog_facets.py, which the server sorts by.
+function connectionTitle(name: string, spec: RawSpec): string {
+  const raw = spec.raw_spec as RawSpec | undefined;
+  const title = str(raw?.title) ?? str(spec.title);
+  if (title) return title;
+  const tail = name.slice(name.lastIndexOf("/") + 1);
+  return tail.replace(/[-_]+/g, " ").trim() || name;
+}
+
 export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
   const entry = describe(type, item);
   return { ...entry, identity: catalogIdentity(entry) };
@@ -395,7 +408,7 @@ function describe(
   const transport = str(spec.connection_type) ?? str(spec.transport) ?? "url";
   return {
     ...base,
-    title: item.name,
+    title: connectionTitle(item.name, spec),
     category: serverCategory ?? str(rawMeta?.["agentarea:category"]),
     verified: rawMeta?.["agentarea:oauth_status"] === "verified",
     integrations: [],
