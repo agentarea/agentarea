@@ -4,6 +4,7 @@ from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from sqlalchemy import JSON, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,9 +25,12 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     server_spec_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    # jsonb, like mcp_servers.json_spec: it is read in SQL (->>), and jsonb
+    # refuses at write time the text a plain json column would store and then
+    # fail to render on every read.
     json_spec: Mapped[dict[str, Any]] = mapped_column(
-        JSON, nullable=False
-    )  # Unified configuration storage
+        JSON().with_variant(JSONB(), "postgresql"), nullable=False
+    )
     verification: Mapped[dict] = mapped_column(
         JSON, nullable=False, default=lambda: dict(DEFAULT_VERIFICATION)
     )
