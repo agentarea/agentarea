@@ -30,3 +30,8 @@ if (!WORKSPACE) {
 export function authHeaders() {
   return { Authorization: `Bearer ${TOKEN}` };
 }
+
+// Groups one invocation's series in Grafana/VictoriaMetrics (e.g.
+// "nightly-2026-09-27"). Falls back to something unique-enough for a manual
+// run so a forgotten -e doesn't silently collide with another run's data.
+export const TESTID = __ENV.TESTID || `manual-${Date.now()}`;

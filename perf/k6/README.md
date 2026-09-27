@@ -1,12 +1,18 @@
 # k6 API performance suite
 
-Read-only load tests for the pages a user hits when opening the app:
-workspaces, connections, explore/catalog, skills, triggers, tasks, inbox, plus
-`/health` as the unauthenticated floor. Lives next to the routes it exercises
-so a routing change (like the workspace-in-path move) and the script that
-hits it land in the same PR.
+Two suites, sharing `lib/config.js` and `lib/http.js`:
 
-## Running it
+- **`scenarios/*.js`** — read-only page-latency checks against any workspace.
+  Good for "did this PR make things slower" on demand. See below.
+- **`scenarios/journeys/*.js`** — full user journeys (browse *and* real
+  create/read/update/delete flows, including a real LLM task run) against a
+  dedicated `perf-k6` workspace, meant to run nightly from an in-cluster
+  CronJob and feed Grafana. See "Journey suite" further down.
+
+Both live next to the routes they exercise, so a routing change (like the
+workspace-in-path move) and the script that hits it land in the same PR.
+
+## Running the endpoint suite
 
 ```bash
 # load prod credentials into this shell only
@@ -87,19 +93,148 @@ Everything endpoint-related lives in `lib/endpoints.js`:
 3. Thresholds and the report table pick it up automatically — both are built
    from `NAMES` / `pages` in `lib/thresholds.js` and `lib/summary.js`.
 
+## Journey suite
+
+`scenarios/journeys/*.js` — the full-app journey suite. Meant to run nightly
+from an in-cluster CronJob against a dedicated workspace (slug `perf-k6`) and
+push results to VictoriaMetrics for Grafana; can also be run by hand.
+
+**Hard rule: write journeys (create/update/delete) only ever run against the
+`perf-k6` workspace.** This is not configurable — `lib/journeys/guard.js`
+hard-codes the workspace name and every write journey checks it before doing
+anything. Point `WORKSPACE` at anything else and the browse journeys still
+work (read-only, any workspace), but every write journey refuses with a loud
+error instead of touching that workspace's data.
+
+### Journeys
+
+| journey | what it does |
+|---|---|
+| browse | one "page load" per real page: dashboard, agents, connections, explore (5 variants: default/sort/type-filter/search/deep-page), skills, tasks, inbox, triggers — plus `/health` and `/v1/workspaces`. Read-only, traced from the actual webapp source (sequential vs. parallel calls match what the page really does — see `lib/journeys/browse.js`'s header comment for the exact shape of each). |
+| auth | authenticated no-op (`GET /v1/workspaces`) vs. `/health` — the gap is roughly what auth costs on every request. Read-only. |
+| agent_lifecycle | create → read → update (attach a skill, and an MCP connection if a `k6-`-prefixed one already exists from `connection_lifecycle`) → delete. Write; perf-k6 only. |
+| skill_lifecycle | create (plain markdown, no frontmatter needed) → read → delete. Write; perf-k6 only. |
+| trigger_lifecycle | create a CRON trigger **disabled** (`enabled: false` at create — never enabled, never will be) → read → delete, plus its throwaway agent. Write; perf-k6 only. |
+| connection_lifecycle | MCP instance from a real no-credential catalog entry when one qualifies (`spec.env_schema` empty, `spec.connection_type === "url"`), else a disposable spec of our own → list → delete; plus an OpenAPI connection against a public spec (Petstore by default) → delete. Write; perf-k6 only. |
+| task_run | starts a real task (cheapest available model, prompt "Reply with exactly: OK") on a throwaway agent and measures `task_accepted` / `task_first_event` / `task_completed` (see "Metric contract"). The one journey with a real LLM cost — never in the random pick, always its own dedicated `shared-iterations` executor capped at `TASK_RUN_LIMIT` (default 3) total runs, independent of VU count. Write; perf-k6 only. |
+
+### Profiles
+
+| profile | script | shape |
+|---|---|---|
+| smoke | `scenarios/journeys/smoke.js` | 1 VU, 1 iteration, every journey once (including one `task_run`) — CI-safe against a local stack, as long as that stack's `WORKSPACE` is literally `perf-k6` |
+| nightly | `scenarios/journeys/nightly.js` | two scenarios at once: `mixed` (ramping-vus, ≤5 VUs, ~7 min, weighted random pick — browse dominates, lifecycle journeys occasional) and `task_run` (`shared-iterations`, `TASK_RUN_LIMIT` runs total) |
+| stress | `scenarios/journeys/stress.js` | ramping-vus to 50 — gated on `ALLOW_STRESS=1` **and** refuses outright if `AGENTAREA_API_URL` is the real prod host, no override |
+
+```bash
+set -a; . ~/.config/agentarea/perf.env; set +a   # AGENTAREA_TOKEN, AGENTAREA_API_URL, WORKSPACE=perf-k6
+cd perf/k6
+k6 run scenarios/journeys/smoke.js
+TASK_RUN_LIMIT=3 k6 run --tag testid=manual-$(date +%F) -e TESTID=manual-$(date +%F) scenarios/journeys/nightly.js
+```
+
+Against any other workspace (e.g. `jamakase54`), the same commands run the
+browse + auth journeys read-only and skip every write journey and `task_run`
+with a log line, rather than failing the whole run.
+
+### Janitor
+
+`lib/journeys/janitor.js` runs in `setup()` (and again in `teardown()`) of
+every journey-suite scenario, only when `WORKSPACE === "perf-k6"`: it lists
+agents, skills, MCP instances, MCP specs, OpenAPI connections and triggers,
+deletes anything whose `name` starts with `k6-`, and logs what it removed.
+Every resource a write journey creates gets that prefix from
+`lib/journeys/naming.js` (`k6-<TESTID>-<kind>-<vu>-<iter>-<timestamp>`) —
+including one left behind by a run that crashed before its own inline
+cleanup ran. It never touches anything without that prefix, and never runs
+at all outside `perf-k6`.
+
+### Metric contract
+
+Stable on purpose — Grafana panels and alerts (perf-dashboards) key on these
+names and tags. Run with `-o experimental-prometheus-rw` and
+`K6_PROMETHEUS_RW_TREND_STATS=p(50),p(95),p(99),max` to get:
+
+- Custom Trends (ms): `page_load` (tags `journey`=`browse`, `page`),
+  `task_accepted`, `task_first_event`, `task_completed` (tag `journey`=`task_run`)
+- Custom Counters: `page_visits` (tags `page`, `journey`), `task_runs` (tag `journey`)
+- Built-ins, tagged on every request: `name`, `journey`, `step`, `kind`
+  (`read`|`write`, set automatically by HTTP verb in `lib/http.js`), and
+  `page` — present only on browse's page-load requests, absent elsewhere
+- `testid` — set globally via `k6 run --tag testid=<value>` (and separately
+  via `-e TESTID=<value>` so resource names carry it too — two different k6
+  mechanisms, same value, both needed)
+
+Predicted resulting series (not yet verified against a real remote-write
+target — confirm against the first real nightly run and fix this section if
+names differ): `k6_page_load_p95{journey,page,testid}`,
+`k6_task_accepted_p95{journey,testid}`, `k6_task_first_event_p95{...}`,
+`k6_task_completed_p95{...}`, `k6_http_req_duration_p95{name,journey,step,kind,page?,testid}`,
+`k6_page_visits_total{...}`, `k6_task_runs_total{...}`.
+
+SLO thresholds (`lib/journeys/thresholds.js`) — encode the target, expect
+failures until things catch up:
+
+- reads (`kind:read`) p95 < 500ms
+- writes (`kind:write`) p95 < 1000ms
+- `page_load` p95 < 1000ms
+- `task_accepted` p95 < 1000ms
+- `task_first_event` p95 < 5000ms
+- `http_req_failed` rate < 1%, `checks` rate > 99%
+- no threshold on `task_completed` — total LLM response time is inherently
+  model-dependent, deliberately left unbounded
+
+### Adding a journey
+
+1. Write it in `lib/journeys/<name>.js` as `{ name, run }`. Read-only? Just
+   call `lib/http.js`'s `get`/`getPublic`/`batchGet`. Writes anything? Call
+   `assertWriteAllowed("<name>")` (from `guard.js`) first, name every created
+   resource with `resourceName("<kind>")` (from `naming.js`), and clean up
+   inline at the end — the janitor is a safety net for crashes, not a
+   substitute for cleaning up.
+2. Tag every request with `tag(journey, step, page?)` from `lib/journeys/tags.js`.
+3. Wire it into `lib/journeys/index.js`: read-only browse pages go in
+   `browse.js`'s `pages` array; a lifecycle-style write journey goes in
+   `writeJourneys`; anything with a real external cost (like `task_run`)
+   stays out of every pool and gets its own dedicated executor in
+   `scenarios/journeys/*.js` instead.
+4. If it deletes something, add its resource type to `janitor.js`'s sweep —
+   check whether its list endpoint returns a plain array or a
+   `PaginatedResponse` (`.items`) first, they're mixed in this API.
+
 ## Layout
 
 ```
 perf/k6/
   lib/
-    config.js      env vars, auth header, fail-fast if the token or workspace is missing
-    http.js         get/getPublic/batchGet — tagging + checks in one place
-    endpoints.js     NAMES + pages: what gets hit and how it's grouped
-    thresholds.js    builds the threshold map from NAMES + pages
-    summary.js       handleSummary: markdown table + JSON dump
+    config.js         env vars, auth header, fail-fast if the token or workspace is missing, TESTID
+    http.js            get/getPublic/batchGet/postJson/patchJson/putJson/del/getWithTimeout —
+                        tagging (incl. automatic kind:read|write) + checks in one place
+    endpoints.js        NAMES + pages: the original endpoint suite's targets
+    thresholds.js       builds the threshold map for the endpoint suite
+    summary.js          handleSummary: markdown table + JSON dump (endpoint suite only)
+    journeys/
+      guard.js           hard-coded perf-k6 workspace check for every write journey
+      naming.js           k6-<testid>-<kind>-... resource names + the janitor's prefix match
+      tags.js              {journey, step, page?} tag builder
+      metrics.js           page_load/page_visits/task_* custom metrics
+      thresholds.js        SLO thresholds for the journey suite
+      janitor.js            sweeps k6-prefixed leftovers at setup()/teardown()
+      browse.js             read-only page-load journeys
+      auth.js                token-validation-cost journey
+      agent_lifecycle.js     create/read/update/delete an agent
+      skill_lifecycle.js     create/read/delete a skill
+      trigger_lifecycle.js    create (disabled)/read/delete a cron trigger
+      connection_lifecycle.js MCP instance + OpenAPI connection lifecycles
+      task_run.js             the real-LLM-call journey
+      index.js                assembles the pools every scenario reads from
   scenarios/
-    smoke.js         1 VU, 1 iteration, every page
-    baseline.js      ramping-vus, 5 VUs / 3 min, gentle
-    stress.js        ramping-vus, 50 VUs — gated on ALLOW_STRESS=1, non-prod only
+    smoke.js         endpoint suite: 1 VU, 1 iteration, every page once
+    baseline.js      endpoint suite: ramping-vus, 5 VUs / 3 min, gentle
+    stress.js        endpoint suite: ramping-vus, 50 VUs — gated on ALLOW_STRESS=1, non-prod only
+    journeys/
+      smoke.js         journey suite: 1 VU, 1 iteration, every journey once
+      nightly.js       journey suite: mixed ramping-vus + a capped task_run executor
+      stress.js        journey suite: ramping-vus to 50 — gated + refuses a prod URL outright
   Makefile
 ```
