@@ -172,6 +172,10 @@ class TestTolerance:
         f = derive_facets("mcp_servers", name="io.github.acme/weather-mcp", spec={}, tags=[])
         assert f.sort_key == "weather mcp"
 
+    def test_sort_key_fits_its_column(self):
+        f = derive_facets("mcp_servers", name="x", spec={"raw_spec": {"title": "a" * 400}}, tags=[])
+        assert len(f.sort_key) == 255
+
     def test_survives_non_mapping_nested_spec(self):
         # Sources are external; raw_spec/metadata are whatever the upstream
         # served. A string where a mapping was expected must not raise.

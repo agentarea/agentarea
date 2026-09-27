@@ -246,7 +246,8 @@ def derive_facets(
     tags = tags if isinstance(tags, list) else []
     return ItemFacets(
         category=_category(registry_type, spec, tags),
-        sort_key=_title(registry_type, name, spec, tags).casefold(),
+        # The column is VARCHAR(255); a source title can be longer.
+        sort_key=_title(registry_type, name, spec, tags).casefold()[:255],
         featured=FEATURED_TAG in tags,
         protocol=_protocol(registry_type, spec),
     )
