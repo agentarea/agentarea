@@ -361,6 +361,12 @@ async def test_platform_rows_are_read_from_every_workspace(backend: Backend) -> 
         created_by="reconcile",
         registry_item_id=inactive_item["id"],
     )
+    tenant_copy = await backend.write(
+        MCPServer.__table__,
+        workspace_id=WS_A,
+        created_by="owner",
+        registry_item_id=active_item["id"],
+    )
 
     async def ids(session: AsyncSession, model: type) -> set[Any]:
         return set((await session.execute(select(model.id))).scalars())
@@ -374,6 +380,7 @@ async def test_platform_rows_are_read_from_every_workspace(backend: Backend) -> 
             assert tenant_instance["id"] not in await ids(session, ModelInstance)
             assert mirror["id"] in await ids(session, MCPServer)
             assert stale_mirror["id"] not in await ids(session, MCPServer)
+            assert tenant_copy["id"] not in await ids(session, MCPServer)
 
             refused = await session.execute(
                 update(ProviderConfig)
@@ -382,3 +389,33 @@ async def test_platform_rows_are_read_from_every_workspace(backend: Backend) -> 
             )
             assert refused.rowcount == 0
         await session.rollback()
+
+
+async def test_mcp_server_by_id_resolves_platform_mirrors_only(backend: Backend) -> None:
+    from agentarea_common.auth.context import UserContext
+    from agentarea_mcp.domain.models import MCPServer
+    from agentarea_mcp.infrastructure.repository import MCPServerRepository
+    from agentarea_registry.domain.models import Registry, RegistryItem
+
+    registry = await backend.write(Registry.__table__, is_active=True)
+    item = await backend.write(RegistryItem.__table__, registry_id=registry["id"])
+    mirror = await backend.write(
+        MCPServer.__table__,
+        workspace_id=PLATFORM_WORKSPACE_ID,
+        created_by="reconcile",
+        registry_item_id=item["id"],
+    )
+    tenant_copy = await backend.write(
+        MCPServer.__table__,
+        workspace_id=WS_A,
+        created_by="owner",
+        registry_item_id=item["id"],
+    )
+
+    async with backend.sessions() as session:
+        with workspace_scope(WS_B):
+            repository = MCPServerRepository(
+                session, UserContext(user_id="intruder", workspace_id=WS_B)
+            )
+            assert await repository.get_server_by_id(mirror["id"]) is not None
+            assert await repository.get_server_by_id(tenant_copy["id"]) is None

@@ -2,6 +2,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import AuditMixin, BaseModel, WorkspaceScopedMixin
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -67,12 +68,15 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
         """The workspace's own specs, plus every catalog mirror of an active registry.
 
         Built-in specs are readable by id from every workspace (ADR-003):
-        reconcile mirrors them with a ``registry_item_id``, and a mirror whose
-        registry is deactivated disappears with it.
+        reconcile mirrors them under the platform workspace with a
+        ``registry_item_id``, and a mirror whose registry is deactivated
+        disappears with it. A tenant's copy of a mirror keeps the
+        ``registry_item_id`` but stays its own.
         """
         return or_(
             cls.workspace_id == workspace_id,
             and_(
+                cls.workspace_id == PLATFORM_WORKSPACE_ID,
                 cls.registry_item_id.is_not(None),
                 exists().where(
                     _registry_items.c.id == cls.registry_item_id,
