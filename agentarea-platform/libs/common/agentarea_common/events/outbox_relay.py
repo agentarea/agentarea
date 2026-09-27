@@ -31,6 +31,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime, timedelta
 
 from agentarea_common.auth.context import ServicePrincipal
+from agentarea_common.base.tenant_scope import unscoped, workspace_scope
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .base_events import EventEnvelope
@@ -127,6 +128,10 @@ class OutboxRelay:
         the batch's locks early and hand a concurrent relay the same rows,
         trading a rare duplicate for a routine one.
         """
+        with unscoped("the relay publishes queued events of every workspace"):
+            return await self._process_batch()
+
+    async def _process_batch(self) -> int:
         published = 0
         async with self._session_factory() as session:
             repo = OutboxRepository(session, _RELAY_CONTEXT)
@@ -144,7 +149,8 @@ class OutboxRelay:
                     if handler is None:
                         await self._event_broker.publish(envelope)
                     else:
-                        await handler(session, envelope)
+                        with workspace_scope(row.workspace_id):
+                            await handler(session, envelope)
                 except Exception as exc:
                     if handler is not None:
                         await self._retry_later(repo, row, exc, now)

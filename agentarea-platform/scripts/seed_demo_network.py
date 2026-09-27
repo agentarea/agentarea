@@ -22,6 +22,7 @@ import random
 from uuid import uuid4
 
 from agentarea_agents.domain.models import Agent
+from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.config.database import db
 from agentarea_common.utils.slug import generate_slug
 from agentarea_mcp.domain.models import MCPServer
@@ -83,6 +84,7 @@ async def main(workspace_id: str, created_by: str) -> None:
     suffix = uuid4().hex[:6]
     rng = random.Random(42)
 
+    bind_workspace_scope(workspace_id)
     async with db.session() as session:
         mcp_rows: list[MCPServerInstance] = []
         for name, scope in MCP_NAMES:

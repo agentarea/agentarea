@@ -29,6 +29,7 @@ class LazySecretReader:
         from uuid import UUID
 
         from agentarea_common.auth.context import UserContext
+        from agentarea_common.base.tenant_scope import unscoped, workspace_scope
         from agentarea_common.config import get_database
 
         from agentarea_triggers.infrastructure.orm import TriggerORM
@@ -39,40 +40,44 @@ class LazySecretReader:
             # Channel creds:   "channel_cred:<channel_type>:<trigger_id>"  → TriggerORM
             # A2A push tokens: "a2a_push_token:<task_id>:<config_id>"      → TaskORM
             user_context: UserContext | None = None
-            parts = name.split(":")
-            if name.startswith("a2a_push_token:") and len(parts) >= 3:
-                try:
-                    from agentarea_tasks.infrastructure.orm import TaskORM
+            with unscoped(
+                "a background secret read names a trigger or task; its workspace decides"
+            ):
+                parts = name.split(":")
+                if name.startswith("a2a_push_token:") and len(parts) >= 3:
+                    try:
+                        from agentarea_tasks.infrastructure.orm import TaskORM
 
-                    task_orm = await session.get(TaskORM, UUID(parts[1]))
-                    if task_orm:
-                        user_context = UserContext(
-                            user_id=str(task_orm.created_by),
-                            workspace_id=str(task_orm.workspace_id),
-                        )
-                except (ValueError, Exception):
-                    logger.exception("Failed to resolve task for secret '%s'", name)
-            elif len(parts) >= 3:
-                try:
-                    trigger_id = UUID(parts[-1])
-                    trigger_orm = await session.get(TriggerORM, trigger_id)
-                    if trigger_orm:
-                        user_context = UserContext(
-                            user_id=str(trigger_orm.created_by),
-                            workspace_id=str(trigger_orm.workspace_id),
-                        )
-                except (ValueError, Exception):
-                    logger.exception("Failed to resolve trigger for secret '%s'", name)
+                        task_orm = await session.get(TaskORM, UUID(parts[1]))
+                        if task_orm:
+                            user_context = UserContext(
+                                user_id=str(task_orm.created_by),
+                                workspace_id=str(task_orm.workspace_id),
+                            )
+                    except (ValueError, Exception):
+                        logger.exception("Failed to resolve task for secret '%s'", name)
+                elif len(parts) >= 3:
+                    try:
+                        trigger_id = UUID(parts[-1])
+                        trigger_orm = await session.get(TriggerORM, trigger_id)
+                        if trigger_orm:
+                            user_context = UserContext(
+                                user_id=str(trigger_orm.created_by),
+                                workspace_id=str(trigger_orm.workspace_id),
+                            )
+                    except (ValueError, Exception):
+                        logger.exception("Failed to resolve trigger for secret '%s'", name)
 
             if not user_context:
                 logger.error("Cannot resolve workspace for secret '%s'", name)
                 return None
 
-            secret_manager = self._factory.create(
-                session=session,
-                user_context=user_context,
-            )
-            return await secret_manager.get_secret(name)
+            with workspace_scope(user_context.workspace_id):
+                secret_manager = self._factory.create(
+                    session=session,
+                    user_context=user_context,
+                )
+                return await secret_manager.get_secret(name)
 
 
 # Backwards-compat alias for any caller still importing the old name.

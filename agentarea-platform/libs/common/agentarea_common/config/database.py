@@ -17,9 +17,11 @@ drift between engines.
 import logging
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
+from enum import StrEnum
 from functools import lru_cache
 from typing import Optional
 
+from pydantic import Field
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -77,6 +79,24 @@ class DatabaseSettings(BaseAppSettings):
             f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
+
+
+class TenantScopeMode(StrEnum):
+    """What a query on a workspace-scoped model does when no workspace is bound."""
+
+    LOG = "log"
+    ENFORCE = "enforce"
+
+
+class TenantScopeSettings(BaseAppSettings):
+    """How the ORM treats a workspace-scoped query that names no workspace.
+
+    Required, with no default: ``log`` runs it unfiltered and warns, ``enforce``
+    refuses it. Kept apart from :class:`DatabaseSettings` because migrations
+    read those and never open an ORM session.
+    """
+
+    mode: TenantScopeMode = Field(validation_alias="AGENTAREA_DB_TENANT_SCOPE")
 
 
 class Database:
@@ -153,15 +173,24 @@ class Database:
             self.read_engine = self.engine.execution_options(isolation_level="AUTOCOMMIT")
 
     def _setup_session_factories(self) -> None:
-        """Setup session factories for async (write/read) and sync sessions."""
+        """Setup session factories for async (write/read) and sync sessions.
+
+        Both async factories confine workspace-scoped models to the bound
+        workspace (see ``agentarea_common.base.tenant_scope``).
+        """
+        from ..base.tenant_scope import tenant_scoped_session_class
+
+        scoped_session_class = tenant_scoped_session_class(get_tenant_scope_settings().mode)
         self.async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
             self.engine,
             class_=AsyncSession,
+            sync_session_class=scoped_session_class,
             expire_on_commit=False,
         )
         self.read_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
             self.read_engine,
             class_=AsyncSession,
+            sync_session_class=scoped_session_class,
             expire_on_commit=False,
         )
         self.sync_session_factory: sessionmaker[Session] = sessionmaker(
@@ -222,6 +251,12 @@ class Database:
 def get_db_settings() -> DatabaseSettings:
     """Get database settings."""
     return DatabaseSettings()
+
+
+@lru_cache
+def get_tenant_scope_settings() -> TenantScopeSettings:
+    """Get the tenant scope enforcement settings."""
+    return TenantScopeSettings()  # pyright: ignore[reportCallIssue]
 
 
 # Global database instance - initialized lazily so importing this module does

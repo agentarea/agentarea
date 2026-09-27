@@ -9,6 +9,7 @@ Every 30 s:
 import asyncio
 import logging
 
+from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config import get_database
 from sqlalchemy import text
 
@@ -195,7 +196,8 @@ class MCPContainerMonitor:
             try:
                 from agentarea_mcp.verification import verify
 
-                await verify(instance)
+                with workspace_scope(str(instance.workspace_id)):
+                    await verify(instance)
             except Exception:
                 logger.exception(
                     "verify raised for instance %s",

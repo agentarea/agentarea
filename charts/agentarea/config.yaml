@@ -5,6 +5,7 @@ groups:
       POSTGRES_PORT: '{{ .Values.global.database.port }}'
       POSTGRES_DB: '{{ .Values.global.database.name }}'
       POSTGRES_SSLMODE: '{{ .Values.global.database.sslMode }}'
+      AGENTAREA_DB_TENANT_SCOPE: '{{ .Values.global.database.tenantScope }}'
     secrets:
       - name: POSTGRES_USER
         secretName: "{{ .Values.global.secrets.postgresql }}"
@@ -199,6 +200,7 @@ groups:
       POSTGRES_PORT: '{{ .Values.global.database.port }}'
       POSTGRES_DB: '{{ .Values.global.database.name }}'
       POSTGRES_SSLMODE: '{{ .Values.global.database.sslMode }}'
+      AGENTAREA_DB_TENANT_SCOPE: '{{ .Values.global.database.tenantScope }}'
     secrets:
       - name: POSTGRES_USER
         secretName: '{{ .Values.global.secrets.postgresql }}'

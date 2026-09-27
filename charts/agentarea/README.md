@@ -80,6 +80,7 @@ The following table lists configurable parameters of the chart and their default
 | global.database.name | string | `"agentarea"` |  |
 | global.database.ssl | bool | `false` |  |
 | global.database.sslMode | string | `"disable"` |  |
+| global.database.tenantScope | string | `"log"` | AGENTAREA_DB_TENANT_SCOPE: what an ORM query on a workspace-scoped table does when no workspace is bound. "log" runs it unfiltered and warns once per call site; "enforce" refuses it. Ship "log", clear the warnings, then flip. |
 | global.database.maxConnections | int | `100` |  |
 | global.database.connectionTimeout | string | `"30s"` |  |
 | global.database.migrations.runAtStartup | bool | `true` |  |

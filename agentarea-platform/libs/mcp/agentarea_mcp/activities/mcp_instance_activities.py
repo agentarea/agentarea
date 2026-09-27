@@ -138,6 +138,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
     ) -> UpdateInstanceStatusResult:
         """Update MCP instance status in the database."""
         from agentarea_common.auth.context import UserContext
+        from agentarea_common.base.tenant_scope import bind_workspace_scope
         from agentarea_common.config import get_database
 
         from agentarea_mcp.domain import auth_models
@@ -152,6 +153,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                     user_id=request.user_id,
                     workspace_id=request.workspace_id,
                 )
+                bind_workspace_scope(user_context.workspace_id)
                 repo = MCPServerInstanceRepository(session, user_context)
 
                 update_kwargs: dict[str, Any] = {}
@@ -228,6 +230,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
     ) -> GetInstanceEnvironmentResult:
         """Resolve environment variables from the secret manager for container startup."""
         from agentarea_common.auth.context import UserContext
+        from agentarea_common.base.tenant_scope import bind_workspace_scope
         from agentarea_common.config import get_database
 
         from agentarea_mcp.application.mcp_env_service import MCPEnvironmentService
@@ -240,6 +243,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                     user_id=request.user_id,
                     workspace_id=request.workspace_id,
                 )
+                bind_workspace_scope(user_context.workspace_id)
                 repo = MCPServerInstanceRepository(session, user_context)
                 instance = await repo.get_by_id(request.instance_id)
 
@@ -270,6 +274,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
     ) -> ResolveAuthHeadersResult:
         """Resolve authentication headers for an MCP instance's auth config."""
         from agentarea_common.auth.context import UserContext
+        from agentarea_common.base.tenant_scope import bind_workspace_scope
         from agentarea_common.config import get_database
 
         from agentarea_mcp.application.auth_service import MCPAuthService
@@ -283,6 +288,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                     user_id=request.user_id,
                     workspace_id=request.workspace_id,
                 )
+                bind_workspace_scope(user_context.workspace_id)
 
                 instance_repo = MCPServerInstanceRepository(session, user_context)
                 instance = await instance_repo.get_by_id(request.instance_id)

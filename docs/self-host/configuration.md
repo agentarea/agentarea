@@ -50,6 +50,12 @@ Consumed by the backend, worker, and event service.
 | `POSTGRES_USER` | Secret `global.secrets.postgresql`, key `username` | generated |
 | `POSTGRES_PASSWORD` | Secret `global.secrets.postgresql`, key `password` | generated |
 | `DATABASE_URL` | composed from the five above | `postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=<sslMode>` |
+| `AGENTAREA_DB_TENANT_SCOPE` | `global.database.tenantScope` | `log` |
+
+`AGENTAREA_DB_TENANT_SCOPE` is required and has no default in the platform. It
+decides what an ORM query on a workspace-scoped table does when nothing bound a
+workspace: `log` runs it unfiltered and logs one warning per call site, `enforce`
+refuses it. Deploy with `log`, clear the warnings, then switch to `enforce`.
 
 `global.database.maxConnections` and `global.database.connectionTimeout` exist in
 `values.yaml` but are not rendered into any environment variable by

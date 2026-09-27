@@ -4,6 +4,7 @@ from uuid import UUID
 
 from agentarea_agents.domain.skill_models import Skill
 from agentarea_common.auth.context import UserContext
+from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
@@ -55,11 +56,12 @@ class ClientRepository(WorkspaceScopedRepository[Client]):
         which the request enters that workspace before constructing any other
         workspace-scoped dependency.
         """
-        located = await session.execute(
-            select(Client.workspace_id).where(
-                Client.id == id, Client.workspace_id.in_(accessible_workspaces)
+        with unscoped("a client endpoint names a client; its workspace is the one to enter"):
+            located = await session.execute(
+                select(Client.workspace_id).where(
+                    Client.id == id, Client.workspace_id.in_(accessible_workspaces)
+                )
             )
-        )
         workspace_id = located.scalar_one_or_none()
         return str(workspace_id) if workspace_id is not None else None
 

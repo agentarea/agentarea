@@ -12,6 +12,7 @@ from agentarea_agents.application.skill_service import SkillService
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
+from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config import get_database
 from agentarea_common.di.container import resolve
 from agentarea_llm.application.model_instance_service import ModelInstanceService
@@ -204,7 +205,10 @@ def create_user_context(user_context_data: dict[str, Any] | None) -> UserContext
 
 
 class ActivityContext:
-    """Context manager for activity execution with proper cleanup."""
+    """Context manager for activity execution with proper cleanup.
+
+    ORM queries inside it are confined to the task's workspace.
+    """
 
     def __init__(
         self,
@@ -216,13 +220,21 @@ class ActivityContext:
         self.user_context = user_context
         self.auto_commit = auto_commit
         self._sessions = []
+        self._scope = workspace_scope(user_context.workspace_id)
 
     async def __aenter__(self):
         """Enter async context and return the activity context."""
+        self._scope.__enter__()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Exit async context, commit/rollback, and close sessions."""
+        try:
+            await self._finish(exc_type)
+        finally:
+            self._scope.__exit__(exc_type, exc_val, exc_tb)
+
+    async def _finish(self, exc_type) -> None:
         # Handle commits/rollbacks first
         for session in self._sessions:
             try:

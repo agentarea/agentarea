@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
+from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.money import to_money
 from temporalio import activity
 
@@ -166,6 +167,7 @@ def make_task_state_activities(
                     user_id=request.user_id,
                     workspace_id=request.workspace_id,
                 )
+                bind_workspace_scope(user_context.workspace_id)
                 repository_factory = RepositoryFactory(session, user_context)
                 task_repository = repository_factory.create_repository(TaskRepository)
                 task_manager = TemporalTaskManager(

@@ -9,15 +9,23 @@ Handles the boilerplate of:
 
 import logging
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import AbstractContextManager, asynccontextmanager, nullcontext
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
+
+
+def _scope_of(caller: object) -> AbstractContextManager[None]:
+    """The caller's workspace scope; a principal that entered none binds none."""
+    if isinstance(caller, UserContext):
+        return workspace_scope(caller.workspace_id)
+    return nullcontext()
 
 
 @asynccontextmanager
@@ -38,11 +46,12 @@ async def platform_context() -> AsyncIterator[
     connection_manager = get_connection_manager()
     event_broker = await connection_manager.get_event_broker()
 
-    async with get_database().session() as session:
-        repo_factory = RepositoryFactory(session, user_context)
-        secret_manager = get_real_secret_manager(session=session, user_context=user_context)
+    with _scope_of(user_context):
+        async with get_database().session() as session:
+            repo_factory = RepositoryFactory(session, user_context)
+            secret_manager = get_real_secret_manager(session=session, user_context=user_context)
 
-        yield session, user_context, repo_factory, event_broker, secret_manager
+            yield session, user_context, repo_factory, event_broker, secret_manager
 
 
 @asynccontextmanager
@@ -63,8 +72,9 @@ async def platform_read_context() -> AsyncIterator[
     connection_manager = get_connection_manager()
     event_broker = await connection_manager.get_event_broker()
 
-    async with get_database().read_session() as session:
-        repo_factory = RepositoryFactory(session, user_context)
-        secret_manager = get_real_secret_manager(session=session, user_context=user_context)
+    with _scope_of(user_context):
+        async with get_database().read_session() as session:
+            repo_factory = RepositoryFactory(session, user_context)
+            secret_manager = get_real_secret_manager(session=session, user_context=user_context)
 
-        yield session, user_context, repo_factory, event_broker, secret_manager
+            yield session, user_context, repo_factory, event_broker, secret_manager

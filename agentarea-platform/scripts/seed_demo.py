@@ -42,6 +42,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from agentarea_agents.domain.models import Agent
+from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.config.database import db
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from agentarea_llm.domain.models import (
@@ -762,6 +763,7 @@ async def main() -> None:
 
     cap = args.cap if args.cap and args.cap > 0 else None
 
+    bind_workspace_scope(args.workspace_id)
     async with db.session() as session:
         if args.reset:
             print("→ Reset:")

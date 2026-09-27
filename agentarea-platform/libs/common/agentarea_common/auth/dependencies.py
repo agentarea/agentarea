@@ -323,12 +323,14 @@ async def _validate_api_key(token: str, request: Request) -> UserPrincipal | Non
     from agentarea_mcp.domain.auth_models import APIKey
     from sqlalchemy import select
 
+    from agentarea_common.base.tenant_scope import unscoped, workspace_scope
     from agentarea_common.config import get_database
 
     token_hash = hashlib.sha256(token.encode()).hexdigest()
 
     async with get_database().async_session_factory() as session:
-        result = await session.execute(select(APIKey).where(APIKey.token_hash == token_hash))
+        with unscoped("an API key is found by its hash; the key names the workspace"):
+            result = await session.execute(select(APIKey).where(APIKey.token_hash == token_hash))
         record = result.scalar_one_or_none()
 
         if record is None or not record.is_active:
@@ -350,7 +352,8 @@ async def _validate_api_key(token: str, request: Request) -> UserPrincipal | Non
         )
         return None
 
-    await _record_api_key_use(key_id, last_written)
+    with workspace_scope(workspace_id):
+        await _record_api_key_use(key_id, last_written)
 
     # The key acts for its creator, and only in the workspace it was issued
     # for: _resolve_access narrows the principal's reach to that one.
@@ -581,6 +584,7 @@ async def get_user_context(
     refused with the same 403. A request that selects neither is a routing bug
     and raises :class:`WorkspaceNotSelectedError`; there is no default.
     """
+    from agentarea_common.base.tenant_scope import bind_workspace_scope
     from agentarea_common.workspaces.slug import is_uuid_shaped, is_valid_workspace_slug
 
     reference = request.path_params.get(WORKSPACE_PATH_PARAM)
@@ -616,6 +620,7 @@ async def get_user_context(
         raise _forbidden_workspace(principal, workspace_slug) from None
 
     ContextManager.set_context(user_context)
+    bind_workspace_scope(user_context.workspace_id)
     logger.debug(
         f"Authenticated user: {user_context.user_id} in workspace: {user_context.workspace_id}"
     )
