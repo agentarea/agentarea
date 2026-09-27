@@ -15,6 +15,7 @@ from uuid import UUID
 from agentarea_agents.domain.models import Agent
 from agentarea_api.api.v1.a2a_card import agent_card_json, build_agent_card, get_base_url
 from agentarea_common.auth.route_authz import unrestricted
+from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.config.database import get_read_db_session
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -29,7 +30,8 @@ router = APIRouter()
 
 async def get_public_agent(agent_id: UUID, session: AsyncSession) -> Agent | None:
     """Read an agent for public discovery without requiring workspace auth."""
-    result = await session.execute(select(Agent).where(Agent.id == agent_id))
+    with unscoped("a discovery URL names an agent, not a workspace; the agent's decides"):
+        result = await session.execute(select(Agent).where(Agent.id == agent_id))
     return result.scalar_one_or_none()
 
 

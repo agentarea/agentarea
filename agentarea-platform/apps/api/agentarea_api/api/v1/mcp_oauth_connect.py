@@ -43,6 +43,7 @@ from agentarea_api.api.v1.oauth_app_credentials import (
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_database
 from agentarea_common.events.broker import EventBroker
@@ -493,6 +494,7 @@ async def oauth_callback(
         workspace_id=state_data["workspace_id"],
         workspace_slug=workspace_slug,
     )
+    bind_workspace_scope(user_context.workspace_id)
     secret_manager = get_real_secret_manager(session=db_session, user_context=user_context)
     auth_service = MCPAuthService(MCPAuthConfigRepository(db_session, user_context), secret_manager)
     auth_config = await auth_service.get(UUID(state_data["auth_config_id"]))

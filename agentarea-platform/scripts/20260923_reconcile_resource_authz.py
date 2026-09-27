@@ -55,6 +55,7 @@ import re
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
+from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.config import get_database, get_settings
 from agentarea_common.rebac.models import RelationQuery, RelationTuple
 from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
@@ -505,13 +506,14 @@ async def main() -> None:
                     await session.execute(text("SELECT id, owner_user_id FROM workspaces"))
                 ).all()
             }
-            for model in models:
-                rows = (
-                    await session.execute(select(model.id, model.workspace_id, model.created_by))
-                ).all()
-                await _reconcile_resources(writer, rows, workspace_owners)
-                resource_count += len(rows)
-                logger.info("reconciled %d %s rows", len(rows), model.__tablename__)
+            with unscoped("reconcile walks every governed row of every workspace"):
+                for model in models:
+                    rows = (
+                        await session.execute(select(model.id, model.workspace_id, model.created_by))
+                    ).all()
+                    await _reconcile_resources(writer, rows, workspace_owners)
+                    resource_count += len(rows)
+                    logger.info("reconciled %d %s rows", len(rows), model.__tablename__)
 
         await _reconcile_workspace_admins(writer, workspace_owners)
         logger.info("reconciled admin projections for %d workspaces", len(workspace_owners))

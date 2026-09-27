@@ -16,7 +16,7 @@ from collections.abc import Collection
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import column, delete, or_, select, table, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.context import UserContext
@@ -146,8 +146,6 @@ class WorkspaceMembershipRepository:
         and so is every pending invitation addressed to them: to ``emails`` or
         to an address they already joined through. Open links name nobody and
         stay open. Their API keys for the workspace are deactivated.
-        ``api_keys`` is owned by the MCP domain, which depends on this library,
-        so it is named as a bare table rather than imported.
 
         The graph revocation is queued in the same transaction, so a removal
         that commits always reaches the graph, whatever happens to the caller's
@@ -184,13 +182,12 @@ class WorkspaceMembershipRepository:
             .where(WorkspaceInvitation.accepted_by_user_id == user_id)
             .values(status=INVITATION_STATUS_REVOKED)
         )
-        api_keys = table(
-            "api_keys", column("workspace_id"), column("created_by"), column("is_active")
-        )
+        from agentarea_mcp.domain.auth_models import APIKey
+
         await self.session.execute(
-            update(api_keys)
-            .where(api_keys.c.workspace_id == workspace_id)
-            .where(api_keys.c.created_by == user_id)
+            update(APIKey)
+            .where(APIKey.workspace_id == workspace_id)
+            .where(APIKey.created_by == user_id)
             .values(is_active=False)
         )
         await OutboxRepository(

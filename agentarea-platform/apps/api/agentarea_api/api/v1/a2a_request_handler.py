@@ -67,6 +67,7 @@ from agentarea_api.api.v1.a2a_mapping import (
 )
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.context_manager import ContextManager
+from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.events.task_stream import TaskEventEnvelope
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.utils.a2a_push import (
@@ -234,6 +235,7 @@ def _user_context(scope: A2ACallScope) -> UserContext:
         workspace_slug=auth.workspace_slug,
     )
     ContextManager.set_context(user_context)
+    bind_workspace_scope(user_context.workspace_id)
     return user_context
 
 

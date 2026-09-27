@@ -82,6 +82,10 @@ global:
     # SSL configuration
     ssl: false
     sslMode: "disable"
+    # -- AGENTAREA_DB_TENANT_SCOPE: what an ORM query on a workspace-scoped table
+    # does when no workspace is bound. "log" runs it unfiltered and warns once per
+    # call site; "enforce" refuses it. Ship "log", clear the warnings, then flip.
+    tenantScope: "log"
     # Connection pool settings
     maxConnections: 100
     connectionTimeout: 30s

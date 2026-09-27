@@ -41,6 +41,7 @@ from agentarea_common.auth.dependencies import (
 from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.auth.tool_authorization import decide_tool_policy
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_read_db_session
 from agentarea_common.utils.url_safety import OutboundPolicy
@@ -391,9 +392,10 @@ async def bind_mcp_instance_workspace(
         instance_uuid = UUID(instance_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="MCP instance not found") from None
-    located = await db_session.execute(
-        select(MCPServerInstance.workspace_id).where(MCPServerInstance.id == instance_uuid)
-    )
+    with unscoped("the proxy URL names an instance; its workspace is the one to bind"):
+        located = await db_session.execute(
+            select(MCPServerInstance.workspace_id).where(MCPServerInstance.id == instance_uuid)
+        )
     workspace_id = located.scalar_one_or_none()
     if workspace_id is None or str(workspace_id) not in (principal.accessible_workspaces or []):
         raise HTTPException(status_code=404, detail="MCP instance not found")

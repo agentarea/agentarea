@@ -22,6 +22,7 @@ from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config.database import db
 from agentarea_common.di.container import register_singleton
 from agentarea_common.workspaces import Workspace
@@ -68,7 +69,8 @@ async def main() -> None:
                 admin_workspaces=[ws_id],
             )
             governance = GovernancePolicyService(RepositoryFactory(session, ctx))
-            created = await provision_default_policies(governance, ws_id)
+            with workspace_scope(ws_id):
+                created = await provision_default_policies(governance, ws_id)
             if created:
                 await session.commit()
                 total += len(created)

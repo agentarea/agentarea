@@ -1,0 +1,60 @@
+{
+  "text": {
+    "apps/api/agentarea_api/api/v1/_secret_owners.py": 1,
+    "apps/api/agentarea_api/api/v1/agents_tasks.py": 1,
+    "apps/api/agentarea_api/api/v1/inbox.py": 1,
+    "apps/api/agentarea_api/api/v1/task_event_feed.py": 1,
+    "apps/api/agentarea_api/cli.py": 2,
+    "apps/worker/agentarea_worker/cli.py": 1,
+    "apps/worker/agentarea_worker/main.py": 1,
+    "libs/agents/agentarea_agents/domain/skill_models.py": 1,
+    "libs/common/agentarea_common/usage/models.py": 3,
+    "libs/mcp/agentarea_mcp/container_monitor.py": 2,
+    "libs/registry/agentarea_registry/domain/models.py": 7,
+    "libs/tasks/agentarea_tasks/infrastructure/orm.py": 1,
+    "libs/wallet/agentarea_wallet/domain/models.py": 1
+  },
+  "repository_text": {
+    "libs/agents/agentarea_agents/infrastructure/catalog_agent_repository.py": 4,
+    "libs/agents/agentarea_agents/infrastructure/catalog_skill_repository.py": 7,
+    "libs/llm/agentarea_llm/infrastructure/catalog_model_spec_repository.py": 2,
+    "libs/mcp/agentarea_mcp/infrastructure/catalog_mcp_repository.py": 3,
+    "libs/mcp/agentarea_mcp/infrastructure/repository.py": 2
+  },
+  "session_execute": {
+    "apps/api/agentarea_api/api/v1/_secret_owners.py": 1,
+    "apps/api/agentarea_api/api/v1/access_control.py": 6,
+    "apps/api/agentarea_api/api/v1/agent_overview.py": 5,
+    "apps/api/agentarea_api/api/v1/agents_tasks.py": 1,
+    "apps/api/agentarea_api/api/v1/agents_well_known.py": 1,
+    "apps/api/agentarea_api/api/v1/dashboard.py": 7,
+    "apps/api/agentarea_api/api/v1/files.py": 1,
+    "apps/api/agentarea_api/api/v1/inbox.py": 1,
+    "apps/api/agentarea_api/api/v1/mcp_proxy.py": 1,
+    "apps/api/agentarea_api/api/v1/mcp_server_instances.py": 1,
+    "apps/api/agentarea_api/api/v1/network.py": 6,
+    "apps/api/agentarea_api/api/v1/network_people.py": 1,
+    "apps/api/agentarea_api/api/v1/task_event_feed.py": 1,
+    "apps/api/agentarea_api/api/v1/triggers.py": 2,
+    "apps/worker/agentarea_worker/cli.py": 1,
+    "libs/common/agentarea_common/auth/dependencies.py": 2,
+    "libs/execution/agentarea_execution/activities/agent_execution_activities.py": 1,
+    "libs/llm/agentarea_llm/application/provider_service.py": 4,
+    "libs/mcp/agentarea_mcp/container_monitor.py": 2,
+    "libs/secrets/agentarea_secrets/catalog_service.py": 13,
+    "libs/secrets/agentarea_secrets/database_secret_manager.py": 5
+  },
+  "unscoped": {
+    "apps/api/agentarea_api/api/v1/agents_well_known.py": 1,
+    "apps/api/agentarea_api/api/v1/mcp_proxy.py": 1,
+    "libs/common/agentarea_common/auth/dependencies.py": 1,
+    "libs/common/agentarea_common/events/outbox_relay.py": 1,
+    "libs/execution/agentarea_execution/activities/agent_execution_activities.py": 1,
+    "libs/execution/agentarea_execution/activities/trigger_execution_activities.py": 1,
+    "libs/mcp/agentarea_mcp/infrastructure/client_repository.py": 1,
+    "libs/triggers/agentarea_triggers/channels/inbound_subscriber.py": 1,
+    "libs/triggers/agentarea_triggers/channels/lazy_secret_manager.py": 1,
+    "libs/triggers/agentarea_triggers/channels/origin_guard.py": 1,
+    "libs/triggers/agentarea_triggers/infrastructure/repository.py": 1
+  }
+}

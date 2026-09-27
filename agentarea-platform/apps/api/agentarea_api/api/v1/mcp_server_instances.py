@@ -723,8 +723,15 @@ async def probe_instance_auth(
                         .where(MCPServer.id == spec.id)
                         .values(json_spec=new_json_spec)
                     )
-                    await db_session.execute(stmt)
+                    updated = await db_session.execute(stmt)
                     await db_session.commit()
+                    if updated.rowcount == 0:
+                        logger.info(
+                            "Auth methods for MCP server spec %s not cached: the spec is not "
+                            "owned by workspace %s (a shared catalog mirror)",
+                            spec.id,
+                            service.repository.user_context.workspace_id,
+                        )
         except Exception:
             logger.warning(
                 "Failed to cache auth methods for MCP server spec after probe",

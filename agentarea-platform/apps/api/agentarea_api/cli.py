@@ -302,6 +302,7 @@ async def _reconcile(
 ):
     """Async reconcile implementation."""
     from agentarea_common.auth.context import UserContext
+    from agentarea_common.base.tenant_scope import workspace_scope
     from agentarea_mcp.infrastructure.repository import MCPServerRepository
     from agentarea_registry.application.service import RegistryService
     from agentarea_registry.infrastructure.repository import (
@@ -398,78 +399,81 @@ async def _reconcile(
         click.echo(f"\nReconciling: {registry_name}")
 
         try:
-            async with db.async_session_factory() as session:
-                registry_repo = RegistryRepository(session, system_context)
-                item_repo = RegistryItemRepository(session, system_context)
-                server_repo = MCPServerRepository(session, system_context)
-                skill_repo = skill_repo_cls(session, system_context) if skill_repo_cls else None
-                provider_spec_repo = (
-                    provider_spec_repo_cls(session, system_context)
-                    if provider_spec_repo_cls
-                    else None
-                )
-                model_spec_repo = (
-                    model_spec_repo_cls(session, system_context) if model_spec_repo_cls else None
-                )
-                agent_repo = agent_repo_cls(session, system_context) if agent_repo_cls else None
-                service = RegistryService(
-                    registry_repo,
-                    item_repo,
-                    server_repo,
-                    skill_repo=skill_repo,
-                    provider_spec_repo=provider_spec_repo,
-                    model_spec_repo=model_spec_repo,
-                    agent_repo=agent_repo,
-                )
+            with workspace_scope(PLATFORM_WORKSPACE_ID):
+                async with db.async_session_factory() as session:
+                    registry_repo = RegistryRepository(session, system_context)
+                    item_repo = RegistryItemRepository(session, system_context)
+                    server_repo = MCPServerRepository(session, system_context)
+                    skill_repo = skill_repo_cls(session, system_context) if skill_repo_cls else None
+                    provider_spec_repo = (
+                        provider_spec_repo_cls(session, system_context)
+                        if provider_spec_repo_cls
+                        else None
+                    )
+                    model_spec_repo = (
+                        model_spec_repo_cls(session, system_context)
+                        if model_spec_repo_cls
+                        else None
+                    )
+                    agent_repo = agent_repo_cls(session, system_context) if agent_repo_cls else None
+                    service = RegistryService(
+                        registry_repo,
+                        item_repo,
+                        server_repo,
+                        skill_repo=skill_repo,
+                        provider_spec_repo=provider_spec_repo,
+                        model_spec_repo=model_spec_repo,
+                        agent_repo=agent_repo,
+                    )
 
-                registries = await registry_repo.list_all()
-                existing = next((r for r in registries if r.name == registry_name), None)
-                configured_priority = config.get("recommendation_priority")
-                if existing:
-                    registry_id = existing.id
-                    click.echo(f"Found existing registry: {registry_id}")
-                    # Reconcile is the only way a manifest edit reaches an
-                    # installed platform: without this, changing a source's
-                    # weight would only ever affect brand-new installs.
-                    if (
-                        configured_priority is not None
-                        and configured_priority != existing.recommendation_priority
-                    ):
-                        await service.update_registry(
-                            registry_id, recommendation_priority=configured_priority
+                    registries = await registry_repo.list_all()
+                    existing = next((r for r in registries if r.name == registry_name), None)
+                    configured_priority = config.get("recommendation_priority")
+                    if existing:
+                        registry_id = existing.id
+                        click.echo(f"Found existing registry: {registry_id}")
+                        # Reconcile is the only way a manifest edit reaches an
+                        # installed platform: without this, changing a source's
+                        # weight would only ever affect brand-new installs.
+                        if (
+                            configured_priority is not None
+                            and configured_priority != existing.recommendation_priority
+                        ):
+                            await service.update_registry(
+                                registry_id, recommendation_priority=configured_priority
+                            )
+                            click.echo(f"Updated recommendation priority: {configured_priority}")
+                    else:
+                        registry_type = config.get("type")
+                        if not registry_type:
+                            # Detection fetches the source to inspect its shape; the
+                            # subsequent sync_registry fetches it again to parse. The
+                            # extra GET is acceptable for a one-shot reconcile — set an
+                            # explicit `type` in the manifest to skip detection.
+                            registry_type = service.detect_type_from_source(config["source_url"])
+                            click.echo(f"Detected type: {registry_type}")
+                        registry = await service.create_registry(
+                            name=registry_name,
+                            registry_type=registry_type,
+                            source_type=config.get("source_type", "url"),
+                            source_url=config["source_url"],
+                            description=config.get("description"),
+                            sync_mode=config.get("sync_mode", "manual"),
+                            recommendation_priority=configured_priority,
                         )
-                        click.echo(f"Updated recommendation priority: {configured_priority}")
-                else:
-                    registry_type = config.get("type")
-                    if not registry_type:
-                        # Detection fetches the source to inspect its shape; the
-                        # subsequent sync_registry fetches it again to parse. The
-                        # extra GET is acceptable for a one-shot reconcile — set an
-                        # explicit `type` in the manifest to skip detection.
-                        registry_type = service.detect_type_from_source(config["source_url"])
-                        click.echo(f"Detected type: {registry_type}")
-                    registry = await service.create_registry(
-                        name=registry_name,
-                        registry_type=registry_type,
-                        source_type=config.get("source_type", "url"),
-                        source_url=config["source_url"],
-                        description=config.get("description"),
-                        sync_mode=config.get("sync_mode", "manual"),
-                        recommendation_priority=configured_priority,
-                    )
-                    registry_id = registry.id
-                    click.echo(f"Created registry: {registry_id}")
+                        registry_id = registry.id
+                        click.echo(f"Created registry: {registry_id}")
 
-                stats = await service.sync_registry(registry_id)
-                await session.commit()
-                click.echo(f"Synced: {stats}")
-                if stats.get("skipped"):
-                    click.echo(
-                        f"  WARNING: skipped {stats['skipped']} item(s) "
-                        "that failed validation (see logs for reasons)",
-                        err=True,
-                    )
-                succeeded.append(registry_name)
+                    stats = await service.sync_registry(registry_id)
+                    await session.commit()
+                    click.echo(f"Synced: {stats}")
+                    if stats.get("skipped"):
+                        click.echo(
+                            f"  WARNING: skipped {stats['skipped']} item(s) "
+                            "that failed validation (see logs for reasons)",
+                            err=True,
+                        )
+                    succeeded.append(registry_name)
         except Exception as e:
             logger.exception("Reconcile failed for registry %s", registry_name)
             click.echo(f"Reconcile failed for {registry_name}: {e}", err=True)

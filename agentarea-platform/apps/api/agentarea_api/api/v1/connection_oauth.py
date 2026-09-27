@@ -28,6 +28,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.config import get_settings
 from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
@@ -423,6 +424,7 @@ async def oauth_callback(
         workspace_id=state_data["workspace_id"],
         workspace_slug=workspace_slug,
     )
+    bind_workspace_scope(user_context.workspace_id)
     workspace_secret_manager = get_real_secret_manager(
         session=db_session, user_context=user_context
     )

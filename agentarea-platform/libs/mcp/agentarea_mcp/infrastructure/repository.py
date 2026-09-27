@@ -6,6 +6,7 @@ from agentarea_common.base.workspace_scoped_repository import (
     WorkspaceScopedRepository,
     as_record_ids,
 )
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from agentarea_common.utils.slug import generate_slug
 from sqlalchemy import String, case, cast, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -261,10 +262,11 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         # Built-in catalog specs are globally readable by id, not workspace-scoped
         # (ADR-003). Reconcile mirrors them into mcp_servers under the platform
         # workspace with a registry_item_id; resolve those across workspaces, but
-        # only catalog mirrors (registry_item_id IS NOT NULL) backed by an active
+        # only platform catalog mirrors (registry_item_id IS NOT NULL) backed by an active
         # registry — never another tenant's private custom spec.
         catalog_mirror = select(self.model_class).where(
             self.model_class.id == server_id,
+            self.model_class.workspace_id == PLATFORM_WORKSPACE_ID,
             text(
                 "EXISTS (SELECT 1 FROM registry_items ri "
                 "JOIN registries r ON r.id = ri.registry_id "

@@ -6,6 +6,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
+from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from sqlalchemy import and_, desc, func, literal_column, select, update
 from sqlalchemy.engine import CursorResult
@@ -40,7 +41,10 @@ async def find_trigger_by_webhook_id(session: AsyncSession, webhook_id: str) -> 
     workspace_id="system")`` just to satisfy the constructor, which then sat in
     scope for the rest of the request.
     """
-    result = await session.execute(select(TriggerORM).where(TriggerORM.webhook_id == webhook_id))
+    with unscoped("an inbound webhook names a trigger, not a workspace; the trigger's decides"):
+        result = await session.execute(
+            select(TriggerORM).where(TriggerORM.webhook_id == webhook_id)
+        )
     return result.scalar_one_or_none()
 
 

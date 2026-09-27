@@ -44,6 +44,7 @@ _last_dispatch_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
 
 async def _flush_last_dispatch_loop(get_session) -> None:
     """Batch-flush last_dispatch updates every 500ms or 100 entries, whichever first."""
+    from agentarea_common.base.tenant_scope import unscoped
     from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
     from sqlalchemy import update
 
@@ -59,12 +60,13 @@ async def _flush_last_dispatch_loop(get_session) -> None:
             continue
         try:
             async with get_session() as session:
-                for instance_id, payload in batch:
-                    await session.execute(
-                        update(MCPServerInstance)
-                        .where(MCPServerInstance.id == instance_id)
-                        .values(last_dispatch=payload)
-                    )
+                with unscoped("the batch holds dispatch stamps queued by runs in any workspace"):
+                    for instance_id, payload in batch:
+                        await session.execute(
+                            update(MCPServerInstance)
+                            .where(MCPServerInstance.id == instance_id)
+                            .values(last_dispatch=payload)
+                        )
                 await session.commit()
         except Exception:
             logger.error("last_dispatch flush failed", exc_info=True)

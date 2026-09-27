@@ -16,6 +16,7 @@ from agentarea_common.auth.dependencies import PrincipalDep, UnboundPrincipalDep
 from agentarea_common.auth.identity_directory import get_identity_directory
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config import get_database
 from agentarea_common.rebac import (
     KetoError,
@@ -74,7 +75,8 @@ def get_workspace_service(session: SessionDep, user: PrincipalDep) -> WorkspaceS
             user_id=user.user_id, workspace_id=workspace.id, admin_workspaces=[workspace.id]
         )
         governance = GovernancePolicyService(RepositoryFactory(session, ctx))
-        await provision_default_policies(governance, workspace.id)
+        with workspace_scope(workspace.id):
+            await provision_default_policies(governance, workspace.id)
 
     async def seed_authorization_graph(workspace: Workspace) -> None:
         """Write the workspace's graph tuples before its row exists.

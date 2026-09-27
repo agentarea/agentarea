@@ -39,16 +39,22 @@ logger = TriggerLogger(__name__)
 async def _resolve_trigger_context(session, trigger_id: UUID):
     """Resolve UserContext from trigger ORM for workspace-scoped repositories.
 
+    The trigger is found across workspaces, since its id is all the activity
+    has; the rest of the activity is then confined to the trigger's workspace.
+
     Raises:
         ValueError: If trigger not found — prevents silent fallback to system context.
     """
     from agentarea_common.auth.context import UserContext
+    from agentarea_common.base.tenant_scope import bind_workspace_scope, unscoped
     from agentarea_triggers.infrastructure.orm import TriggerORM
 
-    trigger_orm = await session.get(TriggerORM, trigger_id)
+    with unscoped("a trigger activity is handed a trigger id; the trigger names the workspace"):
+        trigger_orm = await session.get(TriggerORM, trigger_id)
     if not trigger_orm:
         raise ValueError(f"Trigger {trigger_id} not found — cannot resolve workspace context")
 
+    bind_workspace_scope(trigger_orm.workspace_id)
     return UserContext(
         user_id=trigger_orm.created_by,
         workspace_id=trigger_orm.workspace_id,
