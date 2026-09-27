@@ -419,3 +419,26 @@ async def test_mcp_server_by_id_resolves_platform_mirrors_only(backend: Backend)
             )
             assert await repository.get_server_by_id(mirror["id"]) is not None
             assert await repository.get_server_by_id(tenant_copy["id"]) is None
+
+
+async def test_auth_config_links_count_only_own_openapi_connections(backend: Backend) -> None:
+    from agentarea_common.auth.context import UserContext
+    from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
+    from agentarea_openapi.domain.models import OpenAPIConnection
+
+    config_id = uuid.uuid4()
+    own = await backend.write(
+        OpenAPIConnection.__table__, workspace_id=WS_B, created_by="owner", auth_config_id=config_id
+    )
+    await backend.write(
+        OpenAPIConnection.__table__, workspace_id=WS_A, created_by="owner", auth_config_id=config_id
+    )
+
+    async with backend.sessions() as session:
+        with workspace_scope(WS_B):
+            repository = MCPAuthConfigRepository(
+                session, UserContext(user_id="owner", workspace_id=WS_B)
+            )
+            linked = await repository.get_linked_openapi_connection_ids(config_id)
+
+    assert linked == [str(own["id"])]
