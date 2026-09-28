@@ -21,7 +21,7 @@ async def test_import_from_github_downloads_repo_once_for_multiple_skills(monkey
     async def fake_candidates(_github_url: str):
         return None, "main", candidates
 
-    async def fake_package_zip(repo_zip_data: bytes, *, package_path: str | None):
+    def fake_package_zip(repo_zip_data: bytes, *, package_path: str | None):
         assert repo_zip_data == b"repo-zip"
         package_calls.append(package_path)
         return b"skill-zip"
@@ -71,7 +71,7 @@ async def test_import_from_github_downloads_repo_once_for_multiple_skills(monkey
     from agentarea_agents.infrastructure import github_skill_importer
 
     monkeypatch.setattr(skills_toolset, "_list_github_skill_candidates", fake_candidates)
-    monkeypatch.setattr(skills_toolset, "_github_skill_package_zip", fake_package_zip)
+    monkeypatch.setattr(skills_toolset, "extract_skill_package", fake_package_zip)
     monkeypatch.setattr(skills_toolset, "platform_context", fake_platform_context)
     monkeypatch.setattr(github_skill_importer.GitHubSkillImporter, "download_repo", fake_download)
     monkeypatch.setattr(skill_service, "SkillService", FakeSkillService)
