@@ -30,7 +30,7 @@ from agentarea_bundles.schemas.preview import (
     PreviewIssue,
 )
 
-# Commands we can run inside the mcp-bridge container. Anything else (an
+# Commands we can run inside the MCP base image. Anything else (an
 # absolute path, a ${CLAUDE_PLUGIN_ROOT}-relative binary shipped with a plugin)
 # cannot be provisioned in our container runtime and is marked unsupported.
 _SUPPORTED_COMMANDS = {"npx", "uvx", "uv", "python", "python3", "node", "bunx", "deno"}

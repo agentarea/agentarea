@@ -1,0 +1,12 @@
+{
+  "name": "mcp-base-sdk",
+  "private": true,
+  "description": "MCP SDKs every mcp-base/1 artifact may import without bundling them.",
+  "dependencies": {
+    "@modelcontextprotocol/express": "2.0.0",
+    "@modelcontextprotocol/ext-apps": "2.0.0",
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "zod": "4.6.5"
+  }
+}

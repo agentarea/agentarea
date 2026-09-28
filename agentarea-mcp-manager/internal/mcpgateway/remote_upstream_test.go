@@ -39,7 +39,6 @@ func TestNewProviderRuntimeRejectsHalfConfiguredRemote(t *testing.T) {
 				selectorStub{provider: &runtimeProviderStub{}},
 				&runtimeBackendStub{},
 				&config.Config{Environment: "dataplane"},
-				testImagePolicy(t),
 				time.Second,
 				remote,
 			)

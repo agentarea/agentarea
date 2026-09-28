@@ -268,3 +268,37 @@ async def test_real_mcpserver_streamable_http_negotiates_modern_protocol():
         mcp_client_module.Client = _FakeClient
         mcp_client_module.streamable_http_client = _transport
     assert [tool.name for tool in result.tools] == ["ping"]
+
+
+@pytest.mark.asyncio
+async def test_gateway_start_retry_repeats_only_the_starting_503(monkeypatch):
+    """The gateway never forwards a "workload is starting" 503, so repeating it
+    is safe; any other 503 came from the workload and must reach the caller."""
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(mcp_client.asyncio, "sleep", fake_sleep)
+    replies = [
+        httpx2.Response(503, headers={mcp_client.GATEWAY_STARTING_HEADER: "1", "Retry-After": "2"}),
+        httpx2.Response(503, headers={mcp_client.GATEWAY_STARTING_HEADER: "1"}),
+        httpx2.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}}),
+        httpx2.Response(503, text="workload overloaded"),
+    ]
+    bodies: list[bytes] = []
+
+    def handler(request):
+        bodies.append(request.content)
+        return replies.pop(0)
+
+    transport = mcp_client.GatewayStartRetryTransport(httpx2.MockTransport(handler))
+    async with httpx2.AsyncClient(transport=transport) as http:
+        started = await http.post("http://gateway/mcp/x/mcp", content=b'{"id":1}')
+        workload = await http.post("http://gateway/mcp/x/mcp", content=b'{"id":2}')
+
+    assert started.status_code == 200
+    assert bodies[:3] == [b'{"id":1}'] * 3
+    assert sleeps == [2.0, 1.0]
+    assert workload.status_code == 503
+    assert len(bodies) == 4

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/agentarea/mcp-manager/internal/mcpbase"
 	"github.com/agentarea/mcp-manager/internal/models"
 )
 
@@ -14,10 +15,12 @@ func newTestBackendProvider() *BackendProvider {
 	return &BackendProvider{backend: nil, logger: logger}
 }
 
-// command-type: image must be the sandbox bridge, port must be 8080, and
-// Command must equal [cmd, ...args] (no filtering needed since stdio is not
-// relevant to the bridge wrapper).
-func TestConvertToInstanceSpec_CommandType_UsesSandboxImageAndPort(t *testing.T) {
+// command-type: the stdio command runs on the configured mcp-base image, port
+// 8080, and Command equals [cmd, ...args] (the image's ENTRYPOINT is the
+// bridge).
+func TestConvertToInstanceSpec_CommandType_UsesConfiguredMCPBaseImage(t *testing.T) {
+	const pinned = "registry.example.com/agentarea/agentarea-mcp-base:0.0.16"
+	t.Setenv("MCP_BASE_IMAGE", pinned)
 	p := newTestBackendProvider()
 
 	instance := &models.MCPServerInstance{
@@ -32,11 +35,11 @@ func TestConvertToInstanceSpec_CommandType_UsesSandboxImageAndPort(t *testing.T)
 
 	spec := p.convertToInstanceSpec(instance)
 
-	if spec.Image != sandboxImage {
-		t.Errorf("expected Image=%q, got %q", sandboxImage, spec.Image)
+	if spec.Image != pinned {
+		t.Errorf("expected Image=%q, got %q", pinned, spec.Image)
 	}
-	if spec.Port != sandboxPort {
-		t.Errorf("expected Port=%d, got %d", sandboxPort, spec.Port)
+	if spec.Port != mcpbase.Port {
+		t.Errorf("expected Port=%d, got %d", mcpbase.Port, spec.Port)
 	}
 
 	wantCmd := []string{"npx", "-y", "@modelcontextprotocol/server-filesystem", "/data"}
@@ -67,8 +70,8 @@ func TestConvertToInstanceSpec_CommandType_CommandFieldIsString(t *testing.T) {
 
 	spec := p.convertToInstanceSpec(instance)
 
-	if spec.Image != sandboxImage {
-		t.Errorf("expected Image=%q, got %q", sandboxImage, spec.Image)
+	if spec.Image != mcpbase.Image() {
+		t.Errorf("expected Image=%q, got %q", mcpbase.Image(), spec.Image)
 	}
 	if len(spec.Command) < 1 || spec.Command[0] != "uvx" {
 		t.Errorf("expected Command[0]=%q, got %v", "uvx", spec.Command)
@@ -161,9 +164,6 @@ func TestConvertToInstanceSpec_DockerType_UsesImageAndPortFromSpec(t *testing.T)
 	}
 	if spec.Port != 9090 {
 		t.Errorf("expected Port=9090, got %d", spec.Port)
-	}
-	if spec.Image == sandboxImage {
-		t.Errorf("docker-type must NOT use sandboxImage %q", sandboxImage)
 	}
 }
 

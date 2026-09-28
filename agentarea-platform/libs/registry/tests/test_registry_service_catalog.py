@@ -86,7 +86,7 @@ class TestDetectType:
 class TestParseMCPServers:
     def _telegram_entry(self):
         # Mirrors data/catalog/mcp-servers.json (standard MCP registry format,
-        # pypi package → stdio command wrapped by mcp-bridge).
+        # pypi package → stdio command wrapped by the MCP base image).
         return {
             "servers": [
                 {

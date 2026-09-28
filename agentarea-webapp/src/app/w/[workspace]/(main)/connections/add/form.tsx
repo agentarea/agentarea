@@ -590,8 +590,7 @@ export function AddMCPServerForm() {
                 </p>
               )}
               <p className="text-sm text-muted-foreground">
-                The command to run. It will be wrapped in a sandbox container
-                with mcp-bridge for HTTP transport.
+                The command runs in a sandbox container and is served over HTTP.
               </p>
             </div>
 
