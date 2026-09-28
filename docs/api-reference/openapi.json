@@ -1324,44 +1324,6 @@
         "title": "Blockers",
         "type": "object"
       },
-      "Body_upload_file_v1_files_post": {
-        "properties": {
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "title": "File",
-            "type": "string"
-          },
-          "path": {
-            "default": "",
-            "title": "Path",
-            "type": "string"
-          },
-          "purpose": {
-            "default": "workspace",
-            "title": "Purpose",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file"
-        ],
-        "title": "Body_upload_file_v1_files_post",
-        "type": "object"
-      },
-      "Body_upload_project_file_v1_projects__project_id__files_post": {
-        "properties": {
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "title": "File",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file"
-        ],
-        "title": "Body_upload_project_file_v1_projects__project_id__files_post",
-        "type": "object"
-      },
       "Body_upload_skill_v1_skills_upload_post": {
         "properties": {
           "file": {
@@ -19659,66 +19621,6 @@
           "protected",
           "files"
         ]
-      },
-      "post": {
-        "description": "Upload a file, server-proxied.\n\n``purpose=\"workspace\"`` (the default) lands the file at ``path`` within the\nworkspace, or at the workspace root under its own name when ``path`` is\nomitted. ``purpose=\"attachment\"`` stages it under ``staging/{id}/{filename}``\n\u2014 hidden from the workspace listing \u2014 and returns a ``ref`` the task-create\nendpoint resolves into the task workspace.",
-        "operationId": "upload_file_v1_files_post",
-        "parameters": [
-          {
-            "description": "Slug of the workspace the request acts in",
-            "in": "path",
-            "name": "workspace",
-            "required": true,
-            "schema": {
-              "description": "Slug of the workspace the request acts in",
-              "maxLength": 120,
-              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-              "title": "Workspace",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_upload_file_v1_files_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Upload File",
-        "tags": [
-          "v1",
-          "protected",
-          "files"
-        ]
       }
     },
     "/v1/workspaces/{workspace}/files/directories": {
@@ -20038,7 +19940,7 @@
     },
     "/v1/workspaces/{workspace}/files/upload-url": {
       "post": {
-        "description": "Mint a presigned PUT for a task attachment uploaded directly to the store.\n\nThe client-declared sha256 is bound into the signature as ``ChecksumSHA256``,\nso the object store rejects a body that does not hash to it \u2014 the upload is\ncontent-verified without the API ever seeing the bytes. The returned ``ref``\nis consumed by the task-create endpoint exactly like a server-proxied one.",
+        "description": "Mint a presigned PUT for a task attachment uploaded directly to the store.\n\nThe client-declared sha256 is bound into the signature as ``ChecksumSHA256``,\nso the object store rejects a body that does not hash to it \u2014 the upload is\ncontent-verified without the API ever seeing the bytes. The returned ``ref``\nis what the task-create endpoint takes as an attachment.",
         "operationId": "create_attachment_upload_url_v1_files_upload_url_post",
         "parameters": [
           {
@@ -25745,71 +25647,6 @@
           "protected",
           "projects"
         ]
-      },
-      "post": {
-        "description": "Upload a file to a project's workspace-scoped artifact prefix.",
-        "operationId": "upload_project_file_v1_projects__project_id__files_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Project Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Slug of the workspace the request acts in",
-            "in": "path",
-            "name": "workspace",
-            "required": true,
-            "schema": {
-              "description": "Slug of the workspace the request acts in",
-              "maxLength": 120,
-              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-              "title": "Workspace",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_upload_project_file_v1_projects__project_id__files_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Upload Project File",
-        "tags": [
-          "v1",
-          "protected",
-          "projects"
-        ]
       }
     },
     "/v1/workspaces/{workspace}/projects/{project_id}/files/download/{file_path}": {
@@ -25876,6 +25713,80 @@
           }
         ],
         "summary": "Stream Project File",
+        "tags": [
+          "v1",
+          "protected",
+          "projects"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/projects/{project_id}/files/upload-urls": {
+      "post": {
+        "description": "Diff a ``{path, sha256}`` manifest against a project's files.\n\nPaths are relative to the project and are planned under its prefix, so a\npath that tries to leave it comes back as a per-entry ``error``. The bytes\ngo straight to the object store through the returned presigned PUTs.",
+        "operationId": "plan_project_uploads_v1_projects__project_id__files_upload_urls_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadPlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Plan Project Uploads",
         "tags": [
           "v1",
           "protected",

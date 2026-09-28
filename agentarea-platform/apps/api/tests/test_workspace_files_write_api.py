@@ -1,4 +1,4 @@
-"""Upload placement and archive-instead-of-delete on the workspace files API."""
+"""Upload planning and archive-instead-of-delete on the workspace files API."""
 
 from __future__ import annotations
 
@@ -10,14 +10,6 @@ from agentarea_api.api.v1 import files
 from fastapi import HTTPException
 
 WS = SimpleNamespace(workspace_id="ws-1", user_id="user-1")
-
-
-def _upload(filename: str = "notes.md", content: bytes = b"hi"):
-    return SimpleNamespace(
-        filename=filename,
-        content_type="text/markdown",
-        read=AsyncMock(return_value=content),
-    )
 
 
 def _install_service(monkeypatch, **methods):
@@ -34,51 +26,6 @@ def _install_service(monkeypatch, **methods):
     monkeypatch.setattr(files, "ArtifactService", lambda **kwargs: service)
     monkeypatch.setattr(files, "_get_artifact_service", lambda: service)
     return service
-
-
-@pytest.mark.asyncio
-async def test_upload_keeps_the_requested_directory_structure(monkeypatch) -> None:
-    service = _install_service(monkeypatch)
-
-    await files.upload_file(_upload(), WS, purpose="workspace", path="wiki/api/auth.md")
-
-    assert service.put.await_args.args[1] == "wiki/api/auth.md"
-
-
-@pytest.mark.asyncio
-async def test_upload_without_a_path_lands_at_the_root(monkeypatch) -> None:
-    service = _install_service(monkeypatch)
-
-    await files.upload_file(_upload("report.md"), WS, purpose="workspace", path="")
-
-    assert service.put.await_args.args[1] == "report.md"
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "bad_path",
-    ["../escape.md", "/absolute.md", "wiki/../../etc/passwd", "wiki//double.md"],
-)
-async def test_upload_rejects_paths_that_escape_the_workspace(monkeypatch, bad_path) -> None:
-    service = _install_service(monkeypatch)
-
-    with pytest.raises(HTTPException) as exc:
-        await files.upload_file(_upload(), WS, purpose="workspace", path=bad_path)
-
-    assert exc.value.status_code == 422
-    service.put.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_upload_refuses_to_write_into_reserved_prefixes(monkeypatch) -> None:
-    service = _install_service(monkeypatch)
-
-    for reserved in ("tasks/t-1/out.txt", "staging/x/f.txt", ".trash/old/f.txt"):
-        with pytest.raises(HTTPException) as exc:
-            await files.upload_file(_upload(), WS, purpose="workspace", path=reserved)
-        assert exc.value.status_code == 422
-
-    service.put.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -52,7 +52,7 @@ is the agent, not the deployment.
     ```
 
     Under Compose, `postgres_init`, `app_migrations`, `kratos-migrate`, and
-    `rclone-init` are one-shot. `Exited (0)` is success. Any other code is the
+    `bucket-init` are one-shot. `Exited (0)` is success. Any other code is the
     failure, and the services that depend on them will not have started.
   </Step>
 

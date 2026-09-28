@@ -629,6 +629,9 @@ import type {
   PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostData,
   PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostErrors,
   PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostResponses,
+  PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostData,
+  PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostErrors,
+  PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostResponses,
   PlanWorkspaceUploadsV1FilesUploadUrlsPostData,
   PlanWorkspaceUploadsV1FilesUploadUrlsPostErrors,
   PlanWorkspaceUploadsV1FilesUploadUrlsPostResponses,
@@ -806,12 +809,6 @@ import type {
   UpdateWorkspaceSettingsV1SettingsPutData,
   UpdateWorkspaceSettingsV1SettingsPutErrors,
   UpdateWorkspaceSettingsV1SettingsPutResponses,
-  UploadFileV1FilesPostData,
-  UploadFileV1FilesPostErrors,
-  UploadFileV1FilesPostResponses,
-  UploadProjectFileV1ProjectsProjectIdFilesPostData,
-  UploadProjectFileV1ProjectsProjectIdFilesPostErrors,
-  UploadProjectFileV1ProjectsProjectIdFilesPostResponses,
   UploadSkillV1SkillsUploadPostData,
   UploadSkillV1SkillsUploadPostErrors,
   UploadSkillV1SkillsUploadPostResponses,
@@ -3982,45 +3979,6 @@ export const listWorkspaceFilesV1FilesGet = <
   });
 
 /**
- * Upload File
- *
- * Upload a file, server-proxied.
- *
- * ``purpose="workspace"`` (the default) lands the file at ``path`` within the
- * workspace, or at the workspace root under its own name when ``path`` is
- * omitted. ``purpose="attachment"`` stages it under ``staging/{id}/{filename}``
- * — hidden from the workspace listing — and returns a ``ref`` the task-create
- * endpoint resolves into the task workspace.
- */
-export const uploadFileV1FilesPost = <ThrowOnError extends boolean = false>(
-  options: Options<UploadFileV1FilesPostData, ThrowOnError>
-): RequestResult<
-  UploadFileV1FilesPostResponses,
-  UploadFileV1FilesPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    UploadFileV1FilesPostResponses,
-    UploadFileV1FilesPostErrors,
-    ThrowOnError
-  >({
-    ...formDataBodySerializer,
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace}/files",
-    ...options,
-    headers: {
-      "Content-Type": null,
-      ...options.headers,
-    },
-  });
-
-/**
  * Create Workspace Directory
  *
  * Persist an empty workspace folder as a trailing-slash object marker.
@@ -4201,7 +4159,7 @@ export const restoreWorkspaceFileV1FilesRestoreFilePathPost = <
  * The client-declared sha256 is bound into the signature as ``ChecksumSHA256``,
  * so the object store rejects a body that does not hash to it — the upload is
  * content-verified without the API ever seeing the bytes. The returned ``ref``
- * is consumed by the task-create endpoint exactly like a server-proxied one.
+ * is what the task-create endpoint takes as an attachment.
  */
 export const createAttachmentUploadUrlV1FilesUploadUrlPost = <
   ThrowOnError extends boolean = false,
@@ -7004,44 +6962,6 @@ export const listProjectFilesV1ProjectsProjectIdFilesGet = <
   });
 
 /**
- * Upload Project File
- *
- * Upload a file to a project's workspace-scoped artifact prefix.
- */
-export const uploadProjectFileV1ProjectsProjectIdFilesPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    UploadProjectFileV1ProjectsProjectIdFilesPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  UploadProjectFileV1ProjectsProjectIdFilesPostResponses,
-  UploadProjectFileV1ProjectsProjectIdFilesPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    UploadProjectFileV1ProjectsProjectIdFilesPostResponses,
-    UploadProjectFileV1ProjectsProjectIdFilesPostErrors,
-    ThrowOnError
-  >({
-    ...formDataBodySerializer,
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace}/projects/{project_id}/files",
-    ...options,
-    headers: {
-      "Content-Type": null,
-      ...options.headers,
-    },
-  });
-
-/**
  * Stream Project File
  *
  * Stream a project file through the AgentArea API.
@@ -7072,6 +6992,47 @@ export const streamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGet = <
     ],
     url: "/v1/workspaces/{workspace}/projects/{project_id}/files/download/{file_path}",
     ...options,
+  });
+
+/**
+ * Plan Project Uploads
+ *
+ * Diff a ``{path, sha256}`` manifest against a project's files.
+ *
+ * Paths are relative to the project and are planned under its prefix, so a
+ * path that tries to leave it comes back as a per-entry ``error``. The bytes
+ * go straight to the object store through the returned presigned PUTs.
+ */
+export const planProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostResponses,
+  PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostResponses,
+    PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/projects/{project_id}/files/upload-urls",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**

@@ -90,11 +90,11 @@ This guide covers `docker-compose.yaml`.
 
     1. `db` becomes healthy (`pg_isready`), and `rustfs` becomes healthy.
     2. `postgres_init` creates the `agentarea`, `temporal`, and `kratos` databases. It is idempotent.
-    3. `app_migrations` runs `agentarea-api migrate` with working directory `/app/apps/api`, and `kratos-migrate` runs the Kratos schema migration. `rclone-init` creates the two object-storage buckets.
+    3. `app_migrations` runs `agentarea-api migrate` with working directory `/app/apps/api`, and `kratos-migrate` runs the Kratos schema migration. `bucket-init` creates the two object-storage buckets and gives them the CORS allowlist browsers need for direct uploads (`STORAGE_CORS_ALLOWED_ORIGINS`, default `http://localhost:3000`).
     4. `app`, `frontend`, `agentarea-worker`, `agentarea-events`, `agentarea-mcp-manager`, `sandbox-executor`, `temporal`, and `kratos` start.
 
     The one-shot containers (`postgres_init`, `app_migrations`, `kratos-migrate`,
-    `rclone-init`) exit 0 and stay in `Exited` state. That is the expected result,
+    `bucket-init`) exit 0 and stay in `Exited` state. That is the expected result,
     not a failure.
 
     `temporal` has a 120-second `start_period` on its health check, and

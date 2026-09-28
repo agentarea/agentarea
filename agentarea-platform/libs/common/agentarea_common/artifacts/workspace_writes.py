@@ -1,7 +1,7 @@
 """Where a manual write may land in workspace storage.
 
 Shared by every surface that writes a file on a caller's behalf (the REST
-upload, the upload-plan endpoint, the MCP upload tool), so they accept and
+upload-plan endpoints, folder moves, the MCP upload tool), so they accept and
 refuse the same paths.
 """
 

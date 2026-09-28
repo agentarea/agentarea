@@ -21,6 +21,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
+from .conftest import upload_planned
+
 
 def _create_project(client: httpx.Client, name: str) -> str:
     resp = client.post(f"{client.ws}/projects/", json={"name": name})
@@ -29,11 +31,9 @@ def _create_project(client: httpx.Client, name: str) -> str:
 
 
 def _upload_via_project(client: httpx.Client, project_id: str, filename: str, body: bytes) -> None:
-    resp = client.post(
-        f"{client.ws}/projects/{project_id}/files",
-        files={"file": (filename, body, "text/plain")},
-    )
-    resp.raise_for_status()
+    upload_planned(
+        client, f"{client.ws}/projects/{project_id}/files/upload-urls", filename, body
+    ).raise_for_status()
 
 
 @pytest.mark.integration

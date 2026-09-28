@@ -14,10 +14,11 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { apiProxyUrl } from "@/lib/api-proxy-url";
+import { digestFile, putPlanned } from "@/lib/presigned-upload";
 import {
   downloadProjectFileAction,
   listProjectFilesAction,
-  uploadProjectFileAction,
+  planProjectUploadsAction,
   workspaceFileHistoryAction,
 } from "@/lib/server-actions";
 
@@ -72,15 +73,24 @@ export default function ProjectFilesPage() {
     setUploading(true);
     setUploadError(null);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const result = await uploadProjectFileAction(projectId, formData);
-      if (result.error) {
+      const { hex } = await digestFile(file);
+      const result = await planProjectUploadsAction(projectId, [
+        { path: file.name, sha256: hex, content_type: file.type || null },
+      ]);
+      if (result.error || !result.data) {
         setUploadError(
           apiErrorMessage(result, t("uploadFailed", { name: file.name }))
         );
         return;
       }
+      const [planned] = result.data.uploads;
+      if (planned.status === "error") {
+        setUploadError(
+          `${t("uploadFailed", { name: file.name })}: ${formatApiError(planned.error)}`
+        );
+        return;
+      }
+      if (planned.status === "upload") await putPlanned(planned, file);
       await fetchFiles();
     } catch (err) {
       console.error("Failed to upload project file", err);

@@ -12,7 +12,6 @@ archives: the object moves under ``.trash/`` rather than being destroyed.
 from __future__ import annotations
 
 import base64
-import hashlib
 import logging
 import re
 from pathlib import PurePosixPath
@@ -38,7 +37,6 @@ from agentarea_common.artifacts.workspace import DEFAULT_MAX_FILE_BYTES
 from agentarea_common.artifacts.workspace_writes import (
     MAX_UPLOADS_PER_PLAN,
     ensure_no_file_ancestors,
-    ensure_writable_file,
     is_reserved_path,
     plan_uploads,
     resolve_write_path,
@@ -51,16 +49,15 @@ from agentarea_common.config.app import get_app_settings
 from agentarea_common.workspaces.lookup import workspace_api_prefix
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
-from fastapi import APIRouter, Depends, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
-# Server-proxied attachment uploads are buffered in memory to verify their size
-# and digest, so cap them at the same per-file ceiling the task workspace
-# enforces. The presigned path re-checks size/quota at attach time.
+# Presigned attachments are capped at the same per-file ceiling the task
+# workspace enforces; size/quota are re-checked at attach time.
 MAX_ATTACHMENT_BYTES = DEFAULT_MAX_FILE_BYTES
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -94,14 +91,6 @@ class WorkspaceDirectoryResponse(BaseModel):
 class WorkspaceFileDownloadResponse(BaseModel):
     url: str
     path: str
-
-
-class StagedFileResponse(BaseModel):
-    ref: str
-    filename: str
-    size: int
-    sha256: str
-    content_type: str | None = None
 
 
 class PresignUploadRequest(BaseModel):
@@ -309,68 +298,6 @@ async def create_workspace_directory(
 
 
 @router.post(
-    "",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
-)
-async def upload_file(
-    file: UploadFile,
-    user_context: UserContextDep,
-    purpose: Annotated[str, Form()] = "workspace",
-    path: Annotated[str, Form()] = "",
-):
-    """Upload a file, server-proxied.
-
-    ``purpose="workspace"`` (the default) lands the file at ``path`` within the
-    workspace, or at the workspace root under its own name when ``path`` is
-    omitted. ``purpose="attachment"`` stages it under ``staging/{id}/{filename}``
-    — hidden from the workspace listing — and returns a ``ref`` the task-create
-    endpoint resolves into the task workspace.
-    """
-    filename = PurePosixPath(file.filename or "unnamed").name or "unnamed"
-    content = await file.read()
-    svc = ArtifactService(
-        recorder=DbArtifactEventRecorder(),
-        actor=ArtifactActor(user_id=user_context.user_id),
-    )
-    if purpose == "workspace":
-        resolved_path = _resolve_upload_path(path, filename)
-        try:
-            await ensure_writable_file(svc, user_context.workspace_id, resolved_path)
-        except WorkspaceConflictError as e:
-            raise HTTPException(status_code=409, detail=str(e)) from e
-        await svc.put(
-            user_context.workspace_id,
-            resolved_path,
-            content,
-            content_type=file.content_type,
-        )
-        return Response(status_code=204)
-    if purpose == "attachment":
-        if len(content) > MAX_ATTACHMENT_BYTES:
-            raise HTTPException(
-                status_code=413,
-                detail=f"attachment exceeds the {MAX_ATTACHMENT_BYTES}-byte per-file limit",
-            )
-        path = f"staging/{uuid4().hex}/{filename}"
-        await svc.put(
-            user_context.workspace_id,
-            path,
-            content,
-            content_type=file.content_type,
-        )
-        return StagedFileResponse(
-            ref=path,
-            filename=filename,
-            size=len(content),
-            sha256=hashlib.sha256(content).hexdigest(),
-            content_type=file.content_type,
-        )
-    raise HTTPException(status_code=422, detail=f"Unsupported upload purpose: {purpose!r}")
-
-
-@router.post(
     "/upload-url",
     response_model=PresignUploadResponse,
     dependencies=[
@@ -386,7 +313,7 @@ async def create_attachment_upload_url(
     The client-declared sha256 is bound into the signature as ``ChecksumSHA256``,
     so the object store rejects a body that does not hash to it — the upload is
     content-verified without the API ever seeing the bytes. The returned ``ref``
-    is consumed by the task-create endpoint exactly like a server-proxied one.
+    is what the task-create endpoint takes as an attachment.
     """
     if not _SHA256_HEX_RE.fullmatch(body.sha256):
         raise HTTPException(
