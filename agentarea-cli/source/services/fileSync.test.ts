@@ -1,5 +1,7 @@
 import {createHash} from 'node:crypto';
 import {promises as fs} from 'node:fs';
+import http from 'node:http';
+import {type AddressInfo} from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'ava';
@@ -7,6 +9,7 @@ import {
 	chunk,
 	collectFiles,
 	mapLimit,
+	putFile,
 	remotePath,
 	summarize,
 } from './fileSync.js';
@@ -95,6 +98,61 @@ test('the summary names failures only when there are some', t => {
 		summarize({uploaded: 0, unchanged: 1, failed: [{path: 'a', error: 'x'}]}),
 		'0 uploaded, 1 unchanged, 1 failed',
 	);
+});
+
+test('putFile streams the file with the signed headers and a length', async t => {
+	const root = await tree({'a.bin': 'payload'});
+	let seen: {method?: string; headers: http.IncomingHttpHeaders; body: string} =
+		{headers: {}, body: ''};
+	const server = http.createServer((request, response) => {
+		let body = '';
+		request.on('data', (part: Uint8Array) => {
+			body += Buffer.from(part).toString();
+		});
+		request.on('end', () => {
+			seen = {method: request.method, headers: request.headers, body};
+			response.writeHead(200).end();
+		});
+	});
+	await new Promise<void>(resolve => {
+		server.listen(0, '127.0.0.1', resolve);
+	});
+	const {port} = server.address() as AddressInfo;
+
+	const status = await putFile(
+		`http://127.0.0.1:${port}/bucket/a.bin?X-Amz-Signature=x`,
+		'PUT',
+		{'x-amz-meta-sha256': sha('payload')},
+		path.join(root, 'a.bin'),
+	);
+	server.close();
+
+	t.is(status, 200);
+	t.is(seen.method, 'PUT');
+	t.is(seen.body, 'payload');
+	t.is(seen.headers['content-length'], '7');
+	t.is(seen.headers['x-amz-meta-sha256'], sha('payload'));
+});
+
+test('putFile reports the status of a rejected upload', async t => {
+	const root = await tree({'a.bin': 'x'});
+	const server = http.createServer((_request, response) => {
+		response.writeHead(403).end('SignatureDoesNotMatch');
+	});
+	await new Promise<void>(resolve => {
+		server.listen(0, '127.0.0.1', resolve);
+	});
+	const {port} = server.address() as AddressInfo;
+
+	const status = await putFile(
+		`http://127.0.0.1:${port}/a.bin`,
+		'PUT',
+		{},
+		path.join(root, 'a.bin'),
+	);
+	server.close();
+
+	t.is(status, 403);
 });
 
 test('mapLimit runs every item and never exceeds the limit', async t => {

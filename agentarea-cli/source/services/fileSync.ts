@@ -1,6 +1,9 @@
 import {createHash} from 'node:crypto';
 import {createReadStream, promises as fs} from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
 import path from 'node:path';
+import {pipeline} from 'node:stream/promises';
 
 export const DEFAULT_EXCLUDES = ['.git', 'node_modules', '.DS_Store'];
 
@@ -100,6 +103,38 @@ export function summarize(summary: SyncSummary): string {
 	}
 
 	return parts.join(', ');
+}
+
+/**
+ * Stream one file to a presigned URL over HTTP/1.1. `fetch` negotiates HTTP/2
+ * and multiplexes every upload onto one session, which Node tears down with
+ * ENHANCE_YOUR_CALM once the in-flight bodies pass its session memory cap.
+ */
+export async function putFile(
+	url: string,
+	method: string,
+	headers: Record<string, string>,
+	file: string,
+): Promise<number> {
+	const {size} = await fs.stat(file);
+	const target = new URL(url);
+	const transport = target.protocol === 'https:' ? https : http;
+
+	return new Promise<number>((resolve, reject) => {
+		const request = transport.request(
+			target,
+			{method, headers: {...headers, 'Content-Length': String(size)}},
+			response => {
+				response.resume();
+				response.on('end', () => {
+					resolve(response.statusCode ?? 0);
+				});
+				response.on('error', reject);
+			},
+		);
+		request.on('error', reject);
+		pipeline(createReadStream(file), request).catch(reject);
+	});
 }
 
 /** Run `task` over `items` with at most `limit` in flight. */
