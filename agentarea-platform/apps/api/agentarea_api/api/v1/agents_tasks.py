@@ -110,7 +110,7 @@ class TaskCreate(BaseModel):
     requires_human_approval: bool | None = False
     project_id: str | None = None
     task_policy: PolicyDocument | None = None
-    # staging refs from POST /v1/files (purpose=attachment) or POST /v1/files/upload-url
+    # staging refs from a presigned POST /v1/files/upload-url
     attachments: list[str] | None = None
 
 
@@ -141,12 +141,12 @@ async def _stage_attachments_into_task(
 ) -> list[dict[str, Any]]:
     """Resolve staging refs into a reserved task's ``inputs/attachments`` scope.
 
-    Each ref (``staging/{id}/{filename}`` from ``POST /v1/files`` with
-    ``purpose=attachment`` or a presigned ``POST /v1/files/upload-url``) is HEADed
-    to resolve its verified sha256, size and content type, then copied
-    server-side into the task's content-addressed store via ``attach_object``.
-    The bytes never transit this process. Returns the attachment descriptors
-    persisted alongside the run. Raises HTTP errors mirroring the
+    Each ref (``staging/{id}/{filename}`` from a presigned
+    ``POST /v1/files/upload-url``) is HEADed to resolve its verified sha256,
+    size and content type, then copied server-side into the task's
+    content-addressed store via ``attach_object``. The bytes never transit
+    this process. Returns the attachment descriptors persisted alongside the
+    run. Raises HTTP errors mirroring the
     workspace-commit failure modes. Staging objects are left in place; the
     caller deletes them only after a successful dispatch.
     """

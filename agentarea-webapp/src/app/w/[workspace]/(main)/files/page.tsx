@@ -42,12 +42,17 @@ import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { apiProxyUrl } from "@/lib/api-proxy-url";
 import type { DroppedFile } from "@/lib/file-drop";
 import {
+  digestFile,
+  MAX_UPLOADS_PER_PLAN,
+  putPlanned,
+} from "@/lib/presigned-upload";
+import {
   createWorkspaceDirectoryAction,
   deleteWorkspaceFileAction,
   downloadWorkspaceFileAction,
   listWorkspaceFilesAction,
   moveWorkspaceFileAction,
-  uploadWorkspaceFileAction,
+  planWorkspaceUploadsAction,
   workspaceFileHistoryAction,
 } from "@/lib/server-actions";
 
@@ -139,20 +144,59 @@ export default function WorkspaceFilesPage() {
       setActionError(null);
       const failed: string[] = [];
       try {
+        const digested: (DroppedFile & { path: string; sha256: string })[] = [];
         for (const { file, relativePath } of selected) {
           try {
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append(
-              "path",
-              [destination, relativePath].filter(Boolean).join("/")
-            );
-            const { error } = await uploadWorkspaceFileAction(formData);
-            if (error)
-              failed.push(`${relativePath} (${formatApiError(error)})`);
+            digested.push({
+              file,
+              relativePath,
+              path: [destination, relativePath].filter(Boolean).join("/"),
+              sha256: (await digestFile(file)).hex,
+            });
           } catch (err) {
-            console.error("Failed to upload workspace file", err);
+            console.error("Failed to read workspace file", err);
             failed.push(`${relativePath} (${formatApiError(err)})`);
+          }
+        }
+        for (
+          let start = 0;
+          start < digested.length;
+          start += MAX_UPLOADS_PER_PLAN
+        ) {
+          const batch = digested.slice(start, start + MAX_UPLOADS_PER_PLAN);
+          try {
+            const { data, error } = await planWorkspaceUploadsAction(
+              batch.map(({ file, path, sha256 }) => ({
+                path,
+                sha256,
+                content_type: file.type || null,
+              }))
+            );
+            if (error || !data) {
+              for (const { relativePath } of batch)
+                failed.push(`${relativePath} (${formatApiError(error)})`);
+              continue;
+            }
+            for (const [index, planned] of data.uploads.entries()) {
+              const { file, relativePath } = batch[index];
+              if (planned.status === "unchanged") continue;
+              if (planned.status === "error") {
+                failed.push(
+                  `${relativePath} (${formatApiError(planned.error)})`
+                );
+                continue;
+              }
+              try {
+                await putPlanned(planned, file);
+              } catch (err) {
+                console.error("Failed to upload workspace file", err);
+                failed.push(`${relativePath} (${formatApiError(err)})`);
+              }
+            }
+          } catch (err) {
+            console.error("Failed to plan workspace uploads", err);
+            for (const { relativePath } of batch)
+              failed.push(`${relativePath} (${formatApiError(err)})`);
           }
         }
         if (failed.length)

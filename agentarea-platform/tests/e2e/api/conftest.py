@@ -16,6 +16,7 @@ Override endpoints via env vars if your stack runs elsewhere:
 
 from __future__ import annotations
 
+import hashlib
 import os
 import time
 import uuid
@@ -380,6 +381,42 @@ def create_agent(
         "tools": tools or [],
     }
     return client.post(f"{client.ws}/agents/", json=body).raise_for_status().json()["id"]
+
+
+def upload_planned(
+    client: httpx.Client,
+    plan_url: str,
+    path: str,
+    body: bytes,
+    content_type: str = "text/plain",
+) -> httpx.Response:
+    """Plan one upload at ``plan_url`` and PUT its bytes straight to the store.
+
+    Returns the plan response so callers can assert on refusals (404/422); a
+    planned entry that is neither ``upload`` nor ``unchanged`` fails the test.
+    """
+    plan = client.post(
+        plan_url,
+        json={
+            "files": [
+                {
+                    "path": path,
+                    "sha256": hashlib.sha256(body).hexdigest(),
+                    "content_type": content_type,
+                }
+            ]
+        },
+    )
+    if plan.status_code != 200:
+        return plan
+    [entry] = plan.json()["uploads"]
+    assert entry["status"] in ("upload", "unchanged"), entry
+    if entry["status"] == "upload":
+        with httpx.Client(timeout=30.0) as store:
+            store.request(
+                entry["method"], entry["upload_url"], headers=entry["headers"], content=body
+            ).raise_for_status()
+    return plan
 
 
 @pytest.fixture

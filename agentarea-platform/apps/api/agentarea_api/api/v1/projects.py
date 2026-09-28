@@ -6,12 +6,14 @@ from typing import Annotated, Any
 from urllib.parse import quote
 from uuid import UUID
 
+from agentarea_api.api.v1.files import PlannedUpload, UploadPlanRequest, UploadPlanResponse
 from agentarea_common.artifacts import (
     ArtifactActor,
     ArtifactService,
     DbArtifactEventRecorder,
     secure_download_headers,
 )
+from agentarea_common.artifacts.workspace_writes import plan_uploads
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
@@ -22,7 +24,7 @@ from agentarea_common.workspaces.lookup import workspace_api_prefix
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
 from agentarea_projects.schemas.dto import ProjectCreate, ProjectUpdate
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 
@@ -338,19 +340,24 @@ async def _project_file_download_url(
 
 
 @router.post(
-    "/{project_id}/files",
-    status_code=204,
+    "/{project_id}/files/upload-urls",
+    response_model=UploadPlanResponse,
     dependencies=[
         unrestricted("workspace member; the workspace-scoped repository is the boundary")
     ],
 )
-async def upload_project_file(
+async def plan_project_uploads(
     project_id: UUID,
-    file: UploadFile,
+    body: UploadPlanRequest,
     user_context: UserContextDep,
     service: ProjectServiceDep,
-):
-    """Upload a file to a project's workspace-scoped artifact prefix."""
+) -> UploadPlanResponse:
+    """Diff a ``{path, sha256}`` manifest against a project's files.
+
+    Paths are relative to the project and are planned under its prefix, so a
+    path that tries to leave it comes back as a per-entry ``error``. The bytes
+    go straight to the object store through the returned presigned PUTs.
+    """
     project = await service.get(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -359,12 +366,14 @@ async def upload_project_file(
         recorder=DbArtifactEventRecorder(),
         actor=ArtifactActor(user_id=user_context.user_id),
     )
-    content = await file.read()
-    await svc.put(
-        user_context.workspace_id,
-        _project_path(project_id, file.filename or "unnamed"),
-        content,
-        content_type=file.content_type,
+    prefix = _project_path(project_id)
+    entries = [
+        {**entry.model_dump(exclude_none=True), "path": f"{prefix}{entry.path}"}
+        for entry in body.files
+    ]
+    planned = await plan_uploads(svc, user_context.workspace_id, entries)
+    return UploadPlanResponse(
+        uploads=[PlannedUpload(**{**p, "path": p["path"].removeprefix(prefix)}) for p in planned]
     )
 
 

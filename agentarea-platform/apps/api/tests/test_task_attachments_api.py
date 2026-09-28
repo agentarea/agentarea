@@ -1,9 +1,9 @@
 """Ref-based task attachments are copied server-side before workflow dispatch.
 
-The upload endpoint stages a file (server-proxied or presigned) and returns a
-``ref``; task creation HEADs the ref to resolve its verified digest and copies
-it into the task's content-addressed store via ``attach_object`` without the
-bytes ever transiting the API. Staging objects are deleted only after a
+The presigned upload endpoint stages a file and returns a ``ref``; task
+creation HEADs the ref to resolve its verified digest and copies it into the
+task's content-addressed store via ``attach_object`` without the bytes ever
+transiting the API. Staging objects are deleted only after a
 successful dispatch.
 """
 
@@ -530,27 +530,13 @@ async def test_sync_path_attaches_and_deletes_after_dispatch(monkeypatch):
     assert deleted == ["staging/aaa/report.csv"]
 
 
-# --- files.py unified upload endpoint --------------------------------------
+# --- files.py presigned attachment upload --------------------------------------
 
 
-def _install_files_fakes(monkeypatch, *, puts, presigns):
+def _install_files_fakes(monkeypatch, *, presigns):
     class FakeArtifactService:
         def __init__(self, *args, **kwargs):
             pass
-
-        async def list(self, workspace_id, prefix="", max_items=1000):
-            return []
-
-        async def put(self, workspace_id, path, content, content_type=None):
-            puts.append(
-                {
-                    "workspace_id": workspace_id,
-                    "path": path,
-                    "content": content,
-                    "content_type": content_type,
-                }
-            )
-            return SimpleNamespace(path=path, size=len(content), content_type=content_type)
 
         async def presigned_put_url(
             self, workspace_id, path, *, content_type=None, sha256_b64=None, expires_in=3600
@@ -570,96 +556,10 @@ def _install_files_fakes(monkeypatch, *, puts, presigns):
 
 
 @pytest.mark.asyncio
-async def test_upload_defaults_to_workspace_root_and_returns_204(monkeypatch):
-    context = UserContext(user_id="user-a", workspace_id="workspace-a")
-    puts: list[dict] = []
-    _install_files_fakes(monkeypatch, puts=puts, presigns=[])
-    app = _files_app(context)
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(
-            "/v1/workspaces/acme/files", files={"file": ("report.csv", b"revenue", "text/csv")}
-        )
-
-    assert response.status_code == 204
-    assert puts == [
-        {
-            "workspace_id": "workspace-a",
-            "path": "report.csv",
-            "content": b"revenue",
-            "content_type": "text/csv",
-        }
-    ]
-
-
-@pytest.mark.asyncio
-async def test_upload_attachment_stages_and_returns_descriptor(monkeypatch):
-    context = UserContext(user_id="user-a", workspace_id="workspace-a")
-    puts: list[dict] = []
-    _install_files_fakes(monkeypatch, puts=puts, presigns=[])
-    app = _files_app(context)
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(
-            "/v1/workspaces/acme/files",
-            data={"purpose": "attachment"},
-            files={"file": ("report.csv", b"revenue", "text/csv")},
-        )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["ref"].startswith("staging/")
-    assert body["ref"].endswith("/report.csv")
-    assert body["filename"] == "report.csv"
-    assert body["size"] == 7
-    assert body["sha256"] == SHA_REVENUE
-    assert body["content_type"] == "text/csv"
-    # Stored under the staging ref it returned, not at the workspace root.
-    assert puts[0]["path"] == body["ref"]
-
-
-@pytest.mark.asyncio
-async def test_upload_attachment_over_cap_is_413(monkeypatch):
-    context = UserContext(user_id="user-a", workspace_id="workspace-a")
-    puts: list[dict] = []
-    _install_files_fakes(monkeypatch, puts=puts, presigns=[])
-    monkeypatch.setattr(files, "MAX_ATTACHMENT_BYTES", 3)
-    app = _files_app(context)
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(
-            "/v1/workspaces/acme/files",
-            data={"purpose": "attachment"},
-            files={"file": ("big.bin", b"four", "application/octet-stream")},
-        )
-
-    assert response.status_code == 413
-    assert puts == []
-
-
-@pytest.mark.asyncio
-async def test_unknown_purpose_is_422(monkeypatch):
-    context = UserContext(user_id="user-a", workspace_id="workspace-a")
-    puts: list[dict] = []
-    _install_files_fakes(monkeypatch, puts=puts, presigns=[])
-    app = _files_app(context)
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(
-            "/v1/workspaces/acme/files",
-            data={"purpose": "bogus"},
-            files={"file": ("report.csv", b"revenue", "text/csv")},
-        )
-
-    assert response.status_code == 422
-    assert puts == []
-
-
-@pytest.mark.asyncio
 async def test_upload_url_binds_checksum_and_returns_ref(monkeypatch):
     context = UserContext(user_id="user-a", workspace_id="workspace-a")
     presigns: list[dict] = []
-    _install_files_fakes(monkeypatch, puts=[], presigns=presigns)
+    _install_files_fakes(monkeypatch, presigns=presigns)
     app = _files_app(context)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -687,10 +587,33 @@ async def test_upload_url_binds_checksum_and_returns_ref(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_upload_url_over_cap_is_413(monkeypatch):
+    context = UserContext(user_id="user-a", workspace_id="workspace-a")
+    presigns: list[dict] = []
+    _install_files_fakes(monkeypatch, presigns=presigns)
+    monkeypatch.setattr(files, "MAX_ATTACHMENT_BYTES", 3)
+    app = _files_app(context)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/workspaces/acme/files/upload-url",
+            json={
+                "filename": "big.bin",
+                "content_type": "application/octet-stream",
+                "sha256": SHA_REVENUE,
+                "size": 4,
+            },
+        )
+
+    assert response.status_code == 413
+    assert presigns == []
+
+
+@pytest.mark.asyncio
 async def test_upload_url_rejects_non_hex_sha256(monkeypatch):
     context = UserContext(user_id="user-a", workspace_id="workspace-a")
     presigns: list[dict] = []
-    _install_files_fakes(monkeypatch, puts=[], presigns=presigns)
+    _install_files_fakes(monkeypatch, presigns=presigns)
     app = _files_app(context)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

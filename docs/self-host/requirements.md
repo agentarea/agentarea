@@ -38,7 +38,7 @@ bind-mounts source into the containers. It is not a deployment target.
 | Ports | 3000, 4433, 5432, 6379, 7999, 8000, 9000 | See the port table below |
 
 The compose stack starts 14 containers, three of which are one-shot init jobs
-(`postgres_init`, `app_migrations`, `kratos-migrate`, `rclone-init`). No sizing
+(`postgres_init`, `app_migrations`, `kratos-migrate`, `bucket-init`). No sizing
 figure has been measured for this repo, so none is published here.
 
 ### Kubernetes cluster

@@ -1332,15 +1332,6 @@ export const registry: CommandSpec[] = [
 	},
 	{
 		noun: 'projects',
-		verb: 'upload-file',
-		fn: 'uploadProjectFileV1ProjectsProjectIdFilesPost',
-		method: 'POST',
-		pathParams: ['project_id'],
-		body: true,
-		summary: 'Upload a file to a project',
-	},
-	{
-		noun: 'projects',
 		verb: 'list-files',
 		fn: 'listProjectFilesV1ProjectsProjectIdFilesGet',
 		method: 'GET',
@@ -1907,15 +1898,6 @@ export const registry: CommandSpec[] = [
 		pathParams: [],
 		body: false,
 		summary: 'List workspace files',
-	},
-	{
-		noun: 'files',
-		verb: 'upload',
-		fn: 'uploadFileV1FilesPost',
-		method: 'POST',
-		pathParams: [],
-		body: true,
-		summary: 'Upload a workspace file',
 	},
 	{
 		noun: 'files',

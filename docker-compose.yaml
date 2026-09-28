@@ -76,7 +76,7 @@ services:
         condition: service_completed_successfully
       # Files and artifacts live in these buckets; without them every
       # workspace-file route fails.
-      rclone-init:
+      bucket-init:
         condition: service_completed_successfully
       openfga:
         condition: service_healthy
@@ -436,7 +436,7 @@ services:
         condition: service_started
       temporal:
         condition: service_healthy
-      rclone-init:
+      bucket-init:
         condition: service_completed_successfully
       openfga:
         condition: service_healthy
@@ -510,23 +510,23 @@ services:
       - default
     restart: unless-stopped
 
-  # Rclone bucket initialization
-  rclone-init:
-    image: rclone/rclone:latest
-    container_name: agentarea-rclone-init
+  # Creates the storage buckets and their browser CORS allowlist: browsers PUT
+  # presigned uploads straight to rustfs. The Helm bucket-init hook does the
+  # same in Kubernetes.
+  bucket-init:
+    image: agentarea/agentarea-api:${VERSION:-latest}
+    container_name: agentarea-bucket-init
     depends_on:
       rustfs:
         condition: service_healthy
     environment:
-      - RCLONE_CONFIG_RUSTFS_TYPE=s3
-      - RCLONE_CONFIG_RUSTFS_PROVIDER=Rustfs
-      - RCLONE_CONFIG_RUSTFS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
-      - RCLONE_CONFIG_RUSTFS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
-      - RCLONE_CONFIG_RUSTFS_ENDPOINT=http://rustfs:9000
-      - RCLONE_CONFIG_RUSTFS_ACL=private
-    entrypoint: ["/bin/sh", "-c"]
-    # rclone mkdir is idempotent, so a failure here is a real one and must stop the stack.
-    command: ["rclone mkdir rustfs:${DOCUMENTS_BUCKET:-documents} && rclone mkdir rustfs:${ARTIFACTS_BUCKET:-artifacts} && echo 'Buckets created successfully'"]
+      - AWS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
+      - AWS_REGION=${RUSTFS_REGION:-us-east-1}
+      - AWS_ENDPOINT_URL=http://rustfs:9000
+      - STORAGE_BUCKETS=${DOCUMENTS_BUCKET:-documents},${ARTIFACTS_BUCKET:-artifacts}
+      - STORAGE_CORS_ALLOWED_ORIGINS=${STORAGE_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+    entrypoint: ["python", "-m", "agentarea_common.artifacts.bucket_init"]
     networks:
       - default
 

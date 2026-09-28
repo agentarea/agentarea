@@ -16,12 +16,14 @@ import type {
   SecretResponse,
   SkillResponse,
   UpdateWalletRequest,
+  UploadPlanEntry,
 } from "@/api/client/types.gen";
 import {
   zCreateWorkspaceDirectoryRequest,
   zListSecretsV1SecretsGetResponse,
   zProviderConfigCreate,
   zProviderConfigUpdate,
+  zUploadPlanRequest,
 } from "@/api/client/zod.gen";
 import { env } from "@/env";
 import {
@@ -104,6 +106,8 @@ import {
   listTriggers,
   listWorkspaceFiles,
   pauseAgentTask,
+  planProjectUploads,
+  planWorkspaceUploads,
   previewOpenAPISpec,
   removeAgentFromProject,
   removeMcpInstanceFromClient,
@@ -865,33 +869,17 @@ export async function listProjectFilesAction(projectId: string) {
   return await listProjectFiles(projectId);
 }
 
-export async function uploadProjectFileAction(
+export async function planProjectUploadsAction(
   projectId: string,
-  formData: FormData
+  files: UploadPlanEntry[]
 ) {
   // Validate projectId as UUID to prevent path traversal / SSRF
   if (!/^[a-f0-9-]{36}$/.test(projectId)) {
     return { data: null, error: { detail: "Invalid project ID" } };
   }
-
-  // Build URL safely via URL API — base is a trusted server-only env var
-  const base = new URL(env.API_URL);
-  base.pathname = `/v1/workspaces/{workspace}/projects/${encodeURIComponent(projectId)}/files`;
-
-  const response = await workspaceFetch(base.href, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const errorData = await response
-      .json()
-      .catch(() => ({ detail: "Upload failed" }));
-    return { data: null, error: errorData };
-  }
-
-  const data = await response.json();
-  return { data, error: null };
+  const parsed = zUploadPlanRequest.safeParse({ files });
+  if (!parsed.success) return { data: null, error: parsed.error.flatten() };
+  return await planProjectUploads(projectId, parsed.data);
 }
 
 export async function downloadProjectFileAction(
@@ -920,23 +908,10 @@ export async function createWorkspaceDirectoryAction(
   return await createWorkspaceDirectory(parsed.data);
 }
 
-export async function uploadWorkspaceFileAction(formData: FormData) {
-  const uploadUrl = `${env.API_URL}/v1/workspaces/{workspace}/files`;
-
-  const response = await workspaceFetch(uploadUrl, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({
-      detail: "Upload failed",
-    }));
-    return { data: null, error: errorData };
-  }
-
-  // 204 No Content — no JSON body to parse
-  return { data: { ok: true }, error: null };
+export async function planWorkspaceUploadsAction(files: UploadPlanEntry[]) {
+  const parsed = zUploadPlanRequest.safeParse({ files });
+  if (!parsed.success) return { data: null, error: parsed.error.flatten() };
+  return await planWorkspaceUploads(parsed.data);
 }
 
 export async function deleteWorkspaceFileAction(filePath: string) {

@@ -61,6 +61,7 @@ import type {
   TriggerCreate,
   TriggerUpdate,
   UpdateWalletRequest,
+  UploadPlanRequest,
   ValidateRequest,
 } from "@/api/client/types.gen";
 import { apiErrorMessage } from "@/lib/api-errors";
@@ -1726,6 +1727,19 @@ export const deleteProjectFile = async (
   return { data, error };
 };
 
+export const planProjectUploads = async (
+  projectId: string,
+  body: UploadPlanRequest
+) => {
+  const result =
+    await sdk.planProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPost({
+      client: serverClient,
+      path: { project_id: projectId },
+      body,
+    });
+  return withStatus(result);
+};
+
 export const listWorkspaceFiles = async () => {
   const { data, error } = await sdk.listWorkspaceFilesV1FilesGet({
     client: serverClient,
@@ -1742,6 +1756,14 @@ export const createWorkspaceDirectory = async (
       body,
     });
   return { data, error };
+};
+
+export const planWorkspaceUploads = async (body: UploadPlanRequest) => {
+  const result = await sdk.planWorkspaceUploadsV1FilesUploadUrlsPost({
+    client: serverClient,
+    body,
+  });
+  return withStatus(result);
 };
 
 export const downloadWorkspaceFile = async (filePath: string) => {

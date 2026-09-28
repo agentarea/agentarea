@@ -9,7 +9,7 @@ related:
   - /guides/sandbox/collect-artifacts-and-logs
   - /reference/limits
   - /concepts/execution/artifacts
-last_updated: 2026-07-29
+last_updated: 2026-09-28
 ---
 
 Do this when the agent's work starts from data you already have — a CSV to
@@ -34,23 +34,8 @@ it being attached per task.
 
 <Steps titleSize="h3">
   <Step title="Stage the file and get a ref">
-    Two ways, and they produce the same kind of `staging/{id}/{filename}` ref.
-
-    **Server-proxied, for small files and quick scripting.** One request, no checksum
-    to compute, but the bytes pass through the API process:
-
-    ```bash
-    curl -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/files" \
-      -H "Authorization: Bearer $TOKEN" \
-      -F "purpose=attachment" \
-      -F "file=@report.csv"
-    ```
-
-    The response carries `ref`, `filename`, `size`, `sha256`, and `content_type`.
-
-    **Presigned direct upload, for large files or when you want content
-    verification.** Pick this when the file is big enough that proxying it is
-    wasteful, or when you want the store itself to reject a corrupted body:
+    Ask for a presigned upload URL, then PUT the bytes straight to the object
+    store. They never pass through the API process:
 
     ```bash
     SHA=$(shasum -a 256 report.csv | cut -d' ' -f1)
@@ -122,8 +107,8 @@ should be listed with its expected byte size.
 <AccordionGroup>
   <Accordion title='422 "Invalid attachment ref"'>
     The ref does not begin with `staging/` . Only staged refs are accepted; a
-    workspace path or an arbitrary object key is rejected. Re-stage with
-    `purpose=attachment` or the presigned endpoint.
+    workspace path or an arbitrary object key is rejected. Re-stage through the
+    presigned endpoint.
   </Accordion>
   <Accordion title='404 "attachment ref not found"'>
     The staging object is not there — usually the presigned PUT was never
@@ -133,7 +118,7 @@ should be listed with its expected byte size.
   <Accordion title='422 "attachment integrity digest is unavailable"'>
     The staged object has no recorded SHA-256, so the server cannot verify what
     it is copying. This happens when an object was placed in the staging prefix
-    by something other than the two supported paths.
+    by something other than the presigned upload.
   </Accordion>
   <Accordion title="413 on upload or on task create">
     A single attachment is capped at 268435456 bytes (256 MiB). The task's whole

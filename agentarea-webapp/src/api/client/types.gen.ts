@@ -740,34 +740,6 @@ export type Blockers = {
 };
 
 /**
- * Body_upload_file_v1_files_post
- */
-export type BodyUploadFileV1FilesPost = {
-  /**
-   * File
-   */
-  file: Blob | File;
-  /**
-   * Path
-   */
-  path?: string;
-  /**
-   * Purpose
-   */
-  purpose?: string;
-};
-
-/**
- * Body_upload_project_file_v1_projects__project_id__files_post
- */
-export type BodyUploadProjectFileV1ProjectsProjectIdFilesPost = {
-  /**
-   * File
-   */
-  file: Blob | File;
-};
-
-/**
  * Body_upload_skill_v1_skills_upload_post
  */
 export type BodyUploadSkillV1SkillsUploadPost = {
@@ -11031,30 +11003,6 @@ export type ListWorkspaceFilesV1FilesGetResponses = {
 export type ListWorkspaceFilesV1FilesGetResponse =
   ListWorkspaceFilesV1FilesGetResponses[keyof ListWorkspaceFilesV1FilesGetResponses];
 
-export type UploadFileV1FilesPostData = {
-  body: BodyUploadFileV1FilesPost;
-  path?: never;
-  query?: never;
-  url: "/v1/workspaces/{workspace}/files";
-};
-
-export type UploadFileV1FilesPostErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type UploadFileV1FilesPostError =
-  UploadFileV1FilesPostErrors[keyof UploadFileV1FilesPostErrors];
-
-export type UploadFileV1FilesPostResponses = {
-  /**
-   * Successful Response
-   */
-  200: unknown;
-};
-
 export type CreateWorkspaceDirectoryV1FilesDirectoriesPostData = {
   body: CreateWorkspaceDirectoryRequest;
   path?: never;
@@ -13908,38 +13856,6 @@ export type ListProjectFilesV1ProjectsProjectIdFilesGetResponses = {
 export type ListProjectFilesV1ProjectsProjectIdFilesGetResponse =
   ListProjectFilesV1ProjectsProjectIdFilesGetResponses[keyof ListProjectFilesV1ProjectsProjectIdFilesGetResponses];
 
-export type UploadProjectFileV1ProjectsProjectIdFilesPostData = {
-  body: BodyUploadProjectFileV1ProjectsProjectIdFilesPost;
-  path: {
-    /**
-     * Project Id
-     */
-    project_id: string;
-  };
-  query?: never;
-  url: "/v1/workspaces/{workspace}/projects/{project_id}/files";
-};
-
-export type UploadProjectFileV1ProjectsProjectIdFilesPostErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type UploadProjectFileV1ProjectsProjectIdFilesPostError =
-  UploadProjectFileV1ProjectsProjectIdFilesPostErrors[keyof UploadProjectFileV1ProjectsProjectIdFilesPostErrors];
-
-export type UploadProjectFileV1ProjectsProjectIdFilesPostResponses = {
-  /**
-   * Successful Response
-   */
-  204: void;
-};
-
-export type UploadProjectFileV1ProjectsProjectIdFilesPostResponse =
-  UploadProjectFileV1ProjectsProjectIdFilesPostResponses[keyof UploadProjectFileV1ProjectsProjectIdFilesPostResponses];
-
 export type StreamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGetData = {
   body?: never;
   path: {
@@ -13974,6 +13890,39 @@ export type StreamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGetResponse
      */
     200: unknown;
   };
+
+export type PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostData = {
+  body: UploadPlanRequest;
+  path: {
+    /**
+     * Project Id
+     */
+    project_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/projects/{project_id}/files/upload-urls";
+};
+
+export type PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostError =
+  PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostErrors[keyof PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostErrors];
+
+export type PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostResponses =
+  {
+    /**
+     * Successful Response
+     */
+    200: UploadPlanResponse;
+  };
+
+export type PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostResponse =
+  PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostResponses[keyof PlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostResponses];
 
 export type DeleteProjectFileV1ProjectsProjectIdFilesFilePathDeleteData = {
   body?: never;

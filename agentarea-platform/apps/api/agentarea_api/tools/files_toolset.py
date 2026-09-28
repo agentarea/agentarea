@@ -70,7 +70,7 @@ class FilesToolset(Toolset):
             return json.dumps({"url": url, "path": path, "expires_in": expires_in})
 
     @tool_method(effect="write")
-    @unrestricted("workspace files are member-level, as POST /v1/files allows")
+    @unrestricted("workspace files are member-level, as POST /v1/files/upload-urls allows")
     async def upload_urls(self, files: builtins.list[dict[str, str]]) -> str:
         """Get presigned PUT URLs that write files into workspace storage.
 

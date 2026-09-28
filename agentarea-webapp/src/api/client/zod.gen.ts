@@ -207,22 +207,6 @@ export const zAuditLogListResponse = z.object({
 });
 
 /**
- * Body_upload_file_v1_files_post
- */
-export const zBodyUploadFileV1FilesPost = z.object({
-  file: z.string(),
-  path: z.string().optional().default(""),
-  purpose: z.string().optional().default("workspace"),
-});
-
-/**
- * Body_upload_project_file_v1_projects__project_id__files_post
- */
-export const zBodyUploadProjectFileV1ProjectsProjectIdFilesPost = z.object({
-  file: z.string(),
-});
-
-/**
  * Body_upload_skill_v1_skills_upload_post
  */
 export const zBodyUploadSkillV1SkillsUploadPost = z.object({
@@ -4284,8 +4268,6 @@ export const zExportWorkspaceConfigV1ExportGetResponse = z.string();
  */
 export const zListWorkspaceFilesV1FilesGetResponse = zWorkspaceFileListResponse;
 
-export const zUploadFileV1FilesPostBody = zBodyUploadFileV1FilesPost;
-
 export const zCreateWorkspaceDirectoryV1FilesDirectoriesPostBody =
   zCreateWorkspaceDirectoryRequest;
 
@@ -5114,23 +5096,25 @@ export const zListProjectFilesV1ProjectsProjectIdFilesGetPath = z.object({
 export const zListProjectFilesV1ProjectsProjectIdFilesGetResponse =
   zProjectFileListResponse;
 
-export const zUploadProjectFileV1ProjectsProjectIdFilesPostBody =
-  zBodyUploadProjectFileV1ProjectsProjectIdFilesPost;
-
-export const zUploadProjectFileV1ProjectsProjectIdFilesPostPath = z.object({
-  project_id: z.string().uuid(),
-});
-
-/**
- * Successful Response
- */
-export const zUploadProjectFileV1ProjectsProjectIdFilesPostResponse = z.void();
-
 export const zStreamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGetPath =
   z.object({
     project_id: z.string().uuid(),
     file_path: z.string(),
   });
+
+export const zPlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostBody =
+  zUploadPlanRequest;
+
+export const zPlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostPath =
+  z.object({
+    project_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zPlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostResponse =
+  zUploadPlanResponse;
 
 export const zDeleteProjectFileV1ProjectsProjectIdFilesFilePathDeletePath =
   z.object({

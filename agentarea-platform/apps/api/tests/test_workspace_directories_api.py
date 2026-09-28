@@ -32,6 +32,12 @@ def _app(monkeypatch, stored_paths=(), projects=()):
         exists=AsyncMock(side_effect=lambda workspace_id, path: path in objects),
         list=AsyncMock(side_effect=list_objects),
         put=AsyncMock(side_effect=put),
+        head=AsyncMock(
+            side_effect=lambda workspace_id, path: {"sha256": "0" * 64} if path in objects else None
+        ),
+        authorize_put=AsyncMock(
+            return_value=SimpleNamespace(url="https://store/put", headers={}, expires_in=600)
+        ),
     )
     monkeypatch.setattr(files, "ArtifactService", lambda **kwargs: service)
     monkeypatch.setattr(files, "_get_artifact_service", lambda: service)
@@ -162,32 +168,32 @@ async def test_listing_hides_reserved_markers_and_deduplicates_project_folders(m
     ("stored_paths", "path"),
     [(["docs/"], "docs"), (["docs/report.md"], "docs"), (["docs"], "docs/report.md")],
 )
-async def test_upload_rejects_file_folder_collisions(monkeypatch, stored_paths, path):
+async def test_upload_plan_rejects_file_folder_collisions(monkeypatch, stored_paths, path):
     app, service = _app(monkeypatch, stored_paths)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            "/v1/workspaces/acme/files",
-            data={"path": path},
-            files={"file": ("report.md", b"report", "text/plain")},
+            "/v1/workspaces/acme/files/upload-urls",
+            json={"files": [{"path": path, "sha256": "a" * 64}]},
         )
 
-    assert response.status_code == 409, response.text
-    service.put.assert_not_awaited()
+    assert response.status_code == 200, response.text
+    assert response.json()["uploads"][0]["status"] == "error"
+    service.authorize_put.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_upload_inside_folder_keeps_the_folder_and_allows_file_replacement(monkeypatch):
+async def test_upload_plan_inside_folder_keeps_the_folder_and_allows_file_replacement(monkeypatch):
     app, service = _app(monkeypatch, stored_paths=["docs/", "docs/report.md"])
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            "/v1/workspaces/acme/files",
-            data={"path": "docs/report.md"},
-            files={"file": ("report.md", b"updated", "text/plain")},
+            "/v1/workspaces/acme/files/upload-urls",
+            json={"files": [{"path": "docs/report.md", "sha256": "a" * 64}]},
         )
 
-    assert response.status_code == 204, response.text
-    service.put.assert_awaited_once_with(
-        "workspace-a", "docs/report.md", b"updated", content_type="text/plain"
+    assert response.status_code == 200, response.text
+    assert response.json()["uploads"][0]["status"] == "upload"
+    service.authorize_put.assert_awaited_once_with(
+        "workspace-a", "docs/report.md", sha256_hex="a" * 64, content_type=None
     )
 
 

@@ -5,7 +5,7 @@ Files for a project live in S3/RustFS under
 ``ArtifactService``.
 The endpoints we exercise here:
 
-  POST   /v1/projects/{id}/files          (multipart upload)
+  POST   /v1/projects/{id}/files/upload-urls  (upload plan; bytes PUT to the store)
   GET    /v1/projects/{id}/files          (list)
   GET    /v1/projects/{id}/files/{path}   (authenticated download URL)
   DELETE /v1/projects/{id}/files/{path}
@@ -27,11 +27,17 @@ from urllib.parse import urlparse
 import httpx
 import pytest
 
+from .conftest import upload_planned
+
 
 def _create_project(client: httpx.Client, name: str) -> str:
     resp = client.post(f"{client.ws}/projects/", json={"name": name})
     resp.raise_for_status()
     return resp.json()["id"]
+
+
+def _plan_url(client: httpx.Client, project_id: str) -> str:
+    return f"{client.ws}/projects/{project_id}/files/upload-urls"
 
 
 @pytest.mark.integration
@@ -42,11 +48,9 @@ def test_project_file_upload_list_download_delete_roundtrip(
     body = b"project-file-content-omega-7\n"
     filename = "report.txt"
 
-    upload = alice_client.post(
-        f"{alice_client.ws}/projects/{project_id}/files",
-        files={"file": (filename, body, "text/plain")},
-    )
-    assert upload.status_code == 204, upload.text[:200]
+    upload = upload_planned(alice_client, _plan_url(alice_client, project_id), filename, body)
+    assert upload.status_code == 200, upload.text[:200]
+    assert upload.json()["uploads"][0]["path"] == filename
 
     listing = alice_client.get(f"{alice_client.ws}/projects/{project_id}/files")
     assert listing.status_code == 200, listing.text[:200]
@@ -103,9 +107,8 @@ def test_project_files_are_workspace_scoped(
     alice_client: httpx.Client, bob_client: httpx.Client
 ) -> None:
     project_id = _create_project(alice_client, "files-isolation")
-    alice_client.post(
-        f"{alice_client.ws}/projects/{project_id}/files",
-        files={"file": ("secret.txt", b"alice-eyes-only", "text/plain")},
+    upload_planned(
+        alice_client, _plan_url(alice_client, project_id), "secret.txt", b"alice-eyes-only"
     ).raise_for_status()
 
     # Bob must not see Alice's project at all.
@@ -114,10 +117,7 @@ def test_project_files_are_workspace_scoped(
         f"CRITICAL: Bob listed Alice's project files: HTTP {listing.status_code} "
         f"{listing.text[:200]!r}"
     )
-    upload = bob_client.post(
-        f"{bob_client.ws}/projects/{project_id}/files",
-        files={"file": ("evil.txt", b"x", "text/plain")},
-    )
+    upload = upload_planned(bob_client, _plan_url(bob_client, project_id), "evil.txt", b"x")
     assert upload.status_code == 404, upload.text[:200]
     download = bob_client.get(f"{bob_client.ws}/projects/{project_id}/files/secret.txt")
     assert download.status_code == 404, download.text[:200]
@@ -130,8 +130,20 @@ def test_project_file_unknown_project_returns_404(
     alice_client: httpx.Client,
 ) -> None:
     fake = "00000000-0000-0000-0000-000000000000"
-    resp = alice_client.post(
-        f"{alice_client.ws}/projects/{fake}/files",
-        files={"file": ("x.txt", b"x", "text/plain")},
-    )
+    resp = upload_planned(alice_client, _plan_url(alice_client, fake), "x.txt", b"x")
     assert resp.status_code == 404, resp.text[:200]
+
+
+@pytest.mark.integration
+def test_project_file_plan_refuses_paths_outside_the_project(
+    alice_client: httpx.Client,
+) -> None:
+    project_id = _create_project(alice_client, "files-escape")
+    resp = alice_client.post(
+        _plan_url(alice_client, project_id),
+        json={"files": [{"path": "../escape.txt", "sha256": "a" * 64}]},
+    )
+    assert resp.status_code == 200, resp.text[:200]
+    [entry] = resp.json()["uploads"]
+    assert entry["status"] == "error", entry
+    assert entry["upload_url"] is None, entry
