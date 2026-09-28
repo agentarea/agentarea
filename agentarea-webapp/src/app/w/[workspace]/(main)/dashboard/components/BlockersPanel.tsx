@@ -7,7 +7,6 @@ import EmptyState from "@/components/EmptyState";
 import { CollapsibleGroup } from "@/components/ui/group-header";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import Link from "@/components/WorkspaceLink";
-import { useCurrency } from "@/hooks/useCurrency";
 import type { DashboardData } from "@/lib/api-dashboard";
 import { formatMoney } from "@/lib/money";
 import { formatRelTime } from "./relTime";
@@ -30,12 +29,13 @@ type Group = {
 
 export function BlockersPanel({
   blockers,
+  currency,
 }: {
   blockers: DashboardData["blockers"];
+  currency: string | null;
 }) {
   const t = useTranslations("DashboardPage");
   const locale = useLocale();
-  const { currency } = useCurrency();
   const ago = (iso: string | null) =>
     t("timeAgo", { time: formatRelTime(iso, t) });
 

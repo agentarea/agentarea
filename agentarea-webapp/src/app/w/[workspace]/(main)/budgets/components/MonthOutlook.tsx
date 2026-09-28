@@ -1,7 +1,6 @@
 import { useLocale, useTranslations } from "next-intl";
 import { Gauge, Info } from "lucide-react";
 import { BoardSectionHeader } from "@/components/board";
-import { useCurrency } from "@/hooks/useCurrency";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
@@ -50,16 +49,17 @@ export function MonthOutlook({
   projected,
   cap,
   runRateDays,
+  currency,
 }: {
   today: number;
   projected: number | null;
   cap: number | null;
   /** Number of days behind the projection run-rate. */
   runRateDays: number;
+  currency: string | null;
 }) {
   const t = useTranslations("BudgetsPage");
   const locale = useLocale();
-  const { currency } = useCurrency();
   const fmt = (v: number) => formatMoney(v, currency, locale);
 
   const projectedPct =
