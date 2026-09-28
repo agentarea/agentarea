@@ -18,8 +18,6 @@ KUBERNETES_GATEWAY_NAME: "{{ .Values.mcpManager.gateway.name | default "envoy-ga
 KUBERNETES_GATEWAY_NAMESPACE: "{{ .Values.mcpManager.gateway.namespace | default "envoy-gateway-system" }}"
 KUBERNETES_RUNTIME_CLASS: "{{ .Values.mcpManager.runtimeClass }}"
 DEFAULT_ISOLATION_TIER: "{{ required "mcpManager.isolationTier is required" .Values.mcpManager.isolationTier }}"
-MCP_ALLOWED_IMAGE_REPOSITORIES: "{{ join "," .Values.mcpManager.admission.allowedImageRepositories }}"
-MCP_ALLOWED_COMMAND_PACKAGES: "{{ join "," .Values.mcpManager.admission.allowedCommandPackages }}"
 KUBERNETES_KUBECONFIG: "{{ include "agentarea.mcpManager.executionKubeconfigPath" . }}"
 KUBERNETES_POD_SERVICE_ACCOUNT_NAME: "{{ include "agentarea.mcpRuntimeServiceAccountName" . }}"
 SANDBOX_WORKSPACE_PROVIDER: "s3"
@@ -39,6 +37,7 @@ MCP_IDLE_TIMEOUT: "{{ if .Values.mcpManager.serverless.enabled }}{{ .Values.mcpM
 MCP_IDLE_SWEEP_INTERVAL: "{{ .Values.mcpManager.serverless.sweepInterval }}"
 MCP_REQUEST_LEASE_TTL: "{{ .Values.mcpManager.serverless.requestLeaseTTL }}"
 MCP_GATEWAY_STARTUP_TIMEOUT: "{{ .Values.mcpManager.serverless.startupTimeout }}"
+MCP_BASE_IMAGE: "{{ .Values.mcpManager.mcpBase.image.repository }}:{{ .Values.mcpManager.mcpBase.image.tag }}"
 {{- end }}
 
 {{- define "agentarea.mcpManager.envs" }}
@@ -112,16 +111,6 @@ MCP_GATEWAY_STARTUP_TIMEOUT: "{{ .Values.mcpManager.serverless.startupTimeout }}
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: DEFAULT_ISOLATION_TIER
-- name: MCP_ALLOWED_IMAGE_REPOSITORIES
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: MCP_ALLOWED_IMAGE_REPOSITORIES
-- name: MCP_ALLOWED_COMMAND_PACKAGES
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: MCP_ALLOWED_COMMAND_PACKAGES
 - name: KUBERNETES_KUBECONFIG
   valueFrom:
     configMapKeyRef:
@@ -217,6 +206,11 @@ MCP_GATEWAY_STARTUP_TIMEOUT: "{{ .Values.mcpManager.serverless.startupTimeout }}
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: MCP_GATEWAY_STARTUP_TIMEOUT
+- name: MCP_BASE_IMAGE
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: MCP_BASE_IMAGE
 {{- end }}
 
 {{- define "agentarea.mcpManager.secrets.envs" }}

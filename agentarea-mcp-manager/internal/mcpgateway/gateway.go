@@ -5,10 +5,12 @@
 package mcpgateway
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -26,6 +28,11 @@ import (
 // a tools/call, without running the tool twice. A 503 that the workload or a
 // remote server sends does not carry it.
 const StartingHeader = "X-AgentArea-MCP-Starting"
+
+// maxRequestBodyBytes bounds the request body the gateway buffers before it
+// waits for a workload. MCP requests are JSON-RPC messages; tool arguments that
+// carry files are the large ones.
+const maxRequestBodyBytes = 32 << 20
 
 type InstanceRuntime interface {
 	EnsureReady(context.Context, *models.MCPServerInstance) (string, error)
@@ -175,6 +182,26 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		return
 	}
 	request.Header.Del("X-AgentArea-Manager-Authorization")
+
+	// A cold start holds this request for as long as the workload takes to
+	// listen, and the server's read deadline runs out long before an npx
+	// install finishes. Reading the body now, not when the request is finally
+	// proxied, keeps a slow start from failing the request with an i/o timeout.
+	if request.Body != nil && request.Body != http.NoBody {
+		body, err := io.ReadAll(http.MaxBytesReader(response, request.Body, maxRequestBodyBytes))
+		if err != nil {
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				http.Error(response, "MCP request body is too large", http.StatusRequestEntityTooLarge)
+				return
+			}
+			http.Error(response, "MCP request body could not be read", http.StatusBadRequest)
+			return
+		}
+		request.Body = io.NopCloser(bytes.NewReader(body))
+		request.ContentLength = int64(len(body))
+		request.TransferEncoding = nil
+	}
 
 	requestID := uuid.NewString()
 	var startedAt, endedAt time.Time

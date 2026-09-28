@@ -388,15 +388,13 @@ services:
       MCP_IDLE_SWEEP_INTERVAL: ${MCP_IDLE_SWEEP_INTERVAL:-60s}
       MCP_REQUEST_LEASE_TTL: ${MCP_REQUEST_LEASE_TTL:-90s}
       MCP_GATEWAY_STARTUP_TIMEOUT: ${MCP_GATEWAY_STARTUP_TIMEOUT:-5m}
-      # Admission lists, mirroring charts/agentarea/values.yaml
-      # (mcpManager.admission). Both are required and an absent list is
-      # refused: "not decided yet" must not read as "allow everything".
-      MCP_ALLOWED_IMAGE_REPOSITORIES: "ghcr.io/github/github-mcp-server,mcp/fetch,agentarea/mcp-outreach-demo"
-      MCP_ALLOWED_COMMAND_PACKAGES: "npx -y @modelcontextprotocol/server-everything,npx -y @modelcontextprotocol/server-sequential-thinking,npx -y @modelcontextprotocol/server-customer-segmentation --stdio,npx -y @modelcontextprotocol/server-map --stdio,uvx mcp-server-fetch,uvx mcp-server-time"
-      # Catalog servers are third-party but not user-authored, which is what
-      # the standard tier describes. The untrusted default pins --runtime to
-      # gVisor, and no Docker Desktop has runsc, so every instance would fail
-      # to create with a bare "exit status 125".
+      # `command` connections (npx/uvx) run on this image, built by the
+      # mcp-base service below.
+      MCP_BASE_IMAGE: agentarea/agentarea-mcp-base:dev
+      # MCP servers run third-party npm/PyPI packages and images. The untrusted
+      # tier pins --runtime to gVisor, which no Docker Desktop has, so every
+      # instance would fail to create with a bare "exit status 125"; this dev
+      # stack runs them at standard, on the host kernel.
       DEFAULT_ISOLATION_TIER: ${DEFAULT_ISOLATION_TIER:-standard}
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
@@ -442,6 +440,15 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       SECRET_MANAGER_ENCRYPTION_KEY: ${SECRET_MANAGER_ENCRYPTION_KEY}
+
+  # Builds the image `command` connections run on (MCP_BASE_IMAGE above). The
+  # manager starts its containers; this service only builds it and exits.
+  mcp-base:
+    image: agentarea/agentarea-mcp-base:dev
+    build:
+      context: mcp-servers/mcp-base
+    entrypoint: ["node", "--version"]
+    restart: "no"
 
   # Sandbox executor — isolated script runner (simulates warm pool pod in dev).
   # Same unified runtime image as the prod warm-pool runner (Dockerfile.runner).

@@ -412,15 +412,11 @@ func initDemandGateway(ctx context.Context, cfg *config.Config, providerManager 
 	if err != nil {
 		return nil, nil, nil, failed(logger, "Failed to configure MCP demand gateway", err)
 	}
-	imagePolicy, err := mcpgateway.LoadImagePolicyFromEnv()
-	if err != nil {
-		return nil, nil, nil, failed(logger, "Failed to configure MCP instance admission", err)
-	}
 	gatewayRepository, err := mcpgateway.OpenSQLRepository(ctx, database.BuildConnStr(logger))
 	if err != nil {
 		return nil, nil, nil, failed(logger, "Failed to initialize MCP demand gateway state", err)
 	}
-	gatewayRuntime, err := mcpgateway.NewProviderRuntime(providerManager, backend, cfg, imagePolicy, gatewayPolicy.StartupTimeout, remoteUpstream)
+	gatewayRuntime, err := mcpgateway.NewProviderRuntime(providerManager, backend, cfg, gatewayPolicy.StartupTimeout, remoteUpstream)
 	if err != nil {
 		_ = gatewayRepository.Close()
 		return nil, nil, nil, failed(logger, "Failed to initialize MCP demand runtime", err)

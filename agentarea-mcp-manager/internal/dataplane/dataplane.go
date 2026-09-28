@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -30,6 +29,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/agentarea/mcp-manager/internal/backends"
+	"github.com/agentarea/mcp-manager/internal/listener"
 )
 
 // OwnerLabel marks every instance this data plane created. Operations on anything
@@ -219,7 +219,7 @@ func (s *Server) ensureRunning(c *gin.Context, status *backends.InstanceStatus) 
 	// came back as a bare 502 -- the shape of a broken instance, on a workload
 	// that was seconds away from serving. A warm instance pays one local dial.
 	if status.Status == "running" && status.InternalURL != "" {
-		if err := waitForListener(c.Request.Context(), status.InternalURL, deadline); err != nil {
+		if err := listener.Wait(c.Request.Context(), status.InternalURL, deadline); err != nil {
 			return nil, err
 		}
 		return status, nil
@@ -245,7 +245,7 @@ func (s *Server) ensureRunning(c *gin.Context, status *backends.InstanceStatus) 
 	for {
 		refreshed, err := s.backend.GetInstanceStatus(c.Request.Context(), instanceID)
 		if err == nil && refreshed.Status == "running" && refreshed.InternalURL != "" {
-			if err := waitForListener(c.Request.Context(), refreshed.InternalURL, deadline); err != nil {
+			if err := listener.Wait(c.Request.Context(), refreshed.InternalURL, deadline); err != nil {
 				return nil, err
 			}
 			return refreshed, nil
@@ -256,36 +256,6 @@ func (s *Server) ensureRunning(c *gin.Context, status *backends.InstanceStatus) 
 		select {
 		case <-c.Request.Context().Done():
 			return nil, c.Request.Context().Err()
-		case <-time.After(250 * time.Millisecond):
-		}
-	}
-}
-
-// waitForListener blocks until the instance is accepting connections.
-//
-// "Running" is the container's state, not the server's. A freshly started MCP
-// image reports running while its process is still binding, and proxying into
-// that window returns a bare connection-refused to the caller — indistinguishable
-// from a broken instance.
-func waitForListener(ctx context.Context, internalURL string, deadline time.Time) error {
-	target, err := url.Parse(internalURL)
-	if err != nil || target.Host == "" {
-		return fmt.Errorf("instance address %q is not usable", internalURL)
-	}
-
-	dialer := &net.Dialer{Timeout: 2 * time.Second}
-	for {
-		conn, err := dialer.DialContext(ctx, "tcp", target.Host)
-		if err == nil {
-			conn.Close()
-			return nil
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("instance at %s never accepted a connection: %w", target.Host, err)
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
 		case <-time.After(250 * time.Millisecond):
 		}
 	}

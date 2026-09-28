@@ -705,7 +705,7 @@ class RegistryService:
         if conn_type == "docker":
             docker_image_url = spec.get("image", "")
         elif conn_type == "command":
-            docker_image_url = "agentarea/mcp-bridge:latest"
+            docker_image_url = "agentarea/agentarea-mcp-base"
             command = spec.get("command", "")
             args = spec.get("args", [])
             cmd = [command, *args] if command else None

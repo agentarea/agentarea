@@ -244,7 +244,7 @@ def _url_mcp(key: str, name: str, endpoint_url: str) -> dict[str, Any]:
 
 
 def _stdio_mcp(key: str, name: str, command: str, args: list[str]) -> dict[str, Any]:
-    """A stdio MCP run in the mcp-bridge container.
+    """A stdio MCP run in the MCP base image.
 
     ``command`` must be one of the runtimes the analyzer allows (npx, uvx, …) and
     the package must actually be published — an unresolvable package fails at

@@ -3,6 +3,7 @@ package mcpgateway
 import (
 	"context"
 	"errors"
+	"net"
 	"strings"
 	"sync"
 	"testing"
@@ -25,8 +26,9 @@ type runtimeBackendStub struct {
 }
 
 type statusReply struct {
-	status string
-	err    error
+	status      string
+	internalURL string
+	err         error
 }
 
 func (b *runtimeBackendStub) GetInstanceStatus(context.Context, string) (*backends.InstanceStatus, error) {
@@ -37,7 +39,7 @@ func (b *runtimeBackendStub) GetInstanceStatus(context.Context, string) (*backen
 	if reply.err != nil {
 		return nil, reply.err
 	}
-	return &backends.InstanceStatus{Status: reply.status}, nil
+	return &backends.InstanceStatus{Status: reply.status, InternalURL: reply.internalURL}, nil
 }
 
 func (b *runtimeBackendStub) statusCalls() int {
@@ -85,7 +87,6 @@ func testProviderRuntime(t *testing.T, backend backends.Backend, provider provid
 		selectorStub{provider: provider},
 		backend,
 		&config.Config{Environment: "docker"},
-		testImagePolicy(t),
 		startup,
 		nil,
 	)
@@ -101,20 +102,9 @@ func dockerInstance() *models.MCPServerInstance {
 		Name:       "8ca9f331-9cc9-4a51-9933-27d7bb73860b",
 		JSONSpec: map[string]any{
 			"type":  "docker",
-			"image": "ghcr.io/agentarea/allowed-mcp:1.2.3",
+			"image": "ghcr.io/agentarea/mcp:1.2.3",
 		},
 	}
-}
-
-func testImagePolicy(t *testing.T) ImagePolicy {
-	t.Helper()
-	t.Setenv("MCP_ALLOWED_IMAGE_REPOSITORIES", "ghcr.io/agentarea/allowed-mcp")
-	t.Setenv("MCP_ALLOWED_COMMAND_PACKAGES", "allowed-mcp-package")
-	policy, err := LoadImagePolicyFromEnv()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return policy
 }
 
 // TestOnlyAMissingInstanceTriggersCreation is the typed-error contract: an
@@ -162,6 +152,122 @@ func TestMissingInstanceIsCreatedOnce(t *testing.T) {
 	creates, deletes := provider.counts()
 	if creates != 1 || deletes != 0 {
 		t.Fatalf("creates=%d deletes=%d, want a single creation and no teardown", creates, deletes)
+	}
+}
+
+// TestColdStartWaitsForTheWorkloadToListen reproduces the first-request 502:
+// Docker reports a container running while its server is still starting (an
+// mcp-base container installs its package and initializes its stdio server
+// before it binds), so proxying at "running" dialed a closed port.
+func TestColdStartWaitsForTheWorkloadToListen(t *testing.T) {
+	reserved, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := reserved.Addr().String()
+	reserved.Close()
+	backend := &runtimeBackendStub{statuses: []statusReply{
+		{err: backends.ErrInstanceNotFound},
+		{status: "running", internalURL: "http://" + address},
+	}}
+	const bindAfter = 400 * time.Millisecond
+	go func() {
+		time.Sleep(bindAfter)
+		server, err := net.Listen("tcp", address)
+		if err != nil {
+			return
+		}
+		t.Cleanup(func() { server.Close() })
+	}()
+
+	started := time.Now()
+	if _, err := testProviderRuntime(t, backend, &runtimeProviderStub{}, 5*time.Second).
+		EnsureReady(context.Background(), dockerInstance()); err != nil {
+		t.Fatalf("EnsureReady() error = %v", err)
+	}
+	if waited := time.Since(started); waited < bindAfter {
+		t.Fatalf("EnsureReady returned after %v, before the workload listened", waited)
+	}
+}
+
+func TestWorkloadThatNeverListensIsTornDown(t *testing.T) {
+	reserved, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := reserved.Addr().String()
+	reserved.Close()
+	backend := &runtimeBackendStub{statuses: []statusReply{
+		{err: backends.ErrInstanceNotFound},
+		{status: "running", internalURL: "http://" + address},
+	}}
+	provider := &runtimeProviderStub{}
+	_, err = testProviderRuntime(t, backend, provider, 500*time.Millisecond).
+		EnsureReady(context.Background(), dockerInstance())
+	if err == nil {
+		t.Fatal("a workload that never listened reported a successful activation")
+	}
+	if creates, deletes := provider.counts(); creates != 1 || deletes != 1 {
+		t.Fatalf("creates=%d deletes=%d, want the silent workload torn down", creates, deletes)
+	}
+}
+
+// mcp-base exits when its stdio server dies, and the container it ran in stays
+// behind as exited. Waiting on it held every request for the whole startup
+// timeout before the workload was replaced; it is replaced straight away.
+func TestStoppedWorkloadIsReplacedNotWaitedOn(t *testing.T) {
+	backend := &runtimeBackendStub{statuses: []statusReply{
+		{status: "stopped"},
+		{status: "running"},
+	}}
+	provider := &runtimeProviderStub{}
+	started := time.Now()
+	if _, err := testProviderRuntime(t, backend, provider, 5*time.Second).
+		EnsureReady(context.Background(), dockerInstance()); err != nil {
+		t.Fatalf("EnsureReady() error = %v", err)
+	}
+	if creates, deletes := provider.counts(); creates != 1 || deletes != 1 {
+		t.Fatalf("creates=%d deletes=%d, want the stopped workload replaced once", creates, deletes)
+	}
+	if waited := time.Since(started); waited > time.Second {
+		t.Fatalf("EnsureReady took %v; a stopped workload was waited on", waited)
+	}
+}
+
+// A package that fails to install or initialize makes mcp-base exit. That
+// start has failed, whether the workload stops before or after it reported
+// running, and the caller learns it then — not when the startup timeout ends.
+func TestWorkloadThatStopsWhileStartingFailsFast(t *testing.T) {
+	reserved, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := reserved.Addr().String()
+	reserved.Close()
+	for name, statuses := range map[string][]statusReply{
+		"before running": {{err: backends.ErrInstanceNotFound}, {status: "stopped"}},
+		"while installing": {
+			{err: backends.ErrInstanceNotFound},
+			{status: "running", internalURL: "http://" + address},
+			{status: "stopped"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			backend := &runtimeBackendStub{statuses: statuses}
+			provider := &runtimeProviderStub{}
+			started := time.Now()
+			_, err := testProviderRuntime(t, backend, provider, 30*time.Second).
+				EnsureReady(context.Background(), dockerInstance())
+			if err == nil || !strings.Contains(err.Error(), "stopped") {
+				t.Fatalf("EnsureReady() error = %v, want the stopped workload reported", err)
+			}
+			if waited := time.Since(started); waited > 5*time.Second {
+				t.Fatalf("EnsureReady took %v; a stopped start was waited out", waited)
+			}
+			if creates, deletes := provider.counts(); creates != 1 || deletes != 1 {
+				t.Fatalf("creates=%d deletes=%d, want the failed start cleaned up", creates, deletes)
+			}
+		})
 	}
 }
 
