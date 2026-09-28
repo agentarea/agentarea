@@ -16,6 +16,7 @@ from agentarea_openapi.application.spec_parser import parse_openapi_spec
 from agentarea_openapi.application.url_validator import (
     _SPEC_MAX_SIZE,
     build_pinned_target,
+    check_url_variables,
     validate_url,
 )
 from agentarea_openapi.domain.models import OpenAPIConnection
@@ -30,6 +31,10 @@ logger = logging.getLogger(__name__)
 
 class MissingHeaderSecretError(RuntimeError):
     """A secret header on this connection has no stored value to send."""
+
+
+class MissingUrlVariableSecretError(RuntimeError):
+    """A URL variable on this connection has no stored value to substitute."""
 
 
 # Headers that are never sensitive — stored as plaintext.
@@ -70,6 +75,11 @@ def _load_yaml_spec(text: str) -> Any:
 def _secret_key(connection_id: str | UUID, header_name: str) -> str:
     """Build the secret manager key for a header value."""
     return f"openapi:{connection_id}:header:{header_name}"
+
+
+def _url_variable_key(connection_id: str | UUID, variable_name: str) -> str:
+    """Build the secret manager key for a URL variable value."""
+    return f"openapi:{connection_id}:url_var:{variable_name}"
 
 
 def _is_safe_header(name: str) -> bool:
@@ -183,6 +193,9 @@ class OpenAPIConnectionService:
         allowed_auth_origins: list[str] | None = None,
         status: str = "active",
     ) -> OpenAPIConnection:
+        raw_url_variables = [v.model_dump() for v in payload.url_variables or []]
+        check_url_variables(payload.base_url, [v["name"] for v in raw_url_variables])
+
         # Validate URLs at creation time (SSRF protection)
         validate_url(payload.base_url, policy=self._outbound_policy)
         if payload.spec_url:
@@ -198,6 +211,10 @@ class OpenAPIConnectionService:
         if payload.custom_headers:
             raw_headers = [h.model_dump() for h in payload.custom_headers]
             processed_headers = await self._store_headers(raw_headers, connection_id=conn_id)
+
+        url_variable_names = None
+        if raw_url_variables:
+            url_variable_names = await self._store_url_variables(raw_url_variables, conn_id)
 
         # Eagerly resolve spec + tools so callers get a ready-to-use connection
         # in a single request. Pasted JSON is parsed in-place; spec_url is fetched.
@@ -231,6 +248,7 @@ class OpenAPIConnectionService:
             registry_item_id=registry_item_id,
             allowed_auth_origins=allowed_auth_origins,
             custom_headers=processed_headers,
+            url_variables=url_variable_names,
             available_tools=available_tools,
             status=status,
         )
@@ -298,6 +316,40 @@ class OpenAPIConnectionService:
                 # Swallowing this leaves the credential in the store with
                 # nothing referring to it — invisible, and never cleaned up.
                 await self._secret_manager.delete_secret(key)
+
+    async def _store_url_variables(
+        self,
+        raw_url_variables: list[dict[str, str]],
+        connection_id: str | UUID,
+    ) -> list[str]:
+        """Store each URL variable value as a secret and return the names."""
+        names = []
+        for v in raw_url_variables:
+            await self._secret_manager.set_secret(
+                _url_variable_key(connection_id, v["name"]), v["value"]
+            )
+            names.append(v["name"])
+        return names
+
+    async def _delete_url_variable_secrets(self, conn: OpenAPIConnection) -> None:
+        for name in conn.url_variables or []:
+            await self._secret_manager.delete_secret(_url_variable_key(conn.id, name))
+
+    async def resolve_base_url(self, conn: OpenAPIConnection) -> str:
+        """Fill the base URL's placeholders with their URL-encoded secret values.
+
+        The result carries credentials: log and report ``conn.base_url`` instead.
+        """
+        base_url = conn.base_url
+        for name in conn.url_variables or []:
+            value = await self._secret_manager.get_secret(_url_variable_key(conn.id, name))
+            if not value:
+                raise MissingUrlVariableSecretError(
+                    f"Connection {conn.id} has no stored value for URL variable '{name}'. "
+                    "Re-enter it."
+                )
+            base_url = base_url.replace(f"{{{name}}}", urllib.parse.quote(value, safe=""))
+        return base_url
 
     async def resolve_headers(self, conn: OpenAPIConnection) -> dict[str, str]:
         """Build request headers, including the connection's linked auth config."""
@@ -370,6 +422,19 @@ class OpenAPIConnectionService:
         """Apply a partial update. Headers are processed separately so secrets stay atomic."""
         patch = payload.model_dump(exclude_unset=True)
 
+        raw_url_variables = patch.pop("url_variables", None)
+        url_variables_conn: OpenAPIConnection | None = None
+        if patch.get("base_url") or raw_url_variables is not None:
+            url_variables_conn = await self._repo.get_by_id(str(connection_id))
+            if not url_variables_conn:
+                return None
+            check_url_variables(
+                patch.get("base_url") or url_variables_conn.base_url,
+                [v["name"] for v in raw_url_variables]
+                if raw_url_variables is not None
+                else url_variables_conn.url_variables or [],
+            )
+
         # custom_headers are routed through update_headers (secret manager).
         if "custom_headers" in patch:
             raw_headers = patch.pop("custom_headers")
@@ -400,6 +465,11 @@ class OpenAPIConnectionService:
         if patch.get("spec_url"):
             validate_url(patch["spec_url"], policy=self._outbound_policy)
 
+        if raw_url_variables is not None and url_variables_conn is not None:
+            await self._delete_url_variable_secrets(url_variables_conn)
+            names = await self._store_url_variables(raw_url_variables, url_variables_conn.id)
+            await self._repo.update(str(connection_id), url_variables=names)
+
         if patch:
             return await self._repo.update(str(connection_id), **patch)
 
@@ -410,6 +480,7 @@ class OpenAPIConnectionService:
         conn = await self._repo.get_by_id(str(connection_id))
         if conn:
             await self._delete_header_secrets(conn)
+            await self._delete_url_variable_secrets(conn)
         return await self._repo.delete(str(connection_id))
 
     async def discover_tools(self, connection_id: UUID) -> dict[str, Any]:

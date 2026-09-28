@@ -3888,7 +3888,7 @@ export type OpenApiConnectionCreate = {
     /**
      * Base Url
      *
-     * Base URL for API requests, e.g. 'https://api.example.com'.
+     * Base URL for API requests, e.g. 'https://api.example.com'. The path may hold '{name}' placeholders filled from url_variables, e.g. 'https://api.telegram.org/bot{token}'.
      */
     base_url: string;
     /**
@@ -3923,6 +3923,12 @@ export type OpenApiConnectionCreate = {
      * URL to an OpenAPI 3.x JSON or YAML spec. The spec is fetched and parsed eagerly at create time so the connection is ready for use.
      */
     spec_url?: string | null;
+    /**
+     * Url Variables
+     *
+     * Secret values for the '{name}' placeholders in the base URL path, one per placeholder. Stored encrypted in the secret manager.
+     */
+    url_variables?: Array<UrlVariableInput> | null;
 };
 /**
  * OpenAPIConnectionResponse
@@ -3976,6 +3982,10 @@ export type OpenApiConnectionResponse = {
      * Updated At
      */
     updated_at: string;
+    /**
+     * Url Variables
+     */
+    url_variables?: Array<string> | null;
 };
 /**
  * OpenAPIConnectionUpdate
@@ -4017,6 +4027,12 @@ export type OpenApiConnectionUpdate = {
      * Spec Url
      */
     spec_url?: string | null;
+    /**
+     * Url Variables
+     *
+     * Replace the full URL-variable set; must match the base URL's placeholders. Pass [] to clear all. Values are stored encrypted.
+     */
+    url_variables?: Array<UrlVariableInput> | null;
 };
 /**
  * OpenAPIToolResponse
@@ -7249,6 +7265,27 @@ export type UploadPlanResponse = {
      * Uploads
      */
     uploads: Array<PlannedUpload>;
+};
+/**
+ * UrlVariableInput
+ *
+ * A secret value substituted into a ``{name}`` placeholder in the base URL path.
+ *
+ * The value is stored encrypted in the secret manager; it is never returned.
+ */
+export type UrlVariableInput = {
+    /**
+     * Name
+     *
+     * Placeholder name as written in base_url, e.g. 'token' for '{token}'.
+     */
+    name: string;
+    /**
+     * Value
+     *
+     * Secret value. URL-encoded when substituted into the request URL.
+     */
+    value: string;
 };
 /**
  * ValidateRequest

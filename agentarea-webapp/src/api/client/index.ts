@@ -1818,6 +1818,7 @@ export type {
   UpsertModelSpecV1ModelSpecsUpsertPostErrors,
   UpsertModelSpecV1ModelSpecsUpsertPostResponse,
   UpsertModelSpecV1ModelSpecsUpsertPostResponses,
+  UrlVariableInput,
   ValidateConnectionV1McpServerInstancesValidateConnectionPostData,
   ValidateConnectionV1McpServerInstancesValidateConnectionPostError,
   ValidateConnectionV1McpServerInstancesValidateConnectionPostErrors,

@@ -31,6 +31,7 @@ class TestParseManagedName:
             (f"channel_cred:telegram:{CONFIG_ID}", "trigger", CONFIG_ID),
             (f"wallet_creds_{CONFIG_ID}", "agent", CONFIG_ID),
             (f"openapi:{CONFIG_ID}:header:Authorization", "openapi_connection", CONFIG_ID),
+            (f"openapi:{CONFIG_ID}:url_var:token", "openapi_connection", CONFIG_ID),
             (f"task-input/{CONFIG_ID}/api_token", "task", CONFIG_ID),
             (f"a2a_push_token:{CONFIG_ID}:{INSTANCE_ID}", "task", CONFIG_ID),
         ],
@@ -142,6 +143,7 @@ class TestValidateUserSecretName:
             f"channel_cred:telegram:{CONFIG_ID}",
             f"wallet_creds_{CONFIG_ID}",
             f"openapi:{CONFIG_ID}:header:Authorization",
+            f"openapi:{CONFIG_ID}:url_var:token",
             f"task-input/{CONFIG_ID}/api_token",
             f"a2a_push_token:{CONFIG_ID}:{INSTANCE_ID}",
         ):

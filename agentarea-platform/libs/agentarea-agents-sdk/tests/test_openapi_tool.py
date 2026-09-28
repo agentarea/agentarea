@@ -65,6 +65,7 @@ def _make_service(connection=None, headers=None):
     svc = AsyncMock()
     svc.get_connection = AsyncMock(return_value=connection)
     svc.resolve_headers = AsyncMock(return_value=headers or {})
+    svc.resolve_base_url = AsyncMock(side_effect=lambda c: c.base_url)
     svc._allow_private_urls = False
     return svc
 
@@ -626,3 +627,99 @@ class TestOpenAPIToolFactory:
 
         assert len(tools) == 3
         svc.get_connection.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Secret URL variables
+# ---------------------------------------------------------------------------
+
+_TELEGRAM_TOKEN = "123456:ABC/def"
+_QUOTED_TOKEN = "123456%3AABC%2Fdef"
+
+
+async def _telegram_service(token: str | None = _TELEGRAM_TOKEN):
+    from agentarea_common.testing.mocks import TestSecretManager as FakeSecretManager
+    from agentarea_common.utils.url_safety import OutboundPolicy
+    from agentarea_openapi.application.service import OpenAPIConnectionService
+    from agentarea_openapi.domain.models import OpenAPIConnection
+
+    conn = OpenAPIConnection(
+        id=_CONNECTION_ID,
+        name=_CONNECTION_NAME,
+        base_url="https://api.telegram.org/bot{token}",
+        url_variables=["token"],
+    )
+    secrets = FakeSecretManager()
+    if token is not None:
+        await secrets.set_secret(f"openapi:{conn.id}:url_var:token", token)
+    svc = OpenAPIConnectionService(
+        repository_factory=MagicMock(),
+        secret_manager=secrets,
+        auth_config_access_checker=AsyncMock(),
+        outbound_policy=OutboundPolicy(),
+    )
+    svc._repo = AsyncMock()
+    svc._repo.get_by_id.return_value = conn
+    return svc
+
+
+class TestOpenAPIToolUrlVariables:
+    @pytest.mark.asyncio
+    async def test_the_quoted_secret_reaches_the_request_url_only(self, caplog):
+        svc = await _telegram_service()
+        mock_client = _build_mock_client(httpx.Response(200, json={"ok": True}))
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+            caplog.at_level("DEBUG"),
+        ):
+            op = _make_operation(name="sendMessage", method="POST", path="/sendMessage")
+            tool = mod.OpenAPITool(op, _CONNECTION_ID, _CONNECTION_NAME, svc)
+            result = await tool.execute()
+
+        assert mock_client.request.call_args.kwargs["url"] == (
+            f"https://api.telegram.org/bot{_QUOTED_TOKEN}/sendMessage"
+        )
+        assert result["success"] is True
+        assert _QUOTED_TOKEN not in json.dumps(result)
+        assert _QUOTED_TOKEN not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_a_failed_request_reports_the_template_not_the_secret(self, caplog):
+        svc = await _telegram_service()
+        mock_client = MagicMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.request = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+            caplog.at_level("DEBUG"),
+        ):
+            op = _make_operation(name="getMe", method="GET", path="/getMe")
+            tool = mod.OpenAPITool(op, _CONNECTION_ID, _CONNECTION_NAME, svc)
+            result = await tool.execute()
+
+        assert result["success"] is False
+        assert _QUOTED_TOKEN not in json.dumps(result)
+        assert "https://api.telegram.org/bot{token}/getMe" in caplog.text
+        assert _QUOTED_TOKEN not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_a_missing_stored_value_fails_with_a_clear_error(self):
+        svc = await _telegram_service(token=None)
+        mock_client = _build_mock_client(httpx.Response(200, json={"ok": True}))
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+        ):
+            op = _make_operation(name="getMe", method="GET", path="/getMe")
+            tool = mod.OpenAPITool(op, _CONNECTION_ID, _CONNECTION_NAME, svc)
+            result = await tool.execute()
+
+        assert result["success"] is False
+        assert "no stored value for URL variable 'token'" in result["error"]
+        mock_client.request.assert_not_awaited()

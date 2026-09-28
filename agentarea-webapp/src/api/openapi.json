@@ -6873,7 +6873,7 @@
             "title": "Auth Config Id"
           },
           "base_url": {
-            "description": "Base URL for API requests, e.g. 'https://api.example.com'.",
+            "description": "Base URL for API requests, e.g. 'https://api.example.com'. The path may hold '{name}' placeholders filled from url_variables, e.g. 'https://api.telegram.org/bot{token}'.",
             "maxLength": 500,
             "title": "Base Url",
             "type": "string"
@@ -6936,6 +6936,21 @@
             ],
             "description": "URL to an OpenAPI 3.x JSON or YAML spec. The spec is fetched and parsed eagerly at create time so the connection is ready for use.",
             "title": "Spec Url"
+          },
+          "url_variables": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/UrlVariableInput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Secret values for the '{name}' placeholders in the base URL path, one per placeholder. Stored encrypted in the secret manager.",
+            "title": "Url Variables"
           }
         },
         "required": [
@@ -7038,6 +7053,20 @@
           "updated_at": {
             "title": "Updated At",
             "type": "string"
+          },
+          "url_variables": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url Variables"
           }
         },
         "required": [
@@ -7142,6 +7171,21 @@
               }
             ],
             "title": "Spec Url"
+          },
+          "url_variables": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/UrlVariableInput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replace the full URL-variable set; must match the base URL's placeholders. Pass [] to clear all. Values are stored encrypted.",
+            "title": "Url Variables"
           }
         },
         "title": "OpenAPIConnectionUpdate",
@@ -12793,6 +12837,31 @@
           "uploads"
         ],
         "title": "UploadPlanResponse",
+        "type": "object"
+      },
+      "UrlVariableInput": {
+        "additionalProperties": false,
+        "description": "A secret value substituted into a ``{name}`` placeholder in the base URL path.\n\nThe value is stored encrypted in the secret manager; it is never returned.",
+        "properties": {
+          "name": {
+            "description": "Placeholder name as written in base_url, e.g. 'token' for '{token}'.",
+            "maxLength": 128,
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "description": "Secret value. URL-encoded when substituted into the request URL.",
+            "maxLength": 8192,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "UrlVariableInput",
         "type": "object"
       },
       "ValidateRequest": {

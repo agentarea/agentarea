@@ -1526,40 +1526,6 @@ export const zOAuthLinkResponse = z.object({
 });
 
 /**
- * OpenAPIConnectionCreate
- *
- * Payload for creating an OpenAPI connection.
- *
- * The connection ties a base URL (where requests are sent) to an
- * OpenAPI 3.x specification (which is parsed eagerly into a tool list).
- * Provide either ``spec_url`` or ``spec_content`` — not both required.
- */
-export const zOpenApiConnectionCreate = z.object({
-  auth_config_id: z.string().uuid().nullish(),
-  base_url: z.string().max(500),
-  custom_headers: z.array(zHeaderInput).nullish(),
-  description: z.string().nullish(),
-  name: z.string().min(1).max(255),
-  spec_content: z.record(z.unknown()).nullish(),
-  spec_url: z.string().nullish(),
-});
-
-/**
- * OpenAPIConnectionUpdate
- *
- * Patch payload for an OpenAPI connection. All fields optional — unset = unchanged.
- */
-export const zOpenApiConnectionUpdate = z.object({
-  auth_config_id: z.string().uuid().nullish(),
-  base_url: z.string().max(500).nullish(),
-  custom_headers: z.array(zHeaderInput).nullish(),
-  description: z.string().nullish(),
-  name: z.string().min(1).max(255).nullish(),
-  spec_content: z.record(z.unknown()).nullish(),
-  spec_url: z.string().nullish(),
-});
-
-/**
  * OpenAPIToolResponse
  */
 export const zOpenApiToolResponse = z.object({
@@ -1584,6 +1550,7 @@ export const zOpenApiConnectionResponse = z.object({
   spec_url: z.string().nullish(),
   status: z.string(),
   updated_at: z.string(),
+  url_variables: z.array(z.string()).nullish(),
 });
 
 /**
@@ -3205,6 +3172,54 @@ export const zUploadPlanRequest = z.object({
  */
 export const zUploadPlanResponse = z.object({
   uploads: z.array(zPlannedUpload),
+});
+
+/**
+ * UrlVariableInput
+ *
+ * A secret value substituted into a ``{name}`` placeholder in the base URL path.
+ *
+ * The value is stored encrypted in the secret manager; it is never returned.
+ */
+export const zUrlVariableInput = z.object({
+  name: z.string().max(128),
+  value: z.string().min(1).max(8192),
+});
+
+/**
+ * OpenAPIConnectionCreate
+ *
+ * Payload for creating an OpenAPI connection.
+ *
+ * The connection ties a base URL (where requests are sent) to an
+ * OpenAPI 3.x specification (which is parsed eagerly into a tool list).
+ * Provide either ``spec_url`` or ``spec_content`` — not both required.
+ */
+export const zOpenApiConnectionCreate = z.object({
+  auth_config_id: z.string().uuid().nullish(),
+  base_url: z.string().max(500),
+  custom_headers: z.array(zHeaderInput).nullish(),
+  description: z.string().nullish(),
+  name: z.string().min(1).max(255),
+  spec_content: z.record(z.unknown()).nullish(),
+  spec_url: z.string().nullish(),
+  url_variables: z.array(zUrlVariableInput).nullish(),
+});
+
+/**
+ * OpenAPIConnectionUpdate
+ *
+ * Patch payload for an OpenAPI connection. All fields optional — unset = unchanged.
+ */
+export const zOpenApiConnectionUpdate = z.object({
+  auth_config_id: z.string().uuid().nullish(),
+  base_url: z.string().max(500).nullish(),
+  custom_headers: z.array(zHeaderInput).nullish(),
+  description: z.string().nullish(),
+  name: z.string().min(1).max(255).nullish(),
+  spec_content: z.record(z.unknown()).nullish(),
+  spec_url: z.string().nullish(),
+  url_variables: z.array(zUrlVariableInput).nullish(),
 });
 
 /**
