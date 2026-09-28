@@ -8,6 +8,7 @@ import {
 	chunk,
 	collectFiles,
 	mapLimit,
+	putFile,
 	remotePath,
 	summarize,
 } from '../services/fileSync.js';
@@ -95,17 +96,28 @@ export async function runFilesSync(
 				return;
 			}
 
-			const response = await fetch(planned.upload_url!, {
-				method: planned.method ?? 'PUT',
-				headers: planned.headers ?? {},
-				body: await fs.readFile(file.absolute),
-			});
-			if (response.ok) {
+			let status: number;
+			try {
+				status = await putFile(
+					planned.upload_url!,
+					planned.method ?? 'PUT',
+					planned.headers ?? {},
+					file.absolute,
+				);
+			} catch (error: unknown) {
+				summary.failed.push({
+					path: planned.path,
+					error: (error as NodeJS.ErrnoException).code ?? String(error),
+				});
+				return;
+			}
+
+			if (status >= 200 && status < 300) {
 				summary.uploaded++;
 			} else {
 				summary.failed.push({
 					path: planned.path,
-					error: `store answered ${response.status}`,
+					error: `store answered ${status}`,
 				});
 			}
 		});
