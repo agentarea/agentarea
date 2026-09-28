@@ -133,6 +133,25 @@ class OpenAPITool(BaseTool):
                 "status_code": None,
             }
 
+        # The resolved base URL may carry secret URL variables; only url_template
+        # (with its {placeholders}) is ever logged or reported.
+        try:
+            resolved_base_url = await self._service.resolve_base_url(connection)
+        except Exception as e:
+            logger.error(
+                "Failed to resolve base URL for connection %s: %s",
+                self._connection_id,
+                e,
+                exc_info=True,
+            )
+            return {
+                "success": False,
+                "error": f"Failed to resolve base URL: {e}",
+                "result": None,
+                "tool_name": self.name,
+                "status_code": None,
+            }
+
         # Build URL: substitute path params
         path = self._operation["path"]
         parameters: list[dict[str, Any]] = self._operation.get("parameters", [])
@@ -154,8 +173,8 @@ class OpenAPITool(BaseTool):
                 "status_code": None,
             }
 
-        base_url = connection.base_url.rstrip("/")
-        url = f"{base_url}{path}"
+        url_template = f"{connection.base_url.rstrip('/')}{path}"
+        url = f"{resolved_base_url.rstrip('/')}{path}"
 
         # Collect query params
         query_params: dict[str, Any] = {}
@@ -214,7 +233,10 @@ class OpenAPITool(BaseTool):
                 )
         except UnsafeUrlError:
             logger.warning(
-                "Refused OpenAPI call %s %s to a non-public address", method, url, exc_info=True
+                "Refused OpenAPI call %s %s to a non-public address",
+                method,
+                url_template,
+                exc_info=True,
             )
             return {
                 "success": False,
@@ -224,7 +246,7 @@ class OpenAPITool(BaseTool):
                 "status_code": None,
             }
         except httpx.TimeoutException as e:
-            logger.error("HTTP timeout calling %s %s: %s", method, url, e, exc_info=True)
+            logger.error("HTTP timeout calling %s %s: %s", method, url_template, e, exc_info=True)
             return {
                 "success": False,
                 "error": f"HTTP timeout: {e}",
@@ -233,7 +255,9 @@ class OpenAPITool(BaseTool):
                 "status_code": None,
             }
         except httpx.RequestError as e:
-            logger.error("HTTP request error calling %s %s: %s", method, url, e, exc_info=True)
+            logger.error(
+                "HTTP request error calling %s %s: %s", method, url_template, e, exc_info=True
+            )
             return {
                 "success": False,
                 "error": f"HTTP request error: {e}",
@@ -311,7 +335,7 @@ class OpenAPITool(BaseTool):
                 content_bytes = response.content
                 result_str = f"<binary {len(content_bytes)} bytes, content-type={ct}>"
         except Exception as e:
-            logger.error("Failed to decode response from %s: %s", url, e, exc_info=True)
+            logger.error("Failed to decode response from %s: %s", url_template, e, exc_info=True)
             return {
                 "success": False,
                 "error": f"Failed to decode response: {e}",

@@ -44,6 +44,7 @@ class OpenAPIConnectionResponse(BaseModel):
     auth_config_id: UUID | None = None
     registry_item_id: UUID | None = None
     custom_headers: list[HeaderOutput] | None = None
+    url_variables: list[str] | None = None
     available_tools: list[OpenAPIToolResponse]
     status: str
     created_at: UtcDatetime

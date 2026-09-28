@@ -82,11 +82,14 @@ def _parse_wallet_creds(rest: str) -> OwnerRef | None:
     return OwnerRef("agent", rest) if _UUID_RE.fullmatch(rest) else None
 
 
+_OPENAPI_SLOTS = (":header:", ":url_var:")
+
+
 def _parse_openapi(rest: str) -> OwnerRef | None:
-    # `openapi:{connection_id}:header:{header_name}`, and header names may
-    # themselves contain colons, so read the id off the front.
+    # `openapi:{connection_id}:header:{header_name}` or `...:url_var:{name}`,
+    # and header names may themselves contain colons, so read the id off the front.
     connection_id = _uuid_at_start(rest)
-    if connection_id is None or not rest[_UUID_LEN:].startswith(":header:"):
+    if connection_id is None or not rest[_UUID_LEN:].startswith(_OPENAPI_SLOTS):
         return None
     return OwnerRef("openapi_connection", connection_id)
 
@@ -138,8 +141,10 @@ def managed_field(name: str) -> str | None:
         return None
     if name.startswith("openapi:"):
         rest = name[len("openapi:") :]
-        if _uuid_at_start(rest) and rest[_UUID_LEN:].startswith(":header:"):
-            return rest[_UUID_LEN + len(":header:") :] or None
+        if _uuid_at_start(rest):
+            for slot in _OPENAPI_SLOTS:
+                if rest[_UUID_LEN:].startswith(slot):
+                    return rest[_UUID_LEN + len(slot) :] or None
         return None
     if name.startswith("channel_cred:"):
         channel_type, separator, _ = name[len("channel_cred:") :].partition(":")

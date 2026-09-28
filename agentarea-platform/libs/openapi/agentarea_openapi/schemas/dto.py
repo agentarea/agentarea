@@ -31,6 +31,16 @@ def _validate_url_field(v: str | None) -> str | None:
     return v
 
 
+def _validate_base_url_field(v: str | None) -> str | None:
+    """Base URL placeholders stay in the path, checked before the host is resolved."""
+    if v is None:
+        return v
+    from agentarea_openapi.application.url_validator import url_template_variables
+
+    url_template_variables(v)
+    return _validate_url_field(v)
+
+
 class HeaderInput(BaseModel):
     """One custom HTTP header attached to an OpenAPI connection.
 
@@ -65,6 +75,34 @@ class HeaderInput(BaseModel):
         return v
 
 
+class UrlVariableInput(BaseModel):
+    """A secret value substituted into a ``{name}`` placeholder in the base URL path.
+
+    The value is stored encrypted in the secret manager; it is never returned.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(
+        max_length=128,
+        description="Placeholder name as written in base_url, e.g. 'token' for '{token}'.",
+    )
+    value: str = Field(
+        min_length=1,
+        max_length=8192,
+        description="Secret value. URL-encoded when substituted into the request URL.",
+    )
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, v: str) -> str:
+        from agentarea_openapi.application.url_validator import URL_VARIABLE_NAME_RE
+
+        if not URL_VARIABLE_NAME_RE.fullmatch(v):
+            raise ValueError("URL variable name must match [A-Za-z_][A-Za-z0-9_]*")
+        return v
+
+
 class HeaderOutput(BaseModel):
     """Header metadata returned in API responses (secret values are masked)."""
 
@@ -90,7 +128,11 @@ class OpenAPIConnectionCreate(BaseModel):
     )
     base_url: str = Field(
         max_length=500,
-        description="Base URL for API requests, e.g. 'https://api.example.com'.",
+        description=(
+            "Base URL for API requests, e.g. 'https://api.example.com'. The path may "
+            "hold '{name}' placeholders filled from url_variables, e.g. "
+            "'https://api.telegram.org/bot{token}'."
+        ),
     )
     description: str | None = Field(
         default=None,
@@ -124,11 +166,18 @@ class OpenAPIConnectionCreate(BaseModel):
             "(e.g. Authorization) are stored encrypted in the secret manager."
         ),
     )
+    url_variables: list[UrlVariableInput] | None = Field(
+        default=None,
+        description=(
+            "Secret values for the '{name}' placeholders in the base URL path, one "
+            "per placeholder. Stored encrypted in the secret manager."
+        ),
+    )
 
     @field_validator("base_url")
     @classmethod
     def _validate_base_url(cls, v: str) -> str:
-        return _validate_url_field(v)  # type: ignore[return-value]
+        return _validate_base_url_field(v)  # type: ignore[return-value]
 
     @field_validator("spec_url")
     @classmethod
@@ -157,11 +206,18 @@ class OpenAPIConnectionUpdate(BaseModel):
             "values are stored encrypted in the secret manager."
         ),
     )
+    url_variables: list[UrlVariableInput] | None = Field(
+        default=None,
+        description=(
+            "Replace the full URL-variable set; must match the base URL's "
+            "placeholders. Pass [] to clear all. Values are stored encrypted."
+        ),
+    )
 
     @field_validator("base_url")
     @classmethod
     def _validate_base_url(cls, v: str | None) -> str | None:
-        return _validate_url_field(v)
+        return _validate_base_url_field(v)
 
     @field_validator("spec_url")
     @classmethod
