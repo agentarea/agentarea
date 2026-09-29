@@ -68,8 +68,6 @@ def merge_transport_spec(
     if not is_converted_docker:
         return {**server, **instance}
 
-    merged = {
-        key: value for key, value in server.items() if key not in _CONVERTED_TRANSPORT_KEYS
-    }
+    merged = {key: value for key, value in server.items() if key not in _CONVERTED_TRANSPORT_KEYS}
     merged.update(instance)
     return merged
