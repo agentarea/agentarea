@@ -16,7 +16,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-import httpx
+import httpx2
 import pytest
 from agentarea_agents_sdk.tools.base_tool import BaseTool
 from agentarea_execution.activities import agent_execution_activities as activities
@@ -45,7 +45,10 @@ class FakeWalletService:
         return self.wallet
 
     async def get_wallet_credentials(self, wallet):
-        return {"x402_private_key": "0xkey", "mpp_tempo_key": "tempo-key"}  # pragma: allowlist secret
+        return {
+            "x402_private_key": "0xkey",
+            "mpp_tempo_key": "tempo-key",
+        }  # pragma: allowlist secret
 
     async def get_service_budget_remaining(self, agent_id, execution_id):
         return Decimal("5")
@@ -62,17 +65,17 @@ class FakeWalletService:
         return None
 
 
-class PaidServer(httpx.AsyncBaseTransport):
+class PaidServer(httpx2.AsyncBaseTransport):
     """An x402 resource: 402 until a request carries a payment signature."""
 
     def __init__(self):
         self.paid_requests = 0
 
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
         if "PAYMENT-SIGNATURE" in request.headers:
             self.paid_requests += 1
-            return httpx.Response(200, content=b"paid result", request=request)
-        return httpx.Response(
+            return httpx2.Response(200, content=b"paid result", request=request)
+        return httpx2.Response(
             402, headers={"PAYMENT-REQUIRED": "challenge"}, content=b"{}", request=request
         )
 
@@ -173,7 +176,7 @@ async def test_retried_mcp_call_does_not_pay_again(monkeypatch, activity_fns, wa
         "import_module",
         lambda name: SimpleNamespace(x402HTTPClient=FakeHTTPClient),
     )
-    monkeypatch.setattr(mcp_payment_httpx.httpx, "AsyncHTTPTransport", lambda: server)
+    monkeypatch.setattr(mcp_payment_httpx.httpx2, "AsyncHTTPTransport", lambda: server)
 
     async def execute_tool(instance_id, raw_name, tool_args, httpx_client_factory):
         async with httpx_client_factory() as client:
@@ -205,11 +208,11 @@ async def test_retried_mcp_call_does_not_pay_again(monkeypatch, activity_fns, wa
 class SettledThenFailedServer(PaidServer):
     """Settles the payment, then fails the paid request itself."""
 
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
         if "PAYMENT-SIGNATURE" in request.headers:
             self.paid_requests += 1
             receipt = base64.b64encode(json.dumps({"txHash": "0xsettled"}).encode()).decode()
-            return httpx.Response(
+            return httpx2.Response(
                 502, headers={"PAYMENT-RESPONSE": receipt}, content=b"upstream", request=request
             )
         return await super().handle_async_request(request)
@@ -253,7 +256,7 @@ async def test_payment_that_settled_before_the_request_failed_is_spent(
         "import_module",
         lambda name: SimpleNamespace(x402HTTPClient=FakeHTTPClient),
     )
-    monkeypatch.setattr(mcp_payment_httpx.httpx, "AsyncHTTPTransport", lambda: server)
+    monkeypatch.setattr(mcp_payment_httpx.httpx2, "AsyncHTTPTransport", lambda: server)
 
     async def execute_tool(instance_id, raw_name, tool_args, httpx_client_factory):
         async with httpx_client_factory() as client:

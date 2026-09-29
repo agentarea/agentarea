@@ -657,9 +657,7 @@ class TestServiceCreateInstanceAuthConfigAccess:
     @pytest.mark.asyncio
     async def test_a_foreign_auth_config_is_refused_before_anything_is_persisted(self):
         svc = _make_service()
-        svc._assert_may_use_auth_config = AsyncMock(
-            side_effect=AuthConfigAccessDeniedError("nope")
-        )
+        svc._assert_may_use_auth_config = AsyncMock(side_effect=AuthConfigAccessDeniedError("nope"))
 
         with pytest.raises(AuthConfigAccessDeniedError):
             await svc.create_instance(
@@ -932,11 +930,15 @@ class TestServiceExecuteTool:
 
         assert result["success"] is True
         # A URL-type endpoint is member-chosen: the payment client is kept but
-        # its requests go through the pinned transport.
-        from agentarea_common.utils.url_safety import SafeOutboundTransport
+        # its requests go through the pinned transport, which refuses to dial a
+        # private address.
+        import httpx2
+        from agentarea_common.utils.url_safety import UnsafeUrlError
 
         captured["factory"](headers=None, timeout=None)
-        assert isinstance(factory.call_args.kwargs["inner"], SafeOutboundTransport)
+        inner = factory.call_args.kwargs["inner"]
+        with pytest.raises(UnsafeUrlError):
+            await inner.handle_async_request(httpx2.Request("POST", "http://10.0.0.5/mcp"))
 
 
 # ---------------------------------------------------------------------------
