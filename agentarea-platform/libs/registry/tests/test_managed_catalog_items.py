@@ -26,6 +26,7 @@ def _service(*, source_type: str = "managed", registry_type: str = "mcp_servers"
     item_repo = SimpleNamespace(
         get_by_id=AsyncMock(),
         get_by_external_id=AsyncMock(return_value=None),
+        mark_in_source=AsyncMock(return_value=0),
         create=AsyncMock(),
         update=AsyncMock(),
         delete=AsyncMock(return_value=True),

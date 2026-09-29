@@ -185,6 +185,17 @@ describe("catalog data normalization", () => {
     "weather mcp",
     "titles: without a title the namespace is dropped"
   );
+  assertEqual(
+    normalize(
+      "connections",
+      item({
+        name: "io.github.getsentry/sentry-mcp/npm/@sentry/mcp-server",
+        spec: { raw_spec: { name: "io.github.getsentry/sentry-mcp" } },
+      })
+    ).title,
+    "sentry mcp",
+    "titles: a package entry is named after its server, not its package"
+  );
 
   // ── icon candidates (the card falls through these on a 404) ──
   // One URL was not enough: the curated connection catalog ships a local icon

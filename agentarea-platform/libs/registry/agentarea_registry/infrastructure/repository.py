@@ -12,7 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import case, func, select, update
+from sqlalchemy import case, false, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -112,6 +112,12 @@ class RegistryRepository:
             for field, item_field in _COPIED_REGISTRY_FIELDS.items()
             if field in kwargs
         }
+        if "registry_active" in copied:
+            # An item its source dropped stays hidden when the registry is
+            # switched back on.
+            copied["registry_active"] = (
+                RegistryItem.in_source if copied["registry_active"] else false()
+            )
         if copied:
             await self.session.execute(
                 update(RegistryItem).where(RegistryItem.registry_id == id).values(**copied)
@@ -200,6 +206,34 @@ class RegistryItemRepository:
         await self.session.commit()
         await self.session.refresh(record)
         return record
+
+    async def mark_in_source(self, registry_id: UUID | str, external_ids: set[str]) -> int:
+        """Record which of a registry's items its source still publishes.
+
+        Items the source dropped leave the catalog (``registry_active`` false)
+        without being deleted; one that comes back returns. Returns how many
+        items are now out of the source.
+        """
+        registry = await self.session.get(Registry, registry_id)
+        if registry is None:
+            raise ValueError(f"Registry {registry_id} not found")
+        present = RegistryItem.external_id.in_(external_ids) if external_ids else false()
+        await self.session.execute(
+            update(RegistryItem)
+            .where(RegistryItem.registry_id == registry_id)
+            .values(
+                in_source=present,
+                registry_active=present if registry.is_active else false(),
+            )
+        )
+        await self.session.commit()
+        return (
+            await self.session.execute(
+                select(func.count()).where(
+                    RegistryItem.registry_id == registry_id, RegistryItem.in_source.is_(False)
+                )
+            )
+        ).scalar_one()
 
     async def update(self, id: UUID | str, **kwargs: Any) -> RegistryItem | None:
         record = await self.session.get(RegistryItem, id)
