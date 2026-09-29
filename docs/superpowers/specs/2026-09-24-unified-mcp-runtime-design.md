@@ -160,18 +160,23 @@ resulting server will receive.
    detected path. For example, a package that downloads Chromium into
    `~/.cache` and needs `libnss3` is reported instead of silently moving the
    cache.
-   The build container then streams a `tar` of that directory to the manager
-   over a one-time token; it never receives registry credentials.
+   The pack workload writes a `tar` layer and serves it, together with its
+   report, over HTTP. The manager fetches `/report` and `/layer.tar` through the
+   same local gateway or data-plane proxy path used for demand traffic. The pack
+   workload never receives registry credentials, and this fetch direction does
+   not use a one-time upload token.
 3. Resolve the package's executable and collect the installed files as one
    layer. The trusted manager appends that layer to mcp-base with
    go-containerregistry `mutate.Append`; it does not need a Docker daemon or
    elevated privileges.
-4. Run the resulting image with network access disabled. The import succeeds
-   only when `initialize` and `tools/list` both succeed. This catches servers
-   that download data at start or require an operating-system library that is
-   not in mcp-base. The report names the detected dependency and directs the
-   user to a custom image `FROM agentarea/agentarea-mcp-base` or a ready image
-   from the catalog.
+4. Run the smoke test inside the pack workload with package-registry access
+   disabled through offline environment overrides. The import succeeds only
+   when `initialize` and `tools/list` both succeed. The final package image is
+   not run with its network disabled; runtime egress remains available for the
+   external APIs an MCP server calls. This catches servers that download data at
+   start or require an operating-system library that is not in mcp-base. The
+   report names the detected dependency and directs the user to a custom image
+   `FROM agentarea/agentarea-mcp-base` or a ready image from the catalog.
 5. Push the image from the trusted manager to the build repository under the
    package/version tag. The manager records the digest returned by the registry
    and writes that digest into the connection. A registry manifest lookup by
@@ -230,9 +235,9 @@ the same format. Build failures and registry outages affect only new starts;
 connections already running from pulled images continue to run.
 
 Docker Compose uses the local Docker daemon as its single-host image store and
-does not require a registry. The manager loads completed images into that
-store and uses their local digest. Kubernetes and managed runtimes use the
-configured registry.
+does not require a registry. The manager loads completed images into that store
+and returns the local Docker image ID (`sha256:<id>`) as the image reference.
+Kubernetes and managed runtimes use the configured registry.
 
 ## Network
 
@@ -384,8 +389,9 @@ package images take the install off the start path.
 ### Step B: registry import and conversion
 
 1. Add the build repository and the package import job. Build one image per
-   `package@version`, run the offline smoke test, append the package layer with
-   go-containerregistry and push it from the trusted manager.
+   `package@version`, run the offline smoke test inside the pack workload,
+   append the package layer with go-containerregistry and push it from the
+   trusted manager.
 2. At connection creation, resolve catalog `npx`/`uvx` JSON to the exact package
    version, look up its tag, and import it when absent. Keep invocation
    arguments and environment on the connection.

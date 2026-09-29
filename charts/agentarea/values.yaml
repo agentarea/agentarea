@@ -667,6 +667,16 @@ mcpManager:
     image:
       repository: agentarea/agentarea-mcp-base
       tag: "latest"
+  packageImages:
+    # -- Registry repository where immutable images built from npm/PyPI packages
+    # are stored. Leave empty to use the local Docker daemon with the Docker
+    # backend; Kubernetes and data-plane backends require a repository.
+    repository: ""
+    # -- Existing dockerconfigjson Secret used to authenticate package-image
+    # registry lookups and pushes. The Secret is mounted read-only in the manager.
+    registrySecret: ""
+    # -- Maximum time allowed for one package-image import.
+    importTimeout: "15m"
 
   # Run MCP containers on a remote host instead of in this cluster.
   #

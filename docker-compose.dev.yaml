@@ -391,6 +391,8 @@ services:
       # `command` connections (npx/uvx) run on this image, built by the
       # mcp-base service below.
       MCP_BASE_IMAGE: agentarea/agentarea-mcp-base:dev
+      # Empty keeps package images in the local Docker daemon.
+      MCP_PACKAGE_REPOSITORY: ${MCP_PACKAGE_REPOSITORY:-}
       # MCP servers run third-party npm/PyPI packages and images. The untrusted
       # tier pins --runtime to gVisor, which no Docker Desktop has, so every
       # instance would fail to create with a bare "exit status 125"; this dev

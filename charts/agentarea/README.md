@@ -314,6 +314,9 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.serverless.startupTimeout | string | `"5m"` |  |
 | mcpManager.mcpBase.image.repository | string | `"agentarea/agentarea-mcp-base"` |  |
 | mcpManager.mcpBase.image.tag | string | `"latest"` |  |
+| mcpManager.packageImages.repository | string | `""` | Registry repository where immutable images built from npm/PyPI packages are stored. Leave empty to use the local Docker daemon with the Docker backend; Kubernetes and data-plane backends require a repository. |
+| mcpManager.packageImages.registrySecret | string | `""` | Existing dockerconfigjson Secret used to authenticate package-image registry lookups and pushes. The Secret is mounted read-only in the manager. |
+| mcpManager.packageImages.importTimeout | string | `"15m"` | Maximum time allowed for one package-image import. |
 | mcpManager.dataPlane.allowInsecure | bool | `false` |  |
 | mcpManager.dataPlane.url | string | `""` |  |
 | mcpManager.dataPlane.tokenSecret | string | `""` |  |

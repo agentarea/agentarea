@@ -186,6 +186,66 @@ async def test_update_container_config_retires_runtime_before_persisting_change(
         json_spec={"type": "docker", "environment": {"MODE": "new"}},
     )
 
+@pytest.mark.asyncio
+async def test_update_converted_spec_keeps_imported_transport_metadata():
+    instance = _make_instance("docker")
+    instance.json_spec = {
+        "type": "docker",
+        "image": "registry.example/server@sha256:" + "a" * 64,
+        "command": ["/opt/mcp-pkg/bin/server", "--stdio"],
+        "port": 8080,
+        "package": {"ecosystem": "npm", "name": "server", "version": "1.0.0"},
+        "source": {"type": "command", "command": "npx", "args": ["server"]},
+        "environment": {"MODE": "old"},
+    }
+    svc = _make_service({str(instance.id): instance})
+    svc._retire_runtime_before_mutation = AsyncMock()
+
+    updated = await svc.update_instance(
+        instance.id,
+        MCPServerInstanceUpdate(json_spec={"environment": {"MODE": "new"}}),
+    )
+
+    assert updated.json_spec == {
+        "environment": {"MODE": "new"},
+        "type": "docker",
+        "image": "registry.example/server@sha256:" + "a" * 64,
+        "command": ["/opt/mcp-pkg/bin/server", "--stdio"],
+        "port": 8080,
+        "package": {"ecosystem": "npm", "name": "server", "version": "1.0.0"},
+        "source": {"type": "command", "command": "npx", "args": ["server"]},
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_command_spec_drops_package_import_state():
+    instance = _make_instance("command")
+    instance.json_spec = {
+        "type": "command",
+        "command": "npx",
+        "args": ["server"],
+        "package_import": {
+            "status": "rejected",
+            "error": "missing token",
+            "at": "2026-09-30T00:00:00+00:00",
+        },
+        "environment": {"TOKEN": "old"},
+    }
+    svc = _make_service({str(instance.id): instance})
+    svc._retire_runtime_before_mutation = AsyncMock()
+
+    updated = await svc.update_instance(
+        instance.id,
+        MCPServerInstanceUpdate(json_spec={"environment": {"TOKEN": "new"}}),
+    )
+
+    assert updated.json_spec == {
+        "environment": {"TOKEN": "new"},
+        "type": "command",
+        "command": "npx",
+        "args": ["server"],
+    }
+
 
 @pytest.mark.asyncio
 async def test_update_url_instance_does_not_retire_runtime():

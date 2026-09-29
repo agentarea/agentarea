@@ -4,6 +4,7 @@ Every 30 s:
   1. Orphan GC: mark any `in_progress` verification older than 2 minutes as failed.
   2. Re-verify sweep: for each docker/command row with `never_attempted` verification,
      enqueue verify() (max 5 concurrent via asyncio.Semaphore).
+  3. Package import sweep: import verified npx/uvx command rows sequentially (max 3).
 """
 
 import asyncio
@@ -12,6 +13,8 @@ import logging
 from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config import get_database
 from sqlalchemy import text
+
+from agentarea_mcp.package_import import import_package_image
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +71,24 @@ WHERE COALESCE(
     END
   ) IN ('docker', 'command')
   AND (i.verification->>'status') = 'never_attempted'
+"""
+
+_PACKAGE_IMPORT_SQL = """
+SELECT i.id
+FROM mcp_server_instances i
+WHERE i.json_spec->>'type' = 'command'
+  AND i.json_spec->>'command' IN ('npx', 'uvx')
+  AND i.verification->>'status' = 'succeeded'
+  AND (
+    i.json_spec->'package_import' IS NULL
+    OR (
+      i.json_spec->'package_import'->>'status' = 'unavailable'
+      AND NULLIF(i.json_spec->'package_import'->>'at', '')::timestamptz
+          < now() - INTERVAL '1 hour'
+    )
+  )
+ORDER BY i.created_at
+LIMIT 3
 """
 
 
@@ -175,6 +196,11 @@ class MCPContainerMonitor:
             rows_result = await session.execute(text(_NEVER_ATTEMPTED_SQL))
             rows = rows_result.fetchall()
 
+            # 3. Package import sweep. The import function opens no concurrent
+            # work of its own, so awaiting each row keeps imports sequential.
+            package_rows_result = await session.execute(text(_PACKAGE_IMPORT_SQL))
+            package_rows = package_rows_result.fetchall()
+
         enqueued = 0
         for row in rows:
             instance = await self._row_to_instance(row)
@@ -189,6 +215,24 @@ class MCPContainerMonitor:
             "verify sweep: %d rows enqueued",
             enqueued,
             extra={"enqueued": enqueued},
+        )
+
+        imported = 0
+        for row in package_rows:
+            imported += 1
+            try:
+                await import_package_image(row.id)
+            except Exception:
+                logger.exception(
+                    "package import raised for instance %s",
+                    row.id,
+                    extra={"instance_id": str(row.id)},
+                )
+
+        logger.info(
+            "package import sweep: %d rows attempted",
+            imported,
+            extra={"attempted": imported},
         )
 
     async def _verify_with_semaphore(self, instance) -> None:

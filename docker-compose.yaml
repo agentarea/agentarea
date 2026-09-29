@@ -306,6 +306,8 @@ services:
       DEFAULT_ISOLATION_TIER: "standard"
       # `command` connections (npx/uvx) run on this image.
       MCP_BASE_IMAGE: agentarea/agentarea-mcp-base:${VERSION:-latest}
+      # Empty keeps package images in the local Docker daemon.
+      MCP_PACKAGE_REPOSITORY: ${MCP_PACKAGE_REPOSITORY:-}
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
       SANDBOX_EMBEDDED_RUNNER: "true"

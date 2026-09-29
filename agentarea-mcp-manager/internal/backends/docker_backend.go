@@ -8,12 +8,14 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/container"
+	"github.com/agentarea/mcp-manager/internal/mcpbase"
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
@@ -499,7 +501,27 @@ func dockerTaskKey(workspaceID, taskID string) string {
 // Initialize initializes the Docker backend
 func (d *DockerBackend) Initialize(ctx context.Context) error {
 	d.logger.Info("Initializing Docker backend")
-	return d.manager.Initialize(ctx)
+	if err := d.manager.Initialize(ctx); err != nil {
+		return err
+	}
+	go d.pullMCPBase(ctx)
+	return nil
+}
+
+func (d *DockerBackend) pullMCPBase(parent context.Context) {
+	pullCtx, cancel := context.WithTimeout(parent, 10*time.Minute)
+	defer cancel()
+	d.logger.Info("Pre-pulling mcp-base image", slog.String("image", mcpbase.Image()))
+	command := exec.CommandContext(pullCtx, d.config.Container.Runtime, "pull", "--quiet", mcpbase.Image())
+	output, err := command.CombinedOutput()
+	if err != nil {
+		d.logger.Warn("Could not pre-pull mcp-base image",
+			slog.String("image", mcpbase.Image()),
+			slog.String("error", err.Error()),
+			slog.String("output", strings.TrimSpace(string(output))))
+		return
+	}
+	d.logger.Info("Pre-pulled mcp-base image", slog.String("image", mcpbase.Image()))
 }
 
 // CreateInstance creates a new MCP server instance using the existing container manager

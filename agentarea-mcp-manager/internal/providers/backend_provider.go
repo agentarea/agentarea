@@ -68,15 +68,10 @@ func (p *BackendProvider) CreateInstance(ctx context.Context, instance *models.M
 	p.logger.Info("Creating Kubernetes instance via backend",
 		slog.String("instance_id", instance.InstanceID),
 		slog.String("name", instance.Name))
-
-	resolvedJSON, err := resolveInstanceSpecSecrets(p.secrets, instance.InstanceID, instance.JSONSpec)
+	spec, err := BuildBackendInstanceSpec(instance, p.secrets)
 	if err != nil {
 		return err
 	}
-	resolvedInstance := *instance
-	resolvedInstance.JSONSpec = resolvedJSON
-	// Convert MCPServerInstance to backend InstanceSpec
-	spec := p.convertToInstanceSpec(&resolvedInstance)
 
 	// Use the backend to create the instance
 	result, err := p.backend.CreateInstance(ctx, spec)
@@ -114,6 +109,21 @@ func (p *BackendProvider) DeleteInstance(ctx context.Context, instanceID, name s
 		slog.String("name", name))
 
 	return nil
+}
+
+// BuildBackendInstanceSpec resolves an instance's environment and converts its
+// JSON specification to the backend shape used by container providers.
+func BuildBackendInstanceSpec(instance *models.MCPServerInstance, resolver secrets.SecretResolver) (*BackendInstanceSpec, error) {
+	if instance == nil {
+		return nil, fmt.Errorf("MCP instance is required")
+	}
+	resolvedJSON, err := resolveInstanceSpecSecrets(resolver, instance.InstanceID, instance.JSONSpec)
+	if err != nil {
+		return nil, err
+	}
+	resolvedInstance := *instance
+	resolvedInstance.JSONSpec = resolvedJSON
+	return (&BackendProvider{}).convertToInstanceSpec(&resolvedInstance), nil
 }
 
 // convertToInstanceSpec converts an MCPServerInstance to a backend InstanceSpec.
@@ -174,35 +184,55 @@ func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstan
 
 	// Extract environment variables
 	if envInterface, exists := instance.JSONSpec["environment"]; exists {
-		if envMap, ok := envInterface.(map[string]any); ok {
-			env := make(map[string]string)
+		switch envMap := envInterface.(type) {
+		case map[string]any:
+			env := make(map[string]string, len(envMap))
 			for key, value := range envMap {
 				env[key] = fmt.Sprintf("%v", value)
 			}
 			spec.Environment = env
+		case map[string]string:
+			spec.Environment = make(map[string]string, len(envMap))
+			for key, value := range envMap {
+				spec.Environment[key] = value
+			}
 		}
 	}
 
 	// Also check for env_vars (alternative key)
 	if envInterface, exists := instance.JSONSpec["env_vars"]; exists {
-		if envMap, ok := envInterface.(map[string]any); ok {
+		switch envMap := envInterface.(type) {
+		case map[string]any:
 			if spec.Environment == nil {
 				spec.Environment = make(map[string]string)
 			}
 			for key, value := range envMap {
 				spec.Environment[key] = fmt.Sprintf("%v", value)
 			}
+		case map[string]string:
+			if spec.Environment == nil {
+				spec.Environment = make(map[string]string)
+			}
+			for key, value := range envMap {
+				spec.Environment[key] = value
+			}
 		}
 	}
 
 	// Extract labels
 	if labelsInterface, exists := instance.JSONSpec["labels"]; exists {
-		if labelsMap, ok := labelsInterface.(map[string]any); ok {
-			labels := make(map[string]string)
+		switch labelsMap := labelsInterface.(type) {
+		case map[string]any:
+			labels := make(map[string]string, len(labelsMap))
 			for key, value := range labelsMap {
 				labels[key] = fmt.Sprintf("%v", value)
 			}
 			spec.Labels = labels
+		case map[string]string:
+			spec.Labels = make(map[string]string, len(labelsMap))
+			for key, value := range labelsMap {
+				spec.Labels[key] = value
+			}
 		}
 	}
 

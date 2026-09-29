@@ -70,6 +70,7 @@ logger = logging.getLogger(__name__)
 # Sentinel value for masked secrets — must match across backend and frontend
 SECRET_MASKED_VALUE = "*" * 6
 INSTANCE_TRANSPORT_FIELDS = {"type", "endpoint_url", "image", "command", "args"}
+INSTANCE_SYSTEM_FIELDS = INSTANCE_TRANSPORT_FIELDS | {"port", "package", "source"}
 
 
 def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
@@ -731,7 +732,7 @@ class MCPServerInstanceService:
                 # instance configuration; otherwise every legitimate PATCH drops
                 # ``type`` (and URL endpoints) merely because callers are forbidden
                 # from sending those fields back.
-                for field in INSTANCE_TRANSPORT_FIELDS:
+                for field in INSTANCE_SYSTEM_FIELDS:
                     if field in (instance.json_spec or {}):
                         cleaned_spec.setdefault(field, instance.json_spec[field])
                 masked_placeholders = {SECRET_MASKED_VALUE, "\u2022" * 6}
@@ -938,31 +939,18 @@ class MCPServerInstanceService:
         return deleted
 
     async def _retire_runtime_before_mutation(self, instance_id: UUID) -> None:
-        settings = get_settings().mcp
-        url = settings.manager_retire_url(instance_id)
-        headers = settings.manager_gateway_headers()
-        retryable = {409, 502, 503, 504}
-        last_error: Exception | None = None
+        from agentarea_mcp.package_import import retire_runtime_before_mutation
 
-        async with httpx.AsyncClient(timeout=settings.MCP_CLIENT_TIMEOUT) as client:
-            for attempt in range(3):
-                try:
-                    response = await client.delete(url, headers=headers)
-                    if response.status_code == 204:
-                        return
-                    if response.status_code not in retryable:
-                        response.raise_for_status()
-                    last_error = RuntimeError(
-                        f"MCP manager retirement returned HTTP {response.status_code}"
-                    )
-                except (httpx.TransportError, httpx.TimeoutException) as exc:
-                    last_error = exc
-                if attempt < 2:
-                    await asyncio.sleep(0.2 * (attempt + 1))
+        await retire_runtime_before_mutation(
+            instance_id,
+            settings=get_settings().mcp,
+        )
 
-        raise RuntimeError(
-            f"MCP runtime retirement failed for {instance_id}; desired state was preserved"
-        ) from last_error
+    async def import_package_image(self, instance_id: UUID) -> None:
+        """Import a verified command instance into an immutable package image."""
+        from agentarea_mcp.package_import import import_package_image
+
+        await import_package_image(instance_id, session=self.repository.session)
 
     async def get(self, id: UUID) -> MCPServerInstance | None:
         return await self.repository.get_by_id(id)
