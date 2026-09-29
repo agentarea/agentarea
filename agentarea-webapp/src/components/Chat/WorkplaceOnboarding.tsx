@@ -7,6 +7,7 @@ import { Lock, Sparkles } from "lucide-react";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import {
   BadgeSuggestions,
+  BadgeSuggestionsSkeleton,
   type BadgeSuggestion,
 } from "./componets/BadgeSuggestions";
 import { ChatInputArea } from "./componets/ChatInputArea";
@@ -105,7 +106,7 @@ export function WorkplaceOnboarding({
         <div className="w-full flex-none pb-4">
           {/* Their own boundary — the rest of the onboarding screen is static
               and should not wait on the chips. */}
-          <Suspense fallback={null}>
+          <Suspense fallback={<BadgeSuggestionsSkeleton />}>
             <BadgeSuggestions
               suggestions={badgeSuggestions}
               onBadgeClick={() => router.push(step.href)}

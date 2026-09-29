@@ -2,8 +2,8 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import AuthGuard from "@/components/auth/AuthGuard";
 import { WorkplaceData } from "./components/WorkplaceData";
+import { WorkplaceSkeleton } from "./components/WorkplaceSkeleton";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 export const dynamic = "force-dynamic";
 
@@ -18,13 +18,7 @@ export default async function WorkplacePage() {
         }}
         className="p-0"
       >
-        <Suspense
-          fallback={
-            <div className="flex h-full items-center justify-center py-8">
-              <LoadingSpinner />
-            </div>
-          }
-        >
+        <Suspense fallback={<WorkplaceSkeleton />}>
           <WorkplaceData />
         </Suspense>
       </ContentBlock>

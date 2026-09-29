@@ -4,7 +4,26 @@ import React, { use } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Plug, Sparkles } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+
+/** Shared by the list and its skeleton so the two sit in the same place. */
+const CONTAINER = "mx-auto w-full max-w-3xl px-4 md:px-6";
+
+/** Each row enters this much after the one above it. */
+const STAGGER_MS = 60;
+
+/** Rises into place; skipped for people who asked for less motion. */
+const ENTER =
+  "animate-in fade-in slide-in-from-bottom-1 fill-mode-both duration-300 ease-out motion-reduce:animate-none";
+
+/** Widths for the placeholder rows, so they do not read as a grid. */
+const SKELETON_ROWS = [
+  ["w-36", "w-48"],
+  ["w-32", "w-44"],
+  ["w-24", "w-40"],
+  ["w-36", "w-52"],
+];
 
 function isPromise<T>(value: T[] | Promise<T[]>): value is Promise<T[]> {
   return typeof (value as Promise<T[]>)?.then === "function";
@@ -55,8 +74,13 @@ export const BadgeSuggestions: React.FC<BadgeSuggestionsProps> = ({
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 md:px-6">
-      <p className="px-3 pb-1.5 text-xs text-zinc-400 dark:text-zinc-500">
+    <div className={CONTAINER}>
+      <p
+        className={cn(
+          "px-3 pb-1.5 text-xs text-zinc-400 dark:text-zinc-500",
+          ENTER
+        )}
+      >
         {t("getStarted")}
       </p>
       <ul className="flex flex-col">
@@ -96,7 +120,12 @@ export const BadgeSuggestions: React.FC<BadgeSuggestionsProps> = ({
           );
 
           return (
-            <li key={index}>
+            <li
+              key={index}
+              className={ENTER}
+              // After the heading, then one by one down the list.
+              style={{ animationDelay: `${(index + 1) * STAGGER_MS}ms` }}
+            >
               {badge.href ? (
                 <Link href={badge.href} className={row}>
                   {body}
@@ -117,3 +146,23 @@ export const BadgeSuggestions: React.FC<BadgeSuggestionsProps> = ({
     </div>
   );
 };
+
+/**
+ * Holds the list's place while its rows are still being read, so the centred
+ * composer above does not jump when they arrive. Four rows: the most the list
+ * shows.
+ */
+export function BadgeSuggestionsSkeleton() {
+  return (
+    <div className={CONTAINER} aria-hidden="true">
+      <Skeleton className="mx-3 mb-3 h-3 w-20" />
+      {SKELETON_ROWS.map(([label, hint], index) => (
+        <div key={index} className="flex items-center gap-3 px-3 py-2.5">
+          <Skeleton className="size-4 rounded-sm" />
+          <Skeleton className={cn("h-3", label)} />
+          <Skeleton className={cn("h-2.5", hint)} />
+        </div>
+      ))}
+    </div>
+  );
+}
