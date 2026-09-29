@@ -1323,21 +1323,33 @@
       "title": "How can I help you today?"
     },
     "suggestions": {
-      "askSpecificAgent": {
-        "label": "Ask Specific Agent",
-        "text": "I need help from agent @"
+      "getStarted": "Get started",
+      "putOnChannel": {
+        "label": "Put agent on {channel}",
+        "hint": "Answer where people already write"
       },
-      "analyzeProject": {
-        "label": "Analyze Project Structure",
-        "text": "Analyze the current project structure and identify potential architectural improvements."
+      "connectTool": {
+        "label": "Connect a tool",
+        "hint": "Give agents an MCP server"
       },
-      "generateDocs": {
-        "label": "Generate Documentation",
-        "text": "Generate comprehensive documentation for the core modules of this project."
+      "teachSkill": {
+        "label": "Teach a skill",
+        "hint": "Package a procedure once, reuse it everywhere"
       },
-      "debugIssue": {
-        "label": "Debug Issue",
-        "text": "I'm facing a bug with the API integration. Can you help me debug it?"
+      "catchUp": {
+        "label": "Catch up on {channel}",
+        "hint": "Today's messages, and what needs an answer",
+        "text": "Summarise what came in on {channel} today and flag anything that needs an answer"
+      },
+      "tryTool": {
+        "label": "Try a connected tool",
+        "hint": "See what the agent can reach",
+        "text": "List the tools you can reach right now and what each one is for"
+      },
+      "askAgent": {
+        "label": "Ask {agent}",
+        "hint": "What it’s set up to do, what it needs",
+        "text": "{agent} what are you set up to do, and what access do you have?"
       }
     }
   },

@@ -128,6 +128,14 @@ export function calculateMentionPosition(
 }
 
 /**
+ * An agent mention in storage form, @[agentId:agentName]. The textarea shows it
+ * as @agentName (see formatTextForTextarea); the ID is what the run resolves.
+ */
+export function formatMention(agentId: string, agentName: string): string {
+  return `@[${agentId}:${agentName}]`;
+}
+
+/**
  * Insert mention into text at specified position
  * Stores @[agentId:agentName] format internally for ID preservation
  */
@@ -139,7 +147,7 @@ export function insertMention(
   agentName: string
 ): { newText: string; newCursorPosition: number } {
   // Store in format @[agentId:agentName] to preserve agent ID
-  const mentionText = `@[${agentId}:${agentName}] `;
+  const mentionText = `${formatMention(agentId, agentName)} `;
   const newText =
     text.substring(0, atIndex) + mentionText + text.substring(cursorPosition);
   const newCursorPosition = atIndex + mentionText.length;

@@ -76,7 +76,7 @@ export async function WorkplaceData() {
 
   // Deliberately not awaited: the chat renders now, the chips arrive after.
   const badgeSuggestions = loadWorkplaceSuggestions(
-    agents.map((agent) => agent.name)
+    agents.map(({ id, name }) => ({ id, name }))
   );
 
   const defaultAgent = agents.length > 0 ? agents[0] : null;
