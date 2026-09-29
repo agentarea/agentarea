@@ -46,9 +46,9 @@ class FakeWalletService:
 
     async def get_wallet_credentials(self, wallet):
         return {
-            "x402_private_key": "0xkey",
-            "mpp_tempo_key": "tempo-key",
-        }  # pragma: allowlist secret
+            "x402_private_key": "0xkey",  # pragma: allowlist secret
+            "mpp_tempo_key": "tempo-key",  # pragma: allowlist secret
+        }
 
     async def get_service_budget_remaining(self, agent_id, execution_id):
         return Decimal("5")
