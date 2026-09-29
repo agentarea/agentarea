@@ -299,6 +299,13 @@ services:
       MCP_GATEWAY_STARTUP_TIMEOUT: "5m"
       MCP_IDLE_TIMEOUT: "10m"
       MCP_IDLE_SWEEP_INTERVAL: "60s"
+      # MCP servers run third-party npm/PyPI packages and images. The manager's
+      # default tier, untrusted, pins the gVisor runtime (runsc), which a plain
+      # Docker host does not have, so every MCP container would fail to create.
+      # Here they run at standard, on the host kernel.
+      DEFAULT_ISOLATION_TIER: "standard"
+      # `command` connections (npx/uvx) run on this image.
+      MCP_BASE_IMAGE: agentarea/agentarea-mcp-base:${VERSION:-latest}
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
       SANDBOX_EMBEDDED_RUNNER: "true"
