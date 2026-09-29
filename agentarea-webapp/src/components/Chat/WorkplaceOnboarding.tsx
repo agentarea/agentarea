@@ -37,19 +37,16 @@ export function WorkplaceOnboarding({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const steps = [t("connectModelStep"), t("createAgentStep")];
   const step = hasModels
     ? {
-        index: 2,
-        title: t("createAgentTitle"),
-        description: t("createAgentDescription"),
+        index: 1,
         action: t("createAgentAction"),
         href: "/agents/create",
         placeholder: t("createAgentPlaceholder"),
       }
     : {
-        index: 1,
-        title: t("connectModelTitle"),
-        description: t("connectModelDescription"),
+        index: 0,
         action: t("connectModelAction"),
         href: "/models",
         placeholder: t("connectModelPlaceholder"),
@@ -63,10 +60,8 @@ export function WorkplaceOnboarding({
 
       <div className="relative mx-auto w-full px-4 md:px-6">
         <ComposerSetupBanner
-          step={step.index}
-          totalSteps={2}
-          title={step.title}
-          description={step.description}
+          steps={steps}
+          current={step.index}
           actionLabel={step.action}
           href={step.href}
         />

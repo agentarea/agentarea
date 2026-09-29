@@ -1,31 +1,31 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { cn } from "@/lib/utils";
 
+type StepState = "done" | "current" | "upcoming";
+
 interface ComposerSetupBannerProps {
-  step: number;
-  totalSteps: number;
-  title: string;
-  description: string;
+  /** Every step, in order. */
+  steps: string[];
+  /** Index of the step to do now; the ones before it are done. */
+  current: number;
   actionLabel: string;
   href: string;
   className?: string;
 }
 
 /**
- * The one thing standing between the user and a working composer, docked on
- * top of it. Placed directly above a composer: the bottom edge slides under the
- * composer's top border, so the two read as one piece rather than as a notice
- * floating somewhere on the page.
+ * What stands between the user and a working composer, docked on top of it:
+ * the setup steps in a row, where you are in them, and the button for the
+ * current one. Placed directly above a composer: the bottom edge slides under
+ * the composer's top border, so the two read as one piece rather than as a
+ * notice floating somewhere on the page.
  */
 export function ComposerSetupBanner({
-  step,
-  totalSteps,
-  title,
-  description,
+  steps,
+  current,
   actionLabel,
   href,
   className,
@@ -39,16 +39,49 @@ export function ComposerSetupBanner({
         className
       )}
     >
-      {/* Always one row. A phone has no room for the description or a
-          labelled button, so it gets the title and an arrow instead. */}
-      <div className="relative flex items-center gap-3 px-3 py-2.5">
-        <Badge className="shrink-0 tabular-nums">
-          {step}/{totalSteps}
-        </Badge>
-        <p className="min-w-0 flex-1 text-[13px] leading-5 text-muted-foreground">
-          <span className="font-medium text-foreground">{title}</span>
-          <span className="hidden sm:inline"> {description}</span>
-        </p>
+      <div className="relative flex items-center gap-3 px-3 py-2">
+        <ol className="flex min-w-0 flex-1 items-center gap-2">
+          {steps.map((label, index) => {
+            const state: StepState =
+              index < current
+                ? "done"
+                : index === current
+                  ? "current"
+                  : "upcoming";
+            return (
+              <li
+                key={label}
+                aria-current={state === "current" ? "step" : undefined}
+                className="flex min-w-0 items-center gap-2"
+              >
+                {index > 0 ? (
+                  // Blue, like the current step's ring, once the step before
+                  // it is done.
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "h-px w-5 shrink-0 sm:w-10",
+                      index <= current ? "bg-primary" : "bg-border"
+                    )}
+                  />
+                ) : null}
+                <StepMark state={state} number={index + 1} />
+                {/* A phone keeps only the current step's name. */}
+                <span
+                  className={cn(
+                    "truncate text-[13px] leading-5",
+                    state === "current"
+                      ? "font-medium text-foreground"
+                      : "hidden text-muted-foreground sm:inline"
+                  )}
+                >
+                  {label}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+
         {/* The catalog's Connect button, without the logo; it draws its own
             arrow. */}
         <StartAgentButton
@@ -72,5 +105,30 @@ export function ComposerSetupBanner({
         </Button>
       </div>
     </div>
+  );
+}
+
+/** The circle for one step: a tick once done, its number otherwise. */
+function StepMark({ state, number }: { state: StepState; number: number }) {
+  if (state === "done") {
+    // StatusIndicator's brand halo: a soft tint, not a solid fill — the same
+    // blue as the current step and the line between them.
+    return (
+      <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+        <Check className="size-2.5" strokeWidth={3} aria-hidden />
+      </span>
+    );
+  }
+  return (
+    <span
+      className={cn(
+        "flex size-4 shrink-0 items-center justify-center rounded-full text-[10px] font-medium leading-none tabular-nums",
+        state === "current"
+          ? "border-[1.5px] border-primary text-primary"
+          : "border border-zinc-300 text-zinc-400 dark:border-zinc-600 dark:text-zinc-500"
+      )}
+    >
+      {number}
+    </span>
   );
 }

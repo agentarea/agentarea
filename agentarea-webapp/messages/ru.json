@@ -2023,12 +2023,10 @@
     "noAgentsAvailable": "Агенты недоступны.",
     "createFirstAgent": "Создайте своего первого агента, чтобы начать работу.",
     "onboarding": {
-      "connectModelTitle": "Подключите языковую модель",
-      "connectModelDescription": "Без неё не получится создать агента.",
+      "connectModelStep": "Подключите модель",
+      "createAgentStep": "Создайте агента",
       "connectModelAction": "К моделям",
       "connectModelPlaceholder": "Подключите модель, чтобы начать…",
-      "createAgentTitle": "Создайте первого агента",
-      "createAgentDescription": "Последний шаг — и можно общаться.",
       "createAgentAction": "Создать агента",
       "createAgentPlaceholder": "Создайте агента, чтобы начать…",
       "noAgent": "Нет агента"
