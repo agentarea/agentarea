@@ -190,7 +190,7 @@ are not rendered into environment variables.
 | `LOG_LEVEL` | fixed | `INFO` |
 | `CORE_API_URL` | the backend service, port 8000 | derived |
 | `SERVER_HOST` | fixed | `0.0.0.0` |
-| `SERVER_PORT` | fixed | `80` |
+| `SERVER_PORT` | fixed; the Service still answers on `mcpManager.service.port` | `8000` |
 | `BACKEND_TYPE` | fixed to `kubernetes` in `config.yaml` | `kubernetes` |
 | `KUBERNETES_ENABLED` | fixed | `true` |
 | `KUBERNETES_NAMESPACE` | the release namespace | derived |
