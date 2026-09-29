@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { useQueryState } from "nuqs";
+import { resetCurrencyCache } from "@/hooks/useCurrency";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import type { WorkspaceInvitationPreview } from "@/lib/api";
 import {
   INVITATION_QUERY_PARAM,
@@ -12,6 +13,7 @@ import {
   acceptInvitationAction,
   previewInvitationAction,
 } from "@/lib/workspace-actions";
+import { WORKSPACE_HOME, workspacePath } from "@/lib/workspace-routes";
 
 export type InvitationPreviewState =
   | { status: "loading" }
@@ -21,7 +23,7 @@ export type InvitationPreviewState =
 type ForToken<T> = { token: string; value: T };
 
 export function useInvitationDialog() {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
   const [token, setToken] = useQueryState(INVITATION_QUERY_PARAM);
   const [preview, setPreview] =
     useState<ForToken<InvitationPreviewState> | null>(null);
@@ -63,7 +65,10 @@ export function useInvitationDialog() {
         setAcceptFailure({ token, value: result.error });
         return;
       }
-      router.replace("/dashboard");
+      // Joining a workspace makes it the active one — same
+      // currency-staleness risk as switching workspaces in TeamSwitcher.
+      resetCurrencyCache();
+      router.replace(workspacePath(result.slug, WORKSPACE_HOME));
       router.refresh();
     });
   };

@@ -6,9 +6,7 @@ from uuid import uuid4
 from agentarea_governance.domain.enums import InterceptorAction, Phase
 from agentarea_governance.domain.models import InterceptorContext
 from agentarea_governance.interceptors.observers.metrics_observer import MetricsObserver
-from agentarea_governance.interceptors.observers.audit_observer import AuditObserver
 from agentarea_governance.interceptors.gates.semantic_guard import SemanticGuard
-from agentarea_governance.interceptors.gates.escalation_guard import EscalationGuard
 
 
 def _ctx(
@@ -52,36 +50,6 @@ class TestMetricsObserver:
     @pytest.mark.asyncio
     async def test_always_allows(self):
         obs = MetricsObserver()
-        result = await obs.execute(_ctx())
-        assert result.action == InterceptorAction.ALLOW
-
-
-class TestAuditObserver:
-    @pytest.mark.asyncio
-    async def test_without_sink(self):
-        obs = AuditObserver()
-        result = await obs.execute(_ctx())
-        assert result.action == InterceptorAction.ALLOW
-
-    @pytest.mark.asyncio
-    async def test_with_sink(self):
-        published = []
-
-        class FakeSink:
-            async def publish(self, event):
-                published.append(event)
-
-        obs = AuditObserver(event_sink=FakeSink())
-        await obs.execute(_ctx())
-        assert len(published) == 1
-
-    @pytest.mark.asyncio
-    async def test_sink_failure_handled(self):
-        class FailingSink:
-            async def publish(self, event):
-                raise ConnectionError("sink down")
-
-        obs = AuditObserver(event_sink=FailingSink())
         result = await obs.execute(_ctx())
         assert result.action == InterceptorAction.ALLOW
 
@@ -169,46 +137,3 @@ class TestSemanticGuard:
             _ctx(content="TRUNCATE TABLE logs")
         )
         assert result.action == InterceptorAction.DENY
-
-
-# ── Escalation Guard ──
-
-
-class TestEscalationGuard:
-    @pytest.mark.asyncio
-    async def test_no_rules_allows(self):
-        guard = EscalationGuard()
-        result = await guard.execute(_ctx())
-        assert result.action == InterceptorAction.ALLOW
-
-    @pytest.mark.asyncio
-    async def test_matching_rule_escalates(self):
-        guard = EscalationGuard()
-        ctx = _ctx(
-            action_name="payment_process",
-            execution_state={"escalation_rules": ["payment_*", "delete_*"]},
-        )
-        result = await guard.execute(ctx)
-        assert result.action == InterceptorAction.ESCALATE
-        assert "payment_process" in result.reason
-
-    @pytest.mark.asyncio
-    async def test_no_match_allows(self):
-        guard = EscalationGuard()
-        ctx = _ctx(
-            action_name="web_search",
-            execution_state={"escalation_rules": ["payment_*"]},
-        )
-        result = await guard.execute(ctx)
-        assert result.action == InterceptorAction.ALLOW
-
-    @pytest.mark.asyncio
-    async def test_matched_rules_in_metadata(self):
-        guard = EscalationGuard()
-        ctx = _ctx(
-            action_name="delete_user",
-            execution_state={"escalation_rules": ["payment_*", "delete_*"]},
-        )
-        result = await guard.execute(ctx)
-        assert result.action == InterceptorAction.ESCALATE
-        assert "delete_*" in result.metadata["matched_rules"]

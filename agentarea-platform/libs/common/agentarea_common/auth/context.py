@@ -23,9 +23,12 @@ class UserContext:
     # Set when the principal itself is a Client (agent-proxy), e.g. an OAuth2
     # client-credentials token; the gateway trusts it over URL scoping.
     client_id: str | None = None
+    # The handle the request named the workspace by (``/v1/workspaces/{slug}``).
+    # ``None`` for contexts minted outside HTTP, which name it by id.
+    workspace_slug: str | None = None
 
     def __post_init__(self):
-        """Initialize default values after dataclass creation."""
+        """Refuse a context that names no principal or no workspace."""
         if not self.user_id:
             raise ValueError(
                 "user_id is required; refusing to build a UserContext without a principal"
@@ -34,8 +37,59 @@ class UserContext:
             raise ValueError(
                 "workspace_id is required; refusing to build a UserContext without a workspace"
             )
-        if self.accessible_workspaces is None:
-            self.accessible_workspaces = [self.workspace_id]
+
+
+class WorkspaceUnreachableError(PermissionError):
+    """The principal may not act in the workspace it named.
+
+    Raised alike for a workspace that does not exist and one the principal
+    cannot reach, so the refusal does not reveal which workspaces exist.
+    """
+
+
+class WorkspaceBoundCredentialError(PermissionError):
+    """A credential confined to one workspace was used to act beyond it."""
+
+
+@dataclass
+class UserPrincipal:
+    """An authenticated user before any workspace has been selected.
+
+    Carries no ``workspace_id`` on purpose: authentication says who is calling,
+    never where. The workspace comes from the request -- the URL slug, or the
+    entity an id-addressed route acts on -- and :meth:`enter` is the only way to
+    turn a principal into a :class:`UserContext`.
+    """
+
+    user_id: str
+    email: str | None = None
+    client_id: str | None = None
+    # An API key acts only in the workspace it was issued for.
+    bound_workspace_id: str | None = None
+    # ``None`` until resolved per request; ``[]`` means resolved and none.
+    accessible_workspaces: list[str] | None = None
+    admin_workspaces: list[str] | None = None
+
+    def __post_init__(self):
+        """Refuse a principal that names nobody."""
+        if not self.user_id:
+            raise ValueError("user_id is required; refusing to build a principal without one")
+
+    def enter(self, workspace_id: str, workspace_slug: str) -> "UserContext":
+        """The context for acting in ``workspace_id``, which must be reachable."""
+        if workspace_id not in (self.accessible_workspaces or []):
+            raise WorkspaceUnreachableError(f"No accessible workspace '{workspace_slug}'")
+        return UserContext(
+            user_id=self.user_id,
+            workspace_id=workspace_id,
+            workspace_slug=workspace_slug,
+            accessible_workspaces=list(self.accessible_workspaces or []),
+            admin_workspaces=(
+                None if self.admin_workspaces is None else list(self.admin_workspaces)
+            ),
+            email=self.email,
+            client_id=self.client_id,
+        )
 
 
 @dataclass(frozen=True)

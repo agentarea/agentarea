@@ -16,12 +16,14 @@ import type {
   SecretResponse,
   SkillResponse,
   UpdateWalletRequest,
+  UploadPlanEntry,
 } from "@/api/client/types.gen";
 import {
   zCreateWorkspaceDirectoryRequest,
   zListSecretsV1SecretsGetResponse,
   zProviderConfigCreate,
   zProviderConfigUpdate,
+  zUploadPlanRequest,
 } from "@/api/client/zod.gen";
 import { env } from "@/env";
 import {
@@ -36,7 +38,6 @@ import {
   checkMCPServerInstanceConfiguration,
   continueAgentTask,
   createAgentWallet,
-  createWorkspaceDirectory,
   createClient,
   createMCPAuthConfig,
   createMCPServer,
@@ -46,6 +47,7 @@ import {
   createProject,
   createProviderConfig,
   createSkill,
+  createWorkspaceDirectory,
   deleteAgentWallet,
   deleteClient,
   deleteModelInstance,
@@ -53,15 +55,12 @@ import {
   deleteProject,
   deleteProjectFile,
   deleteSkill,
-  deleteTrigger,
-  disableTrigger,
   discoverMCPInstanceTools,
   discoverModels,
   discoverModelsPreview,
   discoverOpenAPITools,
   downloadProjectFile,
   downloadWorkspaceFile,
-  enableTrigger,
   flattenSkill,
   fundAgentWallet,
   getAgent,
@@ -81,7 +80,6 @@ import {
   getSkillFile,
   getSkillFiles,
   getTask,
-  getTaskPolicySnapshot,
   installAgent,
   installSkill,
   listAgents,
@@ -90,6 +88,7 @@ import {
   listMCPAuthConfigs,
   listMCPServerInstances,
   listMCPServers,
+  listMCPServerSpecs,
   listModelInstances,
   listModelSpecs,
   listOpenAPIConnections,
@@ -107,6 +106,8 @@ import {
   listTriggers,
   listWorkspaceFiles,
   pauseAgentTask,
+  planProjectUploads,
+  planWorkspaceUploads,
   previewOpenAPISpec,
   removeAgentFromProject,
   removeMcpInstanceFromClient,
@@ -130,11 +131,12 @@ import {
   workspaceFileHistory,
 } from "@/lib/api";
 import {
-  getWorkspaceSettings,
+  getPricingCurrency,
   updateWorkspaceSettings,
 } from "@/lib/api-dashboard";
-import { apiErrorMessage } from "@/lib/api-errors";
-import { workspaceFetch } from "@/lib/workspace-request";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
+import { getViewerCapabilities } from "@/lib/workspace-context";
+import { requestWorkspacePath, workspaceFetch } from "@/lib/workspace-request";
 
 function isUUID(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -243,10 +245,6 @@ export async function listTaskSandboxFilesAction(
   return await listTaskSandboxFiles(agentId, taskId, prefix);
 }
 
-export async function getTaskPolicySnapshotAction(taskId: string) {
-  return await getTaskPolicySnapshot(taskId);
-}
-
 export async function createSkillAction(skill: {
   content?: string | null;
   github_url?: string | null;
@@ -257,7 +255,7 @@ export async function createSkillAction(skill: {
 }
 
 export async function uploadSkillAction(formData: FormData) {
-  const uploadUrl = `${env.API_URL}/v1/skills/upload`;
+  const uploadUrl = `${env.API_URL}/v1/workspaces/{workspace}/skills/upload`;
 
   const response = await workspaceFetch(uploadUrl, {
     method: "POST",
@@ -351,7 +349,15 @@ export async function listProviderSpecsWithModelsAction(params?: {
 export async function createProviderConfigAction(config: ProviderConfigCreate) {
   const parsed = zProviderConfigCreate.safeParse(config);
   if (!parsed.success) {
-    return { data: undefined, error: parsed.error };
+    return {
+      data: undefined,
+      error: {
+        detail: parsed.error.issues.map((issue) => ({
+          msg: `${issue.path.join(".")}: ${issue.message}`,
+        })),
+      },
+      status: undefined,
+    };
   }
   return await createProviderConfig(parsed.data as ProviderConfigCreate);
 }
@@ -362,7 +368,15 @@ export async function updateProviderConfigAction(
 ) {
   const parsed = zProviderConfigUpdate.safeParse(config);
   if (!parsed.success) {
-    return { data: undefined, error: parsed.error };
+    return {
+      data: undefined,
+      error: {
+        detail: parsed.error.issues.map((issue) => ({
+          msg: `${issue.path.join(".")}: ${issue.message}`,
+        })),
+      },
+      status: undefined,
+    };
   }
   return await updateProviderConfig(
     configId,
@@ -522,18 +536,6 @@ export async function listTriggersAction(params?: {
   return await listTriggers(params);
 }
 
-export async function enableTriggerAction(triggerId: string) {
-  return await enableTrigger(triggerId);
-}
-
-export async function disableTriggerAction(triggerId: string) {
-  return await disableTrigger(triggerId);
-}
-
-export async function deleteTriggerAction(triggerId: string) {
-  return await deleteTrigger(triggerId);
-}
-
 export async function listMCPServersAction(params?: {
   status?: string;
   is_public?: boolean;
@@ -543,6 +545,12 @@ export async function listMCPServersAction(params?: {
   search?: string;
 }) {
   return await listMCPServers(params);
+}
+
+export async function listMCPServerSpecsAction(
+  specIds: (string | null | undefined)[]
+) {
+  return await listMCPServerSpecs(specIds);
 }
 
 export async function listOpenAPIConnectionsAction(
@@ -570,7 +578,7 @@ export async function createOpenAPIConnectionAction(
   if (!result.error) {
     // Invalidate the list so the new connection is present when the form
     // navigates to /connections (the client no longer calls router.refresh).
-    revalidatePath("/connections");
+    revalidatePath(await requestWorkspacePath("/connections"));
   }
   return result;
 }
@@ -593,7 +601,7 @@ export async function probeInstanceAuthAction(instanceId: string) {
   }
 
   const base = new URL(env.API_URL);
-  base.pathname = `/v1/mcp-server-instances/${encodeURIComponent(instanceId)}/probe`;
+  base.pathname = `/v1/workspaces/{workspace}/mcp-server-instances/${encodeURIComponent(instanceId)}/probe`;
 
   const res = await workspaceFetch(base.href, { method: "POST" });
   if (!res.ok) {
@@ -613,7 +621,9 @@ export async function probeInstanceAuthAction(instanceId: string) {
 export async function listWorkspaceSecretsAction(): Promise<SecretResponse[]> {
   const { data, error } = await listSecrets();
   if (error || !data) {
-    throw new Error(apiErrorMessage({ error }, "Failed to load workspace secrets"));
+    throw new Error(
+      apiErrorMessage({ error }, "Failed to load workspace secrets")
+    );
   }
   return zListSecretsV1SecretsGetResponse.parse(data);
 }
@@ -635,7 +645,7 @@ export async function mcpOAuthPreflightAction(
   }
 
   const base = new URL(env.API_URL);
-  base.pathname = "/v1/mcp-oauth/preflight";
+  base.pathname = "/v1/workspaces/{workspace}/mcp-oauth/preflight";
   base.search = new URLSearchParams({ [key]: id }).toString();
 
   const res = await workspaceFetch(base.href, { method: "GET" });
@@ -645,24 +655,22 @@ export async function mcpOAuthPreflightAction(
   return { data: await res.json(), error: null };
 }
 
-export async function oauthAuthorizeAction(
-  body: {
-    instance_id: string;
-    credential_mode?: "auto" | "custom";
-    client_id?: string;
-    client_secret?: string;
-    client_id_secret_id?: string;
-    client_secret_secret_id?: string;
-    return_to?: string;
-  }
-) {
+export async function oauthAuthorizeAction(body: {
+  instance_id: string;
+  credential_mode?: "auto" | "custom";
+  client_id?: string;
+  client_secret?: string;
+  client_id_secret_id?: string;
+  client_secret_secret_id?: string;
+  return_to?: string;
+}) {
   // Validate UUID to prevent SSRF/path injection in downstream fetch URL
   if (!isUUID(body.instance_id)) {
     return { data: null, error: "Invalid instance ID" };
   }
 
   const base = new URL(env.API_URL);
-  base.pathname = "/v1/mcp-oauth/authorize";
+  base.pathname = "/v1/workspaces/{workspace}/mcp-oauth/authorize";
 
   const res = await workspaceFetch(base.href, {
     method: "POST",
@@ -685,7 +693,10 @@ export async function oauthAuthorizeAction(
 async function readApiError(res: Response) {
   const text = await res.text();
   try {
-    return apiErrorMessage({ error: JSON.parse(text), status: res.status }, "Request failed");
+    return apiErrorMessage(
+      { error: JSON.parse(text), status: res.status },
+      "Request failed"
+    );
   } catch {
     return text || `Request failed (${res.status})`;
   }
@@ -697,7 +708,7 @@ export async function validateConnectionAction(
   serverId?: string
 ) {
   const res = await workspaceFetch(
-    `${env.API_URL}/v1/mcp-server-instances/validate-connection`,
+    `${env.API_URL}/v1/workspaces/{workspace}/mcp-server-instances/validate-connection`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -781,6 +792,10 @@ export async function listPoliciesAction() {
   return await listPolicies({ enabled: true });
 }
 
+export async function getViewerCapabilitiesAction() {
+  return await getViewerCapabilities();
+}
+
 export async function getProjectAction(projectId: string) {
   return await getProject(projectId);
 }
@@ -796,7 +811,7 @@ export async function createProjectAction(project: {
 export async function updateProjectAction(
   projectId: string,
   project: {
-    name?: string | null;
+    name?: string;
     description?: string | null;
     instructions?: string | null;
   }
@@ -854,33 +869,17 @@ export async function listProjectFilesAction(projectId: string) {
   return await listProjectFiles(projectId);
 }
 
-export async function uploadProjectFileAction(
+export async function planProjectUploadsAction(
   projectId: string,
-  formData: FormData
+  files: UploadPlanEntry[]
 ) {
   // Validate projectId as UUID to prevent path traversal / SSRF
   if (!/^[a-f0-9-]{36}$/.test(projectId)) {
     return { data: null, error: { detail: "Invalid project ID" } };
   }
-
-  // Build URL safely via URL API — base is a trusted server-only env var
-  const base = new URL(env.API_URL);
-  base.pathname = `/v1/projects/${encodeURIComponent(projectId)}/files`;
-
-  const response = await workspaceFetch(base.href, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const errorData = await response
-      .json()
-      .catch(() => ({ detail: "Upload failed" }));
-    return { data: null, error: errorData };
-  }
-
-  const data = await response.json();
-  return { data, error: null };
+  const parsed = zUploadPlanRequest.safeParse({ files });
+  if (!parsed.success) return { data: null, error: parsed.error.flatten() };
+  return await planProjectUploads(projectId, parsed.data);
 }
 
 export async function downloadProjectFileAction(
@@ -901,29 +900,18 @@ export async function listWorkspaceFilesAction() {
   return await listWorkspaceFiles();
 }
 
-export async function createWorkspaceDirectoryAction(body: CreateWorkspaceDirectoryRequest) {
+export async function createWorkspaceDirectoryAction(
+  body: CreateWorkspaceDirectoryRequest
+) {
   const parsed = zCreateWorkspaceDirectoryRequest.safeParse(body);
   if (!parsed.success) return { data: null, error: parsed.error.flatten() };
   return await createWorkspaceDirectory(parsed.data);
 }
 
-export async function uploadWorkspaceFileAction(formData: FormData) {
-  const uploadUrl = `${env.API_URL}/v1/files`;
-
-  const response = await workspaceFetch(uploadUrl, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({
-      detail: "Upload failed",
-    }));
-    return { data: null, error: errorData };
-  }
-
-  // 204 No Content — no JSON body to parse
-  return { data: { ok: true }, error: null };
+export async function planWorkspaceUploadsAction(files: UploadPlanEntry[]) {
+  const parsed = zUploadPlanRequest.safeParse({ files });
+  if (!parsed.success) return { data: null, error: parsed.error.flatten() };
+  return await planWorkspaceUploads(parsed.data);
 }
 
 export async function deleteWorkspaceFileAction(filePath: string) {
@@ -933,9 +921,12 @@ export async function deleteWorkspaceFileAction(filePath: string) {
     .map(encodeURIComponent)
     .join("/");
 
-  const response = await workspaceFetch(`${env.API_URL}/v1/files/${encoded}`, {
-    method: "DELETE",
-  });
+  const response = await workspaceFetch(
+    `${env.API_URL}/v1/workspaces/{workspace}/files/${encoded}`,
+    {
+      method: "DELETE",
+    }
+  );
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({
@@ -947,12 +938,18 @@ export async function deleteWorkspaceFileAction(filePath: string) {
   return { data: await response.json(), error: null };
 }
 
-export async function moveWorkspaceFileAction(source: string, destination: string) {
-  const response = await workspaceFetch(`${env.API_URL}/v1/files/move`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source, destination }),
-  });
+export async function moveWorkspaceFileAction(
+  source: string,
+  destination: string
+) {
+  const response = await workspaceFetch(
+    `${env.API_URL}/v1/workspaces/{workspace}/files/move`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source, destination }),
+    }
+  );
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({
@@ -1025,34 +1022,25 @@ export async function fundAgentWalletAction(
   return await fundAgentWallet(agentId, body);
 }
 
-export async function getWorkspaceSettingsAction() {
-  try {
-    const data = await getWorkspaceSettings();
-    return { data, error: null };
-  } catch (err) {
-    return {
-      data: null,
-      error:
-        err instanceof Error
-          ? err.message
-          : "Failed to load workspace settings",
-    };
-  }
-}
-
 export async function updateWorkspaceSettingsAction(
   monthly_cap_usd: number | null
 ) {
   try {
-    const data = await updateWorkspaceSettings(monthly_cap_usd);
-    return { data, error: null };
+    return await updateWorkspaceSettings(monthly_cap_usd);
   } catch (err) {
-    return {
-      data: null,
-      error:
-        err instanceof Error
-          ? err.message
-          : "Failed to update workspace settings",
-    };
+    console.error("Failed to update workspace settings", err);
+    return { data: undefined, error: formatApiError(err), status: undefined };
   }
+}
+
+// getPricingCurrency() never guesses a currency on failure — pass that
+// failure through as an explicit error rather than papering over it here.
+// Callers (useCurrency()) must treat a null/error result as "unknown", never
+// as USD.
+export async function getPricingCurrencyAction() {
+  const result = await getPricingCurrency();
+  if (!result.ok) {
+    return { data: null, error: "Currency unavailable" };
+  }
+  return { data: { currency: result.currency }, error: null };
 }

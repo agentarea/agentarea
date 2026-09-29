@@ -3,7 +3,6 @@ package mcpgateway
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -152,42 +151,6 @@ func TestGatewayAuthenticatesStartsAndObservesWholeRequest(t *testing.T) {
 	}
 }
 
-func TestGatewayUsageIncludesMCPRoutingHeaders(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusAccepted)
-	}))
-	defer upstream.Close()
-
-	instanceID := "8ca9f331-9cc9-4a51-9933-27d7bb73860b"
-	instance := &models.MCPServerInstance{
-		InstanceID:  instanceID,
-		WorkspaceID: "ws-usage",
-	}
-	gateway := testGateway(t, &gatewayRepositoryStub{instance: instance}, &runtimeStub{endpoint: upstream.URL})
-	recorder := &usageRecorderStub{}
-	gateway.SetUsageRecorder(recorder)
-	request := httptest.NewRequest(http.MethodPost, "/mcp/"+instanceID+"/mcp", strings.NewReader("{}"))
-	request.Header.Set("X-AgentArea-Manager-Authorization", "Bearer "+testGatewaySecret)
-	request.Header.Set("Mcp-Method", "tools/call")
-	request.Header.Set("Mcp-Name", "get_weather")
-
-	gateway.ServeHTTP(httptest.NewRecorder(), request)
-
-	events := recorder.snapshot()
-	if len(events) != 2 {
-		t.Fatalf("usage events = %d, want started and completed", len(events))
-	}
-	for _, event := range events {
-		var data map[string]any
-		if err := json.Unmarshal(event.Data, &data); err != nil {
-			t.Fatal(err)
-		}
-		if data["mcp_method"] != "tools/call" || data["mcp_name"] != "get_weather" {
-			t.Fatalf("%s payload = %+v", event.Kind, data)
-		}
-	}
-}
-
 func TestGatewayRejectsMissingCredentialBeforeLifecycle(t *testing.T) {
 	repository := &gatewayRepositoryStub{}
 	runtime := &runtimeStub{}
@@ -248,6 +211,28 @@ func TestGatewayAnswersAConcurrentStartAsRetryable(t *testing.T) {
 	// counter here would report a cold start that never happened.
 	if runtime.ensured != 0 || repository.failed != 0 {
 		t.Fatalf("stepped-aside caller acted on the workload: ensured=%d failed=%d", runtime.ensured, repository.failed)
+	}
+}
+
+// The gateway buffers a request body before it waits for a workload, so a body
+// past the cap must be refused whole, before any start, rather than proxied
+// truncated to a server that would then run on half a request.
+func TestGatewayRefusesAnOversizedBodyBeforeStarting(t *testing.T) {
+	instanceID := "8ca9f331-9cc9-4a51-9933-27d7bb73860b"
+	repository := &gatewayRepositoryStub{instance: &models.MCPServerInstance{InstanceID: instanceID}}
+	runtime := &runtimeStub{}
+	recorder := httptest.NewRecorder()
+	body := strings.NewReader(strings.Repeat("x", maxRequestBodyBytes+1))
+	request := httptest.NewRequest(http.MethodPost, "/mcp/"+instanceID+"/mcp", body)
+	request.Header.Set("X-AgentArea-Manager-Authorization", "Bearer "+testGatewaySecret)
+
+	testGateway(t, repository, runtime).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("response = %d, want %d for a body past the cap", recorder.Code, http.StatusRequestEntityTooLarge)
+	}
+	if runtime.ensured != 0 {
+		t.Fatalf("ensured = %d; an oversized request started a workload", runtime.ensured)
 	}
 }
 

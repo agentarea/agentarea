@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { cn } from "@/lib/utils";
-import type { SetupField } from "@/app/(main)/bundles/types";
+import type { SetupField } from "@/app/w/[workspace]/(main)/bundles/types";
 
 export interface SetupFormProps {
   schema: SetupField[];

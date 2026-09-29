@@ -1,5 +1,6 @@
 """Tests for gate interceptors."""
 
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -22,6 +23,38 @@ def _ctx(
         action_name=action_name,
         execution_state=execution_state or {},
     )
+
+
+@pytest.fixture
+def rub_pricing(monkeypatch):
+    """A customer_pricing extension billing in RUB, installed as discovery would."""
+    from agentarea_common.extensions import customer_pricing
+    from agentarea_common.extensions.registry import ExtensionRegistry
+
+    class _Rub:
+        def currency(self):
+            return "RUB"
+
+        async def price_llm_call(self, **kwargs):
+            return kwargs["provider_cost_usd"] * 95
+
+    monkeypatch.setattr(ExtensionRegistry, "_factories", {"customer_pricing": _Rub})
+    customer_pricing.get_customer_pricing.cache_clear()
+    yield
+    customer_pricing.get_customer_pricing.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_cost_guard_names_the_billing_currency_not_dollars(rub_pricing):
+    guard = CostBudgetGuard()
+
+    denied = await guard.execute(_ctx(execution_state={"budget_usd": 10.0, "cost_used": 12.0}))
+    warned = await guard.execute(_ctx(execution_state={"budget_usd": 10.0, "cost_used": 8.5}))
+
+    assert denied.reason == "budget exhausted (12.00/10.00 RUB)"
+    assert warned.reason == "budget at 85% (8.50/10.00 RUB)"
+    allowed = await guard.execute(_ctx(execution_state={"budget_usd": 10.0, "cost_used": 1.0}))
+    assert allowed.reason == "budget ok (1.00/10.00 RUB)"
 
 
 class TestCostBudgetGuard:
@@ -60,6 +93,23 @@ class TestCostBudgetGuard:
         ctx = _ctx(execution_state={"budget_usd": 10.0, "cost_used": 12.0})
         result = await guard.execute(ctx)
         assert result.action == InterceptorAction.DENY
+
+    @pytest.mark.asyncio
+    async def test_decimal_state_denies_at_exact_exhaustion(self):
+        guard = CostBudgetGuard()
+        spent = Decimal("0.7") + Decimal("0.1")
+        ctx = _ctx(execution_state={"budget_usd": Decimal("0.8"), "cost_used": spent})
+        result = await guard.execute(ctx)
+        assert result.action == InterceptorAction.DENY
+        assert result.metadata == {"cost_used": "0.8", "budget_usd": "0.8"}
+
+    @pytest.mark.asyncio
+    async def test_serialized_money_state_is_compared_as_money(self):
+        guard = CostBudgetGuard(warning_threshold=0.8)
+        ctx = _ctx(execution_state={"budget_usd": "10.00", "cost_used": "8.50"})
+        result = await guard.execute(ctx)
+        assert result.action == InterceptorAction.WARN
+        assert "85%" in result.reason
 
 
 class TestTokenBudgetGuard:
@@ -130,8 +180,18 @@ class TestServiceBudgetGuard:
         result = await guard.execute(ctx)
         assert result.action == InterceptorAction.DENY
         assert "exhausted" in result.reason
-        assert result.metadata["service_cost_used"] == 5.0
-        assert result.metadata["service_budget_usd"] == 5.0
+        assert result.metadata["service_cost_used"] == "5.0"
+        assert result.metadata["service_budget_usd"] == "5.0"
+
+    @pytest.mark.asyncio
+    async def test_decimal_state_denies_at_exact_exhaustion(self):
+        guard = ServiceBudgetGuard()
+        spent = Decimal("0.7") + Decimal("0.1")
+        ctx = _ctx(
+            execution_state={"service_budget_usd": Decimal("0.8"), "service_cost_used": spent}
+        )
+        result = await guard.execute(ctx)
+        assert result.action == InterceptorAction.DENY
 
     @pytest.mark.asyncio
     async def test_over_budget(self):

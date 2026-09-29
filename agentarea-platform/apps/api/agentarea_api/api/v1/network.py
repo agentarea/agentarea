@@ -89,11 +89,6 @@ _GOVERNANCE_INTERCEPTORS = [
         phases=["tool_discovery", "pre_tool_call"],
     ),
     GovernanceOverlay(
-        interceptor_name="audit_observer",
-        category="observer",
-        phases=["pre_llm_call", "post_llm_call", "pre_tool_call", "post_tool_call"],
-    ),
-    GovernanceOverlay(
         interceptor_name="metrics_observer",
         category="observer",
         phases=["pre_llm_call", "post_llm_call", "pre_tool_call", "post_tool_call"],
@@ -162,7 +157,8 @@ async def get_network_topology(
     from agentarea_agents.domain.skill_models import Skill, skill_members_table
     from agentarea_common.config.database import get_database
 
-    accessible_workspaces = user_context.accessible_workspaces or [user_context.workspace_id]
+    # The path selects one workspace; reaching others does not widen the view.
+    accessible_workspaces = [user_context.workspace_id]
 
     # --- Parallel fetches, each with its own session ---
 
@@ -212,7 +208,7 @@ async def get_network_topology(
                 )
                 return await repo.list_all()
         except Exception as e:
-            logger.warning(f"Failed to fetch MCP instances: {e}")
+            logger.warning(f"Failed to fetch MCP instances: {e}", exc_info=True)
             return []
 
     async def fetch_mcp_servers() -> list:
@@ -225,7 +221,7 @@ async def get_network_topology(
                 result = await session.execute(query)
                 return list(result.scalars().all())
         except Exception as e:
-            logger.warning(f"Failed to fetch MCP server specs: {e}")
+            logger.warning(f"Failed to fetch MCP server specs: {e}", exc_info=True)
             return []
 
     async def fetch_triggers() -> list:
@@ -237,7 +233,7 @@ async def get_network_topology(
                 result = await session.execute(query)
                 return list(result.scalars().all())
         except Exception as e:
-            logger.warning(f"Failed to fetch triggers: {e}")
+            logger.warning(f"Failed to fetch triggers: {e}", exc_info=True)
             return []
 
     async def fetch_openapi_connections() -> list:
@@ -251,7 +247,7 @@ async def get_network_topology(
                 result = await session.execute(query)
                 return list(result.scalars().all())
         except Exception as e:
-            logger.warning(f"Failed to fetch OpenAPI connections: {e}")
+            logger.warning(f"Failed to fetch OpenAPI connections: {e}", exc_info=True)
             return []
 
     (

@@ -45,8 +45,20 @@ workload the first call is bringing up. Queueing them instead would hold a
 database connection each for the whole cold start, so a client retrying faster
 than a slow start could finish would fill the manager's connection pool — taking
 the connection the start itself still needs and stalling every instance, not
-only the one being started. A client that honours `Retry-After` sees a slower
-first call; one that treats `503` as fatal needs its own retry.
+only the one being started. The governed proxy (`/v1/mcp/{instance_id}/mcp`)
+and the platform's own MCP clients repeat such a call themselves, honouring
+`Retry-After`, so their callers see only a slower first call.
+
+An MCP 2026-07-28 client that negotiates the protocol version bounds its
+`server/discover` probe (10 seconds in the Python SDK). A start that takes
+longer — an `npx`/`uvx` package installing on boot — makes that probe time out,
+and the client falls back to the 2025 handshake for that connection. The call
+still succeeds; the connection just speaks the older protocol version.
+
+A `command` connection's workload exits when its stdio server dies. The next
+call replaces it with a fresh workload and pays one cold start; it does not wait
+for the stopped one to come back. A package that fails to install or start
+fails the call as soon as its workload exits.
 
 **A reclaimed instance shows no running workload.** The instance row, its
 credentials and its tool list are untouched, but nothing is running until the

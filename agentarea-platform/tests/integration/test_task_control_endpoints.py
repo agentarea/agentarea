@@ -56,7 +56,7 @@ class TestTaskControlEndpoints:
 
                 # Test pause endpoint
                 response = await client.post(
-                    f"{base_url}/v1/agents/{test_agent_id}/tasks/{test_task_id}/pause"
+                    f"{base_url}/v1/workspaces/acme/agents/{test_agent_id}/tasks/{test_task_id}/pause"
                 )
 
                 # Note: This will likely fail with connection error since we don't have the server running
@@ -92,7 +92,7 @@ class TestTaskControlEndpoints:
 
                 # Test resume endpoint
                 response = await client.post(
-                    f"{base_url}/v1/agents/{test_agent_id}/tasks/{test_task_id}/resume"
+                    f"{base_url}/v1/workspaces/acme/agents/{test_agent_id}/tasks/{test_task_id}/resume"
                 )
 
                 # Note: This will likely fail with connection error since we don't have the server running

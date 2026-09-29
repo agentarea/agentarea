@@ -1,5 +1,7 @@
 """Tests for payment protocol detection and unified client."""
 
+from decimal import Decimal
+
 import pytest
 from agentarea_payment.detector import PaymentProtocolDetector
 from agentarea_payment.models import PaymentResult
@@ -60,20 +62,20 @@ class TestPaymentResult:
         r = PaymentResult(
             success=True,
             protocol="x402",
-            amount_usd=0.01,
+            amount_usd=Decimal("0.01"),
             recipient="0xabc",
             tx_hash="0xdef",
         )
         assert r.success is True
         assert r.protocol == "x402"
-        assert r.amount_usd == 0.01
+        assert r.amount_usd == Decimal("0.01")
         assert r.error is None
 
     def test_failed_result(self):
         r = PaymentResult(
             success=False,
             protocol="mpp",
-            amount_usd=0.50,
+            amount_usd=Decimal("0.50"),
             recipient="0xabc",
             error="Insufficient balance",
         )
@@ -89,7 +91,7 @@ class TestUnifiedPaymentClient:
 
         client = UnifiedPaymentClient(
             wallet_type="mpp",
-            mpp_config={"payment_method_types": ["charge"]},
+            mpp_config={"payment_method_types": ["charge"], "session_budget_usd": "10"},
             mpp_tempo_key="0xkey",
         )
 
@@ -102,10 +104,20 @@ class TestUnifiedPaymentClient:
             response_status=402,
             response_headers={"PAYMENT-REQUIRED": "base64data"},
             response_body="",
-            budget_remaining=5.0,
+            budget_remaining=Decimal("5.0"),
         )
         assert result.success is False
         assert "not support x402" in result.error
+
+    def test_mpp_wallet_without_a_session_budget_refuses_to_pay(self):
+        from agentarea_payment.unified_client import UnifiedPaymentClient
+
+        with pytest.raises(ValueError, match="session_budget_usd"):
+            UnifiedPaymentClient(
+                wallet_type="mpp",
+                mpp_config={"payment_method_types": ["charge"]},
+                mpp_tempo_key="0xkey",
+            )
 
     @pytest.mark.asyncio
     async def test_unknown_protocol_returns_error(self):
@@ -121,7 +133,7 @@ class TestUnifiedPaymentClient:
             response_status=402,
             response_headers={"Content-Type": "text/plain"},
             response_body="Pay up",
-            budget_remaining=5.0,
+            budget_remaining=Decimal("5.0"),
         )
         assert result.success is False
         assert "Unknown" in result.error
@@ -154,12 +166,12 @@ class TestX402PaymentClient:
             headers={},
             body=None,
             response_headers={"PAYMENT-REQUIRED": header},
-            budget_remaining=0.01,
+            budget_remaining=Decimal("0.01"),
         )
 
         assert result.success is False
         assert result.protocol == "x402"
-        assert result.amount_usd == 0.025
+        assert result.amount_usd == Decimal("0.025")
         assert result.recipient == "0xrecipient"
         assert "exceeds remaining budget" in result.error
 
@@ -267,12 +279,12 @@ class TestX402PaymentClient:
             response_headers={
                 "PAYMENT-REQUIRED": base64.b64encode(json.dumps(challenge).encode()).decode()
             },
-            budget_remaining=1.0,
+            budget_remaining=Decimal("1.0"),
         )
 
         assert result.success is False
         assert result.tx_hash == "0xsettled"
-        assert result.amount_usd == 0.25
+        assert result.amount_usd == Decimal("0.25")
         assert result.response_status == 500
 
 
@@ -281,7 +293,7 @@ class TestMPPPaymentClient:
     async def test_budget_check_reads_json_body_without_sdk(self):
         from agentarea_payment.mpp_client import MPPPaymentClient
 
-        client = MPPPaymentClient(tempo_key="0xkey")
+        client = MPPPaymentClient(tempo_key="0xkey", session_budget_usd=Decimal("1"))
 
         result = await client.handle_402(
             url="https://api.example.com/paid",
@@ -290,12 +302,12 @@ class TestMPPPaymentClient:
             body=None,
             response_headers={"WWW-Authenticate": "Payment"},
             response_body='{"amount": "250000", "recipient": "merchant"}',
-            budget_remaining=0.10,
+            budget_remaining=Decimal("0.10"),
         )
 
         assert result.success is False
         assert result.protocol == "mpp"
-        assert result.amount_usd == 0.25
+        assert result.amount_usd == Decimal("0.25")
         assert result.recipient == "merchant"
         assert "exceeds remaining budget" in result.error
 
@@ -319,7 +331,7 @@ class TestMPPPaymentClient:
         modules = {"mpp": SimpleNamespace(parse_payment_receipt=parse_payment_receipt)}
         monkeypatch.setattr(mpp_client, "import_module", modules.__getitem__)
         monkeypatch.setattr(mpp_client.MPPPaymentClient, "_get_client", fake_get_client)
-        client = mpp_client.MPPPaymentClient(tempo_key="0xkey")
+        client = mpp_client.MPPPaymentClient(tempo_key="0xkey", session_budget_usd=Decimal("1"))
 
         result = await client.handle_402(
             url="https://api.example.com/paid",
@@ -328,9 +340,9 @@ class TestMPPPaymentClient:
             body=None,
             response_headers={},
             response_body='{"amount": "250000", "recipient": "merchant"}',
-            budget_remaining=1.0,
+            budget_remaining=Decimal("1.0"),
         )
 
         assert result.success is False
         assert result.tx_hash == "0xsettled"
-        assert result.amount_usd == 0.25
+        assert result.amount_usd == Decimal("0.25")

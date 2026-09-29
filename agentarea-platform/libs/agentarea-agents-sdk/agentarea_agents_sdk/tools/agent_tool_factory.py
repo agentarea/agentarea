@@ -117,7 +117,7 @@ class AgentToolFactory:
             return DelegationTool(binding, "a2a")
 
         except Exception as e:
-            logger.error(f"Failed to create delegation tool for agent '{agent_name}': {e}")
+            logger.exception(f"Failed to create delegation tool for agent '{agent_name}': {e}")
             return None
 
     @staticmethod

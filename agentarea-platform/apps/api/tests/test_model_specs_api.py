@@ -1,4 +1,4 @@
-"""API tests for ``POST /v1/model-specs/``.
+"""API tests for ``POST /v1/workspaces/acme/model-specs/``.
 
 Covers the two duplicate paths:
 
@@ -64,7 +64,7 @@ def repo():
 @pytest.fixture
 def client(repo):
     app = FastAPI()
-    app.include_router(router, prefix="/v1")
+    app.include_router(router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_model_spec_repository] = lambda: repo
     app.dependency_overrides[get_user_context] = lambda: ADMIN
     return TestClient(app)
@@ -89,7 +89,7 @@ def test_create_returns_200_when_no_duplicate(client, repo):
     repo.create.return_value = spec
     repo.get_with_relations.return_value = spec
 
-    resp = client.post("/v1/model-specs/", json=_payload(provider_spec_id))
+    resp = client.post("/v1/workspaces/acme/model-specs/", json=_payload(provider_spec_id))
 
     assert resp.status_code == 200
     assert resp.json()["model_name"] == "gpt-4"
@@ -100,7 +100,7 @@ def test_create_returns_409_when_pre_check_finds_duplicate(client, repo):
     provider_spec_id = uuid4()
     repo.get_by_provider_and_model.return_value = _spec(provider_spec_id)
 
-    resp = client.post("/v1/model-specs/", json=_payload(provider_spec_id))
+    resp = client.post("/v1/workspaces/acme/model-specs/", json=_payload(provider_spec_id))
 
     assert resp.status_code == 409
     assert "already exists" in resp.json()["detail"]
@@ -114,7 +114,7 @@ def test_create_returns_409_on_race_against_unique_constraint(client, repo):
         "INSERT", params=None, orig=Exception("unique violation")
     )
 
-    resp = client.post("/v1/model-specs/", json=_payload(provider_spec_id))
+    resp = client.post("/v1/workspaces/acme/model-specs/", json=_payload(provider_spec_id))
 
     assert resp.status_code == 409
     assert "already exists" in resp.json()["detail"]

@@ -11,18 +11,17 @@ import { SettingsSidebarContent } from "@/components/SettingsLayout/SettingsSide
 import { Sidebar, SidebarProvider, SidebarRail } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { navData } from "@/lib/nav-data";
+import {
+  stripWorkspacePrefix,
+  workspaceSlugFromPath,
+} from "@/lib/workspace-routes";
 import type { Workspace } from "@/lib/workspaces";
 
 interface ConditionalLayoutProps {
   children: React.ReactNode;
   sidebarDefaultOpen?: boolean;
   workspaces: Workspace[];
-  activeWorkspaceSlug: string | null;
 }
-
-// Routes that render their own full-page chrome (landing, auth, error) and
-// therefore must not be wrapped in the app shell / sidebar.
-const NO_LAYOUT_ROUTES = ["/auth", "/error", "/404", "/500"];
 
 // Everything that used to live under /admin now sits beneath /settings, so the
 // one prefix covers it.
@@ -32,7 +31,6 @@ export default function ConditionalLayout({
   children,
   sidebarDefaultOpen,
   workspaces,
-  activeWorkspaceSlug,
 }: ConditionalLayoutProps) {
   const pathname = usePathname();
 
@@ -41,17 +39,16 @@ export default function ConditionalLayout({
   // across auth re-renders; auth only gates the content area below via
   // <AuthGuard>. Previously the shell was conditional on useAuth + a hardcoded
   // route list, so a flapping session (or a route missing from the list) could
-  // unmount the provider and silently reset/disable the sidebar.
-  const useNoLayout =
-    pathname === "/" ||
-    NO_LAYOUT_ROUTES.some((route) => pathname.startsWith(route));
+  // unmount the provider and silently reset/disable the sidebar. Only
+  // `/w/{slug}` pages get it: outside a workspace its links lead nowhere.
+  const useNoLayout = workspaceSlugFromPath(pathname) === null;
 
   if (useNoLayout) {
     return <>{children}</>;
   }
 
   const isSettings = SETTINGS_ROUTES.some((route) =>
-    pathname.startsWith(route)
+    stripWorkspacePrefix(pathname).startsWith(route)
   );
 
   return (
@@ -76,11 +73,7 @@ export default function ConditionalLayout({
                 {isSettings ? (
                   <SettingsSidebarContent />
                 ) : (
-                  <AppSidebarContent
-                    data={navData}
-                    workspaces={workspaces}
-                    activeWorkspaceSlug={activeWorkspaceSlug}
-                  />
+                  <AppSidebarContent data={navData} workspaces={workspaces} />
                 )}
               </motion.div>
             </AnimatePresence>

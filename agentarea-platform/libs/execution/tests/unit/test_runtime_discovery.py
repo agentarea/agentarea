@@ -2,9 +2,7 @@ import json
 
 import httpx
 import pytest
-from agentarea_execution.activities.agent_execution_activities import (
-    _as_tool_config_list,
-)
+from agentarea_execution.activities.agent.config import _as_tool_config_list
 from agentarea_execution.activities.runtime_discovery import (
     fetch_runtime_manifest,
     render_runtime_prompt,

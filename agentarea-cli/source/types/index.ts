@@ -85,6 +85,8 @@ export interface CLIConfig {
 	streamTimeout?: number;
 	logLevel?: 'debug' | 'info' | 'warn' | 'error';
 	theme?: 'light' | 'dark' | 'auto';
+	/** Slug of the workspace workspace-scoped commands run in. */
+	workspace?: string;
 }
 
 export interface SessionState {

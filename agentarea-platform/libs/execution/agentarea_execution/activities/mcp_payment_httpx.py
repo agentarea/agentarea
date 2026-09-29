@@ -8,10 +8,12 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from decimal import Decimal
 from importlib import import_module
 from typing import Any
 
-import httpx
+import httpx2
+from agentarea_common.money import ZERO, serialize_money
 from agentarea_wallet.domain.enums import SETTLED_PAYMENT_STATUSES, settlement_status
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,7 @@ SettledPaymentLookup = Callable[[str], Awaitable[dict[str, Any] | None]]
 def create_payment_httpx_client_factory(
     *,
     wallet_config: dict[str, Any],
-    budget_remaining: float,
+    budget_remaining: Decimal,
     next_idempotency_key: Callable[[], str],
     find_settled_payment: SettledPaymentLookup,
     on_payment: PaymentCallback | None = None,
@@ -32,10 +34,10 @@ def create_payment_httpx_client_factory(
 
     def factory(
         headers: dict[str, str] | None = None,
-        timeout: httpx.Timeout | None = None,
-        auth: httpx.Auth | None = None,
-        inner: httpx.AsyncBaseTransport | None = None,
-    ) -> httpx.AsyncClient:
+        timeout: httpx2.Timeout | None = None,
+        auth: httpx2.Auth | None = None,
+        inner: httpx2.AsyncBaseTransport | None = None,
+    ) -> httpx2.AsyncClient:
         kwargs: dict[str, Any] = {
             "follow_redirects": True,
             "transport": AgentAreaPaymentTransport(
@@ -53,12 +55,12 @@ def create_payment_httpx_client_factory(
             kwargs["headers"] = headers
         if auth is not None:
             kwargs["auth"] = auth
-        return httpx.AsyncClient(**kwargs)
+        return httpx2.AsyncClient(**kwargs)
 
     return factory
 
 
-class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
+class AgentAreaPaymentTransport(httpx2.AsyncBaseTransport):
     """HTTPX transport that pays x402/MPP 402 challenges and tracks spend."""
 
     RETRY_KEY = "_agentarea_payment_retry"
@@ -67,20 +69,20 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         self,
         *,
         wallet_config: dict[str, Any],
-        budget_remaining: float,
+        budget_remaining: Decimal,
         next_idempotency_key: Callable[[], str],
         find_settled_payment: SettledPaymentLookup,
         on_payment: PaymentCallback | None = None,
-        inner: httpx.AsyncBaseTransport | None = None,
+        inner: httpx2.AsyncBaseTransport | None = None,
     ) -> None:
         self._wallet_config = wallet_config
-        self._budget_remaining = float(budget_remaining)
+        self._budget_remaining = budget_remaining
         self._next_idempotency_key = next_idempotency_key
         self._find_settled_payment = find_settled_payment
         self._on_payment = on_payment
-        self._inner = inner or httpx.AsyncHTTPTransport()
+        self._inner = inner or httpx2.AsyncHTTPTransport()
 
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
         response = await self._inner.handle_async_request(request)
         if response.status_code != 402 or request.extensions.get(self.RETRY_KEY):
             return response
@@ -113,8 +115,8 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         return None
 
     async def _handle_x402(
-        self, request: httpx.Request, response: httpx.Response, idempotency_key: str
-    ) -> httpx.Response:
+        self, request: httpx2.Request, response: httpx2.Response, idempotency_key: str
+    ) -> httpx2.Response:
         if self._wallet_config.get("wallet_type") not in {"x402", "dual"}:
             return response
         private_key = self._wallet_config.get("x402_private_key")
@@ -202,7 +204,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                 self._payment_result(
                     protocol="x402",
                     success=False,
-                    amount_usd=0,
+                    amount_usd=ZERO,
                     recipient="",
                     request=request,
                     idempotency_key=idempotency_key,
@@ -212,8 +214,8 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
             return response
 
     async def _handle_mpp(
-        self, request: httpx.Request, response: httpx.Response, idempotency_key: str
-    ) -> httpx.Response:
+        self, request: httpx2.Request, response: httpx2.Response, idempotency_key: str
+    ) -> httpx2.Response:
         if self._wallet_config.get("wallet_type") not in {"mpp", "dual"}:
             return response
         tempo_key = self._wallet_config.get("mpp_tempo_key")
@@ -282,7 +284,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                 return response
 
             credential = await method.create_credential(challenge)
-            retry_headers = httpx.Headers(request.headers)
+            retry_headers = httpx2.Headers(request.headers)
             retry_headers["Authorization"] = credential.to_authorization()
             retry_response = await self._inner.handle_async_request(
                 self._retry_request(request, retry_headers)
@@ -315,7 +317,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                 self._payment_result(
                     protocol="mpp",
                     success=False,
-                    amount_usd=0,
+                    amount_usd=ZERO,
                     recipient="",
                     request=request,
                     idempotency_key=idempotency_key,
@@ -325,7 +327,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
             return response
 
     @staticmethod
-    def _json_body(response: httpx.Response) -> dict[str, Any] | None:
+    def _json_body(response: httpx2.Response) -> dict[str, Any] | None:
         try:
             body = response.json()
         except json.JSONDecodeError:
@@ -344,22 +346,22 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         return accepts[0]
 
     @staticmethod
-    def _x402_amount_usd(requirement: Any) -> float:
+    def _x402_amount_usd(requirement: Any) -> Decimal:
         if hasattr(requirement, "get_amount"):
-            return float(requirement.get_amount() or 0) / 1_000_000
+            return Decimal(str(requirement.get_amount() or 0)) / 1_000_000
         amount = getattr(requirement, "amount", None) or getattr(
             requirement, "max_amount_required", 0
         )
-        return float(amount or 0) / 1_000_000
+        return Decimal(str(amount or 0)) / 1_000_000
 
     @staticmethod
-    def _mpp_amount_usd(raw_amount: Any, decimals: int) -> float:
-        return float(raw_amount or 0) / (10**decimals)
+    def _mpp_amount_usd(raw_amount: Any, decimals: int) -> Decimal:
+        return Decimal(str(raw_amount or 0)) / (Decimal(10) ** decimals)
 
     @staticmethod
     def _retry_request(
-        request: httpx.Request, headers: httpx.Headers | dict[str, str]
-    ) -> httpx.Request:
+        request: httpx2.Request, headers: httpx2.Headers | dict[str, str]
+    ) -> httpx2.Request:
         extensions = dict(request.extensions)
         extensions[AgentAreaPaymentTransport.RETRY_KEY] = True
         kwargs: dict[str, Any] = {
@@ -370,12 +372,12 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         }
         try:
             kwargs["content"] = request.content
-        except httpx.RequestNotRead:
+        except httpx2.RequestNotRead:
             kwargs["stream"] = request.stream
-        return httpx.Request(**kwargs)
+        return httpx2.Request(**kwargs)
 
     @staticmethod
-    def _x402_tx_hash(response: httpx.Response) -> str | None:
+    def _x402_tx_hash(response: httpx2.Response) -> str | None:
         raw = response.headers.get("PAYMENT-RESPONSE") or response.headers.get("X-PAYMENT-RESPONSE")
         if not raw:
             return None
@@ -386,7 +388,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
             return None
 
     @staticmethod
-    def _mpp_tx_hash(response: httpx.Response) -> str | None:
+    def _mpp_tx_hash(response: httpx2.Response) -> str | None:
         receipt = response.headers.get("X-MPP-Receipt") or response.headers.get("x-mpp-receipt")
         if not receipt:
             return None
@@ -422,11 +424,11 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         *,
         protocol: str,
         success: bool,
-        amount_usd: float,
+        amount_usd: Decimal,
         recipient: str,
-        request: httpx.Request,
+        request: httpx2.Request,
         idempotency_key: str,
-        response: httpx.Response | None = None,
+        response: httpx2.Response | None = None,
         tx_hash: str | None = None,
         protocol_metadata: dict[str, Any] | None = None,
         error: str | None = None,
@@ -434,7 +436,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         return {
             "success": success,
             "protocol": protocol,
-            "amount_usd": amount_usd,
+            "amount_usd": serialize_money(amount_usd),
             "recipient": recipient,
             "tx_hash": tx_hash,
             "response_status": response.status_code if response else None,

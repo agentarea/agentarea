@@ -104,7 +104,9 @@ async def test_the_mcp_client_never_dials_a_name_that_resolves_private():
             pass
 
     assert dialed == []
-    leaves = raised.value.exceptions if isinstance(raised.value, BaseExceptionGroup) else [raised.value]
+    leaves = (
+        raised.value.exceptions if isinstance(raised.value, BaseExceptionGroup) else [raised.value]
+    )
     assert any(isinstance(leaf, UnsafeUrlError) for leaf in leaves)
 
 
@@ -236,20 +238,6 @@ async def test_creating_a_url_instance_for_a_private_endpoint_is_refused():
     service.repository.session.commit.assert_not_awaited()
 
 
-def test_a_callers_own_factory_gets_a_pinned_inner_transport():
-    from agentarea_common.utils.url_safety import SafeOutboundTransport
-
-    received: dict[str, object] = {}
-
-    def payment_factory(headers=None, timeout=None, auth=None, inner=None):
-        received["inner"] = inner
-        return MagicMock()
-
-    pinned_client_factory(payment_factory, policy=OutboundPolicy())(headers=None, timeout=None)
-
-    assert isinstance(received["inner"], SafeOutboundTransport)
-
-
 @pytest.mark.asyncio
 async def test_a_server_spec_pointing_at_the_metadata_address_is_refused():
     from agentarea_common.exceptions.errors import BadRequestError
@@ -286,7 +274,9 @@ def _internal_member(monkeypatch):
 
     monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
     monkeypatch.setattr(mcp_aggregator, "shared_era_verdict_store", lambda: None)
-    member =AggregatedMember(mcp_instance_id="1", namespace_prefix="m", transport="streamable-http")
+    member = AggregatedMember(
+        mcp_instance_id="1", namespace_prefix="m", transport="streamable-http"
+    )
     proxy = MCPAggregatorProxy(
         name="client",
         description="",

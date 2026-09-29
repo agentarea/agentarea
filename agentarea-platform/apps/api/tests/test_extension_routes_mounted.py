@@ -14,6 +14,7 @@ discovery*.
 """
 
 import agentarea_common.extensions as extensions_module
+import pytest
 from agentarea_api.main import create_app
 from agentarea_common.extensions.registry import ExtensionRegistry
 from fastapi import APIRouter
@@ -128,3 +129,50 @@ def test_extension_cannot_shadow_a_core_route(monkeypatch):
     core_index = min(i for i, r in enumerate(app.routes) if getattr(r, "path", None) == "/health")
     ext_index = max(i for i, r in enumerate(app.routes) if getattr(r, "path", None) == "/health")
     assert core_index < ext_index, "the extension was mounted ahead of the core route"
+
+
+def _billing_router() -> APIRouter:
+    from agentarea_common.auth.dependencies import UserContextDep
+
+    router = APIRouter(prefix="/billing")
+
+    @router.get("/overview")
+    async def _overview(user: UserContextDep) -> dict[str, str]:
+        return {"workspace_id": user.workspace_id}
+
+    return router
+
+
+def test_workspace_extension_routes_are_mounted_under_the_workspace(monkeypatch):
+    """A route that acts in a workspace names it in the path, extension or not."""
+    ExtensionRegistry.clear()
+
+    def fake_discover() -> None:
+        ExtensionRegistry.register("workspace_api_router", _billing_router)
+
+    monkeypatch.setattr(extensions_module, "discover_extensions", fake_discover)
+
+    try:
+        app = create_app()
+    finally:
+        ExtensionRegistry.clear()
+
+    assert "/v1/workspaces/{workspace}/billing/overview" in _paths(app)
+
+
+def test_an_extension_route_that_names_no_workspace_refuses_to_build(monkeypatch):
+    """Mounted at the root, a workspace-resolving route could only fail every request."""
+    from agentarea_api.api.route_contract import RouteContractError
+
+    ExtensionRegistry.clear()
+
+    def fake_discover() -> None:
+        ExtensionRegistry.register("api_router", _billing_router)
+
+    monkeypatch.setattr(extensions_module, "discover_extensions", fake_discover)
+
+    try:
+        with pytest.raises(RouteContractError, match="/billing/overview"):
+            create_app()
+    finally:
+        ExtensionRegistry.clear()

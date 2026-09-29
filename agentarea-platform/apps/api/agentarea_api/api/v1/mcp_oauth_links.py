@@ -22,6 +22,7 @@ from agentarea_mcp.infrastructure.auth_repository import (
     MCPOAuthLinkRepository,
     MCPOAuthSessionRepository,
 )
+from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -44,7 +45,9 @@ class OAuthLinkCreateRequest(BaseModel):
         default_factory=dict,
         description="OAuth provider config: provider, auth_url, token_url, client_id, scopes, …",
     )
-    expires_in_days: int | None = Field(default=None, description="Optional link expiry in days")
+    expires_in_days: int | None = Field(
+        default=None, ge=1, le=3650, description="Optional link expiry in days"
+    )
 
 
 class OAuthLinkResponse(BaseModel):
@@ -75,7 +78,8 @@ async def get_oauth_link_service(
 ) -> MCPOAuthLinkService:
     link_repo = MCPOAuthLinkRepository(db_session, user_context)
     session_repo = MCPOAuthSessionRepository(db_session)
-    return MCPOAuthLinkService(link_repo, session_repo)
+    instance_repo = MCPServerInstanceRepository(db_session, user_context)
+    return MCPOAuthLinkService(link_repo, session_repo, instance_repo)
 
 
 # ---------------------------------------------------------------------------
@@ -105,8 +109,6 @@ async def create_oauth_link(
         return OAuthLinkResponse.model_validate(link)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to create OAuth link: {exc}") from exc
 
 
 @router.get(

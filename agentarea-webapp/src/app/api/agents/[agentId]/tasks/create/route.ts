@@ -3,7 +3,7 @@ import { env } from "@/env";
 import { formatApiError } from "@/lib/api-errors";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
-import { WORKSPACE_REFERENCE_HEADER } from "@/lib/workspaces";
+import { fillWorkspace } from "@/lib/workspace-url";
 
 export async function POST(
   request: NextRequest,
@@ -12,7 +12,7 @@ export async function POST(
   const { agentId } = await params;
 
   try {
-    // Keep credentials server-side while forwarding the active workspace slug.
+    // Keep credentials server-side.
     const token = await getAuthToken();
 
     // Create headers for backend request
@@ -25,15 +25,13 @@ export async function POST(
       backendHeaders["Authorization"] = `Bearer ${token}`;
     }
 
-    const workspaceSlug = await resolveRequestWorkspaceSlug(request);
-    if (workspaceSlug) {
-      backendHeaders[WORKSPACE_REFERENCE_HEADER] = workspaceSlug;
-    }
-
     // Task creation is JSON. Files are pre-staged via POST /v1/files/upload-url
     // (presigned upload) and referenced by ref in the body's `attachments` array.
     const backendUrl = env.API_URL;
-    const createTaskUrl = `${backendUrl}/v1/agents/${agentId}/tasks/`;
+    const createTaskUrl = fillWorkspace(
+      `${backendUrl}/v1/workspaces/{workspace}/agents/${agentId}/tasks/`,
+      resolveRequestWorkspaceSlug(request)
+    );
 
     const response = await fetch(createTaskUrl, {
       method: "POST",

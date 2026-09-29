@@ -40,7 +40,7 @@ def _start_chat_task(
         instruction="Reply with exactly one lowercase word and nothing else.",
     )
     task_id = client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{client.ws}/agents/{agent_id}/tasks/sync",
         json={"description": prompt},
         timeout=30.0,
     ).raise_for_status().json()["id"]
@@ -64,7 +64,7 @@ def _wait_for_status(
     deadline = time.time() + timeout
     last = ""
     while time.time() < deadline:
-        resp = client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/status")
+        resp = client.get(f"{client.ws}/agents/{agent_id}/tasks/{task_id}/status")
         resp.raise_for_status()
         last = (resp.json().get("status") or "").lower()
         if last in target:
@@ -91,7 +91,7 @@ def _start_long_file_task(
         tools=[{"type": "code", "name": "agentarea/files"}],
     )
     task_id = client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{client.ws}/agents/{agent_id}/tasks/sync",
         json={"description": "Create the five step files now."},
         timeout=30.0,
     ).raise_for_status().json()["id"]
@@ -106,7 +106,7 @@ def test_pause_unknown_task_returns_404(
         alice_client, llm_model, agent_name="ctrl-404", prompt="ok"
     )
     fake_task_id = uuid.uuid4()
-    resp = alice_client.post(f"/v1/agents/{agent_id}/tasks/{fake_task_id}/pause")
+    resp = alice_client.post(f"{alice_client.ws}/agents/{agent_id}/tasks/{fake_task_id}/pause")
     assert resp.status_code == 404, resp.text[:200]
 
 
@@ -118,7 +118,7 @@ def test_resume_unknown_task_returns_404(
         alice_client, llm_model, agent_name="ctrl-resume-404", prompt="ok"
     )
     fake_task_id = uuid.uuid4()
-    resp = alice_client.post(f"/v1/agents/{agent_id}/tasks/{fake_task_id}/resume")
+    resp = alice_client.post(f"{alice_client.ws}/agents/{agent_id}/tasks/{fake_task_id}/resume")
     assert resp.status_code == 404, resp.text[:200]
 
 
@@ -139,7 +139,7 @@ def test_pause_resume_terminal_task_returns_400(
     )
     # Let the workflow register so cancel signals it.
     time.sleep(1.0)
-    cancel = alice_client.delete(f"/v1/agents/{agent_id}/tasks/{task_id}")
+    cancel = alice_client.delete(f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}")
     assert cancel.status_code in (200, 404), cancel.text[:200]
     if cancel.status_code == 404:
         pytest.skip("workflow finished before we could cancel it")
@@ -149,11 +149,11 @@ def test_pause_resume_terminal_task_returns_400(
         target={"cancelled", "failed", "completed"}, timeout=60.0,
     )
 
-    pause = alice_client.post(f"/v1/agents/{agent_id}/tasks/{task_id}/pause")
+    pause = alice_client.post(f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}/pause")
     assert pause.status_code == 400, pause.text[:200]
     assert "cannot pause" in pause.json()["detail"].lower()
 
-    resume = alice_client.post(f"/v1/agents/{agent_id}/tasks/{task_id}/resume")
+    resume = alice_client.post(f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}/resume")
     assert resume.status_code == 400, resume.text[:200]
     assert "cannot resume" in resume.json()["detail"].lower()
 
@@ -166,7 +166,7 @@ def test_command_unknown_returns_400(
         alice_client, llm_model, agent_name="ctrl-cmd-bad", prompt="ok"
     )
     resp = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/{task_id}/command",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}/command",
         json={"command": "make_tea"},
     )
     assert resp.status_code == 400, resp.text[:200]
@@ -181,7 +181,7 @@ def test_command_change_model_requires_model_id(
         alice_client, llm_model, agent_name="ctrl-cmd-validate", prompt="ok"
     )
     resp = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/{task_id}/command",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}/command",
         json={"command": "change_model"},
     )
     assert resp.status_code == 400, resp.text[:200]
@@ -196,7 +196,7 @@ def test_command_queue_message_requires_message(
         alice_client, llm_model, agent_name="ctrl-cmd-msg", prompt="ok"
     )
     resp = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/{task_id}/command",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}/command",
         json={"command": "queue_message"},
     )
     assert resp.status_code == 400, resp.text[:200]
@@ -216,17 +216,17 @@ def test_pause_resume_cross_workspace_blocked(
         agent_name="ctrl-cross-ws",
         prompt="Reply with the word: ok",
     )
-    pause = bob_client.post(f"/v1/agents/{agent_id}/tasks/{task_id}/pause")
+    pause = bob_client.post(f"{bob_client.ws}/agents/{agent_id}/tasks/{task_id}/pause")
     assert pause.status_code == 404, (
         f"CRITICAL: Bob paused Alice's task: HTTP {pause.status_code} "
         f"{pause.text[:200]!r}"
     )
-    resume = bob_client.post(f"/v1/agents/{agent_id}/tasks/{task_id}/resume")
+    resume = bob_client.post(f"{bob_client.ws}/agents/{agent_id}/tasks/{task_id}/resume")
     assert resume.status_code == 404, resume.text[:200]
-    cancel = bob_client.delete(f"/v1/agents/{agent_id}/tasks/{task_id}")
+    cancel = bob_client.delete(f"{bob_client.ws}/agents/{agent_id}/tasks/{task_id}")
     assert cancel.status_code == 404, cancel.text[:200]
     cmd = bob_client.post(
-        f"/v1/agents/{agent_id}/tasks/{task_id}/command",
+        f"{bob_client.ws}/agents/{agent_id}/tasks/{task_id}/command",
         json={"command": "update_budget", "budget_usd": 1.0},
     )
     assert cmd.status_code == 404, cmd.text[:200]
@@ -244,7 +244,7 @@ def test_cancel_running_task_terminates_workflow(
     # Give the workflow a beat to register so cancel signal lands on it.
     time.sleep(1.0)
 
-    resp = alice_client.delete(f"/v1/agents/{agent_id}/tasks/{task_id}")
+    resp = alice_client.delete(f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}")
     # 200 = signal landed; 404 = already done before we got there.
     assert resp.status_code in (200, 404), resp.text[:200]
 
@@ -279,13 +279,13 @@ def test_pause_resume_running_task_signals_workflow(
         alice_client, llm_model, agent_name="ctrl-pause-resume"
     )
     # Try to land the pause while the workflow is still doing tool calls.
-    pause = alice_client.post(f"/v1/agents/{agent_id}/tasks/{task_id}/pause")
+    pause = alice_client.post(f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}/pause")
     assert pause.status_code in (200, 400), pause.text[:200]
 
     if pause.status_code == 200:
         # Resume must succeed since we just paused.
         resume = alice_client.post(
-            f"/v1/agents/{agent_id}/tasks/{task_id}/resume"
+            f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}/resume"
         )
         assert resume.status_code == 200, resume.text[:200]
 

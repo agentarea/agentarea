@@ -74,7 +74,7 @@ class ExecutionService(ExecutionServiceInterface):
             )
 
         except Exception as e:
-            logger.error(f"Failed to start execution: {e}")
+            logger.exception(f"Failed to start execution: {e}")
             task_id = str(uuid4())
             execution_id = f"task-{task_id}"
 
@@ -91,7 +91,7 @@ class ExecutionService(ExecutionServiceInterface):
         try:
             return await self._workflow_orchestrator.get_workflow_status(execution_id)
         except Exception as e:
-            logger.error(f"Failed to get execution status: {e}")
+            logger.exception(f"Failed to get execution status: {e}")
             return {
                 "status": "error",
                 "success": False,
@@ -103,7 +103,7 @@ class ExecutionService(ExecutionServiceInterface):
         try:
             return await self._workflow_orchestrator.get_workflow_effective_policy(execution_id)
         except Exception as e:
-            logger.error(f"Failed to get effective policy: {e}")
+            logger.exception(f"Failed to get effective policy: {e}")
             return None
 
     async def get_pending_escalations(self, execution_id: str) -> list[dict[str, Any]]:
@@ -115,7 +115,7 @@ class ExecutionService(ExecutionServiceInterface):
         try:
             return await self._workflow_orchestrator.cancel_workflow(execution_id)
         except Exception as e:
-            logger.error(f"Failed to cancel execution: {e}")
+            logger.exception(f"Failed to cancel execution: {e}")
             return False
 
     async def pause_execution(self, execution_id: str) -> bool:
@@ -123,7 +123,7 @@ class ExecutionService(ExecutionServiceInterface):
         try:
             return await self._workflow_orchestrator.pause_workflow(execution_id)
         except Exception as e:
-            logger.error(f"Failed to pause execution: {e}")
+            logger.exception(f"Failed to pause execution: {e}")
             return False
 
     async def resume_execution(self, execution_id: str) -> bool:
@@ -131,7 +131,7 @@ class ExecutionService(ExecutionServiceInterface):
         try:
             return await self._workflow_orchestrator.resume_workflow(execution_id)
         except Exception as e:
-            logger.error(f"Failed to resume execution: {e}")
+            logger.exception(f"Failed to resume execution: {e}")
             return False
 
     async def send_a2ui_action(self, execution_id: str, action_data: dict) -> bool:
@@ -139,7 +139,7 @@ class ExecutionService(ExecutionServiceInterface):
         try:
             return await self._workflow_orchestrator.send_a2ui_action(execution_id, action_data)
         except Exception as e:
-            logger.error(f"Failed to send A2UI action: {e}")
+            logger.exception(f"Failed to send A2UI action: {e}")
             return False
 
     async def resolve_escalation(
@@ -170,7 +170,7 @@ class ExecutionService(ExecutionServiceInterface):
                 execution_id, command, payload
             )
         except Exception as e:
-            logger.error(f"Failed to send workflow command '{command}': {e}")
+            logger.exception(f"Failed to send workflow command '{command}': {e}")
             return False
 
     async def continue_execution(

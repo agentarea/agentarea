@@ -27,11 +27,11 @@ adjusting those rather than creating them from nothing.
 ## Prerequisites
 
 <Info>
-- You can create policy rules through `/v1/policies`.
+- You can create policy rules through `/v1/workspaces/{workspace}/policies`.
 - Read [budgets and quotas](/concepts/governance/budgets-and-quotas), in
   particular which ceiling is admission-only.
 
-Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
+Examples assume `API=http://localhost:8000`, a bearer token in `$TOKEN`, and your workspace slug in `$WORKSPACE` (see [workspace scoping](/api-reference/introduction#workspace-scoping)).
 </Info>
 
 ## Steps
@@ -51,7 +51,7 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
 
   <Step title="Create the cap">
     ```bash
-    curl -s -X POST "$API/v1/policies" \
+    curl -s -X POST "$API/v1/workspaces/$WORKSPACE/policies" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       -d '{
             "subject_type": "workspace",
@@ -73,7 +73,7 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
 
     ```bash
     curl -s -H "Authorization: Bearer $TOKEN" \
-      "$API/v1/policies?subject_type=workspace&subject_id=$WORKSPACE_ID&effect=cap" \
+      "$API/v1/workspaces/$WORKSPACE/policies?subject_type=workspace&subject_id=$WORKSPACE_ID&effect=cap" \
       | python3 -c '
     import json,sys
     for r in json.load(sys.stdin):
@@ -81,7 +81,7 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
     ```
 
     ```bash
-    curl -s -X PATCH "$API/v1/policies/$RULE_ID" \
+    curl -s -X PATCH "$API/v1/workspaces/$WORKSPACE/policies/$RULE_ID" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       -d '{"params": {"amount_usd": "100.00", "period": "month"}}'
     ```
@@ -95,7 +95,7 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
     A per-task ceiling rides on task creation:
 
     ```bash
-    curl -s -X POST "$API/v1/agents/$AGENT_ID/tasks/" \
+    curl -s -X POST "$API/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       -d '{
             "description": "Summarise the Q3 report",
@@ -113,7 +113,7 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
 **Preview the merged ceiling** before running anything:
 
 ```bash
-curl -s -X POST "$API/v1/governance/effective-policy/preview" \
+curl -s -X POST "$API/v1/workspaces/$WORKSPACE/governance/effective-policy/preview" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"agent_id": "'"$AGENT_ID"'"}' \
   | python3 -c 'import json,sys; d=json.load(sys.stdin)["effective_policy"]; print(json.dumps({"budget": d.get("budget"), "tokens": d.get("tokens")}, indent=2))'
@@ -137,7 +137,7 @@ curl -s -X POST "$API/v1/governance/effective-policy/preview" \
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "$API/v1/governance/task-policy-snapshots/$TASK_ID" \
+  "$API/v1/workspaces/$WORKSPACE/governance/task-policy-snapshots/$TASK_ID" \
   | python3 -m json.tool
 ```
 
@@ -158,7 +158,7 @@ and `BudgetExceeded` when it stops:
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "$API/v1/agents/$AGENT_ID/tasks/$TASK_ID/events" \
+  "$API/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/events" \
   | python3 -c '
 import json,sys
 for e in json.load(sys.stdin)["events"]:

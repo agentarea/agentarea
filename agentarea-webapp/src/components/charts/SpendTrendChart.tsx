@@ -9,14 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-
-const fmtUsd = (v: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(v);
+import { formatMoney } from "@/lib/money";
 
 const fmtDateShort = (iso: string, locale: string) => {
   const d = new Date(iso + "T00:00:00Z");
@@ -41,12 +34,14 @@ export function SpendTrendChart({
   data,
   height = 190,
   locale = "en",
+  currency = null,
   seriesLabel = "Spend",
   cumulativeLabel = "cumulative",
 }: {
   data: Point[];
   height?: number | `${number}%`;
   locale?: string;
+  currency?: string | null;
   seriesLabel?: string;
   cumulativeLabel?: string;
 }) {
@@ -59,10 +54,18 @@ export function SpendTrendChart({
   const total = cumulative.length ? cumulative[cumulative.length - 1].cum : 0;
   const maxY = Math.max(10, Math.ceil(total / 10) * 10);
   const ticks = [0, maxY / 2, maxY];
+  // Every tick here is a whole number (0, maxY/2, maxY are all multiples of
+  // 5), so `compact` always drops the decimals — and formatMoney's
+  // null-currency handling means the axis never guesses a currency either.
+  const fmtAxis = (v: number) =>
+    formatMoney(v, currency, locale, { compact: true });
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={cumulative} margin={{ top: 10, right: 8, bottom: 0, left: 0 }}>
+      <AreaChart
+        data={cumulative}
+        margin={{ top: 10, right: 8, bottom: 0, left: 0 }}
+      >
         <defs>
           <linearGradient id="spendTrendFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--violet)" stopOpacity={0.2} />
@@ -78,7 +81,7 @@ export function SpendTrendChart({
         <YAxis
           domain={[0, maxY]}
           ticks={ticks}
-          tickFormatter={(v) => `$${v}`}
+          tickFormatter={(v) => fmtAxis(Number(v))}
           tick={{ fontSize: 10.5, fill: "currentColor", opacity: 0.5 }}
           axisLine={false}
           tickLine={false}
@@ -110,7 +113,10 @@ export function SpendTrendChart({
           labelFormatter={(label) =>
             `${fmtDateShort(String(label), locale)} · ${cumulativeLabel}`
           }
-          formatter={(v) => [fmtUsd(Number(v)), seriesLabel]}
+          formatter={(v) => [
+            formatMoney(Number(v), currency, locale),
+            seriesLabel,
+          ]}
           cursor={{
             stroke: "var(--violet)",
             strokeOpacity: 0.5,

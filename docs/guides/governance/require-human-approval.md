@@ -24,13 +24,13 @@ works for tools invoked inside an agent task.
 ## Prerequisites
 
 <Info>
-- You can create policy rules through `/v1/policies`.
+- You can create policy rules through `/v1/workspaces/{workspace}/policies`.
 - You know which user ids will approve. Name them; an empty approver list means
   anyone may resolve.
 - Read [approvals](/concepts/governance/approvals) for what the pause can and
   cannot cover.
 
-Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
+Examples assume `API=http://localhost:8000`, a bearer token in `$TOKEN`, and your workspace slug in `$WORKSPACE` (see [workspace scoping](/api-reference/introduction#workspace-scoping)).
 </Info>
 
 ## Steps
@@ -68,7 +68,7 @@ There are two routes to the same enforcement. Both end as an agent-scoped
     attach to that tool alone:
 
     ```bash
-    curl -s -X POST "$API/v1/policies" \
+    curl -s -X POST "$API/v1/workspaces/$WORKSPACE/policies" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       -d '{
             "subject_type": "agent",
@@ -84,7 +84,7 @@ There are two routes to the same enforcement. Both end as an agent-scoped
     because it pauses on every single call:
 
     ```bash
-    curl -s -X POST "$API/v1/policies" \
+    curl -s -X POST "$API/v1/workspaces/$WORKSPACE/policies" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       -d '{
             "subject_type": "agent",
@@ -105,7 +105,7 @@ There are two routes to the same enforcement. Both end as an agent-scoped
 
   <Step title="Confirm it merged">
     ```bash
-    curl -s -X POST "$API/v1/governance/effective-policy/preview" \
+    curl -s -X POST "$API/v1/workspaces/$WORKSPACE/governance/effective-policy/preview" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       -d '{"agent_id": "3f9c1e42-7b5a-4f3e-9a10-2c8d6b4e1f77"}' \
       | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["effective_policy"]["approval"], indent=2))'
@@ -133,7 +133,7 @@ There are two routes to the same enforcement. Both end as an agent-scoped
 
     ```bash
     curl -s -H "Authorization: Bearer $TOKEN" \
-      "$API/v1/agents/$AGENT_ID/tasks/$TASK_ID/events" \
+      "$API/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/events" \
       | python3 -c '
     import json,sys
     for e in json.load(sys.stdin)["events"]:
@@ -143,12 +143,12 @@ There are two routes to the same enforcement. Both end as an agent-scoped
     ```
 
     You can also stream them live from
-    `GET /v1/agents/{agent_id}/tasks/{task_id}/events/stream`.
+    `GET /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/events/stream`.
   </Step>
 
   <Step title="Resolve it">
     ```bash
-    curl -s -X POST "$API/v1/agents/$AGENT_ID/tasks/$TASK_ID/resolve-escalation" \
+    curl -s -X POST "$API/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/resolve-escalation" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       -d '{
             "escalation_id": "8b1f0c7e-2d44-4a91-b0c3-9e5f7a2d1c88",
@@ -172,7 +172,7 @@ There are two routes to the same enforcement. Both end as an agent-scoped
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "$API/v1/agents/$AGENT_ID/tasks/$TASK_ID/status" \
+  "$API/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/status" \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])'
 ```
 
@@ -190,7 +190,7 @@ payload:
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "$API/v1/agents/$AGENT_ID/tasks/$TASK_ID/events" \
+  "$API/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/events" \
   | python3 -c '
 import json,sys
 for e in json.load(sys.stdin)["events"]:
@@ -246,7 +246,7 @@ Once no escalations remain pending the task status returns to `running`.
   <Accordion title="The task waits indefinitely">
     There is no timeout, no auto-deny and no escalation to a second approver. A
     task blocked on an approval nobody answers stays in `waiting_for_approval`
-    until you cancel it with `DELETE /v1/agents/{agent_id}/tasks/{task_id}` .
+    until you cancel it with `DELETE /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}` .
   </Accordion>
   <Accordion title="No notification arrived">
     Core emits the `approval.request` event and updates the task row; it does

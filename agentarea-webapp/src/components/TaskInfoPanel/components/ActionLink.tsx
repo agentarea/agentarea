@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/WorkspaceLink";
 import { ChevronRight } from "lucide-react";
 import { ReactNode } from "react";
 import { cn } from "@/lib/utils";

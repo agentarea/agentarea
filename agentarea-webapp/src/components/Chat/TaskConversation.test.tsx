@@ -27,6 +27,7 @@ vi.mock("next-intl", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
+  useParams: () => ({}),
   useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
 }));
 
@@ -50,6 +51,10 @@ vi.mock("@/hooks/useTaskActions", () => ({
     resolveEscalation: vi.fn(),
     submitInput: vi.fn(),
   }),
+}));
+
+vi.mock("@/hooks/useCurrency", () => ({
+  useCurrency: () => ({ currency: "USD", status: "ready" }),
 }));
 
 vi.mock("@/components/Chat/hooks/useScrollManagement", () => ({

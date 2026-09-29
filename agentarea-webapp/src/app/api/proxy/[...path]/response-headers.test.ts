@@ -5,7 +5,9 @@ import {
   type ProxyBackendHeaders,
 } from "./response-headers";
 
-const backend = (overrides: Partial<ProxyBackendHeaders> = {}): ProxyBackendHeaders => ({
+const backend = (
+  overrides: Partial<ProxyBackendHeaders> = {}
+): ProxyBackendHeaders => ({
   contentType: "text/plain",
   contentDisposition: null,
   contentLength: null,
@@ -30,11 +32,15 @@ describe("buildProxyResponseHeaders", () => {
       })
     );
 
-    expect(headers["content-disposition"]).toBe('attachment; filename="report.pdf"');
+    expect(headers["content-disposition"]).toBe(
+      'attachment; filename="report.pdf"'
+    );
   });
 
   it("omits Content-Disposition when the backend did not send one for an inert type", () => {
-    const headers = buildProxyResponseHeaders(backend({ contentType: "image/png" }));
+    const headers = buildProxyResponseHeaders(
+      backend({ contentType: "image/png" })
+    );
 
     expect(headers["content-disposition"]).toBeUndefined();
   });
@@ -57,7 +63,10 @@ describe("buildProxyResponseHeaders", () => {
 
   it("ignores content-type parameters when deciding whether a type is active", () => {
     const headers = buildProxyResponseHeaders(
-      backend({ contentType: "text/html; charset=utf-8", contentDisposition: "inline" })
+      backend({
+        contentType: "text/html; charset=utf-8",
+        contentDisposition: "inline",
+      })
     );
 
     expect(headers["content-disposition"]).toBe("attachment");

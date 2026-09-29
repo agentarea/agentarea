@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.exceptions.errors import NotFoundError
+
 from agentarea_mcp.domain.auth_models import (
     ACCESS_CONTROL_PUBLIC,
     ACCESS_CONTROL_WORKSPACE,
@@ -16,6 +18,7 @@ from agentarea_mcp.infrastructure.auth_repository import (
     MCPOAuthLinkRepository,
     MCPOAuthSessionRepository,
 )
+from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +35,11 @@ class MCPOAuthLinkService:
         self,
         link_repo: MCPOAuthLinkRepository,
         session_repo: MCPOAuthSessionRepository,
+        instance_repo: MCPServerInstanceRepository,
     ) -> None:
         self._links = link_repo
         self._sessions = session_repo
+        self._instances = instance_repo
 
     # ------------------------------------------------------------------
     # Link management
@@ -48,6 +53,8 @@ class MCPOAuthLinkService:
         expires_in_days: int | None = None,
     ) -> MCPOAuthLink:
         """Generate a new OAuth-protected link for a container MCP instance."""
+        if await self._instances.get_by_id(mcp_instance_id) is None:
+            raise NotFoundError(f"MCP instance {mcp_instance_id} not found")
         token = secrets.token_urlsafe(LINK_TOKEN_BYTES)
         expires_at: datetime | None = None
         if expires_in_days:

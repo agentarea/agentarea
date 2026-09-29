@@ -147,7 +147,7 @@ against the assumption that a published domain event triggers anything.
 
 | Consumer | Entry point |
 |---|---|
-| Webapp | `GET /v1/agents/{agent_id}/tasks/{task_id}/events/stream` — SSE, chunks included by default, `?include_chunks=false` drops them |
+| Webapp | `GET /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/events/stream` — SSE, chunks included by default, `?include_chunks=false` drops them |
 | A2A | `message/stream` and `tasks/resubscribe`, mapping each envelope to A2A SSE frames |
 | CLI | `agentarea-cli/source/services/sse.ts`, with its own copy of the terminal set |
 

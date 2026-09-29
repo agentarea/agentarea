@@ -169,7 +169,7 @@ function s2Agents() {
 		'agents',
 		'create',
 		'--data',
-		JSON.stringify({name, model_id: MODEL_ID, description: 'qa'}),
+		JSON.stringify({name, model_id: MODEL_ID, description: 'qa', tools: []}),
 	]);
 	const id = isOk(create) ? create.json.id : undefined;
 	if (id) trackDelete('agents.delete', ['agents', 'delete', id]);

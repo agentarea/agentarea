@@ -3,4 +3,4 @@
 from .task_service import InMemoryTaskService
 from .tasks import Task, TaskStatus
 
-__all__ = ["Task", "TaskStatus", "InMemoryTaskService"]
+__all__ = ["InMemoryTaskService", "Task", "TaskStatus"]

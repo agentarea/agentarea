@@ -9,5 +9,3 @@ export { useCookie } from "./useCookie";
 export { useInfiniteList } from "./useInfiniteList";
 export { useSearchWithDebounce } from "./useSearchWithDebounce";
 export { useTabState } from "./useTabState";
-// export { useModelInfo } from './useModelInfo';
-// export type { ModelInfo } from './useModelInfo';

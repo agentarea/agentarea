@@ -1,16 +1,21 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Trash2 } from "lucide-react";
-import { toast } from "sonner";
 import BaseModal from "@/components/BaseModal/BaseModal";
 import { Button } from "@/components/ui/button";
+import {
+  apiErrorMessage,
+  formatApiError,
+  type ApiResultLike,
+} from "@/lib/api-errors";
 
 interface DeleteButtonProps {
   itemId: string;
   itemName: string;
-  onDelete: (itemId: string) => Promise<{ error?: { detail?: Array<{ msg?: string }> } }>;
+  onDelete: (itemId: string) => Promise<ApiResultLike>;
   onSuccess?: () => void;
   redirectPath?: string;
   title?: string;
@@ -20,7 +25,6 @@ interface DeleteButtonProps {
     failedToDelete?: string;
     unexpectedError?: string;
   };
-  successMessage?: string;
   size?: "default" | "sm" | "lg" | "icon" | "xs";
 }
 
@@ -30,44 +34,34 @@ export default function DeleteButton({
   onDelete,
   onSuccess,
   redirectPath,
-  title = "Delete Item",
+  title,
   description,
   errorMessages = {},
-  successMessage = "Item deleted successfully",
   size = "sm",
 }: DeleteButtonProps) {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
   const tCommon = useTranslations("Common");
+  const [error, setError] = useState<string | null>(null);
 
-  const defaultErrorMessages = {
-    noIdProvided: "No ID provided for deletion",
-    failedToDelete: "Failed to delete item",
-    unexpectedError: "Unexpected error while deleting",
-    ...errorMessages,
-  };
-
-  const defaultDescription =
-    description || tCommon("deleteDescription", { itemName });
+  const failedToDelete =
+    errorMessages.failedToDelete ?? tCommon("deleteFailed", { itemName });
 
   const handleDelete = async () => {
+    setError(null);
     if (!itemId) {
       console.error("No ID provided for deletion");
-      toast.error(defaultErrorMessages.noIdProvided);
-      return;
+      setError(errorMessages.noIdProvided ?? failedToDelete);
+      return false;
     }
 
     try {
-      const { error } = await onDelete(itemId);
+      const result = await onDelete(itemId);
 
-      if (error) {
-        console.error("Failed to delete item:", error);
-        const errorMessage = error.detail?.[0]?.msg || "Unknown error";
-        toast.error(`${defaultErrorMessages.failedToDelete}: ${errorMessage}`);
-        return;
+      if (result?.error) {
+        console.error("Failed to delete item:", result.error);
+        setError(apiErrorMessage(result, failedToDelete));
+        return false;
       }
-
-      // Success
-      toast.success(successMessage);
 
       if (onSuccess) {
         onSuccess();
@@ -77,16 +71,23 @@ export default function DeleteButton({
       }
     } catch (err) {
       console.error("Error deleting item:", err);
-      toast.error(defaultErrorMessages.unexpectedError);
+      setError(
+        `${errorMessages.unexpectedError ?? failedToDelete}: ${formatApiError(err)}`
+      );
+      return false;
     }
   };
 
   return (
     <BaseModal
-      title={title}
-      description={defaultDescription}
+      title={title ?? tCommon("delete")}
+      description={description || tCommon("deleteDescription", { itemName })}
+      error={error}
       onConfirm={handleDelete}
       type="delete"
+      onOpenChange={(next) => {
+        if (next) setError(null);
+      }}
     >
       <Button variant="destructiveOutline" size={size}>
         <Trash2 />

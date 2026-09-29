@@ -28,13 +28,13 @@ you add.
 ## Prerequisites
 
 <Info>
-- You can create policy rules through `/v1/policies`.
+- You can create policy rules through `/v1/workspaces/{workspace}/policies`.
 - You know the tool's name exactly. Matching is `fnmatch` glob against the name,
   and two MCP instances exposing the same tool name are indistinguishable.
 - Read [tool authorization](/concepts/governance/tool-authorization) for the
   layers this guide manipulates.
 
-Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
+Examples assume `API=http://localhost:8000`, a bearer token in `$TOKEN`, and your workspace slug in `$WORKSPACE` (see [workspace scoping](/api-reference/introduction#workspace-scoping)).
 </Info>
 
 ## Steps
@@ -60,7 +60,7 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
     This is the option to reach for most of the time.
 
     ```bash
-    curl -s -X POST "$API/v1/policies" \
+    curl -s -X POST "$API/v1/workspaces/$WORKSPACE/policies" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       -d '{
             "subject_type": "agent",
@@ -74,7 +74,7 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
     want new tools to be excluded by default as they are added.
 
     ```bash
-    curl -s -X POST "$API/v1/policies" \
+    curl -s -X POST "$API/v1/workspaces/$WORKSPACE/policies" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       -d '{
             "subject_type": "agent",
@@ -99,7 +99,7 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
     Before running anything, resolve the layers without creating a task:
 
     ```bash
-    curl -s -X POST "$API/v1/governance/effective-policy/preview" \
+    curl -s -X POST "$API/v1/workspaces/$WORKSPACE/governance/effective-policy/preview" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       -d '{"agent_id": "3f9c1e42-7b5a-4f3e-9a10-2c8d6b4e1f77"}' \
       | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["effective_policy"].get("tools"), indent=2))'
@@ -120,7 +120,7 @@ Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
     A per-task restriction rides on task creation rather than the rule table:
 
     ```bash
-    curl -s -X POST "$API/v1/agents/$AGENT_ID/tasks/" \
+    curl -s -X POST "$API/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       -d '{
             "description": "Summarise the Q3 report",
@@ -137,7 +137,7 @@ answer, because it is what every enforcement point reads:
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "$API/v1/governance/task-policy-snapshots/$TASK_ID" \
+  "$API/v1/workspaces/$WORKSPACE/governance/task-policy-snapshots/$TASK_ID" \
   | python3 -m json.tool
 ```
 
@@ -149,7 +149,7 @@ as a `tool.result` event whose data carries `denied_by_policy: true`:
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "$API/v1/agents/$AGENT_ID/tasks/$TASK_ID/events" \
+  "$API/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/events" \
   | python3 -c '
 import json,sys
 for e in json.load(sys.stdin)["events"]:
@@ -168,7 +168,7 @@ agent never attempting it rather than attempting and being refused.
     Check the target kind. The compiler handles `allow` and `deny` only on a
     named `tool:` target. Rules targeting `mcp:<id>` , `model:<id>` ,
     `skill:<id>` , `collection:<id>` or `tool:*` are accepted by the API,
-    stored, returned by `GET /v1/policies` , and then skipped when the layer is
+    stored, returned by `GET /v1/workspaces/{workspace}/policies` , and then skipped when the layer is
     compiled. They have no runtime effect. Confirm with the preview endpoint: if
     `tools` is absent or unchanged, the rule did not compile.
   </Accordion>

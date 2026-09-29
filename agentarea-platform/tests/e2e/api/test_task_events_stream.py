@@ -21,7 +21,7 @@ def test_task_events_stream_returns_sse(
     )
 
     task = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={"description": "Reply with the word: sse"},
         timeout=30.0,
     ).raise_for_status().json()
@@ -30,7 +30,7 @@ def test_task_events_stream_returns_sse(
     events = []
     with alice_client.stream(
         "GET",
-        f"/v1/agents/{agent_id}/tasks/{task_id}/events/stream",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}/events/stream",
         timeout=120.0,
     ) as response:
         assert response.status_code == 200
@@ -67,14 +67,14 @@ def test_task_events_stream_cross_workspace_blocked(
     )
 
     task = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={"description": "ok"},
         timeout=30.0,
     ).raise_for_status().json()
     task_id = task["id"]
 
     cross = bob_client.get(
-        f"/v1/agents/{agent_id}/tasks/{task_id}/events/stream",
+        f"{bob_client.ws}/agents/{agent_id}/tasks/{task_id}/events/stream",
         timeout=10.0,
     )
     assert cross.status_code in (403, 404), (
@@ -94,7 +94,7 @@ def test_task_events_stream_unknown_task_returns_404(
     )
 
     resp = alice_client.get(
-        f"/v1/agents/{agent_id}/tasks/00000000-0000-0000-0000-000000000000/events/stream",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/00000000-0000-0000-0000-000000000000/events/stream",
         timeout=10.0,
     )
     assert resp.status_code == 404, resp.text[:200]

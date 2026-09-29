@@ -396,4 +396,22 @@ agents: [{key: a, name: A, model: gpt-4o, mcps: [bad]}]
     actions = {(e.kind, e.key): e.action for e in res.entities}
     assert actions[("mcp", "bad")] == InstallAction.SKIPPED
     # agent created with no tools (unsupported mcp dropped)
-    assert deps["agent_service"].calls[0].tools is None
+    assert deps["agent_service"].calls[0].tools == []
+
+
+async def test_agent_toolsets_become_code_tools():
+    pkg = parse_bundle(
+        """
+schema_version: "0.1.0"
+name: p
+agents:
+  - {key: a, name: A, model: gpt-4o, toolsets: [agentarea/shell, agentarea/files]}
+"""
+    )
+    inst, deps = _installer()
+    await inst.install(pkg, {})
+    tools = deps["agent_service"].calls[0].tools
+    assert [(t.type, t.name) for t in tools] == [
+        ("code", "agentarea/shell"),
+        ("code", "agentarea/files"),
+    ]

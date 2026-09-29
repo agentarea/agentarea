@@ -13,6 +13,7 @@ from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import requires_workspace_admin, unrestricted
 from agentarea_common.config import get_settings
+from agentarea_common.money import Money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.model_discovery_service import DiscoveredModel, ModelDiscoveryService
 from agentarea_llm.application.model_spec_service import ModelSpecService
@@ -276,8 +277,8 @@ class DiscoverPreviewModelResponse(BaseModel):
     display_name: str
     context_window: int
     max_output_tokens: int | None = None
-    input_cost_per_token: float | None = None
-    output_cost_per_token: float | None = None
+    input_cost_per_token: Money | None = None
+    output_cost_per_token: Money | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -540,8 +541,8 @@ class DiscoveredModelResponse(BaseModel):
     display_name: str
     context_window: int
     max_output_tokens: int | None = None
-    input_cost_per_token: float | None = None
-    output_cost_per_token: float | None = None
+    input_cost_per_token: Money | None = None
+    output_cost_per_token: Money | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False

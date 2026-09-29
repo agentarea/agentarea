@@ -6,13 +6,13 @@ from agentarea_api.api.deps.services import get_mcp_server_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
-from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
+from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.service import MCPServerService
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.schemas.dto import MCPServerCreate, MCPServerUpdate
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ._access_control_grants import grant_resource_owner
@@ -104,23 +104,35 @@ async def list_mcp_servers(
     status: str | None = None,
     is_public: bool | None = None,
     tag: str | None = None,
+    ids: list[UUID] | None = Query(
+        None,
+        max_length=100,
+        description=(
+            "Return exactly these specs, workspace or catalog, e.g. the specs of the "
+            "instances a page shows. At most 100 per request."
+        ),
+    ),
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
+    # Asking by id means "these specs", all of them, whatever the page says.
+    page, page_size = (1, len(ids)) if ids is not None else (pagination.page, pagination.page_size)
+    offset = (page - 1) * page_size
     servers, total = await mcp_server_service.list_servers(
         status=status,
         is_public=is_public,
         tag=tag,
         search=pagination.search,
-        limit=pagination.limit,
-        offset=pagination.offset,
+        limit=page_size,
+        offset=offset,
         ids=await readable_resource_ids(user_context.user_id),
+        spec_ids=[str(spec_id) for spec_id in ids] if ids is not None else None,
     )
     return PaginatedResponse(
         items=[MCPServerResponse.from_domain(server) for server in servers],
         total=total,
-        page=pagination.page,
-        page_size=pagination.page_size,
-        has_next=(pagination.offset + pagination.page_size) < total,
+        page=page,
+        page_size=page_size,
+        has_next=(offset + page_size) < total,
     )
 
 
@@ -198,7 +210,9 @@ async def delete_mcp_server(
 
 @router.post(
     "/{server_id}/deploy",
-    dependencies=[requires("edit", "mcp_server", id_param="server_id")],
+    dependencies=[
+        enforced_in_handler("per-object permission resolved by the PDP once the object is loaded")
+    ],
 )
 async def deploy_mcp_server(
     server_id: str,
@@ -208,6 +222,7 @@ async def deploy_mcp_server(
     resolved_id = await _resolve_server_id(mcp_server_service, server_id)
     if not resolved_id:
         raise HTTPException(status_code=404, detail="MCP Server not found")
+    await require_permission("edit", "mcp_server", str(resolved_id), user_context.user_id)
     server = await mcp_server_service.get(resolved_id)
     if not server:
         raise HTTPException(status_code=404, detail="MCP Server not found")

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -12,7 +12,7 @@ interface AuthGuardProps {
 
 export default function AuthGuard({ children, fallback }: AuthGuardProps) {
   const { isLoaded, isSignedIn } = useAuth();
-  const router = useRouter();
+  const router = useWorkspaceRouter();
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {

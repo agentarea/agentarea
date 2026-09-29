@@ -12,7 +12,7 @@ last_updated: 2026-07-29
 ---
 
 Do this when you want to render or follow a run as it happens. Do not build a
-polling loop against `GET /v1/agents/{agent_id}/tasks/{task_id}` for this — the
+polling loop against `GET /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}` for this — the
 stream already replays everything from the beginning, so attaching late loses
 nothing.
 
@@ -29,16 +29,16 @@ nothing.
 
 | Option | Pick it when |
 |---|---|
-| `GET /v1/agents/{agent_id}/tasks/{task_id}/events/stream` | You want live updates. Replays full history, then tails. Ends on a terminal event. |
-| `GET /v1/agents/{agent_id}/tasks/{task_id}/events` | You want a finished task's history, paginated, in one request. |
-| `POST /v1/agents/{agent_id}/tasks/` | You are starting the task anyway and want the stream on the same connection. |
+| `GET /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/events/stream` | You want live updates. Replays full history, then tails. Ends on a terminal event. |
+| `GET /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/events` | You want a finished task's history, paginated, in one request. |
+| `POST /v1/workspaces/{workspace}/agents/{agent_id}/tasks/` | You are starting the task anyway and want the stream on the same connection. |
 
 ## Steps
 
 <Steps titleSize="h3">
   <Step title="Stream live">
     ```bash
-    curl -N "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events/stream" \
+    curl -N "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/events/stream" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Accept: text/event-stream"
     ```
@@ -70,14 +70,14 @@ nothing.
     default. Turn them off when you only need structural progress:
 
     ```bash
-    curl -N "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events/stream?include_chunks=false" \
+    curl -N "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/events/stream?include_chunks=false" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN"
     ```
   </Step>
 
   <Step title="Read history instead">
     ```bash
-    curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events?page=1&page_size=50" \
+    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/events?page=1&page_size=50" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '{total, has_next, first: .events[0]}'
     ```
 
@@ -123,7 +123,7 @@ Confirm the stream terminates on its own with a terminal event rather than
 hanging:
 
 ```bash
-curl -N -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events/stream?include_chunks=false" \
+curl -N -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/events/stream?include_chunks=false" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" | grep -m1 -E '^event: task\.(completed|failed|cancelled)'
 ```
 

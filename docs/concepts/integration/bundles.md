@@ -79,13 +79,13 @@ from the variable name is unnecessary and less accurate.
 
 ### Analyze, then install
 
-`POST /v1/bundles/analyze` parses the source and returns an `ImportPreview` —
+`POST /v1/workspaces/{workspace}/bundles/analyze` parses the source and returns an `ImportPreview` —
 every entity tagged `CREATE`, `REUSE`, or `SKIPPED` with a reason, plus a list
 of issues. It writes nothing. This is where a missing setup field, an agent
 pointing at a nonexistent MCP key, or a command runtime the platform cannot run
 is surfaced.
 
-`POST /v1/bundles/install` takes the canonical bundle and the setup values.
+`POST /v1/workspaces/{workspace}/bundles/install` takes the canonical bundle and the setup values.
 Missing required setup blocks the whole install before anything is written.
 
 Analyze accepts exactly one of `source` (pasted text) or `source_url` (fetched

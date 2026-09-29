@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Tabs } from "@/components/ui/tabs";
 import { setCookie } from "@/utils/cookies";
 
@@ -13,9 +14,9 @@ export function TabsWithNavigation({
   children: React.ReactNode;
   routeChange: string;
 }) {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
   const searchParams = useSearchParams();
-  const pathname = usePathname();
+  const pathname = useWorkspacePathname();
 
   const handleTabChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());

@@ -171,7 +171,7 @@ When OpenFGA is unreachable the client raises rather than coercing the answer to
 allow or deny, so an outage surfaces as a failure at the call site instead of a
 silent posture change.
 
-The relationship explorer at `/v1/access-control` exposes the same graph:
+The relationship explorer at `/v1/workspaces/{workspace}/access-control` exposes the same graph:
 `GET /graph` and `GET /relationships` read it, `POST`/`DELETE /relationships`
 write and revoke resource grants, `POST /check` and `POST /resolve` answer single
 questions, and `POST /sync` reconciles them. Every one of those endpoints

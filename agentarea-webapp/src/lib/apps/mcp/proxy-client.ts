@@ -3,7 +3,6 @@
 // tools/call, and credential injection; nothing here re-implements them.
 
 import "server-only";
-import { setTimeout as delay } from "node:timers/promises";
 import {
   Client,
   ProtocolError,
@@ -33,9 +32,6 @@ const HOST_CLIENT_OPTIONS = {
   },
   versionNegotiation: { mode: "auto" },
 } satisfies ClientOptions;
-// Set by the manager's demand gateway (mcpgateway.StartingHeader) on its own
-// "workload is starting" 503; the proxy passes it through.
-const GATEWAY_STARTING_HEADER = "x-agentarea-mcp-starting";
 // Closing the session is best effort and must still run after the deadline.
 const SESSION_CLOSE_TIMEOUT_MS = 5_000;
 // Errors that mean the server did not run the operation because the cached
@@ -54,34 +50,18 @@ const STALE_VERDICT_CODES: ReadonlySet<number> = new Set([
 const eraVerdicts = new Map<string, PriorDiscovery>();
 
 /**
- * Fetch for the proxy, bounded by `deadline`.
- *
- * While one request cold-starts a reclaimed workload, the manager's demand
- * gateway answers concurrent requests 503 and marks them as never forwarded,
- * so repeating them cannot run a tool twice. Any other 503, from the workload
- * or a remote server, is returned as is.
+ * Fetch for the proxy, bounded by `deadline`. The proxy waits out a workload
+ * cold start the manager's demand gateway is performing, so a reclaimed
+ * workload costs only a slower first request here.
  */
 function proxyFetch(deadline: AbortSignal) {
-  return async (url: string | URL, init: RequestInit = {}) => {
+  return (url: string | URL, init: RequestInit = {}) => {
     const bound =
       init.method === "DELETE"
         ? AbortSignal.timeout(SESSION_CLOSE_TIMEOUT_MS)
         : deadline;
     const signal = init.signal ? AbortSignal.any([init.signal, bound]) : bound;
-    for (;;) {
-      const response = await workspaceFetch(String(url), { ...init, signal });
-      if (
-        response.status !== 503 ||
-        response.headers.get(GATEWAY_STARTING_HEADER) !== "1"
-      ) {
-        return response;
-      }
-      await response.body?.cancel();
-      const retryAfterSeconds = Number(response.headers.get("retry-after"));
-      await delay(Math.max(1, retryAfterSeconds || 1) * 1000, undefined, {
-        signal,
-      });
-    }
+    return workspaceFetch(String(url), { ...init, signal });
   };
 }
 

@@ -33,7 +33,7 @@ One token type covers the whole API. The same key authenticates
 <Steps titleSize="h3">
   <Step title="Create a key">
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/api-keys/" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/api-keys/" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{"name": "codex-laptop", "expires_in_days": 90}'
@@ -79,7 +79,7 @@ One token type covers the whole API. The same key authenticates
 
   <Step title="Audit what exists">
     ```bash
-    curl -s "$AGENTAREA_URL/v1/api-keys/" \
+    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/api-keys/" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       | jq '.[] | {name, token_prefix, is_active, expires_at, access_count, last_accessed_at}'
     ```
@@ -93,14 +93,14 @@ One token type covers the whole API. The same key authenticates
     There is no rotate endpoint. Rotation is create-then-revoke, in that order:
 
     ```bash
-    NEW=$(curl -s -X POST "$AGENTAREA_URL/v1/api-keys/" \
+    NEW=$(curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/api-keys/" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{"name": "codex-laptop-2026-07", "expires_in_days": 90}' | jq -r '.token')
 
     # deploy $NEW to the consumer, confirm it works, then:
     curl -s -o /dev/null -w '%{http_code}\n' \
-      -X DELETE "$AGENTAREA_URL/v1/api-keys/$OLD_TOKEN_ID" \
+      -X DELETE "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/api-keys/$OLD_TOKEN_ID" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN"
     ```
 
@@ -119,7 +119,7 @@ One token type covers the whole API. The same key authenticates
 Confirm the new key authenticates and that the old one no longer does.
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' "$AGENTAREA_URL/v1/agents/" \
+curl -s -o /dev/null -w '%{http_code}\n' "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/" \
   -H "Authorization: Bearer $NEW"
 ```
 
@@ -128,7 +128,7 @@ curl -s -o /dev/null -w '%{http_code}\n' "$AGENTAREA_URL/v1/agents/" \
 ```
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' "$AGENTAREA_URL/v1/agents/" \
+curl -s -o /dev/null -w '%{http_code}\n' "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/" \
   -H "Authorization: Bearer $OLD"
 ```
 
@@ -140,7 +140,7 @@ A 200 then a 401 proves the rotation landed. You can also confirm the key is
 being exercised — `access_count` increments on use:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/api-keys/$NEW_TOKEN_ID" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/api-keys/$NEW_TOKEN_ID" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '{access_count, last_accessed_at}'
 ```
 

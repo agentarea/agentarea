@@ -250,19 +250,17 @@ class EffectivePolicy(PolicyDocument):
 
         This is the anti-corruption layer between the typed governance policy
         domain and the generic interceptor framework. Monetary values are
-        emitted as plain floats because the budget gates perform threshold
-        arithmetic (ratio comparisons) against runtime counters — authoritative
-        money accounting stays upstream in BudgetTracker. Mixing Decimal with
-        float here would raise at the gate and be silently swallowed.
+        emitted as Decimal, like the runtime counters they are compared with, so
+        the budget gates never round a limit or a total through binary floats.
         """
         runtime_state = runtime_state or {}
         state: dict[str, Any] = {}
 
         if self.budget:
             if self.budget.run_budget_usd is not None:
-                state["budget_usd"] = float(to_money(self.budget.run_budget_usd))
+                state["budget_usd"] = to_money(self.budget.run_budget_usd)
             if self.budget.service_budget_usd is not None:
-                state["service_budget_usd"] = float(to_money(self.budget.service_budget_usd))
+                state["service_budget_usd"] = to_money(self.budget.service_budget_usd)
 
         if self.tokens:
             if self.tokens.max_tokens is not None:
@@ -293,7 +291,7 @@ class EffectivePolicy(PolicyDocument):
 
         for key in ("cost_used", "service_cost_used"):
             if key in runtime_state:
-                state[key] = float(to_money(runtime_state[key]))
+                state[key] = to_money(runtime_state[key])
         if "tokens_used" in runtime_state:
             state["tokens_used"] = runtime_state["tokens_used"]
 

@@ -7,7 +7,7 @@ import pytest
 @pytest.mark.integration
 def test_mcp_server_instance_validate_valid_spec(alice_client: httpx.Client) -> None:
     resp = alice_client.post(
-        "/v1/mcp-server-instances/validate",
+        f"{alice_client.ws}/mcp-server-instances/validate",
         json={
             "name": "validate-ok",
             "type": "docker",
@@ -25,7 +25,7 @@ def test_mcp_server_instance_validate_valid_spec(alice_client: httpx.Client) -> 
 @pytest.mark.integration
 def test_mcp_server_instance_validate_invalid_spec(alice_client: httpx.Client) -> None:
     resp = alice_client.post(
-        "/v1/mcp-server-instances/validate",
+        f"{alice_client.ws}/mcp-server-instances/validate",
         json={
             "name": "validate-bad",
             "json_spec": {"invalid_field": "value"},
@@ -42,7 +42,7 @@ def test_mcp_server_instance_validate_invalid_spec(alice_client: httpx.Client) -
 @pytest.mark.integration
 def test_mcp_server_instance_validate_connection(alice_client: httpx.Client) -> None:
     resp = alice_client.post(
-        "/v1/mcp-server-instances/validate-connection",
+        f"{alice_client.ws}/mcp-server-instances/validate-connection",
         json={
             "url": "http://localhost:9999",
             "headers": {},
@@ -54,7 +54,7 @@ def test_mcp_server_instance_validate_connection(alice_client: httpx.Client) -> 
 @pytest.mark.integration
 def test_mcp_server_instance_check_config(alice_client: httpx.Client) -> None:
     resp = alice_client.post(
-        "/v1/mcp-server-instances/check",
+        f"{alice_client.ws}/mcp-server-instances/check",
         json={
             "name": "check-test",
             "json_spec": {

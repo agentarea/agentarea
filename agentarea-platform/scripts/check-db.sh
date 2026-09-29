@@ -33,17 +33,43 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #   audit: append-only is a trigger refusing UPDATE/DELETE. This connects as a
 #     superuser, so a grant-based rule would pass here while enforcing nothing.
 #   wallet idempotency: a partial unique index forbids settling a retry twice.
-#   wallet ledger: a payment settled before its request failed still counts.
-PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL)
+#   wallet ledger: a payment settled before its request failed still counts,
+#     and ledger sums are exact because money columns are numeric.
+#   model prices: a per-token price survives the numeric column exactly.
+#   platform-managed providers: a platform config is readable from every
+#     workspace and writable from none, a rule only the WHERE clause enforces.
+#   catalog model instances: a built-in model is added by copying it into the
+#     workspace's model_specs, the table the instance's foreign key references,
+#     and the catalog query is jsonb.
+#   membership backfill: the migration and the reconcile script insert rows with
+#     SQL that leans on the (workspace, user) unique constraint and the
+#     invitation and outbox tables.
+#   catalog browse plans: /explore is only fast while every browse query has an
+#     index that serves it, a property of the migrated indexes and the planner.
+#   agent presets: presets are a jsonb containment query on catalog tags, and a
+#     preset's skill key is matched against hashed catalog names with LIKE.
+#   MCP spec list: tenant specs and catalog items are paged, filtered and
+#     looked up by id in SQL; the catalog is never materialized per request.
+#   tenant scope: every workspace-scoped model stays in its workspace through
+#     the ORM hook, against the migrated schema rather than create_all.
+PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
   libs/llm/tests/test_provider_secret_lifecycle_db.py
   libs/common/tests/test_audit_append_only_db.py
   libs/wallet/tests/test_payment_idempotency_db.py
   libs/wallet/tests/test_payment_ledger_db.py
+  libs/llm/tests/test_model_spec_price_precision_db.py
+  libs/llm/tests/test_platform_managed_providers_db.py
+  libs/llm/tests/test_catalog_model_instance_db.py
+  apps/api/tests/test_membership_backfill_db.py
+  libs/registry/tests/test_catalog_browse_plans_db.py
+  libs/agents/tests/test_catalog_presets_db.py
+  libs/mcp/tests/test_mcp_spec_list_db.py
+  tests/unit/test_tenant_scope_isolation.py
 )
 
-# MCP manager Go SQL: the demand gateway's lifecycle rules, and the secret
+# MCP manager Go SQL: the demand gateway's lifecycle rules, the secret
 # resolver's join that keeps one workspace's secrets out of another's
 # containers. MCP_GATEWAY_REQUIRE_DB turns a skipped test into a failure.
 GO_PACKAGES=(./internal/mcpgateway/... ./internal/secrets/...)

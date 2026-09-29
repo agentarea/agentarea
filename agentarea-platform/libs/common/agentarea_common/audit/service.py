@@ -71,6 +71,6 @@ class AuditService:
                 sink = sink_factory()
                 await sink.emit(event.to_dict())
             except Exception:
-                logger.warning("Failed to forward audit event to enterprise sink")
+                logger.warning("Failed to forward audit event to enterprise sink", exc_info=True)
 
         return event

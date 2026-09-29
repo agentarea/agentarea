@@ -1,6 +1,6 @@
 import * as React from "react";
 import { ArrowRight, LucideIcon } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/WorkspaceLink";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 

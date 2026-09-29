@@ -58,7 +58,7 @@ class WorkspaceExportService:
             try:
                 skills = await self.skill_service.list()
             except Exception as e:
-                logger.warning(f"Failed to list skills: {e}")
+                logger.warning(f"Failed to list skills: {e}", exc_info=True)
 
         skills_yaml = self._skills_to_yaml(skills)
         skill_id_to_name = {str(s.id): s.name for s in skills}
@@ -176,7 +176,7 @@ class WorkspaceExportService:
             return result
         except Exception as e:
             # Log error but don't fail the entire export
-            logger.warning(f"Failed to export MCP instances: {e}")
+            logger.warning(f"Failed to export MCP instances: {e}", exc_info=True)
             return []
 
     async def _export_provider_configs(self) -> list[dict]:
@@ -215,7 +215,7 @@ class WorkspaceExportService:
             return result
         except Exception as e:
             # Log error but don't fail the entire export
-            logger.warning(f"Failed to export provider configs: {e}")
+            logger.warning(f"Failed to export provider configs: {e}", exc_info=True)
             return []
 
     def _skills_to_yaml(self, skills: list["Skill"]) -> list[dict]:

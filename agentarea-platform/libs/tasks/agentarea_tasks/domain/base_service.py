@@ -17,6 +17,7 @@ from agentarea_common.events.outbox_publisher import OutboxPublisher
 
 from .events import TaskStatusChanged, TaskUpdated
 from .models import AgentTask, Task
+from .statuses import TASK_STATUSES
 
 logger = logging.getLogger(__name__)
 
@@ -393,23 +394,7 @@ class BaseTaskService(ABC):
         if not task.agent_id:
             raise TaskValidationError("Task agent_id is required")
 
-        # Validate status is one of the allowed values
-        valid_statuses = {
-            "submitted",
-            "pending",
-            "preparing",
-            "scheduled",
-            "running",
-            "working",
-            "completed",
-            "failed",
-            "blocked",
-            "cancelled",
-            "waiting_for_continuation",
-            "waiting_for_input",
-            "waiting_for_approval",
-        }
-        if task.status not in valid_statuses:
+        if task.status not in TASK_STATUSES:
             raise TaskValidationError(f"Invalid task status: {task.status}")
 
         # Validate datetime field relationships

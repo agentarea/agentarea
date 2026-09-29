@@ -23,6 +23,7 @@ from agentarea_agents.infrastructure.catalog_skill_repository import (
 )
 from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubSkillImporter,
+    extract_skill_package,
 )
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
@@ -285,8 +286,10 @@ class SkillService:
         """
         repo = self._get_repository()
 
-        # Download repository as ZIP
-        zip_data = await self.github_importer.download_repo(payload.github_url)
+        # Download repository as ZIP and re-root it on the package the URL points at
+        repo_info = self.github_importer.parse_github_url(payload.github_url)
+        repo_zip_data = await self.github_importer.download_repo(payload.github_url)
+        zip_data = extract_skill_package(repo_zip_data, package_path=repo_info.path)
 
         # Parse and extract from ZIP
         import io
@@ -805,7 +808,9 @@ class SkillService:
             try:
                 await self.storage_service.delete_package(skill.s3_path)
             except Exception as e:
-                logger.warning(f"Failed to delete S3 package for skill {skill_id}: {e}")
+                logger.warning(
+                    f"Failed to delete S3 package for skill {skill_id}: {e}", exc_info=True
+                )
 
         # Delete from database
         await repo.delete(str(skill_id))

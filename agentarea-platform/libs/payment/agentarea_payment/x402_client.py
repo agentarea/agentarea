@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+from decimal import Decimal
 from importlib import import_module
 from typing import Any
+
+from agentarea_common.money import ZERO
 
 from .models import PaymentResult
 
@@ -56,7 +59,9 @@ class X402PaymentClient:
             self._client = client
             return client
         except ImportError:
-            logger.warning("x402 SDK not installed. Install with: pip install x402[httpx,evm]")
+            logger.warning(
+                "x402 SDK not installed. Install with: pip install x402[httpx,evm]", exc_info=True
+            )
             raise
 
     def _attach_payment_identifier(self, context: Any) -> None:
@@ -80,7 +85,7 @@ class X402PaymentClient:
 
             return signer_cls(account_cls.from_key(self._private_key))
         except ImportError:
-            logger.warning("eth_account or x402 EVM signer is not available")
+            logger.warning("eth_account or x402 EVM signer is not available", exc_info=True)
             raise
 
     @staticmethod
@@ -119,17 +124,17 @@ class X402PaymentClient:
         return payment_required
 
     @staticmethod
-    def _extract_amount_usd(requirement: dict[str, Any]) -> float:
+    def _extract_amount_usd(requirement: dict[str, Any]) -> Decimal:
         """Extract USD amount from known x402 requirement shapes."""
         for atomic_key in ("maxAmountRequired", "maxAmount", "amount"):
             raw_amount = requirement.get(atomic_key)
             if raw_amount not in (None, ""):
-                return float(raw_amount) / 1_000_000
+                return Decimal(str(raw_amount)) / 1_000_000
 
         price = requirement.get("price")
         if isinstance(price, str) and price.startswith("$"):
-            return float(price[1:])
-        return float(price or 0)
+            return Decimal(price[1:])
+        return Decimal(str(price or 0))
 
     async def handle_402(
         self,
@@ -138,7 +143,7 @@ class X402PaymentClient:
         headers: dict[str, str],
         body: Any | None,
         response_headers: dict[str, str],
-        budget_remaining: float,
+        budget_remaining: Decimal,
     ) -> PaymentResult:
         """Handle a 402 response by making an x402 payment.
 
@@ -164,7 +169,7 @@ class X402PaymentClient:
                 return PaymentResult(
                     success=False,
                     protocol="x402",
-                    amount_usd=0,
+                    amount_usd=ZERO,
                     recipient="",
                     error="No PAYMENT-REQUIRED header found",
                 )
@@ -248,7 +253,7 @@ class X402PaymentClient:
             return PaymentResult(
                 success=False,
                 protocol="x402",
-                amount_usd=0,
+                amount_usd=ZERO,
                 recipient="",
                 error=f"x402 SDK not available: {e}",
             )
@@ -257,7 +262,7 @@ class X402PaymentClient:
             return PaymentResult(
                 success=False,
                 protocol="x402",
-                amount_usd=0,
+                amount_usd=ZERO,
                 recipient="",
                 error=f"x402 payment error: {e}",
             )

@@ -63,11 +63,11 @@ def workspace_service(db_session):
 
 @pytest.mark.asyncio
 async def test_ensure_personal_creates_real_row_with_id_equal_to_user_id(workspace_service):
-    ws = await workspace_service.ensure_personal("user-1")
+    ws = await workspace_service.ensure_personal("user-1", email="jane@example.com")
 
     assert ws.id == "user-1"
     assert ws.owner_user_id == "user-1"
-    assert ws.slug == "user"  # no email -> fallback handle
+    assert ws.slug == "jane"
 
 
 @pytest.mark.asyncio
@@ -105,7 +105,7 @@ async def test_get_by_slug_resolves_to_workspace(workspace_service):
 
 @pytest.mark.asyncio
 async def test_ensure_personal_is_idempotent(workspace_service):
-    first = await workspace_service.ensure_personal("user-1")
+    first = await workspace_service.ensure_personal("user-1", email="jane@example.com")
     second = await workspace_service.ensure_personal("user-1")
 
     assert first.id == second.id == "user-1"
@@ -128,7 +128,7 @@ async def test_personal_is_derived_from_the_id_not_a_stored_flag(workspace_servi
     describes, and the id already carries the fact (``ensure_personal`` reuses
     the user id, ``create_shared`` mints a fresh uuid).
     """
-    personal = await workspace_service.ensure_personal("user-1")
+    personal = await workspace_service.ensure_personal("user-1", email="jane@example.com")
     shared = await workspace_service.create_shared(owner_user_id="user-1", name="Team A")
 
     assert personal.id == personal.owner_user_id
@@ -143,6 +143,7 @@ async def test_list_for_user_returns_personal_and_granted_workspaces(workspace_s
 
     user2_workspaces = await workspace_service.list_for_user(
         "user-2",
+        email="sam@example.com",
         member_workspace_ids=[shared.id],
     )
     ids = {w.id for w in user2_workspaces}
@@ -161,7 +162,9 @@ async def _committed_workspace_ids(session_factory) -> set[str]:
     "create",
     [
         pytest.param(lambda s: s.create_shared(owner_user_id="user-1", name="Acme"), id="shared"),
-        pytest.param(lambda s: s.ensure_personal("user-1"), id="personal"),
+        pytest.param(
+            lambda s: s.ensure_personal("user-1", email="jane@example.com"), id="personal"
+        ),
     ],
 )
 async def test_a_failed_creation_hook_leaves_no_workspace_row(db_session, session_factory, create):

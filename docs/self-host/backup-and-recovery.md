@@ -112,9 +112,10 @@ one item whose loss cannot be recovered from — the secret encryption key.
     ```
 
     Bucket names come from `global.storage.bucket` and, under Compose, from
-    `DOCUMENTS_BUCKET` and `ARTIFACTS_BUCKET` in `.env`. The Compose stack already
-    uses `rclone` for bucket creation, so the image and configuration pattern are
-    present in `docker-compose.yaml` to copy from.
+    `DOCUMENTS_BUCKET` and `ARTIFACTS_BUCKET` in `.env`. The Compose stack does
+    not ship `rclone`; run it from the `rclone/rclone` image with a `rustfs` remote
+    of type `s3`, endpoint `http://rustfs:9000`, and the `RUSTFS_ACCESS_KEY` and
+    `RUSTFS_SECRET_KEY` from `.env`.
 
     Artifacts are referenced by checksum from rows in the `agentarea` database. Back
     up the database and the artifacts bucket close together in time, or a restore

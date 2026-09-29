@@ -12,11 +12,10 @@ archives: the object moves under ``.trash/`` rather than being destroyed.
 from __future__ import annotations
 
 import base64
-import hashlib
 import logging
 import re
 from pathlib import PurePosixPath
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -28,28 +27,37 @@ from agentarea_common.artifacts import (
     ArtifactIntegrityError,
     ArtifactService,
     DbArtifactEventRecorder,
+    WorkspaceConflictError,
     WorkspaceRepository,
     WorkspaceValidationError,
     normalize_workspace_path,
     secure_download_headers,
 )
 from agentarea_common.artifacts.workspace import DEFAULT_MAX_FILE_BYTES
+from agentarea_common.artifacts.workspace_writes import (
+    MAX_UPLOADS_PER_PLAN,
+    ensure_no_file_ancestors,
+    is_reserved_path,
+    plan_uploads,
+    resolve_write_path,
+)
+from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config.app import get_app_settings
+from agentarea_common.workspaces.lookup import workspace_api_prefix
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
-from fastapi import APIRouter, Depends, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
-# Server-proxied attachment uploads are buffered in memory to verify their size
-# and digest, so cap them at the same per-file ceiling the task workspace
-# enforces. The presigned path re-checks size/quota at attach time.
+# Presigned attachments are capped at the same per-file ceiling the task
+# workspace enforces; size/quota are re-checked at attach time.
 MAX_ATTACHMENT_BYTES = DEFAULT_MAX_FILE_BYTES
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -85,14 +93,6 @@ class WorkspaceFileDownloadResponse(BaseModel):
     path: str
 
 
-class StagedFileResponse(BaseModel):
-    ref: str
-    filename: str
-    size: int
-    sha256: str
-    content_type: str | None = None
-
-
 class PresignUploadRequest(BaseModel):
     filename: str = Field(..., min_length=1)
     content_type: str = Field(..., min_length=1)
@@ -106,6 +106,32 @@ class PresignUploadResponse(BaseModel):
     ref: str
     upload_url: str
     expires_in: int
+
+
+class UploadPlanEntry(BaseModel):
+    path: str
+    sha256: str
+    content_type: str | None = None
+
+
+class UploadPlanRequest(BaseModel):
+    files: list[UploadPlanEntry] = Field(..., min_length=1, max_length=MAX_UPLOADS_PER_PLAN)
+
+    model_config = {"extra": "forbid"}
+
+
+class PlannedUpload(BaseModel):
+    path: str
+    status: Literal["unchanged", "upload", "error"]
+    upload_url: str | None = None
+    method: str | None = None
+    headers: dict[str, str] | None = None
+    expires_in: int | None = None
+    error: str | None = None
+
+
+class UploadPlanResponse(BaseModel):
+    uploads: list[PlannedUpload]
 
 
 class MoveWorkspaceFileRequest(BaseModel):
@@ -165,50 +191,24 @@ def _task_workspace_path(file_path: str) -> tuple[str, str] | None:
     return parts[1], relative_path
 
 
-def _is_hidden_storage_path(file_path: str) -> bool:
-    """Paths the workspace view never shows and manual writes may never touch.
-
-    ``staging/`` holds half-finished attachment uploads, ``tasks/`` is the
-    task-owned surface reached through committed manifests, and ``.trash/``
-    holds archived files that only the restore endpoint may resurrect.
-    """
-    clean = file_path.lstrip("/")
-    parts = PurePosixPath(clean).parts
-    return bool(parts and parts[0] in {"tasks", "staging", TRASH_PREFIX.rstrip("/")})
-
-
 def _resolve_upload_path(path: str, filename: str) -> str:
-    """Resolve where an upload lands, rejecting anything outside the workspace.
-
-    An explicit ``path`` keeps the directory structure the client sent, which is
-    what makes folder uploads and prefix-scoped reads possible. Without one the
-    file lands at the workspace root under its own name.
-    """
-    if not path:
-        path = PurePosixPath(filename or "unnamed").name or "unnamed"
     try:
-        resolved = normalize_workspace_path(path)
+        return resolve_write_path(path, filename)
     except WorkspaceValidationError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
-    if _is_hidden_storage_path(resolved):
-        raise HTTPException(
-            status_code=422,
-            detail=f"{resolved!r} is a reserved prefix and cannot be written directly",
-        )
-    return resolved
 
 
 async def _ensure_no_file_ancestors(service: ArtifactService, workspace_id: str, path: str) -> None:
-    """Prevent an existing file from also becoming a parent folder."""
-    for parent in PurePosixPath(path).parents:
-        if parent != PurePosixPath(".") and await service.exists(workspace_id, str(parent)):
-            raise HTTPException(status_code=409, detail=f"A file already exists at {str(parent)!r}")
+    try:
+        await ensure_no_file_ancestors(service, workspace_id, path)
+    except WorkspaceConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
 
 
-def _workspace_file_download_url(file_path: str) -> str:
+async def _workspace_file_download_url(user_context: UserContext, file_path: str) -> str:
     base = get_app_settings().API_BASE_URL.rstrip("/")
     encoded_path = quote(file_path.lstrip("/"), safe="/")
-    return f"{base}/v1/files/download/{encoded_path}"
+    return f"{base}{await workspace_api_prefix(user_context)}/files/download/{encoded_path}"
 
 
 async def get_project_service(
@@ -240,7 +240,7 @@ async def list_workspace_files(
     """
     svc = _get_artifact_service()
     objects = await svc.list(user_context.workspace_id)
-    visible_objects = [obj for obj in objects if not _is_hidden_storage_path(obj.path)]
+    visible_objects = [obj for obj in objects if not is_reserved_path(obj.path)]
     files = [
         WorkspaceFileInfo(
             path=obj.path,
@@ -298,67 +298,6 @@ async def create_workspace_directory(
 
 
 @router.post(
-    "",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
-)
-async def upload_file(
-    file: UploadFile,
-    user_context: UserContextDep,
-    purpose: Annotated[str, Form()] = "workspace",
-    path: Annotated[str, Form()] = "",
-):
-    """Upload a file, server-proxied.
-
-    ``purpose="workspace"`` (the default) lands the file at ``path`` within the
-    workspace, or at the workspace root under its own name when ``path`` is
-    omitted. ``purpose="attachment"`` stages it under ``staging/{id}/{filename}``
-    — hidden from the workspace listing — and returns a ``ref`` the task-create
-    endpoint resolves into the task workspace.
-    """
-    filename = PurePosixPath(file.filename or "unnamed").name or "unnamed"
-    content = await file.read()
-    svc = ArtifactService(
-        recorder=DbArtifactEventRecorder(),
-        actor=ArtifactActor(user_id=user_context.user_id),
-    )
-    if purpose == "workspace":
-        resolved_path = _resolve_upload_path(path, filename)
-        await _ensure_no_file_ancestors(svc, user_context.workspace_id, resolved_path)
-        if await svc.list(user_context.workspace_id, prefix=f"{resolved_path}/", max_items=1):
-            raise HTTPException(status_code=409, detail="A folder already exists at this path")
-        await svc.put(
-            user_context.workspace_id,
-            resolved_path,
-            content,
-            content_type=file.content_type,
-        )
-        return Response(status_code=204)
-    if purpose == "attachment":
-        if len(content) > MAX_ATTACHMENT_BYTES:
-            raise HTTPException(
-                status_code=413,
-                detail=f"attachment exceeds the {MAX_ATTACHMENT_BYTES}-byte per-file limit",
-            )
-        path = f"staging/{uuid4().hex}/{filename}"
-        await svc.put(
-            user_context.workspace_id,
-            path,
-            content,
-            content_type=file.content_type,
-        )
-        return StagedFileResponse(
-            ref=path,
-            filename=filename,
-            size=len(content),
-            sha256=hashlib.sha256(content).hexdigest(),
-            content_type=file.content_type,
-        )
-    raise HTTPException(status_code=422, detail=f"Unsupported upload purpose: {purpose!r}")
-
-
-@router.post(
     "/upload-url",
     response_model=PresignUploadResponse,
     dependencies=[
@@ -374,7 +313,7 @@ async def create_attachment_upload_url(
     The client-declared sha256 is bound into the signature as ``ChecksumSHA256``,
     so the object store rejects a body that does not hash to it — the upload is
     content-verified without the API ever seeing the bytes. The returned ``ref``
-    is consumed by the task-create endpoint exactly like a server-proxied one.
+    is what the task-create endpoint takes as an attachment.
     """
     if not _SHA256_HEX_RE.fullmatch(body.sha256):
         raise HTTPException(
@@ -399,6 +338,33 @@ async def create_attachment_upload_url(
         expires_in=expires_in,
     )
     return PresignUploadResponse(ref=path, upload_url=upload_url, expires_in=expires_in)
+
+
+@router.post(
+    "/upload-urls",
+    response_model=UploadPlanResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
+async def plan_workspace_uploads(
+    body: UploadPlanRequest,
+    user_context: UserContextDep,
+) -> UploadPlanResponse:
+    """Diff a client's ``{path, sha256}`` manifest against workspace storage.
+
+    Files already stored under the same digest come back ``unchanged``; the
+    rest get a presigned PUT bound to their digest, so the bytes go straight to
+    the object store. This is what ``agentarea files sync`` calls, and the same
+    plan the MCP ``workspace_files.upload_urls`` tool returns.
+    """
+    svc = ArtifactService(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    )
+    entries = [entry.model_dump(exclude_none=True) for entry in body.files]
+    planned = await plan_uploads(svc, user_context.workspace_id, entries)
+    return UploadPlanResponse(uploads=[PlannedUpload(**p) for p in planned])
 
 
 @router.post(
@@ -470,7 +436,7 @@ async def delete_workspace_file(
     workspace library.
     """
     clean = file_path.lstrip("/")
-    if _is_hidden_storage_path(clean):
+    if is_reserved_path(clean):
         raise HTTPException(
             status_code=400,
             detail=f"{clean!r} is not a workspace library file",
@@ -567,7 +533,7 @@ async def stream_workspace_file(
                 user_context.workspace_id, task_id, relative_path
             )
         else:
-            if _is_hidden_storage_path(file_path):
+            if is_reserved_path(file_path):
                 raise FileNotFoundError(file_path)
             body, content_type, size = await _get_artifact_service().stream(
                 user_context.workspace_id, file_path
@@ -602,12 +568,12 @@ async def download_workspace_file(
                 user_context.workspace_id, task_id, relative_path
             )
         else:
-            exists = not _is_hidden_storage_path(
-                file_path
-            ) and await _get_artifact_service().exists(user_context.workspace_id, file_path)
+            exists = not is_reserved_path(file_path) and await _get_artifact_service().exists(
+                user_context.workspace_id, file_path
+            )
     except WorkspaceValidationError:
         exists = False
     if not exists:
         raise HTTPException(status_code=404, detail="File not found")
-    url = _workspace_file_download_url(file_path)
+    url = await _workspace_file_download_url(user_context, file_path)
     return WorkspaceFileDownloadResponse(url=url, path=file_path)

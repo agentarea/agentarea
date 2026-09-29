@@ -411,7 +411,8 @@ def _parse_agents(data: dict[str, Any]) -> list[dict[str, Any]]:
                     "model_id": entry.get("model_id"),
                     "tools": tools,
                     "planning": entry.get("planning", False),
-                    "events_config": entry.get("events_config"),
+                    "skills": entry.get("skills") or [],
+                    "triggers": entry.get("triggers") or [],
                 },
                 "tags": entry.get("tags", []),
             }
@@ -584,6 +585,13 @@ def _upsert_registry(
                 "url": source_url,
             },
         )
+        conn.execute(
+            _text(
+                "UPDATE registry_items SET registry_type = :rt, registry_active = true "
+                "WHERE registry_id = :id"
+            ),
+            {"id": registry_id, "rt": registry_type},
+        )
         return registry_id
     registry_id = str(uuid.uuid4())
     conn.execute(
@@ -624,12 +632,17 @@ def _create_registry_item(
     conn, registry_id: str, item: dict[str, Any], workspace_id: str
 ) -> str:
     item_id = str(uuid.uuid4())
+    # registry_type/registry_priority/registry_active are the item's copies of
+    # its registry's columns; catalog browsing filters and orders on them.
     conn.execute(
         _text(
             "INSERT INTO registry_items (id, registry_id, external_id, name, description, "
-            "version, spec, tags, update_available, created_at, updated_at) "
-            "VALUES (:id, :rid, :ext, :name, :desc, :ver, "
-            "CAST(:spec AS JSONB), CAST(:tags AS JSONB), false, now(), now())"
+            "version, spec, tags, update_available, registry_type, registry_priority, "
+            "registry_active, created_at, updated_at) "
+            "SELECT :id, r.id, :ext, :name, :desc, :ver, "
+            "CAST(:spec AS JSONB), CAST(:tags AS JSONB), false, r.registry_type, "
+            "r.recommendation_priority, r.is_active, now(), now() "
+            "FROM registries r WHERE r.id = :rid"
         ),
         {
             "id": item_id,
@@ -846,7 +859,7 @@ def _upsert_mcp_server(
     if conn_type == "docker":
         docker_image_url = spec.get("image", "")
     elif conn_type == "command":
-        docker_image_url = "agentarea/mcp-bridge:latest"
+        docker_image_url = "agentarea/agentarea-mcp-base"
         command_str = spec.get("command", "")
         args = spec.get("args", []) or []
         if command_str:

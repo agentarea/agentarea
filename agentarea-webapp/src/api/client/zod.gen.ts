@@ -18,7 +18,7 @@ export const zA2UiActionPayload = z.object({
  * APIKeyCreateRequest
  */
 export const zApiKeyCreateRequest = z.object({
-  expires_in_days: z.number().int().nullish(),
+  expires_in_days: z.number().int().gte(1).lte(3650).nullish(),
   name: z.string(),
 });
 
@@ -207,22 +207,6 @@ export const zAuditLogListResponse = z.object({
 });
 
 /**
- * Body_upload_file_v1_files_post
- */
-export const zBodyUploadFileV1FilesPost = z.object({
-  file: z.string(),
-  path: z.string().optional().default(""),
-  purpose: z.string().optional().default("workspace"),
-});
-
-/**
- * Body_upload_project_file_v1_projects__project_id__files_post
- */
-export const zBodyUploadProjectFileV1ProjectsProjectIdFilesPost = z.object({
-  file: z.string(),
-});
-
-/**
  * Body_upload_skill_v1_skills_upload_post
  */
 export const zBodyUploadSkillV1SkillsUploadPost = z.object({
@@ -269,6 +253,7 @@ export const zBundleAgent = z.object({
   model: z.string().nullish(),
   name: z.string().min(1),
   skills: z.array(z.string()).optional(),
+  toolsets: z.array(z.string()).optional(),
 });
 
 /**
@@ -491,8 +476,8 @@ export const zClientResponse = z.object({
  */
 export const zClientUpdate = z.object({
   description: z.string().max(1000).nullish(),
-  kind: z.string().max(32).nullish(),
-  name: z.string().min(1).max(255).nullish(),
+  kind: z.string().max(32).optional(),
+  name: z.string().min(1).max(255).optional(),
 });
 
 /**
@@ -571,7 +556,7 @@ export const zContinueTaskPayload = z.object({
  */
 export const zCreateInvitationBody = z.object({
   email: z.string().nullish(),
-  expires_in_days: z.number().int().nullish(),
+  expires_in_days: z.number().int().gte(1).lte(365).nullish(),
 });
 
 /**
@@ -614,11 +599,11 @@ export const zDiscoverPreviewModelResponse = z.object({
   description: z.string().nullish(),
   display_name: z.string(),
   id: z.string(),
-  input_cost_per_token: z.number().nullish(),
+  input_cost_per_token: z.string().nullish(),
   is_new: z.boolean().optional().default(false),
   max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().nullish(),
+  output_cost_per_token: z.string().nullish(),
   supports_function_calling: z.boolean().optional().default(false),
   supports_reasoning: z.boolean().optional().default(false),
   supports_vision: z.boolean().optional().default(false),
@@ -640,11 +625,11 @@ export const zDiscoveredModelResponse = z.object({
   context_window: z.number().int(),
   description: z.string().nullish(),
   display_name: z.string(),
-  input_cost_per_token: z.number().nullish(),
+  input_cost_per_token: z.string().nullish(),
   is_new: z.boolean().optional().default(false),
   max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().nullish(),
+  output_cost_per_token: z.string().nullish(),
   supports_function_calling: z.boolean().optional().default(false),
   supports_reasoning: z.boolean().optional().default(false),
   supports_vision: z.boolean().optional().default(false),
@@ -678,26 +663,6 @@ export const zEscalationResolution = z.object({
   approved: z.boolean(),
   comment: z.string().optional().default(""),
   escalation_id: z.string(),
-});
-
-/**
- * EventConfig
- *
- * One event subscription for an agent.
- */
-export const zEventConfig = z.object({
-  config: z.record(z.unknown()).nullish(),
-  enabled: z.boolean().optional().default(true),
-  event_type: z.string(),
-});
-
-/**
- * EventsConfig
- *
- * Per-agent event subscriptions.
- */
-export const zEventsConfig = z.object({
-  events: z.array(zEventConfig).nullish(),
 });
 
 /**
@@ -772,7 +737,10 @@ export const zFailedTaskBlocker = z.object({
  * FundWalletRequest
  */
 export const zFundWalletRequest = z.object({
-  service_budget_usd: z.number(),
+  service_budget_usd: z.union([
+    z.number().gte(0).lt(1000000000000),
+    z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  ]),
 });
 
 /**
@@ -1116,7 +1084,7 @@ export const zMcpServerInstanceCreate = z.object({
   description: z.string().nullish(),
   json_spec: z.record(z.unknown()),
   name: z.string().min(1).max(255),
-  server_spec_id: z.string(),
+  server_spec_id: z.string().uuid(),
 });
 
 /**
@@ -1161,8 +1129,8 @@ export const zMcpServerInstanceResponse = z.object({
  */
 export const zMcpServerInstanceUpdate = z.object({
   description: z.string().nullish(),
-  json_spec: z.record(z.unknown()).nullish(),
-  name: z.string().min(1).max(255).nullish(),
+  json_spec: z.record(z.unknown()).optional(),
+  name: z.string().min(1).max(255).optional(),
 });
 
 /**
@@ -1194,17 +1162,17 @@ export const zMcpServerResponse = z.object({
  */
 export const zMcpServerUpdate = z.object({
   cmd: z.array(z.string()).nullish(),
-  description: z.string().nullish(),
+  description: z.string().optional(),
   docker_image_url: z.string().nullish(),
-  env_schema: z.array(z.record(z.unknown())).nullish(),
-  is_public: z.boolean().nullish(),
+  env_schema: z.array(z.record(z.unknown())).optional(),
+  is_public: z.boolean().optional(),
   json_spec: z.record(z.unknown()).nullish(),
-  name: z.string().min(1).max(255).nullish(),
+  name: z.string().min(1).max(255).optional(),
   registry_url: z.string().nullish(),
   remote_url: z.string().nullish(),
-  status: z.string().nullish(),
-  tags: z.array(z.string()).nullish(),
-  version: z.string().nullish(),
+  status: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  version: z.string().optional(),
 });
 
 /**
@@ -1217,7 +1185,10 @@ export const zMppConfigSchema = z.object({
   payment_method_types: z.array(z.string()).optional(),
   recipient: z.string().nullish(),
   rpc_url: z.string().nullish(),
-  session_budget_usd: z.number().optional().default(10),
+  session_budget_usd: z.union([
+    z.number().gte(0),
+    z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  ]),
   stripe_profile_id: z.string().nullish(),
 });
 
@@ -1286,6 +1257,18 @@ export const zMcpToolConfigOutput = z.object({
   name: z.string(),
   settings: zMcpToolSettings.nullish(),
   type: z.literal("mcp").optional().default("mcp"),
+});
+
+/**
+ * MemberRemovalPendingResponse
+ *
+ * The membership has ended; its graph access is still being revoked.
+ */
+export const zMemberRemovalPendingResponse = z.object({
+  status: z
+    .literal("revocation_pending")
+    .optional()
+    .default("revocation_pending"),
 });
 
 /**
@@ -1373,7 +1356,8 @@ export const zModelInstanceTestRequest = z.object({
  * ModelInstanceTestResponse
  */
 export const zModelInstanceTestResponse = z.object({
-  cost: z.number().nullish(),
+  cost: z.string().nullish(),
+  currency: z.literal("USD").optional().default("USD"),
   error_type: z.string().nullish(),
   message: z.string(),
   model_name: z.string().nullish(),
@@ -1387,15 +1371,21 @@ export const zModelInstanceTestResponse = z.object({
  * ModelSpecCreate
  */
 export const zModelSpecCreate = z.object({
-  context_window: z.number().int().gt(0),
+  context_window: z.number().int().gt(0).lte(2147483647),
   default_context_strategy: z.string().nullish(),
   description: z.string().nullish(),
   display_name: z.string(),
-  input_cost_per_token: z.number().gte(0),
+  input_cost_per_token: z.union([
+    z.number().gte(0).lt(100000000),
+    z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  ]),
   is_active: z.boolean().optional().default(true),
-  max_output_tokens: z.number().int().gt(0).nullish(),
+  max_output_tokens: z.number().int().gt(0).lte(2147483647).nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().gte(0),
+  output_cost_per_token: z.union([
+    z.number().gte(0).lt(100000000),
+    z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  ]),
   provider_spec_id: z.string().uuid(),
 });
 
@@ -1403,14 +1393,18 @@ export const zModelSpecCreate = z.object({
  * ModelSpecUpdate
  */
 export const zModelSpecUpdate = z.object({
-  context_window: z.number().int().gt(0).nullish(),
+  context_window: z.number().int().gt(0).lte(2147483647).nullish(),
   default_context_strategy: z.string().nullish(),
   description: z.string().nullish(),
   display_name: z.string().nullish(),
-  input_cost_per_token: z.number().gte(0).nullish(),
+  input_cost_per_token: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
   is_active: z.boolean().nullish(),
-  max_output_tokens: z.number().int().gt(0).nullish(),
-  output_cost_per_token: z.number().gte(0).nullish(),
+  max_output_tokens: z.number().int().gt(0).lte(2147483647).nullish(),
+  output_cost_per_token: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
 });
 
 /**
@@ -1511,7 +1505,7 @@ export const zNetworkTopologyResponse = z.object({
  */
 export const zOAuthLinkCreateRequest = z.object({
   access_control: z.string().optional().default("workspace"),
-  expires_in_days: z.number().int().nullish(),
+  expires_in_days: z.number().int().gte(1).lte(3650).nullish(),
   mcp_instance_id: z.string().uuid(),
   provider_config: z.record(z.unknown()).optional(),
 });
@@ -1529,40 +1523,6 @@ export const zOAuthLinkResponse = z.object({
   last_accessed_at: z.string().nullable(),
   mcp_instance_id: z.string().uuid(),
   token: z.string(),
-});
-
-/**
- * OpenAPIConnectionCreate
- *
- * Payload for creating an OpenAPI connection.
- *
- * The connection ties a base URL (where requests are sent) to an
- * OpenAPI 3.x specification (which is parsed eagerly into a tool list).
- * Provide either ``spec_url`` or ``spec_content`` — not both required.
- */
-export const zOpenApiConnectionCreate = z.object({
-  auth_config_id: z.string().uuid().nullish(),
-  base_url: z.string().max(500),
-  custom_headers: z.array(zHeaderInput).nullish(),
-  description: z.string().nullish(),
-  name: z.string().min(1).max(255),
-  spec_content: z.record(z.unknown()).nullish(),
-  spec_url: z.string().nullish(),
-});
-
-/**
- * OpenAPIConnectionUpdate
- *
- * Patch payload for an OpenAPI connection. All fields optional — unset = unchanged.
- */
-export const zOpenApiConnectionUpdate = z.object({
-  auth_config_id: z.string().uuid().nullish(),
-  base_url: z.string().max(500).nullish(),
-  custom_headers: z.array(zHeaderInput).nullish(),
-  description: z.string().nullish(),
-  name: z.string().min(1).max(255).nullish(),
-  spec_content: z.record(z.unknown()).nullish(),
-  spec_url: z.string().nullish(),
 });
 
 /**
@@ -1590,6 +1550,7 @@ export const zOpenApiConnectionResponse = z.object({
   spec_url: z.string().nullish(),
   status: z.string(),
   updated_at: z.string(),
+  url_variables: z.array(z.string()).nullish(),
 });
 
 /**
@@ -1619,45 +1580,12 @@ export const zOpenApiToolConfig = z.object({
 });
 
 /**
- * AgentCreate
- *
- * Payload for creating an agent.
- *
- * ``model_id`` is the UUID of a model instance configured in the workspace —
- * the runtime has no other interpretation of it. Omit it (or pass ``null``) to
- * create an agent with no model bound yet; such an agent cannot be run until a
- * model is assigned.
- */
-export const zAgentCreate = z.object({
-  a2ui_enabled: z.boolean().nullish(),
-  agent_type: z.enum(["stateless", "stateful"]).optional().default("stateless"),
-  description: z.string().max(1000).optional().default(""),
-  events_config: zEventsConfig.nullish(),
-  instruction: z.string().max(20000).optional().default(""),
-  model_id: z.string().nullish(),
-  name: z.string().min(1).max(255),
-  planning: z.boolean().nullish(),
-  skill_ids: z.array(z.string().uuid()).nullish(),
-  tools: z
-    .array(
-      z.union([
-        zCodeToolConfig,
-        zMcpToolConfigInput,
-        zAgentToolConfig,
-        zOpenApiToolConfig,
-      ])
-    )
-    .nullish(),
-});
-
-/**
  * AgentResponse
  */
 export const zAgentResponse = z.object({
   a2ui_enabled: z.boolean().nullish(),
   agent_type: z.string().optional().default("stateless"),
   description: z.string().nullish(),
-  events_config: z.record(z.unknown()).nullish(),
   id: z.string().uuid(),
   instruction: z.string().nullish(),
   is_catalog: z.boolean().optional().default(false),
@@ -1688,13 +1616,12 @@ export const zAgentResponse = z.object({
  */
 export const zAgentUpdate = z.object({
   a2ui_enabled: z.boolean().nullish(),
-  agent_type: z.enum(["stateless", "stateful"]).nullish(),
+  agent_type: z.enum(["stateless", "stateful"]).optional(),
   capabilities: z.array(z.string()).nullish(),
   description: z.string().max(1000).nullish(),
-  events_config: zEventsConfig.nullish(),
   instruction: z.string().max(20000).nullish(),
   model_id: z.string().nullish(),
-  name: z.string().min(1).max(255).nullish(),
+  name: z.string().min(1).max(255).optional(),
   planning: z.boolean().nullish(),
   skill_ids: z.array(z.string().uuid()).nullish(),
   tools: z
@@ -1725,7 +1652,7 @@ export const zPaginatedResponseMcpServerResponse = z.object({
  */
 export const zPaymentRecordResponse = z.object({
   agent_id: z.string(),
-  amount_usd: z.number(),
+  amount_usd: z.string(),
   created_at: z.string().nullish(),
   error_message: z.string().nullish(),
   execution_id: z.string(),
@@ -1757,6 +1684,19 @@ export const zPendingEscalationResponse = z.object({
   tool_args: z.record(z.unknown()),
   tool_call_id: z.string(),
   tool_name: z.string(),
+});
+
+/**
+ * PlannedUpload
+ */
+export const zPlannedUpload = z.object({
+  error: z.string().nullish(),
+  expires_in: z.number().int().nullish(),
+  headers: z.record(z.string()).nullish(),
+  method: z.string().nullish(),
+  path: z.string(),
+  status: z.enum(["unchanged", "upload", "error"]),
+  upload_url: z.string().nullish(),
 });
 
 /**
@@ -1835,6 +1775,17 @@ export const zPolicyRuleUpdateRequest = z.object({
 });
 
 /**
+ * PresetSkillResponse
+ *
+ * A catalog skill a preset attaches; attaching it installs it into the workspace.
+ */
+export const zPresetSkillResponse = z.object({
+  description: z.string().nullish(),
+  id: z.string(),
+  name: z.string(),
+});
+
+/**
  * PresignUploadRequest
  */
 export const zPresignUploadRequest = z.object({
@@ -1878,6 +1829,13 @@ export const zPreviewIssue = z.object({
 });
 
 /**
+ * PricingCurrencyResponse
+ */
+export const zPricingCurrencyResponse = z.object({
+  currency: z.string(),
+});
+
+/**
  * PrincipalType
  *
  * What kind of thing an id refers to.
@@ -1915,7 +1873,7 @@ export const zProjectCreate = z.object({
   description: z.string().max(1000).nullish(),
   instructions: z.string().max(20000).nullish(),
   name: z.string().min(1).max(255),
-  parent_project_id: z.string().nullish(),
+  parent_project_id: z.string().uuid().nullish(),
 });
 
 /**
@@ -1982,8 +1940,8 @@ export const zProjectResponse = z.object({
 export const zProjectUpdate = z.object({
   description: z.string().max(1000).nullish(),
   instructions: z.string().max(20000).nullish(),
-  name: z.string().min(1).max(255).nullish(),
-  parent_project_id: z.string().nullish(),
+  name: z.string().min(1).max(255).optional(),
+  parent_project_id: z.string().uuid().nullish(),
 });
 
 /**
@@ -2674,7 +2632,7 @@ export const zTaskEvent = z.object({
   event_type: z.string(),
   execution_id: z.string().nullish(),
   id: z.string(),
-  message: z.string(),
+  message: z.string().nullish(),
   metadata: z.record(z.unknown()).optional().default({}),
   task_id: z.string(),
   timestamp: z.string(),
@@ -2827,6 +2785,7 @@ export const zToolResponse = z.object({
   category: z.string().optional().default(""),
   description: z.string(),
   display_name: z.string().optional().default(""),
+  group: z.literal("sandbox").nullish(),
   input_schema: z.record(z.unknown()).optional(),
   mcp_instance_id: z.string().uuid().nullish(),
   mcp_instance_name: z.string().nullish(),
@@ -2927,12 +2886,7 @@ export const zTaskCreate = z.object({
 /**
  * TriggerCreate
  *
- * Payload for creating a trigger.
- *
- * A trigger fires an agent — either on a cron schedule (``trigger_type='cron'``)
- * or in response to an inbound webhook (``trigger_type='webhook'``). For poll-based
- * channels (e.g. email inbox), use ``trigger_type='polling'`` plus a
- * ``data_extractor`` configuration.
+ * Payload for creating a trigger on an existing agent.
  */
 export const zTriggerCreate = z.object({
   agent_id: z.string().uuid(),
@@ -3046,6 +3000,87 @@ export const zTriggerRunResponse = z.object({
 });
 
 /**
+ * TriggerSpec
+ *
+ * Everything about a trigger except the agent it fires.
+ *
+ * A trigger fires an agent — either on a cron schedule (``trigger_type='cron'``)
+ * or in response to an inbound webhook (``trigger_type='webhook'``). For poll-based
+ * channels (e.g. email inbox), use ``trigger_type='polling'`` plus a
+ * ``data_extractor`` configuration. Creating an agent takes a list of these,
+ * because the agent does not exist yet when they are written.
+ */
+export const zTriggerSpec = z.object({
+  allowed_methods: z.array(z.string()).optional(),
+  channel_credentials: z.record(z.unknown()).nullish(),
+  conditions: z.record(z.unknown()).optional(),
+  cron_expression: z.string().nullish(),
+  data_extractor: z.string().nullish(),
+  data_extractor_config: z.record(z.unknown()).nullish(),
+  description: z.string().max(1000).optional().default(""),
+  enabled: z.boolean().optional().default(true),
+  event_types: z.array(z.string()).optional(),
+  failure_threshold: z.number().int().gte(1).lte(100).optional().default(5),
+  name: z.string().min(1).max(255),
+  task_parameters: z.record(z.unknown()).optional(),
+  timezone: z.string().optional().default("UTC"),
+  trigger_type: z.enum(["cron", "webhook", "polling"]),
+  validation_rules: z.record(z.unknown()).optional(),
+  webhook_config: z.record(z.unknown()).nullish(),
+  webhook_id: z.string().nullish(),
+  webhook_type: z.string().optional().default("generic"),
+});
+
+/**
+ * AgentCreateRequest
+ *
+ * ``AgentCreate`` plus the triggers created with the agent.
+ */
+export const zAgentCreateRequest = z.object({
+  a2ui_enabled: z.boolean().nullish(),
+  agent_type: z.enum(["stateless", "stateful"]).optional().default("stateless"),
+  description: z.string().max(1000).optional().default(""),
+  instruction: z.string().max(20000).optional().default(""),
+  model_id: z.string().nullish(),
+  name: z.string().min(1).max(255),
+  planning: z.boolean().nullish(),
+  skill_ids: z.array(z.string().uuid()).nullish(),
+  tools: z.array(
+    z.union([
+      zCodeToolConfig,
+      zMcpToolConfigInput,
+      zAgentToolConfig,
+      zOpenApiToolConfig,
+    ])
+  ),
+  triggers: z.array(zTriggerSpec).optional(),
+});
+
+/**
+ * AgentPresetResponse
+ *
+ * A starting point for a new agent: applying it fills the create form.
+ */
+export const zAgentPresetResponse = z.object({
+  description: z.string().nullish(),
+  id: z.string(),
+  instruction: z.string().optional().default(""),
+  name: z.string(),
+  preferred_models: z.array(z.string()).optional(),
+  skills: z.array(zPresetSkillResponse),
+  tools: z.array(
+    z.union([
+      zCodeToolConfig,
+      zMcpToolConfigOutput,
+      zAgentToolConfig,
+      zOpenApiToolConfig,
+    ])
+  ),
+  triggers: z.array(zTriggerSpec),
+  unavailable_skills: z.array(z.string()).optional(),
+});
+
+/**
  * TriggerStatusResponse
  *
  * Response model for trigger status information.
@@ -3117,30 +3152,74 @@ export const zUpdateAllResponse = z.object({
 });
 
 /**
- * UsageEventResponse
+ * UploadPlanEntry
  */
-export const zUsageEventResponse = z.object({
-  data_json: z.string(),
-  id: z.string(),
-  incarnation_id: z.string(),
-  kind: z.string(),
-  occurred_at: z.string(),
-  received_at: z.string(),
-  resource_id: z.string(),
-  resource_kind: z.string(),
-  schema_version: z.number().int(),
-  sequence: z.string(),
-  source: z.string(),
-  task_id: z.string(),
-  workspace_id: z.string(),
+export const zUploadPlanEntry = z.object({
+  content_type: z.string().nullish(),
+  path: z.string(),
+  sha256: z.string(),
 });
 
 /**
- * UsageEventListResponse
+ * UploadPlanRequest
  */
-export const zUsageEventListResponse = z.object({
-  events: z.array(zUsageEventResponse),
-  next_cursor: z.string().nullable(),
+export const zUploadPlanRequest = z.object({
+  files: z.array(zUploadPlanEntry).min(1).max(100),
+});
+
+/**
+ * UploadPlanResponse
+ */
+export const zUploadPlanResponse = z.object({
+  uploads: z.array(zPlannedUpload),
+});
+
+/**
+ * UrlVariableInput
+ *
+ * A secret value substituted into a ``{name}`` placeholder in the base URL path.
+ *
+ * The value is stored encrypted in the secret manager; it is never returned.
+ */
+export const zUrlVariableInput = z.object({
+  name: z.string().max(128),
+  value: z.string().min(1).max(8192),
+});
+
+/**
+ * OpenAPIConnectionCreate
+ *
+ * Payload for creating an OpenAPI connection.
+ *
+ * The connection ties a base URL (where requests are sent) to an
+ * OpenAPI 3.x specification (which is parsed eagerly into a tool list).
+ * Provide either ``spec_url`` or ``spec_content`` — not both required.
+ */
+export const zOpenApiConnectionCreate = z.object({
+  auth_config_id: z.string().uuid().nullish(),
+  base_url: z.string().max(500),
+  custom_headers: z.array(zHeaderInput).nullish(),
+  description: z.string().nullish(),
+  name: z.string().min(1).max(255),
+  spec_content: z.record(z.unknown()).nullish(),
+  spec_url: z.string().nullish(),
+  url_variables: z.array(zUrlVariableInput).nullish(),
+});
+
+/**
+ * OpenAPIConnectionUpdate
+ *
+ * Patch payload for an OpenAPI connection. All fields optional — unset = unchanged.
+ */
+export const zOpenApiConnectionUpdate = z.object({
+  auth_config_id: z.string().uuid().nullish(),
+  base_url: z.string().max(500).nullish(),
+  custom_headers: z.array(zHeaderInput).nullish(),
+  description: z.string().nullish(),
+  name: z.string().min(1).max(255).nullish(),
+  spec_content: z.record(z.unknown()).nullish(),
+  spec_url: z.string().nullish(),
+  url_variables: z.array(zUrlVariableInput).nullish(),
 });
 
 /**
@@ -3175,10 +3254,10 @@ export const zHttpValidationError = z.object({
  * WalletBalanceResponse
  */
 export const zWalletBalanceResponse = z.object({
-  remaining: z.number(),
+  remaining: z.string(),
   service_budget_period: z.string(),
-  service_budget_usd: z.number(),
-  total_spent_current_period: z.number(),
+  service_budget_usd: z.string(),
+  total_spent_current_period: z.string(),
 });
 
 /**
@@ -3229,7 +3308,7 @@ export const zWalletResponse = z.object({
   id: z.string(),
   mpp_config: z.record(z.unknown()).nullish(),
   service_budget_period: z.string(),
-  service_budget_usd: z.number(),
+  service_budget_usd: z.string(),
   status: z.string(),
   updated_at: z.string().nullish(),
   wallet_type: z.string(),
@@ -3273,6 +3352,7 @@ export const zWorkspaceFileListResponse = z.object({
  * WorkspaceResponse
  */
 export const zWorkspaceResponse = z.object({
+  can_administer: z.boolean(),
   id: z.string(),
   name: z.string(),
   owner_user_id: z.string(),
@@ -3290,7 +3370,7 @@ export const zWorkspaceSettingsResponse = z.object({
  * WorkspaceSettingsUpdate
  */
 export const zWorkspaceSettingsUpdate = z.object({
-  monthly_cap_usd: z.number().nullable(),
+  monthly_cap_usd: z.number().gte(0).nullable(),
 });
 
 /**
@@ -3313,7 +3393,13 @@ export const zCreateWalletRequest = z.object({
   credentials: zWalletCredentialsSchema.nullish(),
   mpp_config: zMppConfigSchema.nullish(),
   service_budget_period: z.string().optional().default("execution"),
-  service_budget_usd: z.number().optional().default(0),
+  service_budget_usd: z
+    .union([
+      z.number().gte(0).lt(1000000000000),
+      z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+    ])
+    .optional()
+    .default("0"),
   wallet_type: z.string(),
   x402_config: zX402ConfigSchema.nullish(),
 });
@@ -3325,7 +3411,9 @@ export const zUpdateWalletRequest = z.object({
   credentials: zWalletCredentialsSchema.nullish(),
   mpp_config: zMppConfigSchema.nullish(),
   service_budget_period: z.string().nullish(),
-  service_budget_usd: z.number().nullish(),
+  service_budget_usd: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
   status: z.string().nullish(),
   wallet_type: z.string().nullish(),
   x402_config: zX402ConfigSchema.nullish(),
@@ -3349,11 +3437,11 @@ export const zAgentareaApiApiV1ModelSpecsModelSpecResponse = z.object({
   description: z.string().nullable(),
   display_name: z.string(),
   id: z.string(),
-  input_cost_per_token: z.number().nullish(),
+  input_cost_per_token: z.string().nullish(),
   is_active: z.boolean(),
   max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().nullish(),
+  output_cost_per_token: z.string().nullish(),
   provider_key: z.string().nullish(),
   provider_name: z.string().nullish(),
   provider_spec_id: z.string(),
@@ -3372,11 +3460,11 @@ export const zAgentareaApiApiV1ProviderSpecsModelSpecResponse = z.object({
   description: z.string().nullable(),
   display_name: z.string(),
   id: z.string(),
-  input_cost_per_token: z.number().nullish(),
+  input_cost_per_token: z.string().nullish(),
   is_active: z.boolean(),
   max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().nullish(),
+  output_cost_per_token: z.string().nullish(),
   provider_spec_id: z.string(),
   supports_function_calling: z.boolean().nullish().default(false),
   supports_reasoning: z.boolean().nullish().default(false),
@@ -3437,6 +3525,109 @@ export const zHydraOauth2ProxyOauth2PathPostPath = z.object({
 export const zHydraOauth2ProxyOauth2PathPutPath = z.object({
   path: z.string(),
 });
+
+export const zGetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetPath = z.object({
+  agent_id: z.string().uuid(),
+});
+
+/**
+ * Response Get Agent Well Known Index V1 Agents  Agent Id   Well Known  Get
+ *
+ * Successful Response
+ */
+export const zGetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponse =
+  z.record(z.unknown());
+
+export const zGetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetPath =
+  z.object({
+    agent_id: z.string().uuid(),
+  });
+
+/**
+ * Response Get Agent A2A Info V1 Agents  Agent Id   Well Known A2A Info Json Get
+ *
+ * Successful Response
+ */
+export const zGetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponse =
+  z.record(z.unknown());
+
+export const zGetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetPath =
+  z.object({
+    agent_id: z.string().uuid(),
+  });
+
+export const zHandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostPath = z.object({
+  agent_id: z.string().uuid(),
+});
+
+export const zGetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetPath = z.object({
+  agent_id: z.string(),
+});
+
+export const zOauthCallbackV1ConnectionsOauthCallbackGetQuery = z.object({
+  code: z.string().nullish(),
+  state: z.string().nullish(),
+  error: z.string().nullish(),
+  error_description: z.string().nullish(),
+});
+
+export const zAcceptInvitationV1InvitationsAcceptPostBody =
+  zAcceptInvitationBody;
+
+/**
+ * Successful Response
+ */
+export const zAcceptInvitationV1InvitationsAcceptPostResponse =
+  zAcceptInvitationResponse;
+
+export const zPreviewInvitationV1InvitationsPreviewPostBody =
+  zInvitationPreviewBody;
+
+/**
+ * Successful Response
+ */
+export const zPreviewInvitationV1InvitationsPreviewPostResponse =
+  zInvitationPreviewResponse;
+
+export const zOauthCallbackV1McpOauthCallbackGetQuery = z.object({
+  code: z.string().optional(),
+  state: z.string().optional(),
+  error: z.string().optional(),
+  error_description: z.string().optional(),
+});
+
+export const zProxyInstanceV1McpInstanceIdMcpDeletePath = z.object({
+  instance_id: z.string(),
+});
+
+export const zProxyInstanceV1McpInstanceIdMcpGetPath = z.object({
+  instance_id: z.string(),
+});
+
+export const zProxyInstanceV1McpInstanceIdMcpPostPath = z.object({
+  instance_id: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zGetPricingCurrencyV1PricingCurrencyGetResponse =
+  zPricingCurrencyResponse;
+
+/**
+ * Response List Workspaces V1 Workspaces Get
+ *
+ * Successful Response
+ */
+export const zListWorkspacesV1WorkspacesGetResponse =
+  z.array(zWorkspaceResponse);
+
+export const zCreateWorkspaceV1WorkspacesPostBody = zCreateWorkspaceBody;
+
+/**
+ * Successful Response
+ */
+export const zCreateWorkspaceV1WorkspacesPostResponse = zWorkspaceResponse;
 
 export const zCheckPermissionV1AccessControlCheckPostBody = zCheckRequest;
 
@@ -3508,12 +3699,20 @@ export const zListAgentsV1AgentsGetResponse = z.array(zAgentResponse);
  */
 export const zListAgentsV1AgentsGet2Response = z.array(zAgentResponse);
 
-export const zCreateAgentV1AgentsPostBody = zAgentCreate;
+export const zCreateAgentV1AgentsPostBody = zAgentCreateRequest;
 
 /**
  * Successful Response
  */
 export const zCreateAgentV1AgentsPostResponse = zAgentResponse;
+
+/**
+ * Response List Agent Presets V1 Agents Presets Get
+ *
+ * Successful Response
+ */
+export const zListAgentPresetsV1AgentsPresetsGetResponse =
+  z.array(zAgentPresetResponse);
 
 export const zGetAllToolsV1AgentsToolsGetQuery = z.object({
   include: z.string().optional().default("code,mcp"),
@@ -3551,44 +3750,6 @@ export const zUpdateAgentV1AgentsAgentIdPatchPath = z.object({
  */
 export const zUpdateAgentV1AgentsAgentIdPatchResponse = zAgentResponse;
 
-export const zGetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetPath = z.object({
-  agent_id: z.string().uuid(),
-});
-
-/**
- * Response Get Agent Well Known Index V1 Agents  Agent Id   Well Known  Get
- *
- * Successful Response
- */
-export const zGetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponse =
-  z.record(z.unknown());
-
-export const zGetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetPath =
-  z.object({
-    agent_id: z.string().uuid(),
-  });
-
-/**
- * Response Get Agent A2A Info V1 Agents  Agent Id   Well Known A2A Info Json Get
- *
- * Successful Response
- */
-export const zGetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponse =
-  z.record(z.unknown());
-
-export const zGetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetPath =
-  z.object({
-    agent_id: z.string().uuid(),
-  });
-
-export const zHandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostPath = z.object({
-  agent_id: z.string().uuid(),
-});
-
-export const zGetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetPath = z.object({
-  agent_id: z.string().uuid(),
-});
-
 export const zInstallAgentV1AgentsAgentIdInstallPostPath = z.object({
   agent_id: z.string(),
 });
@@ -3615,7 +3776,7 @@ export const zListAgentTasksV1AgentsAgentIdTasksGetPath = z.object({
 export const zListAgentTasksV1AgentsAgentIdTasksGetQuery = z.object({
   status: z.string().nullish(),
   limit: z.number().int().gte(1).lte(1000).optional().default(100),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -3742,7 +3903,7 @@ export const zGetTaskEventsV1AgentsAgentIdTasksTaskIdEventsGetPath = z.object({
 });
 
 export const zGetTaskEventsV1AgentsAgentIdTasksTaskIdEventsGetQuery = z.object({
-  page: z.number().int().gte(1).optional().default(1),
+  page: z.number().int().gte(1).lte(1000000).optional().default(1),
   page_size: z.number().int().gte(1).lte(100).optional().default(50),
   event_type: z.string().nullish(),
 });
@@ -3908,7 +4069,7 @@ export const zGetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetQuery = z.object(
     status: z.string().nullish(),
     from_date: z.string().datetime().nullish(),
     to_date: z.string().datetime().nullish(),
-    page: z.number().int().gte(1).optional().default(1),
+    page: z.number().int().gte(1).lte(1000000).optional().default(1),
     page_size: z.number().int().gte(1).lte(200).optional().default(50),
   }
 );
@@ -3982,8 +4143,8 @@ export const zInstallBundleV1BundlesInstallPostBody = zInstallRequest;
 export const zInstallBundleV1BundlesInstallPostResponse = zInstallResult;
 
 export const zListClientsV1ClientsGetQuery = z.object({
-  limit: z.number().int().optional().default(100),
-  offset: z.number().int().optional().default(0),
+  limit: z.number().int().gte(1).lte(1000).optional().default(100),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -4107,19 +4268,20 @@ export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutPath =
 export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponse =
   zManagedOAuthAppResponse;
 
-export const zOauthCallbackV1ConnectionsOauthCallbackGetQuery = z.object({
-  code: z.string().nullish(),
-  state: z.string().nullish(),
-  error: z.string().nullish(),
-  error_description: z.string().nullish(),
-});
+/**
+ * Successful Response
+ */
+export const zGetDashboardV1DashboardGetResponse = zDashboardResponse;
+
+/**
+ * Successful Response
+ */
+export const zExportWorkspaceConfigV1ExportGetResponse = z.string();
 
 /**
  * Successful Response
  */
 export const zListWorkspaceFilesV1FilesGetResponse = zWorkspaceFileListResponse;
-
-export const zUploadFileV1FilesPostBody = zBodyUploadFileV1FilesPost;
 
 export const zCreateWorkspaceDirectoryV1FilesDirectoriesPostBody =
   zCreateWorkspaceDirectoryRequest;
@@ -4170,6 +4332,15 @@ export const zCreateAttachmentUploadUrlV1FilesUploadUrlPostBody =
 export const zCreateAttachmentUploadUrlV1FilesUploadUrlPostResponse =
   zPresignUploadResponse;
 
+export const zPlanWorkspaceUploadsV1FilesUploadUrlsPostBody =
+  zUploadPlanRequest;
+
+/**
+ * Successful Response
+ */
+export const zPlanWorkspaceUploadsV1FilesUploadUrlsPostResponse =
+  zUploadPlanResponse;
+
 export const zDeleteWorkspaceFileV1FilesFilePathDeletePath = z.object({
   file_path: z.string(),
 });
@@ -4211,9 +4382,11 @@ export const zGetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetRespo
   zEffectivePolicyResponse;
 
 export const zGetInboxItemsV1InboxGetQuery = z.object({
-  status: z.string().nullish(),
+  status: z
+    .enum(["waiting_for_approval", "waiting_for_input", "completed", "failed"])
+    .nullish(),
   agent_id: z.string().uuid().nullish(),
-  page: z.number().int().gte(1).optional().default(1),
+  page: z.number().int().gte(1).lte(1000000).optional().default(1),
   page_size: z.number().int().gte(1).lte(1000).optional().default(100),
 });
 
@@ -4222,23 +4395,31 @@ export const zGetInboxItemsV1InboxGetQuery = z.object({
  */
 export const zGetInboxItemsV1InboxGetResponse = zInboxResponse;
 
-export const zAcceptInvitationV1InvitationsAcceptPostBody =
-  zAcceptInvitationBody;
+/**
+ * Response List Invitations V1 Invitations Get
+ *
+ * Successful Response
+ */
+export const zListInvitationsV1InvitationsGetResponse =
+  z.array(zInvitationResponse);
+
+export const zCreateInvitationV1InvitationsPostBody = zCreateInvitationBody;
 
 /**
  * Successful Response
  */
-export const zAcceptInvitationV1InvitationsAcceptPostResponse =
-  zAcceptInvitationResponse;
+export const zCreateInvitationV1InvitationsPostResponse =
+  zInvitationCreatedResponse;
 
-export const zPreviewInvitationV1InvitationsPreviewPostBody =
-  zInvitationPreviewBody;
+export const zRevokeInvitationV1InvitationsInvitationIdDeletePath = z.object({
+  invitation_id: z.string().uuid(),
+});
 
 /**
  * Successful Response
  */
-export const zPreviewInvitationV1InvitationsPreviewPostResponse =
-  zInvitationPreviewResponse;
+export const zRevokeInvitationV1InvitationsInvitationIdDeleteResponse =
+  z.void();
 
 /**
  * Response List Mcp Auth Configs V1 Mcp Auth Configs  Get
@@ -4340,13 +4521,6 @@ export const zOauthAuthorizeV1McpOauthAuthorizePostBody =
 export const zOauthAuthorizeV1McpOauthAuthorizePostResponse = z.record(
   z.string()
 );
-
-export const zOauthCallbackV1McpOauthCallbackGetQuery = z.object({
-  code: z.string().optional(),
-  state: z.string().optional(),
-  error: z.string().optional(),
-  error_description: z.string().optional(),
-});
 
 export const zOauthPreflightV1McpOauthPreflightGetQuery = z.object({
   instance_id: z.string().uuid().nullish(),
@@ -4495,7 +4669,8 @@ export const zListMcpServersV1McpServersGetQuery = z.object({
   status: z.string().nullish(),
   is_public: z.boolean().nullish(),
   tag: z.string().nullish(),
-  page: z.number().int().gte(1).optional().default(1),
+  ids: z.array(z.string().uuid()).max(100).nullish(),
+  page: z.number().int().gte(1).lte(1000000).optional().default(1),
   page_size: z.number().int().gte(1).lte(100).optional().default(50),
   search: z.string().nullish(),
 });
@@ -4542,17 +4717,21 @@ export const zDeployMcpServerV1McpServersServerIdDeployPostPath = z.object({
   server_id: z.string(),
 });
 
-export const zProxyInstanceV1McpInstanceIdMcpDeletePath = z.object({
-  instance_id: z.string().uuid(),
+/**
+ * Response List Members V1 Members Get
+ *
+ * Successful Response
+ */
+export const zListMembersV1MembersGetResponse = z.array(zMemberResponse);
+
+export const zRemoveMemberV1MembersUserIdDeletePath = z.object({
+  user_id: z.string(),
 });
 
-export const zProxyInstanceV1McpInstanceIdMcpGetPath = z.object({
-  instance_id: z.string().uuid(),
-});
-
-export const zProxyInstanceV1McpInstanceIdMcpPostPath = z.object({
-  instance_id: z.string().uuid(),
-});
+export const zRemoveMemberV1MembersUserIdDeleteResponse = z.union([
+  zMemberRemovalPendingResponse,
+  z.void(),
+]);
 
 export const zListModelInstancesV1ModelInstancesGetQuery = z.object({
   provider_config_id: z.string().uuid().nullish(),
@@ -4714,7 +4893,7 @@ export const zListConnectionsV1OpenapiConnectionsGetQuery = z.object({
   status: z.string().nullish(),
   search: z.string().nullish(),
   limit: z.number().int().gte(1).lte(1000).optional().default(100),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -4851,8 +5030,8 @@ export const zResolvePrincipalsV1PrincipalsGetResponse =
   z.array(zPrincipalResponse);
 
 export const zListProjectsV1ProjectsGetQuery = z.object({
-  limit: z.number().int().optional().default(100),
-  offset: z.number().int().optional().default(0),
+  limit: z.number().int().gte(1).lte(1000).optional().default(100),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -4932,23 +5111,25 @@ export const zListProjectFilesV1ProjectsProjectIdFilesGetPath = z.object({
 export const zListProjectFilesV1ProjectsProjectIdFilesGetResponse =
   zProjectFileListResponse;
 
-export const zUploadProjectFileV1ProjectsProjectIdFilesPostBody =
-  zBodyUploadProjectFileV1ProjectsProjectIdFilesPost;
-
-export const zUploadProjectFileV1ProjectsProjectIdFilesPostPath = z.object({
-  project_id: z.string().uuid(),
-});
-
-/**
- * Successful Response
- */
-export const zUploadProjectFileV1ProjectsProjectIdFilesPostResponse = z.void();
-
 export const zStreamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGetPath =
   z.object({
     project_id: z.string().uuid(),
     file_path: z.string(),
   });
+
+export const zPlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostBody =
+  zUploadPlanRequest;
+
+export const zPlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostPath =
+  z.object({
+    project_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zPlanProjectUploadsV1ProjectsProjectIdFilesUploadUrlsPostResponse =
+  zUploadPlanResponse;
 
 export const zDeleteProjectFileV1ProjectsProjectIdFilesFilePathDeletePath =
   z.object({
@@ -5201,7 +5382,7 @@ export const zBrowseCatalogV1RegistriesCatalogBrowseGetQuery = z.object({
   protocol: z.enum(["mcp", "api"]).nullish(),
   sort: z.string().nullish(),
   limit: z.number().int().gte(1).lte(500).optional().default(50),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -5255,7 +5436,7 @@ export const zSearchCatalogV1RegistriesCatalogSearchGetQuery = z.object({
   tag: z.string().nullish(),
   update_available: z.boolean().nullish(),
   limit: z.number().int().gte(1).lte(500).optional().default(50),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -5298,7 +5479,7 @@ export const zListRegistryItemsV1RegistriesRegistryIdItemsGetPath = z.object({
 
 export const zListRegistryItemsV1RegistriesRegistryIdItemsGetQuery = z.object({
   limit: z.number().int().gte(1).lte(500).optional().default(50),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -5405,6 +5586,21 @@ export const zRotateSecretV1SecretsSecretIdValuePutPath = z.object({
 export const zRotateSecretV1SecretsSecretIdValuePutResponse = zSecretResponse;
 
 /**
+ * Successful Response
+ */
+export const zGetWorkspaceSettingsV1SettingsGetResponse =
+  zWorkspaceSettingsResponse;
+
+export const zUpdateWorkspaceSettingsV1SettingsPutBody =
+  zWorkspaceSettingsUpdate;
+
+/**
+ * Successful Response
+ */
+export const zUpdateWorkspaceSettingsV1SettingsPutResponse =
+  zWorkspaceSettingsResponse;
+
+/**
  * Response List Collections V1 Skill Collections  Get
  *
  * Successful Response
@@ -5486,7 +5682,7 @@ export const zListSkillsV1SkillsGetQuery = z.object({
   source_type: z.string().nullish(),
   network_scope: z.string().nullish(),
   from_registry: z.boolean().nullish(),
-  page: z.number().int().gte(1).optional().default(1),
+  page: z.number().int().gte(1).lte(1000000).optional().default(1),
   page_size: z.number().int().gte(1).lte(100).optional().default(50),
   search: z.string().nullish(),
 });
@@ -5627,9 +5823,29 @@ export const zRemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeletePath =
   });
 
 export const zGetAllTasksV1TasksGetQuery = z.object({
-  status: z.string().nullish(),
+  status: z
+    .array(
+      z.enum([
+        "submitted",
+        "pending",
+        "preparing",
+        "scheduled",
+        "running",
+        "working",
+        "waiting_for_input",
+        "waiting_for_approval",
+        "waiting_for_continuation",
+        "blocked",
+        "completed",
+        "failed",
+        "cancelled",
+      ])
+    )
+    .nullish(),
+  created_by: z.string().nullish(),
+  search: z.string().nullish(),
   limit: z.number().int().gte(1).lte(1000).optional().default(100),
-  offset: z.number().int().gte(0).optional().default(0),
+  offset: z.number().int().gte(0).lte(1000000000).optional().default(0),
 });
 
 /**
@@ -5739,7 +5955,7 @@ export const zGetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetPath =
 
 export const zGetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetQuery =
   z.object({
-    page: z.number().int().gte(1).optional().default(1),
+    page: z.number().int().gte(1).lte(1000000).optional().default(1),
     page_size: z.number().int().gte(1).lte(100).optional().default(50),
   });
 
@@ -5798,7 +6014,7 @@ export const zGetExecutionHistoryV1TriggersTriggerIdExecutionsGetPath =
 
 export const zGetExecutionHistoryV1TriggersTriggerIdExecutionsGetQuery =
   z.object({
-    page: z.number().int().gte(1).optional().default(1),
+    page: z.number().int().gte(1).lte(1000000).optional().default(1),
     page_size: z.number().int().gte(1).lte(100).optional().default(50),
     status: z.string().nullish(),
     start_time: z.string().datetime().nullish(),
@@ -5868,129 +6084,6 @@ export const zGetExecutionTimelineV1TriggersTriggerIdTimelineGetQuery =
  */
 export const zGetExecutionTimelineV1TriggersTriggerIdTimelineGetResponse =
   zExecutionTimelineResponse;
-
-export const zListUsageEventsV1UsageEventsGetQuery = z.object({
-  source: z.string().nullish(),
-  kind: z.string().nullish(),
-  resource_kind: z.string().nullish(),
-  resource_id: z.string().nullish(),
-  task_id: z.string().nullish(),
-  from: z.string().nullish(),
-  until: z.string().nullish(),
-  cursor: z
-    .string()
-    .regex(/^[1-9]\d{0,18}$/)
-    .nullish(),
-  limit: z.number().int().gte(1).lte(100).optional().default(50),
-});
-
-/**
- * Successful Response
- */
-export const zListUsageEventsV1UsageEventsGetResponse = zUsageEventListResponse;
-
-/**
- * Successful Response
- */
-export const zGetDashboardV1WorkspaceDashboardGetResponse = zDashboardResponse;
-
-/**
- * Successful Response
- */
-export const zExportWorkspaceConfigV1WorkspaceExportGetResponse = z.string();
-
-/**
- * Successful Response
- */
-export const zGetWorkspaceSettingsV1WorkspaceSettingsGetResponse =
-  zWorkspaceSettingsResponse;
-
-export const zUpdateWorkspaceSettingsV1WorkspaceSettingsPutBody =
-  zWorkspaceSettingsUpdate;
-
-/**
- * Successful Response
- */
-export const zUpdateWorkspaceSettingsV1WorkspaceSettingsPutResponse =
-  zWorkspaceSettingsResponse;
-
-/**
- * Response List Workspaces V1 Workspaces Get
- *
- * Successful Response
- */
-export const zListWorkspacesV1WorkspacesGetResponse =
-  z.array(zWorkspaceResponse);
-
-export const zCreateWorkspaceV1WorkspacesPostBody = zCreateWorkspaceBody;
-
-/**
- * Successful Response
- */
-export const zCreateWorkspaceV1WorkspacesPostResponse = zWorkspaceResponse;
-
-export const zListInvitationsV1WorkspacesWorkspaceIdInvitationsGetPath =
-  z.object({
-    workspace_id: z.string(),
-  });
-
-/**
- * Response List Invitations V1 Workspaces  Workspace Id  Invitations Get
- *
- * Successful Response
- */
-export const zListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponse =
-  z.array(zInvitationResponse);
-
-export const zCreateInvitationV1WorkspacesWorkspaceIdInvitationsPostBody =
-  zCreateInvitationBody;
-
-export const zCreateInvitationV1WorkspacesWorkspaceIdInvitationsPostPath =
-  z.object({
-    workspace_id: z.string(),
-  });
-
-/**
- * Successful Response
- */
-export const zCreateInvitationV1WorkspacesWorkspaceIdInvitationsPostResponse =
-  zInvitationCreatedResponse;
-
-export const zRevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeletePath =
-  z.object({
-    workspace_id: z.string(),
-    invitation_id: z.string().uuid(),
-  });
-
-/**
- * Successful Response
- */
-export const zRevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteResponse =
-  z.void();
-
-export const zListMembersV1WorkspacesWorkspaceIdMembersGetPath = z.object({
-  workspace_id: z.string(),
-});
-
-/**
- * Response List Members V1 Workspaces  Workspace Id  Members Get
- *
- * Successful Response
- */
-export const zListMembersV1WorkspacesWorkspaceIdMembersGetResponse =
-  z.array(zMemberResponse);
-
-export const zRemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeletePath =
-  z.object({
-    workspace_id: z.string(),
-    user_id: z.string(),
-  });
-
-/**
- * Successful Response
- */
-export const zRemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponse =
-  z.void();
 
 /**
  * Response Webhook Health Check Webhooks Health Get

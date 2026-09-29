@@ -4,7 +4,7 @@ import { createElement, useEffect, useState } from "react";
 import Image from "next/image";
 import { AlertCircle, Globe, Plug } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { getBuiltinToolIcon } from "@/app/(main)/agents/create/utils/builtinToolUtils";
+import { getBuiltinToolIcon } from "@/app/w/[workspace]/(main)/agents/create/utils/builtinToolUtils";
 import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,

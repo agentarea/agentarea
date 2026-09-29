@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getTaskEvents } from "@/hooks/actions";
 import { useSSE } from "@/hooks/useSSE";
+import { useWorkspaceSlug } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage, type ApiResultLike } from "@/lib/api-errors";
+import { withWorkspaceQuery } from "@/lib/workspaces";
 import type {
   DisplayEvent,
   EventLevel,
@@ -9,7 +11,11 @@ import type {
 } from "@/types/events";
 import { canonicalType, EventInput, Part, TERMINAL_TYPES } from "./contract";
 import { loadAllTaskEventPages, TaskEventsHistoryError } from "./history";
-import { normalizeHistory, normalizeSSEEvent } from "./normalize";
+import {
+  eventTimestamp,
+  normalizeHistory,
+  normalizeSSEEvent,
+} from "./normalize";
 import {
   applyEvent,
   CompletedRun,
@@ -85,18 +91,17 @@ function toDisplayRow(
   index: number
 ): DisplayEvent {
   const canonical = canonicalType(eventType);
-  const rawTs =
-    (typeof data.timestamp === "string" && data.timestamp) ||
-    (typeof data.original_timestamp === "string" && data.original_timestamp) ||
-    null;
-  const ts = rawTs ? new Date(rawTs) : new Date();
+  const timestamp = eventTimestamp(data);
+  if (timestamp === null) {
+    console.error(`Task event ${canonical} carries no timestamp`, data);
+  }
   const id =
     (typeof data.event_id === "string" && data.event_id) ||
     `${canonical}-${index}`;
   return {
     id,
     type: canonical as WorkflowEventType,
-    timestamp: Number.isNaN(ts.getTime()) ? new Date() : ts,
+    timestamp,
     title: canonical,
     description: rowDescription(canonical, data),
     level: rowLevel(canonical),
@@ -185,9 +190,13 @@ export function useTaskEvents(
     [applyOne, includeHistory]
   );
 
+  const workspaceSlug = useWorkspaceSlug();
   const sseUrl =
     agentId && taskId && autoConnect
-      ? `/api/sse/agents/${agentId}/tasks/${taskId}/events/stream`
+      ? withWorkspaceQuery(
+          `/api/sse/agents/${agentId}/tasks/${taskId}/events/stream`,
+          workspaceSlug
+        )
       : null;
 
   const handleSSEMessage = useCallback(

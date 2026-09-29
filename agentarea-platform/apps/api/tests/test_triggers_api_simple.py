@@ -172,7 +172,7 @@ class TestTriggerCredentialFlagFailures:
         mock_trigger.webhook_type = "telegram"
         mock_trigger_service.get_trigger.return_value = mock_trigger
 
-        response = client.get(f"/v1/triggers/{mock_trigger.id}")
+        response = client.get(f"/v1/workspaces/acme/triggers/{mock_trigger.id}")
 
         assert response.status_code == 200
         assert response.json()["has_channel_credentials"] is False
@@ -184,7 +184,7 @@ class TestTriggerCredentialFlagFailures:
         mock_trigger.webhook_type = "telegram"
         mock_trigger_service.list_triggers.return_value = [mock_trigger]
 
-        response = client.get("/v1/triggers/")
+        response = client.get("/v1/workspaces/acme/triggers/")
 
         assert response.status_code == 200
         assert len(response.json()) == 1
@@ -220,7 +220,7 @@ class TestTriggersAPISimple:
         }
 
         # Make request
-        response = client.post("/v1/triggers/", json=request_data)
+        response = client.post("/v1/workspaces/acme/triggers/", json=request_data)
 
         # Assertions
         assert response.status_code == 201
@@ -249,7 +249,7 @@ class TestTriggersAPISimple:
         mock_trigger_service.list_triggers.return_value = triggers
 
         # Make request
-        response = client.get("/v1/triggers/")
+        response = client.get("/v1/workspaces/acme/triggers/")
 
         # Assertions
         assert response.status_code == 200
@@ -272,7 +272,7 @@ class TestTriggersAPISimple:
         mock_trigger_service.get_trigger.return_value = mock_trigger
 
         # Make request
-        response = client.get(f"/v1/triggers/{trigger_id}")
+        response = client.get(f"/v1/workspaces/acme/triggers/{trigger_id}")
 
         # Assertions
         assert response.status_code == 200
@@ -293,7 +293,7 @@ class TestTriggersAPISimple:
 
         # Make request
         trigger_id = str(uuid4())
-        response = client.get(f"/v1/triggers/{trigger_id}")
+        response = client.get(f"/v1/workspaces/acme/triggers/{trigger_id}")
 
         # Assertions
         assert response.status_code == 404
@@ -312,7 +312,7 @@ class TestTriggersAPISimple:
 
         # Make request
         trigger_id = str(uuid4())
-        response = client.delete(f"/v1/triggers/{trigger_id}")
+        response = client.delete(f"/v1/workspaces/acme/triggers/{trigger_id}")
 
         # Assertions
         assert response.status_code == 204
@@ -330,7 +330,7 @@ class TestTriggersAPISimple:
 
         # Make request
         trigger_id = str(uuid4())
-        response = client.post(f"/v1/triggers/{trigger_id}/enable")
+        response = client.post(f"/v1/workspaces/acme/triggers/{trigger_id}/enable")
 
         # Assertions
         assert response.status_code == 200
@@ -351,7 +351,7 @@ class TestTriggersAPISimple:
         }
 
         # Make request
-        response = client.get("/v1/triggers/health")
+        response = client.get("/v1/workspaces/acme/triggers/health")
 
         # Assertions
         assert response.status_code == 200
@@ -367,7 +367,7 @@ class TestTriggersAPISimple:
             "trigger_type": "invalid_type",
         }
 
-        response = client.post("/v1/triggers/", json=request_data)
+        response = client.post("/v1/workspaces/acme/triggers/", json=request_data)
 
         # Should fail validation
         assert response.status_code == 422
@@ -377,7 +377,7 @@ class TestTriggersAPISimple:
         """Test trigger creation with missing required fields using sync client."""
         request_data = {"description": "Missing required fields"}
 
-        response = client.post("/v1/triggers/", json=request_data)
+        response = client.post("/v1/workspaces/acme/triggers/", json=request_data)
 
         # Should fail validation
         assert response.status_code == 422

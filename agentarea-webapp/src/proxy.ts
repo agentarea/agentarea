@@ -6,7 +6,34 @@ import {
   loginRedirectPath,
 } from "@/lib/auth-session";
 import { createOryMiddleware } from "@/lib/ory/middleware";
+import { workspaceSlugFromPath } from "@/lib/workspace-routes";
+import { WORKSPACE_REFERENCE_HEADER } from "@/lib/workspaces";
 import oryConfig from "@/ory.config";
+
+/**
+ * Scope a `/w/{slug}/...` request to its workspace. Pages, RSC fetches and
+ * server actions (which post to the page URL) all read the header set here;
+ * a client-supplied value is overwritten so the URL is the only source.
+ */
+function scopeToWorkspace(request: NextRequest, slug: string) {
+  const headers = new Headers(request.headers);
+  headers.set(WORKSPACE_REFERENCE_HEADER, slug);
+  return NextResponse.next({ request: { headers } });
+}
+
+/**
+ * Pass a request off any workspace page through without a client-supplied
+ * workspace header, so server code only ever sees a slug taken from the URL.
+ */
+function unscoped(request: NextRequest) {
+  const headers = new Headers(request.headers);
+  headers.delete(WORKSPACE_REFERENCE_HEADER);
+  return NextResponse.next({ request: { headers } });
+}
+
+// What NextResponse.next() marks a pass-through with, as opposed to a response
+// the Ory proxy produced itself.
+const PASS_THROUGH_MARKER = "x-middleware-next";
 
 // This function can be marked `async` if using `await` inside
 // The middleware automatically reads ORY_SDK_URL from environment variables
@@ -34,7 +61,7 @@ export const proxy = async (request: Request) => {
   const nextReq = request as NextRequest;
   const pathname = nextReq.nextUrl.pathname;
   if (pathname === "/app-sandbox") {
-    return NextResponse.next();
+    return unscoped(nextReq);
   }
   if (isProtectedRoute(pathname)) {
     const alive = await hasLiveSession(nextReq.headers.get("cookie"), {
@@ -54,9 +81,15 @@ export const proxy = async (request: Request) => {
     }
   }
 
-  const response = createOryMiddleware(oryConfig)(nextReq);
+  const slug = workspaceSlugFromPath(pathname);
+  if (slug) {
+    return scopeToWorkspace(nextReq, slug);
+  }
 
-  return response;
+  const response = await createOryMiddleware(oryConfig)(nextReq);
+  return response.headers.has(PASS_THROUGH_MARKER)
+    ? unscoped(nextReq)
+    : response;
 };
 
 export const config = {

@@ -1,9 +1,21 @@
+from decimal import Decimal
 from importlib import import_module
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from agentarea_common.constants import MANAGED_BY_PLATFORM, PLATFORM_WORKSPACE_ID
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    ColumnElement,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    or_,
+    select,
+    true,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -48,6 +60,16 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
     # for a key there leaves the user with a required field they can only satisfy
     # by inventing a value.
     requires_api_key: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    @classmethod
+    def workspace_visibility(cls, workspace_id: str) -> ColumnElement[bool]:
+        """Every workspace reads every provider type.
+
+        A provider spec is a global catalog entry keyed by the unique
+        ``provider_key``; ``workspace_id`` only records who installed it first,
+        and every tenant's configurations point at the one row.
+        """
+        return true()
 
     # Relationships (lazy="selectin" for async compatibility)
     provider_configs = relationship(
@@ -107,6 +129,11 @@ class ProviderConfig(BaseModel, WorkspaceScopedMixin):
     # disagree.
     managed_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
+    @classmethod
+    def workspace_visibility(cls, workspace_id: str) -> ColumnElement[bool]:
+        """The workspace's own configurations, plus the platform-managed ones."""
+        return or_(cls.workspace_id == workspace_id, cls.managed_by == MANAGED_BY_PLATFORM)
+
     # Relationships (lazy="selectin" for async compatibility)
     provider_spec = relationship("ProviderSpec", back_populates="provider_configs", lazy="selectin")
     model_instances = relationship(
@@ -142,8 +169,8 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     context_window: Mapped[int] = mapped_column(Integer, nullable=False)
     max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    input_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True)
-    output_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True)
+    input_cost_per_token: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
+    output_cost_per_token: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
     supports_function_calling: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )
@@ -153,6 +180,11 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
         String, nullable=True, default=None
     )  # "static", "hybrid", "dynamic" — resolved per agent execution
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    @classmethod
+    def workspace_visibility(cls, workspace_id: str) -> ColumnElement[bool]:
+        """The workspace's own specs, plus the platform's, which any instance may use."""
+        return or_(cls.workspace_id == workspace_id, cls.workspace_id == PLATFORM_WORKSPACE_ID)
 
     # Relationships (lazy="selectin" for async compatibility)
     provider_spec = relationship("ProviderSpec", back_populates="model_specs", lazy="selectin")
@@ -180,6 +212,16 @@ class ModelInstance(BaseModel, WorkspaceScopedMixin):
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    @classmethod
+    def workspace_visibility(cls, workspace_id: str) -> ColumnElement[bool]:
+        """The workspace's own instances, plus those on a platform-managed configuration."""
+        return or_(
+            cls.workspace_id == workspace_id,
+            cls.provider_config_id.in_(
+                select(ProviderConfig.id).where(ProviderConfig.managed_by == MANAGED_BY_PLATFORM)
+            ),
+        )
 
     # Relationships (lazy="selectin" for async compatibility)
     provider_config = relationship(

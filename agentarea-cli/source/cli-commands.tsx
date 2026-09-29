@@ -17,6 +17,7 @@ import {
 	verbsFor,
 } from './commands/router.js';
 import {flushAndExit} from './commands/output.js';
+import {runFilesSync} from './commands/filesSync.js';
 
 interface CliOptions {
 	token?: string;
@@ -60,6 +61,18 @@ export async function handleCliCommand(
 
 	if (command === 'logout') {
 		return runLogout();
+	}
+
+	if (command === 'workspace' && subcommand === 'use') {
+		const slug = options.args?.[2];
+		if (!slug) {
+			console.error('Usage: agentarea workspace use <slug>');
+			await flushAndExit(1);
+		}
+
+		configManager.set('workspace', slug);
+		console.error(`Workspace-scoped commands now run in "${slug}".`);
+		await flushAndExit(0);
 	}
 
 	// Load token from CLI flag, environment, or the stored OAuth session
@@ -116,6 +129,17 @@ export async function handleCliCommand(
 
 	if (command === 'tasks' && subcommand === 'watch') {
 		await flushAndExit(await runTasksWatch(pathArgs[0], pathArgs[1]));
+	}
+
+	if (command === 'files' && subcommand === 'sync') {
+		if (!loadedToken) {
+			console.error(
+				'Not signed in. Run `agentarea login --api-url=<api>` first (or pass --token).',
+			);
+			await flushAndExit(1);
+		}
+
+		await flushAndExit(await runFilesSync(pathArgs[0], pathArgs[1], rawFlags));
 	}
 
 	if (command === 'connect' || (command === 'mcp' && subcommand === 'sync')) {

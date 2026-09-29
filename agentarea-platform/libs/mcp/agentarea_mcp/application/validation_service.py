@@ -188,19 +188,21 @@ class MCPConfigurationValidator:
                 except httpx.ConnectError:
                     # If golang manager is not available, log warning but continue with basic validation
                     logger.warning(
-                        "Golang MCP manager not available for validation, using basic validation only"
+                        "Golang MCP manager not available for validation, using basic validation only",
+                        exc_info=True,
                     )
 
                 except httpx.TimeoutException:
                     logger.warning(
-                        "Golang MCP manager validation timed out, using basic validation only"
+                        "Golang MCP manager validation timed out, using basic validation only",
+                        exc_info=True,
                     )
 
                 except Exception as e:
-                    logger.error(f"Error during golang manager validation: {e}")
+                    logger.exception(f"Error during golang manager validation: {e}")
 
         except Exception as e:
-            logger.error(f"Failed to validate with golang manager: {e}")
+            logger.exception(f"Failed to validate with golang manager: {e}")
             # Don't add error here - we'll fall back to basic validation
 
         return errors

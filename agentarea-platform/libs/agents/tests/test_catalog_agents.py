@@ -8,6 +8,8 @@ no database.
 
 from uuid import UUID, uuid4
 
+import pytest
+
 from agentarea_agents.application.agent_service import AgentService, _project_catalog_item
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.catalog_agent_repository import (
@@ -23,7 +25,7 @@ def _item(item_id=None, name="Built-in", version="1", installed_version=None, sp
         name=name,
         description="desc",
         version=version,
-        spec=spec or {"instruction": "do x", "model_id": "m1"},
+        spec=spec or {"instruction": "do x", "model_id": "m1", "tools": []},
         installed_entity_id=None,
         installed_version=installed_version,
     )
@@ -203,6 +205,16 @@ async def test_list_excludes_catalog_by_default():
     assert all(not getattr(a, "is_catalog", False) for a in result)
     # Update flagging still works without projecting the catalog.
     assert getattr(forked_copy, "update_available", False) is True
+
+
+async def test_install_refuses_a_catalog_agent_without_a_tools_list():
+    # Forking copies the catalog's tools verbatim; a spec with no list is a broken
+    # catalog entry, not "no tools".
+    item = _item(spec={"instruction": "do x"})
+    svc = _service(FakeAgentRepo(), FakeCatalogRepo([item]))
+
+    with pytest.raises(ValueError, match="no tools list"):
+        await svc.install_catalog_agent(UUID(item.id))
 
 
 async def test_install_catalog_agent_forks_once():

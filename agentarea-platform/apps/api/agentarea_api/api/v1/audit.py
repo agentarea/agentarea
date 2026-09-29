@@ -1,6 +1,5 @@
 """Audit log API endpoints."""
 
-from datetime import datetime
 from typing import Annotated, cast
 from uuid import UUID
 
@@ -9,7 +8,7 @@ from agentarea_common.audit.repository import AuditRepository
 from agentarea_common.auth import UserContextDep
 from agentarea_common.auth.route_authz import requires_workspace_admin
 from agentarea_common.config.database import get_db_session
-from agentarea_common.utils.types import UtcDatetime
+from agentarea_common.utils.types import NaiveUtcDatetime, UtcDatetime
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,8 +72,8 @@ async def list_audit_logs(
     actor_id: str | None = Query(None, description="Filter by actor ID"),
     resource_type: str | None = Query(None, description="Filter by resource type"),
     resource_id: str | None = Query(None, description="Filter by resource ID"),
-    since: datetime | None = Query(None, description="Events after this time (ISO 8601)"),
-    until: datetime | None = Query(None, description="Events before this time (ISO 8601)"),
+    since: NaiveUtcDatetime | None = Query(None, description="Events after this time (ISO 8601)"),
+    until: NaiveUtcDatetime | None = Query(None, description="Events before this time (ISO 8601)"),
     cursor: UUID | None = Query(None, description="Cursor for pagination"),
     limit: int = Query(50, ge=1, le=100, description="Max events to return"),
 ):

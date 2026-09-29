@@ -1,10 +1,11 @@
 "use client";
 
 import React from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { ChevronDown } from "lucide-react";
-import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import type { HumanInputSecretValue } from "@/components/Chat/types";
+import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useTaskActions } from "@/hooks/useTaskActions";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
 import { useTaskEvents } from "@/lib/events/useTaskEvents";
 import { getTaskStatusPresentation } from "@/lib/status";
@@ -50,7 +52,9 @@ export default function AgentChat({
   status = "",
   className = "",
 }: AgentChatProps) {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
+  const t = useTranslations("Chat.errors");
+  const tCommon = useTranslations("Common");
 
   const {
     parts,
@@ -60,13 +64,18 @@ export default function AgentChat({
     terminalMessage,
     status: streamStatus,
     completedRuns,
+    error: eventsError,
+    refresh: refreshEvents,
   } = useTaskEvents(agent.id, taskId, {
     includeHistory: true,
     autoConnect: true,
   });
 
   const actions = useTaskActions(agent.id, taskId);
-  const { dispatchAction } = useA2UIActions(agent.id, taskId);
+  const { dispatchAction, error: a2uiError } = useA2UIActions(
+    agent.id,
+    taskId
+  );
   const effectiveStatus = parts.length > 0 ? streamStatus : status;
 
   const {
@@ -89,6 +98,9 @@ export default function AgentChat({
 
   const [input, setInput] = React.useState("");
   const [sending, setSending] = React.useState(false);
+  const [composerError, setComposerError] = React.useState<string | null>(
+    null
+  );
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   const isActive =
@@ -97,6 +109,7 @@ export default function AgentChat({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
+    setComposerError(null);
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = "auto";
@@ -110,14 +123,17 @@ export default function AgentChat({
       answers: Record<string, unknown>,
       secrets: Record<string, HumanInputSecretValue>
     ) => {
-      const { error } = await actions.submitInput(
+      setComposerError(null);
+      const result = await actions.submitInput(
         inputRequestId,
         answers,
         secrets
       );
-      if (error) toast.error("Failed to submit response");
+      if (result.error) {
+        setComposerError(apiErrorMessage(result, t("submitResponseFailed")));
+      }
     },
-    [actions]
+    [actions, t]
   );
 
   const handleSend = async (e: React.FormEvent) => {
@@ -125,6 +141,7 @@ export default function AgentChat({
     const message = input.trim();
     if ((!message && selectedFiles.length === 0) || sending) return;
     setSending(true);
+    setComposerError(null);
     try {
       const delivery = await deliverTaskMessage({
         actions,
@@ -139,15 +156,15 @@ export default function AgentChat({
           QUEUEABLE_STATUSES.includes(effectiveStatus),
       });
       if (delivery.route === "followup" && !delivery.taskId) {
-        toast.error("Failed to create new task");
+        setComposerError(apiErrorMessage(delivery, t("createTaskFailed")));
         return;
       }
       if (delivery.route === "input" && delivery.error) {
-        toast.error("Failed to submit response");
+        setComposerError(apiErrorMessage(delivery, t("submitResponseFailed")));
         return;
       }
       if (delivery.route === "queue" && delivery.error) {
-        toast.error("Failed to send message");
+        setComposerError(apiErrorMessage(delivery, t("sendFailed")));
         return;
       }
 
@@ -158,9 +175,8 @@ export default function AgentChat({
         router.push(`/tasks/${delivery.taskId}`);
       }
     } catch (err) {
-      toast.error("Failed to send message", {
-        description: err instanceof Error ? err.message : String(err),
-      });
+      console.error("Failed to send message", err);
+      setComposerError(`${t("sendFailed")}: ${formatApiError(err)}`);
     } finally {
       setSending(false);
     }
@@ -189,6 +205,14 @@ export default function AgentChat({
           onScroll={handleScroll}
           className="mx-auto flex w-full max-w-3xl flex-1 flex-col space-y-4 overflow-y-auto px-4 py-4 md:px-6"
         >
+          {eventsError && (
+            <div className="flex flex-col items-start gap-2">
+              <FormError className="w-full">{eventsError}</FormError>
+              <Button size="xs" variant="ghost" onClick={refreshEvents}>
+                {tCommon("retry")}
+              </Button>
+            </div>
+          )}
           {buildActivitySegments(parts, completedRuns).map((segment) =>
             segment.kind === "work" ? (
               <ActivityGroup
@@ -237,6 +261,12 @@ export default function AgentChat({
       <CardFooter className="p-0">
         <div className="w-full bg-background">
           <div className="mx-auto w-full max-w-3xl px-4 py-3 md:px-6">
+            {(composerError || a2uiError) && (
+              <div className="mb-2 space-y-2">
+                {composerError && <FormError>{composerError}</FormError>}
+                {a2uiError && <FormError>{a2uiError}</FormError>}
+              </div>
+            )}
             <ChatInputArea
               input={input}
               onInputChange={handleInputChange}

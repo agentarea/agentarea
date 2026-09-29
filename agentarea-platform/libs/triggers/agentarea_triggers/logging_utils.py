@@ -57,10 +57,10 @@ class TriggerLogger:
         formatted_message = self._format_message(message, **kwargs)
         self.logger.info(formatted_message)
 
-    def warning(self, message: str, **kwargs):
+    def warning(self, message: str, exc_info: bool = False, **kwargs):
         """Log warning message with correlation context."""
         formatted_message = self._format_message(message, **kwargs)
-        self.logger.warning(formatted_message)
+        self.logger.warning(formatted_message, exc_info=exc_info)
 
     def error(self, message: str, exc_info: bool = False, **kwargs):
         """Log error message with correlation context."""
@@ -169,7 +169,7 @@ def log_trigger_operation(operation: str, trigger_id: UUID | None = None, **cont
                 return result
             except Exception as e:
                 error_context = {**log_context, "error": str(e)}
-                logger.error(f"Failed {operation}: {e}", **error_context)
+                logger.error(f"Failed {operation}: {e}", **error_context, exc_info=True)
                 raise
 
         return wrapper

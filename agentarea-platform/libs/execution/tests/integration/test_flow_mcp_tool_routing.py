@@ -50,7 +50,6 @@ async def _build_config(request: AgentConfigRequest) -> dict[str, Any]:
         "instruction": "You are a helpful assistant.",
         "tools": [{"type": "mcp", "name": GITHUB_ID, "settings": {"allowed_tools": None}}],
         "context_window": 128000,
-        "events_config": {},
         "planning": False,
     }
 

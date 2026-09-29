@@ -252,8 +252,8 @@ git commit -am "fix: critical bug, bump to 0.0.9"
 - `scripts/verify-version-sync.sh` — consistency check
 - `scripts/sync-versions.py` — emergency resync
 - `scripts/update-appversion.py` — sync Chart.yaml appVersion to VERSION
-- `scripts/bump-chart-version.py` — chart version bumper (used by release-helm.yml)
+- `scripts/bump-chart-version.py` — bumps every top-level chart under `charts/` (used by release-helm.yml)
 - `.github/workflows/release-prepare.yaml` — opens release PR
 - `.github/workflows/ci.yml` → `docker-build-push.yml` — builds `<version>-<sha>` on main
 - `.github/workflows/release-publish.yaml` — retags on tag push, creates GitHub Release
-- `.github/workflows/release-helm.yml` — publishes Helm chart on tag push
+- `.github/workflows/release-helm.yml` — publishes every chart under `charts/` on tag push

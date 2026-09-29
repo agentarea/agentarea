@@ -3,6 +3,7 @@ import { env } from "@/env";
 import { formatApiError } from "@/lib/api-errors";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
+import { fillWorkspace } from "@/lib/workspace-url";
 
 export async function GET(
   request: NextRequest,
@@ -18,23 +19,17 @@ export async function GET(
     // variant 307-redirects to this one, and undici throws `TypeError: fetch
     // failed` when it follows a redirect into a long-lived event-stream body.
     const backendUrl = env.API_URL;
-    const eventsUrl = `${backendUrl}/v1/agents/${agentId}/tasks/${taskId}/events/stream`;
+    const eventsUrl = fillWorkspace(
+      `${backendUrl}/v1/workspaces/{workspace}/agents/${agentId}/tasks/${taskId}/events/stream`,
+      resolveRequestWorkspaceSlug(request)
+    );
 
-    // Create headers for backend request
     const headers: Record<string, string> = {
       Accept: "text/event-stream",
     };
 
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    // Same workspace selection /api/proxy sends. Without it the backend scopes
-    // the stream to the token's personal workspace, so a task viewed in any
-    // other workspace resolves to 404 and the stream never opens.
-    const workspaceSlug = await resolveRequestWorkspaceSlug(request);
-    if (workspaceSlug) {
-      headers["X-Workspace-Slug"] = workspaceSlug;
     }
 
     const response = await fetch(eventsUrl, {

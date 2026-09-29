@@ -19,7 +19,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from agentarea_common.channel_origin import drop_channel_origin, reject_channel_origin
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS
 from agentarea_triggers.domain.enums import TriggerType, WebhookType
@@ -33,13 +33,14 @@ from agentarea_triggers.domain.models import (
 TriggerTypeLiteral = Literal["cron", "webhook", "polling"]
 
 
-class TriggerCreate(BaseModel):
-    """Payload for creating a trigger.
+class TriggerSpec(BaseModel):
+    """Everything about a trigger except the agent it fires.
 
     A trigger fires an agent — either on a cron schedule (``trigger_type='cron'``)
     or in response to an inbound webhook (``trigger_type='webhook'``). For poll-based
     channels (e.g. email inbox), use ``trigger_type='polling'`` plus a
-    ``data_extractor`` configuration.
+    ``data_extractor`` configuration. Creating an agent takes a list of these,
+    because the agent does not exist yet when they are written.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -53,9 +54,6 @@ class TriggerCreate(BaseModel):
         default="",
         max_length=1000,
         description="Short summary of what this trigger does.",
-    )
-    agent_id: UUID = Field(
-        description="UUID of the agent to invoke when the trigger fires.",
     )
     trigger_type: TriggerTypeLiteral = Field(
         description="'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven.",
@@ -158,8 +156,16 @@ class TriggerCreate(BaseModel):
             raise ValueError(f"Invalid webhook type. Must be one of: {valid_types}")
         return v.lower()
 
-    def to_domain(self, created_by: str, workspace_id: str | None = None) -> _DomainTriggerCreate:
-        """Build the internal domain ``TriggerCreate`` value object.
+    @model_validator(mode="after")
+    def _require_cron_expression(self) -> TriggerSpec:
+        if self.trigger_type == "cron" and not self.cron_expression:
+            raise ValueError("cron_expression is required when trigger_type is 'cron'")
+        return self
+
+    def to_domain_for(
+        self, agent_id: UUID, created_by: str, workspace_id: str | None = None
+    ) -> _DomainTriggerCreate:
+        """Build the internal domain ``TriggerCreate`` for ``agent_id``.
 
         The auto-generated ``webhook_id`` (when omitted for webhook triggers)
         is handled here so callers don't have to repeat the logic.
@@ -180,7 +186,7 @@ class TriggerCreate(BaseModel):
         domain_obj = _DomainTriggerCreate(
             name=self.name,
             description=self.description,
-            agent_id=self.agent_id,
+            agent_id=agent_id,
             trigger_type=domain_type,
             task_parameters=self.task_parameters,
             conditions=self.conditions,
@@ -202,6 +208,18 @@ class TriggerCreate(BaseModel):
         # (test fixtures, system contexts) without re-validating.
         domain_obj.workspace_id = workspace_id
         return domain_obj
+
+
+class TriggerCreate(TriggerSpec):
+    """Payload for creating a trigger on an existing agent."""
+
+    agent_id: UUID = Field(
+        description="UUID of the agent to invoke when the trigger fires.",
+    )
+
+    def to_domain(self, created_by: str, workspace_id: str | None = None) -> _DomainTriggerCreate:
+        """Build the internal domain ``TriggerCreate`` value object."""
+        return self.to_domain_for(self.agent_id, created_by, workspace_id)
 
 
 class TriggerUpdate(BaseModel):

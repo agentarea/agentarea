@@ -1,11 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useBillingUrl } from "@/lib/use-billing-url";
-import Link from "next/link";
 import { CreditCard, LogOut, Settings } from "lucide-react";
-import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
-import { deterministicHue } from "@/lib/avatar-hue";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,20 +11,24 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import Link from "@/components/WorkspaceLink";
 import { useAuth } from "@/hooks/useAuth";
 import { APP_VERSION } from "@/lib/app-version";
-
+import { deterministicHue } from "@/lib/avatar-hue";
+import { useWorkspaceBillingUrl } from "@/lib/use-billing-url";
 
 export function NavUser() {
   const t = useTranslations("NavUser");
-  // Empty on any deployment that does not sell, which is the open default.
-  const billingUrl = useBillingUrl();
+  // Empty on any deployment that does not sell, which is the open default,
+  // and off a workspace page.
+  const billingUrl = useWorkspaceBillingUrl();
   const { isMobile } = useSidebar();
   const { user: authUser, isLoaded, signOut } = useAuth();
   const user = authUser
@@ -121,10 +121,7 @@ export function NavUser() {
               </DropdownMenuItem>
               {billingUrl ? (
                 <DropdownMenuItem asChild className="cursor-pointer">
-                  <Link
-                    href={billingUrl}
-                    className="flex w-full items-center"
-                  >
+                  <Link href={billingUrl} className="flex w-full items-center">
                     <CreditCard className="mr-2 size-4" />
                     {t("billing")}
                   </Link>

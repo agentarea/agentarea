@@ -45,8 +45,7 @@ class TasksToolset(Toolset):
 
     @tool_method
     async def set_status(self, task_id: str, status: str) -> str:
-        """
-        Set status of a task. Status must be one of: pending, in_progress,
+        """Set status of a task. Status must be one of: pending, in_progress,
         completed, cancelled, blocked.
         """
         status_enum = TaskStatus(status)

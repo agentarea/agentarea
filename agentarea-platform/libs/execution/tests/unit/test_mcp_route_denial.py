@@ -7,7 +7,7 @@ the call against the agent's own attachment rather than trusting disclosure.
 
 from uuid import uuid4
 
-from agentarea_execution.activities.agent_execution_activities import mcp_route_denial
+from agentarea_execution.activities.agent.tools import mcp_route_denial
 from agentarea_execution.models import McpToolRoute
 
 GITHUB = str(uuid4())

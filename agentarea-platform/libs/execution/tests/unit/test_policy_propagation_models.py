@@ -159,7 +159,9 @@ def test_llm_activity_timeout_allows_large_generations():
 
 
 def test_workflow_continue_as_new_and_activity_payloads_carry_effective_policy():
-    source = inspect.getsource(AgentExecutionWorkflow)
+    source = "".join(
+        inspect.getsource(part) for part in AgentExecutionWorkflow.__mro__ if part is not object
+    )
 
     assert "ContinueAsNewState(" in source
     assert "effective_policy=self.state.effective_policy" in source

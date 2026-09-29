@@ -38,7 +38,7 @@ async def set_webhook(bot_token: str, url: str, secret_token: str | None = None)
             resp.raise_for_status()
         return True
     except httpx.HTTPError as e:
-        logger.warning("Telegram setWebhook failed: %s", e)
+        logger.warning("Telegram setWebhook failed: %s", e, exc_info=True)
         return False
 
 
@@ -51,7 +51,7 @@ async def delete_webhook(bot_token: str) -> bool:
             resp.raise_for_status()
         return True
     except httpx.HTTPError as e:
-        logger.warning("Telegram deleteWebhook failed: %s", e)
+        logger.warning("Telegram deleteWebhook failed: %s", e, exc_info=True)
         return False
 
 
@@ -185,7 +185,7 @@ class TelegramAdapter:
                         resp = await client.post(url, json=payload)
                 resp.raise_for_status()
         except httpx.HTTPError as e:
-            logger.error("Telegram send failed: %s", e)
+            logger.exception("Telegram send failed: %s", e)
 
     async def _resolve_bot_token(self, channel_config: dict[str, Any]) -> str | None:
         """Resolve bot token from the secret store.

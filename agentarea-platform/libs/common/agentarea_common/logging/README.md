@@ -311,10 +311,6 @@ Enable debug logging to troubleshoot issues:
 setup_logging(level="DEBUG")
 ```
 
-## Integration Examples
-
-See `integration_example.py` for complete FastAPI integration examples and `demo.py` for a working demonstration of all features.
-
 ## Requirements
 
 This module satisfies the following requirements from the user-workspace-system spec:

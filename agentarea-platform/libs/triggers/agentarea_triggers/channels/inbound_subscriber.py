@@ -185,6 +185,7 @@ class InboundMessageStreamConsumer:
 
         from agentarea_common.auth.context import UserContext
         from agentarea_common.base.repository_factory import RepositoryFactory
+        from agentarea_common.base.tenant_scope import unscoped, workspace_scope
         from agentarea_common.config import get_database
         from agentarea_tasks.infrastructure.repository import TaskRepository
         from agentarea_tasks.task_service import TaskService
@@ -196,7 +197,10 @@ class InboundMessageStreamConsumer:
 
         database = get_database()
         async with database.async_session_factory() as session:
-            trigger_orm = await session.get(TriggerORM, UUID(trigger_id))
+            with unscoped(
+                "an inbound channel event names a trigger; the trigger's workspace runs it"
+            ):
+                trigger_orm = await session.get(TriggerORM, UUID(trigger_id))
             if not trigger_orm:
                 raise ValueError(f"trigger {trigger_id} not found")
 
@@ -205,37 +209,38 @@ class InboundMessageStreamConsumer:
                 workspace_id=str(trigger_orm.workspace_id),
             )
 
-            repository_factory = RepositoryFactory(session, user_context)
-            task_repository = repository_factory.create_repository(TaskRepository)
+            with workspace_scope(user_context.workspace_id):
+                repository_factory = RepositoryFactory(session, user_context)
+                task_repository = repository_factory.create_repository(TaskRepository)
 
-            task_manager = TemporalTaskManager(
-                task_repository=task_repository, temporal_executor=self._workflow_executor
-            )
-
-            task_service = TaskService(
-                repository_factory=repository_factory,
-                event_broker=self._event_broker,
-                task_manager=task_manager,
-            )
-
-            trigger_service = TriggerService(
-                repository_factory=repository_factory,
-                event_broker=self._event_broker,
-                task_service=task_service,
-                llm_condition_evaluator=build_condition_evaluator(
-                    session=session,
-                    user_context=user_context,
-                    secret_manager=self._secret_manager_factory.create(
-                        session=session, user_context=user_context
-                    ),
-                    event_broker=self._event_broker,
-                ),
-            )
-
-            execution = await trigger_service.execute_trigger(UUID(trigger_id), trigger_data)
-            if execution:
-                logger.info(
-                    "Trigger %s executed, task_id=%s",
-                    trigger_id,
-                    execution.task_id,
+                task_manager = TemporalTaskManager(
+                    task_repository=task_repository, temporal_executor=self._workflow_executor
                 )
+
+                task_service = TaskService(
+                    repository_factory=repository_factory,
+                    event_broker=self._event_broker,
+                    task_manager=task_manager,
+                )
+
+                trigger_service = TriggerService(
+                    repository_factory=repository_factory,
+                    event_broker=self._event_broker,
+                    task_service=task_service,
+                    llm_condition_evaluator=build_condition_evaluator(
+                        session=session,
+                        user_context=user_context,
+                        secret_manager=self._secret_manager_factory.create(
+                            session=session, user_context=user_context
+                        ),
+                        event_broker=self._event_broker,
+                    ),
+                )
+
+                execution = await trigger_service.execute_trigger(UUID(trigger_id), trigger_data)
+                if execution:
+                    logger.info(
+                        "Trigger %s executed, task_id=%s",
+                        trigger_id,
+                        execution.task_id,
+                    )

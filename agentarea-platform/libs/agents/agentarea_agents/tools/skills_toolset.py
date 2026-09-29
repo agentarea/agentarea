@@ -32,6 +32,7 @@ from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires,
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 
+from agentarea_agents.infrastructure.github_skill_importer import extract_skill_package
 from agentarea_agents.schemas.skills_dto import (
     SkillCreateFromArchive,
     SkillCreateFromFiles,
@@ -47,9 +48,6 @@ MAX_INLINE_BYTES = 5 * 1024 * 1024  # 5 MB total across the file map
 MAX_PATH_DEPTH = 10
 MAX_GITHUB_SKILL_CANDIDATES = 50
 MAX_GITHUB_IMPORTS = 10
-MAX_GITHUB_REPO_ZIP_BYTES = 25 * 1024 * 1024
-MAX_GITHUB_PACKAGE_FILES = 200
-MAX_GITHUB_PACKAGE_BYTES = 10 * 1024 * 1024
 FRONTMATTER_NAME_RE = re.compile(r"^name:\s*['\"]?(?P<name>[^'\"\n]+?)['\"]?\s*$", re.MULTILINE)
 FRONTMATTER_DESCRIPTION_RE = re.compile(
     r"^description:\s*['\"]?(?P<description>[^'\"\n]+?)['\"]?\s*$",
@@ -217,53 +215,6 @@ def _select_github_candidates(
         return candidates
 
     raise ValueError("Multiple skills found")
-
-
-async def _github_skill_package_zip(
-    repo_zip_data: bytes,
-    *,
-    package_path: str | None,
-) -> bytes:
-    """Re-root one skill package from a GitHub repository ZIP."""
-    package_prefix = f"{package_path.strip('/')}/" if package_path else ""
-
-    out = io.BytesIO()
-    with (
-        zipfile.ZipFile(io.BytesIO(repo_zip_data)) as source,
-        zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as target,
-    ):
-        selected: list[zipfile.ZipInfo] = []
-        total_size = 0
-        for info in source.infolist():
-            if info.is_dir():
-                continue
-            parts = info.filename.split("/", 1)
-            if len(parts) != 2:
-                continue
-            relative = parts[1]
-            if package_prefix:
-                if not relative.startswith(package_prefix):
-                    continue
-                relative = relative[len(package_prefix) :]
-            if not relative or relative.startswith("__MACOSX/"):
-                continue
-            selected.append(info)
-            total_size += info.file_size
-            if len(selected) > MAX_GITHUB_PACKAGE_FILES:
-                raise ValueError(
-                    f"GitHub skill package contains more than {MAX_GITHUB_PACKAGE_FILES} files"
-                )
-            if total_size > MAX_GITHUB_PACKAGE_BYTES:
-                mb = MAX_GITHUB_PACKAGE_BYTES // (1024 * 1024)
-                raise ValueError(f"GitHub skill package exceeds {mb} MB uncompressed limit")
-
-        for info in selected:
-            relative = info.filename.split("/", 1)[1]
-            if package_prefix:
-                relative = relative[len(package_prefix) :]
-            target.writestr(relative, source.read(info.filename))
-
-    return out.getvalue()
 
 
 @toolset(
@@ -480,9 +431,6 @@ class SkillsToolset(Toolset):
             from agentarea_agents.infrastructure.github_skill_importer import GitHubSkillImporter
 
             repo_zip_data = await GitHubSkillImporter().download_repo(github_url)
-            if len(repo_zip_data) > MAX_GITHUB_REPO_ZIP_BYTES:
-                mb = MAX_GITHUB_REPO_ZIP_BYTES // (1024 * 1024)
-                return json.dumps({"error": f"GitHub repository ZIP exceeds {mb} MB limit"})
         except Exception as exc:
             return json.dumps({"error": str(exc)})
 
@@ -494,7 +442,7 @@ class SkillsToolset(Toolset):
             repo = service._get_repository()
             for candidate in selected:
                 try:
-                    zip_data = await _github_skill_package_zip(
+                    zip_data = extract_skill_package(
                         repo_zip_data,
                         package_path=candidate.get("package_path") or "",
                     )

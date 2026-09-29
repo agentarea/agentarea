@@ -1,0 +1,98 @@
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import { getTranslations } from "next-intl/server";
+import { redirect } from "next/navigation";
+import { AdminOnlyState } from "@/components/AdminOnlyState";
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { FormSkeleton } from "@/components/Skeleton";
+import ProviderConfigFormWrapper from "./components/ProviderConfigFormWrapper";
+import { Button } from "@/components/ui/button";
+import { getProviderSpec } from "@/lib/api";
+import { getViewerCapabilities } from "@/lib/workspace-context";
+import { workspacePath } from "@/lib/workspace-routes";
+
+export const metadata: Metadata = {
+  title: "Create Provider Config",
+};
+
+export default async function CreateProviderConfigPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ workspace: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const [{ workspace }, resolvedSearchParams] = await Promise.all([
+    params,
+    searchParams,
+  ]);
+  const [t, { canAdminister }] = await Promise.all([
+    getTranslations("Models"),
+    getViewerCapabilities(),
+  ]);
+
+  if (!canAdminister) {
+    return (
+      <ContentBlock
+        header={{
+          breadcrumb: [
+            { label: t("title"), href: "/models" },
+            { label: t("createConfig") },
+          ],
+        }}
+      >
+        <AdminOnlyState what="providerConfigs" />
+      </ContentBlock>
+    );
+  }
+
+  // Get the provider_spec_id from query params if provided
+  const preselectedProviderId =
+    typeof resolvedSearchParams.provider_spec_id === "string"
+      ? resolvedSearchParams.provider_spec_id
+      : undefined;
+
+  // If provider_spec_id is provided, redirect to the dynamic route
+  if (preselectedProviderId) {
+    redirect(workspacePath(workspace, `/models/create/${preselectedProviderId}`));
+  }
+
+  // Load provider spec name for breadcrumb (if provider_spec_id is provided)
+  let providerSpecName: string | undefined;
+  if (preselectedProviderId) {
+    try {
+      const specResponse = await getProviderSpec(preselectedProviderId);
+      providerSpecName = specResponse?.data?.name;
+    } catch (error) {
+      console.error("Failed to load provider spec name:", error);
+    }
+  }
+
+  return (
+    <ContentBlock
+      header={{
+        breadcrumb: [
+          { label: t("title"), href: "/models" },
+          { label: providerSpecName || t("createConfig") },
+        ],
+        controls: (
+          <div className="flex items-center gap-2 py-1">
+            <Button size="xs" type="submit" form="provider-config-form">
+              {t("createConfig") as string}
+            </Button>
+          </div>
+        ),
+      }}
+    >
+      <Suspense
+        key={preselectedProviderId || "create"}
+        fallback={<FormSkeleton />}
+      >
+        <ProviderConfigFormWrapper
+          preselectedProviderId={preselectedProviderId}
+          isEdit={false}
+        />
+      </Suspense>
+    </ContentBlock>
+  );
+}

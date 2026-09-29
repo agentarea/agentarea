@@ -8,6 +8,7 @@ from uuid import UUID
 import httpx
 from agentarea_api.api.deps.services import get_openapi_connection_service
 from agentarea_common.auth.route_authz import requires, unrestricted
+from agentarea_common.base.pagination import MAX_OFFSET
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_openapi.application.service import OpenAPIConnectionService, fetch_and_parse_spec
@@ -43,6 +44,7 @@ class OpenAPIConnectionResponse(BaseModel):
     auth_config_id: UUID | None = None
     registry_item_id: UUID | None = None
     custom_headers: list[HeaderOutput] | None = None
+    url_variables: list[str] | None = None
     available_tools: list[OpenAPIToolResponse]
     status: str
     created_at: UtcDatetime
@@ -118,7 +120,7 @@ async def preview_spec(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except httpx.RequestError as e:
-            logger.error("Failed to fetch spec from %s: %s", request.spec_url, e)
+            logger.exception("Failed to fetch spec from %s: %s", request.spec_url, e)
             raise HTTPException(
                 status_code=400, detail="Failed to fetch spec from the provided URL."
             ) from e
@@ -175,7 +177,7 @@ async def create_connection(
             detail=f"Failed to fetch spec: HTTP {e.response.status_code}",
         ) from e
     except httpx.RequestError as e:
-        logger.error("Failed to fetch spec during connection create: %s", e)
+        logger.exception("Failed to fetch spec during connection create: %s", e)
         raise HTTPException(
             status_code=400, detail="Failed to fetch spec from the provided URL."
         ) from e
@@ -192,7 +194,7 @@ async def list_connections(
     status: str | None = Query(None),
     search: str | None = Query(None),
     limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
 ):
     connections, _total = await service.list_connections(
@@ -279,5 +281,5 @@ async def discover_tools(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Failed to discover tools for {connection_id}: {e}")
+        logger.exception(f"Failed to discover tools for {connection_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to discover tools") from e

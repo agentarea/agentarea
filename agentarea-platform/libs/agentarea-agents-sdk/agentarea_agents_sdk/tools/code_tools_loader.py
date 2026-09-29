@@ -115,7 +115,7 @@ def _meta_to_dict(meta: ToolsetMetadata, cls: type) -> dict[str, Any]:
         "description": meta.description,
         "category": meta.category,
         "plane": meta.plane,
-        "enabled_by_default": meta.enabled_by_default,
+        "group": meta.group,
         "requires_user_confirmation": meta.requires_user_confirmation,
         "available_methods": _tool_methods(cls),
         "class_path": f"{cls.__module__}.{cls.__name__}",
@@ -181,5 +181,5 @@ def create_code_tool_instance(
         logger.debug("Creating %s with default constructor", tool_name)
         return cls()
     except Exception as exc:
-        logger.error("Failed to create tool instance %s: %s", tool_name, exc)
+        logger.exception("Failed to create tool instance %s: %s", tool_name, exc)
         return None

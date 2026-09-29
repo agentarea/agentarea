@@ -31,6 +31,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from agentarea_agents.domain.models import Agent
+from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.config.database import db
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from agentarea_tasks.infrastructure.orm import TaskORM
@@ -333,6 +334,7 @@ async def main() -> None:
 
     random.seed()
 
+    bind_workspace_scope(args.workspace_id)
     async with db.session() as session:
         if args.reset:
             await reset_seeded(session, args.workspace_id)

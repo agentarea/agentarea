@@ -1,7 +1,7 @@
 "use client";
 
 import React, { Suspense, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { useTranslations } from "next-intl";
 import { Lock, Sparkles } from "lucide-react";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
@@ -33,7 +33,7 @@ export function WorkplaceOnboarding({
 }: WorkplaceOnboardingProps) {
   const t = useTranslations("WorkplacePage.onboarding");
   const tHero = useTranslations("Workplace.hero");
-  const router = useRouter();
+  const router = useWorkspaceRouter();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 

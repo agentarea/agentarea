@@ -59,7 +59,7 @@ class ConnectionManager:
                     f"{type(self._event_broker_singleton).__name__}"
                 )
             except Exception as e:
-                logger.error(f"Failed to create Redis event broker: {e}")
+                logger.exception(f"Failed to create Redis event broker: {e}")
                 raise e
         else:
             logger.debug("Reusing existing Redis event broker singleton")
@@ -87,7 +87,7 @@ class ConnectionManager:
                 self._execution_service_singleton = ExecutionService(orchestrator)
                 logger.info("Created Temporal execution service singleton")
             except Exception as e:
-                logger.error(f"Failed to create Temporal execution service: {e}")
+                logger.exception(f"Failed to create Temporal execution service: {e}")
                 raise e
         else:
             logger.debug("Reusing existing Temporal execution service singleton")
@@ -148,7 +148,7 @@ class ConnectionManager:
 
                 logger.info("Cleaned up execution service singleton")
             except Exception as e:
-                logger.warning(f"Error cleaning up execution service: {e}")
+                logger.warning(f"Error cleaning up execution service: {e}", exc_info=True)
             finally:
                 self._execution_service_singleton = None
 
@@ -188,9 +188,11 @@ async def cleanup_connections():
         # Add timeout to prevent hanging during shutdown
         await asyncio.wait_for(manager.shutdown(), timeout=5.0)
     except TimeoutError:
-        logger.warning("Connection cleanup timed out after 5 seconds, forcing shutdown")
+        logger.warning(
+            "Connection cleanup timed out after 5 seconds, forcing shutdown", exc_info=True
+        )
     except Exception as e:
-        logger.error(f"Error during connection cleanup: {e}")
+        logger.exception(f"Error during connection cleanup: {e}")
     finally:
         # Always reset the singleton
         ConnectionManager.reset_instance()

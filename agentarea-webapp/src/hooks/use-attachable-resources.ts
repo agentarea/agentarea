@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type {
-  McpServerResponse,
   SecretResponse,
   SkillResponse,
   WorkspaceFileInfo,
@@ -10,7 +9,7 @@ import type {
 import type { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
 import {
   listMCPServerInstancesAction,
-  listMCPServersAction,
+  listMCPServerSpecsAction,
   listSkillsAction,
   listWorkspaceFilesAction,
   listWorkspaceSecretsAction,
@@ -68,14 +67,22 @@ export function useAttachableResources({
     setLoading(true);
 
     async function load() {
-      const [skillsResult, instancesResult, serversResult, filesResult, secretsResult] =
+      const [skillsResult, instancesResult, filesResult, secretsResult] =
         await Promise.allSettled([
           listSkillsAction(),
           listMCPServerInstancesAction(),
-          listMCPServersAction({ page_size: 100 }),
           withFiles ? listWorkspaceFilesAction() : Promise.resolve(null),
           withSecrets ? listWorkspaceSecretsAction() : Promise.resolve(null),
         ]);
+      const instances =
+        instancesResult.status === "fulfilled"
+          ? (instancesResult.value.data ?? [])
+          : [];
+      // Exactly the specs these instances use: the paged spec list would leave
+      // out any whose spec is not on its first page.
+      const [specsResult] = await Promise.allSettled([
+        listMCPServerSpecsAction(instances.map((instance) => instance.server_spec_id)),
+      ]);
       if (cancelled) return;
 
       const broke = (result: PromiseSettledResult<{ error?: unknown } | null>) =>
@@ -86,14 +93,10 @@ export function useAttachableResources({
           ? ((skillsResult.value.data as SkillResponse[]) ?? [])
           : []
       );
-      setMcpInstances(
-        instancesResult.status === "fulfilled"
-          ? (instancesResult.value.data ?? [])
-          : []
-      );
+      setMcpInstances(instances);
       setMcpServers(
-        serversResult.status === "fulfilled"
-          ? normalizeServers(serversResult.value.data)
+        specsResult.status === "fulfilled"
+          ? ((specsResult.value.data ?? []) as McpServer[])
           : []
       );
       setFiles(
@@ -136,11 +139,4 @@ export function useAttachableResources({
     refresh,
     revision,
   };
-}
-
-/** The servers endpoint answers with a bare array or a paginated envelope. */
-function normalizeServers(data: unknown): McpServer[] {
-  if (Array.isArray(data)) return data as McpServer[];
-  const items = (data as { items?: McpServerResponse[] } | undefined)?.items;
-  return items ?? [];
 }

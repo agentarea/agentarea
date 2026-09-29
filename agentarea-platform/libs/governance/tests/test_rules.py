@@ -323,6 +323,14 @@ class TestTypedParams:
         with pytest.raises(ValueError):
             assert_enforceable(_rule("spend", PolicyEffect.CAP, amount_usd=-5))
 
+    def test_rejects_zero_run_budget(self):
+        """A zero run budget compiles to an invalid document, which would fail every read."""
+        with pytest.raises(ValueError):
+            assert_enforceable(_rule("spend", PolicyEffect.CAP, amount_usd=0, period="run"))
+
+    def test_accepts_zero_monthly_cap(self):
+        assert_enforceable(_rule("spend", PolicyEffect.CAP, amount_usd=0, period="month"))
+
     def test_rejects_zero_service_amount(self):
         with pytest.raises(ValueError):
             assert_enforceable(_rule("service", PolicyEffect.CAP, amount_usd=0))

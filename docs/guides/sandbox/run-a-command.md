@@ -39,7 +39,7 @@ for work that has to happen on a filesystem.
     the agent:
 
     ```bash
-    curl -X POST "$AGENTAREA_URL/v1/agents/" \
+    curl -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/" \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -55,7 +55,7 @@ for work that has to happen on a filesystem.
 
   <Step title="Create a task">
     ```bash
-    curl -X POST "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/" \
+    curl -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/" \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
       -d '{"description": "Create a file called out.txt containing the current date, then show it."}'
@@ -84,14 +84,14 @@ for work that has to happen on a filesystem.
 Poll the task until it reaches a terminal state:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/status" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/status" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 Then read the event stream, which contains the tool calls and their results:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/events" \
   -H "Authorization: Bearer $TOKEN"
 ```
 

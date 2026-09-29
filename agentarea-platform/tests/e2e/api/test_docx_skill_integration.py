@@ -112,7 +112,7 @@ def kimi_model(
 ) -> str:
     pc = (
         alice_client.post(
-            "/v1/provider-configs/",
+            f"{alice_client.ws}/provider-configs/",
             json={
                 "provider_spec_id": openrouter_provider_spec_id,
                 "name": f"docx-e2e-{uuid.uuid4().hex[:6]}",
@@ -126,7 +126,7 @@ def kimi_model(
 
     mi = (
         alice_client.post(
-            "/v1/model-instances/",
+            f"{alice_client.ws}/model-instances/",
             json={
                 "provider_config_id": pc["id"],
                 "model_spec_id": kimi_model_spec_id,
@@ -389,7 +389,7 @@ def docx_skill_id(alice_client: httpx.Client) -> str:
     # Each fixture run uses a fresh ephemeral Kratos user (workspace), so the
     # bare skill name from SKILL.md frontmatter never collides.
     resp = alice_client.post(
-        "/v1/skills/upload",
+        f"{alice_client.ws}/skills/upload",
         files=files,
         timeout=30.0,
     )
@@ -418,7 +418,7 @@ def _tool_calls_observed(events: list[dict]) -> list[str]:
 
 def _read_docx_artifact(client: httpx.Client, agent_id: str, task_id: str) -> bytes:
     """Read the committed DOCX through the authenticated artifact API."""
-    listing = client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/artifacts", timeout=30.0)
+    listing = client.get(f"{client.ws}/agents/{agent_id}/tasks/{task_id}/artifacts", timeout=30.0)
     listing.raise_for_status()
     artifact = next(
         (item for item in listing.json() if item["path"].endswith("/output.docx")),
@@ -461,7 +461,7 @@ def test_docx_skill_end_to_end(
     )
 
     create_resp = alice_client.post(
-        "/v1/agents/",
+        f"{alice_client.ws}/agents/",
         json={
             "name": f"docx-tester-{uuid.uuid4().hex[:6]}",
             "description": "docx-skill e2e",
@@ -484,7 +484,7 @@ def test_docx_skill_end_to_end(
     )
 
     task_resp = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={"description": task_description},
         timeout=30.0,
     )

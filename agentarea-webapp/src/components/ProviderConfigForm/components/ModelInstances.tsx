@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Brain, Check, Eye, RefreshCw, Wrench } from "lucide-react";
-import { toast } from "sonner";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Badge } from "@/components/ui/badge";
 import { ProviderIcon } from "@/components/ui/provider-icon";
@@ -10,6 +9,7 @@ import {
   discoverModelsAction,
   discoverModelsPreviewAction,
 } from "@/lib/server-actions";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { ModelSpec, ProviderSpec } from "@/types/provider";
 import type { SkippedModelResponse } from "@/api/client";
 import { filterModelsByDiscovery } from "./modelDiscovery";
@@ -46,6 +46,8 @@ export default function ModelInstances({
 }: ModelInstancesProps) {
   const t = useTranslations("ProviderConfigForm");
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
+  const [discoverSummary, setDiscoverSummary] = useState<string | null>(null);
   const [discoveredModelNames, setDiscoveredModelNames] =
     useState<ReadonlySet<string> | null>(null);
   // In edit mode, the existing model instances are the source of truth and
@@ -75,22 +77,24 @@ export default function ModelInstances({
     return tokens.toLocaleString();
   };
 
-  const formatCostPerMillion = (costPerToken?: number | null) => {
+  const formatCostPerMillion = (costPerToken?: string | null) => {
     if (costPerToken == null) return "-";
-    return `$${(costPerToken * 1_000_000).toFixed(2)}`;
+    return `$${(Number(costPerToken) * 1_000_000).toFixed(2)}`;
   };
 
   const providerKey: string | undefined = selectedProvider?.provider_key;
 
   const handleDiscoverModels = async () => {
+    setDiscoverError(null);
+    setDiscoverSummary(null);
     if (!providerConfigId) {
       if (!providerKey) {
-        toast.error(t("selectProviderFirst"));
+        setDiscoverError(t("selectProviderFirst"));
         return;
       }
       // Keyless proxies (custom endpoint, no auth) can still be discovered.
       if ((!apiKey || !apiKey.trim()) && (!endpointUrl || !endpointUrl.trim())) {
-        toast.error(t("enterApiKeyToDiscover"));
+        setDiscoverError(t("enterApiKeyToDiscover"));
         return;
       }
     }
@@ -102,39 +106,28 @@ export default function ModelInstances({
       let skipped: SkippedModelResponse[] = [];
 
       if (providerConfigId) {
-        const { data, error } = await discoverModelsAction(providerConfigId);
-        if (error) {
-          const detail = (error as { detail?: unknown })?.detail;
-          toast.error(typeof detail === "string" ? detail : t("failedToDiscover"));
+        const result = await discoverModelsAction(providerConfigId);
+        if (result.error) {
+          setDiscoverError(apiErrorMessage(result, t("failedToDiscover")));
           return;
         }
+        const data = result.data;
         totalCount = data?.discovered ?? 0;
         newCount = data?.new_models ?? 0;
         discoveredNames = data?.models.map((model) => model.model_name) ?? [];
         skipped = data?.skipped ?? [];
       } else {
-        const { data, error } = await discoverModelsPreviewAction({
+        const result = await discoverModelsPreviewAction({
           provider_key: providerKey ?? "",
           api_key: apiKey?.trim() || "",
           endpoint_url: endpointUrl || null,
         });
-        if (error) {
-          // Surface the real backend error. Only fall back to a NEUTRAL generic
-          // message — never blame the API key for non-auth failures (e.g. a 500
-          // would otherwise be reported as "Check API key", which is misleading).
-          const e = error as { detail?: unknown; message?: unknown };
-          const d = e?.detail;
-          const msg =
-            typeof d === "string" && d
-              ? d
-              : Array.isArray(d) && typeof d[0]?.msg === "string"
-                ? d[0].msg
-                : typeof e?.message === "string"
-                  ? e.message
-                  : t("failedToDiscover");
-          toast.error(msg);
+        // The backend's reason, never a guess: a 500 is not a bad API key.
+        if (result.error) {
+          setDiscoverError(apiErrorMessage(result, t("failedToDiscover")));
           return;
         }
+        const data = result.data;
         totalCount = data?.discovered ?? 0;
         newCount = data?.new_models ?? 0;
         discoveredNames = data?.models.map((model) => model.model_name) ?? [];
@@ -148,23 +141,20 @@ export default function ModelInstances({
       // `discovered` counts only the models that were kept. Reporting it alone
       // would present a partial discovery as a complete one, which is exactly
       // what the backend returns `skipped` to prevent.
-      toast.success(
-        summary,
+      setDiscoverSummary(
         skipped.length > 0
-          ? {
-              description: t("discoveredSkipped", {
-                skippedCount: skipped.length,
-                names: skipped.map((model) => model.model_name).join(", "),
-              }),
-            }
-          : undefined,
+          ? `${summary} ${t("discoveredSkipped", {
+              skippedCount: skipped.length,
+              names: skipped.map((model) => model.model_name).join(", "),
+            })}`
+          : summary
       );
       setDiscoveredModelNames(new Set(discoveredNames));
       setHasDiscovered(true);
       await onModelsDiscovered?.();
     } catch (err) {
       console.error("discover models failed", err);
-      toast.error(t("failedToDiscover"));
+      setDiscoverError(`${t("failedToDiscover")}: ${formatApiError(err)}`);
     } finally {
       setIsDiscovering(false);
     }
@@ -255,6 +245,14 @@ export default function ModelInstances({
                 : t("testAndDiscover")}
           </Button>
         </div>
+        {discoverError && (
+          <p role="alert" className="form-error">
+            {discoverError}
+          </p>
+        )}
+        {discoverSummary && (
+          <p className="text-xs text-muted-foreground">{discoverSummary}</p>
+        )}
         <p className="note">
           {t("selectModelsToCreateInstances", {
             providerName: selectedProvider.name,

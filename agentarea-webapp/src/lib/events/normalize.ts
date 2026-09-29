@@ -38,19 +38,32 @@ export function normalizeSSEEvent(type: string, raw: unknown): EventInput | null
  *
  * The row's `id` is the same value the live envelope carries as `event_id`, so
  * it has to travel with the payload: it is what lets the SSE catch-up replay
- * dedup against history instead of folding every row a second time.
+ * dedup against history instead of folding every row a second time. The row's
+ * `timestamp` travels too — metadata never carries one. The row `message` does
+ * not: it is `metadata.message` read back, so it adds nothing to the payload.
  */
 export function normalizeHistory(event: {
   id?: string;
   event_type: string;
+  timestamp: string;
   metadata?: Record<string, unknown> | null;
-  message?: string;
 }): EventInput {
   const meta = asRecord(event.metadata);
   const original = asRecord(meta.original_data);
   const data: RawData = { ...meta, ...original };
   delete data.original_data;
-  if (event.message && data.message === undefined) data.message = event.message;
+  data.timestamp = event.timestamp;
   if (event.id && data.event_id === undefined) data.event_id = event.id;
   return { eventType: event.event_type, data };
+}
+
+/** When the event happened, or null when it carries no usable timestamp. */
+export function eventTimestamp(data: RawData): Date | null {
+  const raw =
+    (typeof data.timestamp === "string" && data.timestamp) ||
+    (typeof data.original_timestamp === "string" && data.original_timestamp) ||
+    null;
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
 }

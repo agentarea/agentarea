@@ -12,7 +12,7 @@ This follows patterns from leading agentic frameworks like AutoGen, CrewAI, and 
 
 # High-level Agent class (recommended for most users)
 from .agents.agent import Agent
-from .agents.basic_agent import run_agent  # noqa: F401
+from .agents.basic_agent import run_agent
 from .context.context_service import (
     ContextEvent,
     ContextService,
@@ -47,36 +47,30 @@ from .tools.tool_executor import ToolExecutor
 from .tools.tool_manager import ToolManager
 
 __all__ = [
-    # High-level Agent (recommended)
     "Agent",
-    "run_agent",
-    # LLM Components
+    "BaseAgentRunner",
+    "BaseTool",
+    "CompletionTool",
+    "ContextEvent",
+    "ContextService",
+    "ExecutionResult",
+    "GoalProgressEvaluator",
+    "InMemoryContextService",
+    "InMemoryTaskService",
     "LLMModel",
     "LLMRequest",
     "LLMResponse",
     "LLMUsage",
-    # Tools
-    "BaseTool",
-    "CompletionTool",
     "MCPTool",
     "MCPToolFactory",
-    "ToolExecutionError",
-    "ToolRegistry",
-    "ToolExecutor",
-    "ToolManager",
-    "TasksToolset",
-    # Services
-    "GoalProgressEvaluator",
-    "InMemoryTaskService",
-    "ContextService",
-    "InMemoryContextService",
-    "ContextEvent",
-    "events_to_messages",
-    # Prompts
     "MessageTemplates",
     "PromptBuilder",
-    # Runners
-    "BaseAgentRunner",
-    "ExecutionResult",
     "RunnerConfig",
+    "TasksToolset",
+    "ToolExecutionError",
+    "ToolExecutor",
+    "ToolManager",
+    "ToolRegistry",
+    "events_to_messages",
+    "run_agent",
 ]

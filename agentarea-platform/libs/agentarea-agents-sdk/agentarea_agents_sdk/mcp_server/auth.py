@@ -13,7 +13,6 @@ authorization requires the access token in every HTTP request; no request
 context is retained between requests.
 """
 
-import dataclasses
 import json
 import logging
 import re
@@ -27,7 +26,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
 
-# ContextVar holding the authenticated UserContext for the current request.
+# ContextVar holding the caller for the current request: a UserPrincipal on the
+# bare and client mounts, a UserContext once a workspace is bound.
 _mcp_user_context_var: ContextVar[Any] = ContextVar("mcp_user_context")
 
 # MCP JSON-RPC methods that are allowed without authentication.
@@ -50,7 +50,7 @@ WORKSPACE_REFERENCE_PATTERN = re.compile(
 
 
 def get_mcp_user_context():
-    """Read the current request's UserContext from the ContextVar.
+    """Read the current request's caller from the ContextVar.
 
     Raises ``RuntimeError`` if called outside an authenticated MCP request.
     """
@@ -70,25 +70,17 @@ class WorkspaceAccessDeniedError(PermissionError):
 async def bind_workspace(reference: str) -> AsyncIterator[None]:
     """Run the enclosed tool call against the workspace *reference* names.
 
-    *reference* is a workspace id or slug. It goes through the same resolver and
-    membership gate as the REST surface, so an unknown workspace and a foreign
-    one are refused alike. The bound context is a copy: the authenticated one
-    may be shared by concurrent calls naming different workspaces.
+    *reference* is a workspace id or slug. It goes through the same membership
+    gate as the REST surface, so an unknown workspace and a foreign one are
+    refused alike. The bound context is a new object: the authenticated
+    principal may be shared by concurrent calls naming different workspaces.
     """
-    from agentarea_common.auth.dependencies import (
-        _apply_workspace_override,
-        _resolve_workspace_reference,
-    )
-    from fastapi import HTTPException
+    from agentarea_common.auth.context import WorkspaceUnreachableError
+    from agentarea_common.auth.dependencies import enter_workspace
 
-    caller = get_mcp_user_context()
-    bound = dataclasses.replace(caller)
-    workspace_id = await _resolve_workspace_reference(bound, reference)
-    if workspace_id is None:
-        raise WorkspaceAccessDeniedError(f"No accessible workspace '{reference}'")
     try:
-        _apply_workspace_override(bound, workspace_id)
-    except HTTPException:
+        bound = await enter_workspace(get_mcp_user_context(), reference)
+    except WorkspaceUnreachableError:
         raise WorkspaceAccessDeniedError(f"No accessible workspace '{reference}'") from None
 
     token = _mcp_user_context_var.set(bound)
@@ -211,65 +203,28 @@ class MCPAuthMiddleware:
     async def _try_authenticate(
         self, bearer_token: str, request: Request, pinned_workspace: str | None = None
     ) -> bool:
-        """Attempt to validate the token and set UserContext. Never raises.
+        """Attempt to validate the token and set the request's caller. Never raises.
 
-        *pinned_workspace* is the workspace the mount's URL names, if any.
-        Returns True when the token is valid but that workspace is not
-        reachable for its principal (the context is then left unset).
+        The caller is the authenticated principal, or -- on a mount whose URL
+        pins a workspace -- that principal acting in it. Returns True when the
+        token is valid but the pinned workspace is not reachable for its
+        principal (the context is then left unset).
         """
         try:
-            from agentarea_common.auth.context import UserContext
-            from agentarea_common.auth.dependencies import (
-                _resolve_accessible_workspaces,
-                _try_hydra_token,
-                _validate_api_key,
-                get_auth_provider,
-            )
+            from agentarea_common.auth.dependencies import resolve_principal_from_token
 
-            api_key_prefix = "aat_"
-
-            # --- API key path ---
-            if bearer_token.startswith(api_key_prefix):
-                user_context = await _validate_api_key(bearer_token, request)
-                if user_context:
-                    await _resolve_accessible_workspaces(user_context)
-                    if not await _select_workspace(user_context, pinned_workspace):
-                        return True
-                    _mcp_user_context_var.set(user_context)
-                    return False
-
-            # --- JWT path (Kratos then Hydra) ---
-            auth_provider = get_auth_provider()
-            auth_result = await auth_provider.verify_token(bearer_token)
-
-            if auth_result.is_authenticated and auth_result.token:
-                # Start on the caller's own workspace; an explicit workspace
-                # reference is applied only after the membership check below.
-                user_context = UserContext(
-                    user_id=auth_result.token.user_id,
-                    workspace_id=auth_result.token.user_id,
-                    email=auth_result.token.email,
-                )
-                await _resolve_accessible_workspaces(user_context)
-                if not await _select_workspace(user_context, pinned_workspace):
-                    return True
-                _mcp_user_context_var.set(user_context)
+            principal = await resolve_principal_from_token(bearer_token, request)
+            if principal is None:
+                logger.debug("MCP auth: token validation failed (no provider accepted)")
                 return False
-
-            # Kratos failed — try Hydra OAuth
-            hydra_context = await _try_hydra_token(bearer_token, request)
-            if hydra_context is not None:
-                await _resolve_accessible_workspaces(hydra_context)
-                if not await _select_workspace(hydra_context, pinned_workspace):
-                    return True
-                _mcp_user_context_var.set(hydra_context)
-                return False
-
-            logger.debug("MCP auth: token validation failed (no provider accepted)")
+            caller = await _select_workspace(principal, pinned_workspace)
+            if caller is None:
+                return True
+            _mcp_user_context_var.set(caller)
             return False
 
         except Exception:
-            logger.debug("MCP auth: token validation error", exc_info=True)
+            logger.warning("MCP auth: token validation error", exc_info=True)
             return False
 
 
@@ -278,41 +233,34 @@ class MCPAuthMiddleware:
 # ---------------------------------------------------------------------------
 
 
-async def _select_workspace(user_context: Any, pinned_workspace: str | None) -> bool:
-    """Apply the workspace a pinned mount names, reusing the REST guard.
+async def _select_workspace(principal: Any, pinned_workspace: str | None) -> Any | None:
+    """Enter the workspace a pinned mount names, through the REST membership gate.
 
     `/mcp` is a second authentication path alongside the `/v1` router. It must
     not re-implement the membership check, or the two drift and only one of them
     gets hardened.
 
-    Returns False when the URL names a workspace the caller cannot reach; the
-    caller then leaves the context unset so the request fails closed. With no
-    pinned workspace nothing is selected here: the bare mount binds one per tool
-    call from the required ``workspace`` argument.
+    Returns None when the URL names a workspace the caller cannot reach; the
+    request then fails closed. With no pinned workspace the principal itself is
+    the caller: the bare mount binds a workspace per tool call from the
+    required ``workspace`` argument.
     """
     if pinned_workspace is None:
-        return True
+        return principal
 
-    from agentarea_common.auth.dependencies import (
-        _apply_workspace_override,
-        _resolve_workspace_reference,
-    )
+    from agentarea_common.auth.context import WorkspaceUnreachableError
+    from agentarea_common.auth.dependencies import enter_workspace
 
     try:
-        workspace_id = await _resolve_workspace_reference(user_context, pinned_workspace)
-        if workspace_id is None:
-            raise LookupError(pinned_workspace)
-        _apply_workspace_override(user_context, workspace_id)
-        return True
-    except Exception:
+        return await enter_workspace(principal, pinned_workspace)
+    except WorkspaceUnreachableError:
         logger.warning(
             "MCP auth: rejected pinned workspace user=%s requested=%s accessible=%s",
-            user_context.user_id,
+            principal.user_id,
             pinned_workspace,
-            user_context.accessible_workspaces,
-            exc_info=True,
+            principal.accessible_workspaces,
         )
-        return False
+        return None
 
 
 def _parse_jsonrpc(body: bytes) -> tuple[str, Any]:

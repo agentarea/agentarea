@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
+import Link from "@/components/WorkspaceLink";
 import { Button } from "@/components/ui/button";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { cn } from "@/lib/utils";

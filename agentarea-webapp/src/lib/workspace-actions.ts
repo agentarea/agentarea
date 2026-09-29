@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import {
   acceptWorkspaceInvitation,
   createWorkspace,
@@ -12,35 +11,7 @@ import {
   classifyInvitationError,
   type InvitationFailure,
 } from "@/lib/invitations";
-import { getWorkspaceContext } from "@/lib/workspace-context";
-import { WORKSPACE_SLUG_COOKIE } from "@/lib/workspaces";
-
-const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
-
-async function setActiveSlug(slug: string) {
-  const cookieStore = await cookies();
-  cookieStore.set(WORKSPACE_SLUG_COOKIE, slug, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: ONE_YEAR_SECONDS,
-  });
-  // Every page's data is workspace-scoped, so switching invalidates the whole
-  // cached tree, not one route.
-  revalidatePath("/", "layout");
-}
-
-export async function switchWorkspaceAction(slug: string) {
-  // Never persist a slug the backend would reject: the cookie is sent with
-  // every subsequent request, so a bad one breaks the whole session.
-  const { workspaces } = await getWorkspaceContext();
-  if (!workspaces.some((workspace) => workspace.slug === slug)) {
-    return { error: "You are not a member of that workspace" };
-  }
-
-  await setActiveSlug(slug);
-  return { ok: true };
-}
+import { getWorkspaces } from "@/lib/workspace-context";
 
 export async function createWorkspaceAction(name: string) {
   const trimmed = name.trim();
@@ -54,7 +25,8 @@ export async function createWorkspaceAction(name: string) {
     };
   }
 
-  await setActiveSlug(data.slug);
+  // The switcher in the root layout lists workspaces.
+  revalidatePath("/", "layout");
   return { data };
 }
 
@@ -94,18 +66,15 @@ export async function acceptInvitationAction(token: string) {
     return { ok: false as const, error: invitationFailure(result) };
   }
 
-  // Joining a workspace is a request to work in it, so it becomes the active one.
-  const { workspaces } = await getWorkspaceContext();
-  const joined = workspaces.find(
+  // Joining a workspace is a request to work in it: the caller navigates there.
+  const joined = (await getWorkspaces()).find(
     (workspace) => workspace.id === result.data?.workspace_id
   );
   if (!joined) {
-    console.error(
-      "[invitation] joined workspace missing from the workspace list:",
-      result.data.workspace_id
+    throw new Error(
+      `Joined workspace ${result.data.workspace_id} is missing from the workspace list`
     );
-    return { ok: true as const };
   }
-  await setActiveSlug(joined.slug);
-  return { ok: true as const };
+  revalidatePath("/", "layout");
+  return { ok: true as const, slug: joined.slug };
 }

@@ -19,18 +19,16 @@ import httpx
 import pytest
 
 
-def _members(client: httpx.Client, workspace_id: str) -> list[dict]:
-    resp = client.get(f"/v1/workspaces/{workspace_id}/members")
+def _members(client: httpx.Client, workspace_path: str) -> list[dict]:
+    resp = client.get(f"{workspace_path}/members")
     resp.raise_for_status()
     return resp.json()
 
 
 def _create_invitation(
-    alice_client: httpx.Client, workspace_id: str, **kwargs
+    alice_client: httpx.Client, workspace_path: str, **kwargs
 ) -> dict:
-    resp = alice_client.post(
-        f"/v1/workspaces/{workspace_id}/invitations", json=kwargs or {}
-    )
+    resp = alice_client.post(f"{workspace_path}/invitations", json=kwargs or {})
     resp.raise_for_status()
     return resp.json()
 
@@ -41,8 +39,9 @@ def test_invitation_happy_path(
 ) -> None:
     """Alice creates invite for her workspace; Bob accepts; Bob is now a member."""
     workspace = alice.identity_id
+    workspace_path = alice_client.ws
 
-    invitation = _create_invitation(alice_client, workspace, email=bob.email.upper())
+    invitation = _create_invitation(alice_client, workspace_path, email=bob.email.upper())
     token = invitation["token"]
     assert invitation["status"] == "pending"
     assert invitation["workspace_id"] == workspace
@@ -51,7 +50,7 @@ def test_invitation_happy_path(
 
     # Bob isn't a member yet — listing his memberships in Alice's workspace
     # would even fail authz, so just confirm Bob can't read Alice's pending list.
-    blocked = bob_client.get(f"/v1/workspaces/{workspace}/invitations")
+    blocked = bob_client.get(f"{workspace_path}/invitations")
     assert blocked.status_code == 403, blocked.text
 
     # Accept as Bob
@@ -66,7 +65,7 @@ def test_invitation_happy_path(
     # A member's email/display_name come from their *identity*, resolved through
     # the identity provider, NOT from the invitation — the invitation email
     # (upper-cased above) only says who may redeem the link.
-    members = _members(bob_client, workspace)
+    members = _members(bob_client, workspace_path)
     user_ids = {m["user_id"] for m in members}
     assert bob.identity_id in user_ids
     bob_member = next(m for m in members if m["user_id"] == bob.identity_id)
@@ -76,7 +75,7 @@ def test_invitation_happy_path(
     # Alice sees the same identity for Bob — resolution is not limited to the
     # caller looking at themselves, which is what made this list read as a
     # column of raw uuids.
-    as_alice = _members(alice_client, workspace)
+    as_alice = _members(alice_client, workspace_path)
     bob_as_alice_sees_him = next(m for m in as_alice if m["user_id"] == bob.identity_id)
     assert bob_as_alice_sees_him["email"] == bob.email
 
@@ -87,11 +86,11 @@ def test_invitation_happy_path(
 
     # joined_at is a recorded fact, not a stamp applied at read time.
     assert bob_as_alice_sees_him["joined_at"] is not None
-    assert _members(alice_client, workspace) == as_alice
+    assert _members(alice_client, workspace_path) == as_alice
 
     # Invitation has flipped to accepted
     pending = alice_client.get(
-        f"/v1/workspaces/{workspace}/invitations"
+        f"{workspace_path}/invitations"
     ).raise_for_status().json()
     assert all(i["id"] != invitation["id"] for i in pending), (
         "accepted invitation should not appear in pending list"
@@ -102,8 +101,8 @@ def test_invitation_happy_path(
 def test_emailed_invitation_is_only_for_its_addressee(
     alice, alice_client: httpx.Client, bob, bob_client: httpx.Client, user_factory
 ) -> None:
-    workspace = alice.identity_id
-    token = _create_invitation(alice_client, workspace, email=bob.email)["token"]
+    workspace_path = alice_client.ws
+    token = _create_invitation(alice_client, workspace_path, email=bob.email)["token"]
 
     carol = user_factory("carol")
     with httpx.Client(
@@ -134,8 +133,8 @@ def test_emailed_invitation_is_only_for_its_addressee(
 def test_double_accept_is_idempotent(
     alice, alice_client: httpx.Client, bob, bob_client: httpx.Client
 ) -> None:
-    workspace = alice.identity_id
-    token = _create_invitation(alice_client, workspace)["token"]
+    workspace_path = alice_client.ws
+    token = _create_invitation(alice_client, workspace_path)["token"]
 
     first = bob_client.post("/v1/invitations/accept", json={"token": token})
     assert first.status_code == 200
@@ -157,8 +156,8 @@ def test_consumed_token_rejected_for_other_user(
     user_factory,
 ) -> None:
     """Once Bob accepts, the same token can't be used by Carol."""
-    workspace = alice.identity_id
-    token = _create_invitation(alice_client, workspace)["token"]
+    workspace_path = alice_client.ws
+    token = _create_invitation(alice_client, workspace_path)["token"]
 
     bob_client.post("/v1/invitations/accept", json={"token": token}).raise_for_status()
 
@@ -177,11 +176,11 @@ def test_consumed_token_rejected_for_other_user(
 def test_revoked_token_rejected(
     alice, alice_client: httpx.Client, bob_client: httpx.Client
 ) -> None:
-    workspace = alice.identity_id
-    invitation = _create_invitation(alice_client, workspace)
+    workspace_path = alice_client.ws
+    invitation = _create_invitation(alice_client, workspace_path)
 
     revoke = alice_client.delete(
-        f"/v1/workspaces/{workspace}/invitations/{invitation['id']}"
+        f"{workspace_path}/invitations/{invitation['id']}"
     )
     assert revoke.status_code == 204
 
@@ -196,8 +195,8 @@ def test_expired_token_rejected(
     """Force expiry via psql since we can't fast-forward time in the worker."""
     from tests.e2e.api.conftest import _psql
 
-    workspace = alice.identity_id
-    invitation = _create_invitation(alice_client, workspace)
+    workspace_path = alice_client.ws
+    invitation = _create_invitation(alice_client, workspace_path)
 
     past = (datetime.utcnow() - timedelta(seconds=10)).isoformat(sep=" ", timespec="seconds")
     _psql(
@@ -219,8 +218,8 @@ def test_invalid_token_404(bob_client: httpx.Client) -> None:
     assert accept.status_code == 404, accept.text
 
 
-def _join(alice_client: httpx.Client, workspace: str, client: httpx.Client) -> None:
-    token = _create_invitation(alice_client, workspace)["token"]
+def _join(alice_client: httpx.Client, workspace_path: str, client: httpx.Client) -> None:
+    token = _create_invitation(alice_client, workspace_path)["token"]
     client.post("/v1/invitations/accept", json={"token": token}).raise_for_status()
 
 
@@ -228,14 +227,15 @@ def _join(alice_client: httpx.Client, workspace: str, client: httpx.Client) -> N
 def test_owner_cannot_be_removed(alice, alice_client: httpx.Client) -> None:
     """The owner keeps access until ownership moves; otherwise the workspace strands."""
     workspace = alice.identity_id
-    _members(alice_client, workspace)  # provisions the owner's membership
+    workspace_path = alice_client.ws
+    _members(alice_client, workspace_path)  # provisions the owner's membership
 
     removed = alice_client.delete(
-        f"/v1/workspaces/{workspace}/members/{alice.identity_id}"
+        f"{workspace_path}/members/{alice.identity_id}"
     )
     assert removed.status_code == 409, removed.text
 
-    user_ids = {m["user_id"] for m in _members(alice_client, workspace)}
+    user_ids = {m["user_id"] for m in _members(alice_client, workspace_path)}
     assert alice.identity_id in user_ids
 
 
@@ -243,8 +243,8 @@ def test_owner_cannot_be_removed(alice, alice_client: httpx.Client) -> None:
 def test_non_owner_cannot_remove_another_member(
     alice, alice_client: httpx.Client, bob, bob_client: httpx.Client, user_factory
 ) -> None:
-    workspace = alice.identity_id
-    _join(alice_client, workspace, bob_client)
+    workspace_path = alice_client.ws
+    _join(alice_client, workspace_path, bob_client)
 
     carol = user_factory("carol")
     with httpx.Client(
@@ -252,14 +252,14 @@ def test_non_owner_cannot_remove_another_member(
         headers={"Authorization": f"Bearer {carol.jwt}"},
         timeout=10.0,
     ) as carol_client:
-        _join(alice_client, workspace, carol_client)
+        _join(alice_client, workspace_path, carol_client)
 
         refused = bob_client.delete(
-            f"/v1/workspaces/{workspace}/members/{carol.identity_id}"
+            f"{workspace_path}/members/{carol.identity_id}"
         )
         assert refused.status_code == 403, refused.text
 
-        still_there = {m["user_id"] for m in _members(carol_client, workspace)}
+        still_there = {m["user_id"] for m in _members(carol_client, workspace_path)}
         assert carol.identity_id in still_there
 
 
@@ -267,13 +267,13 @@ def test_non_owner_cannot_remove_another_member(
 def test_member_can_leave_and_the_owner_can_remove(
     alice, alice_client: httpx.Client, bob, bob_client: httpx.Client, user_factory
 ) -> None:
-    workspace = alice.identity_id
-    _join(alice_client, workspace, bob_client)
+    workspace_path = alice_client.ws
+    _join(alice_client, workspace_path, bob_client)
 
-    left = bob_client.delete(f"/v1/workspaces/{workspace}/members/{bob.identity_id}")
+    left = bob_client.delete(f"{workspace_path}/members/{bob.identity_id}")
     assert left.status_code == 204, left.text
     assert bob.identity_id not in {
-        m["user_id"] for m in _members(alice_client, workspace)
+        m["user_id"] for m in _members(alice_client, workspace_path)
     }
 
     carol = user_factory("carol")
@@ -282,14 +282,14 @@ def test_member_can_leave_and_the_owner_can_remove(
         headers={"Authorization": f"Bearer {carol.jwt}"},
         timeout=10.0,
     ) as carol_client:
-        _join(alice_client, workspace, carol_client)
+        _join(alice_client, workspace_path, carol_client)
 
         removed = alice_client.delete(
-            f"/v1/workspaces/{workspace}/members/{carol.identity_id}"
+            f"{workspace_path}/members/{carol.identity_id}"
         )
         assert removed.status_code == 204, removed.text
         assert carol.identity_id not in {
-            m["user_id"] for m in _members(alice_client, workspace)
+            m["user_id"] for m in _members(alice_client, workspace_path)
         }
 
 
@@ -299,9 +299,10 @@ def test_cross_workspace_listing_forbidden(
 ) -> None:
     """Bob, not a member of Alice's workspace, can't list its invitations or members."""
     workspace = alice.identity_id
+    workspace_path = alice_client.ws
 
-    invitations = bob_client.get(f"/v1/workspaces/{workspace}/invitations")
+    invitations = bob_client.get(f"{workspace_path}/invitations")
     assert invitations.status_code == 403, invitations.text
 
-    members = bob_client.get(f"/v1/workspaces/{workspace}/members")
+    members = bob_client.get(f"{workspace_path}/members")
     assert members.status_code == 403, members.text

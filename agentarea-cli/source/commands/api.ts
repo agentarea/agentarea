@@ -5,10 +5,18 @@ import {
 	TASK_FAILED,
 } from '../services/sse.js';
 import {printJson, reportResult, type SdkResult} from './output.js';
+import {type NonOperationExport} from './types.js';
 
 type SdkFn = (options?: unknown) => Promise<SdkResult>;
 
-const NON_OPERATION_EXPORTS = new Set(['configureApiClient', 'client']);
+const NON_OPERATION_EXPORTS: ReadonlySet<string> = new Set<NonOperationExport>([
+	'configureApiClient',
+	'client',
+	'fillWorkspace',
+	'InvalidWorkspaceError',
+	'isWorkspaceScoped',
+	'MissingWorkspaceError',
+]);
 
 function listOperationIds(): string[] {
 	return Object.keys(sdk)

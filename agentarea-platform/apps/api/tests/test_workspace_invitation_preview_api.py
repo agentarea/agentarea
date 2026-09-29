@@ -15,8 +15,8 @@ import pytest_asyncio
 from agentarea_api.api.v1 import workspace_invitations
 from agentarea_api.main import app
 from agentarea_common.auth.authorization import AuthorizationService
-from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.auth.context import UserContext, UserPrincipal
+from agentarea_common.auth.dependencies import get_principal
 from agentarea_common.auth.identity_directory import IdentityRecord
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.di.container import register_singleton
@@ -87,11 +87,7 @@ def directory(monkeypatch):
 
 
 def _client_as(email: str | None):
-    user_context = MagicMock()
-    user_context.user_id = INVITEE
-    user_context.workspace_id = INVITEE
-    user_context.email = email
-    return user_context
+    return UserPrincipal(user_id=INVITEE, email=email, accessible_workspaces=[])
 
 
 @pytest_asyncio.fixture
@@ -105,7 +101,7 @@ async def make_client(service, memberships):
     clients: list[AsyncClient] = []
 
     def _make(email: str | None) -> AsyncClient:
-        app.dependency_overrides[get_user_context] = lambda: _client_as(email)
+        app.dependency_overrides[get_principal] = lambda: _client_as(email)
         client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
         clients.append(client)
         return client
@@ -119,7 +115,7 @@ async def make_client(service, memberships):
             workspace_invitations.get_session,
             workspace_invitations.get_invitation_service,
             workspace_invitations.get_membership_service,
-            get_user_context,
+            get_principal,
         ):
             app.dependency_overrides.pop(dependency, None)
 

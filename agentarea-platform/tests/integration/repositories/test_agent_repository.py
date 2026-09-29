@@ -64,7 +64,6 @@ def create_test_agent(**kwargs) -> dict:
         "instruction": "You are a helpful test agent",
         "model_id": str(uuid4()),
         "tools": None,
-        "events_config": None,
         "planning": False,
     }
     defaults.update(kwargs)

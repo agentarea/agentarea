@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
     description="Run bash commands in an isolated sandbox.",
     category="utility",
     plane="runtime",
+    group="sandbox",
     requires_user_confirmation=True,
 )
 class ShellToolset(Toolset):

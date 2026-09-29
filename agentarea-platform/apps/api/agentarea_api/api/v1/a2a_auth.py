@@ -8,13 +8,20 @@ import logging
 from typing import Any, ClassVar
 from uuid import UUID
 
-from agentarea_agents.application.agent_service import AgentService
-from agentarea_api.api.deps.services import get_agent_service
-from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.dependencies import get_optional_user
+from agentarea_agents.domain.models import Agent
+from agentarea_api.api.v1 import agents_well_known
+from agentarea_common.auth.context import UserPrincipal
+from agentarea_common.auth.dependencies import (
+    bind_request_workspace,
+    binds_workspace,
+    get_optional_principal,
+)
+from agentarea_common.config.database import get_read_db_session
+from agentarea_common.workspaces.lookup import workspace_slug_for
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +35,7 @@ class A2AAuthContext(BaseModel):
     authenticated: bool
     user_id: str | None = None
     workspace_id: str | None = None
+    workspace_slug: str | None = None
     agent_id: UUID | None = None
     permissions: list[str] = []
     auth_method: str | None = None
@@ -69,33 +77,54 @@ def _a2a_metadata(request: Request, **extra: str | None) -> dict[str, Any]:
     }
 
 
+async def load_a2a_agent(
+    agent_id: str,
+    db_session: AsyncSession = Depends(get_read_db_session),
+) -> Agent:
+    """The agent the A2A URL names, looked up across workspaces.
+
+    Unscoped on purpose: the URL names no workspace, and the caller's
+    authority over the agent's workspace is decided afterwards by the edge
+    authorizer, not by which workspace the lookup happened to run in. A
+    malformed id is parsed here and answers like a missing agent: left to
+    FastAPI, the validation error would not stop the dependencies after this
+    one, which would find no workspace bound and fail as a server error.
+    """
+    try:
+        agent_uuid = UUID(agent_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Agent not found") from None
+    agent = await agents_well_known.get_public_agent(agent_uuid, db_session)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return agent
+
+
 async def require_a2a_auth(
     request: Request,
     agent_id: UUID,
-    permission: str = A2APermissions.AGENT_READ,
-    agent_service: AgentService = Depends(get_agent_service),
-    subject: UserContext | None = Depends(get_optional_user),
+    permission: str,
+    agent: Agent,
+    subject: UserPrincipal | None,
 ) -> A2AAuthContext:
-    """Authenticate + authorize an A2A request through the shared edge policy.
+    """Authenticate + authorize an A2A request, then act in the agent's workspace.
 
     A2A carries no auth or permission model of its own (ADR-006). The subject
-    is resolved by the SAME dependency every optional-auth REST endpoint uses
-    (``get_optional_user`` → the shared ``HTTPBearer`` scheme, handling Kratos
-    JWT + ``aat_`` API key + Hydra OAuth), and the allow/deny decision is made
-    by the single edge authorizer (``authorize_agent_action``). An ``aat_`` key
-    that works over REST works here too; a public-execution grant is honored
-    without a key.
+    is resolved by the SAME resolver every optional-auth edge uses
+    (``get_optional_principal`` → the shared ``HTTPBearer`` scheme, handling
+    Kratos JWT + ``aat_`` API key + Hydra OAuth), and the allow/deny decision is
+    made by the single edge authorizer (``authorize_agent_action``) against the
+    agent's workspace. On success that workspace is bound for the request, so
+    every workspace-scoped dependency the handler builds is scoped to where the
+    agent lives rather than to wherever the caller was acting.
     """
     from agentarea_common.auth.access import authorize_agent_action
 
-    agent = await agent_service.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
+    agent_workspace_id = str(agent.workspace_id)
     decision = await authorize_agent_action(
         subject,
         permission,
-        agent_workspace_id=str(agent.workspace_id),
+        agent_workspace_id=agent_workspace_id,
         agent_id=str(agent_id),
     )
     if not decision.allowed:
@@ -114,10 +143,13 @@ async def require_a2a_auth(
             detail=f"Insufficient permissions. Required: {permission}",
         )
 
+    workspace_slug = await workspace_slug_for(agent_workspace_id)
+    bind_request_workspace(request, agent_workspace_id, workspace_slug)
     return A2AAuthContext(
         authenticated=subject is not None,
         user_id=subject.user_id if subject else None,
-        workspace_id=str(subject.workspace_id) if subject else str(agent.workspace_id),
+        workspace_id=agent_workspace_id,
+        workspace_slug=workspace_slug,
         agent_id=agent_id,
         permissions=[permission],
         auth_method="bearer" if subject else "anonymous",
@@ -125,45 +157,53 @@ async def require_a2a_auth(
     )
 
 
+@binds_workspace
+async def require_a2a_read_auth(
+    request: Request,
+    agent_id: UUID,
+    agent: Agent = Depends(load_a2a_agent),
+    subject: UserPrincipal | None = Depends(get_optional_principal),
+) -> A2AAuthContext:
+    """Require A2A read permission."""
+    return await require_a2a_auth(request, agent_id, A2APermissions.AGENT_READ, agent, subject)
+
+
+@binds_workspace
 async def require_a2a_write_auth(
     request: Request,
     agent_id: UUID,
-    agent_service: AgentService = Depends(get_agent_service),
-    subject: UserContext | None = Depends(get_optional_user),
+    agent: Agent = Depends(load_a2a_agent),
+    subject: UserPrincipal | None = Depends(get_optional_principal),
 ) -> A2AAuthContext:
     """Require A2A write permission."""
-    return await require_a2a_auth(
-        request, agent_id, A2APermissions.AGENT_WRITE, agent_service, subject
-    )
+    return await require_a2a_auth(request, agent_id, A2APermissions.AGENT_WRITE, agent, subject)
 
 
+@binds_workspace
 async def require_a2a_execute_auth(
     request: Request,
     agent_id: UUID,
-    agent_service: AgentService = Depends(get_agent_service),
-    subject: UserContext | None = Depends(get_optional_user),
+    agent: Agent = Depends(load_a2a_agent),
+    subject: UserPrincipal | None = Depends(get_optional_principal),
 ) -> A2AAuthContext:
     """Require A2A execute permission."""
-    return await require_a2a_auth(
-        request, agent_id, A2APermissions.AGENT_EXECUTE, agent_service, subject
-    )
+    return await require_a2a_auth(request, agent_id, A2APermissions.AGENT_EXECUTE, agent, subject)
 
 
+@binds_workspace
 async def require_a2a_stream_auth(
     request: Request,
     agent_id: UUID,
-    agent_service: AgentService = Depends(get_agent_service),
-    subject: UserContext | None = Depends(get_optional_user),
+    agent: Agent = Depends(load_a2a_agent),
+    subject: UserPrincipal | None = Depends(get_optional_principal),
 ) -> A2AAuthContext:
     """Require A2A stream permission."""
-    return await require_a2a_auth(
-        request, agent_id, A2APermissions.AGENT_STREAM, agent_service, subject
-    )
+    return await require_a2a_auth(request, agent_id, A2APermissions.AGENT_STREAM, agent, subject)
 
 
 async def allow_public_access(
     request: Request,
-    subject: UserContext | None = Depends(get_optional_user),
+    subject: UserPrincipal | None = Depends(get_optional_principal),
 ) -> A2AAuthContext:
     """Public discovery endpoints: resolve the subject if a token is present,
     but require no permission. Uses the same shared resolver — no bespoke auth.
@@ -171,7 +211,6 @@ async def allow_public_access(
     return A2AAuthContext(
         authenticated=subject is not None,
         user_id=subject.user_id if subject else None,
-        workspace_id=str(subject.workspace_id) if subject else None,
         permissions=[A2APermissions.AGENT_READ],
         auth_method="bearer" if subject else "anonymous",
         metadata=_a2a_metadata(request),

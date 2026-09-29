@@ -2,11 +2,10 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle, Bot, Server } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
-import { toast } from "sonner";
 import { z } from "zod";
 import type {
   ProviderConfigCreate,
@@ -17,12 +16,18 @@ import {
   zProviderConfigCreate,
   zProviderConfigUpdate,
 } from "@/api/client/zod.gen";
+import { AdminOnlyState } from "@/components/AdminOnlyState";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { apiErrorMessage } from "@/lib/api-errors";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import {
+  useWorkspacePathname,
+  useWorkspaceRouter,
+} from "@/hooks/useWorkspaceNavigation";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import {
   bulkCreateModelInstancesAction as bulkCreateModelInstances,
   createProviderConfigAction as createProviderConfig,
@@ -56,6 +61,13 @@ const providerConfigCreateFormSchema = zProviderConfigCreate.superRefine(
 
 type ProviderConfigFormData = z.input<typeof zProviderConfigCreate>;
 
+// A create that saved the config but not all of its models lands on the edit
+// page; the reason travels with it so it is still on screen there.
+const INSTANCES_ERROR_PARAM = "instancesError";
+
+const zodIssues = (issues: z.ZodIssue[]) =>
+  issues.map((issue) => ({ msg: `${issue.path.join(".")}: ${issue.message}` }));
+
 export default function ProviderConfigForm({
   initialData,
   className,
@@ -70,10 +82,16 @@ export default function ProviderConfigForm({
   autoRedirect = true,
   existingModelInstances = [],
 }: ProviderConfigFormProps) {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
+  const pathname = useWorkspacePathname();
+  const searchParams = useSearchParams();
+  const { canAdminister } = useViewerCapabilities();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    searchParams.get(INSTANCES_ERROR_PARAM)
+  );
   const t = useTranslations("ProviderConfigForm");
   const tCommon = useTranslations("Common");
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
@@ -93,14 +111,14 @@ export default function ProviderConfigForm({
             listProviderSpecsWithModels(),
           ]);
 
-        if (
-          providerSpecsResponse.error ||
-          providerSpecsWithModelsResponse.error
-        ) {
+        const failed = providerSpecsResponse.error
+          ? providerSpecsResponse
+          : providerSpecsWithModelsResponse.error
+            ? providerSpecsWithModelsResponse
+            : null;
+        if (failed) {
           throw new Error(
-            providerSpecsResponse.error?.detail?.[0]?.msg ||
-              providerSpecsWithModelsResponse.error?.detail?.[0]?.msg ||
-              "Failed to load provider specifications"
+            apiErrorMessage(failed, t("error.failedToLoadProviderSpecs"))
           );
         }
 
@@ -135,10 +153,12 @@ export default function ProviderConfigForm({
         setProviderSpecs(specs);
         setModelSpecs(models);
       } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : t("error.failedToLoadData");
-        setError(errorMessage);
-        toast.error(errorMessage);
+        console.error("Failed to load provider specifications", err);
+        setLoadError(
+          err instanceof Error
+            ? err.message
+            : `${t("error.failedToLoadProviderSpecs")}: ${formatApiError(err)}`
+        );
       } finally {
         setIsLoading(false);
       }
@@ -147,8 +167,19 @@ export default function ProviderConfigForm({
   );
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (canAdminister) loadData();
+  }, [loadData, canAdminister]);
+
+  // Keep the message, drop it from the address bar so a reload does not
+  // resurface a failure that is already handled.
+  useEffect(() => {
+    if (!searchParams.has(INSTANCES_ERROR_PARAM)) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete(INSTANCES_ERROR_PARAM);
+    router.replace(`${pathname}${params.size ? `?${params}` : ""}`, {
+      scroll: false,
+    });
+  }, [searchParams, pathname, router]);
 
   // Initialize react-hook-form
   const {
@@ -243,17 +274,34 @@ export default function ProviderConfigForm({
     }
   }, [isEdit, existingModelInstances, modelSpecs]);
 
+  if (!canAdminister) {
+    return <AdminOnlyState what="providerConfigs" />;
+  }
+
   // Handle loading state
   if (isLoading) {
     return <LoadingSpinner />;
   }
 
   // Handle error state
-  if (error) {
+  if (loadError) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>{error}</AlertDescription>
+        <AlertDescription className="flex flex-wrap items-center gap-3">
+          {loadError}
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            onClick={() => {
+              setLoadError(null);
+              void loadData();
+            }}
+          >
+            {tCommon("retry")}
+          </Button>
+        </AlertDescription>
       </Alert>
     );
   }
@@ -277,8 +325,7 @@ export default function ProviderConfigForm({
 
     try {
       // Step 1: Create or update the provider configuration
-      let providerConfig;
-      let providerError;
+      let providerResult;
 
       if (isEdit && initialData) {
         const updateData: ProviderConfigUpdate = {
@@ -294,16 +341,16 @@ export default function ProviderConfigForm({
         const parsedUpdate = zProviderConfigUpdate.safeParse(updateData);
         if (!parsedUpdate.success) {
           throw new Error(
-            parsedUpdate.error.issues[0]?.message ||
-              "Invalid provider configuration"
+            apiErrorMessage(
+              { error: { detail: zodIssues(parsedUpdate.error.issues) } },
+              t("error.saveFailed")
+            )
           );
         }
-        const result = await updateProviderConfig(
+        providerResult = await updateProviderConfig(
           initialData.id,
           parsedUpdate.data
         );
-        providerConfig = result.data;
-        providerError = result.error;
       } else {
         const createData: ProviderConfigCreate = {
           provider_spec_id: data.provider_spec_id,
@@ -315,24 +362,18 @@ export default function ProviderConfigForm({
         const parsedCreate = zProviderConfigCreate.safeParse(createData);
         if (!parsedCreate.success) {
           throw new Error(
-            parsedCreate.error.issues[0]?.message ||
-              "Invalid provider configuration"
+            apiErrorMessage(
+              { error: { detail: zodIssues(parsedCreate.error.issues) } },
+              t("error.saveFailed")
+            )
           );
         }
-        const result = await createProviderConfig(parsedCreate.data);
-        providerConfig = result.data;
-        providerError = result.error;
+        providerResult = await createProviderConfig(parsedCreate.data);
       }
 
-      if (providerError || !providerConfig) {
-        throw new Error(
-          apiErrorMessage(
-            { error: providerError },
-            `${t("error.failedTo")} ${
-              isEdit ? tCommon("update") : tCommon("create")
-            } ${t("providerConfiguration")}`
-          )
-        );
+      const providerConfig = providerResult.data;
+      if (providerResult.error || !providerConfig) {
+        throw new Error(apiErrorMessage(providerResult, t("error.saveFailed")));
       }
 
       // Step 2: Create model instances via the bulk endpoint to avoid N
@@ -371,79 +412,71 @@ export default function ProviderConfigForm({
             .slice(0, 3)
             .map((f) => f.error)
             .join("; ");
-          toast.error(
-            `Failed to create ${result.failed_count} of ${rows.length} model instances. ${sample}`
+          throw new Error(
+            t("error.modelInstancesPartial", {
+              failed: result.failed_count,
+              total: rows.length,
+              sample,
+            })
           );
         }
-        return { created: result.succeeded_count };
       };
 
-      if (!isEdit && selectedModels.length > 0 && showModelSelection) {
-        const { created } = await bulkCreate(selectedModels);
-        toast.success(t("toast.configurationCreated", { modelCount: created }));
-      } else if (isEdit && showModelSelection) {
-        // Handle model instances for edit mode
-        const existingModelSpecIds = existingModelInstances.map(
-          (instance) => instance.model_spec_id
-        );
-        const selectedModelSpecIds = selectedModels.map(
-          (model) => model.modelSpecId
-        );
-
-        // Find models to create (new selections)
-        const modelsToCreate = selectedModels.filter(
-          (model) => !existingModelSpecIds.includes(model.modelSpecId)
-        );
-
-        // Find models to delete (removed selections)
-        const modelsToDelete = existingModelInstances.filter(
-          (instance) => !selectedModelSpecIds.includes(instance.model_spec_id)
-        );
-
-        // Create new model instances in one bulk request
-        if (modelsToCreate.length > 0) {
-          await bulkCreate(modelsToCreate);
-        }
-
-        // Delete removed model instances
-        if (modelsToDelete.length > 0) {
-          const deletePromises = modelsToDelete.map(async (instance) => {
-            const { error } = await deleteModelInstance(instance.id);
-
-            if (error) {
-              throw new Error(
-                apiErrorMessage(
-                  { error },
-                  `Failed to delete model instance "${instance.name}"`
-                )
-              );
-            }
-          });
-
-          await Promise.all(deletePromises);
-        }
-
-        const changes = [];
-        if (modelsToCreate.length > 0)
-          changes.push(`+${modelsToCreate.length} ${t("toast.added")}`);
-        if (modelsToDelete.length > 0)
-          changes.push(`-${modelsToDelete.length} ${t("toast.removed")}`);
-
-        if (changes.length > 0) {
-          toast.success(
-            t("toast.modelInstancesUpdated") + `: ${changes.join(", ")}`
+      // The config is saved from here on: a model-instance failure must not
+      // throw, or a retry re-creates the config and the rows that succeeded.
+      let instancesError: string | null = null;
+      try {
+        if (!isEdit && selectedModels.length > 0 && showModelSelection) {
+          await bulkCreate(selectedModels);
+        } else if (isEdit && showModelSelection) {
+          // Handle model instances for edit mode
+          const existingModelSpecIds = existingModelInstances.map(
+            (instance) => instance.model_spec_id
           );
-        } else {
-          toast.success(t("toast.configurationUpdatedSuccessfully"));
+          const selectedModelSpecIds = selectedModels.map(
+            (model) => model.modelSpecId
+          );
+
+          // Find models to create (new selections)
+          const modelsToCreate = selectedModels.filter(
+            (model) => !existingModelSpecIds.includes(model.modelSpecId)
+          );
+
+          // Find models to delete (removed selections)
+          const modelsToDelete = existingModelInstances.filter(
+            (instance) => !selectedModelSpecIds.includes(instance.model_spec_id)
+          );
+
+          // Create new model instances in one bulk request
+          if (modelsToCreate.length > 0) {
+            await bulkCreate(modelsToCreate);
+          }
+
+          // Delete removed model instances
+          if (modelsToDelete.length > 0) {
+            const deletePromises = modelsToDelete.map(async (instance) => {
+              const { error } = await deleteModelInstance(instance.id);
+
+              if (error) {
+                throw new Error(
+                  apiErrorMessage(
+                    { error },
+                    `Failed to delete model instance "${instance.name}"`
+                  )
+                );
+              }
+            });
+
+            await Promise.all(deletePromises);
+          }
         }
-      } else {
-        // These messages are ICU plurals on {modelCount}; passing the arg avoids
-        // next-intl returning the raw key (e.g. "ProviderConfigForm.toast.…").
-        toast.success(
-          isEdit
-            ? t("toast.configurationUpdated", { modelCount: 0 })
-            : t("toast.configurationCreated", { modelCount: 0 })
+      } catch (err) {
+        console.error(
+          "Provider configuration saved, but its model instances were not fully applied",
+          err
         );
+        instancesError =
+          err instanceof Error ? err.message : t("error.unexpectedError");
       }
 
       // Call custom after submit handler if provided
@@ -451,9 +484,23 @@ export default function ProviderConfigForm({
         await onAfterSubmit(providerConfig);
       }
 
+      if (instancesError) {
+        setError(instancesError);
+        if (isEdit) {
+          router.refresh();
+          return;
+        }
+      }
+
       // Redirect if autoRedirect is enabled and no custom handler
       if (autoRedirect && !onAfterSubmit) {
-        router.push("/models");
+        router.push(
+          instancesError
+            ? `/models/edit/${providerConfig.id}?${new URLSearchParams({
+                [INSTANCES_ERROR_PARAM]: instancesError,
+              })}`
+            : "/models"
+        );
         return;
       }
 
@@ -469,10 +516,12 @@ export default function ProviderConfigForm({
         setSelectedModels([]);
       }
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : t("error.unexpectedError");
-      setError(errorMessage);
-      toast.error(errorMessage);
+      console.error("Failed to save provider configuration", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : `${t("error.saveFailed")}: ${formatApiError(err)}`
+      );
     } finally {
       setIsSubmitting(false);
     }

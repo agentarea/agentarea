@@ -12,10 +12,11 @@ key so the projected model spec can populate ``provider_spec_id`` /
 ``provider_name`` / ``provider_key`` for the API. provider_specs remain real DB
 rows (they are not catalog-only in this change).
 
-Unlike agents/skills, model specs are NOT forked on edit: they are reference
-specs that users instantiate via ``model_instances`` rather than editing the
-spec itself. So there is no copy-on-write here -- the catalog is a pure read
-source merged into the spec list.
+Only items of active registries are read, preferred registry first
+(``registry_priority``, the order catalog browse uses), so where several
+registries publish the same model the caller keeps the first. Adding a catalog
+model to a workspace copies it into that workspace's ``model_specs``
+(``ModelSpecRepository.get_or_copy_catalog_spec``); this repository only reads.
 
 It deliberately uses raw SQL against ``registry_items`` / ``registries`` to avoid
 a cross-library dependency on ``agentarea-registry``. The catalog is global
@@ -58,9 +59,9 @@ class CatalogModelSpecRepository:
         self.user_context = user_context
 
     async def list_items(self) -> list[CatalogModelSpecItem]:
-        """List all catalog model spec items (global catalog, no workspace filter).
+        """List the catalog model spec items of active registries, preferred registry first.
 
-        The catalog item's ``spec.provider_key`` is resolved against the
+        Global catalog, no workspace filter. The catalog item's ``spec.provider_key`` is resolved against the
         ``provider_specs`` table (LEFT JOIN on ``spec->>'provider_key'``) so the
         projection can carry the DB ``provider_spec_id`` the API needs.
         """
@@ -71,14 +72,14 @@ class CatalogModelSpecRepository:
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
             "LEFT JOIN provider_specs ps ON ps.provider_key = ri.spec->>'provider_key' "
-            "WHERE r.registry_type = 'llm_models' "
-            "ORDER BY ri.name"
+            "WHERE r.registry_type = 'llm_models' AND ri.registry_active "
+            "ORDER BY ri.registry_priority, ri.id"
         )
         result = await self.session.execute(query)
         return [self._row_to_item(row) for row in result.fetchall()]
 
     async def get_item(self, item_id: str) -> CatalogModelSpecItem | None:
-        """Get a single catalog model spec item by its registry-item id."""
+        """Get a single catalog model spec item of an active registry by its registry-item id."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
             "ri.created_at, ri.updated_at, "
@@ -86,7 +87,7 @@ class CatalogModelSpecRepository:
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
             "LEFT JOIN provider_specs ps ON ps.provider_key = ri.spec->>'provider_key' "
-            "WHERE r.registry_type = 'llm_models' "
+            "WHERE r.registry_type = 'llm_models' AND ri.registry_active "
             "AND ri.id = :item_id"
         )
         result = await self.session.execute(query, {"item_id": item_id})

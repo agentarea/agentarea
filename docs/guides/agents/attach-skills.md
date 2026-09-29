@@ -33,7 +33,7 @@ maintained once.
     Create one from inline content:
 
     ```bash
-    curl -X POST http://localhost:8000/v1/skills \
+    curl -X POST http://localhost:8000/v1/workspaces/{workspace}/skills \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -44,8 +44,8 @@ maintained once.
     ```
 
     Import one from GitHub by passing `github_url` instead of `content`, upload a
-    directory with `POST /v1/skills/upload`, or install one from the catalog with
-    `POST /v1/skills/{skill_id}/install`. All four produce the same object; only
+    directory with `POST /v1/workspaces/{workspace}/skills/upload`, or install one from the catalog with
+    `POST /v1/workspaces/{workspace}/skills/{skill_id}/install`. All four produce the same object; only
     `source_type` differs.
   </Step>
 
@@ -53,7 +53,7 @@ maintained once.
     `skill_ids` replaces the attached set, so send the full list you want.
 
     ```bash
-    curl -X PATCH http://localhost:8000/v1/agents/<agent-id> \
+    curl -X PATCH http://localhost:8000/v1/workspaces/{workspace}/agents/<agent-id> \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
       -d '{"skill_ids": ["<skill-id>", "<other-skill-id>"]}'
@@ -61,8 +61,8 @@ maintained once.
   </Step>
 
   <Step title="Compose skills, if useful">
-    A skill can contain skills, through `POST /v1/skills/{skill_id}/members`. Attach
-    the parent and the agent gets the set. `POST /v1/skills/{skill_id}/flatten`
+    A skill can contain skills, through `POST /v1/workspaces/{workspace}/skills/{skill_id}/members`. Attach
+    the parent and the agent gets the set. `POST /v1/workspaces/{workspace}/skills/{skill_id}/flatten`
     resolves a composed skill into its effective content, which is the fastest way
     to see what an agent will actually receive.
   </Step>
@@ -73,7 +73,7 @@ maintained once.
 Read back the agent and confirm the skill ids:
 
 ```bash
-curl -s http://localhost:8000/v1/agents/<agent-id> \
+curl -s http://localhost:8000/v1/workspaces/{workspace}/agents/<agent-id> \
   -H "Authorization: Bearer $TOKEN"
 ```
 

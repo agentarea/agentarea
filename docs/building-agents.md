@@ -78,13 +78,14 @@ Every AgentArea agent consists of several key components:
     Set up your agent's identity:
     
     ```bash
-    curl -X POST http://localhost:8000/v1/agents \
+    curl -X POST http://localhost:8000/v1/workspaces/{workspace}/agents \
       -H "Content-Type: application/json" \
       -d '{
         "name": "My Assistant",
         "template": "task_assistant",
         "personality": "helpful and efficient",
-        "system_prompt": "You are a helpful assistant that can help users with various tasks."
+        "system_prompt": "You are a helpful assistant that can help users with various tasks.",
+        "tools": []
       }'
     ```
   </Step>

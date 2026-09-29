@@ -122,19 +122,20 @@ curl -X GET http://localhost:8000/health
 
 ### 2. Create Your First Agent
 ```bash
-curl -X POST http://localhost:8000/v1/agents/ \
+curl -X POST http://localhost:8000/v1/workspaces/{workspace}/agents/ \
   -H "Content-Type: application/json" \
   -d '{
     "name": "hello-world",
     "description": "My first agent",
-    "type": "chat"
+    "type": "chat",
+    "tools": []
   }'
 ```
 
 ### 3. Test MCP Integration
 ```bash
 # List available MCP servers
-curl http://localhost:8000/v1/mcp-servers/
+curl http://localhost:8000/v1/workspaces/{workspace}/mcp-servers/
 
 # Test MCP flow
 python test_mcp_flow.py

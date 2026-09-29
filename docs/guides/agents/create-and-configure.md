@@ -34,7 +34,7 @@ Do this through the API when you are scripting or testing. The dashboard at
 <Steps titleSize="h3">
   <Step title="Find a model instance">
     ```bash
-    curl -s http://localhost:8000/v1/model-instances/ \
+    curl -s http://localhost:8000/v1/workspaces/{workspace}/model-instances/ \
       -H "Authorization: Bearer $TOKEN"
     ```
 
@@ -44,17 +44,19 @@ Do this through the API when you are scripting or testing. The dashboard at
   </Step>
 
   <Step title="Create the agent">
-    Only `name` is required. Everything else has a default or is optional.
+    `name` and `tools` are required; pass `tools: []` for an agent with none.
+    Everything else has a default or is optional.
 
     ```bash
-    curl -X POST http://localhost:8000/v1/agents/ \
+    curl -X POST http://localhost:8000/v1/workspaces/{workspace}/agents/ \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
         "name": "release-notes",
         "description": "Summarises merged pull requests into release notes",
         "instruction": "You write release notes. Group changes by area, lead with user-visible behaviour, and omit refactors that change nothing observable.",
-        "model_id": "<model-instance-id>"
+        "model_id": "<model-instance-id>",
+        "tools": []
       }'
     ```
 
@@ -65,11 +67,11 @@ Do this through the API when you are scripting or testing. The dashboard at
     | `model_id` | The model **instance** id from step 1. |
     | `description` | Shown in listings; also what other agents see when this one is exposed as a tool. |
     | `agent_type` | Defaults to `stateless`. |
-    | `tools` | Attached tools and their configuration. |
+    | `tools` | Required. Attached tools and their configuration — `[]` for none. |
     | `skill_ids` | Skills to attach — see [attach skills](/guides/agents/attach-skills). |
     | `planning` | Runs the planning activity before execution. |
     | `a2ui_enabled` | Lets the agent drive interactive UI surfaces. |
-    | `events_config` | Which events the agent emits or reacts to. |
+    | `triggers` | Schedules, webhooks or channel triggers to create with the agent — see [event triggers](/event-triggers). |
   </Step>
 
   <Step title="Attach tools">
@@ -103,7 +105,7 @@ Do this through the API when you are scripting or testing. The dashboard at
 Run a task and watch it reach a terminal event:
 
 ```bash
-curl -X POST http://localhost:8000/v1/agents/<agent-id>/tasks/sync \
+curl -X POST http://localhost:8000/v1/workspaces/{workspace}/agents/<agent-id>/tasks/sync \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"description": "Say hello and stop."}'

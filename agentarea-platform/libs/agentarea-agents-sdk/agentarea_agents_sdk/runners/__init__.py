@@ -12,11 +12,11 @@ from .base import (
 # from .sync_runner import SyncAgentRunner
 
 __all__ = [
+    "AgentGoal",
     "BaseAgentRunner",
     "ExecutionResult",
     "ExecutionTerminator",
     "Message",
-    "AgentGoal",
     "RunnerConfig",
     # "SyncAgentRunner",
 ]

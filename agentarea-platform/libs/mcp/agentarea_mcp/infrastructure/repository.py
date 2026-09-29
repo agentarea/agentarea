@@ -1,3 +1,4 @@
+from collections.abc import Collection
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
@@ -5,8 +6,9 @@ from agentarea_common.base.workspace_scoped_repository import (
     WorkspaceScopedRepository,
     as_record_ids,
 )
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from agentarea_common.utils.slug import generate_slug
-from sqlalchemy import String, case, cast, or_, select, text
+from sqlalchemy import String, case, cast, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_mcp.domain.models import MCPServer
@@ -32,7 +34,7 @@ def _project_catalog_mcp_server(item: CatalogMcpItem) -> MCPServer:
     if conn_type == "docker":
         docker_image_url = spec.get("image", "")
     elif conn_type == "command":
-        docker_image_url = "agentarea/mcp-bridge:latest"
+        docker_image_url = "agentarea/agentarea-mcp-base"
         command_str = spec.get("command", "")
         args = spec.get("args", []) or []
         if command_str:
@@ -76,31 +78,6 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         """Get the read-only catalog (registry_items) repository for MCP specs."""
         return CatalogMcpRepository(session=self.session, user_context=self.user_context)
 
-    @staticmethod
-    def _filter_catalog_projection(
-        server: MCPServer,
-        *,
-        status: str | None,
-        is_public: bool | None,
-        tag: str | None,
-        search: str | None,
-    ) -> bool:
-        """Apply the same list filters to a catalog projection as the SQL query."""
-        if status is not None and server.status != status:
-            return False
-        if is_public is not None and server.is_public != is_public:
-            return False
-        if tag is not None and tag not in (server.tags or []):
-            return False
-        if search is not None:
-            term = search.lower()
-            if (
-                term not in (server.name or "").lower()
-                and term not in (server.description or "").lower()
-            ):
-                return False
-        return True
-
     def _build_list_query(
         self,
         status: str | None = None,
@@ -110,6 +87,7 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         creator_scoped: bool = False,
         include_system: bool = True,
         ids: set[str] | None = None,
+        spec_ids: Collection[str] | None = None,
     ):
         """Build the base filtered query (without pagination) for list_servers."""
         query = select(self.model_class)
@@ -123,6 +101,8 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             # What the authorization graph says this caller may read, applied in
             # SQL so the returned total matches the rows they actually get.
             query = query.where(self.model_class.id.in_(as_record_ids(ids)))
+        if spec_ids is not None:
+            query = query.where(self.model_class.id.in_(as_record_ids(set(spec_ids))))
 
         if status is not None:
             query = query.where(self.model_class.status == status)
@@ -166,8 +146,19 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         creator_scoped: bool = False,
         include_system: bool = True,
         ids: set[str] | None = None,
+        spec_ids: Collection[str] | None = None,
     ) -> tuple[list[MCPServer], int]:
-        """List MCP servers with filtering, search, and pagination.
+        """List MCP server specs: tenant rows first, then read-only catalog projections.
+
+        Built-in specs live in the registry catalog only (ADR-003), and a catalog
+        item a tenant row already instantiates is shadowed by that row. Both
+        halves are filtered and paged in SQL: the catalog is global and large, so
+        it must never be materialized per request.
+
+        ``ids`` narrows the tenant half to what the caller may read; catalog items
+        are platform data with no ownership tuples, so it leaves them alone.
+        ``spec_ids`` asks for exactly those specs, tenant rows and catalog items
+        alike.
 
         Returns:
             Tuple of (servers, total_count)
@@ -180,65 +171,43 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             creator_scoped=creator_scoped,
             include_system=include_system,
             ids=ids,
+            spec_ids=spec_ids,
         )
+        tenant_total = (
+            await self.session.execute(select(func.count()).select_from(base_query.subquery()))
+        ).scalar_one()
 
         # Order: specs with icons first (json_spec has 'icons' key), then by name
         has_icons = case(
             (cast(self.model_class.json_spec, String).like('%"icons"%'), 0),
             else_=1,
         )
-        query = base_query.order_by(has_icons, self.model_class.name)
+        page_query = (
+            base_query.order_by(has_icons, self.model_class.name, self.model_class.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        tenant_page = list((await self.session.execute(page_query)).scalars().all())
 
-        result = await self.session.execute(query)
-        tenant_servers = list(result.scalars().all())
+        # A projection is always an active, non-public spec.
+        if (status is not None and status != "active") or is_public:
+            return tenant_page, tenant_total
 
-        # Merge read-only catalog projections (built-in specs live in the
-        # registry catalog only, ADR-003). A catalog item already instantiated
-        # by a tenant row carrying its registry_item_id is shadowed by that row.
-        projections = await self._catalog_projections(
-            tenant_servers,
-            status=status,
-            is_public=is_public,
+        instantiated = await self.session.execute(
+            base_query.with_only_columns(self.model_class.registry_item_id).where(
+                self.model_class.registry_item_id.is_not(None)
+            )
+        )
+        catalog_items, catalog_total = await self._get_catalog_repository().list_page(
+            limit=max(0, limit - len(tenant_page)),
+            offset=max(0, offset - tenant_total),
+            exclude_item_ids=[str(item_id) for item_id in instantiated.scalars().all()],
             tag=tag,
             search=search,
+            item_ids=spec_ids,
         )
-
-        merged = [*tenant_servers, *projections]
-        total = len(merged)
-
-        # Paginate the merged view in memory so catalog projections page
-        # consistently alongside tenant rows.
-        if offset > 0:
-            merged = merged[offset:]
-        if limit > 0:
-            merged = merged[:limit]
-
-        return merged, total
-
-    async def _catalog_projections(
-        self,
-        tenant_servers: list[MCPServer],
-        *,
-        status: str | None,
-        is_public: bool | None,
-        tag: str | None,
-        search: str | None,
-    ) -> list[MCPServer]:
-        """Project un-instantiated catalog MCP items as read-only specs."""
-        catalog_items = await self._get_catalog_repository().list_items()
-        shadowed = {
-            str(s.registry_item_id) for s in tenant_servers if getattr(s, "registry_item_id", None)
-        }
-        projections: list[MCPServer] = []
-        for item in catalog_items:
-            if item.id in shadowed:
-                continue
-            server = _project_catalog_mcp_server(item)
-            if self._filter_catalog_projection(
-                server, status=status, is_public=is_public, tag=tag, search=search
-            ):
-                projections.append(server)
-        return projections
+        projections = [_project_catalog_mcp_server(item) for item in catalog_items]
+        return [*tenant_page, *projections], tenant_total + catalog_total
 
     async def get_by_slug(self, slug: str) -> MCPServer | None:
         """Get MCP server by workspace-scoped slug."""
@@ -293,10 +262,11 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         # Built-in catalog specs are globally readable by id, not workspace-scoped
         # (ADR-003). Reconcile mirrors them into mcp_servers under the platform
         # workspace with a registry_item_id; resolve those across workspaces, but
-        # only catalog mirrors (registry_item_id IS NOT NULL) backed by an active
+        # only platform catalog mirrors (registry_item_id IS NOT NULL) backed by an active
         # registry — never another tenant's private custom spec.
         catalog_mirror = select(self.model_class).where(
             self.model_class.id == server_id,
+            self.model_class.workspace_id == PLATFORM_WORKSPACE_ID,
             text(
                 "EXISTS (SELECT 1 FROM registry_items ri "
                 "JOIN registries r ON r.id = ri.registry_id "

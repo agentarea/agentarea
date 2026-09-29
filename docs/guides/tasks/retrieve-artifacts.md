@@ -32,7 +32,7 @@ a file that exists.
 <Steps titleSize="h3">
   <Step title="List what the task produced">
     ```bash
-    curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
+    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq
     ```
 
@@ -43,14 +43,14 @@ a file that exists.
         "size": 20481,
         "content_type": "text/csv",
         "last_modified": null,
-        "download_url": "/v1/agents/9b1d.../tasks/3f2a8c11-.../artifacts/files/tasks/3f2a8c11-.../workspace/inputs/attachments/report.csv"
+        "download_url": "/v1/workspaces/acme/agents/9b1d.../tasks/3f2a8c11-.../artifacts/files/tasks/3f2a8c11-.../workspace/inputs/attachments/report.csv"
       },
       {
         "path": "tasks/3f2a8c11-.../workspace/out/summary.md",
         "size": 1284,
         "content_type": "text/markdown",
         "last_modified": null,
-        "download_url": "/v1/agents/9b1d.../tasks/3f2a8c11-.../artifacts/files/tasks/3f2a8c11-.../workspace/out/summary.md"
+        "download_url": "/v1/workspaces/acme/agents/9b1d.../tasks/3f2a8c11-.../artifacts/files/tasks/3f2a8c11-.../workspace/out/summary.md"
       }
     ]
     ```
@@ -67,7 +67,7 @@ a file that exists.
     ```bash
     ARTIFACT="tasks/$TASK_ID/workspace/out/summary.md"
     curl -s -o summary.md \
-      "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/artifacts/files/$ARTIFACT" \
+      "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/artifacts/files/$ARTIFACT" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN"
     ```
 
@@ -78,7 +78,7 @@ a file that exists.
     Or follow the `download_url` from the listing directly:
 
     ```bash
-    URL=$(curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
+    URL=$(curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       | jq -r '.[] | select(.path | endswith("summary.md")) | .download_url')
     curl -s -O -J "$AGENTAREA_URL$URL" -H "Authorization: Bearer $AGENTAREA_TOKEN"
@@ -89,7 +89,7 @@ a file that exists.
     There is no archive endpoint. Loop the listing:
 
     ```bash
-    curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
+    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       | jq -r '.[].download_url' \
       | while read -r url; do
@@ -105,7 +105,7 @@ Confirm the downloaded bytes match what the task committed. The listing's `size`
 is the manifest's recorded size:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" \
   | jq -r '.[] | select(.path | endswith("summary.md")) | .size'
 wc -c < summary.md
@@ -126,7 +126,7 @@ the endpoint does not return a body it could not verify.
     The agent answered from context without writing files. Only files committed
     to the task workspace appear here; text in the final response is not an
     artifact. Read `final_response` from
-    `GET /v1/agents/{agent_id}/tasks/{task_id}/summary` instead.
+    `GET /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/summary` instead.
   </Accordion>
   <Accordion title="404 on a path that appears in the listing">
     The `artifact_path` segment must be the full `tasks/{task_id}/workspace/...`

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import ColumnElement, DateTime, String
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -49,6 +49,18 @@ class WorkspaceScopedMixin:
 
     workspace_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     created_by: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+
+    @classmethod
+    def workspace_visibility(cls, workspace_id: str) -> ColumnElement[bool]:
+        """The rows a session scoped to ``workspace_id`` may read.
+
+        Added to every ORM SELECT by ``agentarea_common.base.tenant_scope``; bulk
+        UPDATE and DELETE stay on the workspace's own rows whatever this says. A
+        model whose rows are legitimately readable beyond their own workspace
+        overrides this beside its columns. Use ``workspace_id`` only as a SQL
+        value: the criteria are cached with it as a bound parameter.
+        """
+        return cls.workspace_id == workspace_id
 
     def is_in_workspace(self, workspace_id: str) -> bool:
         """Check if this record belongs to the specified workspace."""

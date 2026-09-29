@@ -80,10 +80,12 @@ The following table lists configurable parameters of the chart and their default
 | global.database.name | string | `"agentarea"` |  |
 | global.database.ssl | bool | `false` |  |
 | global.database.sslMode | string | `"disable"` |  |
+| global.database.tenantScope | string | `"log"` | AGENTAREA_DB_TENANT_SCOPE: what an ORM query on a workspace-scoped table does when no workspace is bound. "log" runs it unfiltered and warns once per call site; "enforce" refuses it. Ship "log", clear the warnings, then flip. |
 | global.database.maxConnections | int | `100` |  |
 | global.database.connectionTimeout | string | `"30s"` |  |
 | global.database.migrations.runAtStartup | bool | `true` |  |
 | global.database.migrations.initializationTimeout | string | `"300s"` |  |
+| global.database.migrations.command | list | `["agentarea-api","migrate"]` | Command the migration job runs in the API image, from /app/apps/api. An installed extension can name its own command, which must also run the core migrations. |
 | global.redis.host | string | `""` |  |
 | global.redis.port | int | `6379` |  |
 | global.redis.url | string | `""` |  |
@@ -310,6 +312,8 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.serverless.sweepInterval | string | `"60s"` |  |
 | mcpManager.serverless.requestLeaseTTL | string | `"90s"` |  |
 | mcpManager.serverless.startupTimeout | string | `"5m"` |  |
+| mcpManager.mcpBase.image.repository | string | `"agentarea/agentarea-mcp-base"` |  |
+| mcpManager.mcpBase.image.tag | string | `"latest"` |  |
 | mcpManager.dataPlane.allowInsecure | bool | `false` |  |
 | mcpManager.dataPlane.url | string | `""` |  |
 | mcpManager.dataPlane.tokenSecret | string | `""` |  |
@@ -337,14 +341,6 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.gateway.namespace | string | `"envoy-gateway-system"` |  |
 | mcpManager.runtimeClass | string | `""` |  |
 | mcpManager.isolationTier | string | `"standard"` |  |
-| mcpManager.admission.allowedImageRepositories[0] | string | `"ghcr.io/github/github-mcp-server"` |  |
-| mcpManager.admission.allowedImageRepositories[1] | string | `"mcp/fetch"` |  |
-| mcpManager.admission.allowedCommandPackages[0] | string | `"npx -y @modelcontextprotocol/server-everything"` |  |
-| mcpManager.admission.allowedCommandPackages[1] | string | `"npx -y @modelcontextprotocol/server-sequential-thinking"` |  |
-| mcpManager.admission.allowedCommandPackages[2] | string | `"npx -y @modelcontextprotocol/server-customer-segmentation --stdio"` |  |
-| mcpManager.admission.allowedCommandPackages[3] | string | `"npx -y @modelcontextprotocol/server-map --stdio"` |  |
-| mcpManager.admission.allowedCommandPackages[4] | string | `"uvx mcp-server-fetch"` |  |
-| mcpManager.admission.allowedCommandPackages[5] | string | `"uvx mcp-server-time"` |  |
 | mcpManager.executionCluster.kubeconfigSecret | string | `""` |  |
 | mcpManager.executionCluster.kubeconfigKey | string | `""` |  |
 | mcpManager.runtime.serviceAccount.create | bool | `true` |  |
@@ -495,7 +491,7 @@ The following table lists configurable parameters of the chart and their default
 | rustfs.livenessProbe.failureThreshold | int | `6` |  |
 | jobs.dbMigration.enabled | bool | `true` |  |
 | registryReconcile.enabled | bool | `true` |  |
-| registryReconcile.registries | list | `[{"name":"system-llm-providers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json"},{"name":"system-llm-models","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json"},{"name":"system-mcp-servers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json"},{"name":"system-skills-curated","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json"}]` | a custom catalog, or the ~123k community mirror, which stays opt-in and must not drive first-run picks -- lands after them instead of interleaving its first entries with the curated front page. |
+| registryReconcile.registries | list | `[{"name":"system-llm-providers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json"},{"name":"system-llm-models","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json"},{"name":"system-mcp-servers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json"},{"name":"system-skills-curated","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json"},{"name":"system-agents","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json"}]` | a custom catalog, or the ~123k community mirror, which stays opt-in and must not drive first-run picks -- lands after them instead of interleaving its first entries with the curated front page. |
 | keto.enabled | bool | `false` |  |
 | keto.replicaCount | int | `1` |  |
 | keto.image.repository | string | `"oryd/keto"` |  |

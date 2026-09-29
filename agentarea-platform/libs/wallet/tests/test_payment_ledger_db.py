@@ -12,6 +12,7 @@ Needs a PostgreSQL migrated to head; skips without one:
 import os
 import uuid
 from collections.abc import AsyncGenerator
+from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
@@ -21,6 +22,7 @@ from agentarea_wallet.application.wallet_service import WalletService
 from agentarea_wallet.domain.enums import settlement_status
 from agentarea_wallet.domain.models import AgentWallet
 from agentarea_wallet.infrastructure.repository import PaymentRecordRepository, WalletRepository
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 TEST_DATABASE_URL = os.getenv("WALLET_TEST_DATABASE_URL", "")
@@ -57,7 +59,7 @@ async def wallet_setup(request, session: AsyncSession):
         created_by=user_context.user_id,
         agent_id=agent.id,
         wallet_type="x402",
-        service_budget_usd=1.0,
+        service_budget_usd=Decimal("1"),
         service_budget_period=request.param,
     )
     session.add(wallet)
@@ -79,13 +81,14 @@ async def _record(
     request_succeeded: bool,
     tx_hash: str | None,
     error: str | None = None,
+    amount_usd: Decimal = Decimal("0.25"),
 ):
     return await service.record_payment(
         wallet_id=wallet_id,
         agent_id=agent_id,
         execution_id="exec-1",
         protocol="x402",
-        amount_usd=0.25,
+        amount_usd=amount_usd,
         recipient="0xrecipient",
         tx_hash=tx_hash,
         tool_name="paid_search",
@@ -111,8 +114,8 @@ async def test_settled_payment_whose_retry_failed_reduces_the_budget(wallet_setu
         error="Payment retry failed: 500",
     )
 
-    assert await service.get_service_budget_remaining(agent_id, "exec-1") == pytest.approx(0.75)
-    assert await service.get_total_spent_current_period(agent_id) == pytest.approx(0.25)
+    assert await service.get_service_budget_remaining(agent_id, "exec-1") == Decimal("0.75")
+    assert await service.get_total_spent_current_period(agent_id) == Decimal("0.25")
     settled = await service.find_settled_payment(key)
     assert settled is not None
     assert settled.tx_hash == "0xsettled"
@@ -133,6 +136,48 @@ async def test_payment_that_never_settled_leaves_the_budget(wallet_setup):
         error="Payment retry failed: 402",
     )
 
-    assert await service.get_service_budget_remaining(agent_id, "exec-1") == pytest.approx(1.0)
+    assert await service.get_service_budget_remaining(agent_id, "exec-1") == Decimal("1")
     assert await service.find_settled_payment(key) is None
 
+
+
+@pytest.mark.asyncio
+async def test_ledger_sums_cents_exactly(wallet_setup):
+    """Ten settled dimes spend a one-dollar budget exactly, not to 0.9999999999999999."""
+    service, wallet_id, agent_id = wallet_setup
+
+    for _ in range(10):
+        await _record(
+            service,
+            wallet_id,
+            agent_id,
+            uuid.uuid4().hex,
+            request_succeeded=True,
+            tx_hash=f"0x{uuid.uuid4().hex}",
+            amount_usd=Decimal("0.1"),
+        )
+
+    spent = await service.get_total_spent_current_period(agent_id)
+    remaining = await service.get_service_budget_remaining(agent_id, "exec-1")
+    assert isinstance(spent, Decimal)
+    assert spent == Decimal("1")
+    assert remaining == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_money_columns_are_numeric(session: AsyncSession):
+    rows = (
+        await session.execute(
+            text(
+                "SELECT table_name, column_name, data_type, numeric_precision, numeric_scale "
+                "FROM information_schema.columns "
+                "WHERE (table_name, column_name) IN "
+                "(('agent_wallets', 'service_budget_usd'), ('payment_records', 'amount_usd'))"
+            )
+        )
+    ).all()
+
+    assert sorted(tuple(r) for r in rows) == [
+        ("agent_wallets", "service_budget_usd", "numeric", 18, 6),
+        ("payment_records", "amount_usd", "numeric", 18, 6),
+    ]

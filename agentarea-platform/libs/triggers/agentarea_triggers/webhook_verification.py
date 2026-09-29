@@ -72,7 +72,7 @@ class SlackSignatureVerifier(SignatureVerifier):
                     logger.warning("Slack request timestamp too old")
                     return False
             except ValueError:
-                logger.warning("Invalid Slack timestamp format")
+                logger.warning("Invalid Slack timestamp format", exc_info=True)
                 return False
 
             # Compute expected signature
@@ -89,7 +89,7 @@ class SlackSignatureVerifier(SignatureVerifier):
 
             return hmac.compare_digest(expected, signature)
         except Exception as e:
-            logger.error(f"Slack signature verification error: {e}")
+            logger.exception(f"Slack signature verification error: {e}")
             return False
 
     def get_required_headers(self) -> list[str]:
@@ -126,7 +126,7 @@ class GitHubSignatureVerifier(SignatureVerifier):
 
             return hmac.compare_digest(expected, signature)
         except Exception as e:
-            logger.error(f"GitHub signature verification error: {e}")
+            logger.exception(f"GitHub signature verification error: {e}")
             return False
 
     def get_required_headers(self) -> list[str]:
@@ -151,7 +151,7 @@ class DiscordSignatureVerifier(SignatureVerifier):
             bad_signature_error_cls = import_module("nacl.exceptions").BadSignatureError
             verify_key_cls = import_module("nacl.signing").VerifyKey
         except ImportError:
-            logger.error(
+            logger.exception(
                 "PyNaCl not installed, Discord signature verification will reject all requests. Install with: pip install PyNaCl"
             )
             return False
@@ -171,10 +171,10 @@ class DiscordSignatureVerifier(SignatureVerifier):
             verify_key.verify(message, bytes.fromhex(signature))
             return True
         except bad_signature_error_cls:
-            logger.warning("Discord signature verification failed")
+            logger.warning("Discord signature verification failed", exc_info=True)
             return False
         except Exception as e:
-            logger.error(f"Discord signature verification error: {e}")
+            logger.exception(f"Discord signature verification error: {e}")
             return False
 
     def get_required_headers(self) -> list[str]:
@@ -220,7 +220,7 @@ class GenericHMACVerifier(SignatureVerifier):
 
             return hmac.compare_digest(expected, signature)
         except Exception as e:
-            logger.error(f"Generic HMAC verification error: {e}")
+            logger.exception(f"Generic HMAC verification error: {e}")
             return False
 
     def get_required_headers(self) -> list[str]:
@@ -250,7 +250,7 @@ class LinearSignatureVerifier(SignatureVerifier):
 
             return hmac.compare_digest(expected, signature)
         except Exception as e:
-            logger.error(f"Linear signature verification error: {e}")
+            logger.exception(f"Linear signature verification error: {e}")
             return False
 
     def get_required_headers(self) -> list[str]:
@@ -295,7 +295,7 @@ class StripeSignatureVerifier(SignatureVerifier):
                     logger.warning("Stripe request timestamp too old")
                     return False
             except ValueError:
-                logger.warning("Invalid Stripe timestamp format")
+                logger.warning("Invalid Stripe timestamp format", exc_info=True)
                 return False
 
             body_bytes = body if isinstance(body, bytes) else body.encode("utf-8")
@@ -307,7 +307,7 @@ class StripeSignatureVerifier(SignatureVerifier):
 
             return any(hmac.compare_digest(expected, sig) for sig in candidates)
         except Exception as e:
-            logger.error(f"Stripe signature verification error: {e}")
+            logger.exception(f"Stripe signature verification error: {e}")
             return False
 
     def get_required_headers(self) -> list[str]:
@@ -453,6 +453,7 @@ async def resolve_signing_secret(
             "Stored channel credentials for webhook_type=%s trigger_id=%s are not valid JSON",
             webhook_type,
             trigger_id,
+            exc_info=True,
         )
         return None
     if not isinstance(credentials, dict):

@@ -79,6 +79,7 @@ jobs:
           - mcp-manager
           - mcp-runner
           - mcp-runner-locked
+          - mcp-base
           - events
     steps:
       - name: Set up Docker Buildx

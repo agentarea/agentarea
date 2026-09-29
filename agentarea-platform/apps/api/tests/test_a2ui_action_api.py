@@ -115,7 +115,7 @@ SAMPLE_ACTION = {
 
 @pytest.mark.flow(MainFlow.A2UI_ACTION)
 class TestA2UIActionEndpoint:
-    """Test POST /v1/agents/{agent_id}/tasks/{task_id}/a2ui/action"""
+    """Test POST /v1/workspaces/acme/agents/{agent_id}/tasks/{task_id}/a2ui/action"""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("stored_execution_id", ["custom-workflow-run-42", None])
@@ -159,7 +159,7 @@ class TestA2UIActionEndpoint:
         mock_workflow_service.send_a2ui_action.side_effect = deliver_action
 
         response = await async_client.post(
-            f"/v1/agents/{agent.id}/tasks/{task_id}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{agent.id}/tasks/{task_id}/a2ui/action",
             json=SAMPLE_ACTION,
         )
 
@@ -177,7 +177,7 @@ class TestA2UIActionEndpoint:
         mock_agent_service.get.return_value = None
 
         response = await async_client.post(
-            f"/v1/agents/{uuid4()}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{uuid4()}/tasks/{uuid4()}/a2ui/action",
             json=SAMPLE_ACTION,
         )
 
@@ -202,7 +202,7 @@ class TestA2UIActionEndpoint:
         mock_task_service.get_task.side_effect = _foreign_task
 
         response = await async_client.post(
-            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
             json=SAMPLE_ACTION,
         )
 
@@ -224,7 +224,7 @@ class TestA2UIActionEndpoint:
         mock_task_service.get_task.side_effect = _no_task
 
         response = await async_client.post(
-            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
             json=SAMPLE_ACTION,
         )
 
@@ -238,7 +238,7 @@ class TestA2UIActionEndpoint:
         mock_agent_service.get.return_value = agent
 
         response = await async_client.post(
-            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
             json=SAMPLE_ACTION,
         )
 
@@ -255,7 +255,7 @@ class TestA2UIActionEndpoint:
         mock_workflow_service.get_workflow_status.return_value = {"status": "unknown"}
 
         response = await async_client.post(
-            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
             json=SAMPLE_ACTION,
         )
 
@@ -279,7 +279,7 @@ class TestA2UIActionEndpoint:
         }
 
         response = await async_client.post(
-            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
             json=SAMPLE_ACTION,
         )
 
@@ -296,7 +296,7 @@ class TestA2UIActionEndpoint:
         mock_workflow_service.get_workflow_status.return_value = {"status": "failed"}
 
         response = await async_client.post(
-            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
             json=SAMPLE_ACTION,
         )
 
@@ -313,7 +313,7 @@ class TestA2UIActionEndpoint:
         mock_workflow_service.get_workflow_status.return_value = {"status": "cancelled"}
 
         response = await async_client.post(
-            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
             json=SAMPLE_ACTION,
         )
 
@@ -331,7 +331,7 @@ class TestA2UIActionEndpoint:
         mock_workflow_service.send_a2ui_action.return_value = False
 
         response = await async_client.post(
-            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
             json=SAMPLE_ACTION,
         )
 
@@ -348,7 +348,7 @@ class TestA2UIActionEndpoint:
         mock_workflow_service.get_workflow_status.side_effect = RuntimeError("temporal down")
 
         response = await async_client.post(
-            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
             json=SAMPLE_ACTION,
         )
 
@@ -362,7 +362,7 @@ class TestA2UIActionEndpoint:
         mock_agent_service.get.return_value = agent
 
         response = await async_client.post(
-            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
             json={"surface_id": "s1"},  # missing 'name'
         )
 
@@ -375,7 +375,7 @@ class TestA2UIActionEndpoint:
         mock_agent_service.get.return_value = agent
 
         response = await async_client.post(
-            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
             json={"name": "x" * 200, "surface_id": "s1"},
         )
 
@@ -388,7 +388,7 @@ class TestA2UIActionEndpoint:
         mock_agent_service.get.return_value = agent
 
         response = await async_client.post(
-            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
             json={**SAMPLE_ACTION, "evil_field": "injection"},
         )
 
@@ -407,7 +407,7 @@ class TestA2UIActionEndpoint:
 
         other_workspace_agent_id = uuid4()
         response = await async_client.post(
-            f"/v1/agents/{other_workspace_agent_id}/tasks/{uuid4()}/a2ui/action",
+            f"/v1/workspaces/acme/agents/{other_workspace_agent_id}/tasks/{uuid4()}/a2ui/action",
             json=SAMPLE_ACTION,
         )
 

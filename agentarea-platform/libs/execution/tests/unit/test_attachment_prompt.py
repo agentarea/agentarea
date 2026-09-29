@@ -1,4 +1,4 @@
-from agentarea_execution.workflows.agent_execution_workflow import (
+from agentarea_execution.workflows.agent.llm_turn import (
     _render_workspace_attachment_prompt,
 )
 

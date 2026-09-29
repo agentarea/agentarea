@@ -6,11 +6,13 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from agentarea_common.testing.mocks import TestSecretManager as FakeSecretManager
 from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_openapi.application import service as service_module
 from agentarea_common.testing.flows import MainFlow
 from agentarea_openapi.application.service import (
     MissingHeaderSecretError,
+    MissingUrlVariableSecretError,
     OpenAPIConnectionService,
     fetch_and_parse_spec,
 )
@@ -18,7 +20,9 @@ from agentarea_openapi.domain.models import OpenAPIConnection
 from agentarea_openapi.schemas.dto import (
     OpenAPIConnectionCreate,
     OpenAPIConnectionUpdate,
+    UrlVariableInput,
 )
+from pydantic import ValidationError
 
 SAMPLE_SPEC = {
     "openapi": "3.0.0",
@@ -549,3 +553,178 @@ class TestYamlSpecWithBareDates:
         assert stored["spec_content"]["info"]["version"] == "2024-01-01"
         assert json.loads(json.dumps(stored["spec_content"])) == stored["spec_content"]
         assert [t["name"] for t in stored["available_tools"]] == ["listUsers"]
+
+
+TELEGRAM_BASE_URL = "https://api.telegram.org/bot{token}"
+
+
+class TestUrlVariables:
+    """A credential that lives in the URL path is stored like a secret header."""
+
+    def _service(self, secret_manager, current: OpenAPIConnection | None = None):
+        mock_factory = MagicMock()
+        mock_factory.create_repository.return_value = AsyncMock()
+        svc = OpenAPIConnectionService(
+            repository_factory=mock_factory,
+            secret_manager=secret_manager,
+            auth_config_access_checker=AsyncMock(),
+            outbound_policy=OutboundPolicy(),
+        )
+        svc._repo = AsyncMock()
+        svc._repo.get_by_id.return_value = current
+
+        async def _create(**kwargs):
+            return OpenAPIConnection(**kwargs)
+
+        svc._repo.create.side_effect = _create
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_create_stores_the_value_in_the_secret_manager_and_only_the_name_in_the_row(
+        self,
+    ):
+        secrets = FakeSecretManager()
+        svc = self._service(secrets)
+        payload = OpenAPIConnectionCreate.model_construct(
+            name="Telegram",
+            base_url=TELEGRAM_BASE_URL,
+            url_variables=[UrlVariableInput(name="token", value="123:ABC/def")],
+        )
+
+        with patch("agentarea_openapi.application.service.validate_url", return_value=[]):
+            conn = await svc.create_connection(payload)
+
+        stored = svc._repo.create.call_args.kwargs
+        assert stored["base_url"] == TELEGRAM_BASE_URL
+        assert stored["url_variables"] == ["token"]
+        assert "123:ABC/def" not in json.dumps(stored, default=str)
+        assert secrets._secrets == {f"openapi:{stored['id']}:url_var:token": "123:ABC/def"}
+        assert conn.url_variables == ["token"]
+
+    @pytest.mark.asyncio
+    async def test_a_placeholder_in_the_host_is_rejected(self):
+        secrets = FakeSecretManager()
+        svc = self._service(secrets)
+        payload = OpenAPIConnectionCreate.model_construct(
+            name="Evil",
+            base_url="https://{h}.example.com",
+            url_variables=[UrlVariableInput(name="h", value="internal")],
+        )
+
+        with (
+            patch("agentarea_openapi.application.service.validate_url", return_value=[]),
+            pytest.raises(ValueError, match="path"),
+        ):
+            await svc.create_connection(payload)
+
+        assert secrets._secrets == {}
+        svc._repo.create.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        ("base_url", "names"),
+        [
+            (TELEGRAM_BASE_URL, []),
+            ("https://api.telegram.org/bot", ["token"]),
+            (TELEGRAM_BASE_URL, ["tok"]),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_a_placeholder_and_its_variable_must_match(self, base_url, names):
+        secrets = FakeSecretManager()
+        svc = self._service(secrets)
+        payload = OpenAPIConnectionCreate.model_construct(
+            name="Telegram",
+            base_url=base_url,
+            url_variables=[UrlVariableInput(name=n, value="secret") for n in names] or None,
+        )
+
+        with (
+            patch("agentarea_openapi.application.service.validate_url", return_value=[]),
+            pytest.raises(ValueError, match="URL variable"),
+        ):
+            await svc.create_connection(payload)
+
+        assert secrets._secrets == {}
+
+    @pytest.mark.asyncio
+    async def test_update_replaces_the_stored_values(self):
+        secrets = FakeSecretManager()
+        current = OpenAPIConnection(
+            id=uuid4(), name="Telegram", base_url=TELEGRAM_BASE_URL, url_variables=["token"]
+        )
+        await secrets.set_secret(f"openapi:{current.id}:url_var:token", "old")
+        svc = self._service(secrets, current=current)
+        payload = OpenAPIConnectionUpdate.model_validate(
+            {"url_variables": [{"name": "token", "value": "new"}]}
+        )
+
+        await svc.update_connection(current.id, payload)
+
+        assert secrets._secrets == {f"openapi:{current.id}:url_var:token": "new"}
+        svc._repo.update.assert_awaited_once_with(str(current.id), url_variables=["token"])
+
+    @pytest.mark.asyncio
+    async def test_update_of_base_url_alone_must_keep_the_stored_variables_used(self):
+        current = OpenAPIConnection(
+            id=uuid4(), name="Telegram", base_url=TELEGRAM_BASE_URL, url_variables=["token"]
+        )
+        svc = self._service(FakeSecretManager(), current=current)
+        payload = OpenAPIConnectionUpdate.model_construct(base_url="https://api.telegram.org/")
+        payload.__pydantic_fields_set__.add("base_url")
+
+        with (
+            patch("agentarea_openapi.application.service.validate_url", return_value=[]),
+            pytest.raises(ValueError, match="URL variable"),
+        ):
+            await svc.update_connection(current.id, payload)
+
+        svc._repo.update.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_delete_removes_the_variable_secrets(self):
+        secrets = FakeSecretManager()
+        current = OpenAPIConnection(
+            id=uuid4(), name="Telegram", base_url=TELEGRAM_BASE_URL, url_variables=["token"]
+        )
+        await secrets.set_secret(f"openapi:{current.id}:url_var:token", "123:ABC")
+        svc = self._service(secrets, current=current)
+
+        await svc.delete_connection(current.id)
+
+        assert secrets._secrets == {}
+
+    @pytest.mark.asyncio
+    async def test_resolve_base_url_quotes_each_value_into_the_path(self):
+        secrets = FakeSecretManager()
+        conn = OpenAPIConnection(
+            id=uuid4(), name="Telegram", base_url=TELEGRAM_BASE_URL, url_variables=["token"]
+        )
+        await secrets.set_secret(f"openapi:{conn.id}:url_var:token", "123:ABC/def")
+        svc = self._service(secrets)
+
+        assert await svc.resolve_base_url(conn) == "https://api.telegram.org/bot123%3AABC%2Fdef"
+
+    @pytest.mark.asyncio
+    async def test_resolve_base_url_fails_loudly_on_a_missing_value(self):
+        conn = OpenAPIConnection(
+            id=uuid4(), name="Telegram", base_url=TELEGRAM_BASE_URL, url_variables=["token"]
+        )
+        svc = self._service(FakeSecretManager())
+
+        with pytest.raises(MissingUrlVariableSecretError, match="URL variable 'token'"):
+            await svc.resolve_base_url(conn)
+
+
+class TestUrlVariableDto:
+    def test_a_placeholder_in_the_host_is_rejected_before_any_lookup(self):
+        with pytest.raises(ValidationError, match="path"):
+            OpenAPIConnectionCreate(
+                name="Evil",
+                base_url="https://{h}.example.com",
+                url_variables=[{"name": "h", "value": "internal"}],
+            )
+
+    @pytest.mark.parametrize("name", ["1token", "to-ken", "", "a b"])
+    def test_variable_names_are_identifiers(self, name):
+        with pytest.raises(ValidationError):
+            UrlVariableInput(name=name, value="secret")

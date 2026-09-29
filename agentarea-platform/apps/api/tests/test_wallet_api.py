@@ -1,6 +1,7 @@
 """API endpoint tests for wallet routes with mocked WalletService."""
 
 from datetime import datetime
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -28,7 +29,7 @@ def _mock_wallet(**overrides):
     w.x402_config = overrides.get("x402_config", {"network": "eip155:8453"})
     w.mpp_config = overrides.get("mpp_config", {"payment_method_types": ["charge"]})
     w.credentials_secret_id = overrides.get("credentials_secret_id", "secret_1")
-    w.service_budget_usd = overrides.get("service_budget_usd", 5.0)
+    w.service_budget_usd = overrides.get("service_budget_usd", Decimal("5.000000"))
     w.service_budget_period = overrides.get("service_budget_period", "execution")
     w.status = overrides.get("status", "active")
     w.created_at = datetime.now()
@@ -42,7 +43,7 @@ def _mock_payment(**overrides):
     p.agent_id = overrides.get("agent_id", "agent_1")
     p.execution_id = overrides.get("execution_id", "exec_1")
     p.protocol = overrides.get("protocol", "x402")
-    p.amount_usd = overrides.get("amount_usd", 0.01)
+    p.amount_usd = overrides.get("amount_usd", Decimal("0.010000"))
     p.recipient = overrides.get("recipient", "0xabc")
     p.tx_hash = overrides.get("tx_hash", "0xdef")
     p.tool_name = overrides.get("tool_name", "weather")
@@ -113,6 +114,38 @@ class TestCreateWallet:
         data = resp.json()
         assert data["wallet_type"] == "dual"
         assert data["has_credentials"] is True
+
+    def test_create_mpp_wallet_without_a_session_budget_is_rejected(self, client, mock_service):
+        resp = client.post(
+            f"/agents/{AGENT_ID}/wallet",
+            json={
+                "wallet_type": "mpp",
+                "mpp_config": {"payment_method_types": ["charge"]},
+                "service_budget_usd": "5",
+            },
+        )
+
+        assert resp.status_code == 422
+        assert "session_budget_usd" in resp.text
+        mock_service.create_wallet.assert_not_called()
+
+    def test_create_passes_budgets_as_decimal(self, client, mock_service):
+        mock_service.create_wallet.return_value = _mock_wallet()
+
+        resp = client.post(
+            f"/agents/{AGENT_ID}/wallet",
+            json={
+                "wallet_type": "mpp",
+                "mpp_config": {"session_budget_usd": 0.1},
+                "service_budget_usd": 0.3,
+            },
+        )
+
+        assert resp.status_code == 201
+        kwargs = mock_service.create_wallet.call_args.kwargs
+        assert kwargs["service_budget_usd"] == Decimal("0.3")
+        assert kwargs["mpp_config"]["session_budget_usd"] == "0.1"
+        assert resp.json()["service_budget_usd"] == "5.000000"
 
     def test_create_409_duplicate(self, client, mock_service):
         from agentarea_wallet.domain.exceptions import WalletAlreadyExistsError
@@ -226,14 +259,15 @@ class TestDeleteWallet:
 
 class TestGetBalance:
     def test_balance_200(self, client, mock_service):
-        mock_service.get_wallet.return_value = _mock_wallet(service_budget_usd=5.0)
-        mock_service.get_total_spent_current_period.return_value = 2.0
+        mock_service.get_wallet.return_value = _mock_wallet(service_budget_usd=Decimal("0.3"))
+        mock_service.get_total_spent_current_period.return_value = Decimal("0.1") + Decimal("0.1")
 
         resp = client.get(f"/agents/{AGENT_ID}/wallet/balance")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["remaining"] == 3.0
-        assert data["total_spent_current_period"] == 2.0
+        assert data["service_budget_usd"] == "0.3"
+        assert data["remaining"] == "0.1"
+        assert data["total_spent_current_period"] == "0.2"
 
     def test_balance_404(self, client, mock_service):
         from agentarea_wallet.domain.exceptions import WalletNotFoundError
@@ -258,6 +292,7 @@ class TestGetPayments:
         data = resp.json()
         assert data["total"] == 1
         assert len(data["items"]) == 1
+        assert data["items"][0]["amount_usd"] == "0.010000"
         assert data["page"] == 1
 
     def test_payments_200_with_filters(self, client, mock_service):

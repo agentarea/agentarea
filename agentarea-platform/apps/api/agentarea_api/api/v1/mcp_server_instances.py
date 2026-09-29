@@ -192,9 +192,6 @@ async def create_mcp_server_instance(
         raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        logger.exception("create_mcp_server_instance failed")
-        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
 
 @router.post(
@@ -242,9 +239,6 @@ async def create_mcp_server_connection(
         raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        logger.exception("create_mcp_server_connection failed")
-        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
 
 @router.post(
@@ -276,6 +270,9 @@ async def validate_connection(
 
 @router.post(
     "/check",
+    responses={
+        503: {"description": "The MCP manager that validates configurations is unreachable"}
+    },
     dependencies=[
         unrestricted("workspace member; the workspace-scoped repository is the boundary")
     ],
@@ -317,8 +314,6 @@ async def check_mcp_server_instance_configuration(
         raise HTTPException(
             status_code=503, detail="Unable to connect to container manager for validation"
         ) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{instance_id}/environment", dependencies=[requires_workspace_admin()])
@@ -648,7 +643,9 @@ async def get_containers_health(
         try:
             response = await client.get(url)
         except httpx.RequestError as e:
-            logger.warning("MCP manager unreachable for instance %s: %s", instance.id, e)
+            logger.warning(
+                "MCP manager unreachable for instance %s: %s", instance.id, e, exc_info=True
+            )
             return {**row, "healthy": False, "status": "manager_unreachable"}
 
         # The manager answers 200 when healthy and 503 when not, both with the
@@ -657,7 +654,7 @@ async def get_containers_health(
             try:
                 body = response.json()
             except ValueError:
-                logger.error("MCP manager sent unreadable health for %s", instance.id)
+                logger.exception("MCP manager sent unreadable health for %s", instance.id)
                 return {**row, "healthy": False, "status": "unreadable"}
             if not isinstance(body, dict):
                 return {**row, "healthy": False, "status": "unreadable"}
@@ -726,8 +723,15 @@ async def probe_instance_auth(
                         .where(MCPServer.id == spec.id)
                         .values(json_spec=new_json_spec)
                     )
-                    await db_session.execute(stmt)
+                    updated = await db_session.execute(stmt)
                     await db_session.commit()
+                    if updated.rowcount == 0:
+                        logger.info(
+                            "Auth methods for MCP server spec %s not cached: the spec is not "
+                            "owned by workspace %s (a shared catalog mirror)",
+                            spec.id,
+                            service.repository.user_context.workspace_id,
+                        )
         except Exception:
             logger.warning(
                 "Failed to cache auth methods for MCP server spec after probe",

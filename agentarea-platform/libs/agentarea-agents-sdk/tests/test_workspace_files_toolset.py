@@ -16,6 +16,7 @@ async def test_workspace_files_toolset_runs_without_api_package_context():
         extra_kwargs={
             "storage": storage,
             "workspace_id": "workspace-1",
+            "workspace_slug": "acme",
             "base_prefix": "shared",
         },
     )
@@ -29,7 +30,7 @@ async def test_workspace_files_toolset_runs_without_api_package_context():
     ]
 
     url = json.loads(await toolset.get_url("report.html"))
-    assert url["url"] == "/v1/files/download/shared/report.html"
+    assert url["url"] == "/v1/workspaces/acme/files/download/shared/report.html"
 
     deleted = json.loads(await toolset.delete("report.html"))
     assert deleted == {"deleted": True, "path": "report.html"}

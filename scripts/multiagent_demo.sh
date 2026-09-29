@@ -66,6 +66,15 @@ note "JWT acquired (len=${#JWT})"
 
 H=( -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' )
 
+step "Resolve workspace"
+# Workspace-scoped endpoints take the workspace slug in the path
+# (/v1/workspaces/{workspace}/...); there is no header and no default.
+# Listing workspaces auto-provisions and returns this identity's personal one.
+WORKSPACE=$(curl -sS "$API/v1/workspaces" "${H[@]}" | jq -r '.[0].slug')
+[[ -n "$WORKSPACE" && "$WORKSPACE" != "null" ]] || fail "no workspace resolved for this identity"
+note "workspace=$WORKSPACE"
+WS="/v1/workspaces/$WORKSPACE"
+
 step "Resolve provider_spec + model_spec"
 PROV_ID=$($PG "SELECT id FROM provider_specs WHERE provider_key='$LLM_PROVIDER_KEY';" | tr -d '[:space:]')
 [[ -n "$PROV_ID" ]] || fail "provider_spec '$LLM_PROVIDER_KEY' missing — run e2e tests first to seed"
@@ -74,11 +83,11 @@ MSPEC_ID=$($PG "SELECT id FROM model_specs WHERE provider_spec_id='$PROV_ID' AND
 note "provider_spec=$PROV_ID model_spec=$MSPEC_ID"
 
 step "Create provider_config + model_instance"
-PC=$(curl -sS -X POST "$API/v1/provider-configs/" "${H[@]}" \
+PC=$(curl -sS -X POST "$API$WS/provider-configs/" "${H[@]}" \
   -d "{\"provider_spec_id\":\"$PROV_ID\",\"name\":\"demo-$(date +%s)\",\"api_key\":\"$LLM_API_KEY\",\"endpoint_url\":\"$LLM_ENDPOINT\"}")
 PC_ID=$(echo "$PC" | jq -r .id)
 [[ "$PC_ID" != "null" ]] || fail "provider_config: $PC"
-MI=$(curl -sS -X POST "$API/v1/model-instances/" "${H[@]}" \
+MI=$(curl -sS -X POST "$API$WS/model-instances/" "${H[@]}" \
   -d "{\"provider_config_id\":\"$PC_ID\",\"model_spec_id\":\"$MSPEC_ID\",\"name\":\"demo-mi-$(date +%s)\"}")
 MODEL_ID=$(echo "$MI" | jq -r .id)
 [[ "$MODEL_ID" != "null" ]] || fail "model_instance: $MI"
@@ -87,7 +96,7 @@ note "model_id=$MODEL_ID"
 create_agent() {
   local NAME="$1" INSTR="$2" TOOLS="$3"
   local BODY="{\"name\":\"$NAME\",\"description\":\"demo\",\"instruction\":$(jq -Rs . <<<"$INSTR"),\"model_id\":\"$MODEL_ID\",\"agent_type\":\"chat\",\"tools\":$TOOLS}"
-  curl -sS -X POST "$API/v1/agents/" "${H[@]}" -d "$BODY"
+  curl -sS -X POST "$API$WS/agents/" "${H[@]}" -d "$BODY"
 }
 
 step "Create specialist: file-writer"
@@ -139,7 +148,7 @@ PROMPT="Please run all three subagents:
 (2) Tell $PF_NAME to download the PDF at $PDF_URL.
 (3) Tell $MS_NAME to fetch $WIKI_URL and produce a markdown summary into summary.md.
 Then summarize what each one did."
-TASK=$(curl -sS -X POST "$API/v1/agents/$COORD_ID/tasks/sync" "${H[@]}" \
+TASK=$(curl -sS -X POST "$API$WS/agents/$COORD_ID/tasks/sync" "${H[@]}" \
   -d "{\"description\":$(jq -Rs . <<<"$PROMPT")}" --max-time 30)
 TASK_ID=$(echo "$TASK" | jq -r .id)
 [[ "$TASK_ID" != "null" ]] || fail "task submit: $TASK"
@@ -149,7 +158,7 @@ step "Poll events until WorkflowCompleted (up to 5 min)"
 DEADLINE=$(( $(date +%s) + 300 ))
 LAST_TYPES=""
 while [[ $(date +%s) -lt $DEADLINE ]]; do
-  EV=$(curl -sS "$API/v1/agents/$COORD_ID/tasks/$TASK_ID/events" "${H[@]}")
+  EV=$(curl -sS "$API$WS/agents/$COORD_ID/tasks/$TASK_ID/events" "${H[@]}")
   TYPES=$(echo "$EV" | jq -r '.events[].event_type' | sort | uniq -c | awk '{printf "%s:%s ", $2,$1}')
   if [[ "$TYPES" != "$LAST_TYPES" ]]; then
     note "[$(date +%H:%M:%S)] $TYPES"
@@ -167,11 +176,11 @@ while [[ $(date +%s) -lt $DEADLINE ]]; do
 done
 
 step "Final coordinator response"
-FINAL=$(curl -sS "$API/v1/agents/$COORD_ID/tasks/$TASK_ID" "${H[@]}")
+FINAL=$(curl -sS "$API$WS/agents/$COORD_ID/tasks/$TASK_ID" "${H[@]}")
 echo "$FINAL" | jq '{status, result}'
 
 step "Tool calls observed (coordinator)"
-curl -sS "$API/v1/agents/$COORD_ID/tasks/$TASK_ID/events" "${H[@]}" \
+curl -sS "$API$WS/agents/$COORD_ID/tasks/$TASK_ID/events" "${H[@]}" \
   | jq -r '.events[] | select(.event_type=="ToolCallStarted") | .metadata.tool_name' \
   | sort | uniq -c
 
@@ -184,7 +193,7 @@ docker exec agentarea-db-1 /usr/bin/psql -U postgres -d agentarea -tA -c \
   "SELECT t.id, t.description FROM tasks t WHERE t.created_at > now() - interval '10 min' ORDER BY t.created_at;"
 
 # Best-effort: cancel coordinator to release the await_input window.
-curl -sS -X DELETE "$API/v1/agents/$COORD_ID/tasks/$TASK_ID" "${H[@]}" >/dev/null || true
+curl -sS -X DELETE "$API$WS/agents/$COORD_ID/tasks/$TASK_ID" "${H[@]}" >/dev/null || true
 
 step "Cleanup Kratos identity"
 curl -sS -X DELETE "$KRATOS_ADMIN/admin/identities/$IDENT_ID" >/dev/null || true

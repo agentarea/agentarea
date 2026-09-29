@@ -1,9 +1,9 @@
 "use client";
 
 import React, { use } from "react";
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Plug, Sparkles } from "lucide-react";
+import Link from "@/components/WorkspaceLink";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 

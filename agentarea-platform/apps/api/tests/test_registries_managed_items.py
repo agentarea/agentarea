@@ -37,7 +37,7 @@ def _item(**overrides):
 
 def _client_for(service) -> AsyncClient:
     app = FastAPI()
-    app.include_router(registries.router, prefix="/v1")
+    app.include_router(registries.router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[registries.get_registry_service] = lambda: service
     app.dependency_overrides[get_user_context] = lambda: UserContext(
         user_id="platform", workspace_id="platform"
@@ -52,7 +52,7 @@ async def test_post_creates_one_catalog_item():
 
     async with _client_for(service) as client:
         response = await client.post(
-            f"/v1/registries/{registry_id}/items",
+            f"/v1/workspaces/acme/registries/{registry_id}/items",
             json={
                 "external_id": "ai.agentarea.catalog/yandex-metrica",
                 "name": "Yandex Metrica",
@@ -82,7 +82,7 @@ async def test_post_maps_duplicate_to_conflict():
 
     async with _client_for(service) as client:
         response = await client.post(
-            f"/v1/registries/{registry_id}/items",
+            f"/v1/workspaces/acme/registries/{registry_id}/items",
             json={"external_id": "duplicate", "name": "Duplicate"},
         )
 
@@ -95,7 +95,7 @@ async def test_patch_updates_an_item():
 
     async with _client_for(service) as client:
         response = await client.patch(
-            f"/v1/registries/catalog/items/{item.id}",
+            f"/v1/workspaces/acme/registries/catalog/items/{item.id}",
             json={"name": "Renamed"},
         )
 
@@ -109,7 +109,7 @@ async def test_delete_removes_an_item():
     service = SimpleNamespace(delete_catalog_item=AsyncMock(return_value=None))
 
     async with _client_for(service) as client:
-        response = await client.delete(f"/v1/registries/catalog/items/{item_id}")
+        response = await client.delete(f"/v1/workspaces/acme/registries/catalog/items/{item_id}")
 
     assert response.status_code == 204
     service.delete_catalog_item.assert_awaited_once_with(item_id)

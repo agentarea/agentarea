@@ -24,7 +24,7 @@ SDK's nonstreamed completion method and emits no progress callbacks. Omitting a
 chunk callback does not change provider mode. Both modes require configured
 pricing and positive token usage before returning a successful `LLMCallResult`.
 
-[`call_llm_activity`](agentarea_execution/activities/agent_execution_activities.py)
+[`call_llm_activity`](agentarea_execution/activities/agent/llm.py)
 binds task event callbacks, constructs the principal, and maps ordinary errors to
 Temporal failures. Its heartbeat and cancellation behavior remain in the activity
 adapter. The workflow still awaits one final activity result and owns retries,

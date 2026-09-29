@@ -1,0 +1,192 @@
+import { getTranslations } from "next-intl/server";
+import CatalogSuggestions from "@/components/CatalogSuggestions";
+import EmptyState from "@/components/EmptyState";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
+import FormError from "@/components/FormError";
+import {
+  listAgents,
+  listModelInstances,
+  listMCPServerInstances,
+  listMCPServers,
+  listOpenAPIConnections,
+  getAllTasks,
+} from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
+import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
+import type { Agent } from "@/types";
+import {
+  type OpenApiConnectionRef,
+  resolveAgentToolIcons,
+} from "@/utils/agentToolIcons";
+import AgentsList from "./AgentsList";
+
+interface AgentsContentProps {
+  searchQuery?: string;
+  viewMode?: string;
+}
+
+export default async function AgentsContent({
+  searchQuery = "",
+  viewMode = "grid",
+}: AgentsContentProps) {
+  const t = await getTranslations("AgentsPage");
+  const tCommon = await getTranslations("Common");
+
+  const [
+    agentsResult,
+    modelInstancesResult,
+    mcpInstancesResult,
+    mcpServersResult,
+    openApiConnectionsResult,
+    tasksResult,
+  ] = await Promise.all([
+    listAgents(),
+    listModelInstances(),
+    listMCPServerInstances(),
+    listMCPServers({ page_size: 100 }),
+    listOpenAPIConnections(),
+    getAllTasks(),
+  ]);
+
+  if (agentsResult.error) {
+    return (
+      <RetryEmptyState
+        title={t("list.loadFailed")}
+        description={apiErrorMessage(agentsResult, t("list.loadFailed"))}
+        iconsType="agent"
+      />
+    );
+  }
+
+  const partialErrors = [
+    [modelInstancesResult, t("list.loadModelsFailed")],
+    [mcpInstancesResult, t("list.loadMcpInstancesFailed")],
+    [mcpServersResult, t("list.loadMcpServersFailed")],
+    [openApiConnectionsResult, t("list.loadOpenapiFailed")],
+    [tasksResult, t("list.loadTasksFailed")],
+  ] as const;
+  const partialErrorMessages = partialErrors
+    .filter(([result]) => result.error)
+    .map(([result, label]) => apiErrorMessage(result, label));
+  const partialErrorBlock =
+    partialErrorMessages.length > 0 ? (
+      <FormError>{partialErrorMessages.join("; ")}</FormError>
+    ) : null;
+
+  const agents = agentsResult.data ?? [];
+  const modelInstances = modelInstancesResult.data ?? [];
+  const mcpInstances = mcpInstancesResult.data ?? [];
+  const mcpServersData = mcpServersResult.data;
+  const openApiConnections = openApiConnectionsResult.data ?? [];
+  const tasks = tasksResult.data ?? [];
+
+  const mcpServers: McpServer[] = Array.isArray(mcpServersData)
+    ? (mcpServersData as McpServer[])
+    : ((mcpServersData as { items?: McpServer[] } | null | undefined)?.items ??
+      []);
+  const mcpInstanceList = (mcpInstances as McpInstance[]) ?? [];
+  const openApiConnectionList =
+    (openApiConnections as OpenApiConnectionRef[]) ?? [];
+
+  // Count active (running) tasks per agent
+  const taskList = (tasks ?? []) as Array<{ status?: string; agent_id?: string }>;
+  const activeTaskCountByAgent: Record<string, number> = {};
+  for (const task of taskList) {
+    if (task.status === "running" && task.agent_id) {
+      const agentId = String(task.agent_id);
+      activeTaskCountByAgent[agentId] = (activeTaskCountByAgent[agentId] ?? 0) + 1;
+    }
+  }
+
+  // Bridge the API response to the domain Agent type once, at the boundary.
+  // (The /agents list returns only your own agents — catalog lives in Explore.)
+  const agentList = (agents ?? []) as unknown as Agent[];
+  const models = (modelInstances ?? []) as Array<{
+    id: string;
+    provider_name?: string | null;
+    provider_icon_url?: string | null;
+    model_display_name?: string | null;
+    config_name?: string | null;
+  }>;
+
+  const enrichedAgents = agentList.map((agent) => {
+    const model = models.find((m) => m.id === agent.model_id);
+    const model_info = model
+      ? {
+          provider_name: model.provider_name || undefined,
+          provider_icon_url: model.provider_icon_url || undefined,
+          model_display_name: model.model_display_name || undefined,
+          config_name: model.config_name || undefined,
+        }
+      : undefined;
+    const active_task_count = activeTaskCountByAgent[String(agent.id)] ?? 0;
+    const tool_icons = resolveAgentToolIcons(agent, {
+      mcpInstances: mcpInstanceList,
+      mcpServers,
+      openApiConnections: openApiConnectionList,
+    });
+    return { ...agent, model_info, active_task_count, tool_icons };
+  });
+
+  // Filter agents based on search query
+  let filteredAgents = enrichedAgents;
+  if (searchQuery.trim()) {
+    const query = searchQuery.toLowerCase();
+    filteredAgents = enrichedAgents.filter(
+      (agent) =>
+        agent.name?.toLowerCase().includes(query) ||
+        agent.description?.toLowerCase().includes(query) ||
+        agent.model_info?.provider_name?.toLowerCase().includes(query) ||
+        agent.model_info?.model_display_name?.toLowerCase().includes(query) ||
+        agent.model_info?.config_name?.toLowerCase().includes(query)
+    );
+  }
+
+  // Handle empty states
+  if (enrichedAgents.length === 0) {
+    return (
+      <div className="space-y-4">
+        {partialErrorBlock}
+        <EmptyState
+          title={t("noAgentsTitle")}
+          description={t("noAgentsDescription")}
+          hints={[
+            { text: t("noAgentsHintBuild"), href: "/agents/create" },
+            { text: t("noAgentsHintInstall"), href: "/explore?type=agents" },
+            { text: t("noAgentsHintHarness"), href: "/clients" },
+          ]}
+          iconsType="agent"
+          action={{ label: t("createAgent"), href: "/agents/create" }}
+        />
+        <CatalogSuggestions type="agents" />
+      </div>
+    );
+  }
+
+  if (filteredAgents.length === 0) {
+    return (
+      <div className="space-y-4">
+        {partialErrorBlock}
+        <EmptyState
+          title={t("noMatchingAgents")}
+          description={`${t("noMatchingAgentsDescription")}: "${searchQuery}"`}
+          iconsType="agent"
+          action={{ label: tCommon("clearSearch"), href: "/agents" }}
+        />
+      </div>
+    );
+  }
+
+  if (partialErrorBlock) {
+    return (
+      <div className="space-y-4">
+        {partialErrorBlock}
+        <AgentsList initialAgents={filteredAgents} viewMode={viewMode} />
+      </div>
+    );
+  }
+
+  return (
+    <AgentsList initialAgents={filteredAgents} viewMode={viewMode} />
+  );
+}

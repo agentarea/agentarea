@@ -42,7 +42,6 @@ async def test_workflow_with_malformed_tool_calls_in_content():
             "instruction": "Complete tasks efficiently",
             "model_id": str(uuid4()),
             "tools_config": {},
-            "events_config": {},
             "planning": False,
         }
 
@@ -225,7 +224,6 @@ async def test_workflow_with_various_malformed_formats():
             "instruction": "Complete tasks",
             "model_id": str(uuid4()),
             "tools_config": {},
-            "events_config": {},
             "planning": False,
         }
 

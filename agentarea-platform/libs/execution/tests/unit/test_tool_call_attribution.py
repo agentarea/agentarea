@@ -46,7 +46,7 @@ class TestServerIconFromInstance:
     """_server_icon_from_instance extracts the first icon src, else None."""
 
     def test_returns_first_icon_src(self):
-        from agentarea_execution.activities.agent_execution_activities import (
+        from agentarea_execution.activities.agent.tools import (
             _server_icon_from_instance,
         )
 
@@ -58,7 +58,7 @@ class TestServerIconFromInstance:
         )
 
     def test_returns_first_when_multiple_icons(self):
-        from agentarea_execution.activities.agent_execution_activities import (
+        from agentarea_execution.activities.agent.tools import (
             _server_icon_from_instance,
         )
 
@@ -87,7 +87,7 @@ class TestServerIconFromInstance:
         ],
     )
     def test_returns_none_for_missing_or_invalid(self, json_spec):
-        from agentarea_execution.activities.agent_execution_activities import (
+        from agentarea_execution.activities.agent.tools import (
             _server_icon_from_instance,
         )
 
@@ -95,7 +95,7 @@ class TestServerIconFromInstance:
         assert _server_icon_from_instance(instance) is None
 
     def test_guards_instance_without_json_spec_attr(self):
-        from agentarea_execution.activities.agent_execution_activities import (
+        from agentarea_execution.activities.agent.tools import (
             _server_icon_from_instance,
         )
 

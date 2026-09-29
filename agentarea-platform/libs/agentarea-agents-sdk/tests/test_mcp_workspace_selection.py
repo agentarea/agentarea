@@ -7,11 +7,12 @@ reference goes through the REST membership gate.
 """
 
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
-from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.context import UserPrincipal
 from fastapi import FastAPI
 
 from agentarea_agents_sdk.mcp_server import PinnedWorkspaceMiddleware, create_mcp_server
@@ -42,22 +43,20 @@ class UnscopedToolset(Toolset):
         return get_mcp_user_context().user_id
 
 
-def _alice() -> UserContext:
-    return UserContext(
-        user_id="alice",
-        workspace_id="alice",
-        accessible_workspaces=["alice", "ws-acme"],
-    )
+def _alice() -> UserPrincipal:
+    return UserPrincipal(user_id="alice", accessible_workspaces=["ws-alice", "ws-acme"])
 
 
 def _slugs(mapping: dict[str, str]):
-    async def resolve(slug: str) -> str | None:
-        return mapping.get(slug)
+    """Workspace rows: slug -> id."""
 
-    return patch(
-        "agentarea_common.auth.dependencies._resolve_workspace_id_from_slug",
-        new=AsyncMock(side_effect=resolve),
-    )
+    async def load(*, workspace_id=None, slug=None):
+        for row_slug, row_id in mapping.items():
+            if slug == row_slug or workspace_id == row_id:
+                return SimpleNamespace(id=row_id, slug=row_slug)
+        return None
+
+    return patch("agentarea_common.workspaces.lookup.load_workspace", new=load)
 
 
 async def _tools(server) -> dict:
@@ -135,7 +134,7 @@ class TestBinding:
                 assert get_mcp_user_context().workspace_id == "ws-acme"
             assert get_mcp_user_context() is caller
 
-        assert caller.workspace_id == "alice"
+        assert not hasattr(caller, "workspace_id")
 
     @pytest.mark.asyncio
     async def test_unknown_workspace_raises_permission_error(self):

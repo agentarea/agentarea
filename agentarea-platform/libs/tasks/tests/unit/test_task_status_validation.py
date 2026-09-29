@@ -82,3 +82,11 @@ async def test_task_creation_preserves_business_status(status: str) -> None:
 async def test_unknown_status_is_rejected() -> None:
     with pytest.raises(TaskValidationError):
         await _service().create_task(_task("not-a-real-status"))
+
+
+def test_the_validator_reads_the_shared_vocabulary() -> None:
+    """The whitelist and the list filter are one list, so neither can drift."""
+    from agentarea_tasks.domain import base_service
+    from agentarea_tasks.domain.statuses import TASK_STATUSES
+
+    assert base_service.TASK_STATUSES is TASK_STATUSES

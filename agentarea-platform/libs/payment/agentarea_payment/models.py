@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 
 
@@ -12,7 +13,7 @@ class PaymentResult:
 
     success: bool
     protocol: str  # "x402" or "mpp"
-    amount_usd: float
+    amount_usd: Decimal
     recipient: str
     tx_hash: str | None = None
     error: str | None = None

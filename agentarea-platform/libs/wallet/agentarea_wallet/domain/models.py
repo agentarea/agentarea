@@ -1,7 +1,9 @@
 """ORM models for the wallet domain."""
 
+from decimal import Decimal
+
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, Float, ForeignKey, Index, String, UniqueConstraint, text
+from sqlalchemy import JSON, ForeignKey, Index, Numeric, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,7 +23,9 @@ class AgentWallet(BaseModel, WorkspaceScopedMixin):
     x402_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     mpp_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     credentials_secret_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    service_budget_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    service_budget_usd: Mapped[Decimal] = mapped_column(
+        Numeric(18, 6), nullable=False, default=Decimal("0")
+    )
     service_budget_period: Mapped[str] = mapped_column(
         String, nullable=False, default="execution"
     )  # "execution", "daily", "monthly"
@@ -49,7 +53,7 @@ class PaymentRecord(BaseModel, WorkspaceScopedMixin):
     agent_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     execution_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     protocol: Mapped[str] = mapped_column(String, nullable=False)  # "x402", "mpp"
-    amount_usd: Mapped[float] = mapped_column(Float, nullable=False)
+    amount_usd: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     recipient: Mapped[str] = mapped_column(String, nullable=False)
     tx_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     tool_name: Mapped[str] = mapped_column(String, nullable=False)

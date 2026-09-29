@@ -44,7 +44,7 @@ def _wait_for_event_count(
     last: list[dict] = []
     last_count = 0
     while time.time() < deadline:
-        resp = client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/events")
+        resp = client.get(f"{client.ws}/agents/{agent_id}/tasks/{task_id}/events")
         resp.raise_for_status()
         last = resp.json()["events"]
         if any(
@@ -81,7 +81,7 @@ def test_queue_message_resumes_completed_task(
         ),
     )
     task_id = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={"description": "Reply with the word: alpha"},
         timeout=30.0,
     ).raise_for_status().json()["id"]
@@ -96,7 +96,7 @@ def test_queue_message_resumes_completed_task(
     # Send the follow-up. Endpoint must accept the command and the workflow
     # must still be addressable (not yet terminated).
     cmd = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/{task_id}/command",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}/command",
         json={"command": "queue_message", "message": "Now reply with: beta"},
     )
     assert cmd.status_code == 200, cmd.text[:200]
@@ -125,7 +125,7 @@ def test_queue_message_resumes_completed_task(
     )
 
     # Release the workflow — otherwise it parks in awaiting_input for 30 min.
-    cancel = alice_client.delete(f"/v1/agents/{agent_id}/tasks/{task_id}")
+    cancel = alice_client.delete(f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}")
     assert cancel.status_code in (200, 404), cancel.text[:200]
 
 
@@ -143,13 +143,13 @@ def test_queue_message_cross_workspace_blocked(
         instruction="Reply ok then complete.",
     )
     task_id = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={"description": "Reply: ok"},
         timeout=30.0,
     ).raise_for_status().json()["id"]
 
     bad = bob_client.post(
-        f"/v1/agents/{agent_id}/tasks/{task_id}/command",
+        f"{bob_client.ws}/agents/{agent_id}/tasks/{task_id}/command",
         json={"command": "queue_message", "message": "leak"},
     )
     assert bad.status_code == 404, (
@@ -158,7 +158,7 @@ def test_queue_message_cross_workspace_blocked(
     )
 
     # Clean up — best effort, Alice's task may already have completed.
-    alice_client.delete(f"/v1/agents/{agent_id}/tasks/{task_id}")
+    alice_client.delete(f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}")
 
 
 @pytest.mark.integration
@@ -177,16 +177,16 @@ def test_queue_message_empty_text_rejected(
         instruction="ok.",
     )
     task_id = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={"description": "ok"},
         timeout=30.0,
     ).raise_for_status().json()["id"]
 
     resp = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/{task_id}/command",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}/command",
         json={"command": "queue_message"},
     )
     assert resp.status_code == 400, resp.text[:200]
     assert "message is required" in resp.json()["detail"].lower()
 
-    alice_client.delete(f"/v1/agents/{agent_id}/tasks/{task_id}")
+    alice_client.delete(f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}")

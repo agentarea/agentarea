@@ -67,9 +67,11 @@ spec:
             - name: http
               containerPort: {{ .Values.global.api.port }}
               protocol: TCP
+            {{- if .Values.global.monitoring.prometheus.enabled }}
             - name: metrics
               containerPort: {{ .Values.global.monitoring.prometheus.port }}
               protocol: TCP
+            {{- end }}
             - name: health
               containerPort: {{ .Values.global.monitoring.health.port }}
               protocol: TCP

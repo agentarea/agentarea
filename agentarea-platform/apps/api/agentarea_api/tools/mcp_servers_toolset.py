@@ -218,7 +218,14 @@ class MCPServersToolset(Toolset):
         limit: int = 100,
         offset: int = 0,
     ) -> str:
-        """List MCP server specs (templates) available in the workspace."""
+        """List MCP server specs (templates) available in the workspace.
+
+        ``limit`` is 1..100; page further with ``offset``.
+        """
+        if not 1 <= limit <= 100:
+            return json.dumps({"error": f"limit must be between 1 and 100, got {limit}"})
+        if offset < 0:
+            return json.dumps({"error": f"offset must not be negative, got {offset}"})
         async with platform_read_context() as (
             _session,
             user_ctx,
@@ -323,11 +330,15 @@ class MCPServersToolset(Toolset):
             server_spec_id: ID of an existing MCP server spec.
             auth_config_id: Optional MCPAuthConfig UUID for OAuth/credentials.
         """
+        try:
+            spec_id = UUID(server_spec_id)
+        except ValueError:
+            return json.dumps({"error": f"server_spec_id must be a UUID, got {server_spec_id!r}"})
         spec = json.loads(json_spec_json) if json_spec_json else {}
         payload = MCPServerInstanceCreate(
             name=name,
             description=description,
-            server_spec_id=server_spec_id,
+            server_spec_id=spec_id,
             json_spec=spec,
             auth_config_id=auth_config_id,
         )

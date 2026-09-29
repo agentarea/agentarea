@@ -197,6 +197,7 @@ RUN_OWN_FILES = "files under the storage prefix the worker injects for this run"
     description="Read, write, list, and search files in the agent's workspace storage.",
     category="utility",
     plane="runtime",
+    group="sandbox",
     requires_user_confirmation=True,
 )
 class FileToolset(Toolset):

@@ -1,13 +1,21 @@
 import { useTranslations } from "next-intl";
 import { DollarSign } from "lucide-react";
+import { formatMoney } from "@/lib/money";
 import Section from "./Section";
 
 interface BudgetInfoProps {
   totalCost: number;
   budgetLimit: number | null;
+  currency?: string | null;
+  locale?: string;
 }
 
-export default function BudgetInfo({ totalCost, budgetLimit }: BudgetInfoProps) {
+export default function BudgetInfo({
+  totalCost,
+  budgetLimit,
+  currency = null,
+  locale = "en",
+}: BudgetInfoProps) {
   const t = useTranslations("TaskInfoPanel");
 
   const costPct =
@@ -23,10 +31,11 @@ export default function BudgetInfo({ totalCost, budgetLimit }: BudgetInfoProps) 
           {t("cost")}
         </div>
         <span className="text-sm font-semibold text-foreground">
-          ${totalCost.toFixed(4)}
+          {formatMoney(totalCost, currency, locale)}
           {budgetLimit != null && (
             <span className="font-normal text-muted-foreground">
-              {" "}/ ${budgetLimit.toFixed(2)}
+              {" "}
+              / {formatMoney(budgetLimit, currency, locale)}
             </span>
           )}
         </span>

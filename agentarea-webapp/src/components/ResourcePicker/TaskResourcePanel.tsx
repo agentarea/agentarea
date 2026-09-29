@@ -2,9 +2,9 @@
 
 import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import Link from "@/components/WorkspaceLink";
 import SearchInput from "@/components/SearchInput/SearchInput";
 import { BlueprintBadge } from "@/components/ui/blueprint-badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,6 +18,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useWorkspacePath } from "@/hooks/useWorkspaceNavigation";
 import {
   useAttachableResources,
   type AttachableResources,
@@ -48,9 +49,6 @@ const SELECTED_TINT = "hsl(var(--primary))";
 const BARE_EMPTY_STATE =
   "border-0 bg-transparent p-6 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent";
 
-// A new tab: leaving would drop the task being written.
-const openInNewTab = (href: string) =>
-  window.open(href, "_blank", "noopener,noreferrer");
 
 type TaskResourcePanelProps = {
   mcps: TaskResourceRef[];
@@ -83,6 +81,11 @@ export function TaskResourcePanelView({
 }: TaskResourcePanelProps & { resources: AttachableResources }) {
   const t = useTranslations("Pickers");
   const tCommon = useTranslations("Common");
+  const inWorkspace = useWorkspacePath();
+  // A new tab, inside this workspace: leaving would drop the task being
+  // written.
+  const openInNewTab = (path: string) =>
+    window.open(inWorkspace(path), "_blank", "noopener,noreferrer");
   const [tab, setTab] = useState<Tab>("skills");
   const [query, setQuery] = useState("");
 

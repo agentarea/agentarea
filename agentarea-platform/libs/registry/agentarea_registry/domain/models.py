@@ -11,7 +11,17 @@ from datetime import datetime
 from typing import Any
 
 from agentarea_common.base.models import BaseModel
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -41,6 +51,11 @@ class Registry(BaseModel):
     """
 
     __tablename__ = "registries"
+    # Reconcile finds a configured source by name. Without this, two writers
+    # racing on a first sync each saw "no such registry" and created one: prod
+    # carried a second copy of most skill shards and of the MCP catalog, every
+    # item listed twice.
+    __table_args__ = (UniqueConstraint("name", name="uq_registries_name"),)
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -96,6 +111,72 @@ class RegistryItem(BaseModel):
     """
 
     __tablename__ = "registry_items"
+    # Every browse query is bounded by `registry_type`, reads only items of
+    # active registries, and is served by one of these, so /explore costs a
+    # page of index entries rather than a scan of the whole catalog (~300k rows,
+    # each carrying ~1 KB of spec). The ordering indexes mirror CATALOG_SORTS
+    # column for column -- an index that does not match the ORDER BY exactly
+    # cannot stop the sort.
+    __table_args__ = (
+        Index(
+            "ix_registry_items_browse_recommended",
+            "registry_type",
+            text("featured DESC"),
+            "registry_priority",
+            "recommendation_rank",
+            "sort_key",
+            "id",
+            postgresql_where=text("registry_active"),
+        ),
+        Index(
+            "ix_registry_items_browse_category_recommended",
+            "registry_type",
+            "category",
+            text("featured DESC"),
+            "registry_priority",
+            "recommendation_rank",
+            "sort_key",
+            "id",
+            postgresql_where=text("registry_active"),
+        ),
+        Index(
+            "ix_registry_items_browse_name",
+            "registry_type",
+            "sort_key",
+            "id",
+            postgresql_where=text("registry_active"),
+        ),
+        Index(
+            "ix_registry_items_browse_category_name",
+            "registry_type",
+            "category",
+            "sort_key",
+            "id",
+            postgresql_where=text("registry_active"),
+        ),
+        # Totals and facet counts: carries every column their filters read, so
+        # they are counted from the index without visiting a row.
+        Index(
+            "ix_registry_items_browse_facets",
+            "registry_type",
+            "category",
+            postgresql_include=["protocol"],
+            postgresql_where=text("registry_active"),
+        ),
+        # Free-text search is `ILIKE '%term%'`, which no btree can answer.
+        Index(
+            "ix_registry_items_name_trgm",
+            "name",
+            postgresql_using="gin",
+            postgresql_ops={"name": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_registry_items_description_trgm",
+            "description",
+            postgresql_using="gin",
+            postgresql_ops={"description": "gin_trgm_ops"},
+        ),
+    )
 
     registry_id: Mapped[str] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -117,15 +198,28 @@ class RegistryItem(BaseModel):
     # catalog can be filtered, ordered and counted in SQL: every registry type
     # hides its category somewhere different, and the title the UI shows is
     # often not `name`, so neither is reachable from a portable query.
-    category: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    sort_key: Mapped[str] = mapped_column(String(255), nullable=False, default="", index=True)
+    category: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sort_key: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # "mcp" or "api" for the connections catalog, NULL for every other type.
+    protocol: Mapped[str | None] = mapped_column(String(10), nullable=True)
     # Curation order within the owning registry: lower comes first. Sources are
     # already authored best-first (the curated skills artifact is ordered by
     # GitHub stars, the connection artifact leads with official integrations),
     # and that order is the only usefulness signal the catalog has -- without
     # persisting it, browsing collapses to alphabetical.
     recommendation_rank: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Copies of the owning registry's type, weight and active flag. Browse
+    # filters and orders on them; while they lived only on `registries`, no
+    # index on this table could produce the catalog order, so every page sorted
+    # the whole type. RegistryItemRepository.create stamps them and
+    # RegistryRepository.update keeps them in step.
+    registry_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    registry_priority: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=DEFAULT_REGISTRY_PRIORITY
+    )
+    registry_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     def __init__(
         self,
@@ -140,10 +234,19 @@ class RegistryItem(BaseModel):
         sort_key: str | None = None,
         featured: bool = False,
         recommendation_rank: int = 0,
+        protocol: str | None = None,
+        *,
+        registry_type: str,
+        registry_priority: int,
+        registry_active: bool,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.registry_id = registry_id
+        self.registry_type = registry_type
+        self.registry_priority = registry_priority
+        self.registry_active = registry_active
+        self.protocol = protocol
         self.external_id = external_id
         self.name = name
         self.description = description

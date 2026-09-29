@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
+import Link from "@/components/WorkspaceLink";
 import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { BoardCrossMark } from "@/components/board";
 import { Button } from "@/components/ui/button";

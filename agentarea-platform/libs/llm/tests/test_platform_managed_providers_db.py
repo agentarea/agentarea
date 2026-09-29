@@ -19,6 +19,7 @@ Needs a PostgreSQL migrated to head; skips without one:
 import os
 import uuid
 from collections.abc import AsyncGenerator
+from decimal import Decimal
 
 import pytest
 from agentarea_common.auth import UserContext
@@ -122,8 +123,8 @@ async def _install_platform_model(s: AsyncSession, spec: ProviderSpec) -> None:
         model_name=MODEL_NAME,
         display_name="Test Model mini",
         context_window=128000,
-        input_cost_per_token=1.5e-7,
-        output_cost_per_token=6e-7,
+        input_cost_per_token=Decimal("1.5e-7"),
+        output_cost_per_token=Decimal("6e-7"),
         workspace_id=PLATFORM_WORKSPACE_ID,
         created_by="operator",
     )
@@ -252,7 +253,7 @@ async def test_the_worker_can_resolve_a_platform_model_from_a_tenant_workspace(s
     assert instance.provider_config.provider_spec.provider_type == "openai"
     assert instance.model_spec.model_name == MODEL_NAME
     assert instance.provider_config.endpoint_url == ENDPOINT_URL
-    assert instance.model_spec.input_cost_per_token == 1.5e-7, (
+    assert instance.model_spec.input_cost_per_token == Decimal("1.5e-7"), (
         "without pricing the run is refused before it starts"
     )
     # The two fields that decide whose secrets are read and whose money is spent.

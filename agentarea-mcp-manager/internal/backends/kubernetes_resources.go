@@ -136,15 +136,19 @@ func ceilingWithin(allowed, requested config.ResourceRequirements) error {
 	return nil
 }
 
+// dataPlaneOwnerLabel marks a workload as owned by one data plane. The data
+// plane stamps it from its own configuration, never from the request.
+const dataPlaneOwnerLabel = "agentarea.io/dataplane-id"
+
 func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName string, spec *InstanceSpec) error {
 	// Operator labels first, platform labels (incl. the managed-by label the
 	// egress NetworkPolicy selects on) applied on top so they can't be clobbered.
 	labels := mergeStringMaps(k.k8sConfig.InstancePod.Labels, k.getCommonLabels(instanceName))
 	// Data-plane ownership is stamped by the authenticated server, not inherited
 	// from operator pod defaults or an instance name.
-	delete(labels, usageOwnerLabel)
-	if owner := spec.Labels[usageOwnerLabel]; owner != "" {
-		labels[usageOwnerLabel] = owner
+	delete(labels, dataPlaneOwnerLabel)
+	if owner := spec.Labels[dataPlaneOwnerLabel]; owner != "" {
+		labels[dataPlaneOwnerLabel] = owner
 	}
 
 	// Convert ResourceList to config.ResourceRequirements
@@ -256,13 +260,16 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 		// Scale-to-zero means every call may pay this. A fixed initial delay is
 		// dead time the fastest image cannot avoid, so slow starts are absorbed by
 		// startupProbe's budget instead and readiness polls at one second.
+		// The budget matches MCP_GATEWAY_STARTUP_TIMEOUT's 5m default: mcp-base
+		// opens its port only after the stdio server initialized, and for a
+		// `command` connection that includes `npx`/`uvx` installing the package.
 		StartupProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(spec.Port)},
 			},
 			PeriodSeconds:    1,
 			TimeoutSeconds:   2,
-			FailureThreshold: 120,
+			FailureThreshold: 300,
 		},
 		ReadinessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{

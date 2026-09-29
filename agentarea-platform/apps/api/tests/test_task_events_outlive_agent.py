@@ -114,7 +114,9 @@ def override_dependencies(task_service, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_event_history_is_readable_after_the_agent_is_deleted(async_client):
-    response = await async_client.get(f"/v1/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}/events")
+    response = await async_client.get(
+        f"/v1/workspaces/acme/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}/events"
+    )
 
     assert response.status_code == 200, response.text
     body = response.json()
@@ -125,7 +127,7 @@ async def test_event_history_is_readable_after_the_agent_is_deleted(async_client
 @pytest.mark.asyncio
 async def test_event_stream_opens_after_the_agent_is_deleted(async_client):
     response = await async_client.get(
-        f"/v1/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}/events/stream"
+        f"/v1/workspaces/acme/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}/events/stream"
     )
 
     assert response.status_code == 200, response.text
@@ -134,11 +136,15 @@ async def test_event_stream_opens_after_the_agent_is_deleted(async_client):
 @pytest.mark.asyncio
 async def test_task_detail_and_status_are_readable_after_the_agent_is_deleted(async_client):
     """The task page reads both of these; neither may be gated on the agent."""
-    detail = await async_client.get(f"/v1/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}")
+    detail = await async_client.get(
+        f"/v1/workspaces/acme/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}"
+    )
     assert detail.status_code == 200, detail.text
     assert detail.json()["status"] == "completed"
 
-    status = await async_client.get(f"/v1/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}/status")
+    status = await async_client.get(
+        f"/v1/workspaces/acme/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}/status"
+    )
     assert status.status_code == 200, status.text
     assert status.json()["status"] == "completed"
 
@@ -157,7 +163,9 @@ async def test_a_task_belonging_to_another_agent_is_still_a_404(async_client, ta
         status="completed",
     )
 
-    response = await async_client.get(f"/v1/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}")
+    response = await async_client.get(
+        f"/v1/workspaces/acme/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}"
+    )
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Task not found"
@@ -185,7 +193,9 @@ async def test_events_reject_an_agent_id_that_does_not_own_the_task(
         execution_id="exec-9",
     )
 
-    response = await async_client.get(f"/v1/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}{suffix}")
+    response = await async_client.get(
+        f"/v1/workspaces/acme/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}{suffix}"
+    )
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Task not found"
@@ -195,7 +205,9 @@ async def test_events_reject_an_agent_id_that_does_not_own_the_task(
 async def test_a_task_that_does_not_exist_is_still_a_404(async_client, task_service):
     task_service.get_task.return_value = None
 
-    response = await async_client.get(f"/v1/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}/events")
+    response = await async_client.get(
+        f"/v1/workspaces/acme/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}/events"
+    )
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Task not found"

@@ -9,7 +9,9 @@ from uuid import UUID
 from agentarea_api.api.deps.services import get_registry_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import AUTHZ_ATTR, unrestricted
+from agentarea_common.base.pagination import MAX_OFFSET
 from agentarea_common.utils.types import UtcDatetime
+from agentarea_registry.application.catalog_facets import PROTOCOL_REGISTRY_TYPE, CatalogProtocol
 from agentarea_registry.application.service import (
     VALID_REGISTRY_TYPES,
     CatalogItemAlreadyExistsError,
@@ -18,11 +20,7 @@ from agentarea_registry.application.service import (
     RegistryService,
 )
 from agentarea_registry.domain.models import Registry, RegistryItem
-from agentarea_registry.infrastructure.repository import (
-    CATALOG_SORTS,
-    PROTOCOL_REGISTRY_TYPE,
-    CatalogProtocol,
-)
+from agentarea_registry.infrastructure.repository import CATALOG_SORTS
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -309,7 +307,7 @@ async def browse_catalog(
     ),
     sort: str | None = Query(None, description="'recommended' (default) or 'name'"),
     limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     service: RegistryService = Depends(get_registry_service),
 ):
     """Browse one catalog type: filtered, sorted and paged server-side.
@@ -360,7 +358,7 @@ async def search_catalog(
     tag: str | None = Query(None),
     update_available: bool | None = Query(None),
     limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     service: RegistryService = Depends(get_registry_service),
 ):
     """Search across all registry catalogs in the workspace."""
@@ -462,7 +460,7 @@ async def list_registry_items(
     registry_id: UUID,
     user_context: UserContextDep,
     limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     service: RegistryService = Depends(get_registry_service),
 ):
     items = await service.list_items(registry_id, limit=limit, offset=offset)

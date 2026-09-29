@@ -122,8 +122,8 @@ repository:
 ### How artifacts get retrieved
 
 ```http
-GET /v1/agents/{agent_id}/tasks/{task_id}/artifacts
-GET /v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/{artifact_path}
+GET /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/artifacts
+GET /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/artifacts/files/{artifact_path}
 ```
 
 The list endpoint returns entries under the public path

@@ -14,11 +14,12 @@ Two distinct access patterns share one repository:
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from datetime import UTC, datetime
 from uuid import UUID
 
 from agentarea_common.auth.context import Principal, ServicePrincipal
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .base_events import EventEnvelope
@@ -72,7 +73,12 @@ class OutboxRepository:
         return row
 
     async def fetch_unpublished(
-        self, limit: int = 100, max_attempts: int | None = None
+        self,
+        limit: int = 100,
+        max_attempts: int | None = None,
+        *,
+        now: datetime | None = None,
+        unbounded_types: Collection[str] = (),
     ) -> list[EventOutbox]:
         """Fetch and lock deliverable unpublished rows for the relay.
 
@@ -84,10 +90,21 @@ class OutboxRepository:
         never marked published, so they stay the oldest unpublished rows
         forever. Skipping them after fetching still lets a batch-sized pile of
         them fill every fetch and starve live events permanently.
+        ``unbounded_types`` are exempt from it; they are held back only until
+        their ``next_attempt_at``.
         """
-        stmt = select(EventOutbox).where(EventOutbox.published_at.is_(None))
+        now = now or datetime.now(UTC).replace(tzinfo=None)
+        stmt = select(EventOutbox).where(
+            EventOutbox.published_at.is_(None),
+            or_(EventOutbox.next_attempt_at.is_(None), EventOutbox.next_attempt_at <= now),
+        )
         if max_attempts is not None:
-            stmt = stmt.where(EventOutbox.attempts < max_attempts)
+            within_budget = EventOutbox.attempts < max_attempts
+            if unbounded_types:
+                within_budget = or_(
+                    within_budget, EventOutbox.event_type.in_(list(unbounded_types))
+                )
+            stmt = stmt.where(within_budget)
         stmt = (
             stmt.order_by(EventOutbox.created_at.asc())
             .limit(limit)
@@ -103,9 +120,11 @@ class OutboxRepository:
             .values(published_at=datetime.now(UTC).replace(tzinfo=None))
         )
 
-    async def mark_failed(self, outbox_id: UUID, error: str) -> None:
+    async def mark_failed(
+        self, outbox_id: UUID, error: str, *, retry_at: datetime | None = None
+    ) -> None:
         await self.session.execute(
             update(EventOutbox)
             .where(EventOutbox.id == outbox_id)
-            .values(attempts=EventOutbox.attempts + 1, last_error=error)
+            .values(attempts=EventOutbox.attempts + 1, last_error=error, next_attempt_at=retry_at)
         )

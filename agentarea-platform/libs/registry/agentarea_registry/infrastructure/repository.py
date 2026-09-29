@@ -8,14 +8,18 @@ for call-site compatibility, but ``user_context`` is intentionally unused for
 read/write scoping.
 """
 
-from typing import Any, Literal, get_args
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
+from agentarea_registry.application.catalog_facets import (
+    CATALOG_PROTOCOLS,
+    PROTOCOL_REGISTRY_TYPE,
+)
 from agentarea_registry.domain.models import Registry, RegistryItem
 
 # Accepted catalog orderings, mapped to their ORDER BY. Every ordering ends with
@@ -31,7 +35,7 @@ from agentarea_registry.domain.models import Registry, RegistryItem
 CATALOG_SORTS: dict[str, Any] = {
     "recommended": lambda: (
         RegistryItem.featured.desc(),
-        Registry.recommendation_priority.asc(),
+        RegistryItem.registry_priority.asc(),
         RegistryItem.recommendation_rank.asc(),
         RegistryItem.sort_key.asc(),
         RegistryItem.id.asc(),
@@ -49,21 +53,12 @@ DEFAULT_CATALOG_SORT = "recommended"
 # writes "Other". Comparing exactly demoted only one of them.
 FALLBACK_CATEGORY = "other"
 
-# Connections are not all MCP: a catalog entry is either an MCP server (reached
-# over a transport -- url/command/docker) or a plain HTTP API described by an
-# OpenAPI document. The distinction is what the gallery lets you filter on, and
-# `spec.connection_type` is where every parser records it.
-OPENAPI_CONNECTION_TYPE = "openapi"
-CatalogProtocol = Literal["mcp", "api"]
-# Facet order: the vocabulary is closed, so derive it rather than restating it.
-CATALOG_PROTOCOLS: tuple[CatalogProtocol, ...] = get_args(CatalogProtocol)
-# Only the connections catalog has a protocol dimension; every other registry
-# type holds one kind of thing.
-PROTOCOL_REGISTRY_TYPE = "mcp_servers"
-
-
-def _is_openapi() -> ColumnElement[bool]:
-    return RegistryItem.spec["connection_type"].astext == OPENAPI_CONNECTION_TYPE
+# Registry columns copied onto each of its items, as registry field -> item field.
+_COPIED_REGISTRY_FIELDS = {
+    "registry_type": "registry_type",
+    "recommendation_priority": "registry_priority",
+    "is_active": "registry_active",
+}
 
 
 class RegistryRepository:
@@ -112,6 +107,15 @@ class RegistryRepository:
         for field, value in kwargs.items():
             if hasattr(record, field):
                 setattr(record, field, value)
+        copied = {
+            item_field: kwargs[field]
+            for field, item_field in _COPIED_REGISTRY_FIELDS.items()
+            if field in kwargs
+        }
+        if copied:
+            await self.session.execute(
+                update(RegistryItem).where(RegistryItem.registry_id == id).values(**copied)
+            )
         await self.session.commit()
         await self.session.refresh(record)
         return record
@@ -182,7 +186,16 @@ class RegistryItemRepository:
         return (await self.session.execute(query)).scalar_one()
 
     async def create(self, **kwargs: Any) -> RegistryItem:
-        record = RegistryItem(**kwargs)
+        registry = await self.session.get(Registry, kwargs["registry_id"])
+        if registry is None:
+            raise ValueError(f"Registry {kwargs['registry_id']} not found")
+        record = RegistryItem(
+            **kwargs,
+            **{
+                item_field: getattr(registry, field)
+                for field, item_field in _COPIED_REGISTRY_FIELDS.items()
+            },
+        )
         self.session.add(record)
         await self.session.commit()
         await self.session.refresh(record)
@@ -246,6 +259,10 @@ class RegistryItemRepository:
     # for the same reason -- doing them on the loaded prefix reorders the list
     # under the user as more pages arrive, and hides matches that were never
     # fetched.
+    #
+    # None of these join `registries`: type, weight and active flag are read
+    # from the item's own copies, which keeps every query on one table, where
+    # the browse indexes on RegistryItem can serve it.
 
     def _browse_filter(
         self,
@@ -255,22 +272,16 @@ class RegistryItemRepository:
         protocol: str | None = None,
     ) -> list[ColumnElement[bool]]:
         """WHERE clause shared by the page query, its total, and the facets."""
-        conditions = [
-            Registry.registry_type == registry_type,
-            Registry.is_active.is_(True),
+        conditions: list[ColumnElement[bool]] = [
+            RegistryItem.registry_type == registry_type,
+            # Bare column, not `IS TRUE`: it has to match the partial indexes'
+            # predicate for the planner to use them.
+            RegistryItem.registry_active.expression,
         ]
         if category:
             conditions.append(RegistryItem.category == category)
-        if protocol == "api":
-            conditions.append(_is_openapi())
-        elif protocol == "mcp":
-            # IS DISTINCT FROM, not `!=`: an entry that never recorded a
-            # connection_type is an MCP server, and `!=` would drop it.
-            conditions.append(
-                RegistryItem.spec["connection_type"].astext.is_distinct_from(
-                    OPENAPI_CONNECTION_TYPE
-                )
-            )
+        if protocol:
+            conditions.append(RegistryItem.protocol == protocol)
         if q:
             pattern = f"%{q}%"
             conditions.append(
@@ -294,18 +305,13 @@ class RegistryItemRepository:
         the current page contributes nothing visible.
         """
         conditions = self._browse_filter(registry_type, q, category, protocol)
-        join = select(RegistryItem).join(Registry, RegistryItem.registry_id == Registry.id)
-
         order_by = CATALOG_SORTS.get(sort, CATALOG_SORTS[DEFAULT_CATALOG_SORT])()
-        page = join.where(*conditions).order_by(*order_by).offset(offset).limit(limit)
+        page = (
+            select(RegistryItem).where(*conditions).order_by(*order_by).offset(offset).limit(limit)
+        )
         items = list((await self.session.execute(page)).scalars().all())
 
-        counted = (
-            select(func.count())
-            .select_from(RegistryItem)
-            .join(Registry, RegistryItem.registry_id == Registry.id)
-            .where(*conditions)
-        )
+        counted = select(func.count()).select_from(RegistryItem).where(*conditions)
         total = (await self.session.execute(counted)).scalar_one()
         return items, total
 
@@ -327,7 +333,6 @@ class RegistryItemRepository:
         conditions = self._browse_filter(registry_type, q, category=None, protocol=protocol)
         query = (
             select(RegistryItem.category, func.count().label("n"))
-            .join(Registry, RegistryItem.registry_id == Registry.id)
             .where(*conditions, RegistryItem.category.is_not(None))
             .group_by(RegistryItem.category)
             .order_by(
@@ -351,16 +356,14 @@ class RegistryItemRepository:
         if registry_type != PROTOCOL_REGISTRY_TYPE:
             return []
         conditions = self._browse_filter(registry_type, q, category, protocol=None)
-        protocol = case((_is_openapi(), "api"), else_="mcp")
         query = (
-            select(protocol.label("protocol"), func.count())
-            .join(Registry, RegistryItem.registry_id == Registry.id)
+            select(RegistryItem.protocol, func.count())
             .where(*conditions)
-            .group_by(protocol)
+            .group_by(RegistryItem.protocol)
         )
         # .tuples() so the pairs arrive typed: over raw Rows the key type is
         # lost and the dict reads as bytes.
-        counts: dict[str, int] = dict((await self.session.execute(query)).tuples().all())
+        counts: dict[str | None, int] = dict((await self.session.execute(query)).tuples().all())
         return [(name, counts[name]) for name in CATALOG_PROTOCOLS if counts.get(name)]
 
     async def search(

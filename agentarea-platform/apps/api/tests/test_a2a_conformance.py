@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import httpx
@@ -38,11 +39,11 @@ from agentarea_api.api.deps.services import (
     get_secret_manager,
     get_task_service,
 )
-from agentarea_api.api.v1 import a2a_request_handler, agents_a2a, agents_well_known
+from agentarea_api.api.v1 import a2a_auth, a2a_request_handler, agents_a2a, agents_well_known
 from agentarea_common.auth import access
 from agentarea_common.auth.access import EdgeDecision
-from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.dependencies import get_optional_user
+from agentarea_common.auth.context import UserPrincipal
+from agentarea_common.auth.dependencies import get_optional_principal
 from agentarea_common.events.contract import LLM_CHUNK, TASK_COMPLETED, TASK_STARTED
 from agentarea_common.events.task_stream import TaskEventEnvelope
 from agentarea_tasks.domain.models import AgentTask
@@ -131,12 +132,12 @@ def _events(*items: tuple[str, dict[str, Any]]) -> list[TaskEventEnvelope]:
     ]
 
 
-def _subject(request: Request) -> UserContext | None:
+def _subject(request: Request) -> UserPrincipal | None:
     bearer = request.headers.get("authorization", "").removeprefix("Bearer ")
     if bearer == MEMBER_BEARER:
-        return UserContext(user_id=MEMBER, workspace_id=WORKSPACE)
+        return UserPrincipal(user_id=MEMBER, accessible_workspaces=[WORKSPACE])
     if bearer == OUTSIDER_BEARER:
-        return UserContext(user_id=OUTSIDER, workspace_id="ws-elsewhere")
+        return UserPrincipal(user_id=OUTSIDER, accessible_workspaces=["ws-elsewhere"])
     return None
 
 
@@ -144,7 +145,8 @@ async def _authorize(subject, action, *, agent_workspace_id, agent_id) -> EdgeDe
     if subject is None:
         return EdgeDecision(allowed=False, reason="anonymous")
     return EdgeDecision(
-        allowed=subject.workspace_id == agent_workspace_id, reason="workspace scope"
+        allowed=agent_workspace_id in (subject.accessible_workspaces or []),
+        reason="workspace scope",
     )
 
 
@@ -167,6 +169,7 @@ def services(monkeypatch):
     monkeypatch.setattr(agents_a2a, "open_task_event_feed", feed)
     monkeypatch.setattr(agents_well_known, "get_public_agent", public_agent)
     monkeypatch.setattr(a2a_request_handler, "validate_outbound_url", lambda url: None)
+    monkeypatch.setattr(a2a_auth, "workspace_slug_for", AsyncMock(return_value="acme"))
     return SimpleNamespace(tasks=tasks, secrets=secrets, feed=feed_script, feed_calls=feed_calls)
 
 
@@ -175,7 +178,7 @@ def app(services) -> FastAPI:
     app = FastAPI()
     app.include_router(agents_well_known.router, prefix="/v1/agents/{agent_id}")
     app.include_router(agents_a2a.router, prefix="/v1/agents/{agent_id}")
-    app.dependency_overrides[get_optional_user] = _subject
+    app.dependency_overrides[get_optional_principal] = _subject
     app.dependency_overrides[get_task_service] = lambda: services.tasks
     app.dependency_overrides[get_agent_service] = FakeAgentService
     app.dependency_overrides[get_secret_manager] = lambda: services.secrets

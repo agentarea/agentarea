@@ -54,8 +54,7 @@
     "closeTab": "Close {name}",
     "download": "Download",
     "noPreview": "Preview is not available for this file type.",
-    "loadFileFailed": "Could not load this file.",
-    "readFileFailed": "Could not read the file contents.",
+    "readFileFailed": "Couldn't read the file contents",
     "historyLoading": "Loading history…",
     "historyEmpty": "No history recorded yet",
     "changeBy": "{action} by {actor}",
@@ -68,7 +67,9 @@
       "deleted": "Deleted",
       "moved": "Moved"
     },
-    "unnamedAgent": "an agent"
+    "unnamedAgent": "an agent",
+    "fileLoadFailed": "Couldn't load the file",
+    "historyLoadFailed": "Couldn't load the file history"
   },
   "Metadata": {
     "agents": "Agents",
@@ -113,7 +114,10 @@
     "deleteDescription": "Are you sure you want to delete \"{itemName}\"? This action cannot be undone.",
     "retry": "Try again",
     "clearSearch": "Clear search",
-    "copyFailed": "Couldn’t copy to clipboard"
+    "copyFailed": "Couldn’t copy to clipboard",
+    "saved": "Saved",
+    "deleteFailed": "Couldn’t delete {itemName}",
+    "confirm": "Confirm"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -169,6 +173,7 @@
     "llms": "LLM Models",
     "llmBrowse": "Browse",
     "mcp": "MCP Servers",
+    "mcpServers": "Servers",
     "projects": "Projects",
     "context": "Context",
     "work": "Work",
@@ -268,9 +273,7 @@
     "removeMemberTitle": "Remove member",
     "removeMemberText": "Remove {member} from “{workspace}”? They lose access immediately.",
     "leaveText": "Leave “{workspace}”? You will lose access to every agent in it.",
-    "memberRemoved": "Member removed",
-    "memberRemovedText": "{member} no longer has access to this workspace.",
-    "youLeft": "You left the workspace",
+    "removalInProgressText": "{member} is out of the workspace. Their access is still being revoked and ends shortly.",
     "removeFailed": "Couldn’t remove member",
     "leaveFailed": "Couldn’t leave the workspace",
     "noMatchTitle": "No people match “{query}”",
@@ -286,9 +289,6 @@
     "noInvitationsTitle": "No invitations",
     "noInvitationsDescription": "Create an invite link to let people join this workspace.",
     "noInvitationsMatchTitle": "No invitations match “{query}”",
-    "invitationRevoked": "Invitation revoked",
-    "invitationRevokedEmail": "{email} can no longer use this link.",
-    "invitationRevokedLink": "The link can no longer be used.",
     "revokeFailed": "Couldn’t revoke invitation",
     "inviteLinkCreatedTitle": "Invite link created",
     "inviteLinkOnlyEmail": "Only {email} can use this link.",
@@ -300,7 +300,8 @@
     "inviteLinkCopied": "Invite link copied",
     "thisWorkspace": "this workspace",
     "orderExpires": "Expiry",
-    "orderRecipient": "Recipient"
+    "orderRecipient": "Recipient",
+    "createInvitationFailed": "Couldn't create the invitation"
   },
   "InvitationDialog": {
     "title": "Workspace invitation",
@@ -443,7 +444,7 @@
     "table": {
       "time": "Time",
       "protocol": "Protocol",
-      "amount": "Amount",
+      "amount": "Amount (USD)",
       "recipient": "Recipient",
       "tool": "Tool",
       "txHash": "Tx Hash",
@@ -566,11 +567,53 @@
       "selectModel": "Select a model",
       "noConfigurationsYet": "No configurations yet",
       "createAndUseProviderConfiguration": "Create and use a provider configuration",
-      "createConfiguration": "Create Configuration"
+      "createConfiguration": "Create Configuration",
+      "triggerEnabled": "Enabled",
+      "removeTrigger": "Remove trigger",
+      "triggerCredentialRequired": "Select a workspace secret",
+      "noTriggers": "No triggers. The agent runs only when a task is started for it.",
+      "triggersManagedElsewhere": "Schedules and channels of this agent are managed in Automation.",
+      "openTriggers": "Open Automation",
+      "presets": {
+        "title": "Start from",
+        "empty": "Empty",
+        "emptyDescription": "No tools, skills or triggers",
+        "loadFailed": "Could not load agent presets. Refresh the page or try again later.",
+        "unavailableSkills": "This preset expects skills the catalog does not have: {skills}"
+      },
+      "toolGroups": {
+        "sandbox": {
+          "label": "Sandbox",
+          "description": "Run commands and work with files in the agent's sandbox."
+        }
+      },
+      "loadOpenapiConnectionsFailed": "Couldn't load OpenAPI connections",
+      "loadingOpenapiConnections": "Loading OpenAPI connections...",
+      "loadInstanceFailed": "Couldn't load the MCP connection for editing",
+      "updateInstanceFailed": "Couldn't update the MCP connection"
     },
     "browseCatalog": "Browse the catalog",
     "newTask": "New task",
-    "activity": "Activity"
+    "activity": "Activity",
+    "form": {
+      "saveFailed": "Couldn't save the agent",
+      "validationFailed": "Some fields are invalid.",
+      "createFailed": "Couldn't create the agent"
+    },
+    "delegationPage": {
+      "saveFailed": "Couldn't save delegation",
+      "description": "Enable delegation to allow this agent to start tasks on other agents.",
+      "saving": "Saving...",
+      "noOtherAgents": "No other agents in this workspace to delegate to."
+    },
+    "list": {
+      "loadFailed": "Couldn't load agents",
+      "loadModelsFailed": "Couldn't load models",
+      "loadMcpInstancesFailed": "Couldn't load MCP connections",
+      "loadMcpServersFailed": "Couldn't load MCP servers",
+      "loadOpenapiFailed": "Couldn't load OpenAPI connections",
+      "loadTasksFailed": "Couldn't load running tasks"
+    }
   },
   "MCPServersPage": {
     "title": "Connections",
@@ -767,7 +810,13 @@
           "unequipped": "Not equipped",
           "destructive": "Destructive",
           "readOnly": "Read-only"
-        }
+        },
+        "refresh": "Refresh",
+        "discover": "Discover tools",
+        "noneDiscovered": "No tools discovered yet",
+        "discovered": "Discovered {count, plural, one {# tool} other {# tools}}",
+        "discoverFailed": "Couldn't discover tools",
+        "discoverUnverified": "Couldn't discover tools: the server did not pass verification"
       },
       "consumers": {
         "title": "Used by ({count})",
@@ -804,17 +853,14 @@
         "deleteTitle": "Delete instance?",
         "deleteDescription": "This will permanently delete \"{instanceName}\" and stop its container. This action cannot be undone."
       },
-      "success": {
-        "starting": "Starting {instanceName}…",
-        "stopped": "Stopped {instanceName}",
-        "deleted": "Deleted {instanceName}",
-        "copied": "{label} copied to clipboard"
-      },
       "errors": {
         "startFailed": "Failed to start instance",
         "stopFailed": "Failed to stop instance",
         "deleteFailed": "Failed to delete instance",
-        "copyFailed": "Failed to copy"
+        "copyFailed": "Failed to copy",
+        "verifyFailed": "Couldn't start verification",
+        "saveConfigFailed": "Couldn't save the configuration",
+        "consumersLoadFailed": "Couldn't load which agents use this connection"
       }
     },
     "table": {
@@ -876,6 +922,43 @@
         "version": "Version",
         "versionPlaceholder": "1.0.0",
         "versionRequired": "Version is required"
+      },
+      "addFailed": "Couldn't add the server"
+    },
+    "authConfigs": {
+      "loadFailed": "Couldn't load authentication configs",
+      "createFailed": "Couldn't save the authentication config"
+    },
+    "loadErrors": {
+      "title": "Couldn't load connections",
+      "servers": "Couldn't load MCP servers",
+      "instances": "Couldn't load MCP connections",
+      "openapi": "Couldn't load OpenAPI connections",
+      "usage": "Couldn't load which agents use these connections"
+    },
+    "openapiDetail": {
+      "back": "Back to connections",
+      "notFound": "Connection not found",
+      "refreshing": "Refreshing...",
+      "refreshFromSpec": "Refresh from spec URL",
+      "deleting": "Deleting...",
+      "deleteTitle": "Delete connection?",
+      "type": "Type",
+      "status": "Status",
+      "baseUrl": "Base URL",
+      "specUrl": "Spec URL",
+      "customHeaders": "Custom headers ({count})",
+      "noCustomHeaders": "No custom headers. Click Add to set Authorization or any other request header your provider needs.",
+      "noToolsWithSpec": "No tools discovered yet. Click “Refresh from spec URL” to parse the spec again.",
+      "noTools": "No tools were parsed from this spec.",
+      "availableTools": "Available tools ({count})",
+      "oauthError": "Couldn't connect the account: {reason}",
+      "errors": {
+        "loadFailed": "Couldn't load the connection",
+        "reloadFailed": "Couldn't reload the connection",
+        "discoverFailed": "Couldn't refresh tools from the spec",
+        "saveHeadersFailed": "Couldn't save the headers",
+        "deleteFailed": "Couldn't delete the connection"
       }
     }
   },
@@ -965,23 +1048,14 @@
       "updating": "Updating...",
       "creating": "Creating..."
     },
-    "toast": {
-      "configurationCreated": "Provider configuration created successfully with {modelCount, plural, =0 {no model instances} one {# model instance} other {# model instances}}!",
-      "configurationUpdated": "Provider configuration updated successfully with {modelCount, plural, =0 {no model instances} one {# model instance} other {# model instances}}!",
-      "configurationDeleted": "Provider configuration deleted successfully!",
-      "modelInstancesUpdated": "Model instances updated successfully!",
-      "modelInstancesCreated": "Model instances created successfully!",
-      "modelInstancesDeleted": "Model instances deleted successfully!",
-      "added": "added",
-      "removed": "removed",
-      "configurationUpdatedSuccessfully": "Provider configuration updated successfully!"
-    },
     "error": {
       "failedTo": "Failed to",
       "unknownError": "Unknown error",
       "failedToLoadProviderSpecs": "Failed to load provider specifications",
       "failedToLoadData": "Failed to load data",
-      "unexpectedError": "An unexpected error occurred"
+      "unexpectedError": "An unexpected error occurred",
+      "modelInstancesPartial": "Saved the configuration, but {failed} of {total} model instances could not be created: {sample}",
+      "saveFailed": "Couldn't save the provider configuration"
     }
   },
   "Chat": {
@@ -1003,6 +1077,16 @@
       "arguments": "Arguments",
       "executionTime": "Execution Time",
       "result": "Result"
+    },
+    "errors": {
+      "submitResponseFailed": "Couldn't submit the response",
+      "createTaskFailed": "Couldn't start a new task",
+      "sendFailed": "Couldn't send the message",
+      "actionRejected": "The task did not accept the action",
+      "continueFailed": "Couldn't continue the task",
+      "continueGrantRequired": "Grant at least one iteration or a budget top-up.",
+      "pauseFailed": "Couldn't pause the task",
+      "resumeFailed": "Couldn't resume the task"
     }
   },
   "TasksPage": {
@@ -1022,6 +1106,11 @@
     "noMatchingTasks": "No matching tasks",
     "noMatchingTasksDescription": "No tasks match your search \"{query}\"",
     "noTasksByCreatorDescription": "Nobody has started a task matching this filter",
+    "noTasksOnPageDescription": "This page is past the last task",
+    "firstPage": "First page",
+    "previousPage": "Previous",
+    "nextPage": "Next",
+    "pageNumber": "Page {page}",
     "unknownCreator": "Unknown",
     "showTasksBy": "Show tasks started by {name}",
     "taskRunning": "Task Running",
@@ -1080,18 +1169,18 @@
     "noSkillsHintImport": "Import from a GitHub repository or upload an archive",
     "noSkillsHintInstall": "Install a ready-made skill from the catalog",
     "loading": "Loading...",
+    "createFirstSkill": "Create your first skill to get started.",
     "error": {
       "loadSkills": "Failed to load skills",
       "skillNotFound": "Skill not found",
       "loadFileContent": "Failed to load file content",
       "updateSkill": "Failed to update skill",
       "deleteSkill": "Failed to delete skill",
-      "installSkill": "Failed to add skill to workspace"
-    },
-    "success": {
-      "skillUpdated": "Skill updated successfully",
-      "skillDeleted": "Skill deleted successfully",
-      "skillInstalled": "Skill added to workspace"
+      "installSkill": "Failed to add skill to workspace",
+      "loadSkill": "Couldn't load the skill",
+      "loadFiles": "Couldn't load the skill's files",
+      "saveSkill": "Couldn't save the skill",
+      "reloadAfterSave": "Saved, but couldn't reload the skill"
     },
     "confirm": {
       "deleteSkillTitle": "Delete Skill",
@@ -1120,9 +1209,11 @@
       "description": "Description",
       "source": "Source",
       "updated": "Updated",
-      "created": "Created"
+      "created": "Created",
+      "actions": "Actions"
     },
     "detail": {
+      "title": "Skill details",
       "details": "Details",
       "files": "Files",
       "selectFile": "Select a file",
@@ -1135,6 +1226,8 @@
       "description": "Description",
       "source": "Source",
       "updated": "Updated",
+      "sourceCode": "Source code",
+      "configuration": "Configuration",
       "skillConfiguration": "Skill Configuration",
       "editable": "Editable",
       "catalogTemplate": "Catalog template",
@@ -1241,7 +1334,17 @@
     },
     "emptyHere": "No skills here",
     "emptyHereDescription": "Nothing matches this view yet.",
-    "browseCatalog": "Browse the catalog"
+    "browseCatalog": "Browse the catalog",
+    "children": {
+      "title": "Child skills ({count})",
+      "add": "Add child skill",
+      "empty": "No child skills yet.",
+      "selectPlaceholder": "Select a skill",
+      "loadFailed": "Couldn't load child skills",
+      "loadOptionsFailed": "Couldn't load the skills to choose from",
+      "addFailed": "Couldn't add the child skill",
+      "removeFailed": "Couldn't remove the child skill"
+    }
   },
   "TaskInfoPanel": {
     "agentTask": "Agent Task",
@@ -1317,7 +1420,14 @@
     "policyOff": "Off",
     "policyRequired": "Required",
     "policyNotRequired": "Not required",
-    "policyNone": "No policy constraints"
+    "policyNone": "No policy constraints",
+    "taskLoadFailed": "Couldn't load the task",
+    "statusLoadFailed": "Couldn't load the task status",
+    "policyLoadFailed": "Couldn't load the task policy",
+    "modelsLoadFailed": "Couldn't load models",
+    "modelChangeFailed": "Couldn't switch the model",
+    "selectModel": "Select model",
+    "changeModel": "Change"
   },
   "Workplace": {
     "hero": {
@@ -1404,10 +1514,6 @@
       "createFailed": "Failed to create API key",
       "revokeFailed": "Failed to revoke API key",
       "loadFailed": "Failed to load API keys"
-    },
-    "success": {
-      "created": "API key created successfully",
-      "revoked": "API key revoked successfully"
     }
   },
   "TriggersPage": {
@@ -1630,14 +1736,8 @@
       "deleteFailed": "Failed to delete trigger",
       "loadFailed": "Failed to load trigger",
       "enableFailed": "Failed to enable trigger",
-      "disableFailed": "Failed to disable trigger"
-    },
-    "success": {
-      "created": "Trigger created successfully",
-      "updated": "Trigger updated successfully",
-      "deleted": "Trigger deleted successfully",
-      "enabled": "Trigger enabled successfully",
-      "disabled": "Trigger disabled successfully"
+      "disableFailed": "Failed to disable trigger",
+      "runFailed": "Couldn't run the trigger"
     }
   },
   "NetworkPage": {
@@ -1748,7 +1848,8 @@
         "egress": "Marked as an external resource in network configuration.",
         "unknown": "Network scope has not been specified."
       },
-      "openFullPage": "Open full page"
+      "openFullPage": "Open full page",
+      "policyLoadFailed": "Couldn't load the policy"
     },
     "integration": {
       "loadError": "Could not load the network.",
@@ -1854,7 +1955,7 @@
     "budget": {
       "title": "Monthly Spend Cap",
       "description": "Set a soft monthly cap for total task spend. New tasks are refused (HTTP 402) when month-to-date spend reaches this value. Running tasks are not killed.",
-      "label": "Monthly cap (USD)",
+      "label": "Monthly cap ({currency})",
       "placeholder": "e.g. 100.00",
       "save": "Save cap",
       "saving": "Saving...",
@@ -1863,16 +1964,6 @@
       "current": "Current cap",
       "noCap": "No cap set"
     }
-  },
-  "SkillsSection": {
-    "title": "Skills",
-    "addSkill": "Add Skill",
-    "searchPlaceholder": "Search skills...",
-    "loading": "Loading skills...",
-    "noSkillsAvailable": "No skills available",
-    "createSkill": "Create a skill",
-    "noSkillsFound": "No skills found",
-    "noSkillsAssigned": "No skills assigned. Add skills to enhance this agent's capabilities."
   },
   "TriggerControl": {
     "error": "Something went wrong with the trigger",
@@ -2014,7 +2105,8 @@
       "subtitle": "Create your first agent to start firing off tasks.",
       "openWorkplace": "Open Workplace",
       "createAgent": "Create agent"
-    }
+    },
+    "policiesLoadFailed": "Couldn't load task policies"
   },
   "WorkplacePage": {
     "workplace": "Workplace",
@@ -2029,7 +2121,8 @@
       "createAgentAction": "Create agent",
       "createAgentPlaceholder": "Create an agent to start…",
       "noAgent": "No agent"
-    }
+    },
+    "policiesLoadFailed": "Couldn't load task policies"
   },
   "BuiltinToolIconGrid": {
     "title": "Built-in Tools",
@@ -2059,8 +2152,6 @@
   "AuditLogPage": {
     "title": "Audit Log",
     "description": "Track who did what, when, and from where across your workspace",
-    "enterpriseFeature": "Audit logging is available on Enterprise plans.",
-    "enterpriseDescription": "Track who did what, when, and from where across your workspace.",
     "noEvents": "No audit events found.",
     "loadMore": "Load more",
     "filter": {
@@ -2078,7 +2169,8 @@
       "actor": "Actor",
       "ip": "IP",
       "when": "When"
-    }
+    },
+    "loadFailed": "Couldn't load the audit log"
   },
   "AuthConsent": {
     "title": "Authorize {clientName}",
@@ -2164,13 +2256,14 @@
     "capNoCap": "No cap is set. Workspace spend can continue without a monthly stop.",
     "capUsed": "{amount} used",
     "capOfTotal": "{pct}% of {cap}",
-    "capField": "Monthly cap (USD)",
+    "capField": "Monthly cap ({currency})",
     "capPlaceholder": "No cap",
     "save": "Save",
     "capNote": "Changes apply immediately across the workspace.",
     "capUpdated": "Workspace monthly cap updated.",
     "capInvalid": "Enter a positive number, or leave it empty to remove the cap.",
-    "capUpdateFailed": "Failed to update workspace cap"
+    "capUpdateFailed": "Failed to update workspace cap",
+    "settingsLoadFailed": "Couldn't load workspace settings"
   },
   "AgentOverviewPage": {
     "showMore": "Show more",
@@ -2230,7 +2323,13 @@
     "effectSafety": "{count} safety",
     "upcoming": "Upcoming",
     "nothingUpcoming": "Nothing scheduled in the next 7 days.",
-    "inFmt": "in {time}"
+    "inFmt": "in {time}",
+    "guardrailsLoadFailed": "Couldn't load guardrails",
+    "activityLoadFailed": "Couldn't load the agent's activity",
+    "capLoadFailed": "Couldn't load the monthly cap",
+    "tasksLoadFailed": "Couldn't load tasks",
+    "connectionsLoadFailed": "Couldn't load connections",
+    "currencyLoadFailed": "Couldn't load the billing currency"
   },
   "SecretsPage": {
     "newSecret": "New secret",
@@ -2260,8 +2359,7 @@
       "title": "Delete {name}?",
       "inUse": "This secret is still in use. Detach it from these places first:",
       "irreversible": "This cannot be undone.",
-      "failed": "Couldn't delete the secret",
-      "deleted": "Secret {name} deleted"
+      "failed": "Couldn't delete the secret"
     },
     "table": {
       "name": "Name",
@@ -2281,6 +2379,86 @@
       "agent": "Agent wallet"
     }
   },
+  "InboxPage": {
+    "title": "Inbox",
+    "approve": "Approve",
+    "reject": "Reject",
+    "approveAll": "Approve all",
+    "loadFailed": "Failed to load inbox",
+    "filters": {
+      "all": "All",
+      "pending": "Needs approval",
+      "input": "Needs input",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
+    "row": {
+      "untitled": "Untitled task",
+      "unknownAgent": "Unknown agent",
+      "request": "Request {tool}",
+      "waiting": "Waiting for approval",
+      "resultAvailable": "Result available",
+      "taskFailed": "Task failed",
+      "taskActivity": "Task activity",
+      "select": "Select task"
+    },
+    "selection": {
+      "count": "{count} selected",
+      "clear": "Clear"
+    },
+    "sheet": {
+      "title": "Inbox task details",
+      "description": "Review task output and approve or reject the action."
+    },
+    "detail": {
+      "review": "Inbox review",
+      "openChat": "Open chat",
+      "close": "Close details panel",
+      "requestedRecently": "Requested recently",
+      "willRun": "Approving will let the agent run <b>{tool}</b>.",
+      "requestedAction": "the requested action",
+      "outputPending": "Output will be available after the action runs.",
+      "noOutput": "No output was returned for this task."
+    },
+    "result": {
+      "assistant": "Assistant",
+      "structured": "Structured result",
+      "details": "Result details"
+    },
+    "emptyList": {
+      "all": {
+        "title": "No inbox decisions yet",
+        "description": "When an agent needs approval, completes a governed action, or fails a controlled step, it will appear here for review."
+      },
+      "pending": {
+        "title": "Approval queue is clear",
+        "description": "No agent is waiting on a human decision right now. New escalations will land here before they can continue."
+      },
+      "input": {
+        "title": "No agent is waiting for input",
+        "description": "When an agent stops to ask a question, it will appear here until someone answers it."
+      },
+      "completed": {
+        "title": "No completed approvals",
+        "description": "Approved actions will appear here after operators release them, so you can audit what moved forward."
+      },
+      "failed": {
+        "title": "No rejected or failed approvals",
+        "description": "Rejected actions and failed escalations will appear here when a governed path is stopped."
+      },
+      "viewAll": "View all",
+      "taskHistory": "Open task history",
+      "triggers": "Check triggers"
+    },
+    "detailEmpty": {
+      "title": "Select a task",
+      "pending": "{count, plural, one {# task is} other {# tasks are}} waiting for your decision. Open one to review its output, then approve or reject the action.",
+      "clear": "Nothing is waiting for your decision. Open a task to review its output.",
+      "openNext": "Review next approval"
+    },
+    "resolveFailed": "Couldn’t resolve “{task}”",
+    "resolveManyFailed": "Couldn’t resolve {failed} of {total}"
+  },
   "AppsPage": {
     "title": "Apps",
     "description": "Interactive interfaces from your MCP connections.",
@@ -2298,5 +2476,141 @@
     "iframeTitle": "MCP App",
     "closePanel": "Close panel",
     "openAppError": "Could not open this app."
+  },
+  "AdminOnly": {
+    "membersLink": "See who administers this workspace",
+    "areas": {
+      "policies": {
+        "title": "Policies need a workspace admin",
+        "description": "Only a workspace admin can view and change the policies that govern agents here."
+      },
+      "accessControl": {
+        "title": "Access control needs a workspace admin",
+        "description": "Only a workspace admin can view and change who has access to what in this workspace."
+      },
+      "policyEditor": {
+        "title": "Editing policies needs a workspace admin",
+        "description": "Only a workspace admin can create or edit policies in this workspace."
+      },
+      "apiKeys": {
+        "description": "Only a workspace admin can see and revoke API keys created by other members. Your own keys stay yours to manage."
+      },
+      "auditLog": {
+        "title": "The audit log needs a workspace admin",
+        "description": "Only a workspace admin can read the record of who did what in this workspace."
+      },
+      "networkPeopleAccess": {
+        "title": "People access needs a workspace admin",
+        "description": "Only a workspace admin can see which people can reach which agents in this workspace."
+      },
+      "providerConfigs": {
+        "title": "Model providers need a workspace admin",
+        "description": "Only a workspace admin can connect a model provider or change its settings."
+      },
+      "wallet": {
+        "title": "Wallets and payments need a workspace admin",
+        "description": "Only a workspace admin can manage agent wallets and payments in this workspace."
+      }
+    },
+    "hints": {
+      "budgetCap": "Only a workspace admin can change the budget cap.",
+      "createSecret": "Only a workspace admin can add a secret.",
+      "manageSecret": "Only a workspace admin can edit, rotate or delete a secret.",
+      "invitePeople": "Only a workspace admin can invite people.",
+      "manageProvider": "Only a workspace admin can add or edit a model provider.",
+      "importPolicies": "Only a workspace admin can import policies.",
+      "manageMcpAuth": "Only a workspace admin can pick or create an authentication config.",
+      "viewPolicies": "Only a workspace admin can view policies.",
+      "pickTaskPolicy": "Only a workspace admin can pick a task policy. Tasks run under the default one."
+    }
+  },
+  "AgentWallet": {
+    "errors": {
+      "fetchWallet": "Couldn't load the wallet",
+      "invalidWallet": "The wallet response is malformed",
+      "fetchPayments": "Couldn't load payments",
+      "invalidPayments": "The payments response is malformed",
+      "createWallet": "Couldn't create the wallet",
+      "updateWallet": "Couldn't update the wallet",
+      "removeWallet": "Couldn't remove the wallet"
+    }
+  },
+  "PoliciesPage": {
+    "accessControl": {
+      "loadFailedTitle": "Couldn't load access control",
+      "loadFailed": "Failed to load access control",
+      "graphLoadFailed": "Failed to load the access-control graph",
+      "rulesLoadFailed": "Failed to load access-control rules",
+      "collectionsLoadFailed": "Failed to load skill collections",
+      "noData": "Access-control API returned no data"
+    },
+    "editor": {
+      "loadFailedTitle": "Couldn't load policy",
+      "loadFailed": "Failed to load policies"
+    }
+  },
+  "ProjectSettingsPage": {
+    "name": "Name",
+    "description": "Description",
+    "instructions": "Instructions",
+    "nameRequired": "Enter a project name.",
+    "loadFailed": "Couldn’t load the project",
+    "saveFailed": "Couldn’t save the project",
+    "deleteTitle": "Delete project"
+  },
+  "ProjectFilesPage": {
+    "title": "Files ({count})",
+    "upload": "Upload file",
+    "empty": "No files uploaded yet.",
+    "loadFailed": "Couldn’t load project files",
+    "uploadFailed": "Couldn’t upload {name}"
+  },
+  "ClientsPage": {
+    "loadFailed": "Couldn’t load harnesses",
+    "loadOneFailed": "Couldn’t load the harness",
+    "createFailed": "Couldn’t add the harness",
+    "updateFailed": "Couldn’t save the harness",
+    "title": "Harnesses",
+    "description": "Connect external agent harnesses to your workspace's tools and skills.",
+    "add": "Add harness",
+    "edit": "Edit harness",
+    "name": "Name",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "What this connection is for",
+    "type": "Type",
+    "columnHarness": "Harness",
+    "columnSkills": "Skills",
+    "emptyTitle": "No harnesses yet",
+    "emptyDescription": "A harness is a coding agent running outside this workspace, such as Claude Code or Codex, that you let reach in for tools.",
+    "emptyHintRegister": "Register the harness to get its connection command",
+    "emptyHintPick": "Pick the skills and connections it may use",
+    "emptyHintScope": "It gets that bundle and nothing else",
+    "connectionsCount": "{count, plural, one {# connection} other {# connections}}",
+    "skillsCount": "{count, plural, one {# skill} other {# skills}}",
+    "deleteTitle": "Delete harness",
+    "deleteDescription": "Delete \"{name}\"? The scoped MCP endpoint stops working for any harness connected to it. This cannot be undone."
+  },
+  "AttachmentSection": {
+    "addFailed": "Couldn’t add {item}",
+    "removeFailed": "Couldn’t remove {item}"
+  },
+  "BundleInstall": {
+    "modelsLoadFailed": "Couldn't load workspace models",
+    "skillFileLoadFailed": "Couldn't load the file",
+    "skillFilesLoadFailed": "Couldn't load the skill files",
+    "catalogLoadFailed": "Couldn't load the catalog",
+    "itemLoadFailed": "Couldn't load the catalog item",
+    "connectFailed": "Couldn't connect this account",
+    "unsafeRedirect": "the provider returned an unsafe sign-in address",
+    "analyzeFailed": "Couldn't analyze the bundle",
+    "installFailed": "Couldn't install the bundle",
+    "agentInstallFailed": "Couldn't add the agent",
+    "agentsLoadFailed": "Couldn't load workspace agents",
+    "skillInstallFailed": "Couldn't add the skill",
+    "skillAttachFailed": "Couldn't add the skill to {agent}"
+  },
+  "ProjectOverviewPage": {
+    "loadFailed": "Couldn't load the project",
+    "agentsLoadFailed": "Couldn't load workspace agents"
   }
 }

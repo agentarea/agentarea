@@ -28,7 +28,9 @@ const HYDRA_ADMIN_URL =
   "http://localhost:4445";
 const KRATOS_PUBLIC_URL = process.env.ORY_SDK_URL || "http://localhost:4433";
 
-async function requireSessionIdentity(request: NextRequest): Promise<string | null> {
+async function requireSessionIdentity(
+  request: NextRequest
+): Promise<string | null> {
   return getLiveSessionIdentityId(request.headers.get("cookie"), {
     orySdkUrl: KRATOS_PUBLIC_URL,
   });
@@ -52,7 +54,10 @@ export async function GET(request: NextRequest) {
       `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent?consent_challenge=${challenge}`
     );
     const data = await res.json();
-    if (res.ok && !sessionMatchesConsentSubject(sessionIdentityId, data?.subject)) {
+    if (
+      res.ok &&
+      !sessionMatchesConsentSubject(sessionIdentityId, data?.subject)
+    ) {
       return NextResponse.json(
         { error: "Consent request does not belong to this session" },
         { status: 403 }
@@ -61,7 +66,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data, { status: res.status });
   } catch (err) {
     console.error("[hydra/consent] Failed to fetch consent request:", err);
-    return NextResponse.json({ error: "Failed to fetch consent request" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch consent request" },
+      { status: 500 }
+    );
   }
 }
 
@@ -71,11 +79,17 @@ export async function PUT(request: NextRequest) {
   const action = searchParams.get("action");
 
   if (!challenge || !action) {
-    return NextResponse.json({ error: "Missing challenge or action" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing challenge or action" },
+      { status: 400 }
+    );
   }
 
   if (action !== "accept" && action !== "reject") {
-    return NextResponse.json({ error: "action must be accept or reject" }, { status: 400 });
+    return NextResponse.json(
+      { error: "action must be accept or reject" },
+      { status: 400 }
+    );
   }
 
   const sessionIdentityId = await requireSessionIdentity(request);
@@ -99,15 +113,23 @@ export async function PUT(request: NextRequest) {
       );
     }
     const consentRequest = await consentRes.json();
-    if (!sessionMatchesConsentSubject(sessionIdentityId, consentRequest?.subject)) {
+    if (
+      !sessionMatchesConsentSubject(sessionIdentityId, consentRequest?.subject)
+    ) {
       return NextResponse.json(
         { error: "Consent request does not belong to this session" },
         { status: 403 }
       );
     }
   } catch (err) {
-    console.error("[hydra/consent] Failed to verify consent request subject:", err);
-    return NextResponse.json({ error: "Failed to verify consent request" }, { status: 500 });
+    console.error(
+      "[hydra/consent] Failed to verify consent request subject:",
+      err
+    );
+    return NextResponse.json(
+      { error: "Failed to verify consent request" },
+      { status: 500 }
+    );
   }
 
   let body: unknown;
@@ -132,6 +154,9 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(data, { status: res.status });
   } catch (err) {
     console.error(`[hydra/consent] Failed to ${action} consent:`, err);
-    return NextResponse.json({ error: `Failed to ${action} consent` }, { status: 500 });
+    return NextResponse.json(
+      { error: `Failed to ${action} consent` },
+      { status: 500 }
+    );
   }
 }

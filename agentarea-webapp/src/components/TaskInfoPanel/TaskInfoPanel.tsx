@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useLocale } from "next-intl";
+import FormError from "@/components/FormError";
 import { InfoPanelBody, InfoPanelShell } from "@/components/InfoPanel";
+import { useCurrency } from "@/hooks/useCurrency";
 import type { EffectivePolicy } from "@/types/policies";
 import ActivitySummary, {
   TaskActivitySummary,
@@ -34,6 +36,8 @@ interface TaskInfoPanelProps {
   totalCost?: number | null;
   budgetLimit?: number | null;
   policy?: EffectivePolicy | null;
+  policyError?: string | null;
+  statusError?: string | null;
 }
 
 export default function TaskInfoPanel({
@@ -50,9 +54,12 @@ export default function TaskInfoPanel({
   totalCost,
   budgetLimit,
   policy,
+  policyError,
+  statusError,
 }: TaskInfoPanelProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "model">("overview");
   const locale = useLocale();
+  const { currency } = useCurrency();
 
   const formattedStart = startTime
     ? new Date(startTime).toLocaleString(locale)
@@ -91,6 +98,7 @@ export default function TaskInfoPanel({
                   : executionStatus}
               </p>
             )}
+            {statusError && <FormError>{statusError}</FormError>}
             <KeyMetrics
               currentStatus={currentStatus}
               isActive={isActive}
@@ -103,12 +111,23 @@ export default function TaskInfoPanel({
               <BudgetInfo
                 totalCost={totalCost ?? 0}
                 budgetLimit={budgetLimit ?? null}
+                currency={currency}
+                locale={locale}
               />
             )}
 
-            <PolicyInfo policy={policy} />
+            <PolicyInfo
+              policy={policy}
+              error={policyError}
+              currency={currency}
+              locale={locale}
+            />
 
-            <ActivitySummary summary={activitySummary} />
+            <ActivitySummary
+              summary={activitySummary}
+              currency={currency}
+              locale={locale}
+            />
             <Participants
               agentId={task.agent_id}
               agentName={task.agent_name}

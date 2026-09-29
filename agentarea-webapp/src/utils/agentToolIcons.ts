@@ -1,4 +1,4 @@
-import { getBuiltinToolLabel } from "@/app/(main)/agents/create/utils/builtinToolUtils";
+import { getBuiltinToolLabel } from "@/app/w/[workspace]/(main)/agents/create/utils/builtinToolUtils";
 import { getOpenApiConnectionInitials } from "@/lib/entity-identity";
 import {
   McpInstance,

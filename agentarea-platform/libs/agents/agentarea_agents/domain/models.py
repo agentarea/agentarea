@@ -26,7 +26,6 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     instruction: Mapped[str | None] = mapped_column(String, nullable=True)
     model_id: Mapped[str | None] = mapped_column(String, nullable=True)
     tools: Mapped[list[dict[str, Any]] | dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    events_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     planning: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     a2ui_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
     # DEPRECATED: persisted and surfaced through the API, but nothing reads it —

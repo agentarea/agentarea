@@ -13,7 +13,7 @@ replace, ADR-005's in-execution governance ("what may the run do").
 import logging
 from dataclasses import dataclass
 
-from .context import UserContext
+from .context import UserContext, UserPrincipal
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ async def _has_public_grant(agent_id: str, action: str) -> bool:
 
 
 async def authorize_agent_action(
-    subject: UserContext | None,
+    subject: UserPrincipal | UserContext | None,
     action: str,
     *,
     agent_workspace_id: str,
@@ -64,8 +64,7 @@ async def authorize_agent_action(
     if subject is None:
         return EdgeDecision(False, "anonymous subject and no public grant")
 
-    accessible = subject.accessible_workspaces or [subject.workspace_id]
-    if agent_workspace_id in accessible:
+    if agent_workspace_id in (subject.accessible_workspaces or []):
         return EdgeDecision(True, "workspace scope")
 
     return EdgeDecision(

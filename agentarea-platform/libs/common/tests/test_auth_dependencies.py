@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import jwt
 import pytest
-from agentarea_common.auth import UserContext, get_user_context
+from agentarea_common.auth import UserContext, UserPrincipal, get_user_context
 from agentarea_common.auth.jwt_handler import JWTTokenHandler
 from fastapi import HTTPException, Request
 
@@ -65,7 +65,7 @@ class TestJWTTokenHandler:
         assert isinstance(context, UserContext)
         assert context.user_id == "test-user-123"
         assert context.workspace_id == "test-workspace-456"
-        assert context.accessible_workspaces == ["test-workspace-456"]
+        assert context.accessible_workspaces is None
 
     @pytest.mark.asyncio
     async def test_extract_user_context_missing_token(self, jwt_handler, mock_request):
@@ -130,161 +130,185 @@ class TestJWTTokenHandler:
 
         assert context.user_id == "test-user-123"
         assert context.workspace_id == "test-workspace-456"
-        assert context.accessible_workspaces == ["test-workspace-456"]
+        assert context.accessible_workspaces is None
 
 
-class TestGetUserContext:
-    """Test cases for get_user_context dependency function."""
+def _kratos_accepts(user_id: str, email: str | None = None):
+    from agentarea_common.auth.interfaces import AuthToken
 
-    @pytest.fixture
-    def mock_request(self):
-        """Create mock request object."""
-        request = Mock(spec=Request)
-        request.headers = {}
-        return request
+    provider = Mock()
+    provider.verify_token = AsyncMock(
+        return_value=Mock(
+            is_authenticated=True, token=AuthToken(user_id=user_id, email=email), error=None
+        )
+    )
+    return provider
+
+
+def _request(path_params: dict | None = None, headers: dict | None = None) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/v1/workspaces/x/agents",
+            "query_string": b"",
+            "headers": [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()],
+            "path_params": path_params or {},
+        }
+    )
+
+
+class TestAuthenticatePrincipal:
+    """Authentication names the caller and nothing else."""
 
     @pytest.mark.asyncio
     @patch("agentarea_common.auth.dependencies.get_auth_provider")
-    @patch("agentarea_common.auth.dependencies.ContextManager")
-    async def test_get_user_context_success(
-        self, mock_context_manager, mock_get_auth_provider, mock_request
-    ):
-        """Test successful user context extraction and context manager setting."""
-        from agentarea_common.auth.authorization import AuthorizationService
-        from agentarea_common.auth.interfaces import AuthToken
-        from agentarea_common.di.container import register_singleton
-
-        # Register a mock AuthorizationService that allows "test-workspace"
-        mock_authz = Mock(spec=AuthorizationService)
-
-        async def mock_get_accessible_workspaces(user_context):
-            return [user_context.workspace_id, "test-workspace", "platform"]
-
-        mock_authz.get_accessible_workspaces = mock_get_accessible_workspaces
-        register_singleton(AuthorizationService, mock_authz)
-
-        # Setup mocks
-        mock_auth_provider = Mock()
-        mock_get_auth_provider.return_value = mock_auth_provider
-
-        # Create mock token and auth result
-        mock_token = AuthToken(user_id="test-user", email="test@example.com")
-        mock_auth_result = Mock()
-        mock_auth_result.is_authenticated = True
-        mock_auth_result.token = mock_token
-        mock_auth_result.error = None
-
-        # Make verify_token async
-        async def mock_verify_token(token):
-            return mock_auth_result
-
-        mock_auth_provider.verify_token = mock_verify_token
-
-        # Mock request headers — X-Workspace-ID override is only honoured if
-        # the user is a member; our mock authz returns "test-workspace" so this
-        # should succeed.
-        mock_request.headers = {"X-Workspace-ID": "test-workspace"}
-
-        # Call the dependency with valid credentials
+    async def test_kratos_token_yields_a_principal_without_a_workspace(self, get_provider):
+        from agentarea_common.auth.dependencies import authenticate_principal
         from fastapi.security import HTTPAuthorizationCredentials
 
+        get_provider.return_value = _kratos_accepts("test-user", "test@example.com")
         credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="valid-token")
 
-        result = await get_user_context(mock_request, credentials)
+        principal = await authenticate_principal(_request(), credentials)
 
-        # Verify results
-        assert result.user_id == "test-user"
-        assert result.workspace_id == "test-workspace"
-        mock_context_manager.set_context.assert_called_once()
+        assert isinstance(principal, UserPrincipal)
+        assert principal.user_id == "test-user"
+        assert principal.email == "test@example.com"
+        assert not hasattr(principal, "workspace_id")
 
     @pytest.mark.asyncio
     @patch("agentarea_common.auth.dependencies.get_auth_provider")
-    async def test_get_user_context_jwt_error_propagation(
-        self, mock_get_auth_provider, mock_request
-    ):
-        """Test that JWT errors are properly propagated."""
-        # Setup mocks
-        mock_auth_provider = Mock()
-        mock_get_auth_provider.return_value = mock_auth_provider
-
-        # Mock failed authentication
-        mock_auth_result = Mock()
-        mock_auth_result.is_authenticated = False
-        mock_auth_result.token = None
-        mock_auth_result.error = "Invalid token"
-
-        async def mock_verify_token(token):
-            return mock_auth_result
-
-        mock_auth_provider.verify_token = mock_verify_token
-
-        # Call the dependency and verify exception is raised
+    async def test_jwt_error_propagates_as_401(self, get_provider):
+        from agentarea_common.auth.dependencies import authenticate_principal
         from fastapi.security import HTTPAuthorizationCredentials
 
+        provider = Mock()
+        provider.verify_token = AsyncMock(
+            return_value=Mock(is_authenticated=False, token=None, error="Invalid token")
+        )
+        get_provider.return_value = provider
         credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="invalid-token")
 
-        with pytest.raises(HTTPException) as exc_info:
-            await get_user_context(mock_request, credentials)
+        with (
+            patch(
+                "agentarea_common.auth.dependencies._try_hydra_token",
+                new=AsyncMock(return_value=None),
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await authenticate_principal(_request(), credentials)
 
         assert exc_info.value.status_code == 401
 
     @pytest.mark.asyncio
-    @patch("agentarea_common.auth.dependencies._resolve_accessible_workspaces")
-    @patch("agentarea_common.auth.dependencies._try_hydra_token")
-    @patch("agentarea_common.auth.dependencies.get_auth_provider")
-    async def test_hydra_workspace_header_is_applied(
-        self,
-        mock_get_auth_provider,
-        mock_try_hydra_token,
-        mock_resolve_accessible,
-        mock_request,
-    ):
-        rejected = Mock(is_authenticated=False, token=None, error="not a Kratos token")
-        mock_provider = Mock()
-        mock_provider.verify_token = AsyncMock(return_value=rejected)
-        mock_get_auth_provider.return_value = mock_provider
+    async def test_missing_credentials_is_401(self):
+        from agentarea_common.auth.dependencies import authenticate_principal
 
-        hydra_context = UserContext(user_id="alice", workspace_id="alice")
-        mock_try_hydra_token.return_value = hydra_context
+        with pytest.raises(HTTPException) as exc_info:
+            await authenticate_principal(_request(), None)
 
-        async def grant_shared(context):
-            context.accessible_workspaces = ["alice", "shared-workspace"]
+        assert exc_info.value.status_code == 401
 
-        mock_resolve_accessible.side_effect = grant_shared
-        mock_request.headers = {"X-AgentArea-Workspace": "shared-workspace"}
 
-        from fastapi.security import HTTPAuthorizationCredentials
+class TestGetUserContext:
+    """The workspace is the path slug; headers and defaults select nothing."""
 
-        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="hydra-token")
-        result = await get_user_context(mock_request, credentials)
+    @pytest.fixture(autouse=True)
+    def _authz(self):
+        from agentarea_common.auth.authorization import AuthorizationService
+        from agentarea_common.auth.workspace_authorization import (
+            WorkspaceScopedAuthorizationService,
+        )
+        from agentarea_common.di.container import register_singleton
 
-        assert result.workspace_id == "shared-workspace"
+        register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+
+    @pytest.mark.asyncio
+    @patch("agentarea_common.auth.dependencies.ContextManager")
+    async def test_member_workspace_is_selected_by_path_slug(self, context_manager):
+        shared = Mock(id="ws-shared", slug="shared")
+        with (
+            patch(
+                "agentarea_common.auth.dependencies._owned_and_named_workspaces",
+                new=AsyncMock(return_value=([], shared)),
+            ),
+            patch(
+                "agentarea_common.auth.dependencies._member_workspace_ids",
+                new=AsyncMock(return_value=["ws-shared"]),
+            ),
+        ):
+            context = await get_user_context(
+                _request({"workspace": "shared"}, {"X-AgentArea-Workspace": "other"}),
+                UserPrincipal(user_id="alice"),
+            )
+
+        assert context.workspace_id == "ws-shared"
+        assert context.workspace_slug == "shared"
+        context_manager.set_context.assert_called_once_with(context)
+
+    @pytest.mark.asyncio
+    async def test_hydra_principal_is_refused_a_foreign_workspace(self):
+        foreign = Mock(id="ws-foreign", slug="foreign")
+        with (
+            patch(
+                "agentarea_common.auth.dependencies._owned_and_named_workspaces",
+                new=AsyncMock(return_value=([], foreign)),
+            ),
+            patch(
+                "agentarea_common.auth.dependencies._member_workspace_ids",
+                new=AsyncMock(return_value=[]),
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await get_user_context(
+                _request({"workspace": "foreign"}), UserPrincipal(user_id="alice")
+            )
+
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_a_database_failure_is_not_a_missing_workspace(self):
+        with (
+            patch(
+                "agentarea_common.auth.dependencies._owned_and_named_workspaces",
+                new=AsyncMock(side_effect=RuntimeError("database is down")),
+            ),
+            patch(
+                "agentarea_common.auth.dependencies._member_workspace_ids",
+                new=AsyncMock(return_value=[]),
+            ),
+            pytest.raises(RuntimeError, match="database is down"),
+        ):
+            await get_user_context(
+                _request({"workspace": "shared"}), UserPrincipal(user_id="alice")
+            )
 
 
 @pytest.mark.asyncio
-async def test_accessible_workspaces_include_owned_workspaces():
+async def test_accessible_workspaces_include_owned_and_joined_workspaces():
     from agentarea_common.auth.authorization import AuthorizationService
-    from agentarea_common.auth.dependencies import _resolve_accessible_workspaces
+    from agentarea_common.auth.dependencies import _resolve_access
     from agentarea_common.di.container import register_singleton
 
     authz = Mock(spec=AuthorizationService)
-    authz.get_accessible_workspaces = AsyncMock(return_value=["personal"])
+    authz.get_accessible_workspaces = AsyncMock(return_value=[])
     register_singleton(AuthorizationService, authz)
 
-    owned = Mock(id="owned-workspace")
+    owned = Mock(id="owned-workspace", slug="owned", owner_user_id="alice")
+    named = Mock(id="named-workspace", slug="named", owner_user_id="bob")
     repository = Mock()
-    repository.list_owned_by_user = AsyncMock(return_value=[owned])
-    session = AsyncMock()
+    repository.list_owned_or_named = AsyncMock(return_value=[owned, named])
     session_context = AsyncMock()
-    session_context.__aenter__.return_value = session
+    session_context.__aenter__.return_value = AsyncMock()
     database = Mock()
     database.async_session_factory.return_value = session_context
 
-    user_context = UserContext(user_id="alice", workspace_id="personal")
+    principal = UserPrincipal(user_id="alice")
     with (
         patch(
-            "agentarea_common.workspaces.memberships.get_workspace_membership_graph",
-            return_value=None,
+            "agentarea_common.auth.dependencies._member_workspace_ids",
+            new=AsyncMock(return_value=["joined-workspace"]),
         ),
         patch("agentarea_common.config.database.get_database", return_value=database),
         patch(
@@ -292,31 +316,61 @@ async def test_accessible_workspaces_include_owned_workspaces():
             return_value=repository,
         ),
     ):
-        await _resolve_accessible_workspaces(user_context)
+        resolved = await _resolve_access(principal, slug="named")
 
-    assert user_context.accessible_workspaces == ["personal", "owned-workspace"]
-    repository.list_owned_by_user.assert_awaited_once_with("alice")
+    assert resolved is named
+    assert principal.accessible_workspaces == ["joined-workspace", "owned-workspace"]
+    assert principal.admin_workspaces == ["owned-workspace"]
+    repository.list_owned_or_named.assert_awaited_once_with(
+        "alice", slug="named", workspace_id=None
+    )
 
 
 @pytest.mark.asyncio
-async def test_canonical_workspace_reference_accepts_slug():
-    from agentarea_common.auth.dependencies import _apply_workspace_selection
+async def test_api_key_reach_is_narrowed_to_its_workspace():
+    from agentarea_common.auth.authorization import AuthorizationService
+    from agentarea_common.auth.dependencies import _resolve_access
+    from agentarea_common.di.container import register_singleton
 
-    request = Mock(spec=Request)
-    request.headers = {"X-AgentArea-Workspace": "shared-slug"}
-    user_context = UserContext(
-        user_id="alice",
-        workspace_id="personal",
-        accessible_workspaces=["personal", "shared-id"],
-    )
+    authz = Mock(spec=AuthorizationService)
+    authz.get_accessible_workspaces = AsyncMock(return_value=[])
+    register_singleton(AuthorizationService, authz)
+    owned = Mock(id="owned-workspace", owner_user_id="alice")
 
-    with patch(
-        "agentarea_common.auth.dependencies._resolve_workspace_id_from_slug",
-        new=AsyncMock(return_value="shared-id"),
+    principal = UserPrincipal(user_id="alice", bound_workspace_id="joined-workspace")
+    with (
+        patch(
+            "agentarea_common.auth.dependencies._member_workspace_ids",
+            new=AsyncMock(return_value=["joined-workspace"]),
+        ),
+        patch(
+            "agentarea_common.auth.dependencies._owned_and_named_workspaces",
+            new=AsyncMock(return_value=([owned], None)),
+        ),
     ):
-        await _apply_workspace_selection(user_context, request)
+        await _resolve_access(principal)
 
-    assert user_context.workspace_id == "shared-id"
+    assert principal.accessible_workspaces == ["joined-workspace"]
+    assert principal.admin_workspaces == []
+
+
+@pytest.mark.asyncio
+async def test_mcp_workspace_reference_accepts_slug_or_id():
+    from agentarea_common.auth.dependencies import enter_workspace
+
+    shared_id = "0d5c2f7e-8d6b-4b53-9a4e-1f7f3c2d9a10"
+    shared = Mock(id=shared_id, slug="shared-slug")
+    principal = UserPrincipal(user_id="alice", accessible_workspaces=[shared_id])
+
+    async def load(*, workspace_id=None, slug=None):
+        return shared if slug == "shared-slug" or workspace_id == shared_id else None
+
+    with patch("agentarea_common.workspaces.lookup.load_workspace", new=load):
+        by_slug = await enter_workspace(principal, "shared-slug")
+        by_id = await enter_workspace(principal, shared_id)
+
+    assert by_slug.workspace_id == by_id.workspace_id == shared_id
+    assert by_slug.workspace_slug == "shared-slug"
 
 
 @pytest.mark.asyncio
@@ -343,7 +397,7 @@ async def test_hydra_token_workspace_claim_is_ignored():
 
     assert context is not None
     assert context.user_id == "alice"
-    assert context.workspace_id == "alice"
+    assert not hasattr(context, "workspace_id")
 
 
 @pytest.mark.asyncio

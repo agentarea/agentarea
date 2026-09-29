@@ -40,7 +40,7 @@ from another entity.
 <Steps titleSize="h3">
   <Step title="Create the client">
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/clients/" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/clients/" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{"name": "codex-laptop", "kind": "harness", "description": "Local Codex harness"}'
@@ -67,7 +67,7 @@ from another entity.
   <Step title="Attach instances, with a namespace each">
     ```bash
     curl -s -o /dev/null -w '%{http_code}\n' \
-      -X POST "$AGENTAREA_URL/v1/clients/$CLIENT_ID/mcp-instances" \
+      -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/clients/$CLIENT_ID/mcp-instances" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{\"id\": \"$GITHUB_INSTANCE_ID\", \"namespace_prefix\": \"gh\"}"
@@ -86,7 +86,7 @@ from another entity.
   <Step title="Attach skills, if the client should have them">
     ```bash
     curl -s -o /dev/null -w '%{http_code}\n' \
-      -X POST "$AGENTAREA_URL/v1/clients/$CLIENT_ID/skills" \
+      -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/clients/$CLIENT_ID/skills" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{\"id\": \"$SKILL_ID\"}"
@@ -156,12 +156,12 @@ curl -s -X POST "$AGENTAREA_URL/mcp/clients/$CLIENT_ID" \
   <Accordion title="A tool that exists on the server is missing from the aggregate">
     Member tools come from each instance's stored snapshot, discovered at its
     last verification. Run
-    `POST /v1/mcp-server- instances/{instance_id}/discover-tools` on the member,
+    `POST /v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/discover-tools` on the member,
     then list again.
   </Accordion>
   <Accordion title="A member is still exposed after you removed it elsewhere">
     Members are only ever the client's own attachments. Remove one with
-    `DELETE /v1/clients/{client_id}/mcp-instances/{mcp_instance_id}` .
+    `DELETE /v1/workspaces/{workspace}/clients/{client_id}/mcp-instances/{mcp_instance_id}` .
   </Accordion>
   <Accordion title="The endpoint 404s">
     `/mcp/clients/{client_id}` is a mounted application, not a `/v1` route, and

@@ -138,6 +138,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
     ) -> UpdateInstanceStatusResult:
         """Update MCP instance status in the database."""
         from agentarea_common.auth.context import UserContext
+        from agentarea_common.base.tenant_scope import bind_workspace_scope
         from agentarea_common.config import get_database
 
         from agentarea_mcp.domain import auth_models
@@ -152,6 +153,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                     user_id=request.user_id,
                     workspace_id=request.workspace_id,
                 )
+                bind_workspace_scope(user_context.workspace_id)
                 repo = MCPServerInstanceRepository(session, user_context)
 
                 update_kwargs: dict[str, Any] = {}
@@ -172,7 +174,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
 
                 return UpdateInstanceStatusResult(success=True)
         except Exception as e:
-            logger.error("Failed to update instance: %s", e)
+            logger.exception("Failed to update instance: %s", e)
             return UpdateInstanceStatusResult(success=False, error=str(e))
 
     @activity.defn(name="discover_mcp_tools_activity")
@@ -189,7 +191,9 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
             )
             return DiscoverToolsResult(success=True, tools=tools)
         except Exception as e:
-            logger.warning("Tool discovery failed for %s: %s", request.instance_id, e)
+            logger.warning(
+                "Tool discovery failed for %s: %s", request.instance_id, e, exc_info=True
+            )
             return DiscoverToolsResult(success=False, error=str(e))
 
     @activity.defn(name="publish_mcp_event_activity")
@@ -217,7 +221,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
             await redis_event_broker.publish(event)
             return PublishMCPEventResult(success=True)
         except Exception as e:
-            logger.warning("Failed to publish MCP event: %s", e)
+            logger.warning("Failed to publish MCP event: %s", e, exc_info=True)
             return PublishMCPEventResult(success=False, error=str(e))
 
     @activity.defn(name="get_mcp_instance_environment_activity")
@@ -226,6 +230,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
     ) -> GetInstanceEnvironmentResult:
         """Resolve environment variables from the secret manager for container startup."""
         from agentarea_common.auth.context import UserContext
+        from agentarea_common.base.tenant_scope import bind_workspace_scope
         from agentarea_common.config import get_database
 
         from agentarea_mcp.application.mcp_env_service import MCPEnvironmentService
@@ -238,6 +243,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                     user_id=request.user_id,
                     workspace_id=request.workspace_id,
                 )
+                bind_workspace_scope(user_context.workspace_id)
                 repo = MCPServerInstanceRepository(session, user_context)
                 instance = await repo.get_by_id(request.instance_id)
 
@@ -259,7 +265,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                 return GetInstanceEnvironmentResult(env_vars=env_vars)
 
         except Exception as e:
-            logger.error("Failed to resolve environment: %s", e)
+            logger.exception("Failed to resolve environment: %s", e)
             return GetInstanceEnvironmentResult(error=str(e))
 
     @activity.defn(name="resolve_auth_headers_activity")
@@ -268,6 +274,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
     ) -> ResolveAuthHeadersResult:
         """Resolve authentication headers for an MCP instance's auth config."""
         from agentarea_common.auth.context import UserContext
+        from agentarea_common.base.tenant_scope import bind_workspace_scope
         from agentarea_common.config import get_database
 
         from agentarea_mcp.application.auth_service import MCPAuthService
@@ -281,6 +288,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                     user_id=request.user_id,
                     workspace_id=request.workspace_id,
                 )
+                bind_workspace_scope(user_context.workspace_id)
 
                 instance_repo = MCPServerInstanceRepository(session, user_context)
                 instance = await instance_repo.get_by_id(request.instance_id)
@@ -303,7 +311,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                 return ResolveAuthHeadersResult(headers=headers)
 
         except Exception as e:
-            logger.error("Failed to resolve auth headers: %s", e)
+            logger.exception("Failed to resolve auth headers: %s", e)
             return ResolveAuthHeadersResult(error=str(e))
 
     return [

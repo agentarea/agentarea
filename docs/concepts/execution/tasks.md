@@ -44,7 +44,7 @@ different set of defaults.
 | Field | Meaning |
 |---|---|
 | `id` | Task identity. Callers may pre-assign it (A2A echoes it back). |
-| `agent_id` | The agent that runs it. Tasks are addressed under the agent: `/v1/agents/{agent_id}/tasks/{task_id}`. |
+| `agent_id` | The agent that runs it. Tasks are addressed under the agent: `/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}`. |
 | `workspace_id`, `user_id` | Tenancy and audit. Both are required; a task missing either is rejected at the manager boundary. |
 | `query`, `description` | What the agent is asked to do. |
 | `parameters` | Caller input, including `channel_origin` and `success_criteria`. |
@@ -123,7 +123,7 @@ done.
 Hitting the iteration limit or the budget ceiling is not a failure yet. The
 workflow records the reason, writes `waiting_for_continuation`, emits
 `task.awaiting_continuation`, and idles for up to 24 hours.
-`POST /v1/tasks/{task_id}/continue` grants more iterations, more budget, or
+`POST /v1/workspaces/{workspace}/tasks/{task_id}/continue` grants more iterations, more budget, or
 both, as a Temporal update that returns whether the grant was accepted. The
 grant must match the reason: additional iterations for `iteration_limit`,
 additional budget for `budget_exceeded`. A mismatched or late grant returns 409.
@@ -150,9 +150,9 @@ Temporal otherwise.
 
 ## Limits
 
-- **Cancel does not write the row.** `DELETE /v1/agents/{agent_id}/tasks/{task_id}`
+- **Cancel does not write the row.** `DELETE /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}`
   cancels the Temporal workflow and returns. It does not persist `cancelled`.
-  `GET /v1/agents/{agent_id}/tasks/{task_id}` enriches from Temporal and will
+  `GET /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}` enriches from Temporal and will
   report `cancelled`; the list endpoint does not enrich, so a cancelled task can
   still read `running` in a list view and in the database.
 - **There is no wall-clock timeout on a task.** `AgentExecutionRequest` carries

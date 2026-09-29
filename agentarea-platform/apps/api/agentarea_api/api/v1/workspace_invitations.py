@@ -7,10 +7,14 @@ invitation state.
 
 import logging
 from collections.abc import AsyncGenerator
-from typing import Annotated, NoReturn
+from typing import Annotated, Literal, NoReturn
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.dependencies import (
+    PrincipalDep,
+    UnboundPrincipalDep,
+    UserContextDep,
+)
 from agentarea_common.auth.identity_directory import (
     IdentityRecord,
     get_identity_directory,
@@ -19,6 +23,7 @@ from agentarea_common.auth.identity_directory import (
 from agentarea_common.auth.route_authz import (
     enforced_in_handler,
     requires_workspace_admin,
+    unrestricted,
 )
 from agentarea_common.config import get_database
 from agentarea_common.rebac import (
@@ -54,7 +59,8 @@ from agentarea_common.workspaces.memberships import (
     list_workspace_member_ids,
 )
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -88,6 +94,7 @@ def get_membership_service(session: SessionDep) -> WorkspaceMembershipService:
         membership_repo=WorkspaceMembershipRepository(session),
         workspace_repo=WorkspaceRepository(session),
         graph=graph,
+        identities=get_identity_directory(),
     )
 
 
@@ -101,7 +108,7 @@ MembershipServiceDep = Annotated[WorkspaceMembershipService, Depends(get_members
 
 class CreateInvitationBody(BaseModel):
     email: str | None = None
-    expires_in_days: int | None = None
+    expires_in_days: int | None = Field(default=None, ge=1, le=365)
 
 
 class InvitationResponse(BaseModel):
@@ -154,6 +161,12 @@ class AcceptInvitationResponse(BaseModel):
     workspace_id: str
     user_id: str
     invitation_id: UUID
+
+
+class MemberRemovalPendingResponse(BaseModel):
+    """The membership has ended; its graph access is still being revoked."""
+
+    status: Literal["revocation_pending"] = "revocation_pending"
 
 
 class MemberResponse(BaseModel):
@@ -271,39 +284,24 @@ async def _list_member_ids(workspace_id: str) -> list[str]:
         _raise_membership_graph_unavailable(exc)
 
 
-def _ensure_workspace_access(user: UserContextDep, workspace_id: str) -> None:
-    """Owner-of-workspace bootstrap rule.
-
-    Until permissions land in their own PR, the rule is: a user may
-    operate on a workspace iff that workspace is in their
-    accessible_workspaces list (resolved by AuthorizationService) OR
-    the workspace_id equals their own user_id (personal workspace).
-    """
-    accessible = user.accessible_workspaces or [user.workspace_id]
-    if workspace_id == user.user_id or workspace_id in accessible:
-        return
-    raise HTTPException(
-        status_code=403,
-        detail=f"Access denied to workspace {workspace_id}",
-    )
-
-
 # ---------------------------------------------------------------------------
 # Routers
 # ---------------------------------------------------------------------------
 
+# Mounted under /v1/workspaces/{workspace}: the workspace the path selects.
 router = APIRouter(tags=["workspace-invitations"])
+# Preview and accept name no workspace: by design the invitee need not (yet)
+# be a member of the target workspace.
+principal_router = APIRouter(tags=["workspace-invitations"])
 
 
-# Invitations under /workspaces/{workspace_id}/invitations
 @router.post(
-    "/workspaces/{workspace_id}/invitations",
+    "/invitations",
     response_model=InvitationCreatedResponse,
     status_code=201,
-    dependencies=[requires_workspace_admin(workspace_param="workspace_id")],
+    dependencies=[requires_workspace_admin()],
 )
 async def create_invitation(
-    workspace_id: str,
     body: CreateInvitationBody,
     user: UserContextDep,
     service: InvitationServiceDep,
@@ -314,10 +312,9 @@ async def create_invitation(
     The plaintext ``token`` is returned exactly once in the response.
     The caller delivers it however they want (link, email, Slack).
     """
-    _ensure_workspace_access(user, workspace_id)
     kwargs: dict = {
         "actor": user,
-        "workspace_id": workspace_id,
+        "workspace_id": user.workspace_id,
         "email": body.email,
     }
     if body.expires_in_days is not None:
@@ -335,44 +332,40 @@ async def create_invitation(
 
 
 @router.get(
-    "/workspaces/{workspace_id}/invitations",
+    "/invitations",
     response_model=list[InvitationResponse],
-    dependencies=[requires_workspace_admin(workspace_param="workspace_id")],
+    dependencies=[requires_workspace_admin()],
 )
 async def list_invitations(
-    workspace_id: str,
     user: UserContextDep,
     service: InvitationServiceDep,
 ):
     """List pending invitations for the workspace. Tokens are NOT returned."""
-    _ensure_workspace_access(user, workspace_id)
-    invitations = await service.list_pending(actor=user, workspace_id=workspace_id)
+    invitations = await service.list_pending(actor=user, workspace_id=user.workspace_id)
     inviters = await _resolve_identities([i.invited_by for i in invitations])
     return [_invitation_to_response(i, inviters.get(i.invited_by)) for i in invitations]
 
 
 @router.delete(
-    "/workspaces/{workspace_id}/invitations/{invitation_id}",
+    "/invitations/{invitation_id}",
     status_code=204,
-    dependencies=[requires_workspace_admin(workspace_param="workspace_id")],
+    dependencies=[requires_workspace_admin()],
 )
 async def revoke_invitation(
-    workspace_id: str,
     invitation_id: UUID,
     user: UserContextDep,
     service: InvitationServiceDep,
 ):
     """Revoke a pending invitation. Idempotent — already-resolved invitations are no-ops."""
-    _ensure_workspace_access(user, workspace_id)
     try:
-        await service.revoke(actor=user, workspace_id=workspace_id, invitation_id=invitation_id)
+        await service.revoke(
+            actor=user, workspace_id=user.workspace_id, invitation_id=invitation_id
+        )
     except InvitationNotFound as exc:
         raise HTTPException(status_code=404, detail="Invitation not found") from exc
 
 
-# Preview and accept live at top-level /invitations — by design the invitee
-# need not (yet) be a member of the target workspace.
-@router.post(
+@principal_router.post(
     "/invitations/preview",
     response_model=InvitationPreviewResponse,
     dependencies=[
@@ -384,7 +377,7 @@ async def revoke_invitation(
 )
 async def preview_invitation(
     body: InvitationPreviewBody,
-    user: UserContextDep,
+    user: PrincipalDep,
     service: InvitationServiceDep,
     session: SessionDep,
 ):
@@ -418,19 +411,19 @@ async def preview_invitation(
     )
 
 
-@router.post(
+@principal_router.post(
     "/invitations/accept",
     response_model=AcceptInvitationResponse,
     dependencies=[
         enforced_in_handler(
             "token bearer only; an emailed invitation must match the caller's email, "
-            "checked by InvitationService.accept"
+            "checked by InvitationService.accept; API keys confined to a workspace are refused"
         )
     ],
 )
 async def accept_invitation(
     body: AcceptInvitationBody,
-    user: UserContextDep,
+    user: UnboundPrincipalDep,
     service: InvitationServiceDep,
     memberships: MembershipServiceDep,
 ):
@@ -462,20 +455,18 @@ async def accept_invitation(
     )
 
 
-# Members under /workspaces/{workspace_id}/members
 @router.get(
-    "/workspaces/{workspace_id}/members",
+    "/members",
     response_model=list[MemberResponse],
     dependencies=[
-        enforced_in_handler("membership in the target workspace is asserted in the handler")
+        unrestricted("any member of the workspace the path selects may list its members")
     ],
 )
 async def list_members(
-    workspace_id: str,
     user: UserContextDep,
     memberships: MembershipServiceDep,
 ):
-    _ensure_workspace_access(user, workspace_id)
+    workspace_id = user.workspace_id
     try:
         if workspace_id == user.user_id:
             await memberships.record(
@@ -497,12 +488,17 @@ async def list_members(
 
 
 @router.delete(
-    "/workspaces/{workspace_id}/members/{user_id}",
+    "/members/{user_id}",
     status_code=204,
+    responses={
+        202: {
+            "model": MemberRemovalPendingResponse,
+            "description": "Membership ended; graph access is still being revoked",
+        }
+    },
     dependencies=[enforced_in_handler("owner-only, enforced by MembershipService.remove")],
 )
 async def remove_member(
-    workspace_id: str,
     user_id: str,
     user: UserContextDep,
     memberships: MembershipServiceDep,
@@ -511,11 +507,12 @@ async def remove_member(
 
     The owner keeps their access until ownership moves, and the last member
     cannot leave — either would strand the workspace and everything in it.
+    202 means the membership has ended but the member still has access until
+    the revocation, which is retried until it succeeds, reaches the graph.
     """
-    _ensure_workspace_access(user, workspace_id)
     try:
-        await memberships.remove(
-            workspace_id=workspace_id,
+        revoked = await memberships.remove(
+            workspace_id=user.workspace_id,
             target_user_id=user_id,
             actor_user_id=user.user_id,
         )
@@ -526,3 +523,5 @@ async def remove_member(
     except GRAPH_ERRORS as exc:
         logger.exception("Failed to revoke workspace membership")
         _raise_membership_graph_unavailable(exc)
+    if not revoked:
+        return JSONResponse(status_code=202, content=MemberRemovalPendingResponse().model_dump())

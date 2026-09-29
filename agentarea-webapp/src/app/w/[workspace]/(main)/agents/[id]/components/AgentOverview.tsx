@@ -1,0 +1,280 @@
+import { getLocale, getTranslations } from "next-intl/server";
+import { notFound } from "next/navigation";
+import { policyToRule } from "@/app/w/[workspace]/(main)/policies/components/policy-rules";
+import { resolveAgentIdentity } from "@/lib/agent-identity";
+import {
+  getAgent,
+  getModelInstance,
+  listAgentTasks,
+  listMCPServerInstances,
+  listMCPServers,
+  listOpenAPIConnections,
+  listPolicies,
+  type TaskResponse,
+} from "@/lib/api";
+import {
+  getAgentOverview,
+  getPricingCurrency,
+  getWorkspaceSettings,
+} from "@/lib/api-dashboard";
+import { apiErrorMessage, isApiNotFound } from "@/lib/api-errors";
+import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
+import { getAgentStatusPresentation } from "@/lib/status";
+import { getViewerCapabilities } from "@/lib/workspace-context";
+import type { Agent } from "@/types/agent";
+import type { Policy, PolicyEffect } from "@/types/policies";
+import {
+  resolveAgentToolIcons,
+  type OpenApiConnectionRef,
+} from "@/utils/agentToolIcons";
+import { isAwaitingUserTask, isRunningTask } from "../../shared/taskStatus";
+import {
+  AgentOverviewView,
+  type AgentOverviewModel,
+} from "./AgentOverviewView";
+import { CatalogAgentPreview } from "./CatalogAgentPreview";
+
+const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
+
+/**
+ * Data container for the agent overview: loads the agent, its tasks, spend,
+ * registry-resolved tools and agent-scoped policies, then hands a plain view
+ * model to {@link AgentOverviewView}.
+ */
+export async function AgentOverview({ agentId }: { agentId: string }) {
+  const agentRes = await getAgent(agentId);
+  const agent = agentRes.data as Agent | undefined;
+  if (!agent) notFound();
+
+  // Canonical ref for in-page links: keep URLs on the slug when available,
+  // regardless of whether the page was opened by slug or id.
+  const agentRef = agent.slug || agentId;
+
+  // A read-only catalog agent has no tenant row, tasks, spend or guardrails.
+  // Show a preview + "Add to workspace" CTA instead of the operational dashboard.
+  if (agent.is_catalog) {
+    return (
+      <div className="main-content">
+        <CatalogAgentPreview agent={agent} agentRef={agentRef} />
+      </div>
+    );
+  }
+
+  // Use the resolved UUID for endpoints that require it (list_agent_tasks, etc.).
+  const realId: string = agent.id;
+  const [{ canAdminister }, t] = await Promise.all([
+    getViewerCapabilities(),
+    getTranslations("AgentOverviewPage"),
+  ]);
+
+  // A section whose data failed to load says so instead of rendering zeros.
+  const thrown = (label: string) => (error: unknown) => {
+    console.error(label, error);
+    return { data: undefined, error, status: undefined };
+  };
+
+  const [
+    overviewRes,
+    tasksRes,
+    settingsRes,
+    mcpInstancesRes,
+    mcpServersRes,
+    openApiConnectionsRes,
+    policiesRes,
+    modelInstanceRes,
+    pricingCurrency,
+  ] = await Promise.all([
+    getAgentOverview(realId).catch(thrown("Failed to load agent overview")),
+    listAgentTasks(realId).catch(thrown("Failed to load agent tasks")),
+    getWorkspaceSettings().catch(thrown("Failed to load workspace settings")),
+    listMCPServerInstances().catch(thrown("Failed to load MCP instances")),
+    listMCPServers({ page_size: 100 }).catch(
+      thrown("Failed to load MCP servers")
+    ),
+    listOpenAPIConnections().catch(
+      thrown("Failed to load OpenAPI connections")
+    ),
+    canAdminister
+      ? listPolicies({ subject_type: "agent", subject_id: realId }).catch(
+          thrown("Failed to load agent policies")
+        )
+      : null,
+    agent.model_id
+      ? getModelInstance(agent.model_id).catch((error: unknown) => ({
+          data: undefined,
+          error,
+          status: undefined,
+        }))
+      : Promise.resolve({ data: undefined, error: undefined }),
+    getPricingCurrency(),
+  ]);
+
+  const overview = overviewRes.data;
+  const settings = settingsRes.data;
+  const tasks = (tasksRes.data as TaskResponse[] | undefined) ?? [];
+
+  const registryFailure = [
+    mcpInstancesRes,
+    mcpServersRes,
+    openApiConnectionsRes,
+  ].find((res) => res.error);
+  const loadErrors: AgentOverviewModel["loadErrors"] = {
+    overview:
+      overviewRes.error || !overviewRes.data
+        ? apiErrorMessage(overviewRes, t("activityLoadFailed"))
+        : undefined,
+    settings:
+      settingsRes.error || !settingsRes.data
+        ? apiErrorMessage(settingsRes, t("capLoadFailed"))
+        : undefined,
+    tasks:
+      tasksRes.error || !tasksRes.data
+        ? apiErrorMessage(tasksRes, t("tasksLoadFailed"))
+        : undefined,
+    connections: registryFailure
+      ? apiErrorMessage(registryFailure, t("connectionsLoadFailed"))
+      : undefined,
+    // getPricingCurrency() never throws (it catches internally), so there's
+    // no raw error to feed apiErrorMessage — just the one translated line.
+    currency: !pricingCurrency.ok ? t("currencyLoadFailed") : undefined,
+  };
+  // The hero label falls back to the agent's own model info; a deleted
+  // instance (404) is expected, anything else is worth a log line.
+  if (modelInstanceRes.error && !isApiNotFound(modelInstanceRes)) {
+    console.error("Failed to load model instance", modelInstanceRes.error);
+  }
+
+  const completedValues = (overview?.daily_tasks ?? []).map((d) => d.completed);
+  const failedValues = (overview?.daily_tasks ?? []).map((d) => d.failed);
+
+  const modelInstance = modelInstanceRes.data;
+  const triggers = (overview?.upcoming ?? []).filter(
+    (u) => u.kind === "trigger"
+  );
+
+  // Work that has not happened yet, soonest first (the API already sorts it).
+  // `running_task` is dropped: the Running group lists those from the task
+  // query, and one run in two places reads as two runs.
+  const upcoming = (overview?.upcoming ?? [])
+    .filter((u) => u.kind !== "running_task")
+    .slice(0, 6);
+
+  // Resolve the agent's tools into names via the live MCP registry so refs map
+  // to real server names (same as the /agents list).
+  const mcpServersData = mcpServersRes?.data;
+  const mcpServers: McpServer[] = Array.isArray(mcpServersData)
+    ? (mcpServersData as McpServer[])
+    : ((mcpServersData as { items?: McpServer[] } | null | undefined)?.items ??
+      []);
+  const mcpInstanceList = (mcpInstancesRes?.data as McpInstance[]) ?? [];
+  const toolIcons = resolveAgentToolIcons(agent, {
+    mcpInstances: mcpInstanceList,
+    mcpServers,
+    openApiConnections:
+      (openApiConnectionsRes?.data as OpenApiConnectionRef[]) ?? [],
+  });
+
+  // Agent-scoped governance rules, summarised by effect. Never guess a
+  // currency: a failed lookup threads through as null (see @/lib/money for
+  // how that renders) rather than assuming USD.
+  const locale = await getLocale();
+  const currency = pricingCurrency.ok ? pricingCurrency.currency : null;
+  let policies: AgentOverviewModel["policies"];
+  if (!policiesRes) {
+    policies = { status: "adminOnly" };
+  } else if (policiesRes.error || !policiesRes.data) {
+    policies = {
+      status: "error",
+      message: apiErrorMessage(policiesRes, t("guardrailsLoadFailed")),
+    };
+  } else {
+    const policyRules = (policiesRes.data as Policy[])
+      .filter((p) => p.enabled !== false)
+      .map((p) => policyToRule(p, currency, locale));
+    policies = {
+      status: "ok",
+      count: policyRules.length,
+      effectCounts: policyRules.reduce<Partial<Record<PolicyEffect, number>>>(
+        (acc, rule) => {
+          acc[rule.effect] = (acc[rule.effect] ?? 0) + 1;
+          return acc;
+        },
+        {}
+      ),
+    };
+  }
+
+  const { hue, iconKey } = resolveAgentIdentity(agent);
+
+  const model: AgentOverviewModel = {
+    agentRef,
+    name: agent.name,
+    description: agent.description,
+    hue,
+    iconKey,
+    status: getAgentStatusPresentation(agent.status || "inactive"),
+    model: {
+      label:
+        agent.model_info?.model_display_name ||
+        modelInstance?.model_display_name ||
+        modelInstance?.name ||
+        agent.model_info?.config_name ||
+        modelInstance?.config_name ||
+        agent.model_id ||
+        null,
+      provider:
+        agent.model_info?.provider_name || modelInstance?.provider_name || null,
+      iconUrl:
+        agent.model_info?.provider_icon_url ||
+        modelInstance?.provider_icon_url ||
+        null,
+    },
+    triggers: {
+      count: triggers.length,
+      titles: Array.from(new Set(triggers.map((u) => u.title).filter(Boolean))),
+    },
+    lastActivityAt: overview?.last_activity_at ?? null,
+    stats: {
+      completed7d: sum(completedValues.slice(-7)),
+      failed7d: sum(failedValues.slice(-7)),
+      throughput7d: sum(completedValues.slice(-7)) / 7,
+      throughputPrev: sum(completedValues.slice(-14, -7)) / 7,
+      maxDaily: Math.max(...completedValues, 0),
+      costMtd: overview?.cost_mtd_usd ?? 0,
+      cap: settings?.monthly_cap_usd ?? null,
+      doneToday: overview?.tasks_done_today ?? 0,
+      failedToday: overview?.tasks_failed_today ?? 0,
+    },
+    upcoming: upcoming.map((u) => ({
+      // A cron trigger contributes one entry per fire time, so the id has to
+      // carry the moment as well as the thing that fires.
+      id: `${u.kind}-${u.trigger_id ?? u.task_id ?? "none"}-${u.fires_at}`,
+      firesAt: u.fires_at,
+      kind: u.kind,
+      title: u.title,
+      href: u.task_id
+        ? `/tasks/${u.task_id}`
+        : u.trigger_id
+          ? `/triggers/${u.trigger_id}`
+          : null,
+    })),
+    runningTasks: tasks.filter(isRunningTask),
+    // Queued work is listed under Upcoming, not here -- "recent" is what has
+    // already run, and showing a pending task in both reads as two tasks.
+    recentTasks: tasks
+      .filter(
+        (task) =>
+          !isRunningTask(task) &&
+          !["pending", "submitted"].includes(String(task.status ?? ""))
+      )
+      .slice(0, 5),
+    pendingApprovals: tasks.filter(isAwaitingUserTask),
+    skills: (agent.skills ?? []).map((s) => s.name),
+    connections: toolIcons.map((tool) => tool.label),
+    policies,
+    loadErrors,
+    currency,
+  };
+
+  return <AgentOverviewView model={model} />;
+}

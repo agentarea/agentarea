@@ -163,6 +163,10 @@ class BundleAgent(BaseModel):
     model: str | None = Field(default=None)
     mcps: list[str] = Field(default_factory=list, description="BundleMcp keys to attach as tools.")
     skills: list[str] = Field(default_factory=list, description="BundleSkill keys to attach.")
+    toolsets: list[str] = Field(
+        default_factory=list,
+        description='Built-in toolsets to attach, e.g. ["agentarea/shell", "agentarea/files"].',
+    )
 
     @field_validator("key")
     @classmethod

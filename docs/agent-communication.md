@@ -121,7 +121,7 @@ The library will serialize the call, await completion (if `wait_for_response=tru
 You can simulate the same process via HTTP:
 
 ```bash
-curl -X POST http://localhost:8000/v1/tasks/ \
+curl -X POST http://localhost:8000/v1/workspaces/{workspace}/tasks/ \
   -H "Content-Type: application/json" \
   -d '{
         "message": "Translate this to French: Hello World",
@@ -133,7 +133,7 @@ curl -X POST http://localhost:8000/v1/tasks/ \
 Track status:
 
 ```
-GET /v1/tasks/{task_id}
+GET /v1/workspaces/{workspace}/tasks/{task_id}
 ```
 
 ---

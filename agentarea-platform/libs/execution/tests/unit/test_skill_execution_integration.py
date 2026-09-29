@@ -52,7 +52,6 @@ class TestSkillPromptInjection:
             model_id=str(uuid4()),
             context_window=128000,
             tools=[],
-            events_config={},
             planning=False,
             skills=skills,
         )
@@ -205,7 +204,6 @@ class TestBuildAgentConfigWithSkills:
         mock_agent.instruction = "You are a test agent."
         mock_agent.model_id = str(uuid4())
         mock_agent.tools = []
-        mock_agent.events_config = {}
         mock_agent.planning = False
         mock_agent.skills = [mock_skill]
 

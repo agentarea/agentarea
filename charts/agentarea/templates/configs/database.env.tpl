@@ -8,6 +8,7 @@ POSTGRES_HOST: "{{ include "agentarea.database.host" . }}"
 POSTGRES_PORT: "{{ .Values.global.database.port }}"
 POSTGRES_DB: "{{ .Values.global.database.name }}"
 POSTGRES_SSLMODE: "{{ .Values.global.database.sslMode }}"
+AGENTAREA_DB_TENANT_SCOPE: "{{ .Values.global.database.tenantScope }}"
 {{- end }}
 
 {{- define "agentarea.database.envs" }}
@@ -31,6 +32,11 @@ POSTGRES_SSLMODE: "{{ .Values.global.database.sslMode }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-database
       key: POSTGRES_SSLMODE
+- name: AGENTAREA_DB_TENANT_SCOPE
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-database
+      key: AGENTAREA_DB_TENANT_SCOPE
 - name: DATABASE_URL
   value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode={{ .Values.global.database.sslMode }}
 {{- end }}

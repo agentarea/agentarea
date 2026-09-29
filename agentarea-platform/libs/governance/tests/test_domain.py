@@ -18,7 +18,6 @@ from agentarea_governance.domain.exceptions import (
     GovernanceDenied,
     SecurityBlocked,
 )
-from agentarea_governance.domain.events import GovernanceViolation, SecurityFinding
 
 
 class TestEnums:
@@ -169,31 +168,3 @@ class TestExceptions:
         )
         assert "destructive action" in str(exc)
         assert isinstance(exc, Exception)
-
-
-class TestEvents:
-    def test_governance_violation(self):
-        event = GovernanceViolation(
-            agent_id=uuid4(),
-            workspace_id="ws-1",
-            phase=Phase.PRE_TOOL_CALL,
-            interceptor_name="capability_guard",
-            action=InterceptorAction.DENY,
-            reason="tool not allowed",
-        )
-        assert event.event_type == "governance.deny"
-        assert event.interceptor_name == "capability_guard"
-        assert event.event_id is not None
-        assert event.timestamp is not None
-
-    def test_security_finding(self):
-        event = SecurityFinding(
-            agent_id=uuid4(),
-            workspace_id="ws-1",
-            phase=Phase.POST_LLM_CALL,
-            interceptor_name="output_sanitizer",
-            finding_category="pii.email",
-            confidence=0.95,
-            engine_name="regex",
-        )
-        assert event.event_type == "security.finding.pii.email"

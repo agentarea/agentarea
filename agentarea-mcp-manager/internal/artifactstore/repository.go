@@ -28,7 +28,6 @@ import (
 	"github.com/aws/smithy-go"
 	"github.com/google/uuid"
 
-	"github.com/agentarea/mcp-manager/internal/usage"
 	"github.com/agentarea/mcp-manager/internal/workspace"
 )
 
@@ -51,7 +50,8 @@ type Config struct {
 	MaxTotalBytes  int64
 }
 
-type s3Client interface {
+// ObjectStoreClient is the S3 surface the repository uses.
+type ObjectStoreClient interface {
 	GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
 	HeadObject(context.Context, *s3.HeadObjectInput, ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
 	PutObject(context.Context, *s3.PutObjectInput, ...func(*s3.Options)) (*s3.PutObjectOutput, error)
@@ -59,9 +59,9 @@ type s3Client interface {
 }
 
 type Repository struct {
-	cfg      Config
-	client   s3Client
-	recorder usage.Recorder
+	cfg       Config
+	client    ObjectStoreClient
+	published PublicationObserver
 }
 
 type Artifact struct {
@@ -105,7 +105,7 @@ func NewFromConfig(ctx context.Context, cfg Config) (*Repository, error) {
 	return New(cfg, client)
 }
 
-func New(cfg Config, client s3Client) (*Repository, error) {
+func New(cfg Config, client ObjectStoreClient) (*Repository, error) {
 	if cfg.Bucket == "" || client == nil {
 		return nil, fmt.Errorf("artifact bucket and S3 client are required")
 	}
@@ -234,7 +234,7 @@ func (r *Repository) PublishStream(ctx context.Context, workspaceID, taskID, sou
 	}
 	reservationCommitted = true
 	artifact := Artifact{ID: id, Path: normalized, Name: name, Size: expectedSize, ContentType: contentType, SHA256: hash, CreatedAt: now, objectKey: key}
-	if err := r.recordPublication(ctx, workspaceID, taskID, artifact); err != nil {
+	if err := r.observePublication(ctx, workspaceID, taskID, artifact); err != nil {
 		return Artifact{}, err
 	}
 	return artifact, nil

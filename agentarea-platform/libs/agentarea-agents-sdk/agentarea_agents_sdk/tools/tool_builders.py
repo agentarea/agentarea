@@ -124,7 +124,7 @@ class CodeToolBuilder(ToolBuilder):
 
     async def _tool_defs(self, spec: ToolSpec, ctx: ToolBuildContext) -> list[dict[str, Any]]:
         disabled = spec.settings.get("disabled_methods", [])
-        toolset_methods = {method: False for method in disabled} if disabled else {}
+        toolset_methods = dict.fromkeys(disabled, False) if disabled else {}
         # Workspace-scoped toolsets (context, files, …) refuse to construct
         # without a workspace_id rather than risk serving one tenant's storage
         # to another. This path only reads the class's schema, but the

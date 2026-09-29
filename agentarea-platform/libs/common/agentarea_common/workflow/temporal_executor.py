@@ -131,7 +131,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                 self._connected = True
                 logger.info("Successfully connected to Temporal server")
             except Exception as e:
-                logger.error(f"Failed to connect to Temporal server at {self.server_url}: {e}")
+                logger.exception(f"Failed to connect to Temporal server at {self.server_url}: {e}")
                 raise ConnectionError(f"Cannot connect to Temporal server: {e}") from e
 
         if self.client is None:
@@ -259,7 +259,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                 )
                 return workflow_id
             else:
-                logger.error(f"Failed to start workflow {workflow_id}: {e}")
+                logger.exception(f"Failed to start workflow {workflow_id}: {e}")
                 raise
 
     async def get_workflow_status(self, workflow_id: str) -> WorkflowResult:
@@ -285,7 +285,9 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                     if not isinstance(result, dict):
                         result = {"result": result}
                 except Exception as e:
-                    logger.warning(f"Failed to get workflow result for {workflow_id}: {e}")
+                    logger.warning(
+                        f"Failed to get workflow result for {workflow_id}: {e}", exc_info=True
+                    )
                     result = None
 
             return WorkflowResult(
@@ -309,7 +311,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             else:
                 raise
         except Exception as e:
-            logger.error(f"Failed to get workflow status for {workflow_id}: {e}")
+            logger.exception(f"Failed to get workflow status for {workflow_id}: {e}")
             return WorkflowResult(
                 workflow_id=workflow_id, status=WorkflowStatus.UNKNOWN, error=str(e)
             )
@@ -326,12 +328,12 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
         except TemporalError as e:
             if "not found" in str(e).lower():
-                logger.warning(f"Cannot cancel workflow {workflow_id}: not found")
+                logger.warning(f"Cannot cancel workflow {workflow_id}: not found", exc_info=True)
                 return False
             else:
                 raise
         except Exception as e:
-            logger.error(f"Failed to cancel workflow {workflow_id}: {e}")
+            logger.exception(f"Failed to cancel workflow {workflow_id}: {e}")
             return False
 
     async def wait_for_result(
@@ -374,7 +376,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         except TimeoutError as e:
             raise TimeoutError(f"Workflow {workflow_id} did not complete within timeout") from e
         except Exception as e:
-            logger.error(f"Failed to wait for workflow {workflow_id}: {e}")
+            logger.exception(f"Failed to wait for workflow {workflow_id}: {e}")
             return WorkflowResult(
                 workflow_id=workflow_id, status=WorkflowStatus.FAILED, error=str(e)
             )
@@ -389,7 +391,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             logger.debug(f"Sent signal {signal_name} to workflow {workflow_id}")
 
         except Exception as e:
-            logger.error(f"Failed to signal workflow {workflow_id}: {e}")
+            logger.exception(f"Failed to signal workflow {workflow_id}: {e}")
             raise
 
     async def send_workflow_command(
@@ -408,7 +410,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send workflow command '{command}' to {workflow_id}: {e}")
+            logger.exception(f"Failed to send workflow command '{command}' to {workflow_id}: {e}")
             return False
 
     async def query_workflow(
@@ -423,7 +425,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             return result
 
         except Exception as e:
-            logger.error(f"Failed to query workflow {workflow_id}: {e}")
+            logger.exception(f"Failed to query workflow {workflow_id}: {e}")
             raise
 
 

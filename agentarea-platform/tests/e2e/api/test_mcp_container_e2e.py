@@ -164,7 +164,7 @@ def test_mcp_instance_container_lifecycle(
     unique_id = uuid4().hex[:8]
 
     spec_response = alice_client.post(
-        "/v1/mcp-servers/",
+        f"{alice_client.ws}/mcp-servers/",
         json={
             "name": f"test-container-spec-{unique_id}",
             "description": "Test spec for container lifecycle",
@@ -179,7 +179,7 @@ def test_mcp_instance_container_lifecycle(
 
     try:
         instance_response = alice_client.post(
-            "/v1/mcp-server-instances/",
+            f"{alice_client.ws}/mcp-server-instances/",
             json={
                 "server_spec_id": str(spec_id),
                 "name": f"test-container-instance-{unique_id}",
@@ -216,7 +216,7 @@ def test_mcp_instance_container_lifecycle(
         assert env.get("MCP_INSTANCE_ID") == instance_id, "Container missing MCP_INSTANCE_ID"
         assert "MCP_SERVICE_NAME" in env, "Container missing MCP_SERVICE_NAME"
 
-        delete_response = alice_client.delete(f"/v1/mcp-server-instances/{instance_id}")
+        delete_response = alice_client.delete(f"{alice_client.ws}/mcp-server-instances/{instance_id}")
         assert delete_response.status_code in (200, 202, 204), (
             f"Failed to delete instance: {delete_response.text}"
         )
@@ -229,7 +229,7 @@ def test_mcp_instance_container_lifecycle(
         # Best-effort cleanup; the test has already asserted, and a stale
         # spec row will not affect subsequent runs (unique-id naming).
         try:
-            alice_client.delete(f"/v1/mcp-servers/{spec_id}")
+            alice_client.delete(f"{alice_client.ws}/mcp-servers/{spec_id}")
         except Exception as exc:
             logger.warning("cleanup: failed to delete spec %s: %s", spec_id, exc)
 
@@ -247,7 +247,7 @@ def test_multiple_mcp_instances_isolated(
     try:
         for i in range(2):
             spec_response = alice_client.post(
-                "/v1/mcp-servers/",
+                f"{alice_client.ws}/mcp-servers/",
                 json={
                     "name": f"test-isolation-spec-{i}-{unique_id}",
                     "description": f"Test spec for isolation {i}",
@@ -261,7 +261,7 @@ def test_multiple_mcp_instances_isolated(
             spec_id = spec_response.json()["id"]
 
             instance_response = alice_client.post(
-                "/v1/mcp-server-instances/",
+                f"{alice_client.ws}/mcp-server-instances/",
                 json={
                     "server_spec_id": str(spec_id),
                     "name": f"test-isolation-instance-{i}-{unique_id}",
@@ -289,8 +289,8 @@ def test_multiple_mcp_instances_isolated(
         # Best-effort cleanup; failures here should not mask the test result.
         for instance_id, spec_id in instances:
             try:
-                alice_client.delete(f"/v1/mcp-server-instances/{instance_id}")
-                alice_client.delete(f"/v1/mcp-servers/{spec_id}")
+                alice_client.delete(f"{alice_client.ws}/mcp-server-instances/{instance_id}")
+                alice_client.delete(f"{alice_client.ws}/mcp-servers/{spec_id}")
             except Exception as exc:
                 logger.warning(
                     "cleanup: failed to delete instance %s / spec %s: %s",

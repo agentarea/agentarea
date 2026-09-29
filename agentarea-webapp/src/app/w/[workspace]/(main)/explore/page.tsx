@@ -1,0 +1,122 @@
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+import { cookies } from "next/headers";
+import ContentBlock from "@/components/ContentBlock";
+import { browseCatalog } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
+import {
+  ALL,
+  DEFAULT_SORT,
+  EXPLORE_VIEW_COOKIE,
+  isCatalogProtocol,
+  isSortMode,
+  normalize,
+  PAGE,
+  REGISTRY_TYPE,
+  toCatalogType,
+  type CatalogEntry,
+  type CatalogType,
+  type RegistryItem,
+  type SortMode,
+} from "../bundles/components/catalog-data";
+import CatalogGallery, {
+  ExplorePendingProvider,
+  ExploreSortSelect,
+  ExploreTypeTabs,
+  ExploreViewToggle,
+} from "../bundles/components/CatalogGallery";
+
+export const metadata: Metadata = {
+  title: "Catalog",
+};
+
+interface ExplorePageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+function param(v: string | string[] | undefined): string | undefined {
+  return typeof v === "string" && v ? v : undefined;
+}
+
+// Unified discovery surface: one faceted gallery across every catalog type
+// (bundles, agents, skills, connections).
+//
+// Every browse dimension — type, search, category, sort — is resolved here and
+// applied by the server in one ordered, paged query, so the first page is real
+// data on first paint and page N means the same thing as page 1. Changing any
+// of them round-trips here (nuqs shallow:false); the gallery re-seeds from the
+// new props, so loaded state can never go stale.
+export default async function ExplorePage({ searchParams }: ExplorePageProps) {
+  const sp = await searchParams;
+  const type: CatalogType = toCatalogType(sp.type) ?? "bundles";
+  const query = param(sp.q);
+  const categoryParam = param(sp.category);
+  const category =
+    categoryParam && categoryParam !== ALL ? categoryParam : undefined;
+  // Junk in the URL means "unfiltered" rather than an error page.
+  const protocol = isCatalogProtocol(sp.protocol) ? sp.protocol : undefined;
+  const sort: SortMode = isSortMode(sp.sort) ? sp.sort : DEFAULT_SORT;
+
+  // Persisted grid/table choice: URL param wins, otherwise the cookie written
+  // by the view toggle, otherwise grid. Seeds the toggle + gallery defaults so
+  // the user's last view is restored on return.
+  const cookieStore = await cookies();
+  const initialView =
+    sp.view === "table" || sp.view === "grid"
+      ? sp.view
+      : cookieStore.get(EXPLORE_VIEW_COOKIE)?.value === "table"
+        ? "table"
+        : "grid";
+
+  const { items, total, categories, protocols, error, status } =
+    await browseCatalog({
+      registryType: REGISTRY_TYPE[type],
+      q: query,
+      category,
+      protocol,
+      sort,
+      limit: PAGE,
+      offset: 0,
+    });
+  const tBundle = await getTranslations("BundleInstall");
+  const entries: CatalogEntry[] = (items as RegistryItem[]).map((it) =>
+    normalize(type, it)
+  );
+
+  return (
+    // Provider wraps both the subheader (type tabs trigger the transition) and
+    // the content (gallery skeletons on isPending) so the switch is flash-free.
+    <ExplorePendingProvider>
+      <ContentBlock
+        header={{
+          breadcrumb: [{ label: "Catalog" }],
+          description:
+            "Browse the catalog. Filter by type, use case, or integration, then add to your workspace.",
+        }}
+        subheader={
+          <>
+            <ExploreTypeTabs initialType={type} />
+            <div className="flex items-center gap-2">
+              <ExploreSortSelect initialSort={sort} />
+              <ExploreViewToggle initialView={initialView} />
+            </div>
+          </>
+        }
+      >
+        <CatalogGallery
+          initialType={type}
+          initialEntries={entries}
+          initialTotal={total}
+          initialCategories={categories}
+          initialProtocols={protocols}
+          initialError={
+            error
+              ? apiErrorMessage({ error, status }, tBundle("catalogLoadFailed"))
+              : null
+          }
+          initialView={initialView}
+        />
+      </ContentBlock>
+    </ExplorePendingProvider>
+  );
+}

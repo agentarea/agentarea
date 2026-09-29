@@ -103,6 +103,7 @@ class FakeMembershipService:
     def __init__(self):
         self.calls: list = []
         self.removal_error: Exception | None = None
+        self.revoked = True
 
     async def list_members(self, workspace_id):
         self.calls.append(("list", workspace_id))
@@ -118,6 +119,7 @@ class FakeMembershipService:
         if self.removal_error is not None:
             raise self.removal_error
         self.calls.append(("remove", workspace_id, target_user_id, actor_user_id))
+        return self.revoked
 
 
 class FakeDirectory:
@@ -252,6 +254,22 @@ async def test_remove_revokes_membership_in_the_callers_workspace(harness):
     await MembersToolset().remove(user_id="user-2")
 
     assert harness.memberships.calls == [("remove", "ws-1", "user-2", "user-1")]
+
+
+async def test_remove_reports_a_finished_removal(harness):
+    result = json.loads(await MembersToolset().remove(user_id="user-2"))
+
+    assert result == {"removed": True, "user_id": "user-2"}
+
+
+async def test_remove_does_not_claim_a_member_is_gone_while_revocation_is_pending(harness):
+    harness.memberships.revoked = False
+
+    result = json.loads(await MembersToolset().remove(user_id="user-2"))
+
+    assert result["status"] == "revocation_pending"
+    assert result["user_id"] == "user-2"
+    assert "removed" not in result
 
 
 async def test_remove_reports_a_refused_removal_instead_of_claiming_success(harness):

@@ -12,6 +12,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.base.tenant_scope import unscoped
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -35,7 +36,7 @@ class TriggerWorkspaceGuard:
             trigger_uuid = UUID(str(trigger_id))
             task_uuid = UUID(str(task_id))
         except ValueError:
-            logger.error(
+            logger.exception(
                 "Refusing channel delivery: unparseable trigger_id=%r or task_id=%r",
                 trigger_id,
                 task_id,
@@ -43,12 +44,15 @@ class TriggerWorkspaceGuard:
             return False
 
         async with self._session_factory() as session:
-            trigger_workspace = await session.scalar(
-                select(TriggerORM.workspace_id).where(TriggerORM.id == trigger_uuid)
-            )
-            task_workspace = await session.scalar(
-                select(TaskORM.workspace_id).where(TaskORM.id == task_uuid)
-            )
+            with unscoped(
+                "the guard compares the workspaces of a trigger and a task; it reads both"
+            ):
+                trigger_workspace = await session.scalar(
+                    select(TriggerORM.workspace_id).where(TriggerORM.id == trigger_uuid)
+                )
+                task_workspace = await session.scalar(
+                    select(TaskORM.workspace_id).where(TaskORM.id == task_uuid)
+                )
         if trigger_workspace is None or task_workspace is None:
             logger.error(
                 "Refusing channel delivery: trigger %s or task %s does not exist",

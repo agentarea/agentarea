@@ -28,10 +28,12 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_common.artifacts import secure_download_headers
+from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.auth.tool_authorization import caller_can_approve
 from agentarea_common.base import ReadRepositoryFactoryDep
+from agentarea_common.base.pagination import MAX_OFFSET, MAX_PAGE
 from agentarea_common.channel_origin import reject_channel_origin
 from agentarea_common.config import get_settings
 from agentarea_common.events.contract import (
@@ -42,6 +44,7 @@ from agentarea_common.events.contract import (
 )
 from agentarea_common.money import ZERO, Money, serialize_money
 from agentarea_common.utils.types import UtcDatetime
+from agentarea_common.workspaces.lookup import workspace_api_prefix
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_secrets.naming import has_reserved_prefix
@@ -49,6 +52,7 @@ from agentarea_tasks.domain.exceptions import (
     AgentModelNotConfiguredError,
     SchedulingNotSupportedError,
 )
+from agentarea_tasks.domain.statuses import TaskStatus
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
 from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig, require_future_instant
 from agentarea_tasks.task_service import TaskService
@@ -106,7 +110,7 @@ class TaskCreate(BaseModel):
     requires_human_approval: bool | None = False
     project_id: str | None = None
     task_policy: PolicyDocument | None = None
-    # staging refs from POST /v1/files (purpose=attachment) or POST /v1/files/upload-url
+    # staging refs from a presigned POST /v1/files/upload-url
     attachments: list[str] | None = None
 
 
@@ -137,12 +141,12 @@ async def _stage_attachments_into_task(
 ) -> list[dict[str, Any]]:
     """Resolve staging refs into a reserved task's ``inputs/attachments`` scope.
 
-    Each ref (``staging/{id}/{filename}`` from ``POST /v1/files`` with
-    ``purpose=attachment`` or a presigned ``POST /v1/files/upload-url``) is HEADed
-    to resolve its verified sha256, size and content type, then copied
-    server-side into the task's content-addressed store via ``attach_object``.
-    The bytes never transit this process. Returns the attachment descriptors
-    persisted alongside the run. Raises HTTP errors mirroring the
+    Each ref (``staging/{id}/{filename}`` from a presigned
+    ``POST /v1/files/upload-url``) is HEADed to resolve its verified sha256,
+    size and content type, then copied server-side into the task's
+    content-addressed store via ``attach_object``. The bytes never transit
+    this process. Returns the attachment descriptors persisted alongside the
+    run. Raises HTTP errors mirroring the
     workspace-commit failure modes. Staging objects are left in place; the
     caller deletes them only after a successful dispatch.
     """
@@ -439,13 +443,19 @@ class TaskWithAgent(BaseModel):
 )
 async def get_all_tasks(
     user_context: UserContextDep,
-    status: str | None = Query(None, description="Filter by task status"),
+    status: list[TaskStatus] | None = Query(
+        None, description="Filter to tasks in any of these statuses"
+    ),
+    created_by: str | None = Query(None, description="Filter by the principal that started it"),
+    search: str | None = Query(
+        None, description="Case-insensitive match on the description or the agent name"
+    ),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks to return"),
-    offset: int = Query(0, ge=0, description="Number of tasks to skip"),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET, description="Number of tasks to skip"),
     agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
 ):
-    """Get all workspace tasks across all agents.
+    """Get one page of the workspace's tasks across all agents, newest first.
 
     Access Control:
         Returns all tasks within the current user's workspace (workspace isolation).
@@ -456,12 +466,20 @@ async def get_all_tasks(
         # via ReadRepositoryFactoryDep, and asyncpg forbids concurrent ops on a
         # single connection ("another operation is in progress").
         agents_result = await agent_service.list()
-        task_orms = await task_service.task_repository.list_all(limit=limit)
-
-        # Build agent lookup map
         agent_map = {str(agent.id): agent.name for agent in agents_result}
+        task_orms = await task_service.task_repository.list_page(
+            limit=limit,
+            offset=offset,
+            statuses=status or [],
+            created_by=created_by,
+            search=search,
+            agent_ids=[
+                agent.id
+                for agent in agents_result
+                if search and search.lower() in (agent.name or "").lower()
+            ],
+        )
 
-        # Convert ORM → domain → TaskWithAgent
         all_tasks: list[TaskWithAgent] = []
         for task_orm in task_orms:
             task = task_service.task_repository._orm_to_domain(task_orm)
@@ -485,23 +503,10 @@ async def get_all_tasks(
                     created_by=task.user_id,
                 )
             )
-
-        # Apply status filtering if specified
-        if status:
-            all_tasks = [task for task in all_tasks if task.status.lower() == status.lower()]
-
-        # Sort by created_at descending (newest first)
-        all_tasks.sort(key=lambda x: x.created_at, reverse=True)
-
-        # Apply pagination
-        paginated_tasks = all_tasks[offset : offset + limit]
-
-        logger.info(f"Returning {len(paginated_tasks)} tasks out of {len(all_tasks)} total tasks")
-
-        return paginated_tasks
+        return all_tasks
 
     except Exception as e:
-        logger.error(f"Failed to get all tasks: {e}")
+        logger.exception(f"Failed to get all tasks: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -547,7 +552,7 @@ async def get_task_by_id(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get task {task_id}: {e}")
+        logger.exception(f"Failed to get task {task_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -562,7 +567,7 @@ class TaskEvent(BaseModel):
     execution_id: str | None = None
     timestamp: UtcDatetime
     event_type: str
-    message: str
+    message: str | None = None
     metadata: dict[str, Any] = {}
 
 
@@ -1034,7 +1039,7 @@ async def list_agent_tasks(
     user_context: UserContextDep,
     status: str | None = Query(None, description="Filter by task status"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks to return"),
-    offset: int = Query(0, ge=0, description="Number of tasks to skip"),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET, description="Number of tasks to skip"),
     agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
 ):
@@ -1079,7 +1084,7 @@ async def list_agent_tasks(
         return paginated_tasks
 
     except Exception as e:
-        logger.error(f"Failed to get tasks for agent {agent_id}: {e}")
+        logger.exception(f"Failed to get tasks for agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1147,7 +1152,7 @@ async def get_agent_task_status(
         status = await workflow_task_service.get_workflow_status(execution_id)
         stored_artifacts = await _list_task_artifact_items(
             agent_id=agent_id,
-            workspace_id=user_context.workspace_id,
+            user_context=user_context,
             task_id=task_id,
         )
         status_artifacts = status.get("artifacts") or []
@@ -1240,7 +1245,7 @@ async def _sandbox_manager_request(
                 headers={"Authorization": f"Bearer {secret.get_secret_value()}"},
             )
     except httpx.RequestError as exc:
-        logger.warning("Sandbox manager request failed: %s", exc)
+        logger.warning("Sandbox manager request failed: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=503, detail="Sandbox file access is temporarily unavailable"
         ) from exc
@@ -1267,7 +1272,7 @@ async def _sandbox_manager_stream(
         response = await client.send(request, stream=True)
     except httpx.RequestError as exc:
         await client.aclose()
-        logger.warning("Sandbox manager streaming request failed: %s", exc)
+        logger.warning("Sandbox manager streaming request failed: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=503, detail="Sandbox file access is temporarily unavailable"
         ) from exc
@@ -1334,20 +1339,21 @@ def _raise_sandbox_manager_error(response: httpx.Response, *, resource: str) -> 
 async def _list_task_artifact_items(
     *,
     agent_id: UUID,
-    workspace_id: str,
+    user_context: UserContext,
     task_id: UUID,
 ) -> list[TaskArtifactItem]:
     response = await _sandbox_manager_request(
         "GET",
         "/sandbox/artifacts",
-        params={"workspace_id": workspace_id, "task_id": str(task_id)},
+        params={"workspace_id": user_context.workspace_id, "task_id": str(task_id)},
     )
     _raise_sandbox_manager_error(response, resource="Artifact list")
     try:
         result = _ManagerArtifactList.model_validate(response.json())
     except (ValueError, ValidationError) as exc:
-        logger.error("Sandbox manager returned an invalid artifact list: %s", exc)
+        logger.exception("Sandbox manager returned an invalid artifact list: %s", exc)
         raise HTTPException(status_code=502, detail="Artifact list response is invalid") from exc
+    prefix = await workspace_api_prefix(user_context)
     return [
         TaskArtifactItem(
             id=item.id,
@@ -1357,14 +1363,16 @@ async def _list_task_artifact_items(
             content_type=item.content_type or None,
             sha256=item.sha256 or None,
             created_at=item.created_at,
-            download_url=_task_artifact_download_url(agent_id, task_id, item.id),
+            download_url=_task_artifact_download_url(prefix, agent_id, task_id, item.id),
         )
         for item in result.items
     ]
 
 
-def _task_artifact_download_url(agent_id: UUID, task_id: UUID, artifact_id: str) -> str:
-    return f"/v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/{artifact_id}"
+def _task_artifact_download_url(
+    workspace_prefix: str, agent_id: UUID, task_id: UUID, artifact_id: str
+) -> str:
+    return f"{workspace_prefix}/agents/{agent_id}/tasks/{task_id}/artifacts/files/{artifact_id}"
 
 
 async def _verify_task_for_agent(task_service: TaskService, agent_id: UUID, task_id: UUID) -> Any:
@@ -1400,7 +1408,7 @@ async def list_task_artifacts(
 
     return await _list_task_artifact_items(
         agent_id=agent_id,
-        workspace_id=user_context.workspace_id,
+        user_context=user_context,
         task_id=task_id,
     )
 
@@ -1477,7 +1485,7 @@ async def list_task_sandbox_files(
     try:
         result = _ManagerSandboxFileList.model_validate(response.json())
     except (ValueError, ValidationError) as exc:
-        logger.error("Sandbox manager returned an invalid file list: %s", exc)
+        logger.exception("Sandbox manager returned an invalid file list: %s", exc)
         raise HTTPException(status_code=502, detail="Sandbox file list is invalid") from exc
     items = [SandboxFileItem(path=path) for path in result.paths]
     return SandboxFileListResponse(items=items, total=len(items))
@@ -1686,7 +1694,7 @@ async def pause_agent_task(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to pause task {task_id} for agent {agent_id}: {e}")
+        logger.exception(f"Failed to pause task {task_id} for agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1748,7 +1756,7 @@ async def resume_agent_task(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to resume task {task_id} for agent {agent_id}: {e}")
+        logger.exception(f"Failed to resume task {task_id} for agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1803,7 +1811,7 @@ async def send_a2ui_action(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to send A2UI action for task {task_id}: {e}")
+        logger.exception(f"Failed to send A2UI action for task {task_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -2104,7 +2112,7 @@ async def get_task_events(
     agent_id: UUID,
     task_id: UUID,
     repository_factory: ReadRepositoryFactoryDep,
-    page: int = Query(1, ge=1, description="Page number"),
+    page: int = Query(1, ge=1, le=MAX_PAGE, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of events per page"),
     event_type: str | None = Query(None, description="Filter by event type"),
     task_service: TaskService = Depends(get_read_task_service),
@@ -2137,7 +2145,7 @@ async def get_task_events(
                 execution_id=record.data.get("execution_id") or record.metadata.get("execution_id"),
                 timestamp=record.timestamp,
                 event_type=record.event_type,
-                message=record.data.get("message", f"Event: {record.event_type}"),
+                message=record.data.get("message"),
                 metadata=dict(record.data) if record.data else {},
             )
             for record in records
@@ -2152,7 +2160,7 @@ async def get_task_events(
         )
 
     except Exception as e:
-        logger.error(f"Failed to get task events for task {task_id}: {e}")
+        logger.exception(f"Failed to get task events for task {task_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -2243,7 +2251,7 @@ async def stream_task_events(
                     yield chunk
 
             except Exception as e:
-                logger.error(f"Fatal error in SSE stream for task {task_id}: {e}")
+                logger.exception(f"Fatal error in SSE stream for task {task_id}: {e}")
                 yield _format_sse_event(
                     "error",
                     {
@@ -2269,7 +2277,7 @@ async def stream_task_events(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to create SSE stream for task {task_id}: {e}")
+        logger.exception(f"Failed to create SSE stream for task {task_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 

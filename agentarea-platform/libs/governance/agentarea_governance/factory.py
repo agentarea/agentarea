@@ -15,7 +15,6 @@ from .interceptors.gates.cost_budget_guard import CostBudgetGuard
 from .interceptors.gates.semantic_guard import SemanticGuard
 from .interceptors.gates.service_budget_guard import ServiceBudgetGuard
 from .interceptors.gates.token_budget_guard import TokenBudgetGuard
-from .interceptors.observers.audit_observer import AuditObserver
 from .interceptors.observers.metrics_observer import MetricsObserver
 from .pipeline import InterceptorPipeline
 from .registry import InterceptorRegistry
@@ -77,10 +76,8 @@ def create_governance_pipeline() -> InterceptorPipeline:
 
     # Observers (always last)
     metrics = MetricsObserver()
-    audit = AuditObserver()
     for phase in Phase:
         registry.register(metrics, phase, priority=800)
-        registry.register(audit, phase, priority=810)
 
     logger.info(
         "Governance pipeline created with %d interceptor registrations",

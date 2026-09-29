@@ -45,7 +45,7 @@ explicitly if you want some values to stay readable.
 <Steps titleSize="h3">
   <Step title="Declare the schema on the spec">
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-servers/" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-servers/" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -64,7 +64,7 @@ explicitly if you want some values to stay readable.
     For a remote server, credentials go in `headers`:
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{
@@ -81,7 +81,7 @@ explicitly if you want some values to stay readable.
     For a managed workload they go in `environment`:
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{
@@ -105,7 +105,7 @@ explicitly if you want some values to stay readable.
     Send the new value the same way with `PATCH`:
 
     ```bash
-    curl -s -X PATCH "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID" \
+    curl -s -X PATCH "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/$INSTANCE_ID" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{"json_spec": {"type": "url", "endpoint_url": "https://api.githubcopilot.com/mcp/", "headers": {"Authorization": "Bearer ghp_NEW"}}}'
@@ -115,7 +115,7 @@ explicitly if you want some values to stay readable.
     credential:
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID/verify" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/$INSTANCE_ID/verify" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '.verification.status'
     ```
 
@@ -131,7 +131,7 @@ Two checks. First, that the names are registered as secret-backed and the values
 are masked:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/$INSTANCE_ID" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" \
   | jq '{env_vars: .json_spec.env_vars, headers: .json_spec.headers}'
 ```
@@ -153,7 +153,7 @@ here, its `env_schema` entry is missing or `isSecret` is false.
 Second, that a value is actually present in the secret manager:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID/environment" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/$INSTANCE_ID/environment" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq
 ```
 
@@ -185,7 +185,7 @@ from this list has no stored value.
   <Accordion title="Verification fails with 401 right after a rotation">
     The new value was supplied under a name the server does not expect, or the
     placeholder was sent instead of a real value. Confirm the name appears in
-    `GET /v1/mcp-server-instances/{instance_id}/environment` , then re-verify.
+    `GET /v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/environment` , then re-verify.
   </Accordion>
   <Accordion title="A managed container starts and immediately dies">
     A required environment variable is missing. Because secret values are

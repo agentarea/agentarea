@@ -360,6 +360,10 @@ class BudgetTracker:
         if self.budget_limit <= ZERO:
             raise ValueError("budget_usd must be greater than zero")
         self.cost: Money = ZERO
+        # ISO 4217 code of cost and budget_limit — the billing currency, whatever
+        # the `_usd` names say. Learned from the first priced LLM call (the workflow
+        # cannot ask the pricing extension itself); None until then.
+        self.currency: str | None = None
         self.warning_threshold = BUDGET_WARNING_THRESHOLD
         self._warning_sent = False
         # Service budget tracking
@@ -371,7 +375,14 @@ class BudgetTracker:
         """Add cost to the current total."""
         added = to_money(amount)
         self.cost += added
-        workflow.logger.info(f"Added cost: ${added}, total: ${self.cost}")
+        workflow.logger.info(
+            f"Added cost: {self.describe(added)}, total: {self.describe(self.cost)}"
+        )
+
+    def describe(self, amount: Money | float, places: int | None = None) -> str:
+        """Render an amount with its currency code, never a hardcoded `$`."""
+        text = f"{to_money(amount):.{places}f}" if places is not None else str(to_money(amount))
+        return f"{text} {self.currency}" if self.currency else text
 
     def set_limit(self, amount: Money | float) -> None:
         """Replace the inference budget with a validated positive limit."""
@@ -422,7 +433,7 @@ class BudgetTracker:
 
     # --- Service budget tracking ---
 
-    def add_service_cost(self, amount: float) -> None:
+    def add_service_cost(self, amount: Money) -> None:
         """Track a service payment cost."""
         self._service_cost += to_money(amount)
         workflow.logger.info(f"Added service cost: ${amount:.6f}, total: ${self._service_cost}")
@@ -597,7 +608,7 @@ class ToolCallExtractor:
         import json
         import re
 
-        from ..workflows.agent_execution_workflow import ToolCall
+        from .models import ToolCall
 
         # Handle both dataclass and dict formats
         tool_calls = None

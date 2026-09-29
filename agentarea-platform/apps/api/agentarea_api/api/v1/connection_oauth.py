@@ -28,10 +28,12 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.config import get_settings
 from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
 from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
+from agentarea_common.workspaces.lookup import workspace_slug_for
 from agentarea_mcp.application.auth_resolver import build_auth_config_access_checker
 from agentarea_mcp.application.auth_service import MCPAuthService, MissingCredentialsError
 from agentarea_mcp.application.oauth_client_service import PKCEPair
@@ -400,7 +402,19 @@ async def oauth_callback(
 
     connection_id = UUID(state_data["connection_id"])
     frontend = _frontend_base(state_data.get("return_to", ""))
-    detail_url = f"{frontend}/connections/openapi/{connection_id}"
+    try:
+        workspace_slug = await workspace_slug_for(state_data["workspace_id"])
+    except LookupError:
+        # Deleted while the user was at the provider: there is no workspace
+        # page to return to.
+        logger.warning(
+            "Connection OAuth callback for connection %s: workspace %s is gone",
+            connection_id,
+            state_data["workspace_id"],
+            exc_info=True,
+        )
+        return RedirectResponse(f"{frontend}/?oauth=error&reason=workspace_gone", status_code=302)
+    detail_url = f"{frontend}/w/{workspace_slug}/connections/openapi/{connection_id}"
     if error or not code:
         reason = urllib.parse.quote(error_description or error or "missing_code")
         return RedirectResponse(f"{detail_url}?oauth=error&reason={reason}", status_code=302)
@@ -408,7 +422,9 @@ async def oauth_callback(
     user_context = UserContext(
         user_id=state_data["user_id"],
         workspace_id=state_data["workspace_id"],
+        workspace_slug=workspace_slug,
     )
+    bind_workspace_scope(user_context.workspace_id)
     workspace_secret_manager = get_real_secret_manager(
         session=db_session, user_context=user_context
     )
@@ -449,7 +465,9 @@ async def oauth_callback(
             response.raise_for_status()
             tokens = response.json()
     except (httpx.HTTPError, MissingCredentialsError, ValueError) as exc:
-        logger.warning("Connection OAuth exchange failed for %s: %s", connection_id, exc)
+        logger.warning(
+            "Connection OAuth exchange failed for %s: %s", connection_id, exc, exc_info=True
+        )
         return RedirectResponse(
             f"{detail_url}?oauth=error&reason=token_exchange_failed", status_code=302
         )

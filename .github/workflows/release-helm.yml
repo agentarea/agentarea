@@ -83,8 +83,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin https://x-access-token:${{ steps.generate-token.outputs.token }}@github.com/${{ github.repository }}
-          git add charts/agentarea/Chart.yaml
-          git commit -m "chore(helm): bump chart version to ${{ steps.version.outputs.chart_version }}"
+          # Every top-level chart, not just agentarea: the bump script moves all of
+          # them, and committing one would leave the rest published from a version
+          # git does not record.
+          git add charts/*/Chart.yaml
+          git commit -m "chore(helm): bump chart versions (agentarea ${{ steps.version.outputs.chart_version }})"
           git push origin HEAD:main
 
       - name: Add repositories
@@ -103,9 +106,9 @@ jobs:
         run: |
           mkdir -p dist
           helm package charts/agentarea --destination dist
-          # Versioned on its own: bump charts/agentarea-dataplane/Chart.yaml when
-          # the chart changes. Re-packaging an unchanged version replaces the
-          # identical archive in the repo.
+          # Bumped by the same script above, so this never re-packages a version
+          # that is already published. It used to be versioned by hand, which let
+          # a changed chart keep its version and overwrite what others had pinned.
           helm package charts/agentarea-dataplane --destination dist
 
           ls -la dist

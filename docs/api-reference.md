@@ -37,7 +37,7 @@ All endpoints require a JWT bearer token. Identity is managed by Ory Kratos;
 machine clients use API keys exchanged for a token.
 
 ```bash
-curl http://localhost:8000/v1/agents \
+curl http://localhost:8000/v1/workspaces/{workspace}/agents \
   -H "Authorization: Bearer $AGENTAREA_TOKEN"
 ```
 
@@ -94,7 +94,7 @@ Task execution emits events over Server-Sent Events. Events belong to a task
 under its agent, so the stream path is nested:
 
 ```bash
-curl -N "http://localhost:8000/v1/agents/$AGENT_ID/tasks/$TASK_ID/events/stream" \
+curl -N "http://localhost:8000/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/events/stream" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN"
 ```
 

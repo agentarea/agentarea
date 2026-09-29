@@ -1,4 +1,5 @@
 import logging
+from typing import Literal
 from uuid import UUID
 
 from agentarea_agents_sdk.models import LLMModel, LLMRequest
@@ -9,10 +10,13 @@ from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.exceptions.errors import NotFoundError
+from agentarea_common.money import Money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
 from agentarea_llm.domain.provider_profiles import profile_for
+from agentarea_llm.infrastructure.model_spec_repository import ModelPricingNotConfiguredError
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -50,7 +54,11 @@ class ModelInstanceTestResponse(BaseModel):
     error_type: str | None = None
     provider_type: str | None = None
     model_name: str | None = None
-    cost: float | None = None
+    # The provider's charge for the test call, unconverted — unlike task costs,
+    # which are in the billing currency. Named so a client does not format this
+    # with the billing currency and show a USD figure as, say, roubles.
+    cost: Money | None = None
+    currency: Literal["USD"] = "USD"
     tokens_used: int | None = None
 
 
@@ -180,19 +188,18 @@ async def create_model_instances_bulk(
                 is_public=item.is_public,
             )
             succeeded.append(ModelInstanceResponse.from_domain(instance))
-        except Exception as e:
-            logger.warning(
-                "Bulk create failed for item %d (model_spec_id=%s): %s",
+        except (NotFoundError, ModelPricingNotConfiguredError) as e:
+            logger.info(
+                "Bulk create skipped item %d (model_spec_id=%s): %s",
                 index,
                 item.model_spec_id,
                 e,
-                exc_info=True,
             )
             failed.append(
                 ModelInstanceBulkFailure(
                     index=index,
                     model_spec_id=str(item.model_spec_id),
-                    error=str(e),
+                    error=e.detail,
                 )
             )
 
@@ -369,7 +376,7 @@ async def validate_model_instance(
         error_message = str(e)
         error_type = type(e).__name__
 
-        logger.error(f"LLM test failed: {error_message}")
+        logger.exception(f"LLM test failed: {error_message}")
 
         # Categorize common errors
         if "AuthenticationError" in error_type or "api_key" in error_message.lower():

@@ -22,6 +22,8 @@ import httpx
 import jwt
 import pytest
 
+from tests.e2e.api.conftest import WorkspaceClient, personal_workspace_path
+
 
 pytestmark = [
     pytest.mark.e2e,
@@ -151,12 +153,9 @@ def container_runtime() -> ContainerRuntime:
 def api_client():
     """Create authenticated HTTP client for testing."""
     token = generate_test_token()
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "X-Workspace-ID": TEST_WORKSPACE,
-    }
-    
-    client = httpx.Client(
+    headers = {"Authorization": f"Bearer {token}"}
+
+    client = WorkspaceClient(
         base_url=API_BASE_URL,
         timeout=60.0,
         headers=headers,
@@ -169,7 +168,9 @@ def api_client():
             pytest.skip(f"AgentArea API not healthy: {response.status_code}")
     except Exception as e:
         pytest.skip(f"AgentArea API not running: {e}")
-    
+
+    # The workspace is named in the path: act in the caller's personal one.
+    client.ws = personal_workspace_path(client)
     yield client
     client.close()
 
@@ -197,7 +198,7 @@ def test_mcp_instance_container_lifecycle(api_client, container_runtime: Contain
         "version": "1.0.0",
     }
 
-    spec_response = api_client.post("/v1/mcp-servers/", json=spec_data)
+    spec_response = api_client.post(f"{api_client.ws}/mcp-servers/", json=spec_data)
     assert spec_response.status_code in [200, 201], f"Failed to create spec: {spec_response.text}"
 
     spec = spec_response.json()
@@ -216,7 +217,7 @@ def test_mcp_instance_container_lifecycle(api_client, container_runtime: Contain
             },
         }
 
-        instance_response = api_client.post("/v1/mcp-server-instances/", json=instance_data)
+        instance_response = api_client.post(f"{api_client.ws}/mcp-server-instances/", json=instance_data)
         assert instance_response.status_code in [200, 201], f"Failed to create instance: {instance_response.text}"
 
         instance = instance_response.json()
@@ -230,7 +231,7 @@ def test_mcp_instance_container_lifecycle(api_client, container_runtime: Contain
         running = False
 
         for i in range(max_retries):
-            status_response = api_client.get(f"/v1/mcp-server-instances/{instance_id}")
+            status_response = api_client.get(f"{api_client.ws}/mcp-server-instances/{instance_id}")
             if status_response.status_code == 200:
                 status_data = status_response.json()
                 status = status_data.get("status", "unknown")
@@ -321,7 +322,7 @@ def test_mcp_instance_container_lifecycle(api_client, container_runtime: Contain
         print(f"    - MCP_SERVICE_NAME: {env.get('MCP_SERVICE_NAME')}")
 
         # Step 5: Delete instance
-        delete_response = api_client.delete(f"/v1/mcp-server-instances/{instance_id}")
+        delete_response = api_client.delete(f"{api_client.ws}/mcp-server-instances/{instance_id}")
         assert delete_response.status_code in [200, 202, 204], f"Failed to delete instance: {delete_response.text}"
 
         print(f"  Deleted instance: {instance_id}")
@@ -337,7 +338,7 @@ def test_mcp_instance_container_lifecycle(api_client, container_runtime: Contain
     finally:
         # Cleanup spec if still exists
         try:
-            api_client.delete(f"/v1/mcp-servers/{spec_id}")
+            api_client.delete(f"{api_client.ws}/mcp-servers/{spec_id}")
         except Exception:
             pass
 
@@ -368,7 +369,7 @@ def test_multiple_mcp_instances_isolated(api_client, container_runtime: Containe
                 "mcp_server_type": "http",
                 "port": 80,
             }
-            spec_response = api_client.post("/v1/mcp-server-specifications/", json=spec_data)
+            spec_response = api_client.post(f"{api_client.ws}/mcp-servers/", json=spec_data)
             assert spec_response.status_code == 201
             spec_id = spec_response.json()["id"]
 
@@ -382,7 +383,7 @@ def test_multiple_mcp_instances_isolated(api_client, container_runtime: Containe
                     "port": 80,
                 },
             }
-            instance_response = api_client.post("/v1/mcp-server-instances/", json=instance_data)
+            instance_response = api_client.post(f"{api_client.ws}/mcp-server-instances/", json=instance_data)
             assert instance_response.status_code == 201
             instance_id = instance_response.json()["id"]
             instances.append((instance_id, spec_id))
@@ -427,7 +428,7 @@ def test_multiple_mcp_instances_isolated(api_client, container_runtime: Containe
         # Cleanup
         for instance_id, spec_id in instances:
             try:
-                api_client.delete(f"/v1/mcp-server-instances/{instance_id}")
-                api_client.delete(f"/v1/mcp-servers/{spec_id}")
+                api_client.delete(f"{api_client.ws}/mcp-server-instances/{instance_id}")
+                api_client.delete(f"{api_client.ws}/mcp-servers/{spec_id}")
             except Exception as e:
                 print(f"  Cleanup warning: {e}")

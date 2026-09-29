@@ -75,7 +75,6 @@ async def test_full_workflow_with_real_ollama():
             "instruction": "You are a helpful AI assistant. When you complete a task, use the task_complete tool.",
             "model_id": str(uuid4()),  # This will be ignored since we override the model
             "tools_config": {},
-            "events_config": {},
             "planning": False,
         }
 

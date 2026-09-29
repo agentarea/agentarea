@@ -2,6 +2,7 @@ import type {
   TaskEvent as ApiTaskEvent,
   TaskEventResponse as ApiTaskEventResponse,
 } from "@/api/client/types.gen";
+import { formatMoney } from "@/lib/money";
 
 // Base types from API schema
 export type TaskEvent = ApiTaskEvent;
@@ -98,7 +99,8 @@ export interface SSEMessage {
 export interface DisplayEvent {
   id: string;
   type: WorkflowEventType;
-  timestamp: Date;
+  /** Null when the event arrived without one — never replaced by "now". */
+  timestamp: Date | null;
   title: string;
   description: string;
   level: EventLevel;
@@ -324,7 +326,9 @@ export const EVENT_TYPE_CONFIG: Record<
 // Utility functions
 export const mapSSEToDisplayEvent = (
   sseEvent: SSEMessage,
-  id?: string
+  id?: string,
+  currency: string | null = null,
+  locale: string = "en"
 ): DisplayEvent => {
   // Map event names to our internal event types - handle both PascalCase and snake_case
   const eventTypeMap: Record<string, WorkflowEventType> = {
@@ -428,7 +432,7 @@ export const mapSSEToDisplayEvent = (
   } else if (eventData.messages_compacted) {
     description = `${config?.title}: ${eventData.messages_compacted} messages summarized, ~${eventData.tokens_saved || 0} tokens saved`;
   } else if (eventData.cost) {
-    description = `${config?.title} (Cost: $${Number(eventData.cost).toFixed(4)})`;
+    description = `${config?.title} (Cost: ${formatMoney(Number(eventData.cost), currency, locale)})`;
   } else if (eventData.iteration) {
     description = `${config?.title} ${eventData.iteration}`;
   }
@@ -441,24 +445,6 @@ export const mapSSEToDisplayEvent = (
     description,
     level: config?.level || "info",
     data: eventData,
-    icon: config?.icon,
-  };
-};
-
-export const mapTaskEventToDisplayEvent = (
-  taskEvent: TaskEvent
-): DisplayEvent => {
-  const eventType = taskEvent.event_type as WorkflowEventType;
-  const config = EVENT_TYPE_CONFIG[eventType];
-
-  return {
-    id: taskEvent.id,
-    type: eventType,
-    timestamp: new Date(taskEvent.timestamp),
-    title: config?.title || taskEvent.event_type,
-    description: taskEvent.message,
-    level: config?.level || "info",
-    data: taskEvent.metadata,
     icon: config?.icon,
   };
 };
@@ -496,7 +482,8 @@ export const getEventStats = (events: DisplayEvent[]): EventStats => {
       },
       {} as Record<EventLevel, number>
     ),
-    recentActivity: events.filter((event) => event.timestamp > oneHourAgo)
-      .length,
+    recentActivity: events.filter(
+      (event) => event.timestamp !== null && event.timestamp > oneHourAgo
+    ).length,
   };
 };

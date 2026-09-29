@@ -37,7 +37,7 @@ different endpoint, a proxy — without touching any agent.
 <Steps titleSize="h3">
   <Step title="Find the provider spec">
     ```bash
-    curl -s http://localhost:8000/v1/provider-specs/with-models \
+    curl -s http://localhost:8000/v1/workspaces/{workspace}/provider-specs/with-models \
       -H "Authorization: Bearer $TOKEN"
     ```
 
@@ -51,7 +51,7 @@ different endpoint, a proxy — without touching any agent.
     [pass secrets](/guides/mcp/pass-secrets) for the same pattern applied to MCP.
 
     ```bash
-    curl -X POST http://localhost:8000/v1/provider-configs/ \
+    curl -X POST http://localhost:8000/v1/workspaces/{workspace}/provider-configs/ \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -68,7 +68,7 @@ different endpoint, a proxy — without touching any agent.
 
   <Step title="Create a model instance">
     ```bash
-    curl -X POST http://localhost:8000/v1/model-instances/ \
+    curl -X POST http://localhost:8000/v1/workspaces/{workspace}/model-instances/ \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -88,7 +88,7 @@ different endpoint, a proxy — without touching any agent.
 ## Verify
 
 ```bash
-curl -X POST http://localhost:8000/v1/model-instances/test \
+curl -X POST http://localhost:8000/v1/workspaces/{workspace}/model-instances/test \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

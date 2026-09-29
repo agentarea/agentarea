@@ -130,7 +130,7 @@ async def test_create_accepts_a_real_model_instance(session_factory):
         instance = await _seed_model_instance(session)
 
         agent = await _service(session, context).create_agent(
-            AgentCreate(name="Bound", model_id=str(instance.id))
+            AgentCreate(name="Bound", tools=[], model_id=str(instance.id))
         )
 
         assert agent.model_id == str(instance.id)
@@ -141,7 +141,7 @@ async def test_create_rejects_a_bare_model_name(session_factory):
     async with session_factory() as session:
         with pytest.raises(InvalidModelIdError, match="expected the UUID"):
             await _service(session, _context()).create_agent(
-                AgentCreate(name="Named", model_id="gpt-4o")
+                AgentCreate(name="Named", tools=[], model_id="gpt-4o")
             )
 
 
@@ -150,7 +150,7 @@ async def test_create_rejects_a_uuid_that_is_not_a_model_instance(session_factor
     async with session_factory() as session:
         with pytest.raises(InvalidModelIdError, match="does not exist in this workspace"):
             await _service(session, _context()).create_agent(
-                AgentCreate(name="Ghost", model_id=str(uuid4()))
+                AgentCreate(name="Ghost", tools=[], model_id=str(uuid4()))
             )
 
 
@@ -160,7 +160,7 @@ async def test_create_rejects_an_instance_from_another_workspace(session_factory
 
         with pytest.raises(InvalidModelIdError, match="does not exist in this workspace"):
             await _service(session, _context("ws-a")).create_agent(
-                AgentCreate(name="Borrowed", model_id=str(instance.id))
+                AgentCreate(name="Borrowed", tools=[], model_id=str(instance.id))
             )
 
 
@@ -169,8 +169,8 @@ async def test_unbound_agent_is_allowed_and_empty_string_normalises_to_none(sess
     async with session_factory() as session:
         service = _service(session, _context())
 
-        omitted = await service.create_agent(AgentCreate(name="Unbound"))
-        blank = await service.create_agent(AgentCreate(name="Blank", model_id="   "))
+        omitted = await service.create_agent(AgentCreate(name="Unbound", tools=[]))
+        blank = await service.create_agent(AgentCreate(name="Blank", tools=[], model_id="   "))
 
         assert omitted.model_id is None
         assert blank.model_id is None
@@ -180,7 +180,7 @@ async def test_update_is_validated_too(session_factory):
     async with session_factory() as session:
         context = _context()
         service = _service(session, context)
-        agent = await service.create_agent(AgentCreate(name="Editable"))
+        agent = await service.create_agent(AgentCreate(name="Editable", tools=[]))
 
         with pytest.raises(InvalidModelIdError):
             await service.update_agent(agent.id, AgentUpdate(model_id="claude-3-5-sonnet"))
@@ -190,7 +190,7 @@ async def test_update_can_bind_a_model_later(session_factory):
     async with session_factory() as session:
         context = _context()
         service = _service(session, context)
-        agent = await service.create_agent(AgentCreate(name="Later"))
+        agent = await service.create_agent(AgentCreate(name="Later", tools=[]))
         instance = await _seed_model_instance(session)
 
         updated = await service.update_agent(agent.id, AgentUpdate(model_id=str(instance.id)))

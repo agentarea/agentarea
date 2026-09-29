@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "@/components/WorkspaceLink";
+import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
 import { cn } from "@/lib/utils";
 
 interface ActiveLinkProps {
@@ -11,7 +11,7 @@ interface ActiveLinkProps {
 }
 
 export function ActiveLink({ href, children, className }: ActiveLinkProps) {
-  const pathname = usePathname();
+  const pathname = useWorkspacePathname();
   const isActive = pathname === href;
 
   return (

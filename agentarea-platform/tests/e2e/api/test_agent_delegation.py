@@ -53,7 +53,7 @@ def test_coordinator_with_one_child_completes(
         ),
     )
 
-    specialist = alice_client.get(f"/v1/agents/{specialist_id}").raise_for_status().json()
+    specialist = alice_client.get(f"{alice_client.ws}/agents/{specialist_id}").raise_for_status().json()
     specialist_name = specialist["name"]
 
     coord_id = create_agent(
@@ -70,7 +70,7 @@ def test_coordinator_with_one_child_completes(
     )
 
     task_id = alice_client.post(
-        f"/v1/agents/{coord_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{coord_id}/tasks/sync",
         json={
             "description": f"Ask {specialist_name} to spell the word: omega",
             "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
@@ -91,4 +91,4 @@ def test_coordinator_with_one_child_completes(
     assert "WorkflowCompleted" in types, types
 
     # Release the coordinator's 30-min await window.
-    alice_client.delete(f"/v1/agents/{coord_id}/tasks/{task_id}")
+    alice_client.delete(f"{alice_client.ws}/agents/{coord_id}/tasks/{task_id}")

@@ -1,6 +1,8 @@
 import {useEffect} from 'react';
 import {logger} from '../utils/logger.js';
 import {apiClient} from '../services/apiClient.js';
+import {fillWorkspace} from '@agentarea/api-client';
+import {requireWorkspace} from '../services/apiRuntime.js';
 import {tokenStorage} from '../utils/storage.js';
 import {
 	formatPrompt,
@@ -172,11 +174,11 @@ async function processCommand(
 
 async function handleAgentsCommand(): Promise<CommandResult> {
 	try {
-		const response = await apiClient.getClient().get('/v1/agents', {
-			headers: {
-				'X-Workspace-ID': 'default',
-			},
-		});
+		const response = await apiClient
+			.getClient()
+			.get(
+				fillWorkspace('/v1/workspaces/{workspace}/agents', requireWorkspace()),
+			);
 
 		const agents: Agent[] = response.data.data || response.data || [];
 

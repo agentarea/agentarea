@@ -52,7 +52,7 @@ one workspace. It points at a spec via `server_spec_id`, carries its own
 |---|---|---|
 | `url` | Nothing. The server is somebody else's. | The declared remote URL |
 | `docker` | An image, provisioned by the Go MCP manager | `http://mcp-{instance_id}:{port}`, default port 8000, or the manager-reported `internal_url` |
-| `command` | An npm/PyPI package wrapped in `agentarea/mcp-bridge:latest` | `http://mcp-{instance_id}:8080` |
+| `command` | An npm/PyPI package run through the image selected by `MCP_BASE_IMAGE` (default `agentarea/agentarea-mcp-base:latest`) | `http://mcp-{instance_id}:8080` |
 
 Managed means `docker` or `command`: AgentArea runs the workload. Remote means
 `url`: AgentArea holds the credential and governs the call, but the server is
@@ -199,7 +199,7 @@ limits.
 - **The tool list is a snapshot.** Tools discovered at verification are stored on
   the row. A server that adds a tool later is not rediscovered until a
   re-verification or an explicit
-  `POST /v1/mcp-server-instances/{instance_id}/discover-tools`.
+  `POST /v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/discover-tools`.
 - **The proxy is Streamable HTTP only.** An SSE-only server can be verified —
   verification falls back to SSE — but it cannot be served through
   `/v1/mcp/{instance_id}/mcp`.

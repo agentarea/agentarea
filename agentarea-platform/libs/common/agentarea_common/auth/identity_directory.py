@@ -6,8 +6,10 @@ a name to put next to the id, and the identity provider is the only authority
 for that. An invitation's ``email`` is explicitly not that authority: it records
 where a link was sent and who may redeem it, never what that person is called.
 
-When the directory cannot answer, the identity stays unresolved. Callers render
-that as an unknown user rather than substituting a plausible-looking value.
+When the directory cannot answer, ``resolve`` leaves the identity unresolved,
+and callers render that as an unknown user rather than substituting a
+plausible-looking value. ``lookup`` is for callers that must tell "this user has
+no such identity" apart from "the directory is down".
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
+from urllib.parse import quote
 
 import httpx
 
@@ -37,10 +40,22 @@ class IdentityRecord:
     display_name: str | None
 
 
+class IdentityDirectoryUnavailableError(RuntimeError):
+    """The identity provider could not be asked, so its answer is unknown."""
+
+
 @runtime_checkable
 class IdentityDirectory(Protocol):
     async def resolve(self, user_ids: Sequence[str]) -> dict[str, IdentityRecord]:
         """Map each resolvable id to its identity. Unresolvable ids are absent."""
+        ...
+
+    async def lookup(self, user_id: str) -> IdentityRecord | None:
+        """One identity, or None if the provider has none.
+
+        Raises :class:`IdentityDirectoryUnavailableError` when the provider
+        cannot be asked.
+        """
         ...
 
 
@@ -75,34 +90,44 @@ class KratosIdentityDirectory:
 
             async def fetch(user_id: str) -> tuple[str, IdentityRecord | None]:
                 async with semaphore:
-                    return user_id, await self._fetch_one(client, user_id)
+                    try:
+                        return user_id, await self._fetch_one(client, user_id)
+                    except IdentityDirectoryUnavailableError:
+                        logger.error("Identity lookup failed for user %s", user_id, exc_info=True)
+                        return user_id, None
 
             results = await asyncio.gather(*(fetch(user_id) for user_id in unique_ids))
 
         return {user_id: record for user_id, record in results if record is not None}
 
+    async def lookup(self, user_id: str) -> IdentityRecord | None:
+        async with httpx.AsyncClient(
+            base_url=self._admin_url,
+            timeout=self._timeout_seconds,
+            transport=self._transport,
+        ) as client:
+            return await self._fetch_one(client, user_id)
+
     async def _fetch_one(self, client: httpx.AsyncClient, user_id: str) -> IdentityRecord | None:
         try:
-            response = await client.get(f"/admin/identities/{user_id}")
-        except httpx.HTTPError:
-            logger.warning("Identity lookup failed for user %s", user_id, exc_info=True)
-            return None
+            # Ids arrive from callers: one encoded segment, never URL syntax.
+            response = await client.get(f"/admin/identities/{quote(user_id, safe='')}")
+        except httpx.HTTPError as exc:
+            raise IdentityDirectoryUnavailableError(f"Kratos unreachable: {exc}") from exc
 
         if response.status_code == httpx.codes.NOT_FOUND:
             return None
         if response.is_error:
-            logger.warning(
-                "Identity lookup for user %s returned HTTP %s",
-                user_id,
-                response.status_code,
+            raise IdentityDirectoryUnavailableError(
+                f"Kratos answered HTTP {response.status_code} for user {user_id}"
             )
-            return None
 
         try:
             traits = response.json().get("traits") or {}
-        except ValueError:
-            logger.warning("Identity lookup for user %s returned non-JSON", user_id, exc_info=True)
-            return None
+        except ValueError as exc:
+            raise IdentityDirectoryUnavailableError(
+                f"Kratos answered non-JSON for user {user_id}"
+            ) from exc
 
         return _record_from_traits(user_id, traits)
 

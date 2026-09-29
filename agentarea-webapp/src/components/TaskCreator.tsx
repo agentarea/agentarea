@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/WorkspaceLink";
 import { useTranslations } from "next-intl";
 import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
 import { deterministicHue } from "@/lib/avatar-hue";

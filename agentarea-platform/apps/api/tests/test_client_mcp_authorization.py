@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import agentarea_common.di.container as di
 import pytest
+from agentarea_common.auth.context import UserPrincipal
 from agentarea_api.api.v1.client_mcp import (
     ClientAccessDeniedError,
     _authorize_client_access,
@@ -55,11 +56,8 @@ async def test_user_without_use_relation_is_denied(monkeypatch):
 @pytest.mark.asyncio
 async def test_client_endpoint_binds_context_to_clients_workspace():
     """The resource chooses workspace server-side; no token claim/header is needed."""
-    user_context = SimpleNamespace(
-        user_id="user-1",
-        workspace_id="personal-workspace",
-        accessible_workspaces=["personal-workspace", "client-workspace"],
-        client_id=None,
+    principal = UserPrincipal(
+        user_id="user-1", accessible_workspaces=["personal-workspace", "client-workspace"]
     )
     client = SimpleNamespace(
         id=CLIENT_ID,
@@ -71,8 +69,10 @@ async def test_client_endpoint_binds_context_to_clients_workspace():
         skills=[],
     )
     client_repository = MagicMock()
-    client_repository.get_accessible_by_id = AsyncMock(return_value=client)
+    client_repository.get_by_id = AsyncMock(return_value=client)
     client_repository.get_instance_namespaces = AsyncMock(return_value={})
+    repository_class = MagicMock(return_value=client_repository)
+    repository_class.locate_workspace = AsyncMock(return_value="client-workspace")
 
     session = MagicMock()
 
@@ -87,12 +87,17 @@ async def test_client_endpoint_binds_context_to_clients_workspace():
 
     def make_secret_manager(*, session, user_context):
         assert user_context.workspace_id == "client-workspace"
+        assert user_context.workspace_slug == "client-slug"
         return MagicMock()
 
     with (
         patch(
             "agentarea_agents_sdk.mcp_server.auth.get_mcp_user_context",
-            return_value=user_context,
+            return_value=principal,
+        ),
+        patch(
+            "agentarea_common.workspaces.lookup.workspace_slug_for",
+            new=AsyncMock(return_value="client-slug"),
         ),
         patch("agentarea_common.config.database.get_database", return_value=database),
         patch(
@@ -105,7 +110,7 @@ async def test_client_endpoint_binds_context_to_clients_workspace():
         ) as get_secret_manager,
         patch(
             "agentarea_mcp.infrastructure.client_repository.ClientRepository",
-            return_value=client_repository,
+            new=repository_class,
         ),
         patch(
             "agentarea_mcp.application.service.MCPServerInstanceService",
@@ -120,9 +125,13 @@ async def test_client_endpoint_binds_context_to_clients_workspace():
 
     assert proxy is not None
     assert skills == {}
-    client_repository.get_accessible_by_id.assert_awaited_once_with(CLIENT_ID)
-    assert user_context.workspace_id == "client-workspace"
-    get_secret_manager.assert_called_once_with(session=session, user_context=user_context)
+    repository_class.locate_workspace.assert_awaited_once_with(
+        session, CLIENT_ID, ["personal-workspace", "client-workspace"]
+    )
+    client_repository.get_by_id.assert_awaited_once_with(CLIENT_ID)
+    bound = repository_class.call_args.args[1]
+    assert bound.workspace_id == "client-workspace"
+    get_secret_manager.assert_called_once_with(session=session, user_context=bound)
 
 
 @pytest.mark.asyncio
@@ -132,17 +141,14 @@ async def test_client_resource_lookup_is_limited_to_accessible_workspaces():
     import agentarea_mcp.domain.mpc_server_instance_model  # noqa: F401
     from agentarea_mcp.infrastructure.client_repository import ClientRepository
 
-    user_context = SimpleNamespace(
-        user_id="user-1",
-        workspace_id="personal-workspace",
-        accessible_workspaces=["personal-workspace", "client-workspace"],
-    )
     result = MagicMock()
     result.scalar_one_or_none.return_value = None
     session = MagicMock()
     session.execute = AsyncMock(return_value=result)
 
-    await ClientRepository(session, user_context).get_accessible_by_id(CLIENT_ID)
+    await ClientRepository.locate_workspace(
+        session, CLIENT_ID, ["personal-workspace", "client-workspace"]
+    )
 
     statement = session.execute.await_args.args[0]
     params = statement.compile().params

@@ -12,7 +12,7 @@ import {
   type CatalogType,
   type RawSpec,
   type RegistryItem,
-} from "@/app/(main)/bundles/components/catalog-data";
+} from "@/app/w/[workspace]/(main)/bundles/components/catalog-data";
 import { browseCatalog, listRegistries, listRegistryItems } from "@/lib/api";
 import type { EntityIdentity } from "@/lib/entity-identity";
 

@@ -85,7 +85,7 @@ async def test_resolves_several_ids_in_one_call(client, monkeypatch) -> None:
         ),
     )
 
-    response = await client.get(f"/v1/principals?ids={ARTEM}&ids={MISHA}")
+    response = await client.get(f"/v1/workspaces/acme/principals?ids={ARTEM}&ids={MISHA}")
 
     assert response.status_code == 200, response.text
     by_id = {p["id"]: p for p in response.json()}
@@ -103,7 +103,7 @@ async def test_an_id_the_directory_does_not_know_is_absent(client, monkeypatch) 
         _directory({ARTEM: IdentityRecord(ARTEM, "artem@aadocs.local", "Artem Astapenko")}),
     )
 
-    response = await client.get(f"/v1/principals?ids={ARTEM}&ids=deleted-user")
+    response = await client.get(f"/v1/workspaces/acme/principals?ids={ARTEM}&ids=deleted-user")
 
     assert response.status_code == 200, response.text
     returned = {p["id"] for p in response.json()}
@@ -117,7 +117,7 @@ async def test_reserved_platform_ids_resolve_without_the_directory(client, monke
     directory.resolve = AsyncMock(return_value={})
     monkeypatch.setattr(principals, "get_identity_directory", lambda: directory)
 
-    response = await client.get("/v1/principals?ids=platform&ids=system")
+    response = await client.get("/v1/workspaces/acme/principals?ids=platform&ids=system")
 
     assert response.status_code == 200, response.text
     by_id = {p["id"]: p for p in response.json()}
@@ -132,7 +132,7 @@ async def test_reserved_platform_ids_resolve_without_the_directory(client, monke
 async def test_no_ids_is_an_empty_answer_not_an_error(client, monkeypatch) -> None:
     monkeypatch.setattr(principals, "get_identity_directory", _directory({}))
 
-    response = await client.get("/v1/principals")
+    response = await client.get("/v1/workspaces/acme/principals")
 
     assert response.status_code == 200
     assert response.json() == []
@@ -146,7 +146,9 @@ async def test_duplicate_ids_cost_one_lookup(client, monkeypatch) -> None:
     )
     monkeypatch.setattr(principals, "get_identity_directory", lambda: directory)
 
-    response = await client.get(f"/v1/principals?ids={ARTEM}&ids={ARTEM}&ids={ARTEM}")
+    response = await client.get(
+        f"/v1/workspaces/acme/principals?ids={ARTEM}&ids={ARTEM}&ids={ARTEM}"
+    )
 
     assert response.status_code == 200
     assert len(response.json()) == 1
@@ -162,7 +164,7 @@ async def test_identity_resolution_switched_off_yields_no_names(client, monkeypa
     """
     monkeypatch.setattr(principals, "get_identity_directory", lambda: None)
 
-    response = await client.get(f"/v1/principals?ids={MISHA}")
+    response = await client.get(f"/v1/workspaces/acme/principals?ids={MISHA}")
 
     assert response.status_code == 200
     assert response.json() == []
@@ -173,7 +175,7 @@ async def test_the_caller_can_always_resolve_themselves(client, monkeypatch) -> 
     """The caller's own token is a second authority for exactly one id."""
     monkeypatch.setattr(principals, "get_identity_directory", _directory({}))
 
-    response = await client.get(f"/v1/principals?ids={ARTEM}")
+    response = await client.get(f"/v1/workspaces/acme/principals?ids={ARTEM}")
 
     assert response.status_code == 200, response.text
     body = response.json()
@@ -186,7 +188,7 @@ async def test_an_agent_id_resolves_to_the_agent(client, agent_service, monkeypa
     agent_service.list.return_value = [_agent(SEO_AGENT, "SEO")]
     monkeypatch.setattr(principals, "get_identity_directory", _directory({}))
 
-    response = await client.get(f"/v1/principals?ids={SEO_AGENT}")
+    response = await client.get(f"/v1/workspaces/acme/principals?ids={SEO_AGENT}")
 
     assert response.status_code == 200, response.text
     assert response.json() == [
@@ -206,7 +208,7 @@ async def test_an_agent_id_is_never_sent_to_the_identity_provider(
     )
     monkeypatch.setattr(principals, "get_identity_directory", lambda: directory)
 
-    response = await client.get(f"/v1/principals?ids={SEO_AGENT}&ids={MISHA}")
+    response = await client.get(f"/v1/workspaces/acme/principals?ids={SEO_AGENT}&ids={MISHA}")
 
     assert response.status_code == 200, response.text
     assert directory.resolve.await_args.args[0] == [MISHA]
@@ -225,7 +227,7 @@ async def test_an_id_that_is_no_agent_still_falls_through_to_the_directory(
         _directory({MISHA: IdentityRecord(MISHA, "misha@aadocs.local", "Misha Dev")}),
     )
 
-    response = await client.get(f"/v1/principals?ids={MISHA}")
+    response = await client.get(f"/v1/workspaces/acme/principals?ids={MISHA}")
 
     assert response.status_code == 200, response.text
     assert response.json()[0]["type"] == "user"
@@ -239,7 +241,7 @@ async def test_a_deleted_agent_is_absent_rather_than_named(
     agent_service.list.return_value = []
     monkeypatch.setattr(principals, "get_identity_directory", _directory({}))
 
-    response = await client.get(f"/v1/principals?ids={SEO_AGENT}")
+    response = await client.get(f"/v1/workspaces/acme/principals?ids={SEO_AGENT}")
 
     assert response.status_code == 200, response.text
     assert response.json() == []

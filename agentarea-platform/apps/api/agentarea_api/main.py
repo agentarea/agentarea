@@ -17,14 +17,22 @@ from agentarea_common.di.container import get_container, register_factory, regis
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.registration import register_error_handlers
 from agentarea_common.logging import setup_logging
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 
+from agentarea_api.api.route_contract import check_route_contract
 from agentarea_api.api.v1.mcp_oauth_as import oauth_as_router
-from agentarea_api.api.v1.router import protected_v1_router, public_v1_router
+from agentarea_api.api.v1.router import (
+    WORKSPACE_PREFIX,
+    a2a_v1_router,
+    mcp_proxy_v1_router,
+    principal_v1_router,
+    public_v1_router,
+    workspace_v1_router,
+)
 
 # Configure structured (JSON) logging once at import time. The noisy third-party
 # loggers above keep their WARNING level (disable_existing_loggers is False).
@@ -49,6 +57,14 @@ async def initialize_services():
         from agentarea_common.features.service import DeploymentMode, FeatureService
 
         discover_extensions()
+
+        # Resolve now, after discovery, and let a failure stop startup. An installed
+        # pricing extension that cannot be resolved leaves the currency unknown, and
+        # a process running anyway would record amounts in a different currency from
+        # its siblings; exiting lets the orchestrator restart it instead.
+        from agentarea_common.extensions.customer_pricing import get_customer_pricing
+
+        logger.info("Billing currency: %s", get_customer_pricing().currency())
 
         app_settings = get_app_settings()
         mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
@@ -154,7 +170,7 @@ async def initialize_services():
             type(event_broker).__name__,
         )
     except Exception as e:
-        logger.error("Service initialization failed: %s", e)
+        logger.exception("Service initialization failed: %s", e)
         raise e
 
 
@@ -169,9 +185,9 @@ async def cleanup_all_connections():
         await asyncio.wait_for(cleanup_connections(), timeout=2.0)
         logger.info("Connection manager cleanup completed")
     except TimeoutError:
-        logger.warning("Connection manager cleanup timed out (reload mode)")
+        logger.warning("Connection manager cleanup timed out (reload mode)", exc_info=True)
     except Exception as e:
-        logger.error("Error in connection manager cleanup: %s", e)
+        logger.exception("Error in connection manager cleanup: %s", e)
 
     try:
         # Stop events router with timeout
@@ -180,9 +196,9 @@ async def cleanup_all_connections():
         await asyncio.wait_for(stop_events_router(), timeout=2.0)
         logger.info("Events router cleanup completed")
     except TimeoutError:
-        logger.warning("Events router cleanup timed out (reload mode)")
+        logger.warning("Events router cleanup timed out (reload mode)", exc_info=True)
     except Exception as e:
-        logger.error("Error in events router cleanup: %s", e)
+        logger.exception("Error in events router cleanup: %s", e)
 
     logger.info("All connection cleanup completed")
 
@@ -197,7 +213,16 @@ async def app_lifespan(app: FastAPI):
 
     # NOTE: Don't override signal handlers - let uvicorn handle them for proper reload
 
-    # Startup
+    # Startup. The metrics port first: failing to bind it must not leave the
+    # events router running with nothing to stop it.
+    from agentarea_common.config import ObservabilitySettings
+    from agentarea_common.observability.metrics import start_metrics_server
+
+    observability = ObservabilitySettings()
+    metrics_server = (
+        start_metrics_server(observability.METRICS_PORT) if observability.METRICS_ENABLED else None
+    )
+
     get_container()
     await initialize_services()
 
@@ -210,6 +235,10 @@ async def app_lifespan(app: FastAPI):
     try:
         yield
     finally:
+        if metrics_server is not None:
+            metrics_server.shutdown()
+            metrics_server.server_close()
+
         # Always stop the events router — Redis subscribers hold connections
         # open and block uvicorn reload if not cancelled
         from agentarea_api.api.events.events_router import stop_events_router
@@ -346,6 +375,10 @@ def create_app() -> FastAPI:
 
     app.add_middleware(AuditContextMiddleware)
 
+    from agentarea_api.api.nul_character_middleware import NulCharacterMiddleware
+
+    app.add_middleware(NulCharacterMiddleware)
+
     # Reject oversized request bodies (413) before buffering — cheap DoS guard.
     from agentarea_common.config import get_settings as _get_settings
 
@@ -372,6 +405,11 @@ def create_app() -> FastAPI:
         max_age=_cors.CORS_MAX_AGE,
     )
 
+    # Outermost, so it times everything the middleware above adds to a request.
+    from agentarea_api.api.http_metrics_middleware import HTTPMetricsMiddleware
+
+    app.add_middleware(HTTPMetricsMiddleware)
+
     # Mount static files - this serves all files from static/ at /static/
     static_path = Path(__file__).parent / "static"
 
@@ -388,7 +426,10 @@ def create_app() -> FastAPI:
     app.include_router(webhooks_module.router, tags=["webhooks"])
 
     app.include_router(public_v1_router, tags=["v1"])
-    app.include_router(protected_v1_router, tags=["v1"])
+    app.include_router(principal_v1_router, tags=["v1"])
+    app.include_router(workspace_v1_router, tags=["v1"])
+    app.include_router(a2a_v1_router, tags=["v1"])
+    app.include_router(mcp_proxy_v1_router, tags=["v1"])
 
     # Routes contributed by installed extensions.
     #
@@ -404,7 +445,9 @@ def create_app() -> FastAPI:
     #
     # A failing extension must not take the API down with it. The registry is populated by
     # scanning installed packages, so a broken one is a deployment problem, and refusing
-    # to start turns "one feature is unavailable" into "nothing is".
+    # to start turns "one feature is unavailable" into "nothing is". A route that
+    # breaks the workspace contract is different: it is a programming error, and
+    # check_route_contract below refuses to build the app with it.
     from agentarea_common.extensions import discover_extensions
     from agentarea_common.extensions.registry import ExtensionRegistry
 
@@ -422,18 +465,32 @@ def create_app() -> FastAPI:
     # assignment, so the later call re-registers the same factories.
     discover_extensions()
 
-    extension_router_factory = ExtensionRegistry.get_factory("api_router")
-    if extension_router_factory is not None:
+    # Two seams: ``api_router`` routes are mounted as declared (they act on no
+    # workspace), ``workspace_api_router`` routes under /v1/workspaces/{workspace},
+    # where the path selects the workspace they act in.
+    for extension_point, prefix in (("api_router", ""), ("workspace_api_router", WORKSPACE_PREFIX)):
+        extension_router_factory = ExtensionRegistry.get_factory(extension_point)
+        if extension_router_factory is None:
+            # Say so. The silence here is what let this ship broken: with no
+            # extension installed this is the normal OSS path, but it is also what
+            # a discovery-ordering bug looks like, and the two were indistinguishable.
+            logger.info("No %s extension registered; serving core routes only", extension_point)
+            continue
         try:
-            app.include_router(extension_router_factory())
-            logger.info("Mounted routes from the api_router extension")
+            extension_router = extension_router_factory()
         except Exception:
-            logger.exception("api_router extension failed to mount; continuing without it")
-    else:
-        # Say so. The silence here is what let this ship broken: with no
-        # extension installed this is the normal OSS path, but it is also what
-        # a discovery-ordering bug looks like, and the two were indistinguishable.
-        logger.info("No api_router extension registered; serving core routes only")
+            logger.exception("%s extension failed to build; continuing without it", extension_point)
+            continue
+        if prefix:
+            scoped = APIRouter(
+                prefix=prefix,
+                dependencies=workspace_v1_router.dependencies,
+                generate_unique_id_function=workspace_v1_router.generate_unique_id_function,
+            )
+            scoped.include_router(extension_router)
+            extension_router = scoped
+        app.include_router(extension_router)
+        logger.info("Mounted routes from the %s extension", extension_point)
 
     # Mount native MCP server at /mcp — exposes platform tools via MCP protocol.
     # Auth: Hydra OAuth tokens (Cursor/Claude Desktop), API keys, Kratos JWT.
@@ -522,6 +579,7 @@ def create_app() -> FastAPI:
             extra={
                 "current_mtd_usd": exc.current_mtd_usd,
                 "cap_usd": exc.cap_usd,
+                "currency": exc.currency,
                 "workspace_id": exc.workspace_id,
             },
         )
@@ -534,6 +592,10 @@ def create_app() -> FastAPI:
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
         }
+
+    # A route that names no workspace yet resolves one would fail every request
+    # it serves; refuse to build instead. Extension routes are checked too.
+    check_route_contract(app.routes)
 
     # Customize OpenAPI: add bearer scheme and ensure per-operation security
     def custom_openapi():

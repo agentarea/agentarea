@@ -32,6 +32,18 @@ class TestCategory:
         )
         assert f.category == "other"
 
+    def test_skill_categories_fold_into_the_closed_set(self):
+        def cat(raw):
+            return derive_facets("skills", name="x", spec={}, tags=[f"category:{raw}"]).category
+
+        assert cat("ai-llm") == "agents"
+        assert cat("Quality") == "testing"
+        assert cat("research-analysis") == "data"
+
+    def test_unknown_skill_categories_are_other(self):
+        f = derive_facets("skills", name="x", spec={}, tags=["category:war-room-2"])
+        assert f.category == "other"
+
     def test_mcp_servers_read_the_curated_metadata_key(self):
         f = derive_facets(
             "mcp_servers",
@@ -122,10 +134,47 @@ class TestFeatured:
         assert derive_facets("skills", name="x", spec={}, tags=["category:other"]).featured is False
 
 
+class TestProtocol:
+    """Connections split into MCP servers and HTTP APIs; nothing else has a protocol."""
+
+    def test_an_openapi_connection_is_an_api(self):
+        f = derive_facets("mcp_servers", name="x", spec={"connection_type": "openapi"}, tags=[])
+        assert f.protocol == "api"
+
+    def test_any_other_transport_is_mcp(self):
+        f = derive_facets("mcp_servers", name="x", spec={"connection_type": "url"}, tags=[])
+        assert f.protocol == "mcp"
+
+    def test_a_connection_that_never_recorded_its_type_is_mcp(self):
+        # Managed publications predate connection_type.
+        assert derive_facets("mcp_servers", name="x", spec={}, tags=[]).protocol == "mcp"
+
+    def test_other_types_have_none(self):
+        f = derive_facets("skills", name="x", spec={"connection_type": "openapi"}, tags=[])
+        assert f.protocol is None
+
+
 class TestTolerance:
     def test_survives_null_spec_and_tags(self):
         f = derive_facets("skills", name="x", spec=None, tags=None)
         assert (f.category, f.sort_key, f.featured) == (None, "x", False)
+
+    def test_mcp_servers_sort_by_their_title(self):
+        f = derive_facets(
+            "mcp_servers",
+            name="ai.agentarea.catalog/ahrefs",
+            spec={"raw_spec": {"title": "Ahrefs"}},
+            tags=[],
+        )
+        assert f.sort_key == "ahrefs"
+
+    def test_mcp_servers_without_a_title_drop_the_namespace(self):
+        f = derive_facets("mcp_servers", name="io.github.acme/weather-mcp", spec={}, tags=[])
+        assert f.sort_key == "weather mcp"
+
+    def test_sort_key_fits_its_column(self):
+        f = derive_facets("mcp_servers", name="x", spec={"raw_spec": {"title": "a" * 400}}, tags=[])
+        assert len(f.sort_key) == 255
 
     def test_survives_non_mapping_nested_spec(self):
         # Sources are external; raw_spec/metadata are whatever the upstream
@@ -134,8 +183,8 @@ class TestTolerance:
         assert f.category is None
 
     def test_survives_non_string_tags(self):
-        f = derive_facets("skills", name="x", spec={}, tags=["category:ok", 5, None])
-        assert f.category == "ok"
+        f = derive_facets("skills", name="x", spec={}, tags=["category:data", 5, None])
+        assert f.category == "data"
 
 
 class TestApplyFacets:
@@ -152,13 +201,19 @@ class TestApplyFacets:
             self.category = "stale"
             self.sort_key = "stale"
             self.featured = True
+            self.protocol = "stale"
 
-    def test_rewrites_all_three_columns_from_current_content(self):
+    def test_rewrites_every_derived_column_from_current_content(self):
         from agentarea_registry.application.catalog_facets import apply_facets
 
         item = self._Item("csv-clean--acme--1", {}, ["category:data"])
         apply_facets(item, "skills")
-        assert (item.category, item.sort_key, item.featured) == ("data", "csv clean", False)
+        assert (item.category, item.sort_key, item.featured, item.protocol) == (
+            "data",
+            "csv clean",
+            False,
+            None,
+        )
 
     def test_clears_a_category_the_source_dropped(self):
         from agentarea_registry.application.catalog_facets import apply_facets

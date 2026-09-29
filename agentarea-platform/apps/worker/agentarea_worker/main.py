@@ -164,6 +164,14 @@ class AgentAreaWorker:
 
         discover_extensions()
 
+        # Resolve now, after discovery, and let a failure stop startup. An installed
+        # pricing extension that cannot be resolved leaves the currency unknown, and
+        # a process running anyway would record amounts in a different currency from
+        # its siblings; exiting lets the orchestrator restart it instead.
+        from agentarea_common.extensions.customer_pricing import get_customer_pricing
+
+        logger.info("Billing currency: %s", get_customer_pricing().currency())
+
         app_settings = get_app_settings()
         mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
         register_singleton(FeatureService, FeatureService(mode=mode))
@@ -402,14 +410,23 @@ class AgentAreaWorker:
 
         # Transactional outbox relay: drains event_outbox rows (written in the
         # same txn as the aggregate change by domain services) and publishes them
-        # to the event broker. FOR UPDATE SKIP LOCKED lets it co-reside with any
-        # number of workers without coordination.
+        # to the event broker, or performs the ones that have a handler. FOR
+        # UPDATE SKIP LOCKED lets it co-reside with any number of workers
+        # without coordination.
         from agentarea_common.config.database import get_database
         from agentarea_common.events.outbox_relay import OutboxRelay
+        from agentarea_common.workspaces import (
+            MEMBERSHIP_ENDED,
+            get_workspace_membership_graph,
+            membership_removal_handler,
+        )
 
         self.outbox_relay = OutboxRelay(
             session_factory=get_database().async_session_factory,
             event_broker=dependencies.event_broker,
+            handlers={
+                MEMBERSHIP_ENDED: membership_removal_handler(get_workspace_membership_graph()),
+            },
         )
 
     async def run(self) -> None:
@@ -480,7 +497,7 @@ class AgentAreaWorker:
             await self.create_worker()
             await self.run()
         except Exception as e:
-            logger.error(f"Worker failed to start: {e}")
+            logger.exception(f"Worker failed to start: {e}")
             raise
         finally:
             await self.shutdown()
@@ -544,7 +561,7 @@ async def main() -> None:
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt")
     except Exception as e:
-        logger.error(f"Worker error: {e}")
+        logger.exception(f"Worker error: {e}")
         sys.exit(1)
 
 

@@ -4,7 +4,7 @@ import asyncio
 import inspect
 import logging
 import socket
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -27,6 +27,7 @@ from mcp import MCPError
 from agentarea_mcp.application.auth_service import MCPAuthService, OAuthReauthRequiredError
 from agentarea_mcp.application.mcp_client import (
     connected_mcp_client,
+    gateway_client_factory,
     mcp_verdict_key,
     pinned_client_factory,
     platform_client_factory,
@@ -335,8 +336,12 @@ class MCPServerService(BaseCrudService[MCPServer]):
         limit: int = 100,
         offset: int = 0,
         ids: set[str] | None = None,
+        spec_ids: Collection[str] | None = None,
     ) -> tuple[list[MCPServer], int]:
-        """List server specs, narrowed to ``ids`` when the caller has a readable set."""
+        """List server specs, narrowed to ``ids`` when the caller has a readable set.
+
+        ``spec_ids`` asks for exactly those specs, tenant or catalog.
+        """
         return await self.repository.list_servers(
             status=status,
             is_public=is_public,
@@ -345,6 +350,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
             limit=limit,
             offset=offset,
             ids=ids,
+            spec_ids=spec_ids,
         )
 
     async def get(self, id: UUID) -> MCPServer | None:
@@ -692,7 +698,7 @@ class MCPServerInstanceService:
         payload = MCPServerInstanceCreate(
             name=instance_payload.name,
             description=instance_payload.description,
-            server_spec_id=str(server.id),
+            server_spec_id=server.id,
             json_spec=instance_payload.json_spec,
             auth_config_id=instance_payload.auth_config_id,
         )
@@ -1074,6 +1080,8 @@ class MCPServerInstanceService:
                 httpx_client_factory = pinned_client_factory(httpx_client_factory)
             elif httpx_client_factory is None:
                 httpx_client_factory = platform_client_factory
+            else:
+                httpx_client_factory = gateway_client_factory(httpx_client_factory)
         except Exception as e:
             return _fail(
                 f"MCP '{instance.name}' is not available (cannot resolve URL: {e}). "
@@ -1191,7 +1199,12 @@ class MCPServerInstanceService:
                 if auth_config:
                     headers = await auth_service.get_auth_headers(auth_config)
             except Exception as e:
-                logger.warning("Failed to resolve auth headers for instance %s: %s", instance.id, e)
+                logger.warning(
+                    "Failed to resolve auth headers for instance %s: %s",
+                    instance.id,
+                    e,
+                    exc_info=True,
+                )
 
         if instance_type in ("docker", "command"):
             headers.update(get_settings().mcp.manager_gateway_headers())
@@ -1407,6 +1420,13 @@ class MCPServerInstanceService:
             return {"status": "error", "message": "No endpoint URL configured"}
 
         try:
+            validate_outbound_url(mcp_url, policy=OutboundPolicy.from_env())
+            # OAuth from the shared classifier, before the GET status: a server
+            # may be POST-only (405) or list tools without a token and still
+            # require one for every call — the metadata is what says so.
+            if (await MCPOAuthClientService().assess(mcp_url)).advertises_oauth:
+                return {"status": "auth_required", "methods": ["oauth", "credentials"]}
+
             async with safe_async_client(timeout=httpx.Timeout(10.0)) as client:
                 resp = await client.get(mcp_url, follow_redirects=True)
 
@@ -1416,25 +1436,6 @@ class MCPServerInstanceService:
                 # 401 is the spec'd auth challenge; some servers (e.g. Vercel)
                 # answer an unauthenticated request with 403 — treat both the same.
                 if resp.status_code in (401, 403):
-                    www_auth = resp.headers.get("www-authenticate", "")
-                    has_oauth = (
-                        "resource_metadata" in www_auth.lower() or "bearer" in www_auth.lower()
-                    )
-
-                    if has_oauth:
-                        try:
-                            oauth_service = MCPOAuthClientService()
-                            await oauth_service.discover_auth_server(mcp_url)
-                            return {
-                                "status": "auth_required",
-                                "methods": ["oauth", "credentials"],
-                            }
-                        except Exception:
-                            logger.debug(
-                                "OAuth discovery failed for %s, falling back to credentials",
-                                mcp_url,
-                            )
-
                     hints = []
                     if instance.server_spec_id:
                         try:

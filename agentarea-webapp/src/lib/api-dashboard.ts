@@ -3,7 +3,8 @@
 import "server-only";
 import { env } from "@/env";
 import { getAuthToken } from "./getAuthToken";
-import { workspaceSlugHeaders } from "./workspace-request";
+import { getRequestWorkspaceSlug } from "./workspace-context";
+import { fillWorkspace } from "./workspace-url";
 
 export type DashboardSpend = {
   today_usd: number;
@@ -101,59 +102,86 @@ async function authedFetch(path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${token}`);
 
-  for (const [name, value] of Object.entries(await workspaceSlugHeaders())) {
-    if (!headers.has(name)) {
-      headers.set(name, value);
-    }
-  }
-
   if (init?.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  return fetch(`${env.API_URL}${path}`, {
+  const url = fillWorkspace(
+    `${env.API_URL}${path}`,
+    await getRequestWorkspaceSlug()
+  );
+  return fetch(url, {
     ...init,
     headers,
     cache: "no-store",
   });
 }
 
-export async function getDashboard(): Promise<DashboardData> {
-  const res = await authedFetch("/v1/workspace/dashboard");
-  if (!res.ok) {
-    throw new Error(`Dashboard fetch failed: ${res.status}`);
+export type DashboardResult<T> = {
+  data?: T;
+  error?: unknown;
+  status: number;
+};
+
+/** A failed request keeps its status and the API's own error body. */
+async function request<T>(
+  path: string,
+  init?: RequestInit
+): Promise<DashboardResult<T>> {
+  const res = await authedFetch(path, init);
+  if (res.ok) return { data: (await res.json()) as T, status: res.status };
+
+  const body = await res.text();
+  let error: unknown = body || undefined;
+  try {
+    error = body ? JSON.parse(body) : undefined;
+  } catch {
+    // Not JSON: the raw text is the reason.
   }
-  return res.json();
+  return { error, status: res.status };
 }
 
-export async function getWorkspaceSettings(): Promise<WorkspaceSettings> {
-  const res = await authedFetch("/v1/workspace/settings");
-  if (!res.ok) {
-    throw new Error(`Workspace settings fetch failed: ${res.status}`);
-  }
-  return res.json();
+export function getDashboard() {
+  return request<DashboardData>("/v1/workspaces/{workspace}/dashboard");
 }
 
-export async function getAgentOverview(
-  agentId: string
-): Promise<AgentOverviewData> {
-  const res = await authedFetch(
-    `/v1/agents/${encodeURIComponent(agentId)}/overview`
+export function getWorkspaceSettings() {
+  return request<WorkspaceSettings>("/v1/workspaces/{workspace}/settings");
+}
+
+export function getAgentOverview(agentId: string) {
+  return request<AgentOverviewData>(
+    `/v1/workspaces/{workspace}/agents/${encodeURIComponent(agentId)}/overview`
   );
-  if (!res.ok) {
-    throw new Error(`Agent overview fetch failed: ${res.status}`);
-  }
-  return res.json();
 }
 
-export async function updateWorkspaceSettings(
-  monthly_cap_usd: number | null
-): Promise<WorkspaceSettings> {
-  const res = await authedFetch("/v1/workspace/settings", {
+export function updateWorkspaceSettings(monthly_cap_usd: number | null) {
+  return request<WorkspaceSettings>("/v1/workspaces/{workspace}/settings", {
     method: "PUT",
     body: JSON.stringify({ monthly_cap_usd }),
   });
-  if (!res.ok) {
-    throw new Error(`Workspace settings update failed: ${res.status}`);
+}
+
+/**
+ * The workspace's billing currency (C2, `GET /v1/pricing/currency`). Never
+ * guesses on failure — callers must treat `{ ok: false }` as "currency
+ * unknown" and render money without a currency symbol (see formatMoney in
+ * @/lib/money), never silently assume USD: on a non-USD deployment that
+ * would mislabel every amount by the fx rate.
+ */
+export type PricingCurrencyResult =
+  | { ok: true; currency: string }
+  | { ok: false };
+
+export async function getPricingCurrency(): Promise<PricingCurrencyResult> {
+  try {
+    const res = await authedFetch("/v1/pricing/currency");
+    if (!res.ok) return { ok: false };
+    const data = await res.json();
+    if (typeof data?.currency !== "string" || !data.currency) {
+      return { ok: false };
+    }
+    return { ok: true, currency: data.currency };
+  } catch {
+    return { ok: false };
   }
-  return res.json();
 }

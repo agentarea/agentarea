@@ -36,12 +36,12 @@ central.
 
 <Steps titleSize="h3">
   <Step title="Test the endpoint before saving it">
-    `POST /v1/mcp-server-instances/validate` is stateless — it stores nothing and
+    `POST /v1/workspaces/{workspace}/mcp-server-instances/validate` is stateless — it stores nothing and
     creates nothing. For `type: "url"` it opens an MCP session and calls
     `tools/list` on a 3-second budget.
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/validate" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/validate" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -66,7 +66,7 @@ central.
 
   <Step title="Create the connection">
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/with-spec" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/with-spec" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -123,7 +123,7 @@ central.
     vendor adds a tool:
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID/discover-tools" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/$INSTANCE_ID/discover-tools" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN"
     ```
   </Step>
@@ -134,7 +134,7 @@ central.
 Confirm the instance verified and the agent-facing proxy answers.
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/$INSTANCE_ID" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" \
   | jq '{status: .verification.status, tools: (.tools | length)}'
 ```
@@ -188,7 +188,7 @@ the instance, injected the stored credential, and reached the server.
     Validation used the headers in your request body; the instance uses the
     headers stored on it. If `env_schema` marked the header secret, confirm the
     value was saved — read
-    `GET /v1/mcp-server- instances/{instance_id}/environment` to see which names
+    `GET /v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/environment` to see which names
     have values.
   </Accordion>
   <Accordion title="The instance verifies but calls through `/v1/mcp/{instance_id}/mcp` fail">

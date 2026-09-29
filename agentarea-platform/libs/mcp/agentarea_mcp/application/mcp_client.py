@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -15,14 +16,12 @@ from agentarea_common.utils.url_safety import (
     OutboundPolicy,
     PinnedSender,
     Resolver,
-    SafeOutboundTransport,
     UnsafeUrlError,
     resolve_host,
 )
 from mcp import Client, MCPError
 from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamable_http_client
-from mcp.shared._httpx_utils import create_mcp_http_client
 from mcp_types import DiscoverResult
 
 from agentarea_mcp.verification import mcp_transport_candidates
@@ -37,6 +36,12 @@ NEGOTIATION_ERROR_CODES = frozenset({-32022, -32601})
 # responses, and a tool call may legitimately stream that long.
 SSE_READ_TIMEOUT_SECONDS = 300.0
 MCP_CONNECT_TIMEOUT_SECONDS = 30.0
+# The manager gateway answers a request that arrives while another one is
+# cold-starting the workload with this header on a 503, and never forwards it.
+GATEWAY_STARTING_HEADER = "X-AgentArea-MCP-Starting"
+# The manager's default MCP_GATEWAY_STARTUP_TIMEOUT. A start still running past
+# it has failed, and the gateway answers with that failure instead.
+GATEWAY_START_WAIT_SECONDS = 300.0
 
 
 class EraVerdictStore(Protocol):
@@ -160,8 +165,84 @@ class SafeMCPTransport(httpx2.AsyncBaseTransport):
         await self._sender.aclose()
 
 
-# For addresses the platform chose itself, such as the manager gateway.
-platform_client_factory = create_mcp_http_client
+def gateway_start_retry_delay(status_code: int, headers: Mapping[str, str]) -> float | None:
+    """Seconds to wait before repeating a request the gateway answered
+    "workload is starting"; ``None`` for any other response.
+
+    The gateway starts a reclaimed workload detached from the request that
+    asked for it and tells concurrent callers to come back. It never forwards
+    those requests, so repeating one cannot run a tool twice. Any other 503
+    came from the workload and is not repeated.
+    """
+    if status_code != 503 or headers.get(GATEWAY_STARTING_HEADER) != "1":
+        return None
+    try:
+        return max(1.0, float(headers.get("Retry-After", "1")))
+    except ValueError:
+        return 1.0
+
+
+class GatewayStartRetryTransport(httpx2.AsyncBaseTransport):
+    """Repeats a request the manager gateway answered "workload is starting"."""
+
+    def __init__(self, inner: httpx2.AsyncBaseTransport | None = None) -> None:
+        self._inner = inner or httpx2.AsyncHTTPTransport()
+
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + GATEWAY_START_WAIT_SECONDS
+        while True:
+            response = await self._inner.handle_async_request(request)
+            delay = gateway_start_retry_delay(response.status_code, response.headers)
+            if delay is None or loop.time() + delay > deadline:
+                return response
+            await response.aclose()
+            await asyncio.sleep(delay)
+
+    async def aclose(self) -> None:
+        await self._inner.aclose()
+
+
+def platform_client_factory(
+    headers: dict[str, str] | None = None,
+    timeout: httpx2.Timeout | None = None,
+    auth: httpx2.Auth | None = None,
+) -> httpx2.AsyncClient:
+    """An ``httpx_client_factory`` for addresses the platform chose itself.
+
+    That address is the manager gateway, so its clients wait out a cold start
+    another request is performing instead of failing on it.
+    """
+    kwargs: dict[str, Any] = {
+        "transport": GatewayStartRetryTransport(),
+        "timeout": timeout
+        or httpx2.Timeout(MCP_CONNECT_TIMEOUT_SECONDS, read=SSE_READ_TIMEOUT_SECONDS),
+    }
+    if headers is not None:
+        kwargs["headers"] = headers
+    if auth is not None:
+        kwargs["auth"] = auth
+    return httpx2.AsyncClient(**kwargs)
+
+
+def gateway_client_factory(wrapped: Callable[..., Any]) -> Callable[..., Any]:
+    """``platform_client_factory`` for a caller's own factory, such as the
+    payment client, that takes an ``inner`` transport.
+
+    Its requests then wait out a cold start the way the platform's own do. A
+    fresh transport per call, because a client closes its transport on exit.
+    """
+
+    def factory(
+        headers: dict[str, str] | None = None,
+        timeout: Any = None,
+        auth: Any = None,
+    ) -> Any:
+        return wrapped(
+            headers=headers, timeout=timeout, auth=auth, inner=GatewayStartRetryTransport()
+        )
+
+    return factory
 
 
 def pinned_client_factory(
@@ -175,7 +256,7 @@ def pinned_client_factory(
 
     For a member-supplied (URL-type) MCP endpoint. ``wrapped`` is a caller's own
     factory that takes an ``inner`` transport, such as the payment client; its
-    requests then go through ``SafeOutboundTransport``. Each call builds a fresh
+    requests then go through ``SafeMCPTransport``. Each call builds a fresh
     transport, because a client closes its transport on exit and the connect
     loop opens one client per transport candidate.
     """
@@ -191,7 +272,7 @@ def pinned_client_factory(
                 headers=headers,
                 timeout=timeout,
                 auth=auth,
-                inner=SafeOutboundTransport(effective, resolve=resolve),
+                inner=SafeMCPTransport(effective, resolve=resolve, inner=inner),
             )
         kwargs: dict[str, Any] = {
             "transport": SafeMCPTransport(effective, resolve=resolve, inner=inner),

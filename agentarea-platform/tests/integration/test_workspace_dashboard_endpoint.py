@@ -1,4 +1,4 @@
-"""Integration tests for GET /v1/workspace/dashboard.
+"""Integration tests for GET /v1/workspaces/acme/dashboard.
 
 Calls get_dashboard() directly against an in-memory SQLite seeded with Agent,
 TaskORM, and PolicyRuleORM rows. The PostgreSQL-only operators

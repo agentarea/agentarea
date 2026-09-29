@@ -71,7 +71,7 @@
           "agentarea:source_url": "https://github.com/chigwell/telegram-mcp",
           "agentarea:logo_domain": "telegram.org",
           "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=telegram.org&sz=128",
-          "agentarea:notes": "Python stdio server run via 'uvx telegram-mcp' inside agentarea/mcp-bridge:latest. Read-only by default via TELEGRAM_EXPOSED_TOOLS. Requires a pre-generated Telethon session string."
+          "agentarea:notes": "Python stdio server run via 'uvx telegram-mcp' on the agentarea/agentarea-mcp-base image. Read-only by default via TELEGRAM_EXPOSED_TOOLS. Requires a pre-generated Telethon session string."
         }
       },
       "_meta": {
@@ -116,7 +116,7 @@
         "metadata": {
           "agentarea:source_type": "official",
           "agentarea:source_url": "https://github.com/modelcontextprotocol/ext-apps",
-          "agentarea:notes": "Interactive MCP Apps UI example from the official ext-apps repository. The npm package runs in stdio mode with '--stdio' inside agentarea/mcp-bridge:latest."
+          "agentarea:notes": "Interactive MCP Apps UI example from the official ext-apps repository. The npm package runs in stdio mode with '--stdio' on the agentarea/agentarea-mcp-base image."
         }
       },
       "_meta": {
@@ -161,7 +161,7 @@
         "metadata": {
           "agentarea:source_type": "official",
           "agentarea:source_url": "https://github.com/modelcontextprotocol/ext-apps",
-          "agentarea:notes": "Interactive MCP Apps UI example from the official ext-apps repository. The npm package runs in stdio mode with '--stdio' inside agentarea/mcp-bridge:latest."
+          "agentarea:notes": "Interactive MCP Apps UI example from the official ext-apps repository. The npm package runs in stdio mode with '--stdio' on the agentarea/agentarea-mcp-base image."
         }
       },
       "_meta": {

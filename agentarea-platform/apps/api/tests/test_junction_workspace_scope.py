@@ -31,6 +31,7 @@ from agentarea_common.di.container import get_container
 from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
+from agentarea_registry.domain.models import Registry, RegistryItem, RegistryItemInstall
 from agentarea_mcp.application.client_service import ClientService
 from agentarea_mcp.domain.auth_models import MCPAuthConfig
 from agentarea_mcp.domain.client_models import Client, client_mcp_instances, client_skills
@@ -66,6 +67,10 @@ _TABLES = [
     project_mcp_instances,
     client_skills,
     client_mcp_instances,
+    # A skill id that is not the workspace's is looked up in the catalog next.
+    Registry.__table__,
+    RegistryItem.__table__,
+    RegistryItemInstall.__table__,
 ]
 
 
@@ -318,8 +323,9 @@ async def test_client_endpoint_lookup_hides_a_foreign_skill_already_linked(sessi
     await session.commit()
     session.expunge_all()
 
-    ctx = UserContext(user_id="user-a", workspace_id="ws-a", accessible_workspaces=["ws-a", "ws-b"])
-    resolved = await ClientRepository(session, ctx).get_accessible_by_id(client.id)
+    workspace_id = await ClientRepository.locate_workspace(session, client.id, ["ws-a", "ws-b"])
+    ctx = UserContext(user_id="user-a", workspace_id=workspace_id)
+    resolved = await ClientRepository(session, ctx).get_by_id(client.id)
 
     assert [s.id for s in resolved.skills] == [ours.id]
 
@@ -366,14 +372,14 @@ async def test_agent_create_refuses_a_foreign_skill_and_creates_nothing(session)
     foreign = await _skill(session, THEIRS)
 
     with pytest.raises(NotFoundError):
-        await _agents(session).create_agent(AgentCreate(name="writer", skill_ids=[foreign.id]))
+        await _agents(session).create_agent(AgentCreate(name="writer", tools=[], skill_ids=[foreign.id]))
 
     assert (await session.execute(select(Agent))).scalars().all() == []
 
 
 async def test_agent_update_refuses_a_foreign_skill_and_keeps_its_skills(session):
     ours = await _skill(session, OURS)
-    agent = await _agents(session).create_agent(AgentCreate(name="writer", skill_ids=[ours.id]))
+    agent = await _agents(session).create_agent(AgentCreate(name="writer", tools=[], skill_ids=[ours.id]))
     foreign = await _skill(session, THEIRS)
 
     with pytest.raises(NotFoundError):

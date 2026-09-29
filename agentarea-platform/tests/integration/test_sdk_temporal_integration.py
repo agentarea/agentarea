@@ -62,7 +62,6 @@ async def test_sdk_temporal_integration_single_tool_call():
             "instruction": "You are a helpful assistant. Use the calculate tool for math problems. When done, use task_complete.",
             "model_id": "66666666-6666-6666-6666-666666666666",
             "tools_config": {},
-            "events_config": {},
             "planning": False,
         }
 
@@ -294,7 +293,6 @@ async def test_sdk_temporal_integration_multiple_tool_calls():
             "instruction": "You are a helpful assistant. Use tools step by step. First calculate, then complete the task.",
             "model_id": "66666666-6666-6666-6666-666666666666",
             "tools_config": {},
-            "events_config": {},
             "planning": False,
         }
 

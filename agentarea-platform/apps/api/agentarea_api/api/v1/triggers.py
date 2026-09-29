@@ -30,18 +30,16 @@ from agentarea_api.api.deps.services import (
     get_trigger_service,
 )
 from agentarea_api.api.v1._icons import CHANNEL_ICON_NAMESPACE, build_icon_url
+from agentarea_api.api.v1._trigger_creation import (
+    create_trigger_from_spec,
+    get_channel_webhook_service,
+    resolve_channel_credentials,
+)
 from agentarea_common.auth.dependencies import UserContext, get_user_context
 from agentarea_common.auth.route_authz import requires, unrestricted
-from agentarea_common.config.app import get_app_settings
+from agentarea_common.base.pagination import MAX_PAGE
 from agentarea_common.config.database import get_db_session
-from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_common.utils.types import UtcDatetime
-from agentarea_secrets.catalog_service import (
-    ManagedSecretError,
-    SecretAccessDeniedError,
-    SecretCatalogService,
-    SecretNotFoundError,
-)
+from agentarea_common.utils.types import NaiveUtcDatetime, UtcDatetime
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
@@ -383,7 +381,9 @@ async def _has_credentials(secret_manager: Any, trigger: Any, trigger_id: UUID) 
     try:
         return await secret_manager.has_secret(secret_name)
     except Exception as e:
-        logger.warning(f"Could not resolve channel credentials for trigger {trigger_id}: {e}")
+        logger.warning(
+            f"Could not resolve channel credentials for trigger {trigger_id}: {e}", exc_info=True
+        )
         return False
 
 
@@ -422,18 +422,6 @@ async def get_channel_events(
     return CHANNEL_EVENTS
 
 
-def get_channel_webhook_service() -> ChannelWebhookService:
-    """Composition root for inbound webhook registration.
-
-    Reads the reachable ingress base (TELEGRAM_WEBHOOK_BASE_URL if set, else
-    API_BASE_URL) and hands the endpoints a service that knows nothing about any
-    specific channel — that lives behind the WebhookRegistrar registry.
-    """
-    settings = get_app_settings()
-    base = getattr(settings, "TELEGRAM_WEBHOOK_BASE_URL", "") or settings.API_BASE_URL
-    return ChannelWebhookService(base)
-
-
 def _channel_secret_name(trigger: Any, trigger_id: Any) -> str | None:
     """Secret name holding this trigger's channel credentials, if it is a webhook
     trigger. Only the naming convention lives here — no channel logic.
@@ -441,63 +429,6 @@ def _channel_secret_name(trigger: Any, trigger_id: Any) -> str | None:
     wt = getattr(trigger, "webhook_type", None)
     name = getattr(wt, "value", None) or str(wt or "")
     return channel_credential_secret_name(name, trigger_id) if name else None
-
-
-async def _resolve_channel_credentials(
-    credentials: dict[str, Any] | None,
-    secret_catalog: SecretCatalogService,
-    secret_manager: BaseSecretManager,
-) -> dict[str, Any] | None:
-    """Resolve workspace secret selections before persisting any trigger changes."""
-    if not credentials:
-        return credentials
-
-    resolved = {}
-    for field, credential in credentials.items():
-        if not isinstance(credential, dict):
-            # Existing clients provide credential values directly.
-            resolved[field] = credential
-            continue
-
-        if set(credential) != {"secret_id"} or not isinstance(credential["secret_id"], str):
-            raise HTTPException(
-                status_code=422, detail="Invalid channel credential secret reference."
-            )
-        try:
-            secret_id = UUID(credential["secret_id"])
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=422, detail="Invalid channel credential secret reference."
-            ) from exc
-
-        try:
-            secret = await secret_catalog.get_for_use(secret_id)
-        except SecretNotFoundError as exc:
-            raise HTTPException(
-                status_code=422,
-                detail="Selected channel credential secret is not available in this workspace.",
-            ) from exc
-        except ManagedSecretError as exc:
-            raise HTTPException(
-                status_code=422,
-                detail="Selected channel credential must be a user-owned workspace secret.",
-            ) from exc
-        except SecretAccessDeniedError as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
-        try:
-            value = await secret_manager.get_secret(secret.secret_name)
-        except Exception:
-            # Provider exceptions may include sensitive material; never forward or log them.
-            raise HTTPException(
-                status_code=422, detail="Selected channel credential secret could not be read."
-            ) from None
-        if not value:
-            raise HTTPException(
-                status_code=422, detail="Selected channel credential secret has no value."
-            )
-        resolved[field] = value
-
-    return resolved
 
 
 @router.post(
@@ -542,54 +473,18 @@ async def create_trigger(
         if not user_context.user_id:
             raise HTTPException(status_code=400, detail="User ID is required to create a trigger")
 
-        credentials = await _resolve_channel_credentials(
+        credentials = await resolve_channel_credentials(
             payload.channel_credentials, secret_catalog, secret_manager
         )
-
-        # Convert DTO -> domain create. Done up-front so we can fold polling
-        # channel credentials into ``data_extractor_config`` before persisting.
-        trigger_data = payload.to_domain(
-            created_by=user_context.user_id,
-            workspace_id=user_context.workspace_id,
+        trigger, has_creds = await create_trigger_from_spec(
+            payload,
+            agent_id=payload.agent_id,
+            user_context=user_context,
+            credentials=credentials,
+            trigger_service=trigger_service,
+            secret_manager=secret_manager,
+            webhook_service=webhook_service,
         )
-
-        # For polling extractors, merge credentials into extractor config
-        # so the Go polling service can read them (e.g. bot_token for Telegram).
-        # Extractors that read the secret store themselves are excluded: that
-        # column is plain JSON, and a mailbox password does not belong in it.
-        from agentarea_triggers.extractors import resolves_own_credentials
-
-        if (
-            trigger_data.data_extractor
-            and credentials
-            and not resolves_own_credentials(trigger_data.data_extractor)
-        ):
-            trigger_data.data_extractor_config = {
-                **(trigger_data.data_extractor_config or {}),
-                **credentials,
-            }
-
-        # Create trigger
-        trigger = await trigger_service.create_trigger(trigger_data)
-
-        # Also store credentials encrypted in secret store for Python outbound delivery
-        has_creds = False
-        if credentials and secret_manager:
-            # Channel type for secret key: use webhook_type or derive from data_extractor.
-            # Extractor names like "telegram_polling" map to channel type via suffix stripping.
-            extractor = payload.data_extractor or ""
-            channel_type = payload.webhook_type or extractor.removesuffix("_polling") or "generic"
-            secret_name = channel_credential_secret_name(channel_type, trigger.id)
-            await secret_manager.set_secret(secret_name, json.dumps(credentials))
-            has_creds = True
-            logger.info(f"Stored channel credentials for trigger {trigger.id}")
-
-        if has_creds:
-            await webhook_service.register(
-                channel_type=getattr(trigger, "webhook_type", None),
-                webhook_id=getattr(trigger, "webhook_id", None),
-                credentials=credentials,
-            )
 
         logger.info(f"Created trigger {trigger.id} for agent {trigger.agent_id}")
 
@@ -598,10 +493,10 @@ async def create_trigger(
     except HTTPException:
         raise
     except TriggerValidationError as e:
-        logger.warning(f"Trigger validation failed: {e}")
+        logger.warning(f"Trigger validation failed: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Failed to create trigger: {e}")
+        logger.exception(f"Failed to create trigger: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -679,7 +574,7 @@ async def list_triggers(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to list triggers: {e}")
+        logger.exception(f"Failed to list triggers: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -760,7 +655,7 @@ async def get_trigger(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get trigger {trigger_id}: {e}")
+        logger.exception(f"Failed to get trigger {trigger_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -800,7 +695,7 @@ async def update_trigger(
         HTTPException: If trigger not found or validation fails.
     """
     try:
-        credentials = await _resolve_channel_credentials(
+        credentials = await resolve_channel_credentials(
             payload.channel_credentials, secret_catalog, secret_manager
         )
         if credentials and any(
@@ -866,10 +761,10 @@ async def update_trigger(
     except TriggerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except TriggerValidationError as e:
-        logger.warning(f"Trigger validation failed: {e}")
+        logger.warning(f"Trigger validation failed: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Failed to update trigger {trigger_id}: {e}")
+        logger.exception(f"Failed to update trigger {trigger_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -915,7 +810,9 @@ async def delete_trigger(
                         credentials=json.loads(raw),
                     )
         except Exception as e:
-            logger.warning(f"Webhook deregistration on delete failed for {trigger_id}: {e}")
+            logger.warning(
+                f"Webhook deregistration on delete failed for {trigger_id}: {e}", exc_info=True
+            )
 
         success = await trigger_service.delete_trigger(trigger_id)
 
@@ -927,7 +824,7 @@ async def delete_trigger(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to delete trigger {trigger_id}: {e}")
+        logger.exception(f"Failed to delete trigger {trigger_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -975,7 +872,7 @@ async def enable_trigger(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to enable trigger {trigger_id}: {e}")
+        logger.exception(f"Failed to enable trigger {trigger_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1023,7 +920,7 @@ async def disable_trigger(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to disable trigger {trigger_id}: {e}")
+        logger.exception(f"Failed to disable trigger {trigger_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1036,13 +933,17 @@ async def disable_trigger(
 )
 async def get_execution_history(
     trigger_id: UUID,
-    page: int = Query(1, ge=1, description="Page number"),
+    page: int = Query(1, ge=1, le=MAX_PAGE, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of executions per page"),
     status: str | None = Query(
         None, description="Filter by execution status (success, failed, timeout)"
     ),
-    start_time: datetime | None = Query(None, description="Filter executions after this time"),
-    end_time: datetime | None = Query(None, description="Filter executions before this time"),
+    start_time: NaiveUtcDatetime | None = Query(
+        None, description="Filter executions after this time"
+    ),
+    end_time: NaiveUtcDatetime | None = Query(
+        None, description="Filter executions before this time"
+    ),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
     db_session: AsyncSession = Depends(get_db_session),
@@ -1129,7 +1030,7 @@ async def get_execution_history(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get execution history for trigger {trigger_id}: {e}")
+        logger.exception(f"Failed to get execution history for trigger {trigger_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1184,7 +1085,7 @@ async def get_trigger_status(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get trigger status for {trigger_id}: {e}")
+        logger.exception(f"Failed to get trigger status for {trigger_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1249,7 +1150,7 @@ async def get_execution_metrics(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get execution metrics for trigger {trigger_id}: {e}")
+        logger.exception(f"Failed to get execution metrics for trigger {trigger_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1303,7 +1204,7 @@ async def get_execution_timeline(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get execution timeline for trigger {trigger_id}: {e}")
+        logger.exception(f"Failed to get execution timeline for trigger {trigger_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1316,7 +1217,7 @@ async def get_execution_timeline(
 )
 async def get_execution_correlations(
     trigger_id: UUID,
-    page: int = Query(1, ge=1, description="Page number"),
+    page: int = Query(1, ge=1, le=MAX_PAGE, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of executions per page"),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
@@ -1363,7 +1264,7 @@ async def get_execution_correlations(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get execution correlations for trigger {trigger_id}: {e}")
+        logger.exception(f"Failed to get execution correlations for trigger {trigger_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 

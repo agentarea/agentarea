@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from agentarea_common.exceptions.errors import NotFoundError
 
 from agentarea_mcp.application.oauth_link_service import MCPOAuthLinkService
 from agentarea_mcp.domain.auth_models import (
@@ -53,10 +54,11 @@ def _session(*, expired: bool = False) -> MCPOAuthSession:
     return session
 
 
-def _make_service(link_repo=None, session_repo=None):
+def _make_service(link_repo=None, session_repo=None, instance_repo=None):
     link_repo = link_repo or AsyncMock()
     session_repo = session_repo or AsyncMock()
-    return MCPOAuthLinkService(link_repo, session_repo), link_repo, session_repo
+    instance_repo = instance_repo or AsyncMock()
+    return MCPOAuthLinkService(link_repo, session_repo, instance_repo), link_repo, session_repo
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +89,16 @@ class TestCreateLink:
 
         call_kwargs = repo.create.call_args.kwargs
         assert call_kwargs["expires_at"] is not None
+
+    async def test_refuses_an_instance_outside_the_workspace(self):
+        instance_repo = AsyncMock()
+        instance_repo.get_by_id.return_value = None
+        svc, repo, _ = _make_service(instance_repo=instance_repo)
+
+        with pytest.raises(NotFoundError):
+            await svc.create_link(mcp_instance_id=uuid4())
+
+        repo.create.assert_not_called()
 
     async def test_creates_link_without_expiry_by_default(self):
         svc, repo, _ = _make_service()

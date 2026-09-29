@@ -1,3 +1,6 @@
+import { client } from "./generated/client.gen";
+import { fillWorkspace, isWorkspaceScoped } from "./workspace-url";
+
 // Public surface of the shared AgentArea API client (fetch flavor).
 // Generated SDK functions + types come from ./generated; the transport
 // (base URL + auth) is injected by each consumer via configureApiClient().
@@ -5,8 +8,12 @@
 export * from "./generated/sdk.gen";
 export * from "./generated/types.gen";
 export { client } from "./generated/client.gen";
-
-import { client } from "./generated/client.gen";
+export {
+  fillWorkspace,
+  InvalidWorkspaceError,
+  isWorkspaceScoped,
+  MissingWorkspaceError,
+} from "./workspace-url";
 
 export type TokenProvider =
   | string
@@ -19,6 +26,11 @@ export interface ApiClientOptions {
   token?: TokenProvider;
   /** Override the fetch implementation (defaults to global fetch). */
   fetch?: typeof globalThis.fetch;
+  /**
+   * Slug for `/v1/workspaces/{workspace}/...` endpoints, asked only when a
+   * request is workspace-scoped. Returning nothing fails that request.
+   */
+  workspace?: () => string | undefined | Promise<string | undefined>;
 }
 
 /**
@@ -44,4 +56,17 @@ export function configureApiClient(options: ApiClientOptions): void {
       return request;
     });
   }
+
+  client.interceptors.request.use(async (request: Request) => {
+    if (!isWorkspaceScoped(request.url)) return request;
+    const url = fillWorkspace(request.url, await options.workspace?.());
+    // A Request's URL is read-only; rebuild it around the buffered body.
+    return new Request(url, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body ? await request.arrayBuffer() : undefined,
+      redirect: request.redirect,
+      signal: request.signal,
+    });
+  });
 }

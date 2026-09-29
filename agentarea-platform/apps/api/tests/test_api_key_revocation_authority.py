@@ -34,7 +34,7 @@ def _client(context: UserContext) -> tuple[TestClient, AsyncMock]:
     service.get_token.return_value = type("Key", (), {"created_by": OWNER_ID})()
     service.revoke_token.return_value = True
     app = FastAPI()
-    app.include_router(router, prefix="/v1")
+    app.include_router(router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_api_key_service] = lambda: service
     app.dependency_overrides[get_user_context] = lambda: context
     return TestClient(app), service
@@ -43,7 +43,7 @@ def _client(context: UserContext) -> tuple[TestClient, AsyncMock]:
 def test_a_member_cannot_revoke_someone_elses_key() -> None:
     client, service = _client(UserContext(user_id="user-other", workspace_id="ws-acme"))
 
-    response = client.delete(f"/v1/api-keys/{TOKEN_ID}")
+    response = client.delete(f"/v1/workspaces/acme/api-keys/{TOKEN_ID}")
 
     assert response.status_code == 403, response.text
     service.revoke_token.assert_not_awaited()
@@ -52,7 +52,7 @@ def test_a_member_cannot_revoke_someone_elses_key() -> None:
 def test_the_creator_revokes_their_own_key() -> None:
     client, service = _client(UserContext(user_id=OWNER_ID, workspace_id="ws-acme"))
 
-    response = client.delete(f"/v1/api-keys/{TOKEN_ID}")
+    response = client.delete(f"/v1/workspaces/acme/api-keys/{TOKEN_ID}")
 
     assert response.status_code == 204, response.text
     service.revoke_token.assert_awaited_once()
@@ -63,7 +63,7 @@ def test_a_workspace_admin_revokes_any_key() -> None:
         UserContext(user_id="user-owner", workspace_id="ws-acme", admin_workspaces=["ws-acme"])
     )
 
-    response = client.delete(f"/v1/api-keys/{TOKEN_ID}")
+    response = client.delete(f"/v1/workspaces/acme/api-keys/{TOKEN_ID}")
 
     assert response.status_code == 204, response.text
     service.revoke_token.assert_awaited_once()

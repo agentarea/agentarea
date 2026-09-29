@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { TableRow } from "@/components/ui/table";
 
 /**
@@ -24,7 +24,7 @@ export function TableRowNav({
   className?: string;
   children: React.ReactNode;
 } & React.HTMLAttributes<HTMLTableRowElement>) {
-  const router = useRouter();
+  const router = useWorkspaceRouter();
 
   return (
     <TableRow

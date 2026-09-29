@@ -147,7 +147,6 @@ async def mock_build_agent_config(request: AgentConfigRequest) -> dict[str, Any]
         "model_id": "gpt-4o-mini",
         "instruction": "You are a helpful assistant.",
         "tools_config": {"mcp_servers": []},
-        "events_config": {},
         "planning": False,
     }
 

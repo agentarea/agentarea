@@ -12,12 +12,16 @@ Both repositories accept ``UserContext`` per project convention but
 use it only for explicit policy checks inside the calling service.
 """
 
+from collections.abc import Collection
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import column, delete, or_, select, table, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth.context import UserContext
+from ..events.base_events import EventEnvelope
+from ..events.outbox_repository import OutboxRepository
 from .models import (
     INVITATION_STATUS_ACCEPTED,
     INVITATION_STATUS_PENDING,
@@ -26,6 +30,8 @@ from .models import (
     WorkspaceInvitation,
     WorkspaceMembership,
 )
+
+MEMBERSHIP_ENDED = "workspace.membership.ended"
 
 
 class WorkspaceInvitationRepository:
@@ -131,35 +137,74 @@ class WorkspaceMembershipRepository:
         )
         return list(result.scalars().all())
 
-    async def end(self, workspace_id: str, user_id: str) -> None:
+    async def end(
+        self, workspace_id: str, user_id: str, *, ended_by: str, emails: Collection[str]
+    ) -> None:
         """Drop the row and every credential that could bring the user back.
 
         The invitation they joined through is revoked so replaying it is refused,
-        and their API keys for the workspace are deactivated. ``api_keys`` is
-        owned by the MCP domain, which depends on this library, so it is named
-        as a bare table rather than imported.
+        and so is every pending invitation addressed to them: to ``emails`` or
+        to an address they already joined through. Open links name nobody and
+        stay open. Their API keys for the workspace are deactivated.
+
+        The graph revocation is queued in the same transaction, so a removal
+        that commits always reaches the graph, whatever happens to the caller's
+        own attempt.
         """
         await self.session.execute(
             delete(WorkspaceMembership)
             .where(WorkspaceMembership.workspace_id == workspace_id)
             .where(WorkspaceMembership.user_id == user_id)
         )
+        joined_through = (
+            await self.session.execute(
+                select(WorkspaceInvitation.email)
+                .where(WorkspaceInvitation.workspace_id == workspace_id)
+                .where(WorkspaceInvitation.accepted_by_user_id == user_id)
+                .where(WorkspaceInvitation.email.is_not(None))
+            )
+        ).scalars()
+        addresses = {_address(email) for email in (*emails, *joined_through) if email}
+        pending = (
+            await self.session.execute(
+                select(WorkspaceInvitation)
+                .where(WorkspaceInvitation.workspace_id == workspace_id)
+                .where(WorkspaceInvitation.status == INVITATION_STATUS_PENDING)
+                .where(WorkspaceInvitation.email.is_not(None))
+            )
+        ).scalars()
+        for invitation in pending:
+            if invitation.email is not None and _address(invitation.email) in addresses:
+                invitation.status = INVITATION_STATUS_REVOKED
         await self.session.execute(
             update(WorkspaceInvitation)
             .where(WorkspaceInvitation.workspace_id == workspace_id)
             .where(WorkspaceInvitation.accepted_by_user_id == user_id)
             .values(status=INVITATION_STATUS_REVOKED)
         )
-        api_keys = table(
-            "api_keys", column("workspace_id"), column("created_by"), column("is_active")
-        )
+        from agentarea_mcp.domain.auth_models import APIKey
+
         await self.session.execute(
-            update(api_keys)
-            .where(api_keys.c.workspace_id == workspace_id)
-            .where(api_keys.c.created_by == user_id)
+            update(APIKey)
+            .where(APIKey.workspace_id == workspace_id)
+            .where(APIKey.created_by == user_id)
             .values(is_active=False)
         )
+        await OutboxRepository(
+            self.session, UserContext(user_id=ended_by, workspace_id=workspace_id)
+        ).add(
+            EventEnvelope(
+                event_type=MEMBERSHIP_ENDED,
+                data={"workspace_id": workspace_id, "user_id": user_id},
+            ),
+            aggregate_id=user_id,
+            aggregate_type="workspace_membership",
+        )
         await self.session.commit()
+
+
+def _address(email: str) -> str:
+    return email.strip().casefold()
 
 
 class WorkspaceRepository:
@@ -204,6 +249,20 @@ class WorkspaceRepository:
                 )
             )
             .order_by(Workspace.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+    async def list_owned_or_named(
+        self, user_id: str, *, slug: str | None = None, workspace_id: str | None = None
+    ) -> list[Workspace]:
+        """Workspaces ``user_id`` owns, plus the one ``slug`` or ``workspace_id`` names."""
+        condition = Workspace.owner_user_id == user_id
+        if slug is not None:
+            condition = or_(condition, Workspace.slug == slug)
+        if workspace_id is not None:
+            condition = or_(condition, Workspace.id == workspace_id)
+        result = await self.session.execute(
+            select(Workspace).where(condition).order_by(Workspace.created_at.asc())
         )
         return list(result.scalars().all())
 

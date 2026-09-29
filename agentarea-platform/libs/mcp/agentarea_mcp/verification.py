@@ -457,6 +457,7 @@ async def verify(
                         "verify: could not connect to url endpoint: %s",
                         message,
                         extra={"instance_id": instance_id},
+                        exc_info=True,
                     )
                     message = _URL_CONNECT_FAILED
                 payload = _make_payload(
@@ -478,6 +479,7 @@ async def verify(
                         "result": "failed",
                         "error_code": "mcp_error",
                     },
+                    exc_info=True,
                 )
                 return payload
 

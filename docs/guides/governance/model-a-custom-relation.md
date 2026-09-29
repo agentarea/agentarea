@@ -178,11 +178,11 @@ cd config/auth/openfga && fga model test --tests model.fga.yaml
 relation and check it end to end. Both endpoints require workspace admin:
 
 ```bash
-curl -s -X POST "$API/v1/access-control/relationships" \
+curl -s -X POST "$API/v1/workspaces/$WORKSPACE/access-control/relationships" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"namespace":"Agent","object":"'"$AGENT_ID"'","relation":"reader","subject_id":"User:alice@example.com"}'
 
-curl -s -X POST "$API/v1/access-control/check" \
+curl -s -X POST "$API/v1/workspaces/$WORKSPACE/access-control/check" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"namespace":"Agent","object":"'"$AGENT_ID"'","relation":"read","subject_id":"User:alice@example.com"}'
 ```

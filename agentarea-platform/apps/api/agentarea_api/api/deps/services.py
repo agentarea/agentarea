@@ -16,6 +16,7 @@ from agentarea_agents.domain.interfaces import ExecutionServiceInterface
 from agentarea_common.audit.service import AuditService
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base import ReadRepositoryFactoryDep, RepositoryFactoryDep
+from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.events.broker import EventBroker
@@ -485,7 +486,7 @@ async def get_trigger_service(
                 model_instance_service=model_instance_service, secret_manager=secret_manager
             )
         except Exception as e:
-            logger.warning(f"LLM condition evaluator not available: {e}")
+            logger.warning(f"LLM condition evaluator not available: {e}", exc_info=True)
 
     # Create temporal schedule manager
     temporal_schedule_manager = None
@@ -495,7 +496,7 @@ async def get_trigger_service(
             task_queue=settings.triggers.TEMPORAL_SCHEDULE_TASK_QUEUE,
         )
     except Exception as e:
-        logger.warning(f"Temporal schedule manager not available: {e}")
+        logger.warning(f"Temporal schedule manager not available: {e}", exc_info=True)
 
     return TriggerService(
         repository_factory=repository_factory,
@@ -601,35 +602,39 @@ async def get_public_webhook_manager(
                     user_id=str(trigger_row.created_by),
                     workspace_id=str(trigger_row.workspace_id),
                 )
-                repo_factory = RepositoryFactory(session=fresh_session, user_context=ctx)
-                sec_manager = get_real_secret_manager(session=fresh_session, user_context=ctx)
+                with workspace_scope(ctx.workspace_id):
+                    repo_factory = RepositoryFactory(session=fresh_session, user_context=ctx)
+                    sec_manager = get_real_secret_manager(session=fresh_session, user_context=ctx)
 
-                svc = await get_trigger_service(repo_factory, self._event_broker, sec_manager)
-                callback = TriggerServiceWebhookCallback(svc)
-                mgr = DefaultWebhookManager(
-                    execution_callback=callback,
-                    event_broker=self._event_broker,
-                    base_url=self._settings.triggers.WEBHOOK_BASE_URL,
-                    trigger_service=svc,
-                    secret_reader=sec_manager,
-                )
-                # Pre-register the trigger so the manager doesn't need another lookup.
-                # Re-read through the workspace-scoped repository: the unscoped
-                # lookup above only established which tenant this webhook belongs to.
-                scoped_repo = repo_factory.create_repository(TriggerRepository)
-                trigger = await scoped_repo.get_by_webhook_id(webhook_id)
-                # Only a webhook trigger can be served here; a cron trigger that
-                # somehow carries a webhook_id is corrupt, not a thing to deliver to.
-                if not isinstance(trigger, WebhookTrigger):
-                    return {
-                        "status_code": 400,
-                        "body": {"status": "error", "message": f"Webhook {webhook_id} not found"},
-                    }
-                mgr._registered_webhooks[webhook_id] = trigger
+                    svc = await get_trigger_service(repo_factory, self._event_broker, sec_manager)
+                    callback = TriggerServiceWebhookCallback(svc)
+                    mgr = DefaultWebhookManager(
+                        execution_callback=callback,
+                        event_broker=self._event_broker,
+                        base_url=self._settings.triggers.WEBHOOK_BASE_URL,
+                        trigger_service=svc,
+                        secret_reader=sec_manager,
+                    )
+                    # Pre-register the trigger so the manager doesn't need another lookup.
+                    # Re-read through the workspace-scoped repository: the unscoped
+                    # lookup above only established which tenant this webhook belongs to.
+                    scoped_repo = repo_factory.create_repository(TriggerRepository)
+                    trigger = await scoped_repo.get_by_webhook_id(webhook_id)
+                    # Only a webhook trigger can be served here; a cron trigger that
+                    # somehow carries a webhook_id is corrupt, not a thing to deliver to.
+                    if not isinstance(trigger, WebhookTrigger):
+                        return {
+                            "status_code": 400,
+                            "body": {
+                                "status": "error",
+                                "message": f"Webhook {webhook_id} not found",
+                            },
+                        }
+                    mgr._registered_webhooks[webhook_id] = trigger
 
-                return await mgr.handle_webhook_request(
-                    webhook_id, method, headers, body, query_params, raw_body=raw_body
-                )
+                    return await mgr.handle_webhook_request(
+                        webhook_id, method, headers, body, query_params, raw_body=raw_body
+                    )
 
         async def is_healthy(self):
             return True
@@ -675,7 +680,9 @@ async def get_trigger_health_check(
             task_queue=settings.triggers.TEMPORAL_SCHEDULE_TASK_QUEUE,
         )
     except Exception as e:
-        logger.warning(f"Temporal schedule manager not available for health check: {e}")
+        logger.warning(
+            f"Temporal schedule manager not available for health check: {e}", exc_info=True
+        )
 
     return TriggerSystemHealthCheck(
         trigger_repository=trigger_repository,

@@ -84,7 +84,7 @@ class GoalProgressEvaluator:
             }
 
         except Exception as e:
-            logger.error(f"Failed to evaluate goal progress: {e}")
+            logger.exception(f"Failed to evaluate goal progress: {e}")
             return {
                 "goal_achieved": False,
                 "final_response": None,

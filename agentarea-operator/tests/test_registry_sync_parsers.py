@@ -120,6 +120,13 @@ class TestAgentParser:
         items = parse_source("agents", {"agents": [{"name": "X"}]})
         assert items[0]["external_id"] == "X"
 
+    def test_preset_skills_and_triggers_reach_the_spec(self):
+        trigger = {"name": "Heartbeat", "trigger_type": "cron", "cron_expression": "*/30 * * * *"}
+        entry = {"name": "Claw", "skills": ["brainstorming--obra-superpowers"], "triggers": [trigger]}
+        (item,) = parse_source("agents", {"agents": [entry]})
+        assert item["spec"]["skills"] == ["brainstorming--obra-superpowers"]
+        assert item["spec"]["triggers"] == [trigger]
+
 
 class TestMCPServerParser:
     def test_agentarea_flattened_format_parses(self):

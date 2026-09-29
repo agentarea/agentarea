@@ -13,7 +13,7 @@ const NotFound = () => {
       showSidebarTrigger={false}
       header={{
         breadcrumb: [
-          { label: "Home", href: "/workplace" },
+          { label: "Home", href: "/" },
           { label: t("title") },
         ],
       }}

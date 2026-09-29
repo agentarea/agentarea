@@ -63,10 +63,13 @@ def resolve_graph_client() -> tuple[GraphClient, str] | None:
     repository would mean the process started without one, so callers treat it
     as a misconfiguration rather than as permission to skip the grant.
     """
-    from agentarea_common.config import get_settings
+    from agentarea_common.config.access_control import AccessControlSettings
     from agentarea_common.di.container import get_container
 
-    backend = get_settings().access_control.ACCESS_CONTROL_BACKEND
+    # Only the backend choice, not the whole application config: a process that
+    # creates resources without running workflows (the catalog reconcile) has
+    # no Temporal settings, and the full Settings refuses to build without them.
+    backend = AccessControlSettings().ACCESS_CONTROL_BACKEND
     if backend == "openfga":
         client_type: type[GraphClient] = OpenFGAClient
         backend_name = "OpenFGA"

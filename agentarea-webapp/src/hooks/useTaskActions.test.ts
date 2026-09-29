@@ -27,7 +27,7 @@ describe("createFollowupAgentTask", () => {
 
     await expect(
       createFollowupAgentTask("agent-1", "Analyze", [file])
-    ).resolves.toBe("task-2");
+    ).resolves.toEqual({ data: "task-2" });
 
     expect(mockedUploadAttachments).toHaveBeenCalledWith([file]);
     const [, init] = fetchMock.mock.calls[0] as unknown as [
@@ -84,9 +84,43 @@ describe("createFollowupAgentTask", () => {
       vi.fn(async () => new Response(stream, { status: 200 }))
     );
 
-    await expect(createFollowupAgentTask("agent-1", "Analyze")).resolves.toBe(
-      "split-task"
-    );
+    await expect(
+      createFollowupAgentTask("agent-1", "Analyze")
+    ).resolves.toEqual({ data: "split-task" });
     expect(cancelled).toBe(true);
+  });
+
+  it("returns the reason from an error event instead of no task", async () => {
+    mockedUploadAttachments.mockResolvedValue([]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            'event: connected\ndata: {}\n\nevent: error\ndata: {"error":"Agent model is not configured"}\n\n',
+            { status: 200 }
+          )
+      )
+    );
+
+    await expect(createFollowupAgentTask("agent-1", "Analyze")).resolves.toEqual({
+      error: { error: "Agent model is not configured" },
+    });
+  });
+
+  it("returns the API body and status when task creation is refused", async () => {
+    mockedUploadAttachments.mockResolvedValue([]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response('{"detail":"Task policy rejected"}', { status: 422 })
+      )
+    );
+
+    await expect(createFollowupAgentTask("agent-1", "Analyze")).resolves.toEqual({
+      error: { detail: "Task policy rejected" },
+      status: 422,
+    });
   });
 });

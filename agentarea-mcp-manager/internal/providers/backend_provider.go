@@ -5,16 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/agentarea/mcp-manager/internal/mcpbase"
 	"github.com/agentarea/mcp-manager/internal/mcpspec"
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/secrets"
-)
-
-// sandboxImage / sandboxPort mirror the constants in internal/container.
-// Duplicated to avoid an import cycle (container → models → providers).
-const (
-	sandboxImage = "agentarea/mcp-bridge:latest"
-	sandboxPort  = 8080
 )
 
 // BackendInstanceSpec defines the specification for creating an instance
@@ -124,9 +118,9 @@ func (p *BackendProvider) DeleteInstance(ctx context.Context, instanceID, name s
 
 // convertToInstanceSpec converts an MCPServerInstance to a backend InstanceSpec.
 //
-// For command-type instances we wrap the stdio command in mcp-bridge (same as
-// the docker-mode handler does). Otherwise deployment would be created with
-// empty image + port=0 and rejected by the K8s apiserver.
+// For command-type instances we run the stdio command on the mcp-base image
+// (same as the docker-mode handler does). Otherwise deployment would be
+// created with empty image + port=0 and rejected by the K8s apiserver.
 func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstance) *BackendInstanceSpec {
 	// The tier is deliberately left empty: the backend then applies the
 	// operator's DEFAULT_ISOLATION_TIER. Pinning "untrusted" here asked every MCP
@@ -144,12 +138,12 @@ func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstan
 	specType, _ := jsonSpec["type"].(string)
 
 	if specType == "command" {
-		// command-type: always wraps stdio command with mcp-bridge.
+		// command-type: the stdio command runs behind mcp-base's bridge.
 		cmd, _ := jsonSpec["command"].(string)
-		spec.Image = sandboxImage
-		spec.Port = sandboxPort
-		// mcp-bridge's ENTRYPOINT is `python bridge.py`. The stdio command
-		// + args are appended as CLI arguments (K8s container.args).
+		spec.Image = mcpbase.Image()
+		spec.Port = mcpbase.Port
+		// mcp-base's ENTRYPOINT is its bridge; the stdio command + args are
+		// its arguments (K8s container.args).
 		spec.Command = append([]string{cmd}, mcpspec.StringList(jsonSpec["args"])...)
 	} else {
 		// docker-type: use the image directly — it must serve HTTP natively.

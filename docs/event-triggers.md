@@ -402,7 +402,7 @@ class TriggerExecution(BaseModel):
 
 ```bash
 # List trigger executions
-GET /v1/triggers/{trigger_id}/executions
+GET /v1/workspaces/{workspace}/triggers/{trigger_id}/executions
 
 # Get execution details
 GET /v1/triggers/{trigger_id}/executions/{execution_id}

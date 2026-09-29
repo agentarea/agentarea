@@ -2,10 +2,12 @@
 
 import logging
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from agentarea_common.money import ZERO
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -70,14 +72,14 @@ class WalletRepository(WorkspaceScopedRepository[AgentWallet]):
         for wallet in wallets:
             period_start = daily_start if wallet.service_budget_period == "daily" else monthly_start
             spent_q = (
-                select(func.coalesce(func.sum(PaymentRecord.amount_usd), 0.0))
+                select(func.coalesce(func.sum(PaymentRecord.amount_usd), ZERO))
                 .where(PaymentRecord.agent_id == str(wallet.agent_id))
                 .where(PaymentRecord.status.in_(SETTLED_PAYMENT_STATUSES))
                 .where(PaymentRecord.created_at >= period_start)
                 .where(PaymentRecord.workspace_id == wallet.workspace_id)
             )
-            spent = float((await self.session.execute(spent_q)).scalar() or 0.0)
-            if spent >= float(wallet.service_budget_usd):
+            spent = (await self.session.execute(spent_q)).scalar_one()
+            if spent >= wallet.service_budget_usd:
                 exhausted.append(wallet)
         return exhausted
 
@@ -143,7 +145,7 @@ class PaymentRecordRepository(WorkspaceScopedRepository[PaymentRecord]):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def sum_by_execution(self, agent_id: str, execution_id: str) -> float:
+    async def sum_by_execution(self, agent_id: str, execution_id: str) -> Decimal:
         """Return total amount_usd spent by an agent within an execution.
 
         Args:
@@ -154,16 +156,16 @@ class PaymentRecordRepository(WorkspaceScopedRepository[PaymentRecord]):
             Sum of amount_usd for settled payments in the execution.
         """
         query = (
-            select(func.coalesce(func.sum(PaymentRecord.amount_usd), 0.0))
+            select(func.coalesce(func.sum(PaymentRecord.amount_usd), ZERO))
             .where(PaymentRecord.agent_id == agent_id)
             .where(PaymentRecord.execution_id == execution_id)
             .where(PaymentRecord.status.in_(SETTLED_PAYMENT_STATUSES))
             .where(self._get_workspace_filter())
         )
         result = await self.session.execute(query)
-        return float(result.scalar() or 0.0)
+        return result.scalar_one()
 
-    async def sum_by_period(self, agent_id: str, budget_period: str) -> float:
+    async def sum_by_period(self, agent_id: str, budget_period: str) -> Decimal:
         """Return total amount_usd spent by an agent in the current budget period.
 
         Args:
@@ -174,7 +176,7 @@ class PaymentRecordRepository(WorkspaceScopedRepository[PaymentRecord]):
             Sum of amount_usd for settled payments in the current period.
         """
         query = (
-            select(func.coalesce(func.sum(PaymentRecord.amount_usd), 0.0))
+            select(func.coalesce(func.sum(PaymentRecord.amount_usd), ZERO))
             .where(PaymentRecord.agent_id == agent_id)
             .where(PaymentRecord.status.in_(SETTLED_PAYMENT_STATUSES))
             .where(self._get_workspace_filter())
@@ -189,4 +191,4 @@ class PaymentRecordRepository(WorkspaceScopedRepository[PaymentRecord]):
             query = query.where(PaymentRecord.created_at >= period_start)
 
         result = await self.session.execute(query)
-        return float(result.scalar() or 0.0)
+        return result.scalar_one()

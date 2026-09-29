@@ -45,6 +45,9 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
     # Each entry: {"name": "Header-Name", "secret": bool, "value": "plaintext-or-null"}
     # Secret header values are stored in the secret manager, not here.
     custom_headers: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    # Names of the ``{placeholders}`` in base_url's path. Their values are
+    # stored in the secret manager, not here.
+    url_variables: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     available_tools: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, nullable=False, default=list
     )
@@ -61,6 +64,7 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
         registry_item_id: UUID | None = None,
         allowed_auth_origins: list[str] | None = None,
         custom_headers: list[dict[str, Any]] | None = None,
+        url_variables: list[str] | None = None,
         available_tools: list[dict[str, Any]] | None = None,
         status: str = "active",
         **kwargs: Any,
@@ -75,5 +79,6 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
         self.registry_item_id = registry_item_id
         self.allowed_auth_origins = allowed_auth_origins
         self.custom_headers = custom_headers
+        self.url_variables = url_variables
         self.available_tools = available_tools or []
         self.status = status

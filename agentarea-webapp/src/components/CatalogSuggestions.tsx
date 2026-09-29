@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/WorkspaceLink";
 import { ArrowRight } from "lucide-react";
-import type { CatalogType } from "@/app/(main)/bundles/components/catalog-data";
+import type { CatalogType } from "@/app/w/[workspace]/(main)/bundles/components/catalog-data";
 import EntityMark from "@/components/EntityMark";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";

@@ -23,17 +23,18 @@ from agentarea_governance.domain.rules import (
     PolicyEffect,
     PolicyRule,
     PolicySubjectType,
+    assert_enforceable,
 )
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_wallet.infrastructure.repository import WalletRepository
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import Date, Numeric, case, cast, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-router = APIRouter(prefix="/workspace", tags=["dashboard"])
+router = APIRouter(tags=["dashboard"])
 
 DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 
@@ -415,7 +416,7 @@ class WorkspaceSettingsResponse(BaseModel):
 
 
 class WorkspaceSettingsUpdate(BaseModel):
-    monthly_cap_usd: float | None
+    monthly_cap_usd: float | None = Field(ge=0, allow_inf_nan=False)
 
 
 @router.get(
@@ -468,6 +469,17 @@ async def update_workspace_settings(
         return WorkspaceSettingsResponse(monthly_cap_usd=None)
 
     params = {"amount_usd": str(to_money(payload.monthly_cap_usd)), "period": "month"}
+    cap = PolicyRule(
+        subject_type=PolicySubjectType.WORKSPACE,
+        subject_id=workspace_id,
+        target="spend",
+        effect=PolicyEffect.CAP,
+        params=params,
+    )
+    try:
+        assert_enforceable(cap)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if existing:
         first, *rest = existing
         if first.id is not None:
@@ -476,15 +488,7 @@ async def update_workspace_settings(
             if rule.id is not None:
                 await repo.delete(rule.id)
     else:
-        await repo.create(
-            PolicyRule(
-                subject_type=PolicySubjectType.WORKSPACE,
-                subject_id=workspace_id,
-                target="spend",
-                effect=PolicyEffect.CAP,
-                params=params,
-            )
-        )
+        await repo.create(cap)
 
     return WorkspaceSettingsResponse(
         monthly_cap_usd=float(to_money(payload.monthly_cap_usd)),

@@ -3,15 +3,17 @@ import { useState } from "react";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { IntlProvider } from "@/test/intl";
 import { installRadixJsdomStubs } from "@/test/radix-jsdom";
 import { SecretSelect } from "./SecretSelect";
 
 const createSecretAction = vi.fn();
 
-vi.mock("@/app/(main)/secrets/actions", () => ({
+vi.mock("@/app/w/[workspace]/(main)/secrets/actions", () => ({
   createSecretAction: (...args: unknown[]) => createSecretAction(...args),
 }));
 vi.mock("next/navigation", () => ({
+  useParams: () => ({}),
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
@@ -48,7 +50,7 @@ describe("SecretSelect", () => {
       secret: { id: "fresh-id", name: "fresh-secret" },
     });
     const user = userEvent.setup();
-    render(<Harness />);
+    render(<Harness />, { wrapper: IntlProvider });
 
     await user.click(screen.getByRole("combobox"));
     await user.click(await screen.findByText("New secret"));
@@ -95,7 +97,7 @@ describe("SecretSelect", () => {
       );
     }
 
-    render(<RefetchingHarness />);
+    render(<RefetchingHarness />, { wrapper: IntlProvider });
     await user.click(screen.getByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: "New secret" }));
     await screen.findByRole("dialog");

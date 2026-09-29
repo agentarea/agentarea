@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useWorkspaceSlug } from "@/hooks/useWorkspaceNavigation";
 
 /**
  * Where this deployment's billing page lives, or "" when it has none.
@@ -18,9 +19,21 @@ export function useBillingUrl(): string {
   const [url, setUrl] = useState("");
 
   useEffect(() => {
-    const env = (window as { __ENV__?: { CLIENT_BILLING_URL?: string } }).__ENV__;
+    const env = (window as { __ENV__?: { CLIENT_BILLING_URL?: string } })
+      .__ENV__;
     setUrl(env?.CLIENT_BILLING_URL?.trim() ?? "");
   }, []);
 
   return url;
+}
+
+/**
+ * The billing page for the workspace this page belongs to
+ * (`{billing}/{slug}`), or "" when billing is off or the page has no workspace.
+ */
+export function useWorkspaceBillingUrl(): string {
+  const billingUrl = useBillingUrl();
+  const slug = useWorkspaceSlug();
+  if (!billingUrl || !slug) return "";
+  return `${billingUrl.replace(/\/+$/, "")}/${encodeURIComponent(slug)}`;
 }

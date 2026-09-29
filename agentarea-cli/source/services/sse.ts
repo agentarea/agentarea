@@ -1,4 +1,5 @@
-import {getApiBaseUrl, resolveToken} from './apiRuntime.js';
+import {fillWorkspace} from '@agentarea/api-client';
+import {getApiBaseUrl, requireWorkspace, resolveToken} from './apiRuntime.js';
 import {SSEError} from '../utils/error.js';
 
 /**
@@ -154,14 +155,17 @@ async function* openSseRequest(
 	}
 
 	const baseUrl = getApiBaseUrl().replace(/\/$/, '');
-	const response = await fetch(`${baseUrl}${path}`, {
-		...init,
-		headers: {
-			...init.headers,
-			Authorization: `Bearer ${token}`,
-			Accept: 'text/event-stream',
+	const response = await fetch(
+		fillWorkspace(`${baseUrl}${path}`, requireWorkspace()),
+		{
+			...init,
+			headers: {
+				...init.headers,
+				Authorization: `Bearer ${token}`,
+				Accept: 'text/event-stream',
+			},
 		},
-	});
+	);
 
 	if (!response.ok) {
 		throw new SSEError(
@@ -193,7 +197,7 @@ export function streamTaskEvents(
 	const query = options.includeChunks === false ? '?include_chunks=false' : '';
 	return filterTaskEvents(
 		openSseRequest(
-			`/v1/agents/${agentId}/tasks/${taskId}/events/stream${query}`,
+			`/v1/workspaces/{workspace}/agents/${agentId}/tasks/${taskId}/events/stream${query}`,
 			{signal: options.signal},
 		),
 	);
@@ -209,7 +213,7 @@ export function submitTaskStream(
 ): AsyncGenerator<TaskEvent> {
 	// Task creation is JSON; the CLI sends no attachments.
 	return filterTaskEvents(
-		openSseRequest(`/v1/agents/${agentId}/tasks/`, {
+		openSseRequest(`/v1/workspaces/{workspace}/agents/${agentId}/tasks/`, {
 			method: 'POST',
 			headers: {'Content-Type': 'application/json'},
 			body: JSON.stringify({parameters: {}, ...body}),

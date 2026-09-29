@@ -186,7 +186,7 @@ class DefaultWebhookManager(WebhookManager):
                 logger.warning(f"Webhook provider config not found at {config_path}")
                 self.providers = {}
         except Exception as e:
-            logger.error(f"Failed to load webhook provider config: {e}")
+            logger.error(f"Failed to load webhook provider config: {e}", exc_info=True)
             self.providers = {}
 
     def _extract_value_by_path(self, data: Any, path: str) -> Any:
@@ -287,7 +287,9 @@ class DefaultWebhookManager(WebhookManager):
                                 repo.user_context.user_id = db_trigger.created_by
                         logger.info(f"Loaded trigger from DB for webhook {webhook_id}")
                 except Exception as db_err:
-                    logger.warning(f"DB lookup failed for webhook {webhook_id}: {db_err}")
+                    logger.warning(
+                        f"DB lookup failed for webhook {webhook_id}: {db_err}", exc_info=True
+                    )
             if not trigger:
                 error_msg = f"Webhook {webhook_id} not found"
                 logger.warning(error_msg, webhook_id=webhook_id)
@@ -346,7 +348,7 @@ class DefaultWebhookManager(WebhookManager):
                     return await self.get_webhook_response(False, "Request validation failed")
             except Exception as validation_error:
                 error_msg = f"Validation error: {validation_error}"
-                logger.error(error_msg, webhook_id=webhook_id, trigger_id=trigger.id)
+                logger.error(error_msg, webhook_id=webhook_id, trigger_id=trigger.id, exc_info=True)
                 return await self.get_webhook_response(False, "Request validation failed")
 
             # Create request data
@@ -374,6 +376,7 @@ class DefaultWebhookManager(WebhookManager):
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
                     webhook_type=trigger.webhook_type,
+                    exc_info=True,
                 )
                 return await self.get_webhook_response(False, "Failed to parse request data")
 
@@ -431,13 +434,16 @@ class DefaultWebhookManager(WebhookManager):
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
                     execution_time_ms=execution_time_ms,
+                    exc_info=True,
                 )
                 return await self.get_webhook_response(False, "Webhook execution failed")
 
         except Exception as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
             error_msg = f"Unexpected error processing webhook: {e}"
-            logger.error(error_msg, webhook_id=webhook_id, execution_time_ms=execution_time_ms)
+            logger.error(
+                error_msg, webhook_id=webhook_id, execution_time_ms=execution_time_ms, exc_info=True
+            )
             return await self.get_webhook_response(False, "Internal server error")
 
     async def validate_webhook_method(self, trigger: WebhookTrigger, method: str) -> bool:
@@ -508,6 +514,7 @@ class DefaultWebhookManager(WebhookManager):
                             webhook_id=trigger.webhook_id,
                             trigger_id=trigger.id,
                             body_type=type(body).__name__,
+                            exc_info=True,
                         )
                         return False
 
@@ -521,6 +528,7 @@ class DefaultWebhookManager(WebhookManager):
                 f"Error applying validation rules: {e}",
                 webhook_id=trigger.webhook_id,
                 trigger_id=trigger.id,
+                exc_info=True,
             )
             raise WebhookValidationError(
                 f"Validation rule processing failed: {e}",
@@ -569,7 +577,7 @@ class DefaultWebhookManager(WebhookManager):
             # Basic health check - could be extended with more sophisticated checks
             return True
         except Exception as e:
-            logger.error(f"Webhook manager health check failed: {e}")
+            logger.error(f"Webhook manager health check failed: {e}", exc_info=True)
             return False
 
     def _extract_event_type(
@@ -715,7 +723,7 @@ class DefaultWebhookManager(WebhookManager):
             return parsed_data
 
         except Exception as e:
-            logger.error(f"Error parsing mapped webhook: {e}")
+            logger.error(f"Error parsing mapped webhook: {e}", exc_info=True)
             return {**base_data, "body": request_data.body, "parse_error": str(e)}
 
     async def _parse_telegram_webhook(
@@ -809,7 +817,7 @@ class DefaultWebhookManager(WebhookManager):
             return parsed_data
 
         except Exception as e:
-            logger.error(f"Error parsing Telegram webhook: {e}")
+            logger.error(f"Error parsing Telegram webhook: {e}", exc_info=True)
             return {**base_data, "body": request_data.body, "parse_error": str(e)}
 
     async def _parse_slack_webhook(
@@ -900,7 +908,7 @@ class DefaultWebhookManager(WebhookManager):
             return parsed_data
 
         except Exception as e:
-            logger.error(f"Error parsing Slack webhook: {e}")
+            logger.error(f"Error parsing Slack webhook: {e}", exc_info=True)
             return {**base_data, "body": request_data.body, "parse_error": str(e)}
 
     async def _parse_github_webhook(
@@ -1011,7 +1019,7 @@ class DefaultWebhookManager(WebhookManager):
             return parsed_data
 
         except Exception as e:
-            logger.error(f"Error parsing GitHub webhook: {e}")
+            logger.error(f"Error parsing GitHub webhook: {e}", exc_info=True)
             return {**base_data, "body": request_data.body, "parse_error": str(e)}
 
     async def _parse_discord_webhook(
@@ -1098,7 +1106,7 @@ class DefaultWebhookManager(WebhookManager):
 
             return parsed_data
         except Exception as e:
-            logger.error(f"Error parsing Discord webhook: {e}")
+            logger.error(f"Error parsing Discord webhook: {e}", exc_info=True)
             return {**base_data, "body": request_data.body, "parse_error": str(e)}
 
     async def _parse_linear_webhook(
@@ -1122,7 +1130,7 @@ class DefaultWebhookManager(WebhookManager):
             }
             return parsed_data
         except Exception as e:
-            logger.error(f"Error parsing Linear webhook: {e}")
+            logger.error(f"Error parsing Linear webhook: {e}", exc_info=True)
             return {**base_data, "body": request_data.body, "parse_error": str(e)}
 
     async def _parse_gmail_webhook(
@@ -1162,7 +1170,7 @@ class DefaultWebhookManager(WebhookManager):
 
             return parsed_data
         except Exception as e:
-            logger.error(f"Error parsing Gmail webhook: {e}")
+            logger.error(f"Error parsing Gmail webhook: {e}", exc_info=True)
             return {**base_data, "body": request_data.body, "parse_error": str(e)}
 
     async def _parse_email_webhook(
@@ -1189,7 +1197,10 @@ class DefaultWebhookManager(WebhookManager):
         try:
             message = normalize_email(body, field_map)
         except ValueError as exc:
-            logger.error(f"Unparseable inbound email on webhook {request_data.webhook_id}: {exc}")
+            logger.error(
+                f"Unparseable inbound email on webhook {request_data.webhook_id}: {exc}",
+                exc_info=True,
+            )
             return {**base_data, "body": request_data.body, "parse_error": str(exc)}
 
         return {
@@ -1245,5 +1256,5 @@ class DefaultWebhookManager(WebhookManager):
 
             return parsed_data
         except Exception as e:
-            logger.error(f"Error parsing Teams webhook: {e}")
+            logger.error(f"Error parsing Teams webhook: {e}", exc_info=True)
             return {**base_data, "body": request_data.body, "parse_error": str(e)}

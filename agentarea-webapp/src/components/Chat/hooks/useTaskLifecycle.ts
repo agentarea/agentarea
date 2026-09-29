@@ -4,6 +4,8 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useWorkspaceSlug } from "@/hooks/useWorkspaceNavigation";
+import { withWorkspaceQuery } from "@/lib/workspaces";
 
 export interface UseTaskLifecycleOptions {
   /**
@@ -112,8 +114,12 @@ export function useTaskLifecycle(
   }, [onTaskFinished]);
 
   // Construct SSE URL
+  const workspaceSlug = useWorkspaceSlug();
   const sseUrl = currentTaskId
-    ? `/api/sse/agents/${agentId}/tasks/${currentTaskId}/events/stream`
+    ? withWorkspaceQuery(
+        `/api/sse/agents/${agentId}/tasks/${currentTaskId}/events/stream`,
+        workspaceSlug
+      )
     : null;
 
   return {

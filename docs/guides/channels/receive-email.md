@@ -47,7 +47,7 @@ mail server) at the webhook below and owns its own namespace. See
 differently, so this is configuration rather than a per-vendor integration.
 
 ```bash
-curl -s -X POST "$AGENTAREA_URL/v1/triggers/" \
+curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -79,7 +79,9 @@ curl -s -X POST "$AGENTAREA_URL/v1/triggers/" \
 ```
 
 The response carries `webhook_id`. The endpoint is
-`POST /v1/webhooks/{webhook_id}`.
+`POST /webhooks/{webhook_id}` — unlike the rest of the API it is not
+workspace-scoped in the path; the trigger row it targets carries its own
+workspace.
 
 A path segment is not a secret. Set `validation_rules.signing_secret` to the
 secret your provider signs with, and the request is rejected unless the HMAC
@@ -115,7 +117,7 @@ Polling is a cron trigger with the `imap` extractor. The credential goes to the
 secret store, never into the trigger's config column.
 
 ```bash
-curl -s -X POST "$AGENTAREA_URL/v1/triggers/" \
+curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -173,7 +175,7 @@ message to a webhook. No provider account, no public DNS:
 services:
   mailpit:
     environment:
-      MP_WEBHOOK_URL: http://app:8000/v1/webhooks/YOUR_WEBHOOK_ID
+      MP_WEBHOOK_URL: http://app:8000/webhooks/YOUR_WEBHOOK_ID
 ```
 
 mailpit's payload maps with:

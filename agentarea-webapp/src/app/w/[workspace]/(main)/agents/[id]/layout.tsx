@@ -1,0 +1,68 @@
+import { getTranslations } from "next-intl/server";
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { getAgent, listAgentTasks, type TaskResponse } from "@/lib/api";
+import { requireApiData } from "@/lib/server-resource";
+import { ChatProvider } from "../shared/ChatContext";
+import { isRunningTask } from "../shared/taskStatus";
+import AgentHeaderControls from "./components/AgentHeaderControls";
+import AgentHeaderTabs from "./components/AgentHeaderTabs";
+
+interface Props {
+  params: Promise<{ id: string }>;
+  children: React.ReactNode;
+}
+
+export default async function AgentLayout({ params, children }: Props) {
+  const { id } = await params;
+  const agentResponse = await getAgent(id);
+  const t = await getTranslations("AgentsPage");
+  const agent = requireApiData(agentResponse, "agent");
+  // Keep all in-page navigation on the slug when available, so opening by slug
+  // doesn't bounce back to the id once a tab/breadcrumb is clicked.
+  const agentRef = agent.slug || agent.id;
+  // Catalog (built-in, not-yet-forked) agents have no tasks/settings/payments to
+  // operate on — only the read-only preview. Hide the operational tabs.
+  const isCatalog = Boolean((agent as { is_catalog?: boolean }).is_catalog);
+
+  // In-progress count for the Tasks tab pill. Best-effort: a failed lookup
+  // just hides the number.
+  let runningCount = 0;
+  if (!isCatalog) {
+    const tasksRes = await listAgentTasks(agent.id).catch((error: unknown) => {
+      console.error("Failed to load agent tasks for the tab count", error);
+      return null;
+    });
+    if (tasksRes?.error) {
+      console.error(
+        "Failed to load agent tasks for the tab count",
+        tasksRes.error
+      );
+    }
+    const tasks = (tasksRes?.data as TaskResponse[] | null | undefined) ?? [];
+    runningCount = tasks.filter(isRunningTask).length;
+  }
+
+  return (
+    <ChatProvider>
+      <ContentBlock
+        header={{
+          breadcrumb: [
+            { label: t("browseAgents"), href: "/agents" },
+            { label: agent.name, href: `/agents/${agentRef}` },
+          ],
+          controls: (
+            <AgentHeaderControls agentRef={agentRef} isCatalog={isCatalog} />
+          ),
+        }}
+        className="p-0 h-full"
+        subheader={
+          isCatalog ? undefined : (
+            <AgentHeaderTabs agentId={agentRef} runningCount={runningCount} />
+          )
+        }
+      >
+        {children}
+      </ContentBlock>
+    </ChatProvider>
+  );
+}

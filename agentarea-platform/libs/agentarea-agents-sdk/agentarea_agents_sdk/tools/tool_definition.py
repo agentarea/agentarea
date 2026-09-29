@@ -33,6 +33,10 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 # distinction has to be declared rather than inferred from a namespace list.
 ToolPlane = Literal["runtime", "build", "operate", "observe", "govern", "federate"]
 
+# ``group`` — toolsets switched on and off together because they only work as a
+# set. The UI renders one switch per group.
+ToolGroup = Literal["sandbox"]
+
 # ``effect`` — per tool method. ``privileged`` is what changes someone's
 # rights, limits, or reach, which is not the same as merely writing data.
 ToolEffect = Literal["read", "write", "destructive", "privileged"]
@@ -84,7 +88,7 @@ class ToolsetMetadata(BaseModel):
     description: str = ""
     category: str = ""
     plane: ToolPlane | None = None
-    enabled_by_default: bool = False
+    group: ToolGroup | None = None
     requires_user_confirmation: bool = False
 
 
@@ -100,15 +104,22 @@ def toolset(
     description: str = "",
     category: str = "",
     plane: ToolPlane | None = None,
-    enabled_by_default: bool = False,
+    group: ToolGroup | None = None,
     requires_user_confirmation: bool = False,
     register: bool = True,
 ) -> Callable[[type], type]:
     """Stamp ``ToolsetMetadata`` on a Toolset subclass and (by default) register it.
 
     Args:
+        namespace: Registry key and the prefix of every tool name in the toolset.
+        display_name: Human-readable name shown in the UI.
+        description: What the toolset is for, shown in the UI and catalog.
+        category: Grouping used by the catalog.
         plane: Which surface this toolset belongs to — the axis a split into
             separate MCP servers would cut along.
+        group: Toolsets that only make sense together and are switched on and off
+            as one (``sandbox``: shell and the file toolsets share one filesystem).
+        requires_user_confirmation: Whether its tools ask a human before running.
         register: If False, only stamps metadata without adding the class to the
             global lookup registry. Use when the class shares a ``namespace`` with
             another implementation that should win the lookup. (Example: the
@@ -116,14 +127,13 @@ def toolset(
             ``TriggersAgentToolset`` both manage triggers but expose different
             surfaces; the agent variant owns the namespace in the registry.)
     """
-
     meta = ToolsetMetadata(
         namespace=namespace,
         display_name=display_name,
         description=description,
         category=category,
         plane=plane,
-        enabled_by_default=enabled_by_default,
+        group=group,
         requires_user_confirmation=requires_user_confirmation,
     )
 
@@ -169,7 +179,6 @@ def build_method_schema(method: Callable) -> dict[str, Any]:
       that primitives, ``BaseModel`` fields, ``list``/``dict``/``Literal`` and
       ``Optional`` types all render correctly via ``model_json_schema()``.
     """
-
     sig = inspect.signature(method)
     try:
         hints = get_type_hints(method)

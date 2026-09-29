@@ -24,6 +24,7 @@ from typing import Any
 from uuid import UUID
 
 import yaml
+from agentarea_common.money import to_optional_money
 from agentarea_common.utils.slug import generate_slug
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
 
@@ -294,9 +295,7 @@ class RegistryService:
             version=version,
             spec=item_spec,
             tags=item_tags,
-            category=facets.category,
-            sort_key=facets.sort_key,
-            featured=facets.featured,
+            **facets._asdict(),
             # A managed registry has no source order to take a position from,
             # so an unranked publication goes to the end rather than tying with
             # the existing catalog and jumping it on the alphabetical tiebreak.
@@ -339,11 +338,7 @@ class RegistryService:
         spec = fields.get("spec", item.spec)
         tags = fields.get("tags", item.tags)
         facets = derive_facets(registry.registry_type, name, spec, tags)
-        fields.update(
-            category=facets.category,
-            sort_key=facets.sort_key,
-            featured=facets.featured,
-        )
+        fields.update(facets._asdict())
         updated = await self.item_repo.update(item_id, **fields)
         if updated is None:  # Defensive against a concurrent delete.
             raise CatalogItemNotFoundError(f"Catalog item {item_id} not found")
@@ -466,10 +461,8 @@ class RegistryService:
                             version=item_data.get("version"),
                             spec=item_data.get("spec", {}),
                             tags=item_data.get("tags", []),
-                            category=facets.category,
-                            sort_key=facets.sort_key,
                             recommendation_rank=item_data.get("recommendation_rank", 0),
-                            featured=facets.featured,
+                            **facets._asdict(),
                         )
                         try:
                             entity_id = await self._create_entity(
@@ -558,7 +551,7 @@ class RegistryService:
                 await self.update_item_spec(item.id)
                 updated += 1
             except Exception as e:
-                logger.warning(f"Failed to update {item.name}: {e}")
+                logger.warning(f"Failed to update {item.name}: {e}", exc_info=True)
                 errors += 1
         return {"updated": updated, "errors": errors}
 
@@ -712,7 +705,7 @@ class RegistryService:
         if conn_type == "docker":
             docker_image_url = spec.get("image", "")
         elif conn_type == "command":
-            docker_image_url = "agentarea/mcp-bridge:latest"
+            docker_image_url = "agentarea/agentarea-mcp-base"
             command = spec.get("command", "")
             args = spec.get("args", [])
             cmd = [command, *args] if command else None
@@ -813,8 +806,8 @@ class RegistryService:
             description=item.description,
             context_window=context_window,
             max_output_tokens=spec.get("max_output_tokens"),
-            input_cost_per_token=spec.get("input_cost_per_token"),
-            output_cost_per_token=spec.get("output_cost_per_token"),
+            input_cost_per_token=to_optional_money(spec.get("input_cost_per_token")),
+            output_cost_per_token=to_optional_money(spec.get("output_cost_per_token")),
             supports_function_calling=spec.get("supports_function_calling", False),
             is_active=spec.get("is_active", True),
         )
@@ -1271,7 +1264,10 @@ class RegistryService:
                         "preferred_models": _agent_preferred_models(entry),
                         "tools": tools,
                         "planning": entry.get("planning", False),
-                        "events_config": entry.get("events_config"),
+                        # Presets name catalog skills by their stable key and
+                        # carry trigger templates; see the agent presets API.
+                        "skills": entry.get("skills") or [],
+                        "triggers": entry.get("triggers") or [],
                     },
                     "tags": entry.get("tags", []),
                     **rank_fields(entry),

@@ -16,7 +16,10 @@ export async function GET(request: NextRequest) {
   const consentChallenge = searchParams.get("consent_challenge");
 
   if (!consentChallenge) {
-    return NextResponse.json({ error: "Missing consent_challenge" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing consent_challenge" },
+      { status: 400 }
+    );
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";

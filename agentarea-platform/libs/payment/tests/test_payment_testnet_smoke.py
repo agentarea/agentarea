@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -60,7 +61,7 @@ async def test_x402_base_sepolia_smoke():
         headers={},
         body=body,
         response_headers=dict(first.headers),
-        budget_remaining=float(os.getenv("AGENTAREA_X402_TESTNET_BUDGET", "1.0")),
+        budget_remaining=Decimal(os.getenv("AGENTAREA_X402_TESTNET_BUDGET", "1.0")),
     )
 
     assert result.success is True, result.error
@@ -85,7 +86,7 @@ async def test_mpp_tempo_testnet_smoke():
 
     client = MPPPaymentClient(
         tempo_key=tempo_key,
-        session_budget_usd=float(os.getenv("AGENTAREA_MPP_TESTNET_BUDGET", "1.0")),
+        session_budget_usd=Decimal(os.getenv("AGENTAREA_MPP_TESTNET_BUDGET", "1.0")),
         chain_id=int(os.getenv("AGENTAREA_MPP_CHAIN_ID"))
         if os.getenv("AGENTAREA_MPP_CHAIN_ID")
         else None,
@@ -100,7 +101,7 @@ async def test_mpp_tempo_testnet_smoke():
         body=body,
         response_headers=dict(first.headers),
         response_body=first.text,
-        budget_remaining=float(os.getenv("AGENTAREA_MPP_TESTNET_BUDGET", "1.0")),
+        budget_remaining=Decimal(os.getenv("AGENTAREA_MPP_TESTNET_BUDGET", "1.0")),
     )
 
     assert result.success is True, result.error

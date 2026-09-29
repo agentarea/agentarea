@@ -145,6 +145,8 @@ select = [
     "T20", # flake8-print
     "PT",  # flake8-pytest-style
     "RUF", # Ruff-specific rules
+    "TRY400", # logger.error in an except block: use logger.exception
+    "LOG", # flake8-logging (exc_info misuse, root-logger calls)
 ]
 ignore = [
     "D102",

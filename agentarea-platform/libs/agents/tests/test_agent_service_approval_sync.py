@@ -131,7 +131,7 @@ async def test_update_agent_reconciles_the_rule_and_strips_the_flag(session_fact
     async with session_factory() as session:
         context = _context()
         service = _service(session, context)
-        agent = await service.create_agent(AgentCreate(name="Editable", model_id=None))
+        agent = await service.create_agent(AgentCreate(name="Editable", tools=[], model_id=None))
 
         updated = await service.update_agent(
             agent.id,

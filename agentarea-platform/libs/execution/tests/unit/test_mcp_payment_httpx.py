@@ -1,41 +1,117 @@
 """Tests for MCP payment-aware HTTPX factory."""
 
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import httpx
+import httpx2
 import pytest
+from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError
 from agentarea_execution.activities.mcp_payment_httpx import (
     AgentAreaPaymentTransport,
     create_payment_httpx_client_factory,
 )
+from agentarea_mcp.application.mcp_client import connected_mcp_client, pinned_client_factory
+from mcp.server.mcpserver import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 
 
-async def test_payment_httpx_factory_uses_agentarea_payment_transport():
-    factory = create_payment_httpx_client_factory(
+def _payment_factory():
+    return create_payment_httpx_client_factory(
         wallet_config={"wallet_type": "dual"},
-        budget_remaining=1.0,
+        budget_remaining=Decimal("1"),
         next_idempotency_key=lambda: "key-1",
         find_settled_payment=AsyncMock(return_value=None),
     )
 
-    client = factory(headers={"X-Test": "1"}, timeout=httpx.Timeout(5.0))
-    try:
-        assert isinstance(client._transport, AgentAreaPaymentTransport)
-        assert client.headers["X-Test"] == "1"
-    finally:
-        await client.aclose()
+
+def _leaves(error: BaseException) -> list[BaseException]:
+    if isinstance(error, BaseExceptionGroup):
+        return [leaf for inner in error.exceptions for leaf in _leaves(inner)]
+    return [error]
 
 
-class SequenceTransport(httpx.AsyncBaseTransport):
-    def __init__(self, responses: list[httpx.Response]):
+@pytest.mark.asyncio
+async def test_an_agent_with_a_wallet_can_call_an_mcp_tool():
+    """The MCP SDK drives the payment client: it must be the SDK's httpx2 client.
+
+    An httpx v1 client failed every call from a wallet agent inside the SDK
+    ("unsupported operand type(s) for +: 'float' and 'Timeout'").
+    """
+    server = MCPServer(name="paid")
+
+    def ping() -> str:
+        return "pong"
+
+    server.add_tool(ping, name="ping")
+    app = server.streamable_http_app(
+        streamable_http_path="/",
+        stateless_http=True,
+        transport_security=TransportSecuritySettings(
+            allowed_hosts=["127.0.0.1"], allowed_origins=["http://127.0.0.1"]
+        ),
+    )
+    payment_factory = _payment_factory()
+
+    def factory(headers=None, timeout=None, auth=None):
+        return payment_factory(
+            headers=headers, timeout=timeout, auth=auth, inner=httpx2.ASGITransport(app=app)
+        )
+
+    async with app.router.lifespan_context(app):
+        async with connected_mcp_client(
+            "http://127.0.0.1/",
+            {},
+            5.0,
+            transport="streamable-http",
+            httpx_client_factory=factory,
+        ) as client:
+            result = await client.call_tool("ping", {})
+
+    assert [block.text for block in result.content] == ["pong"]
+
+
+@pytest.mark.asyncio
+async def test_a_wallet_agent_never_dials_a_url_connection_that_resolves_private():
+    dialed: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        dialed.append(request)
+        return httpx2.Response(200)
+
+    async def resolve(host: str, port: int) -> list[str]:
+        return ["10.0.0.5"]
+
+    factory = pinned_client_factory(
+        _payment_factory(),
+        policy=OutboundPolicy(),
+        resolve=resolve,
+        inner=lambda: httpx2.MockTransport(handler),
+    )
+
+    with pytest.raises(BaseException) as raised:  # noqa: PT011 - an exception group
+        async with connected_mcp_client(
+            "http://mcp.internal.example/mcp",
+            None,
+            2.0,
+            transport="streamable-http",
+            httpx_client_factory=factory,
+        ):
+            pass
+
+    assert dialed == []
+    assert any(isinstance(leaf, UnsafeUrlError) for leaf in _leaves(raised.value))
+
+
+class SequenceTransport(httpx2.AsyncBaseTransport):
+    def __init__(self, responses: list[httpx2.Response]):
         self.responses = responses
-        self.requests: list[httpx.Request] = []
+        self.requests: list[httpx2.Request] = []
 
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
         response = self.responses.pop(0)
-        return httpx.Response(
+        return httpx2.Response(
             response.status_code,
             headers=response.headers,
             content=response.content,
@@ -86,8 +162,8 @@ async def test_x402_transport_retries_and_reports_payment(monkeypatch):
 
     inner = SequenceTransport(
         [
-            httpx.Response(402, headers={"PAYMENT-REQUIRED": "challenge"}, content=b"{}"),
-            httpx.Response(200, content=b"ok"),
+            httpx2.Response(402, headers={"PAYMENT-REQUIRED": "challenge"}, content=b"{}"),
+            httpx2.Response(200, content=b"ok"),
         ]
     )
     payments = []
@@ -97,14 +173,14 @@ async def test_x402_transport_retries_and_reports_payment(monkeypatch):
             "x402_private_key": "0xkey",
             "x402_config": {"network": "eip155:84532"},
         },
-        budget_remaining=1.0,
+        budget_remaining=Decimal("1"),
         next_idempotency_key=lambda: "key-1",
         find_settled_payment=AsyncMock(return_value=None),
         on_payment=payments.append,
         inner=inner,
     )
 
-    async with httpx.AsyncClient(transport=transport) as client:
+    async with httpx2.AsyncClient(transport=transport) as client:
         response = await client.get("https://paid.example/mcp")
 
     assert response.status_code == 200
@@ -114,7 +190,7 @@ async def test_x402_transport_retries_and_reports_payment(monkeypatch):
         {
             "success": True,
             "protocol": "x402",
-            "amount_usd": 0.25,
+            "amount_usd": "0.25",
             "recipient": "0xrecipient",
             "tx_hash": None,
             "response_status": 200,
@@ -180,21 +256,21 @@ async def test_mpp_transport_retries_and_reports_payment(monkeypatch):
 
     inner = SequenceTransport(
         [
-            httpx.Response(402, headers={"WWW-Authenticate": "Payment challenge"}, content=b""),
-            httpx.Response(204, content=b""),
+            httpx2.Response(402, headers={"WWW-Authenticate": "Payment challenge"}, content=b""),
+            httpx2.Response(204, content=b""),
         ]
     )
     payments = []
     transport = AgentAreaPaymentTransport(
         wallet_config={"wallet_type": "mpp", "mpp_tempo_key": "tempo-key"},
-        budget_remaining=1.0,
+        budget_remaining=Decimal("1"),
         next_idempotency_key=lambda: "key-1",
         find_settled_payment=AsyncMock(return_value=None),
         on_payment=payments.append,
         inner=inner,
     )
 
-    async with httpx.AsyncClient(transport=transport) as client:
+    async with httpx2.AsyncClient(transport=transport) as client:
         response = await client.post("https://paid.example/mcp", content=b"{}")
 
     assert response.status_code == 204
@@ -202,7 +278,7 @@ async def test_mpp_transport_retries_and_reports_payment(monkeypatch):
     assert inner.requests[1].headers["Authorization"] == "Payment credential"
     assert payments[0]["success"] is True
     assert payments[0]["protocol"] == "mpp"
-    assert payments[0]["amount_usd"] == 0.5
+    assert payments[0]["amount_usd"] == "0.5"
     assert payments[0]["recipient"] == "tempo-recipient"
 
 
@@ -211,22 +287,82 @@ async def test_settled_request_is_not_paid_again():
     settled = {"success": False, "already_settled": True, "idempotency_key": "key-1"}
     find_settled = AsyncMock(return_value=settled)
     inner = SequenceTransport(
-        [httpx.Response(402, headers={"PAYMENT-REQUIRED": "challenge"}, content=b"{}")]
+        [httpx2.Response(402, headers={"PAYMENT-REQUIRED": "challenge"}, content=b"{}")]
     )
     payments = []
     transport = AgentAreaPaymentTransport(
         wallet_config={"wallet_type": "x402", "x402_private_key": "0xkey"},
-        budget_remaining=1.0,
+        budget_remaining=Decimal("1"),
         next_idempotency_key=lambda: "key-1",
         find_settled_payment=find_settled,
         on_payment=payments.append,
         inner=inner,
     )
 
-    async with httpx.AsyncClient(transport=transport) as client:
+    async with httpx2.AsyncClient(transport=transport) as client:
         response = await client.get("https://paid.example/mcp")
 
     assert response.status_code == 402
     assert len(inner.requests) == 1
     find_settled.assert_awaited_once_with("key-1")
     assert payments == [settled]
+
+
+@pytest.mark.asyncio
+async def test_budget_is_spent_down_exactly(monkeypatch):
+    """Three dimes fit a thirty-cent budget; float subtraction leaves 0.09999999999999998."""
+    from agentarea_payment.x402_client import X402PaymentClient
+
+    class FakeHTTPClient:
+        def __init__(self, client):
+            self.client = client
+
+        def get_payment_required_response(self, get_header, body):
+            return SimpleNamespace(
+                accepts=[
+                    SimpleNamespace(
+                        pay_to="0xrecipient",
+                        network="eip155:84532",
+                        scheme="exact",
+                        get_amount=lambda: "100000",
+                    )
+                ]
+            )
+
+        def encode_payment_signature_header(self, payment_payload):
+            return {"PAYMENT-SIGNATURE": "signed"}
+
+    class FakeX402Client:
+        async def create_payment_payload(self, payment_required):
+            return {"signed": True}
+
+    monkeypatch.setattr(X402PaymentClient, "_get_client", lambda self: FakeX402Client())
+    monkeypatch.setattr(
+        "agentarea_execution.activities.mcp_payment_httpx.import_module",
+        lambda name: SimpleNamespace(x402HTTPClient=FakeHTTPClient),
+    )
+
+    paid = httpx2.Response(200, headers={"PAYMENT-RESPONSE": "e30="}, content=b"ok")
+    challenge = httpx2.Response(402, headers={"PAYMENT-REQUIRED": "challenge"}, content=b"{}")
+    inner = SequenceTransport([challenge, paid] * 3)
+    keys = iter(["key-1", "key-2", "key-3"])
+    payments = []
+    transport = AgentAreaPaymentTransport(
+        wallet_config={
+            "wallet_type": "x402",
+            "x402_private_key": "0xkey",
+            "x402_config": {"network": "eip155:84532"},
+        },
+        budget_remaining=Decimal("0.3"),
+        next_idempotency_key=lambda: next(keys),
+        find_settled_payment=AsyncMock(return_value=None),
+        on_payment=payments.append,
+        inner=inner,
+    )
+
+    async with httpx2.AsyncClient(transport=transport) as client:
+        statuses = [(await client.get("https://paid.example/mcp")).status_code for _ in range(3)]
+
+    assert statuses == [200, 200, 200]
+    assert [p["amount_usd"] for p in payments] == ["0.1", "0.1", "0.1"]
+    assert all(p["success"] for p in payments)

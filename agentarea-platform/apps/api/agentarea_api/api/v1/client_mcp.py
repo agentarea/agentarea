@@ -89,85 +89,95 @@ async def _resolve_client_scope(
     from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
     from agentarea_agents_sdk.skills.skill_catalog_builder import SkillEntry
     from agentarea_common.base.repository_factory import RepositoryFactory
+    from agentarea_common.base.tenant_scope import workspace_scope
     from agentarea_common.config.database import get_database
     from agentarea_common.infrastructure.connection_manager import get_connection_manager
+    from agentarea_common.workspaces.lookup import workspace_slug_for
     from agentarea_mcp.application.service import MCPServerInstanceService
     from agentarea_mcp.infrastructure.client_repository import ClientRepository
     from agentarea_secrets.secret_manager_factory import get_real_secret_manager
 
-    user_ctx = get_mcp_user_context()
+    principal = get_mcp_user_context()
     connection_manager = get_connection_manager()
     broker = await connection_manager.get_event_broker()
 
     async with get_database().read_session() as session:
-        client_repo = ClientRepository(session, user_ctx)
-        client = await client_repo.get_accessible_by_id(client_id)
-        if client is None:
+        workspace_id = await ClientRepository.locate_workspace(
+            session, client_id, principal.accessible_workspaces or []
+        )
+        if workspace_id is None:
             return None, {}
 
-        await _authorize_client_access(user_ctx, client_id)
+        await _authorize_client_access(principal, client_id)
 
-        # A client endpoint is itself a workspace reference. Bind before
+        # A client endpoint is itself a workspace reference. Enter it before
         # constructing workspace-scoped dependencies: secret managers may
         # capture the workspace id in their constructor.
-        user_ctx.workspace_id = str(client.workspace_id)
-        repo_factory = RepositoryFactory(session, user_ctx)
-        secret = get_real_secret_manager(session=session, user_context=user_ctx)
+        user_ctx = principal.enter(workspace_id, await workspace_slug_for(workspace_id))
+        with workspace_scope(workspace_id):
+            client_repo = ClientRepository(session, user_ctx)
+            client = await client_repo.get_by_id(client_id)
+            if client is None:
+                return None, {}
+            repo_factory = RepositoryFactory(session, user_ctx)
+            secret = get_real_secret_manager(session=session, user_context=user_ctx)
 
-        namespaces = await client_repo.get_instance_namespaces(client_id)
-        instances = {str(i.id): i for i in client.mcp_instances}
-        skills = {str(s.id): s for s in client.skills}
+            namespaces = await client_repo.get_instance_namespaces(client_id)
+            instances = {str(i.id): i for i in client.mcp_instances}
+            skills = {str(s.id): s for s in client.skills}
 
-        skill_registry = {
-            s.name: SkillEntry(
-                name=s.name,
-                description=s.description or "",
-                content=s.content or "",
-                files=[],
-            )
-            for s in skills.values()
-        }
-
-        instance_service = MCPServerInstanceService(repo_factory, broker, secret)
-        members: list[AggregatedMember] = []
-        instance_urls: dict[str, str] = {}
-        instance_names: dict[str, str] = {}
-        instance_headers: dict[str, dict[str, str]] = {}
-        instance_transports: dict[str, str | None] = {}
-        for order, (iid, inst) in enumerate(instances.items()):
-            full = await instance_service.repository.get_by_id(inst.id)
-            if full is None:
-                continue
-            try:
-                url, headers, transport = await instance_service._resolve_mcp_url_and_headers(full)
-                spec = await instance_service._get_transport_spec_for_instance(full)
-            except Exception:
-                logger.exception("Failed to resolve MCP url for instance %s", iid)
-                continue
-            instance_urls[iid] = url
-            instance_names[iid] = full.name
-            instance_transports[iid] = transport
-            if headers:
-                instance_headers[iid] = headers
-            members.append(
-                AggregatedMember(
-                    mcp_instance_id=iid,
-                    order=order,
-                    namespace_prefix=namespaces.get(iid),
-                    transport=instance_transports[iid],
-                    pinned=spec.get("type", "docker") == "url",
+            skill_registry = {
+                s.name: SkillEntry(
+                    name=s.name,
+                    description=s.description or "",
+                    content=s.content or "",
+                    files=[],
                 )
+                for s in skills.values()
+            }
+
+            instance_service = MCPServerInstanceService(repo_factory, broker, secret)
+            members: list[AggregatedMember] = []
+            instance_urls: dict[str, str] = {}
+            instance_names: dict[str, str] = {}
+            instance_headers: dict[str, dict[str, str]] = {}
+            instance_transports: dict[str, str | None] = {}
+            for order, (iid, inst) in enumerate(instances.items()):
+                full = await instance_service.repository.get_by_id(inst.id)
+                if full is None:
+                    continue
+                try:
+                    url, headers, transport = await instance_service._resolve_mcp_url_and_headers(
+                        full
+                    )
+                    spec = await instance_service._get_transport_spec_for_instance(full)
+                except Exception:
+                    logger.exception("Failed to resolve MCP url for instance %s", iid)
+                    continue
+                instance_urls[iid] = url
+                instance_names[iid] = full.name
+                instance_transports[iid] = transport
+                if headers:
+                    instance_headers[iid] = headers
+                members.append(
+                    AggregatedMember(
+                        mcp_instance_id=iid,
+                        order=order,
+                        namespace_prefix=namespaces.get(iid),
+                        transport=instance_transports[iid],
+                        pinned=spec.get("type", "docker") == "url",
+                    )
+                )
+            proxy = MCPAggregatorProxy(
+                client.name,
+                client.description or "",
+                members,
+                instance_urls,
+                instance_names,
+                instance_headers,
+                tool_cache=_tool_cache(),
             )
-        proxy = MCPAggregatorProxy(
-            client.name,
-            client.description or "",
-            members,
-            instance_urls,
-            instance_names,
-            instance_headers,
-            tool_cache=_tool_cache(),
-        )
-        return proxy, skill_registry
+            return proxy, skill_registry
 
 
 def _activate_skill_tool(skill_registry: dict) -> Tool:

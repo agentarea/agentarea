@@ -24,7 +24,7 @@ All platform endpoints are under `/v1`.
 Send a bearer token on every `/v1` request:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/agents/" \
+curl -s "$AGENTAREA_URL/v1/workspaces" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN"
 ```
 
@@ -35,10 +35,36 @@ read access to `/v1`, including on endpoints that look public.
 
 ## Workspace scoping
 
-A token resolves to a user *and* a workspace. Every list endpoint returns only
-what that workspace can see, and every write lands in it — there is no global
-scope and no cross-workspace query. See
-[workspaces, projects, and resources](/concepts/workspaces-projects-resources)
+Authentication and workspace selection are two separate steps. A token
+resolves to a user, who has no workspace yet; the workspace comes from the
+request itself, never from a header and never from a default. Every
+workspace-scoped endpoint below carries the workspace as a slug in the path:
+
+```bash
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/" \
+  -H "Authorization: Bearer $AGENTAREA_TOKEN"
+```
+
+`GET /v1/workspaces` lists the workspaces the token can reach — including the
+user's personal one, provisioned on first call — and each entry's `slug` is
+what goes in `$WORKSPACE`. There is no implicit "current workspace" and no
+personal-workspace fallback: a request that omits the path segment on a
+workspace-scoped endpoint is rejected, and a slug the token cannot reach is
+refused with `403`, the same response as a slug that does not exist. An API
+key is bound to the one workspace it was issued for; naming any other
+workspace in the path also gets `403`.
+
+A handful of endpoints are not workspace-scoped in the path because they
+address one specific entity instead, and the workspace is resolved from that
+entity: the A2A surface (`/v1/agents/{agent_id}/a2a/*` and its
+`.well-known` documents), the MCP instance proxy (`/v1/mcp/{instance_id}/mcp`),
+and inbound webhooks (`/webhooks/{webhook_id}`). `GET/POST /v1/workspaces`
+itself and invitation preview/accept are the only endpoints with no workspace
+context at all.
+
+Every list endpoint returns only what the selected workspace can see, and
+every write lands in it — there is no global scope and no cross-workspace
+query. See [workspaces, projects, and resources](/concepts/workspaces-projects-resources)
 for the model this enforces.
 
 ## Errors

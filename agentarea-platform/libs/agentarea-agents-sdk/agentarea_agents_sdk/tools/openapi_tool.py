@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from collections.abc import Awaitable, Callable
+from decimal import Decimal
 from typing import Any
 from urllib.parse import quote
 from uuid import UUID
@@ -132,6 +133,25 @@ class OpenAPITool(BaseTool):
                 "status_code": None,
             }
 
+        # The resolved base URL may carry secret URL variables; only url_template
+        # (with its {placeholders}) is ever logged or reported.
+        try:
+            resolved_base_url = await self._service.resolve_base_url(connection)
+        except Exception as e:
+            logger.error(
+                "Failed to resolve base URL for connection %s: %s",
+                self._connection_id,
+                e,
+                exc_info=True,
+            )
+            return {
+                "success": False,
+                "error": f"Failed to resolve base URL: {e}",
+                "result": None,
+                "tool_name": self.name,
+                "status_code": None,
+            }
+
         # Build URL: substitute path params
         path = self._operation["path"]
         parameters: list[dict[str, Any]] = self._operation.get("parameters", [])
@@ -153,8 +173,8 @@ class OpenAPITool(BaseTool):
                 "status_code": None,
             }
 
-        base_url = connection.base_url.rstrip("/")
-        url = f"{base_url}{path}"
+        url_template = f"{connection.base_url.rstrip('/')}{path}"
+        url = f"{resolved_base_url.rstrip('/')}{path}"
 
         # Collect query params
         query_params: dict[str, Any] = {}
@@ -213,7 +233,10 @@ class OpenAPITool(BaseTool):
                 )
         except UnsafeUrlError:
             logger.warning(
-                "Refused OpenAPI call %s %s to a non-public address", method, url, exc_info=True
+                "Refused OpenAPI call %s %s to a non-public address",
+                method,
+                url_template,
+                exc_info=True,
             )
             return {
                 "success": False,
@@ -223,7 +246,7 @@ class OpenAPITool(BaseTool):
                 "status_code": None,
             }
         except httpx.TimeoutException as e:
-            logger.error("HTTP timeout calling %s %s: %s", method, url, e, exc_info=True)
+            logger.error("HTTP timeout calling %s %s: %s", method, url_template, e, exc_info=True)
             return {
                 "success": False,
                 "error": f"HTTP timeout: {e}",
@@ -232,7 +255,9 @@ class OpenAPITool(BaseTool):
                 "status_code": None,
             }
         except httpx.RequestError as e:
-            logger.error("HTTP request error calling %s %s: %s", method, url, e, exc_info=True)
+            logger.error(
+                "HTTP request error calling %s %s: %s", method, url_template, e, exc_info=True
+            )
             return {
                 "success": False,
                 "error": f"HTTP request error: {e}",
@@ -291,7 +316,7 @@ class OpenAPITool(BaseTool):
                 "tool_name": self.name,
                 "status_code": status_code,
                 "payment": payment_result,
-                "service_cost": 0.0,
+                "service_cost": "0",
             }
 
         # Coerce successful response to string
@@ -310,7 +335,7 @@ class OpenAPITool(BaseTool):
                 content_bytes = response.content
                 result_str = f"<binary {len(content_bytes)} bytes, content-type={ct}>"
         except Exception as e:
-            logger.error("Failed to decode response from %s: %s", url, e, exc_info=True)
+            logger.error("Failed to decode response from %s: %s", url_template, e, exc_info=True)
             return {
                 "success": False,
                 "error": f"Failed to decode response: {e}",
@@ -341,11 +366,11 @@ class OpenAPITool(BaseTool):
             "error": None,
             "tool_name": self.name,
             "status_code": status_code,
-            "service_cost": 0.0,
+            "service_cost": "0",
         }
         if payment_result:
             result["payment"] = payment_result
-            result["service_cost"] = float(payment_result.get("amount_usd") or 0.0)
+            result["service_cost"] = str(Decimal(str(payment_result.get("amount_usd") or 0)))
         return result
 
 
@@ -365,6 +390,7 @@ class OpenAPIToolFactory:
             connection_name_or_id: Connection UUID or name string.
             allowed_tools: Operation names to return; ``None`` means all, ``[]`` means none.
             openapi_connection_service: OpenAPIConnectionService instance.
+            payment_handler: Pays for operations that answer HTTP 402, if any.
 
         Returns:
             List of OpenAPITool instances (empty on any error).

@@ -9,27 +9,13 @@ for REST clients reading the OpenAPI doc.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
+from agentarea_common.utils.types import NotNull
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agentarea_agents.schemas.import_export import ToolConfig
-
-
-class EventConfig(BaseModel):
-    """One event subscription for an agent."""
-
-    event_type: str = Field(description="Event type the agent listens to.")
-    config: dict | None = Field(default=None, description="Event-specific configuration.")
-    enabled: bool = Field(default=True, description="Whether this subscription is active.")
-
-
-class EventsConfig(BaseModel):
-    """Per-agent event subscriptions."""
-
-    events: list[EventConfig] | None = None
-
 
 AgentTypeLiteral = Literal["stateless", "stateful"]
 
@@ -67,13 +53,12 @@ class AgentCreate(BaseModel):
             "Null means no model is bound yet and the agent cannot be run."
         ),
     )
-    tools: list[ToolConfig] | None = Field(
-        default=None,
-        description="Tools attached to the agent (code/mcp/agent/openapi).",
-    )
-    events_config: EventsConfig | None = Field(
-        default=None,
-        description="Event subscriptions that auto-trigger this agent.",
+    tools: list[ToolConfig] = Field(
+        description=(
+            "Tools attached to the agent (code/mcp/agent/openapi). Required: pass [] "
+            "for an agent with no tools. Built-in toolsets and their groups are "
+            "listed by GET /v1/agents/tools."
+        ),
     )
     planning: bool | None = Field(
         default=None,
@@ -112,17 +97,16 @@ class AgentUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str | None = Field(default=None, min_length=1, max_length=255)
+    name: Annotated[str | None, NotNull] = Field(default=None, min_length=1, max_length=255)
     capabilities: list[str] | None = None
     description: str | None = Field(default=None, max_length=1000)
     instruction: str | None = Field(default=None, max_length=20000)
     model_id: str | None = None
     tools: list[ToolConfig] | None = None
-    events_config: EventsConfig | None = None
     planning: bool | None = None
     a2ui_enabled: bool | None = None
     skill_ids: list[UUID] | None = None
-    agent_type: AgentTypeLiteral | None = None
+    agent_type: Annotated[AgentTypeLiteral | None, NotNull] = None
 
 
 class AgentSummary(BaseModel):

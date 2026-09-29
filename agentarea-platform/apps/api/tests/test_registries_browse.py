@@ -54,7 +54,7 @@ class _Service:
 
 def _client_for(service: _Service) -> AsyncClient:
     app = FastAPI()
-    app.include_router(registries.router, prefix="/v1")
+    app.include_router(registries.router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[registries.get_registry_service] = lambda: service
     app.dependency_overrides[get_user_context] = lambda: UserContext(
         user_id="u1", workspace_id="ws-1"
@@ -64,7 +64,7 @@ def _client_for(service: _Service) -> AsyncClient:
 
 async def _browse(service, **params):
     async with _client_for(service) as client:
-        return await client.get("/v1/registries/catalog/browse", params=params)
+        return await client.get("/v1/workspaces/acme/registries/catalog/browse", params=params)
 
 
 class TestResponseShape:

@@ -4,7 +4,13 @@ from collections import defaultdict
 
 from agentarea_api.api.v1 import webhooks
 from agentarea_api.api.v1.mcp_oauth_as import oauth_as_router
-from agentarea_api.api.v1.router import protected_v1_router, public_v1_router
+from agentarea_api.api.v1.router import (
+    a2a_v1_router,
+    mcp_proxy_v1_router,
+    principal_v1_router,
+    public_v1_router,
+    workspace_v1_router,
+)
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
@@ -14,7 +20,10 @@ def _application() -> FastAPI:
     app.include_router(oauth_as_router)
     app.include_router(webhooks.router)
     app.include_router(public_v1_router)
-    app.include_router(protected_v1_router)
+    app.include_router(principal_v1_router)
+    app.include_router(workspace_v1_router)
+    app.include_router(a2a_v1_router)
+    app.include_router(mcp_proxy_v1_router)
     return app
 
 

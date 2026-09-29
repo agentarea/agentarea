@@ -39,16 +39,22 @@ logger = TriggerLogger(__name__)
 async def _resolve_trigger_context(session, trigger_id: UUID):
     """Resolve UserContext from trigger ORM for workspace-scoped repositories.
 
+    The trigger is found across workspaces, since its id is all the activity
+    has; the rest of the activity is then confined to the trigger's workspace.
+
     Raises:
         ValueError: If trigger not found — prevents silent fallback to system context.
     """
     from agentarea_common.auth.context import UserContext
+    from agentarea_common.base.tenant_scope import bind_workspace_scope, unscoped
     from agentarea_triggers.infrastructure.orm import TriggerORM
 
-    trigger_orm = await session.get(TriggerORM, trigger_id)
+    with unscoped("a trigger activity is handed a trigger id; the trigger names the workspace"):
+        trigger_orm = await session.get(TriggerORM, trigger_id)
     if not trigger_orm:
         raise ValueError(f"Trigger {trigger_id} not found — cannot resolve workspace context")
 
+    bind_workspace_scope(trigger_orm.workspace_id)
     return UserContext(
         user_id=trigger_orm.created_by,
         workspace_id=trigger_orm.workspace_id,
@@ -143,7 +149,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                     if isinstance(e, TriggerNotFoundError):
                         raise
                     error_msg = f"Error retrieving trigger: {e}"
-                    logger.error(error_msg, trigger_id=trigger_id)
+                    logger.error(error_msg, trigger_id=trigger_id, exc_info=True)
                     raise TriggerExecutionError(
                         error_msg, trigger_id=str(trigger_id), original_error=str(e)
                     ) from None
@@ -261,6 +267,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         logger.error(
                             f"Data extractor failed: {extractor_error}",
                             trigger_id=trigger_id,
+                            exc_info=True,
                         )
                         # Continue without extracted data
 
@@ -396,7 +403,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
             execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
 
-            logger.error(f"Error executing trigger {trigger_id}: {e}")
+            logger.error(f"Error executing trigger {trigger_id}: {e}", exc_info=True)
 
             try:
                 database = get_database()
@@ -420,7 +427,8 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                     )
             except Exception as record_error:
                 logger.error(
-                    f"Failed to record execution failure for trigger {trigger_id}: {record_error}"
+                    f"Failed to record execution failure for trigger {trigger_id}: {record_error}",
+                    exc_info=True,
                 )
 
             raise
@@ -480,7 +488,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 )
 
         except Exception as e:
-            logger.error(f"Failed to record execution for trigger {trigger_id}: {e}")
+            logger.error(f"Failed to record execution for trigger {trigger_id}: {e}", exc_info=True)
             raise
 
     @activity.defn(name="evaluate_trigger_conditions_activity")
@@ -633,7 +641,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 )
 
         except Exception as e:
-            logger.error(f"Failed to create task from trigger {trigger_id}: {e}")
+            logger.error(f"Failed to create task from trigger {trigger_id}: {e}", exc_info=True)
             return CreateTaskFromTriggerResult(
                 task_id=None,
                 trigger_id=trigger_id,

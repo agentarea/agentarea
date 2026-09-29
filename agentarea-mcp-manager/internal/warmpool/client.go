@@ -20,7 +20,6 @@ import (
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontract"
-	"github.com/agentarea/mcp-manager/internal/usage"
 	"github.com/agentarea/mcp-manager/internal/workspace"
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
@@ -83,7 +82,7 @@ type Client struct {
 	timeout                    time.Duration
 	taskLeaseTTL               time.Duration
 	observeExecutorIncarnation func(context.Context, *corev1.Pod) (string, error)
-	usageRecorder              usage.Recorder
+	observer                   LifecycleObserver
 }
 
 // Config holds warm pool configuration
@@ -970,7 +969,7 @@ func (c *Client) markTaskAssigned(ctx context.Context, pod *corev1.Pod, workspac
 	if err != nil {
 		return nil, fmt.Errorf("failed to assign pod to task %s: %w", taskID, err)
 	}
-	if err := c.recordPodLease(ctx, updated); err != nil {
+	if err := c.observeLease(ctx, updated); err != nil {
 		return nil, err
 	}
 	return updated, nil
@@ -1001,14 +1000,14 @@ func (c *Client) createTaskPodFromTemplate(ctx context.Context, workspaceID, tas
 			if identityErr := verifyTaskPodIdentity(existing, workspaceID, taskID); identityErr != nil {
 				return nil, identityErr
 			}
-			if err := c.recordPodAllocation(ctx, existing); err != nil {
+			if err := c.observeAllocation(ctx, existing); err != nil {
 				return nil, err
 			}
 			return c.waitForPodRunning(ctx, existing.Name, 120*time.Second)
 		}
 		return nil, fmt.Errorf("failed to create task sandbox pod for %s: %w", taskID, err)
 	}
-	if err := c.recordPodLease(ctx, created); err != nil {
+	if err := c.observeLease(ctx, created); err != nil {
 		return nil, err
 	}
 	return c.waitForPodRunning(ctx, created.Name, 120*time.Second)
@@ -1081,10 +1080,10 @@ func (c *Client) DeleteExactPod(ctx context.Context, pod *corev1.Pod) error {
 		return fmt.Errorf("exact sandbox pod name and UID are required")
 	}
 	uid := pod.UID
-	err := c.deletePodWithUsage(ctx, pod, metav1.DeleteOptions{
+	err := c.deleteTaskPod(ctx, pod, metav1.DeleteOptions{
 		Preconditions: &metav1.Preconditions{UID: &uid},
 	}, "unsafe_discard")
-	if k8serrors.IsNotFound(err) {
+	if podAlreadyGone(err, false) {
 		return nil
 	}
 	if err != nil {
@@ -1171,7 +1170,7 @@ func (c *Client) RetirePodForTask(ctx context.Context, workspaceID, taskID strin
 		if idleTTL <= 0 {
 			uid := pod.UID
 			resourceVersion := pod.ResourceVersion
-			if err := c.deletePodWithUsage(ctx, &pod, metav1.DeleteOptions{
+			if err := c.deleteTaskPod(ctx, &pod, metav1.DeleteOptions{
 				Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &resourceVersion},
 			}, "retirement"); err != nil {
 				return fmt.Errorf("failed to delete pod %s for task %s: %w", pod.Name, taskID, err)
@@ -1194,7 +1193,7 @@ func (c *Client) RetirePodForTask(ctx context.Context, workspaceID, taskID strin
 		if _, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, &pod, metav1.UpdateOptions{}); err != nil {
 			return fmt.Errorf("failed to mark pod %s idle for task %s: %w", pod.Name, taskID, err)
 		}
-		if err := c.recordPodLease(ctx, &pod); err != nil {
+		if err := c.observeLease(ctx, &pod); err != nil {
 			return err
 		}
 	}
@@ -1251,7 +1250,7 @@ func (c *Client) BeginTaskOperation(ctx context.Context, pod *corev1.Pod, leaseT
 		if err != nil {
 			return nil, fmt.Errorf("register task operation: %w", err)
 		}
-		if err := c.recordPodLease(ctx, updated); err != nil {
+		if err := c.observeLease(ctx, updated); err != nil {
 			operation := &TaskOperation{
 				PodName: updated.Name, PodUID: string(updated.UID), Binding: binding, Token: token,
 				ExecutorIncarnation: executorIncarnation,
@@ -1359,7 +1358,7 @@ func (c *Client) updateTaskOperation(ctx context.Context, operation *TaskOperati
 			return fmt.Errorf("update task operation: %w", err)
 		}
 		if !remove {
-			return c.recordPodLease(ctx, pod)
+			return c.observeLease(ctx, pod)
 		}
 		return nil
 	}
@@ -1436,7 +1435,7 @@ func (c *Client) TouchTaskPod(ctx context.Context, pod *corev1.Pod, leaseTTL tim
 	if _, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, current, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to extend task lease for pod %s: %w", pod.Name, err)
 	}
-	return c.recordPodLease(ctx, current)
+	return c.observeLease(ctx, current)
 }
 
 // EnsurePodHydrated serializes immutable input materialization in Kubernetes
@@ -1575,7 +1574,7 @@ func (c *Client) renewHydrationClaim(
 				done <- fmt.Errorf("renew workspace hydration claim: %w", err)
 				return
 			}
-			if err := c.recordPodLease(ctx, pod); err != nil {
+			if err := c.observeLease(ctx, pod); err != nil {
 				done <- err
 				return
 			}
@@ -1681,10 +1680,10 @@ func (c *Client) DeleteExpiredTaskPods(ctx context.Context, now time.Time) (int,
 		}
 		uid := pod.UID
 		resourceVersion := pod.ResourceVersion
-		if err := c.deletePodWithUsage(ctx, &pod, metav1.DeleteOptions{
+		if err := c.deleteTaskPod(ctx, &pod, metav1.DeleteOptions{
 			Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &resourceVersion},
 		}, "lease_expired"); err != nil {
-			if k8serrors.IsNotFound(err) || k8serrors.IsConflict(err) {
+			if podAlreadyGone(err, true) {
 				continue
 			}
 			return deleted, fmt.Errorf("failed to delete expired task sandbox pod %s: %w", pod.Name, err)

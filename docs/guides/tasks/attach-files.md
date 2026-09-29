@@ -8,7 +8,7 @@ related:
   - /guides/tasks/retrieve-artifacts
   - /concepts/execution/artifacts
   - /concepts/sandbox/the-file-model
-last_updated: 2026-07-29
+last_updated: 2026-09-28
 ---
 
 Do this when the agent needs to read a file you supply — a CSV to analyse, a PDF
@@ -17,7 +17,8 @@ across tasks; those belong in workspace or project storage, which the agent
 reaches through a different path.
 
 Uploading is a two-step: stage the bytes, then reference the staging ref in the
-create-task body. There is no multipart task-create endpoint.
+create-task body. The bytes go straight to the object store through a presigned
+PUT and never transit the API process; there is no multipart upload endpoint.
 
 ## Prerequisites
 
@@ -27,16 +28,6 @@ create-task body. There is no multipart task-create endpoint.
 - The file's SHA-256 digest, in both hex and base64. You compute this before
   uploading; the object store verifies against it.
 </Info>
-
-## Choose an upload path
-
-| Option | Pick it when |
-|---|---|
-| `POST /v1/files/upload-url` then PUT to the object store | Default. Bytes go straight to storage and never transit the API process. |
-| `POST /v1/files` with `purpose=attachment` | The client cannot reach the object store directly, or the file is small and you want one round trip. |
-
-Both return a `ref` of the form `staging/{id}/{filename}`, and the create-task
-endpoint treats them identically.
 
 ## Steps
 
@@ -54,7 +45,7 @@ endpoint treats them identically.
     The request takes the digest as lowercase hex.
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/files/upload-url" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/files/upload-url" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{
@@ -88,30 +79,11 @@ endpoint treats them identically.
 
     The object store rejects a body that does not hash to the declared digest, so a
     truncated or swapped upload fails here rather than reaching the agent.
-
-    **Alternative — server-proxied upload.** One call, no digest arithmetic:
-
-    ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/files" \
-      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-      -F "purpose=attachment" \
-      -F "file=@report.csv"
-    ```
-
-    ```json
-    {
-      "ref": "staging/3d9a.../report.csv",
-      "filename": "report.csv",
-      "size": 20481,
-      "sha256": "9f86d081884c7d65...",
-      "content_type": "text/csv"
-    }
-    ```
   </Step>
 
   <Step title="Create the task with the ref">
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/sync" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/sync" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -136,7 +108,7 @@ List the task's files and confirm the attachment landed under
 `inputs/attachments/`:
 
 ```bash
-curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/agents/$AGENT_ID/tasks/$TASK_ID/artifacts" \
   -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '.[] | {path, size, content_type}'
 ```
 
@@ -167,17 +139,17 @@ If the path is present with the size you uploaded, the agent can read it.
   <Accordion title='422 "attachment integrity digest is unavailable"'>
     The staged object carries neither the `sha256` metadata nor an S3-native
     checksum. This happens when bytes were written to the staging key by
-    something other than these two endpoints. Do not work around it; re- upload
-    through a supported path.
+    something other than the presigned upload. Do not work around it; re-upload
+    through a presigned URL.
   </Accordion>
   <Accordion title="413 on upload or on task creation">
-    The per-file limit is 256 MiB, enforced at both the presign step and the
-    server-proxied upload. A 413 at task creation instead means the workspace's
+    The per-file limit is 256 MiB, enforced at the presign step. A 413 at task
+    creation instead means the workspace's
     total quota would be exceeded by the attach.
   </Accordion>
   <Accordion title='422 "Invalid attachment ref"'>
     Refs must begin with `staging/` . A workspace file path is not an attachment
-    ref; upload it with `purpose=attachment` to get one.
+    ref; upload it through `files/upload-url` to get one.
   </Accordion>
   <Accordion title="The task dispatches but the agent says it cannot find the file">
     Check that the descriptor path starts with `inputs/attachments/` in the

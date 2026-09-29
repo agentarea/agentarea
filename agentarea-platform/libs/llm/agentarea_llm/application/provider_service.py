@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from agentarea_common.auth.authorization import assert_workspace_admin
 from agentarea_common.events.broker import EventBroker
-from agentarea_common.exceptions.errors import NotFoundError
+from agentarea_common.exceptions.errors import BadRequestError, NotFoundError
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from sqlalchemy import delete, select
 
@@ -183,12 +183,12 @@ class ProviderService:
         )
         secret = result.scalar_one_or_none()
         if secret is None:
-            raise ValueError(f"No secret {secret_id} in this workspace")
+            raise NotFoundError(f"No secret {secret_id} in this workspace")
         if secret.owner_type is not None:
             # Managed secrets belong to the connection that minted them. Sharing
             # one would mean this config's key changes whenever that connection
             # rotates its own.
-            raise ValueError(
+            raise BadRequestError(
                 f"Secret '{secret.secret_name}' is managed by {secret.owner_type} and "
                 "cannot be reused as a provider API key."
             )
@@ -403,7 +403,7 @@ class ProviderService:
         Returns:
             Optional[ModelSpec]: The model specification if found, else None.
         """
-        return await self.model_spec_repo.get_by_id(model_spec_id)
+        return await self.model_spec_repo.get_with_relations(model_spec_id)
 
     # Model Instances methods
 
@@ -417,6 +417,9 @@ class ProviderService:
     ) -> ModelInstance:
         """Create a new model instance.
 
+        A catalog model spec id is resolved to this workspace's own copy of that
+        model, created from the catalog on first use.
+
         Args:
             provider_config_id (UUID): The provider configuration ID.
             model_spec_id (UUID): The model specification ID.
@@ -429,17 +432,21 @@ class ProviderService:
 
         Raises:
             NotFoundError: the config or spec is neither this workspace's nor
-                the platform's. The spec sets the price runs are billed at, so
-                one from a workspace the caller administers elsewhere would let
-                them choose it here.
+                the platform's nor a catalog model. The spec sets the price runs
+                are billed at, so one from a workspace the caller administers
+                elsewhere would let them choose it here.
+            ModelPricingNotConfiguredError: the catalog model has no price.
         """
         if await self.provider_config_repo.get_by_id(provider_config_id) is None:
             raise NotFoundError(f"Provider config {provider_config_id} not found")
-        if await self.model_spec_repo.get_usable(model_spec_id) is None:
+        spec = await self.model_spec_repo.get_usable(model_spec_id)
+        if spec is None:
+            spec = await self.model_spec_repo.get_or_copy_catalog_spec(model_spec_id)
+        if spec is None:
             raise NotFoundError(f"Model spec {model_spec_id} not found")
         instance = ModelInstance(
             provider_config_id=provider_config_id,
-            model_spec_id=model_spec_id,
+            model_spec_id=spec.id,
             name=name,
             description=description,
             is_public=is_public,

@@ -1,5 +1,8 @@
 import { useCallback } from "react";
-import { createFollowupAgentTask } from "@/components/Chat/utils/createFollowupAgentTask";
+import {
+  createFollowupAgentTask,
+  type FollowupTaskResult,
+} from "@/components/Chat/utils/createFollowupAgentTask";
 import {
   cancelAgentTaskAction,
   resolveEscalationAction,
@@ -76,7 +79,7 @@ export function useTaskActions(agentId: string | null, taskId: string | null) {
   }, [agentId, taskId]);
 
   /**
-   * Start a fresh follow-up task for the same agent and return its id. The
+   * Start a fresh follow-up task for the same agent; its id is `data`. The
    * create endpoint streams SSE; the task_id lands in the first chunk, so we
    * scan the stream for it and stop.
    */
@@ -84,8 +87,8 @@ export function useTaskActions(agentId: string | null, taskId: string | null) {
     async (
       description: string,
       files: readonly File[] = []
-    ): Promise<string | null> => {
-      if (!agentId) return null;
+    ): Promise<FollowupTaskResult> => {
+      if (!agentId) return { error: NO_TARGET.error };
       return createFollowupAgentTask(agentId, description, files);
     },
     [agentId]

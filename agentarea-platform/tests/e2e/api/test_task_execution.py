@@ -27,18 +27,19 @@ def test_task_executes_end_to_end(
     alice_client: httpx.Client, llm_model: str
 ) -> None:
     agent_id = alice_client.post(
-        "/v1/agents/",
+        f"{alice_client.ws}/agents/",
         json={
             "name": "exec-agent",
             "description": "e2e execution test",
             "instruction": "Reply with exactly one lowercase word and nothing else.",
             "model_id": llm_model,
             "agent_type": "stateless",
+            "tools": [],
         },
     ).raise_for_status().json()["id"]
 
     task = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={"description": "Reply with the single word: ok"},
         timeout=30.0,
     )
@@ -49,7 +50,7 @@ def test_task_executes_end_to_end(
     last_events: list[dict] = []
     while time.time() < deadline:
         events_resp = alice_client.get(
-            f"/v1/agents/{agent_id}/tasks/{task_id}/events"
+            f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}/events"
         )
         events_resp.raise_for_status()
         last_events = events_resp.json()["events"]
@@ -85,23 +86,24 @@ def test_task_events_are_isolated(
     llm_model: str,
 ) -> None:
     agent_id = alice_client.post(
-        "/v1/agents/",
+        f"{alice_client.ws}/agents/",
         json={
             "name": "iso-exec-agent",
             "description": "d",
             "instruction": "x",
             "model_id": llm_model,
             "agent_type": "stateless",
+            "tools": [],
         },
     ).raise_for_status().json()["id"]
 
     task_id = alice_client.post(
-        f"/v1/agents/{agent_id}/tasks/sync",
+        f"{alice_client.ws}/agents/{agent_id}/tasks/sync",
         json={"description": "ok"},
         timeout=30.0,
     ).raise_for_status().json()["id"]
 
     cross_events = bob_client.get(
-        f"/v1/agents/{agent_id}/tasks/{task_id}/events"
+        f"{bob_client.ws}/agents/{agent_id}/tasks/{task_id}/events"
     )
     assert cross_events.status_code in (403, 404), cross_events.text[:200]

@@ -287,7 +287,11 @@ async def test_create_instance_with_spec_populates_slug():
     repository resolver and set on the persisted server.
     """
     svc = _make_service()
-    svc.repository.session.flush = AsyncMock()
+
+    async def _flush_assigns_the_id() -> None:
+        svc.repository.session.add.call_args[0][0].id = uuid.uuid4()
+
+    svc.repository.session.flush = AsyncMock(side_effect=_flush_assigns_the_id)
     svc.mcp_server_repository.resolve_unique_slug = AsyncMock(return_value="my-server")
     svc.create_instance = AsyncMock(return_value=MagicMock(spec=MCPServerInstance))
 
@@ -531,7 +535,7 @@ class TestServiceCreateInstance:
             inst = await svc.create_instance(
                 MCPServerInstanceCreate(
                     name="url-inst",
-                    server_spec_id="test-spec-id",
+                    server_spec_id="00000000-0000-4000-8000-000000000001",
                     json_spec={"type": "url", "endpoint_url": "http://test.example.com/mcp"},
                 )
             )
@@ -580,7 +584,7 @@ class TestServiceCreateInstance:
             inst = await svc.create_instance(
                 MCPServerInstanceCreate(
                     name="asana",
-                    server_spec_id="platform-spec-id",
+                    server_spec_id="00000000-0000-4000-8000-000000000002",
                     json_spec={"type": "url", "endpoint_url": "http://test.example.com/mcp"},
                 )
             )
@@ -609,7 +613,7 @@ class TestServiceCreateInstance:
             inst = await svc.create_instance(
                 MCPServerInstanceCreate(
                     name="docker-inst",
-                    server_spec_id="test-spec-id",
+                    server_spec_id="00000000-0000-4000-8000-000000000001",
                     json_spec={"type": "docker"},
                 )
             )
@@ -624,7 +628,7 @@ class TestServiceCreateInstance:
         with pytest.raises(ValueError, match="bundle"):
             MCPServerInstanceCreate(
                 name="bundle-inst",
-                server_spec_id="test-spec-id",
+                server_spec_id="00000000-0000-4000-8000-000000000001",
                 json_spec={"type": "bundle", "members": [str(uuid.uuid4())]},
             )
 
@@ -653,15 +657,13 @@ class TestServiceCreateInstanceAuthConfigAccess:
     @pytest.mark.asyncio
     async def test_a_foreign_auth_config_is_refused_before_anything_is_persisted(self):
         svc = _make_service()
-        svc._assert_may_use_auth_config = AsyncMock(
-            side_effect=AuthConfigAccessDeniedError("nope")
-        )
+        svc._assert_may_use_auth_config = AsyncMock(side_effect=AuthConfigAccessDeniedError("nope"))
 
         with pytest.raises(AuthConfigAccessDeniedError):
             await svc.create_instance(
                 MCPServerInstanceCreate(
                     name="docker-inst",
-                    server_spec_id="test-spec-id",
+                    server_spec_id="00000000-0000-4000-8000-000000000001",
                     json_spec={"type": "docker"},
                     auth_config_id=str(uuid.uuid4()),
                 )
@@ -691,7 +693,7 @@ class TestServiceCreateInstanceAuthConfigAccess:
             inst = await svc.create_instance(
                 MCPServerInstanceCreate(
                     name="docker-inst",
-                    server_spec_id="test-spec-id",
+                    server_spec_id="00000000-0000-4000-8000-000000000001",
                     json_spec={"type": "docker"},
                     auth_config_id=auth_config_id,
                 )
@@ -928,11 +930,15 @@ class TestServiceExecuteTool:
 
         assert result["success"] is True
         # A URL-type endpoint is member-chosen: the payment client is kept but
-        # its requests go through the pinned transport.
-        from agentarea_common.utils.url_safety import SafeOutboundTransport
+        # its requests go through the pinned transport, which refuses to dial a
+        # private address.
+        import httpx2
+        from agentarea_common.utils.url_safety import UnsafeUrlError
 
         captured["factory"](headers=None, timeout=None)
-        assert isinstance(factory.call_args.kwargs["inner"], SafeOutboundTransport)
+        inner = factory.call_args.kwargs["inner"]
+        with pytest.raises(UnsafeUrlError):
+            await inner.handle_async_request(httpx2.Request("POST", "http://10.0.0.5/mcp"))
 
 
 # ---------------------------------------------------------------------------

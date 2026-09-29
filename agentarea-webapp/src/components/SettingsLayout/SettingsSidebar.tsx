@@ -1,15 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import {
-  ArrowLeft,
-  CreditCard,
-  Key,
-  ScrollText,
-  User,
-} from "lucide-react";
+import { ArrowLeft, CreditCard, Key, ScrollText, User } from "lucide-react";
 import { AppSidebarFooter } from "@/components/MainLayout/components/AppSidebarFooter";
 import { navItemClassName } from "@/components/MainLayout/components/NavMain";
 import {
@@ -21,13 +13,16 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { useBillingUrl } from "@/lib/use-billing-url";
+import Link from "@/components/WorkspaceLink";
+import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
+import { useWorkspaceBillingUrl } from "@/lib/use-billing-url";
 
 export function SettingsSidebarContent() {
-  const pathname = usePathname();
+  const pathname = useWorkspacePathname();
   const t = useTranslations("SettingsSidebar");
-  // Empty on any deployment that does not sell, which is the open default.
-  const billingUrl = useBillingUrl();
+  // Empty on any deployment that does not sell, which is the open default,
+  // and off a workspace page.
+  const billingUrl = useWorkspaceBillingUrl();
 
   const settingsNav = [
     {

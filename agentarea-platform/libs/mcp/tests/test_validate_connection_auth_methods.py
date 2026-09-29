@@ -266,3 +266,53 @@ class TestDetectionIsScopedToCatalogSpecs:
 
         service.mcp_server_repository.get_server_by_id.assert_awaited_once_with(SERVER_ID)
         detect.assert_awaited_once_with(URL)
+
+
+def _probing(service: MCPServerInstanceService, url: str = URL) -> MCPServerInstanceService:
+    """Point probe_instance_auth at one URL-type instance at ``url``."""
+    service.repository = MagicMock()
+    service.repository.get_by_id = AsyncMock(
+        return_value=MagicMock(id="inst-1", server_spec_id=None)
+    )
+    service._get_transport_spec_for_instance = AsyncMock(  # type: ignore[method-assign]
+        return_value={"type": "url", "endpoint_url": url}
+    )
+    return service
+
+
+class TestProbeInstanceAuth:
+    """The per-instance probe answers from the same classifier as the create page."""
+
+    @pytest.mark.asyncio
+    async def test_a_server_that_lists_openly_but_advertises_oauth_requires_auth(self):
+        """Gmail: 405 on GET, tools/list without a token, 401 on every call.
+        The probe used to report it open because it only read the GET status."""
+        with _client_returning(405), _oauth("oauth_app_required"):
+            result = await _probing(_service()).probe_instance_auth("inst-1")
+
+        assert result == {"status": "auth_required", "methods": ["oauth", "credentials"]}
+
+    @pytest.mark.asyncio
+    async def test_an_open_server_is_ok(self):
+        with _client_returning(200), _oauth("unsupported"):
+            result = await _probing(_service()).probe_instance_auth("inst-1")
+
+        assert result == {"status": "ok", "methods": ["none"]}
+
+    @pytest.mark.asyncio
+    async def test_a_challenge_without_oauth_asks_for_credentials(self):
+        with _client_returning(401), _oauth("unsupported"):
+            result = await _probing(_service()).probe_instance_auth("inst-1")
+
+        assert result["status"] == "auth_required"
+        assert result["methods"] == ["credentials"]
+
+    @pytest.mark.asyncio
+    async def test_the_oauth_classifier_never_dials_a_refused_address(self):
+        with _oauth("ready") as oauth_cls:
+            result = await _probing(
+                _service(), "http://169.254.169.254/latest/meta-data/"
+            ).probe_instance_auth("inst-1")
+
+        assert result["status"] == "error"
+        oauth_cls.return_value.assess.assert_not_awaited()

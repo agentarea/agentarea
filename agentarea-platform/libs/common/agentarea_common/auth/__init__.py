@@ -5,9 +5,9 @@ to support different authentication providers.
 """
 
 from .authorization import AuthorizationService, assert_workspace_admin
-from .context import Principal, ServicePrincipal, UserContext
+from .context import Principal, ServicePrincipal, UserContext, UserPrincipal
 from .context_manager import ContextManager
-from .dependencies import UserContextDep, get_user_context
+from .dependencies import PrincipalDep, UserContextDep, get_principal, get_user_context
 from .jwt_handler import JWTTokenHandler, get_jwt_handler
 from .openfga_permission import OpenFGAPermissionService
 from .permission import PermissionService, require_permission
@@ -20,12 +20,15 @@ __all__ = [
     "OpenFGAPermissionService",
     "PermissionService",
     "Principal",
+    "PrincipalDep",
     "ServicePrincipal",
     "UserContext",
     "UserContextDep",
+    "UserPrincipal",
     "WorkspaceScopedAuthorizationService",
     "assert_workspace_admin",
     "get_jwt_handler",
+    "get_principal",
     "get_user_context",
     "require_permission",
 ]

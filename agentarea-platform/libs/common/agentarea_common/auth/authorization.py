@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 
 from fastapi import HTTPException
 
-from .context import UserContext
+from .context import UserContext, UserPrincipal
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +25,17 @@ class AuthorizationService(ABC):
     """
 
     @abstractmethod
-    async def get_accessible_workspaces(self, user_context: UserContext) -> list[str]:
-        """Return the list of workspace IDs this user can read from.
+    async def get_accessible_workspaces(self, principal: UserPrincipal) -> list[str]:
+        """Return workspace IDs this principal may act in beyond ownership and membership.
+
+        Ownership and graph membership are resolved by the request dependency;
+        this adds whatever an implementation grants on top of them.
 
         Args:
-            user_context: Current user and workspace context.
+            principal: The authenticated caller, before any workspace is selected.
 
         Returns:
-            List of workspace IDs the user has read access to.
+            List of additional workspace IDs the principal has access to.
         """
         ...
 

@@ -1,7 +1,7 @@
 "use client";
 
 import type { MouseEventHandler, ReactNode } from "react";
-import Link from "next/link";
+import Link from "@/components/WorkspaceLink";
 import { AgentAvatar, type AgentAvatarAgent } from "@/components/AgentAvatar";
 import { cn } from "@/lib/utils";
 

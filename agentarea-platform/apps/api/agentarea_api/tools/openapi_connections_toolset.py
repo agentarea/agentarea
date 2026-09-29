@@ -19,6 +19,7 @@ from agentarea_openapi.schemas.dto import (
     HeaderInput,
     OpenAPIConnectionCreate,
     OpenAPIConnectionUpdate,
+    UrlVariableInput,
 )
 
 from .base import platform_context, platform_read_context
@@ -36,6 +37,7 @@ def _serialize(conn: Any) -> dict:
             {"name": h["name"], "secret": h.get("secret", False)}
             for h in (conn.custom_headers or [])
         ],
+        "url_variables": conn.url_variables or [],
         "tools_count": len(conn.available_tools or []),
         "status": conn.status,
     }
@@ -76,12 +78,15 @@ class OpenAPIConnectionsToolset(Toolset):
         spec_content_json: str = "",
         auth_config_id: str | None = None,
         custom_headers_json: str = "",
+        url_variables_json: str = "",
     ) -> str:
         """Create a new OpenAPI connection.
 
         Args:
             name: Display name for the connection (unique per workspace).
             base_url: Base URL for API requests, e.g. ``https://api.example.com``.
+                The path may hold ``{name}`` placeholders filled from
+                ``url_variables_json``, e.g. ``https://api.telegram.org/bot{token}``.
             description: Optional human-readable summary.
             spec_url: URL to an OpenAPI 3.x JSON or YAML spec. Spec is fetched
                 and parsed eagerly at create time so the connection is ready.
@@ -92,11 +97,20 @@ class OpenAPIConnectionsToolset(Toolset):
             custom_headers_json: JSON-encoded array of ``{"name", "value"}``
                 header objects. Non-safe headers (e.g. Authorization) are stored
                 encrypted in the secret manager.
+            url_variables_json: JSON-encoded array of ``{"name", "value"}`` objects,
+                one per ``{name}`` placeholder in ``base_url``. Values are stored
+                encrypted in the secret manager and never returned.
         """
         spec_content = json.loads(spec_content_json) if spec_content_json else None
         headers_raw = json.loads(custom_headers_json) if custom_headers_json else None
         custom_headers = (
             [HeaderInput.model_validate(h) for h in headers_raw] if headers_raw else None
+        )
+        url_variables_raw = json.loads(url_variables_json) if url_variables_json else None
+        url_variables = (
+            [UrlVariableInput.model_validate(v) for v in url_variables_raw]
+            if url_variables_raw
+            else None
         )
 
         payload = OpenAPIConnectionCreate(
@@ -107,6 +121,7 @@ class OpenAPIConnectionsToolset(Toolset):
             spec_content=spec_content,
             auth_config_id=UUID(auth_config_id) if auth_config_id else None,
             custom_headers=custom_headers,
+            url_variables=url_variables,
         )
 
         async with platform_context() as (
@@ -177,10 +192,13 @@ class OpenAPIConnectionsToolset(Toolset):
         spec_content_json: str = "",
         auth_config_id: str | None = None,
         custom_headers_json: str = "",
+        url_variables_json: str = "",
     ) -> str:
         """Update fields on an existing OpenAPI connection. Only fields explicitly
         set are written. ``custom_headers_json`` replaces the full header set;
-        pass ``[]`` to clear all. Secret values are stored encrypted in the
+        pass ``[]`` to clear all. ``url_variables_json`` likewise replaces the
+        full ``[{"name", "value"}]`` set, which must match the ``{name}``
+        placeholders in ``base_url``. Secret values are stored encrypted in the
         secret manager. Call ``discover_tools`` afterwards to refresh the
         discovered tools list when the spec changes.
         """
@@ -200,6 +218,9 @@ class OpenAPIConnectionsToolset(Toolset):
         if custom_headers_json:
             raw_headers = json.loads(custom_headers_json)
             patch["custom_headers"] = [HeaderInput.model_validate(h) for h in raw_headers]
+        if url_variables_json:
+            raw_url_variables = json.loads(url_variables_json)
+            patch["url_variables"] = [UrlVariableInput.model_validate(v) for v in raw_url_variables]
 
         if not patch:
             return json.dumps({"error": "no fields to update"})
@@ -237,7 +258,7 @@ class OpenAPIConnectionsToolset(Toolset):
     @tool_method(effect="destructive")
     @requires("delete", "openapi_connection", id_param="connection_id")
     async def delete(self, connection_id: str) -> str:
-        """Delete an OpenAPI connection and its stored secret headers."""
+        """Delete an OpenAPI connection and its stored secret headers and URL variables."""
         async with platform_context() as (
             _session,
             _user_ctx,

@@ -9,8 +9,8 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "@/components/WorkspaceLink";
+import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -144,7 +144,7 @@ export function NavMain({
   sections: NavSection[];
 }) {
   const items = sections.flatMap((s) => s.items);
-  const pathname = usePathname();
+  const pathname = useWorkspacePathname();
   const activeSectionIds = useMemo(
     () =>
       sections
