@@ -286,6 +286,30 @@ def _is_under(path: Path, root: Path) -> bool:
     return True
 
 
+def install_cache_roots(environ: Mapping[str, str]) -> list[Path]:
+    """Caches the package managers and Node fill during an install.
+
+    None of them is part of the package: npm and uv keep downloads there, and
+    Node (22+, which npm enables) keeps compiled modules in
+    ``$TMPDIR/node-compile-cache`` unless NODE_COMPILE_CACHE moves it.
+    """
+    roots = [
+        Path(value)
+        for key, value in environ.items()
+        if key
+        in {
+            "NPM_CONFIG_CACHE",
+            "npm_config_cache",
+            "UV_CACHE_DIR",
+            "uv_cache_dir",
+            "NODE_COMPILE_CACHE",
+        }
+        and value
+    ]
+    roots.append(Path(environ.get("TMPDIR") or "/tmp") / "node-compile-cache")
+    return roots
+
+
 def detect_outside_writes(
     marker: Path,
     *,
@@ -562,12 +586,7 @@ def run_pack(arguments: Sequence[str]) -> PackResult:
         else:
             raise RuntimeError(f"unsupported package ecosystem: {config.ecosystem!r}")
 
-        cache_roots = [
-            Path(value)
-            for key, value in os.environ.items()
-            if key in {"NPM_CONFIG_CACHE", "npm_config_cache", "UV_CACHE_DIR", "uv_cache_dir"}
-            and value
-        ]
+        cache_roots = install_cache_roots(os.environ)
         roots = [Path("/tmp")]
         home_value = os.environ.get("HOME")
         if home_value and home_value != "/tmp":
@@ -610,6 +629,7 @@ def run_pack(arguments: Sequence[str]) -> PackResult:
         return PackResult(report, None, workdir)
     finally:
         report["log_tail"] = _tail(output)
+
 
 class _PackHandler(BaseHTTPRequestHandler):
     server: "_PackHTTPServer"
