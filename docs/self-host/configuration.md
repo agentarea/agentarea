@@ -211,6 +211,18 @@ are not rendered into environment variables.
 | `MCP_REQUEST_LEASE_TTL` | `mcpManager.serverless.requestLeaseTTL` | `90s` |
 | `MCP_GATEWAY_STARTUP_TIMEOUT` | `mcpManager.serverless.startupTimeout` | `5m` |
 | `MCP_GATEWAY_AUTH_SECRET` | optional; the gateway's shared secret | `""` |
+| `MCP_PACKAGE_REPOSITORY` | `mcpManager.packageImages.repository` | `""` |
+| `MCP_PACKAGE_IMPORT_TIMEOUT` | `mcpManager.packageImages.importTimeout` | `15m` |
+| `DOCKER_CONFIG` | `mcpManager.packageImages.registrySecret` | not set; `/etc/agentarea/mcp-registry` when a registry Secret is configured |
+
+An empty `MCP_PACKAGE_REPOSITORY` uses the local Docker image store only when
+the manager's backend is Docker; Kubernetes and data-plane backends require a
+repository.
+
+`mcpManager.packageImages.registrySecret` names an existing
+`kubernetes.io/dockerconfigjson` Secret. The manager projects its
+`.dockerconfigjson` key as `config.json` in a read-only mount at
+`/etc/agentarea/mcp-registry`, and `DOCKER_CONFIG` points at that directory.
 
 All four gateway durations are **required** — the manager refuses to start when
 one is missing or unparseable, and only `MCP_IDLE_TIMEOUT` may be zero

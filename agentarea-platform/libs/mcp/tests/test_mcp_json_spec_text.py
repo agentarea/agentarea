@@ -23,22 +23,22 @@ BAD_SPECS = [{"type": "docker", "environment": {"A": "x\x00"}}, {"type": "url", 
 
 @pytest.mark.parametrize("spec", BAD_SPECS)
 def test_instance_create_refuses_unstorable_text(spec) -> None:
-    with pytest.raises(ValidationError, match="NUL|surrogate"):
+    with pytest.raises(ValidationError, match=r"NUL|surrogate"):
         MCPServerInstanceCreate(name="i", server_spec_id=uuid4(), json_spec=spec)
 
 
 @pytest.mark.parametrize("spec", BAD_SPECS)
 def test_instance_update_refuses_unstorable_text(spec) -> None:
     spec = {k: v for k, v in spec.items() if k != "type"}
-    with pytest.raises(ValidationError, match="NUL|surrogate"):
+    with pytest.raises(ValidationError, match=r"NUL|surrogate"):
         MCPServerInstanceUpdate(json_spec=spec)
 
 
 @pytest.mark.parametrize("spec", BAD_SPECS)
 def test_server_create_and_update_refuse_unstorable_text(spec) -> None:
-    with pytest.raises(ValidationError, match="NUL|surrogate"):
+    with pytest.raises(ValidationError, match=r"NUL|surrogate"):
         MCPServerCreate(name="s", version="1", json_spec=spec)
-    with pytest.raises(ValidationError, match="NUL|surrogate"):
+    with pytest.raises(ValidationError, match=r"NUL|surrogate"):
         MCPServerUpdate(json_spec=spec)
 
 
@@ -46,3 +46,14 @@ def test_ordinary_specs_still_validate() -> None:
     spec = {"type": "docker", "environment": {"TOKEN": "ключ"}}
     assert MCPServerInstanceCreate(name="i", server_spec_id=uuid4(), json_spec=spec).json_spec == spec
     assert MCPServerUpdate(json_spec=spec).json_spec == spec
+
+
+def test_instance_update_rejects_imported_runtime_fields() -> None:
+    with pytest.raises(ValidationError, match=r"package|port|source"):
+        MCPServerInstanceUpdate(
+            json_spec={
+                "port": 8080,
+                "package": {"ecosystem": "npm"},
+                "source": {"type": "command"},
+            }
+        )

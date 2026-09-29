@@ -35,6 +35,8 @@ type Config struct {
 
 	// Feature flags configuration
 	Features FeaturesConfig `json:"features"`
+	// Package image import configuration
+	PackageImages PackageImageConfig `json:"package_images"`
 }
 
 // FeaturesConfig holds feature flag configuration
@@ -105,6 +107,14 @@ type RedisConfig struct {
 	URL string `json:"url"`
 }
 
+// PackageImageConfig controls the manager's package-to-image import flow.
+type PackageImageConfig struct {
+	Repository     string        `json:"repository"`
+	ImportTimeout  time.Duration `json:"import_timeout"`
+	NPMRegistryURL string        `json:"npm_registry_url"`
+	PyPIURL        string        `json:"pypi_url"`
+}
+
 // Load loads configuration from environment variables. Missing operational
 // values may use documented defaults; malformed values always stop startup.
 func Load() *Config {
@@ -154,6 +164,12 @@ func Load() *Config {
 		Kubernetes:  loadKubernetesConfig(),
 		Environment: backendEnvironment(),
 		Features:    loadFeaturesConfig(),
+		PackageImages: PackageImageConfig{
+			Repository:     getEnv("MCP_PACKAGE_REPOSITORY", ""),
+			ImportTimeout:  getEnvDuration("MCP_PACKAGE_IMPORT_TIMEOUT", 15*time.Minute),
+			NPMRegistryURL: getEnv("MCP_NPM_REGISTRY_URL", "https://registry.npmjs.org"),
+			PyPIURL:        getEnv("MCP_PYPI_URL", "https://pypi.org"),
+		},
 	}
 	if config.Server.Port <= 0 || config.Server.ReadTimeout <= 0 || config.Server.WriteTimeout <= 0 {
 		panic("server port and timeouts must be positive")

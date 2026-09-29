@@ -27,7 +27,9 @@ from pydantic import (
 # surrogate stored there broke every such query, so refuse it at the edge.
 JsonSpec = Annotated[dict[str, Any], AfterValidator(require_pg_text)]
 
-INSTANCE_TRANSPORT_FIELDS = frozenset({"type", "endpoint_url", "image", "command", "args"})
+INSTANCE_TRANSPORT_FIELDS = frozenset(
+    {"type", "endpoint_url", "image", "command", "args", "port", "package", "source"}
+)
 
 # ---------------------------------------------------------------------------
 # MCP server spec (a.k.a. "template") — catalog entry that an instance can

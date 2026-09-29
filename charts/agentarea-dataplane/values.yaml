@@ -14,6 +14,12 @@ image:
 # the nodes of this cluster; give them registry credentials there.
 imagePullSecrets: []
 
+mcpBase:
+  image:
+    # -- mcp-base image pre-pulled on every node before package workloads start.
+    repository: agentarea/agentarea-mcp-base
+    tag: "latest"
+
 dataPlane:
   # -- (required) Stamped on every instance this data plane creates. A data plane
   # refuses instances without its own id, so two data planes never claim each

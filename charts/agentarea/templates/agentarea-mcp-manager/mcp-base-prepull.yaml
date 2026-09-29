@@ -1,0 +1,57 @@
+{{- if and .Values.mcpManager.enabled (eq (include "agentarea.mcpManager.backendType" . | trim) "kubernetes") }}
+{{- $instancePod := .Values.mcpManager.instancePod | default dict }}
+{{- $globalPullSecrets := .Values.global.image.pullSecrets | default (list) }}
+{{- $instancePullSecrets := $instancePod.imagePullSecrets | default (list) }}
+{{- $pullSecrets := concat $globalPullSecrets $instancePullSecrets }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "agentarea.fullname" . }}-mcp-base-prepull
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-base-prepull
+spec:
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mcp-base-prepull
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mcp-base-prepull
+    spec:
+      automountServiceAccountToken: false
+      {{- with $pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $instancePod.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $instancePod.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $instancePod.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: pull-mcp-base
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.mcpManager.mcpBase.image.repository }}:{{ .Values.mcpManager.mcpBase.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          command: ["/bin/sh", "-c", "true"]
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 1m
+              memory: 1Mi
+            limits:
+              cpu: 10m
+              memory: 16Mi
+{{- end }}

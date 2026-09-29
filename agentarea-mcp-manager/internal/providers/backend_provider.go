@@ -68,15 +68,10 @@ func (p *BackendProvider) CreateInstance(ctx context.Context, instance *models.M
 	p.logger.Info("Creating Kubernetes instance via backend",
 		slog.String("instance_id", instance.InstanceID),
 		slog.String("name", instance.Name))
-
-	resolvedJSON, err := resolveInstanceSpecSecrets(p.secrets, instance.InstanceID, instance.JSONSpec)
+	spec, err := BuildBackendInstanceSpec(instance, p.secrets)
 	if err != nil {
 		return err
 	}
-	resolvedInstance := *instance
-	resolvedInstance.JSONSpec = resolvedJSON
-	// Convert MCPServerInstance to backend InstanceSpec
-	spec := p.convertToInstanceSpec(&resolvedInstance)
 
 	// Use the backend to create the instance
 	result, err := p.backend.CreateInstance(ctx, spec)
@@ -116,6 +111,21 @@ func (p *BackendProvider) DeleteInstance(ctx context.Context, instanceID, name s
 	return nil
 }
 
+// BuildBackendInstanceSpec resolves an instance's environment and converts its
+// JSON specification to the backend shape used by container providers.
+func BuildBackendInstanceSpec(instance *models.MCPServerInstance, resolver secrets.SecretResolver) (*BackendInstanceSpec, error) {
+	if instance == nil {
+		return nil, fmt.Errorf("MCP instance is required")
+	}
+	resolvedJSON, err := resolveInstanceSpecSecrets(resolver, instance.InstanceID, instance.JSONSpec)
+	if err != nil {
+		return nil, err
+	}
+	resolvedInstance := *instance
+	resolvedInstance.JSONSpec = resolvedJSON
+	return (&BackendProvider{}).convertToInstanceSpec(&resolvedInstance), nil
+}
+
 // convertToInstanceSpec converts an MCPServerInstance to a backend InstanceSpec.
 //
 // For command-type instances we run the stdio command on the mcp-base image
@@ -133,10 +143,16 @@ func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstan
 		Name:        instance.InstanceID,
 		ServiceName: instance.InstanceID,
 	}
-
 	jsonSpec := instance.JSONSpec
-	specType, _ := jsonSpec["type"].(string)
+	applyTransportSpec(spec, jsonSpec)
+	applyResourceLimits(spec, jsonSpec)
+	applyEnvironment(spec, jsonSpec)
+	applyLabels(spec, jsonSpec)
+	return spec
+}
 
+func applyTransportSpec(spec *BackendInstanceSpec, jsonSpec map[string]any) {
+	specType, _ := jsonSpec["type"].(string)
 	if specType == "command" {
 		// command-type: the stdio command runs behind mcp-base's bridge.
 		cmd, _ := jsonSpec["command"].(string)
@@ -145,22 +161,21 @@ func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstan
 		// mcp-base's ENTRYPOINT is its bridge; the stdio command + args are
 		// its arguments (K8s container.args).
 		spec.Command = append([]string{cmd}, mcpspec.StringList(jsonSpec["args"])...)
-	} else {
-		// docker-type: use the image directly — it must serve HTTP natively.
-		if image, ok := jsonSpec["image"].(string); ok {
-			spec.Image = image
-		}
-		if port, ok := jsonSpec["port"].(float64); ok {
-			spec.Port = int(port)
-		} else if port, ok := jsonSpec["port"].(int); ok {
-			spec.Port = port
-		}
-		spec.Command = mcpspec.DockerArgv(jsonSpec)
+		return
 	}
+	// docker-type: use the image directly — it must serve HTTP natively.
+	if image, ok := jsonSpec["image"].(string); ok {
+		spec.Image = image
+	}
+	if port, ok := jsonSpec["port"].(float64); ok {
+		spec.Port = int(port)
+	} else if port, ok := jsonSpec["port"].(int); ok {
+		spec.Port = port
+	}
+	spec.Command = mcpspec.DockerArgv(jsonSpec)
+}
 
-	// A per-instance ceiling, when the control plane sets one. Without this the
-	// host default is the only ceiling there is, so every workspace and every plan
-	// gets the same slice of the machine.
+func applyResourceLimits(spec *BackendInstanceSpec, jsonSpec map[string]any) {
 	if resources, ok := jsonSpec["resources"].(map[string]any); ok {
 		if limits, ok := resources["limits"].(map[string]any); ok {
 			if memory, ok := limits["memory"].(string); ok {
@@ -171,54 +186,61 @@ func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstan
 			}
 		}
 	}
-
-	// Extract environment variables
-	if envInterface, exists := instance.JSONSpec["environment"]; exists {
-		if envMap, ok := envInterface.(map[string]any); ok {
-			env := make(map[string]string)
-			for key, value := range envMap {
-				env[key] = fmt.Sprintf("%v", value)
-			}
-			spec.Environment = env
+	if resources, ok := jsonSpec["resource_limits"].(map[string]any); ok {
+		if memory, ok := resources["memory"].(string); ok {
+			spec.Resources.Limits.Memory = memory
+		}
+		if cpu, ok := resources["cpu"].(string); ok {
+			spec.Resources.Limits.CPU = cpu
+		} else if cpu, ok := resources["cpu"].(float64); ok {
+			spec.Resources.Limits.CPU = fmt.Sprintf("%f", cpu)
 		}
 	}
+}
 
-	// Also check for env_vars (alternative key)
-	if envInterface, exists := instance.JSONSpec["env_vars"]; exists {
-		if envMap, ok := envInterface.(map[string]any); ok {
-			if spec.Environment == nil {
-				spec.Environment = make(map[string]string)
-			}
-			for key, value := range envMap {
-				spec.Environment[key] = fmt.Sprintf("%v", value)
-			}
+func applyEnvironment(spec *BackendInstanceSpec, jsonSpec map[string]any) {
+	if environment, exists := jsonSpec["environment"]; exists {
+		if values, ok := stringMap(environment); ok {
+			spec.Environment = values
 		}
 	}
-
-	// Extract labels
-	if labelsInterface, exists := instance.JSONSpec["labels"]; exists {
-		if labelsMap, ok := labelsInterface.(map[string]any); ok {
-			labels := make(map[string]string)
-			for key, value := range labelsMap {
-				labels[key] = fmt.Sprintf("%v", value)
-			}
-			spec.Labels = labels
+	if values, exists := jsonSpec["env_vars"]; exists {
+		environment, ok := stringMap(values)
+		if !ok {
+			return
+		}
+		if spec.Environment == nil {
+			spec.Environment = make(map[string]string)
+		}
+		for key, value := range environment {
+			spec.Environment[key] = value
 		}
 	}
+}
 
-	// Extract resource limits
-	if resourcesInterface, exists := instance.JSONSpec["resource_limits"]; exists {
-		if resourcesMap, ok := resourcesInterface.(map[string]any); ok {
-			if memory, ok := resourcesMap["memory"].(string); ok {
-				spec.Resources.Limits.Memory = memory
-			}
-			if cpu, ok := resourcesMap["cpu"].(string); ok {
-				spec.Resources.Limits.CPU = cpu
-			} else if cpu, ok := resourcesMap["cpu"].(float64); ok {
-				spec.Resources.Limits.CPU = fmt.Sprintf("%f", cpu)
-			}
+func applyLabels(spec *BackendInstanceSpec, jsonSpec map[string]any) {
+	if labels, exists := jsonSpec["labels"]; exists {
+		if values, ok := stringMap(labels); ok {
+			spec.Labels = values
 		}
 	}
+}
 
-	return spec
+func stringMap(raw any) (map[string]string, bool) {
+	switch values := raw.(type) {
+	case map[string]any:
+		out := make(map[string]string, len(values))
+		for key, value := range values {
+			out[key] = fmt.Sprintf("%v", value)
+		}
+		return out, true
+	case map[string]string:
+		out := make(map[string]string, len(values))
+		for key, value := range values {
+			out[key] = value
+		}
+		return out, true
+	default:
+		return nil, false
+	}
 }

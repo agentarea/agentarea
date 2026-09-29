@@ -38,6 +38,8 @@ MCP_IDLE_SWEEP_INTERVAL: "{{ .Values.mcpManager.serverless.sweepInterval }}"
 MCP_REQUEST_LEASE_TTL: "{{ .Values.mcpManager.serverless.requestLeaseTTL }}"
 MCP_GATEWAY_STARTUP_TIMEOUT: "{{ .Values.mcpManager.serverless.startupTimeout }}"
 MCP_BASE_IMAGE: "{{ .Values.mcpManager.mcpBase.image.repository }}:{{ .Values.mcpManager.mcpBase.image.tag }}"
+MCP_PACKAGE_REPOSITORY: "{{ .Values.mcpManager.packageImages.repository }}"
+MCP_PACKAGE_IMPORT_TIMEOUT: "{{ .Values.mcpManager.packageImages.importTimeout }}"
 {{- end }}
 
 {{- define "agentarea.mcpManager.envs" }}
@@ -211,6 +213,16 @@ MCP_BASE_IMAGE: "{{ .Values.mcpManager.mcpBase.image.repository }}:{{ .Values.mc
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: MCP_BASE_IMAGE
+- name: MCP_PACKAGE_REPOSITORY
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: MCP_PACKAGE_REPOSITORY
+- name: MCP_PACKAGE_IMPORT_TIMEOUT
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: MCP_PACKAGE_IMPORT_TIMEOUT
 {{- end }}
 
 {{- define "agentarea.mcpManager.secrets.envs" }}

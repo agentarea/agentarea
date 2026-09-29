@@ -28,6 +28,8 @@ func DockerArgv(jsonSpec map[string]any) []string {
 			}
 		case []any:
 			argv = append(argv, StringList(value)...)
+		case []string:
+			argv = append(argv, value...)
 		default:
 			continue
 		}
@@ -49,8 +51,17 @@ func DockerArgv(jsonSpec map[string]any) []string {
 
 // StringList reads a JSON array of strings, skipping anything else.
 func StringList(raw any) []string {
-	items, ok := raw.([]any)
-	if !ok {
+	var items []any
+	switch values := raw.(type) {
+	case []any:
+		items = values
+	case []string:
+		out := append([]string(nil), values...)
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	default:
 		return nil
 	}
 	out := make([]string, 0, len(items))

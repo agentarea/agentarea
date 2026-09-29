@@ -20,6 +20,7 @@ spec:
     spec:
       {{- $dockerBackend := eq (default "kubernetes" .Values.mcpManager.backend) "docker" }}
       {{- $execKubeconfig := include "agentarea.mcpManager.executionKubeconfigPath" . }}
+      {{- $packageRegistrySecret := .Values.mcpManager.packageImages.registrySecret | default "" }}
       serviceAccountName: {{ include "agentarea.mcpManagerServiceAccountName" . }}
       {{- if not $dockerBackend }}
       {{- with .Values.global.security.podSecurityContext }}
@@ -98,6 +99,10 @@ spec:
             {{- include "agentarea.sandboxRuntime.envs" . | nindent 12 }}
             {{- include "agentarea.mcpManager.envs" . | nindent 12 }}
             {{- include "agentarea.mcpManager.secrets.envs" . | nindent 12 }}
+            {{- if $packageRegistrySecret }}
+            - name: DOCKER_CONFIG
+              value: /etc/agentarea/mcp-registry
+            {{- end }}
             {{- $ip := .Values.mcpManager.instancePod }}
             {{- if and $ip (or $ip.labels $ip.annotations $ip.nodeSelector $ip.tolerations $ip.affinity $ip.imagePullSecrets $ip.priorityClassName) }}
             # Operator customization for spawned MCP instance pods (one JSON blob;
@@ -152,6 +157,12 @@ spec:
             # and internal/sandboxruntime/manager.go (SandboxFileUpload).
             - name: tmp
               mountPath: /tmp
+            {{- if $packageRegistrySecret }}
+            # Registry credentials for package-image lookup and push.
+            - name: mcp-package-registry
+              mountPath: /etc/agentarea/mcp-registry
+              readOnly: true
+            {{- end }}
             {{- if $dockerBackend }}
             # Docker backend: drive containers through the host Docker socket.
             - name: docker-sock
@@ -167,6 +178,14 @@ spec:
           hostPath:
             path: /var/run/docker.sock
             type: Socket
+        {{- end }}
+        {{- if $packageRegistrySecret }}
+        - name: mcp-package-registry
+          secret:
+            secretName: {{ $packageRegistrySecret | quote }}
+            items:
+              - key: .dockerconfigjson
+                path: config.json
         {{- end }}
         {{- include "agentarea.mcpManager.executionKubeconfigVolume" . | nindent 8 }}
 {{- end }}
