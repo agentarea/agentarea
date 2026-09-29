@@ -118,7 +118,7 @@ groups:
       LOG_LEVEL: 'INFO'
       CORE_API_URL: 'http://{{ include "agentarea.fullname" . }}-backend:8000'
       SERVER_HOST: '0.0.0.0'
-      SERVER_PORT: '80'
+      SERVER_PORT: '8000'
       # Derived from whether mcpManager.dataPlane names a host, so the backend
       # and the address it is given cannot disagree. Half-configuration stops
       # the render — see the helper.
