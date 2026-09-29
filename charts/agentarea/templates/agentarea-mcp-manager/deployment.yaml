@@ -54,7 +54,7 @@ spec:
           {{- end }}
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8000
               protocol: TCP
           env:
             {{- include "agentarea.database.secrets.envs" . | nindent 12 }}
