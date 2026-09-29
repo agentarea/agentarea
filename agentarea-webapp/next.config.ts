@@ -32,8 +32,15 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/(.*)",
+        headers: [{ key: "X-Content-Type-Options", value: "nosniff" }],
+      },
+      {
+        // /app-sandbox is the MCP Apps frame, meant to be embedded by the
+        // webapp; it sends its own CSP (frame-ancestors = the webapp origin).
+        // This one, with frame-ancestors 'none', would replace it and the
+        // browser would refuse to load the frame.
+        source: "/((?!app-sandbox$).*)",
         headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Content-Security-Policy", value: CONTENT_SECURITY_POLICY },
         ],
       },
