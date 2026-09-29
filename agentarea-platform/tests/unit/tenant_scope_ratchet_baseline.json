@@ -50,6 +50,7 @@
     "libs/common/agentarea_common/events/outbox_relay.py": 1,
     "libs/execution/agentarea_execution/activities/agent_execution_activities.py": 1,
     "libs/execution/agentarea_execution/activities/trigger_execution_activities.py": 1,
+    "libs/mcp/agentarea_mcp/container_monitor.py": 1,
     "libs/mcp/agentarea_mcp/infrastructure/client_repository.py": 1,
     "libs/triggers/agentarea_triggers/channels/inbound_subscriber.py": 1,
     "libs/triggers/agentarea_triggers/channels/lazy_secret_manager.py": 1,

@@ -13,7 +13,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/mcpbase"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
@@ -252,7 +252,7 @@ func (s *LocalStore) inspect(ctx context.Context, reference string) (*dockerInsp
 		return nil, fmt.Errorf("decode Docker image inspect: %w", err)
 	}
 	if inspection.ID == "" {
-		return nil, fmt.Errorf("Docker image inspect returned no image id")
+		return nil, fmt.Errorf("docker image inspect returned no image id")
 	}
 	return &inspection, nil
 }

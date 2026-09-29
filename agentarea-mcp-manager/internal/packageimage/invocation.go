@@ -34,103 +34,140 @@ func ParseInvocation(command []string) (Invocation, error) {
 	if len(command) == 0 {
 		return Invocation{}, fmt.Errorf("command invocation is empty")
 	}
-
-	var invocation Invocation
 	switch command[0] {
 	case "npx":
-		invocation.Ecosystem = EcosystemNPM
+		return parseNpxInvocation(command)
 	case "uvx":
-		invocation.Ecosystem = EcosystemPyPI
+		return parseUvxInvocation(command)
 	default:
 		return Invocation{}, fmt.Errorf("unsupported package command %q", command[0])
 	}
+}
 
-	allowedFlags := map[string]struct{}{}
-	if invocation.Ecosystem == EcosystemNPM {
-		allowedFlags["-y"] = struct{}{}
-		allowedFlags["--yes"] = struct{}{}
-		allowedFlags["-q"] = struct{}{}
-		allowedFlags["--quiet"] = struct{}{}
-	} else {
-		allowedFlags["-q"] = struct{}{}
-		allowedFlags["--quiet"] = struct{}{}
-	}
-
-	packageFromFlag := false
-	packageSet := false
+func parseNpxInvocation(command []string) (Invocation, error) {
+	invocation := Invocation{Ecosystem: EcosystemNPM}
+	packageSet, packageFromFlag := false, false
 	for index := 1; index < len(command); index++ {
 		token := command[index]
-		if !packageSet {
-			if _, ok := allowedFlags[token]; ok {
-				continue
-			}
-			if token == "-p" || token == "--package" || token == "--from" {
-				if invocation.Ecosystem == EcosystemPyPI && token == "-p" {
-					return Invocation{}, fmt.Errorf("unsupported uvx flag %q", token)
-				}
-				if invocation.Ecosystem == EcosystemNPM && token == "--from" {
-					return Invocation{}, fmt.Errorf("unsupported npx flag %q", token)
-				}
-				if index+1 >= len(command) {
-					return Invocation{}, fmt.Errorf("flag %q requires a package spec", token)
-				}
-				index++
-				spec := command[index]
-				if strings.HasPrefix(spec, "-") {
-					return Invocation{}, fmt.Errorf("flag %q requires a package spec", token)
-				}
-				name, version, err := parsePackageSpec(invocation.Ecosystem, spec)
-				if err != nil {
-					return Invocation{}, err
-				}
-				invocation.Package, invocation.Version = name, version
-				packageSet = true
-				packageFromFlag = true
-				continue
-			}
-			if strings.HasPrefix(token, "--package=") || strings.HasPrefix(token, "--from=") {
-				flag, spec, ok := strings.Cut(token, "=")
-				if !ok || spec == "" {
-					return Invocation{}, fmt.Errorf("flag %q requires a package spec", flag)
-				}
-				if invocation.Ecosystem == EcosystemPyPI && flag != "--from" {
-					return Invocation{}, fmt.Errorf("unsupported uvx flag %q", flag)
-				}
-				if invocation.Ecosystem == EcosystemNPM && flag != "--package" {
-					return Invocation{}, fmt.Errorf("unsupported npx flag %q", flag)
-				}
-				name, version, err := parsePackageSpec(invocation.Ecosystem, spec)
-				if err != nil {
-					return Invocation{}, err
-				}
-				invocation.Package, invocation.Version = name, version
-				packageSet = true
-				packageFromFlag = true
-				continue
-			}
-			if strings.HasPrefix(token, "-") {
-				return Invocation{}, fmt.Errorf("unsupported %s flag %q", invocation.Ecosystem, token)
-			}
-			name, version, err := parsePackageSpec(invocation.Ecosystem, token)
+		if packageSet {
+			appendInvocationToken(&invocation, token, packageFromFlag)
+			continue
+		}
+		switch token {
+		case "-y", "--yes", "-q", "--quiet":
+			continue
+		case "-p", "--package":
+			name, version, next, err := parsePackageFlag(command, index, EcosystemNPM)
 			if err != nil {
 				return Invocation{}, err
 			}
 			invocation.Package, invocation.Version = name, version
-			packageSet = true
-			continue
+			index, packageSet, packageFromFlag = next, true, true
+		case "--from":
+			return Invocation{}, fmt.Errorf("unsupported npx flag %q", token)
+		default:
+			if strings.HasPrefix(token, "--package=") || strings.HasPrefix(token, "--from=") {
+				name, version, err := parseEqualsPackageFlag(token, EcosystemNPM, "--package")
+				if err != nil {
+					return Invocation{}, err
+				}
+				invocation.Package, invocation.Version = name, version
+				packageSet, packageFromFlag = true, true
+				continue
+			}
+			if strings.HasPrefix(token, "-") {
+				return Invocation{}, fmt.Errorf("unsupported npx flag %q", token)
+			}
+			name, version, err := parsePackageSpec(EcosystemNPM, token)
+			if err != nil {
+				return Invocation{}, err
+			}
+			invocation.Package, invocation.Version, packageSet = name, version, true
 		}
-
-		if packageFromFlag && invocation.Executable == "" && !strings.HasPrefix(token, "-") {
-			invocation.Executable = token
-			continue
-		}
-		invocation.Args = append(invocation.Args, token)
 	}
-
 	if !packageSet {
 		return Invocation{}, fmt.Errorf("package spec is required")
 	}
 	return invocation, nil
+}
+
+func parseUvxInvocation(command []string) (Invocation, error) {
+	invocation := Invocation{Ecosystem: EcosystemPyPI}
+	packageSet, packageFromFlag := false, false
+	for index := 1; index < len(command); index++ {
+		token := command[index]
+		if packageSet {
+			appendInvocationToken(&invocation, token, packageFromFlag)
+			continue
+		}
+		switch token {
+		case "-q", "--quiet":
+			continue
+		case "-p":
+			return Invocation{}, fmt.Errorf("unsupported uvx flag %q", token)
+		case "--package", "--from":
+			name, version, next, err := parsePackageFlag(command, index, EcosystemPyPI)
+			if err != nil {
+				return Invocation{}, err
+			}
+			invocation.Package, invocation.Version = name, version
+			index, packageSet, packageFromFlag = next, true, true
+		default:
+			if strings.HasPrefix(token, "--package=") || strings.HasPrefix(token, "--from=") {
+				name, version, err := parseEqualsPackageFlag(token, EcosystemPyPI, "--from")
+				if err != nil {
+					return Invocation{}, err
+				}
+				invocation.Package, invocation.Version = name, version
+				packageSet, packageFromFlag = true, true
+				continue
+			}
+			if strings.HasPrefix(token, "-") {
+				return Invocation{}, fmt.Errorf("unsupported uvx flag %q", token)
+			}
+			name, version, err := parsePackageSpec(EcosystemPyPI, token)
+			if err != nil {
+				return Invocation{}, err
+			}
+			invocation.Package, invocation.Version, packageSet = name, version, true
+		}
+	}
+	if !packageSet {
+		return Invocation{}, fmt.Errorf("package spec is required")
+	}
+	return invocation, nil
+}
+
+func parsePackageFlag(command []string, index int, ecosystem Ecosystem) (string, string, int, error) {
+	flag := command[index]
+	if index+1 >= len(command) {
+		return "", "", index, fmt.Errorf("flag %q requires a package spec", flag)
+	}
+	spec := command[index+1]
+	if strings.HasPrefix(spec, "-") {
+		return "", "", index, fmt.Errorf("flag %q requires a package spec", flag)
+	}
+	name, version, err := parsePackageSpec(ecosystem, spec)
+	return name, version, index + 1, err
+}
+
+func parseEqualsPackageFlag(token string, ecosystem Ecosystem, expected string) (string, string, error) {
+	flag, spec, ok := strings.Cut(token, "=")
+	if !ok || spec == "" {
+		return "", "", fmt.Errorf("flag %q requires a package spec", flag)
+	}
+	if flag != expected {
+		return "", "", fmt.Errorf("unsupported %s flag %q", ecosystem, flag)
+	}
+	return parsePackageSpec(ecosystem, spec)
+}
+
+func appendInvocationToken(invocation *Invocation, token string, packageFromFlag bool) {
+	if packageFromFlag && invocation.Executable == "" && !strings.HasPrefix(token, "-") {
+		invocation.Executable = token
+		return
+	}
+	invocation.Args = append(invocation.Args, token)
 }
 
 func parsePackageSpec(ecosystem Ecosystem, spec string) (string, string, error) {
@@ -198,9 +235,10 @@ func parsePyPIspec(spec string) (string, string, error) {
 // the package-store naming contract and is safe to append to a registry host.
 func RepositoryPath(ecosystem Ecosystem, packageName string) string {
 	name := strings.ToLower(packageName)
-	if ecosystem == EcosystemNPM {
+	switch ecosystem {
+	case EcosystemNPM:
 		name = strings.TrimPrefix(name, "@")
-	} else if ecosystem == EcosystemPyPI {
+	case EcosystemPyPI:
 		name = normalizePyPIName(name)
 	}
 	return string(ecosystem) + "/" + name

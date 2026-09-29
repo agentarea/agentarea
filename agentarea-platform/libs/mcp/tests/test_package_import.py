@@ -294,6 +294,28 @@ async def test_monitor_package_sweep_uses_effective_server_command_and_is_sequen
 
     monkeypatch.setattr("agentarea_mcp.container_monitor.import_package_image", fake_import)
 
+    package_calls: list[tuple[object, int]] = []
+
+    async def fake_candidates(session, *, limit):
+        package_calls.append((session, limit))
+        return [
+            SimpleNamespace(
+                id=instance_id,
+                json_spec={},
+                server_json_spec={},
+                cmd=["uvx", "mcp-server-time"],
+                remote_url=None,
+                verification={"status": "succeeded"},
+                workspace_id=uuid4(),
+            )
+            for instance_id in candidate_ids
+        ]
+
+    monkeypatch.setattr(
+        "agentarea_mcp.container_monitor.MCPServerInstanceRepository.list_package_import_candidates",
+        fake_candidates,
+    )
+
     class _GCResult:
         rowcount = 0
 
@@ -316,22 +338,6 @@ async def test_monitor_package_sweep_uses_effective_server_command_and_is_sequen
             self.sql.append(statement_text)
             if "in_progress" in statement_text:
                 return _GCResult()
-            if "package_import" in statement_text:
-                return _RowsResult(
-                    [
-                        SimpleNamespace(
-                            id=instance_id,
-                            json_spec={},
-                            server_json_spec={},
-                            cmd=["uvx", "mcp-server-time"],
-                            remote_url=None,
-                            verification={"status": "succeeded"},
-                            workspace_id=uuid4(),
-                            created_by=str(uuid4()),
-                        )
-                        for instance_id in candidate_ids
-                    ]
-                )
             return _RowsResult([])
 
         async def commit(self):
@@ -360,21 +366,7 @@ async def test_monitor_package_sweep_uses_effective_server_command_and_is_sequen
         "start",
         "finish",
     ]
-    package_sql = next(sql for sql in sweep_session.sql if "package_import" in sql)
-    assert "JOIN mcp_servers s ON s.id::text = i.server_spec_id" in package_sql
-    assert "COALESCE(" in package_sql
-    assert "i.json_spec->>'command'" in package_sql
-    assert "s.json_spec->>'command'" in package_sql
-    assert "s.cmd->>0" in package_sql
-    assert "s.remote_url" in package_sql
-    assert "i.json_spec->>'type' = 'docker'" in package_sql
-    assert "image" in package_sql
-    assert "IN ('npx', 'uvx')" in package_sql
-    assert "verification->>'status' = 'succeeded'" in package_sql
-    assert "package_import' IS NULL" in package_sql
-    assert "status' = 'unavailable'" in package_sql
-    assert "INTERVAL '1 hour'" in package_sql
-    assert "LIMIT 3" in package_sql
+    assert package_calls == [(sweep_session, 3)]
 
 
 @pytest.mark.asyncio

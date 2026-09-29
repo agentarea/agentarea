@@ -10,10 +10,11 @@ Every 30 s:
 import asyncio
 import logging
 
-from agentarea_common.base.tenant_scope import workspace_scope
+from agentarea_common.base.tenant_scope import unscoped, workspace_scope
 from agentarea_common.config import get_database
 from sqlalchemy import text
 
+from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
 from agentarea_mcp.package_import import import_package_image
 
 logger = logging.getLogger(__name__)
@@ -71,33 +72,6 @@ WHERE COALESCE(
     END
   ) IN ('docker', 'command')
   AND (i.verification->>'status') = 'never_attempted'
-"""
-
-_PACKAGE_IMPORT_SQL = """
-SELECT i.id, i.workspace_id
-FROM mcp_server_instances i
-JOIN mcp_servers s ON s.id::text = i.server_spec_id
-WHERE COALESCE(
-    NULLIF(i.json_spec->>'command', ''),
-    NULLIF(s.json_spec->>'command', ''),
-    NULLIF(s.cmd->>0, '')
-  ) IN ('npx', 'uvx')
-  AND NULLIF(s.remote_url, '') IS NULL
-  AND NOT (
-    i.json_spec->>'type' = 'docker'
-    AND NULLIF(i.json_spec->>'image', '') IS NOT NULL
-  )
-  AND i.verification->>'status' = 'succeeded'
-  AND (
-    i.json_spec->'package_import' IS NULL
-    OR (
-      i.json_spec->'package_import'->>'status' = 'unavailable'
-      AND NULLIF(i.json_spec->'package_import'->>'at', '')::timestamptz
-          < now() - INTERVAL '1 hour'
-    )
-  )
-ORDER BY i.created_at
-LIMIT 3
 """
 
 
@@ -207,8 +181,11 @@ class MCPContainerMonitor:
 
             # 3. Package import sweep. The import function opens no concurrent
             # work of its own, so awaiting each row keeps imports sequential.
-            package_rows_result = await session.execute(text(_PACKAGE_IMPORT_SQL))
-            package_rows = package_rows_result.fetchall()
+            with unscoped("the package-import sweep reads every workspace's command connections"):
+                package_rows = await MCPServerInstanceRepository.list_package_import_candidates(
+                    session,
+                    limit=3,
+                )
 
         enqueued = 0
         for row in rows:

@@ -1,4 +1,6 @@
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
+from datetime import timedelta
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
@@ -8,7 +10,7 @@ from agentarea_common.base.workspace_scoped_repository import (
 )
 from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from agentarea_common.utils.slug import generate_slug
-from sqlalchemy import String, case, cast, func, or_, select, text
+from sqlalchemy import DateTime, String, and_, case, cast, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_mcp.domain.models import MCPServer
@@ -77,6 +79,12 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
     def _get_catalog_repository(self) -> CatalogMcpRepository:
         """Get the read-only catalog (registry_items) repository for MCP specs."""
         return CatalogMcpRepository(session=self.session, user_context=self.user_context)
+
+    @staticmethod
+    async def get_for_package_import(session: AsyncSession, server_id: str) -> MCPServer | None:
+        """Load the linked server row for a package-import attempt."""
+        result = await session.execute(select(MCPServer).where(MCPServer.id == server_id))
+        return result.scalar_one_or_none()
 
     def _build_list_query(
         self,
@@ -292,6 +300,75 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
 class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, MCPServerInstance, user_context)
+
+    @staticmethod
+    async def lock_for_package_import(
+        session: AsyncSession,
+        instance_id: UUID | str,
+    ) -> MCPServerInstance | None:
+        """Lock one instance while a package import decides its next state."""
+        query = (
+            select(MCPServerInstance).where(MCPServerInstance.id == instance_id).with_for_update()
+        )
+        result = await session.execute(query)
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    def update_locked_json_spec(
+        instance: MCPServerInstance,
+        expected_spec: dict,
+        updated_spec: dict,
+    ) -> bool:
+        """Replace a locked instance spec only when the import source is unchanged."""
+        if instance.json_spec != expected_spec:
+            return False
+        instance.json_spec = updated_spec
+        return True
+
+    @staticmethod
+    async def list_package_import_candidates(
+        session: AsyncSession,
+        *,
+        limit: int = 3,
+    ) -> Sequence[Any]:
+        """Find verified command instances that still need package conversion."""
+        instance_spec = MCPServerInstance.json_spec
+        server_spec = MCPServer.json_spec
+        effective_command = func.coalesce(
+            func.nullif(instance_spec["command"].as_string(), ""),
+            func.nullif(server_spec["command"].as_string(), ""),
+            func.nullif(MCPServer.cmd[0].as_string(), ""),
+        )
+        package_import = instance_spec["package_import"]
+        package_import_at = package_import["at"].as_string()
+        query = (
+            select(MCPServerInstance.id, MCPServerInstance.workspace_id)
+            .join(
+                MCPServer,
+                cast(MCPServer.id, String) == MCPServerInstance.server_spec_id,
+            )
+            .where(
+                effective_command.in_({"npx", "uvx"}),
+                func.nullif(MCPServer.remote_url, "").is_(None),
+                ~and_(
+                    instance_spec["type"].as_string() == "docker",
+                    func.nullif(instance_spec["image"].as_string(), "").is_not(None),
+                ),
+                MCPServerInstance.verification["status"].as_string() == "succeeded",
+                (
+                    package_import.is_(None)
+                    | (package_import["status"].as_string() == "unavailable")
+                    & (
+                        cast(package_import_at, DateTime(timezone=True))
+                        < func.now() - timedelta(hours=1)
+                    )
+                ),
+            )
+            .order_by(MCPServerInstance.created_at)
+            .limit(limit)
+        )
+        result = await session.execute(query)
+        return result.fetchall()
 
     async def list_by_server_spec(
         self,

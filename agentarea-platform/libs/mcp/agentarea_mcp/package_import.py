@@ -9,10 +9,11 @@ from uuid import UUID
 
 import httpx
 from agentarea_common.config import get_database, get_settings
-from sqlalchemy import select
 
-from agentarea_mcp.domain.models import MCPServer
-from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.infrastructure.repository import (
+    MCPServerInstanceRepository,
+    MCPServerRepository,
+)
 from agentarea_mcp.transport_spec import merge_transport_spec, server_transport_spec
 
 _PACKAGE_IMPORT_TIMEOUT_SECONDS = 20 * 60
@@ -81,26 +82,6 @@ async def retire_runtime_before_mutation(
     ) from last_error
 
 
-async def _load_instance(session, instance_id: UUID) -> MCPServerInstance:
-    """Load an instance with a row lock for the conversion decision."""
-    result = await session.execute(
-        select(MCPServerInstance).where(MCPServerInstance.id == instance_id).with_for_update()
-    )
-    instance = result.scalar_one_or_none()
-    if instance is None:
-        raise ValueError(f"MCP instance {instance_id} not found")
-    return instance
-
-
-async def _load_server(session, server_id) -> MCPServer:
-    """Load the catalog server row that supplies command defaults."""
-    result = await session.execute(select(MCPServer).where(MCPServer.id == server_id))
-    server = result.scalar_one_or_none()
-    if server is None:
-        raise ValueError(f"MCP server spec {server_id} not found")
-    return server
-
-
 async def _record_package_import(
     session,
     instance_id: UUID,
@@ -116,24 +97,41 @@ async def _record_package_import(
     judges the edited connection afresh.
     """
     async with session.begin():
-        instance = await _load_instance(session, instance_id)
-        if instance.json_spec != source_spec:
-            return
+        instance = await MCPServerInstanceRepository.lock_for_package_import(
+            session,
+            instance_id,
+        )
+        if instance is None:
+            raise ValueError(f"MCP instance {instance_id} not found")
         updated_spec = dict(source_spec)
         updated_spec["package_import"] = {
             "status": status,
             "error": error,
             "at": _now_iso(),
         }
-        instance.json_spec = updated_spec
+        MCPServerInstanceRepository.update_locked_json_spec(
+            instance,
+            source_spec,
+            updated_spec,
+        )
 
 
 async def _run_import(session, instance_id: UUID) -> None:
     """Run one manager import and persist its terminal platform state."""
     async with session.begin():
-        instance = await _load_instance(session, instance_id)
+        instance = await MCPServerInstanceRepository.lock_for_package_import(
+            session,
+            instance_id,
+        )
+        if instance is None:
+            raise ValueError(f"MCP instance {instance_id} not found")
         source_spec = dict(instance.json_spec or {})
-        server = await _load_server(session, instance.server_spec_id)
+        server = await MCPServerRepository.get_for_package_import(
+            session,
+            instance.server_spec_id,
+        )
+        if server is None:
+            raise ValueError(f"MCP server spec {instance.server_spec_id} not found")
         effective_source_spec = merge_transport_spec(
             server_transport_spec(server),
             source_spec,
@@ -224,14 +222,23 @@ async def _run_import(session, instance_id: UUID) -> None:
     )
 
     async with session.begin():
-        instance = await _load_instance(session, instance_id)
+        instance = await MCPServerInstanceRepository.lock_for_package_import(
+            session,
+            instance_id,
+        )
+        if instance is None:
+            raise ValueError(f"MCP instance {instance_id} not found")
         if instance.json_spec != source_spec:
             # Edited while the image was built: the image may still be right,
             # but the conversion would drop the edit. The next sweep imports
             # the edited connection, and finds the image by its tag.
             return
         await retire_runtime_before_mutation(instance_id)
-        instance.json_spec = converted_spec
+        MCPServerInstanceRepository.update_locked_json_spec(
+            instance,
+            source_spec,
+            converted_spec,
+        )
 
 
 async def import_package_image(instance_id: UUID, session=None) -> None:

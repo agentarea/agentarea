@@ -384,7 +384,10 @@ func (s *Service) health(ctx context.Context, baseURL string) bool {
 	if err != nil {
 		return false
 	}
-	io.Copy(io.Discard, response.Body)
+	if _, err := io.Copy(io.Discard, response.Body); err != nil {
+		response.Body.Close()
+		return false
+	}
 	response.Body.Close()
 	return response.StatusCode == http.StatusOK
 }
