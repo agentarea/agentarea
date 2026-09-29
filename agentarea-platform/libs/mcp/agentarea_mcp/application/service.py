@@ -27,6 +27,7 @@ from mcp import MCPError
 from agentarea_mcp.application.auth_service import MCPAuthService, OAuthReauthRequiredError
 from agentarea_mcp.application.mcp_client import (
     connected_mcp_client,
+    gateway_client_factory,
     mcp_verdict_key,
     pinned_client_factory,
     platform_client_factory,
@@ -1079,6 +1080,8 @@ class MCPServerInstanceService:
                 httpx_client_factory = pinned_client_factory(httpx_client_factory)
             elif httpx_client_factory is None:
                 httpx_client_factory = platform_client_factory
+            else:
+                httpx_client_factory = gateway_client_factory(httpx_client_factory)
         except Exception as e:
             return _fail(
                 f"MCP '{instance.name}' is not available (cannot resolve URL: {e}). "

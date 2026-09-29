@@ -16,7 +16,6 @@ from agentarea_common.utils.url_safety import (
     OutboundPolicy,
     PinnedSender,
     Resolver,
-    SafeOutboundTransport,
     UnsafeUrlError,
     resolve_host,
 )
@@ -226,6 +225,26 @@ def platform_client_factory(
     return httpx2.AsyncClient(**kwargs)
 
 
+def gateway_client_factory(wrapped: Callable[..., Any]) -> Callable[..., Any]:
+    """``platform_client_factory`` for a caller's own factory, such as the
+    payment client, that takes an ``inner`` transport.
+
+    Its requests then wait out a cold start the way the platform's own do. A
+    fresh transport per call, because a client closes its transport on exit.
+    """
+
+    def factory(
+        headers: dict[str, str] | None = None,
+        timeout: Any = None,
+        auth: Any = None,
+    ) -> Any:
+        return wrapped(
+            headers=headers, timeout=timeout, auth=auth, inner=GatewayStartRetryTransport()
+        )
+
+    return factory
+
+
 def pinned_client_factory(
     wrapped: Callable[..., Any] | None = None,
     *,
@@ -237,7 +256,7 @@ def pinned_client_factory(
 
     For a member-supplied (URL-type) MCP endpoint. ``wrapped`` is a caller's own
     factory that takes an ``inner`` transport, such as the payment client; its
-    requests then go through ``SafeOutboundTransport``. Each call builds a fresh
+    requests then go through ``SafeMCPTransport``. Each call builds a fresh
     transport, because a client closes its transport on exit and the connect
     loop opens one client per transport candidate.
     """
@@ -253,7 +272,7 @@ def pinned_client_factory(
                 headers=headers,
                 timeout=timeout,
                 auth=auth,
-                inner=SafeOutboundTransport(effective, resolve=resolve),
+                inner=SafeMCPTransport(effective, resolve=resolve, inner=inner),
             )
         kwargs: dict[str, Any] = {
             "transport": SafeMCPTransport(effective, resolve=resolve, inner=inner),
