@@ -67,6 +67,25 @@ def test_outside_writes_report_files_but_not_package_or_caches(tmp_path: Path) -
     assert writes == [str(outside)]
 
 
+def test_node_compile_cache_is_not_an_outside_write(tmp_path: Path) -> None:
+    # npm on Node 22 compiles its modules into $TMPDIR/node-compile-cache;
+    # counting that rejected every npm package on the data plane.
+    marker = tmp_path / "marker"
+    marker.write_text("marker", encoding="utf-8")
+    compiled = tmp_path / "node-compile-cache" / "v22-x64-1000" / "00bf0630"
+    compiled.parent.mkdir(parents=True)
+    compiled.write_text("compiled", encoding="utf-8")
+    os.utime(compiled, ns=(marker.stat().st_mtime_ns + 1,) * 2)
+
+    writes = pack.detect_outside_writes(
+        marker,
+        roots=[tmp_path],
+        excluded=pack.install_cache_roots({"TMPDIR": str(tmp_path)}),
+    )
+
+    assert writes == []
+
+
 def test_npm_executable_resolution_prefers_unscoped_bin_name(tmp_path: Path) -> None:
     package = tmp_path / "mcp-pkg"
     package_json = package / "node_modules" / "@scope" / "tool" / "package.json"
