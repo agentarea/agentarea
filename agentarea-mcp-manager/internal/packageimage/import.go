@@ -539,15 +539,19 @@ func (s *Service) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		return
 	}
 	var httpErr *HTTPError
-	if errors.As(err, &httpErr) {
-		payload := map[string]any{"error": httpErr.Message}
-		if httpErr.Code == http.StatusUnprocessableEntity {
-			payload["report"] = httpErr.Report
-		}
-		writeJSON(response, httpErr.Code, payload)
-		return
+	if !errors.As(err, &httpErr) {
+		httpErr = newHTTPError(http.StatusServiceUnavailable, err.Error(), nil)
 	}
-	writeJSON(response, http.StatusServiceUnavailable, map[string]any{"error": err.Error()})
+	logAttrs := []any{slog.String("instance_id", body.InstanceID), slog.Int("status", httpErr.Code), slog.String("error", httpErr.Message)}
+	if httpErr.Report != nil && httpErr.Report.LogTail != "" {
+		logAttrs = append(logAttrs, slog.String("log_tail", httpErr.Report.LogTail))
+	}
+	s.logger.Warn("MCP package import failed", logAttrs...)
+	payload := map[string]any{"error": httpErr.Message}
+	if httpErr.Code == http.StatusUnprocessableEntity {
+		payload["report"] = httpErr.Report
+	}
+	writeJSON(response, httpErr.Code, payload)
 }
 
 type HTTPError struct {

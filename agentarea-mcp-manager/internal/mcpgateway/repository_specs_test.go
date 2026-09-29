@@ -1,6 +1,9 @@
 package mcpgateway
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 // Either json_spec column can hold the JSON literal `null` instead of SQL NULL:
 // the control plane writes it whenever the field was omitted, and the query's
@@ -56,5 +59,36 @@ func TestDecodeSpecsRejectsMalformedJSON(t *testing.T) {
 	}
 	if _, err := decodeSpecs([]byte("{}"), []byte("{")); err == nil {
 		t.Fatal("decodeSpecs() error = nil, want a decode failure for malformed instance spec")
+	}
+}
+func TestMergeLoadedSpecsPreservesConvertedDockerTransport(t *testing.T) {
+	spec, err := mergeLoadedSpecs(
+		[]byte(`{"type":"command","args":["server-arg"],"cmd":["npx","-y","pkg","--flag"],"endpoint_url":"https://server.example","catalog":"keep"}`),
+		[]byte(`{"type":"docker","image":"repo@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","command":["/opt/mcp-pkg/bin/server","--flag"],"port":8080}`),
+		"",
+		[]byte(`["npx","-y","pkg","--flag"]`),
+		"server-image:latest",
+	)
+	if err != nil {
+		t.Fatalf("mergeLoadedSpecs() error = %v", err)
+	}
+	wantTransport := map[string]any{
+		"type":    "docker",
+		"image":   "repo@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		"command": []any{"/opt/mcp-pkg/bin/server", "--flag"},
+		"port":    float64(8080),
+	}
+	for key, want := range wantTransport {
+		if got := spec[key]; !reflect.DeepEqual(got, want) {
+			t.Fatalf("spec[%q] = %#v, want %#v", key, got, want)
+		}
+	}
+	for _, key := range []string{"args", "cmd", "endpoint_url"} {
+		if _, exists := spec[key]; exists {
+			t.Fatalf("spec[%q] unexpectedly survived converted Docker merge", key)
+		}
+	}
+	if spec["catalog"] != "keep" {
+		t.Fatalf("non-transport server metadata was not preserved: %#v", spec["catalog"])
 	}
 }

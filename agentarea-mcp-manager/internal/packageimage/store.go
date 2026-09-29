@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/agentarea/mcp-manager/internal/mcpbase"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -112,6 +112,13 @@ func (s *RegistryStore) options(ctx context.Context) []remote.Option {
 type LocalStore struct {
 	runtime   string
 	baseImage string
+
+	// A v1.Image read from a `docker save` tarball reads its layers from the
+	// file lazily, so the file has to outlive every import that uses it. It
+	// is kept per base image id and replaced when the base changes.
+	baseMu   sync.Mutex
+	baseID   string
+	basePath string
 }
 
 func NewLocalStore(runtime string) *LocalStore {
@@ -135,45 +142,54 @@ func (s *LocalStore) Lookup(ctx context.Context, packageInfo Package) (*StoredIm
 }
 
 func (s *LocalStore) Base(ctx context.Context) (v1.Image, error) {
-	if _, err := s.inspect(ctx, s.baseImage); err != nil {
+	inspection, err := s.inspect(ctx, s.baseImage)
+	if err != nil {
 		pull := exec.CommandContext(ctx, s.runtime, "pull", "--quiet", s.baseImage)
 		if output, pullErr := pull.CombinedOutput(); pullErr != nil {
 			return nil, fmt.Errorf("pull mcp-base image %s: %w (%s)", s.baseImage, pullErr, strings.TrimSpace(string(output)))
 		}
+		if inspection, err = s.inspect(ctx, s.baseImage); err != nil {
+			return nil, fmt.Errorf("inspect mcp-base image %s: %w", s.baseImage, err)
+		}
 	}
-	file, err := os.CreateTemp(os.TempDir(), "mcp-package-base-*.tar")
-	if err != nil {
-		return nil, fmt.Errorf("create mcp-base tarball: %w", err)
+	s.baseMu.Lock()
+	defer s.baseMu.Unlock()
+	if s.baseID != inspection.ID {
+		path, err := s.saveBase(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if s.basePath != "" {
+			os.Remove(s.basePath)
+		}
+		s.baseID, s.basePath = inspection.ID, path
 	}
-	path := file.Name()
-	defer os.Remove(path)
-	if err := file.Close(); err != nil {
-		return nil, err
-	}
-	command := exec.CommandContext(ctx, s.runtime, "save", s.baseImage)
-	output, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		return nil, fmt.Errorf("open mcp-base tarball: %w", err)
-	}
-	command.Stdout = output
-	command.Stderr = io.Discard
-	err = command.Run()
-	closeErr := output.Close()
-	if err != nil {
-		return nil, fmt.Errorf("save mcp-base image %s: %w", s.baseImage, err)
-	}
-	if closeErr != nil {
-		return nil, fmt.Errorf("close mcp-base tarball: %w", closeErr)
-	}
-	tag, err := name.NewTag("agentarea-mcp-base:latest", name.WeakValidation)
-	if err != nil {
-		return nil, err
-	}
-	image, err := tarball.ImageFromPath(path, &tag)
+	// `docker save` of one reference holds exactly one image, so no tag is
+	// needed to pick it.
+	image, err := tarball.ImageFromPath(s.basePath, nil)
 	if err != nil {
 		return nil, fmt.Errorf("read mcp-base tarball: %w", err)
 	}
 	return image, nil
+}
+
+func (s *LocalStore) saveBase(ctx context.Context) (string, error) {
+	file, err := os.CreateTemp(os.TempDir(), "mcp-package-base-*.tar")
+	if err != nil {
+		return "", fmt.Errorf("create mcp-base tarball: %w", err)
+	}
+	path := file.Name()
+	var stderr strings.Builder
+	command := exec.CommandContext(ctx, s.runtime, "save", s.baseImage)
+	command.Stdout = file
+	command.Stderr = &stderr
+	runErr := command.Run()
+	closeErr := file.Close()
+	if runErr != nil || closeErr != nil {
+		os.Remove(path)
+		return "", fmt.Errorf("save mcp-base image %s: %w (%s)", s.baseImage, errors.Join(runErr, closeErr), strings.TrimSpace(stderr.String()))
+	}
+	return path, nil
 }
 
 func (s *LocalStore) Put(ctx context.Context, packageInfo Package, entrypoint []string, image v1.Image) (*StoredImage, error) {

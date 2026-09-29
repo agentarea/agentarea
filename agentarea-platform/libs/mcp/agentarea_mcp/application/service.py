@@ -59,6 +59,7 @@ from agentarea_mcp.schemas.dto import (
     MCPServerUpdate,
 )
 from agentarea_mcp.tool_serialization import serialize_mcp_tool
+from agentarea_mcp.transport_spec import merge_transport_spec, server_transport_spec
 from agentarea_mcp.verification import declared_remote_transport, verify
 
 from .mcp_env_service import MCPEnvironmentService
@@ -93,21 +94,9 @@ def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
 
 
 def _server_transport_spec(server_spec: MCPServer) -> dict[str, Any]:
-    spec = dict(server_spec.json_spec or {})
-    if server_spec.remote_url:
-        spec.setdefault("type", "url")
-        spec.setdefault("endpoint_url", server_spec.remote_url)
-    elif server_spec.cmd:
-        spec.setdefault("type", "command")
-        spec.setdefault("command", server_spec.cmd[0] if server_spec.cmd else "")
-        if len(server_spec.cmd or []) > 1:
-            spec.setdefault("args", list(server_spec.cmd[1:]))
-    elif server_spec.docker_image_url:
-        spec.setdefault("type", "docker")
-        spec.setdefault("image", server_spec.docker_image_url)
-    else:
-        spec.setdefault("type", "docker")
-    return _normalize_url_keys(spec)
+    """Build the effective transport fields declared by a server row."""
+    spec = server_transport_spec(server_spec)
+    return spec
 
 
 def _is_mcp_protocol_error(exc: BaseException) -> bool:
@@ -452,7 +441,7 @@ class MCPServerInstanceService:
         server_spec = await self.mcp_server_repository.get_server_by_id(instance.server_spec_id)
         if not server_spec:
             raise ValueError(f"MCP server spec {instance.server_spec_id} not found")
-        return {**_server_transport_spec(server_spec), **(instance.json_spec or {})}
+        return merge_transport_spec(_server_transport_spec(server_spec), instance.json_spec)
 
     def _endpoint_url_from_spec(self, instance: MCPServerInstance, spec: dict[str, Any]) -> str:
         instance_type = spec.get("type", "docker")

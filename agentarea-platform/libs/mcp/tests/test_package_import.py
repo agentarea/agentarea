@@ -14,6 +14,7 @@ from agentarea_mcp.application.validation_service import MCPConfigurationValidat
 from agentarea_mcp.container_monitor import MCPContainerMonitor
 from agentarea_mcp.package_import import import_package_image
 from agentarea_mcp.schemas.dto import MCPServerInstanceCreate
+from agentarea_mcp.transport_spec import merge_transport_spec
 
 
 class _Begin:
@@ -32,16 +33,37 @@ class _Result:
         return self.row
 
 
+class _Server:
+    def __init__(self, row, *, cmd=None):
+        self.id = row.server_spec_id
+        self.json_spec = {}
+        self.remote_url = None
+        self.cmd = cmd
+        self.docker_image_url = None
+
+
 class _Session:
-    def __init__(self, row):
+    def __init__(self, row, *, server=None):
         self.row = row
+        self.server = server or self._default_server(row)
         self.execute_calls = []
+
+    @staticmethod
+    def _default_server(row):
+        spec = row.json_spec or {}
+        command = spec.get("command")
+        args = spec.get("args", [])
+        cmd = [command, *args] if isinstance(command, str) and isinstance(args, list) else None
+        return _Server(row, cmd=cmd)
 
     def begin(self):
         return _Begin()
 
     async def execute(self, statement):
-        self.execute_calls.append(str(statement))
+        statement_text = str(statement)
+        self.execute_calls.append(statement_text)
+        if "mcp_servers" in statement_text:
+            return _Result(self.server)
         return _Result(self.row)
 
 
@@ -145,6 +167,61 @@ async def test_import_200_converts_spec_and_retires_before_persisting(monkeypatc
     }
     assert row.set_events == ["persist"]
 
+@pytest.mark.asyncio
+async def test_import_records_effective_source_from_server_command(monkeypatch):
+    row = _Row({"type": "command", "environment": {"MODE": "prod"}})
+    server = _Server(row, cmd=["uvx", "mcp-server-time", "--stdio"])
+    session = _Session(row, server=server)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                json={
+                    "image": "ghcr.io/acme/server@sha256:" + "c" * 64,
+                    "command": ["/opt/mcp-pkg/bin/server"],
+                    "port": 8080,
+                    "package": {"ecosystem": "pypi", "name": "mcp-server-time"},
+                },
+            )
+        return httpx.Response(204)
+
+    _patch_http(monkeypatch, handler)
+    await import_package_image(row.id, session=session)
+
+    assert row.json_spec["source"] == {
+        "type": "command",
+        "command": "uvx",
+        "args": ["mcp-server-time", "--stdio"],
+    }
+
+
+def test_converted_instance_merge_drops_server_transport_fields():
+    merged = merge_transport_spec(
+        {
+            "type": "command",
+            "command": "uvx",
+            "args": ["mcp-server-time"],
+            "endpoint_url": "http://server.example",
+            "catalog_name": "time",
+        },
+        {
+            "type": "docker",
+            "image": "ghcr.io/acme/server@sha256:" + "d" * 64,
+            "command": ["/opt/mcp-pkg/bin/server"],
+            "port": 8080,
+            "package": {"name": "mcp-server-time"},
+        },
+    )
+
+    assert merged["type"] == "docker"
+    assert merged["image"].endswith("d" * 64)
+    assert merged["command"] == ["/opt/mcp-pkg/bin/server"]
+    assert "args" not in merged
+    assert "endpoint_url" not in merged
+    assert merged["catalog_name"] == "time"
+
+
 
 @pytest.mark.asyncio
 async def test_import_422_records_rejected_without_retirement(monkeypatch):
@@ -198,7 +275,9 @@ def test_converted_docker_spec_passes_create_and_transport_validation():
 
 
 @pytest.mark.asyncio
-async def test_monitor_package_sweep_is_sequential_and_query_filters_candidates(monkeypatch):
+async def test_monitor_package_sweep_uses_effective_server_command_and_is_sequential(
+    monkeypatch,
+):
     monitor = MCPContainerMonitor(check_interval=30)
     candidate_ids = [uuid4(), uuid4(), uuid4()]
     events: list[tuple[str, UUID]] = []
@@ -242,6 +321,11 @@ async def test_monitor_package_sweep_is_sequential_and_query_filters_candidates(
                     [
                         SimpleNamespace(
                             id=instance_id,
+                            json_spec={},
+                            server_json_spec={},
+                            cmd=["uvx", "mcp-server-time"],
+                            remote_url=None,
+                            verification={"status": "succeeded"},
                             workspace_id=uuid4(),
                             created_by=str(uuid4()),
                         )
@@ -277,8 +361,15 @@ async def test_monitor_package_sweep_is_sequential_and_query_filters_candidates(
         "finish",
     ]
     package_sql = next(sql for sql in sweep_session.sql if "package_import" in sql)
-    assert "json_spec->>'type' = 'command'" in package_sql
-    assert "json_spec->>'command' IN ('npx', 'uvx')" in package_sql
+    assert "JOIN mcp_servers s ON s.id::text = i.server_spec_id" in package_sql
+    assert "COALESCE(" in package_sql
+    assert "i.json_spec->>'command'" in package_sql
+    assert "s.json_spec->>'command'" in package_sql
+    assert "s.cmd->>0" in package_sql
+    assert "s.remote_url" in package_sql
+    assert "i.json_spec->>'type' = 'docker'" in package_sql
+    assert "image" in package_sql
+    assert "IN ('npx', 'uvx')" in package_sql
     assert "verification->>'status' = 'succeeded'" in package_sql
     assert "package_import' IS NULL" in package_sql
     assert "status' = 'unavailable'" in package_sql

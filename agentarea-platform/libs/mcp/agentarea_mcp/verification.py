@@ -26,6 +26,7 @@ from agentarea_mcp.domain.verification_types import (
     VerificationPayload,
 )
 from agentarea_mcp.tool_serialization import serialize_mcp_tool
+from agentarea_mcp.transport_spec import merge_transport_spec, server_transport_spec
 
 logger = logging.getLogger(__name__)
 
@@ -42,20 +43,8 @@ _SAFETY_DEADLINE = 600  # seconds
 
 
 def _transport_spec_from_server(server: MCPServer) -> dict:
-    spec = dict(server.json_spec or {})
-    if server.remote_url:
-        spec.setdefault("type", "url")
-        spec.setdefault("endpoint_url", server.remote_url)
-    elif server.cmd:
-        spec.setdefault("type", "command")
-        spec.setdefault("command", server.cmd[0] if server.cmd else "")
-        if len(server.cmd or []) > 1:
-            spec.setdefault("args", list(server.cmd[1:]))
-    elif server.docker_image_url:
-        spec.setdefault("type", "docker")
-        spec.setdefault("image", server.docker_image_url)
-    else:
-        spec.setdefault("type", "docker")
+    """Build the effective transport fields declared by a server row."""
+    spec = server_transport_spec(server)
     return spec
 
 
@@ -69,7 +58,7 @@ class _RuntimeInstance:
         self.last_dispatch = instance.last_dispatch
         self.tools = instance.tools
         self.server_spec_id = instance.server_spec_id
-        self.json_spec = {**transport_spec, **(instance.json_spec or {})}
+        self.json_spec = merge_transport_spec(transport_spec, instance.json_spec)
 
     @property
     def endpoint_url(self) -> str:

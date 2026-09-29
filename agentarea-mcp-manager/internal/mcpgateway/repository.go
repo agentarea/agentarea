@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/models"
@@ -148,32 +149,13 @@ WHERE i.id = $1::uuid
 	if err != nil {
 		return nil, fmt.Errorf("load MCP instance: %w", err)
 	}
-	serverSpec, err := decodeSpecs(serverJSON, instanceJSON)
+	remoteEndpoint := ""
+	if remoteURL.Valid {
+		remoteEndpoint = remoteURL.String
+	}
+	serverSpec, err := mergeLoadedSpecs(serverJSON, instanceJSON, remoteEndpoint, commandJSON, dockerImage.String)
 	if err != nil {
 		return nil, err
-	}
-	if remoteURL.Valid && remoteURL.String != "" {
-		serverSpec["type"] = "url"
-		serverSpec["endpoint_url"] = remoteURL.String
-	} else if string(commandJSON) != "null" {
-		var command []string
-		if err := json.Unmarshal(commandJSON, &command); err != nil || len(command) == 0 {
-			return nil, fmt.Errorf("decode MCP command spec")
-		}
-		serverSpec["type"] = "command"
-		serverSpec["command"] = command[0]
-		args := make([]any, 0, len(command)-1)
-		for _, item := range command[1:] {
-			args = append(args, item)
-		}
-		serverSpec["args"] = args
-	} else if dockerImage.Valid && dockerImage.String != "" {
-		if _, exists := serverSpec["type"]; !exists {
-			serverSpec["type"] = "docker"
-		}
-		if _, exists := serverSpec["image"]; !exists {
-			serverSpec["image"] = dockerImage.String
-		}
 	}
 	instanceType, _ := serverSpec["type"].(string)
 	if instanceType != "docker" && instanceType != "command" && instanceType != "kubernetes" {
@@ -206,6 +188,57 @@ func decodeSpecs(serverJSON, instanceJSON []byte) (map[string]any, error) {
 	}
 	for key, value := range instanceSpec {
 		serverSpec[key] = value
+	}
+	return serverSpec, nil
+}
+
+// mergeLoadedSpecs applies server-level transport defaults unless the instance
+// itself contains a complete Docker transport.
+func mergeLoadedSpecs(serverJSON, instanceJSON []byte, remoteURL string, commandJSON []byte, dockerImage string) (map[string]any, error) {
+	serverSpec, err := decodeSpecs(serverJSON, instanceJSON)
+	if err != nil {
+		return nil, err
+	}
+	var instanceSpec map[string]any
+	if err := json.Unmarshal(instanceJSON, &instanceSpec); err != nil {
+		return nil, fmt.Errorf("decode MCP instance spec: %w", err)
+	}
+	instanceType, _ := instanceSpec["type"].(string)
+	instanceImage, _ := instanceSpec["image"].(string)
+	if instanceType == "docker" && strings.TrimSpace(instanceImage) != "" {
+		for _, key := range []string{"args", "cmd", "endpoint_url"} {
+			if _, exists := instanceSpec[key]; !exists {
+				delete(serverSpec, key)
+			}
+		}
+		return serverSpec, nil
+	}
+	if remoteURL != "" {
+		serverSpec["type"] = "url"
+		serverSpec["endpoint_url"] = remoteURL
+		return serverSpec, nil
+	}
+	if len(commandJSON) > 0 && string(commandJSON) != "null" {
+		var command []string
+		if err := json.Unmarshal(commandJSON, &command); err != nil || len(command) == 0 {
+			return nil, fmt.Errorf("decode MCP command spec")
+		}
+		serverSpec["type"] = "command"
+		serverSpec["command"] = command[0]
+		args := make([]any, 0, len(command)-1)
+		for _, item := range command[1:] {
+			args = append(args, item)
+		}
+		serverSpec["args"] = args
+		return serverSpec, nil
+	}
+	if dockerImage != "" {
+		if _, exists := serverSpec["type"]; !exists {
+			serverSpec["type"] = "docker"
+		}
+		if _, exists := serverSpec["image"]; !exists {
+			serverSpec["image"] = dockerImage
+		}
 	}
 	return serverSpec, nil
 }

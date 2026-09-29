@@ -74,10 +74,19 @@ WHERE COALESCE(
 """
 
 _PACKAGE_IMPORT_SQL = """
-SELECT i.id
+SELECT i.id, i.workspace_id
 FROM mcp_server_instances i
-WHERE i.json_spec->>'type' = 'command'
-  AND i.json_spec->>'command' IN ('npx', 'uvx')
+JOIN mcp_servers s ON s.id::text = i.server_spec_id
+WHERE COALESCE(
+    NULLIF(i.json_spec->>'command', ''),
+    NULLIF(s.json_spec->>'command', ''),
+    NULLIF(s.cmd->>0, '')
+  ) IN ('npx', 'uvx')
+  AND NULLIF(s.remote_url, '') IS NULL
+  AND NOT (
+    i.json_spec->>'type' = 'docker'
+    AND NULLIF(i.json_spec->>'image', '') IS NOT NULL
+  )
   AND i.verification->>'status' = 'succeeded'
   AND (
     i.json_spec->'package_import' IS NULL
@@ -221,7 +230,10 @@ class MCPContainerMonitor:
         for row in package_rows:
             imported += 1
             try:
-                await import_package_image(row.id)
+                # The import reads and writes one connection; bind its
+                # workspace like verification does, or enforce refuses it.
+                with workspace_scope(str(row.workspace_id)):
+                    await import_package_image(row.id)
             except Exception:
                 logger.exception(
                     "package import raised for instance %s",

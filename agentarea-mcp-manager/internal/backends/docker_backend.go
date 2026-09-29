@@ -508,11 +508,18 @@ func (d *DockerBackend) Initialize(ctx context.Context) error {
 	return nil
 }
 
+// pullMCPBase puts mcp-base on the host before the first command connection
+// needs it. An image the daemon already has is left alone: a locally built
+// tag (the dev stack's mcp-base:dev) exists in no registry to pull from.
 func (d *DockerBackend) pullMCPBase(parent context.Context) {
 	pullCtx, cancel := context.WithTimeout(parent, 10*time.Minute)
 	defer cancel()
-	d.logger.Info("Pre-pulling mcp-base image", slog.String("image", mcpbase.Image()))
-	command := exec.CommandContext(pullCtx, d.config.Container.Runtime, "pull", "--quiet", mcpbase.Image())
+	image := mcpbase.Image()
+	if err := exec.CommandContext(pullCtx, d.config.Container.Runtime, "image", "inspect", image).Run(); err == nil {
+		return
+	}
+	d.logger.Info("Pre-pulling mcp-base image", slog.String("image", image))
+	command := exec.CommandContext(pullCtx, d.config.Container.Runtime, "pull", "--quiet", image)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		d.logger.Warn("Could not pre-pull mcp-base image",

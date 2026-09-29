@@ -11,7 +11,9 @@ import httpx
 from agentarea_common.config import get_database, get_settings
 from sqlalchemy import select
 
+from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.transport_spec import merge_transport_spec, server_transport_spec
 
 _PACKAGE_IMPORT_TIMEOUT_SECONDS = 20 * 60
 
@@ -90,6 +92,15 @@ async def _load_instance(session, instance_id: UUID) -> MCPServerInstance:
     return instance
 
 
+async def _load_server(session, server_id) -> MCPServer:
+    """Load the catalog server row that supplies command defaults."""
+    result = await session.execute(select(MCPServer).where(MCPServer.id == server_id))
+    server = result.scalar_one_or_none()
+    if server is None:
+        raise ValueError(f"MCP server spec {server_id} not found")
+    return server
+
+
 async def _record_package_import(
     session,
     instance_id: UUID,
@@ -122,6 +133,11 @@ async def _run_import(session, instance_id: UUID) -> None:
     async with session.begin():
         instance = await _load_instance(session, instance_id)
         source_spec = dict(instance.json_spec or {})
+        server = await _load_server(session, instance.server_spec_id)
+        effective_source_spec = merge_transport_spec(
+            server_transport_spec(server),
+            source_spec,
+        )
 
     settings = get_settings().mcp
     manager_url = f"{settings.MCP_MANAGER_URL.rstrip('/')}/packages/import"
@@ -183,7 +199,7 @@ async def _run_import(session, instance_id: UUID) -> None:
     if not isinstance(package, dict):
         raise ValueError("MCP manager package import response package must be an object")
 
-    old_args = source_spec.get("args", [])
+    old_args = effective_source_spec.get("args", [])
     if not isinstance(old_args, list):
         raise ValueError("Command instance args must be a list before package import")
 
@@ -201,7 +217,7 @@ async def _run_import(session, instance_id: UUID) -> None:
             "package": package,
             "source": {
                 "type": "command",
-                "command": source_spec.get("command"),
+                "command": effective_source_spec.get("command"),
                 "args": list(old_args),
             },
         }

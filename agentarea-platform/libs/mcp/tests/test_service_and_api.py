@@ -218,6 +218,32 @@ async def test_update_converted_spec_keeps_imported_transport_metadata():
 
 
 @pytest.mark.asyncio
+async def test_transport_spec_for_converted_instance_ignores_server_command_defaults():
+    instance = _make_instance("docker")
+    instance.json_spec = {
+        "type": "docker",
+        "image": "registry.example/server@sha256:" + "e" * 64,
+        "command": ["/opt/mcp-pkg/bin/server"],
+        "port": 8080,
+    }
+    svc = _make_service({str(instance.id): instance})
+    server_spec = svc.mcp_server_repository.get_server_by_id.return_value
+    server_spec.remote_url = None
+    server_spec.cmd = ["uvx", "mcp-server-time"]
+    server_spec.docker_image_url = None
+    server_spec.json_spec = {"type": "command"}
+
+    merged = await svc._get_transport_spec_for_instance(instance)
+
+    assert merged["type"] == "docker"
+    assert merged["image"] == instance.json_spec["image"]
+    assert merged["command"] == ["/opt/mcp-pkg/bin/server"]
+    assert merged["port"] == 8080
+    assert "args" not in merged
+    assert "endpoint_url" not in merged
+
+
+@pytest.mark.asyncio
 async def test_update_command_spec_drops_package_import_state():
     instance = _make_instance("command")
     instance.json_spec = {
