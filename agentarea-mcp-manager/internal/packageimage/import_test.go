@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -30,7 +31,7 @@ func (r importTestRepository) LoadInstance(context.Context, string) (*models.MCP
 	return r.instance, nil
 }
 
-const testAuthSecret = "0123456789abcdef0123456789abcdef"
+var testAuthSecret = strings.Repeat("a", 32)
 
 type importTestBackend struct {
 	mu      sync.Mutex
