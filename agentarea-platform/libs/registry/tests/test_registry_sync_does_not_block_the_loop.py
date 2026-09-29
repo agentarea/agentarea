@@ -35,6 +35,7 @@ def _service():
     )
     item_repo = SimpleNamespace(
         get_by_external_id=AsyncMock(return_value=None),
+        mark_in_source=AsyncMock(return_value=0),
         create=AsyncMock(return_value=SimpleNamespace(id=uuid4())),
         update=AsyncMock(),
         delete=AsyncMock(return_value=True),

@@ -450,3 +450,38 @@ class TestCategoryCounts:
 
     async def test_counts_respect_the_search_query(self, item_repo, catalog):
         assert await item_repo.category_counts("skills", q="two") == [("data", 1)]
+
+
+class TestInSource:
+    """Items a source stops publishing leave the catalog without being deleted."""
+
+    async def test_a_dropped_item_leaves_the_catalog_and_returns_with_its_source(
+        self, db_session, item_repo
+    ):
+        reg = await _registry(db_session, "src")
+        await _item(item_repo, reg, "keep", "keep")
+        await _item(item_repo, reg, "gone", "gone")
+
+        assert await item_repo.mark_in_source(reg.id, {"keep"}) == 1
+        items, total = await item_repo.browse("skills")
+        assert [i.external_id for i in items] == ["keep"] and total == 1
+
+        assert await item_repo.mark_in_source(reg.id, {"keep", "gone"}) == 0
+        _, total = await item_repo.browse("skills")
+        assert total == 2
+
+    async def test_reactivating_the_registry_keeps_dropped_items_hidden(
+        self, db_session, item_repo
+    ):
+        reg = await _registry(db_session, "src")
+        await _item(item_repo, reg, "keep", "keep")
+        await _item(item_repo, reg, "gone", "gone")
+        await item_repo.mark_in_source(reg.id, {"keep"})
+
+        registries = RegistryRepository(db_session)
+        await registries.update(reg.id, is_active=False)
+        assert (await item_repo.browse("skills"))[1] == 0
+        await registries.update(reg.id, is_active=True)
+
+        items, _ = await item_repo.browse("skills")
+        assert [i.external_id for i in items] == ["keep"]

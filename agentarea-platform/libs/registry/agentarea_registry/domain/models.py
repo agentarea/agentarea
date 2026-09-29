@@ -21,6 +21,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     text,
+    true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -220,6 +221,15 @@ class RegistryItem(BaseModel):
         Integer, nullable=False, default=DEFAULT_REGISTRY_PRIORITY
     )
     registry_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Whether the source still publishes this item. The platform never deletes
+    # catalog rows (installs point at them), so an item a source dropped used to
+    # stay browsable forever -- the old id of a renamed server showed up as a
+    # second card beside the new one. Sync keeps this in step, and
+    # `registry_active` (what browse and its indexes filter on) is "registry
+    # active AND still in the source".
+    in_source: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
 
     def __init__(
         self,

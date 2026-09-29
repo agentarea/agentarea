@@ -275,6 +275,12 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         )
         server = (await self.session.execute(catalog_mirror)).scalar_one_or_none()
         if server is not None:
+            # Platform data to this caller, like a projection: routes skip the
+            # per-object read check for it. Since reconcile records ownership
+            # (the platform principal's), a graph check would refuse every
+            # other workspace -- "Permission denied" on a catalog connection.
+            # Writes still go through the PDP, which denies them.
+            server.is_catalog = True  # type: ignore[attr-defined]
             return server
 
         # Fall back to a read-only catalog projection: built-in specs may live in

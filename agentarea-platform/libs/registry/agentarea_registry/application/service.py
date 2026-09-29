@@ -491,6 +491,17 @@ class RegistryService:
                     if len(skipped_items) < self.MAX_SKIPPED_DETAILS:
                         skipped_items.append({"external_id": external_id, "reason": str(e)})
 
+            # What the source no longer publishes leaves the catalog. An empty
+            # parse is far likelier a broken source than an emptied one, so it
+            # retires nothing.
+            out_of_source = (
+                await self.item_repo.mark_in_source(
+                    registry_id, {item["external_id"] for item in parsed_items}
+                )
+                if parsed_items
+                else None
+            )
+
             total = new_specs + updates_flagged + unchanged
             await self.registry_repo.update(
                 registry_id,
@@ -506,6 +517,7 @@ class RegistryService:
                 "total": len(parsed_items),
                 "skipped": skipped,
                 "skipped_items": skipped_items,
+                "out_of_source": out_of_source,
             }
 
         except Exception as e:

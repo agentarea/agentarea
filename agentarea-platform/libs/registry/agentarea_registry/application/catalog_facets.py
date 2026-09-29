@@ -186,8 +186,11 @@ def _connection_title(name: str, spec: dict[str, Any]) -> str:
     title = _text(raw.get("title")) or _text(spec.get("title"))
     if title:
         return title
-    tail = name.rsplit("/", 1)[-1]
-    return re.sub(r"[-_]+", " ", tail).strip() or name
+    # A package entry's id carries the package ("…/npm/@sentry/mcp-server");
+    # the server it belongs to is the name.
+    server = _text(raw.get("name")) or name
+    tail = server.rsplit("/", 1)[-1]
+    return re.sub(r"[-_]+", " ", tail).strip() or server
 
 
 def _category(registry_type: str, spec: dict[str, Any], tags: list[Any]) -> str | None:

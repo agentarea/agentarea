@@ -298,8 +298,11 @@ function connectionTitle(name: string, spec: RawSpec): string {
   const raw = spec.raw_spec as RawSpec | undefined;
   const title = str(raw?.title) ?? str(spec.title);
   if (title) return title;
-  const tail = name.slice(name.lastIndexOf("/") + 1);
-  return tail.replace(/[-_]+/g, " ").trim() || name;
+  // A package entry's id carries the package ("…/npm/@sentry/mcp-server");
+  // the server it belongs to is the name.
+  const server = str(raw?.name) ?? name;
+  const tail = server.slice(server.lastIndexOf("/") + 1);
+  return tail.replace(/[-_]+/g, " ").trim() || server;
 }
 
 export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
