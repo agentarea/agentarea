@@ -988,6 +988,7 @@
     "writeNewTaskFor": "Write new task for {agentName}...",
     "inputControls": {
       "agent": "Agent",
+      "mentionHeading": "Mention an agent",
       "project": "Project",
       "taskPolicy": "Task policy",
       "noProject": "No project",

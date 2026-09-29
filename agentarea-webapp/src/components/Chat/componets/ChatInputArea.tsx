@@ -33,7 +33,12 @@ const DEFAULT_TASK_POLICY_VALUE = "__default_task_policy__";
 
 export interface MentionMenuProps {
   show: boolean;
-  agents: Array<{ id: string; name: string; description?: string | null }>;
+  agents: Array<{
+    id: string;
+    name: string;
+    description?: string | null;
+    icon?: string | null;
+  }>;
   position: {
     top: number;
     left: number;

@@ -989,6 +989,7 @@
     "writeNewTaskFor": "Напишите новую задачу для {agentName}...",
     "inputControls": {
       "agent": "Агент",
+      "mentionHeading": "Упомянуть агента",
       "project": "Проект",
       "taskPolicy": "Политика задачи",
       "noProject": "Без проекта",
