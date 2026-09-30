@@ -88,11 +88,6 @@ def validate_tool_pairs(messages: list[dict[str, Any]]) -> bool:
     return True
 
 
-def messages_payload_bytes(messages: list[dict[str, Any]]) -> int:
-    """Size of the conversation as it travels in activity and continue-as-new payloads."""
-    return len(json.dumps(messages, ensure_ascii=False).encode("utf-8"))
-
-
 def find_compaction_boundary(
     messages: list[dict[str, Any]], keep_recent: int, *, carry_skills: bool = False
 ) -> int:
@@ -161,6 +156,19 @@ def find_compaction_boundary(
             return boundary
 
     return 0
+
+
+def compactable_prefix(tail: list[dict[str, Any]], keep_recent: int) -> int:
+    """How many leading entries of a conversation tail compaction may summarize.
+
+    The tail follows the head (system prompt, carried skills, a summary), so it
+    is split as if a system message preceded it. Activated skill content in the
+    summarized part does not block the split; the caller carries it over.
+    """
+    boundary = find_compaction_boundary(
+        [{"role": "system", "content": ""}, *tail], keep_recent, carry_skills=True
+    )
+    return boundary - 1 if boundary > 1 else 0
 
 
 class ContextWindowManager:

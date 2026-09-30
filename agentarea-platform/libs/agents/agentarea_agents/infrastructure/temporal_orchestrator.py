@@ -263,7 +263,6 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                     response["error"] = error_message
                 response["result"] = {
                     "response": final_response,
-                    "conversation_history": _result_field(result, "conversation_history", []),
                     "execution_metrics": _result_field(result, "execution_metrics", {}),
                     "success": task_success,
                     "status": outcome_status,

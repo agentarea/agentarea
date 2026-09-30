@@ -8,10 +8,12 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agentarea_agents_sdk import GoalProgressEvaluator, LLMModel, LLMRequest
+from agentarea_agents_sdk.skills import SkillContextGuard
 from agentarea_common.auth.context import UserContext
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.extensions.customer_pricing import price_llm_call
 from agentarea_common.money import ZERO, to_money, to_optional_money
+from agentarea_tasks.domain.models import ConversationEntry
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
@@ -21,6 +23,7 @@ from ...interfaces import ActivityDependencies
 from ...models import (
     CompactMessagesRequest,
     CompactMessagesResult,
+    ConversationWindow,
     ExecutionPlanRequest,
     ExecutionPlanResult,
     GoalEvaluationRequest,
@@ -31,8 +34,11 @@ from ...models import (
     ResolvedModelInfo,
     ResolveModelRequest,
 )
+from ...workflows.context_manager import compactable_prefix, estimate_tokens_for_messages
+from ...workflows.context_store import ContextStore
 from ..event_publisher import create_event_publisher
 from ..heartbeat import auto_heartbeater
+from . import conversation as conversation_log
 
 if TYPE_CHECKING:
     from ..dependencies import ActivityServiceContainer
@@ -133,6 +139,14 @@ def make_llm_activities(
                 raise ValueError("Either workspace_id or user_context_data must be provided")
             user_context = create_user_context(request.user_context_data)
 
+            if request.conversation is not None:
+                head, tail, _ = await conversation_log.sync_window(
+                    container, user_context, request.conversation, request.messages
+                )
+                request = request.model_copy(
+                    update={"messages": [entry.as_message() for entry in (*head, *tail)]}
+                )
+
             on_chunk = None
             if request.task_id and dependencies.broker_client is not None:
                 on_chunk = create_event_publisher(
@@ -163,11 +177,11 @@ def make_llm_activities(
     async def compact_messages_activity(
         request: CompactMessagesRequest,
     ) -> CompactMessagesResult:
-        """Summarize older messages to reduce context window usage.
+        """Summarize the older part of a task's conversation in its log.
 
-        Uses the same model as the agent to generate a concise summary
-        of older conversation history, preserving key decisions, tool
-        results, and reasoning.
+        Uses the same model as the agent. The summary replaces the summarized
+        entries in the window the model sees; activated skill content is carried
+        over verbatim, and the most recent entries stay as they are.
         """
         try:
             model_uuid = UUID(request.model_id)
@@ -178,6 +192,46 @@ def make_llm_activities(
                 user_context = create_user_context(request.user_context_data)
             else:
                 raise ValueError("Either workspace_id or user_context_data must be provided")
+
+            window = request.conversation
+            head, tail, end_seq = await conversation_log.sync_window(
+                container, user_context, window, request.pending
+            )
+            count = compactable_prefix([entry.as_message() for entry in tail], request.keep_recent)
+            if count == 0:
+                return CompactMessagesResult(
+                    conversation=window.model_copy(update={"next_seq": end_seq}),
+                    summary="",
+                    original_message_count=0,
+                    estimated_tokens_saved=0,
+                    context_tokens=estimate_tokens_for_messages(
+                        [entry.as_message() for entry in (*head, *tail)]
+                    ),
+                )
+            removed, kept = tail[:count], tail[count:]
+            skills = [e for e in removed if SkillContextGuard.is_protected(e.as_message())]
+            messages_to_compact = [
+                entry.as_message()
+                for entry in (
+                    *(e for e in head if e.kind == "summary"),
+                    *(e for e in removed if e not in skills),
+                )
+            ]
+
+            history_chunk_stored = False
+            if request.history_chunk_index is not None:
+                try:
+                    await ContextStore(request.workspace_id, window.task_id).store_history_chunk(
+                        request.history_chunk_index, [entry.as_message() for entry in removed]
+                    )
+                    history_chunk_stored = True
+                except Exception:
+                    logger.warning(
+                        "History chunk %s of task %s was not stored",
+                        request.history_chunk_index,
+                        window.task_id,
+                        exc_info=True,
+                    )
 
             # Dual path: use cached resolved_model if provided, else fall back to DB lookup
             provider_type = None
@@ -272,7 +326,7 @@ def make_llm_activities(
 
             # Build compaction prompt
             conversation_text = ""
-            for msg in request.messages_to_compact:
+            for msg in messages_to_compact:
                 role = msg.get("role", "unknown")
                 content = msg.get("content", "")
                 if msg.get("tool_calls"):
@@ -342,15 +396,46 @@ def make_llm_activities(
                 provider_cost_usd=final_cost,
             )
 
-            original_tokens = sum(
-                len(msg.get("content", "") or "") // 4 for msg in request.messages_to_compact
+            next_seq = end_seq
+            carried: list[ConversationEntry] = []
+            for skill in skills:
+                carried.append(ConversationEntry(seq=next_seq, role="user", content=skill.content))
+                next_seq += 1
+            summary_entry = ConversationEntry(
+                seq=next_seq,
+                kind="summary",
+                role="user",
+                content=f"[Previous conversation summary]\n{complete_content}",
+            )
+            next_seq += 1
+            await conversation_log.write_entries(
+                container, user_context, window.task_id, [*carried, summary_entry]
+            )
+            new_head = [
+                *(e for e in head if e.kind != "summary"),
+                *carried,
+                summary_entry,
+            ]
+
+            original_tokens = estimate_tokens_for_messages(
+                [entry.as_message() for entry in removed]
             )
             summary_tokens = len(complete_content) // 4
 
             return CompactMessagesResult(
+                conversation=ConversationWindow(
+                    task_id=window.task_id,
+                    head_seqs=[entry.seq for entry in new_head],
+                    tail_start=kept[0].seq,
+                    next_seq=next_seq,
+                ),
                 summary=complete_content,
-                original_message_count=len(request.messages_to_compact),
+                original_message_count=len(removed),
                 estimated_tokens_saved=max(0, original_tokens - summary_tokens),
+                context_tokens=estimate_tokens_for_messages(
+                    [entry.as_message() for entry in (*new_head, *kept)]
+                ),
+                history_chunk_stored=history_chunk_stored,
                 cost=cost,
                 usage=LLMUsage(
                     prompt_tokens=final_usage.prompt_tokens,

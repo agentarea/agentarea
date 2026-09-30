@@ -9,7 +9,7 @@ from agentarea_execution.workflows.constants import (
     CONTEXT_WARNING_THRESHOLD,
 )
 from agentarea_execution.workflows.context_manager import (
-    messages_payload_bytes,
+    compactable_prefix,
     ContextWindowManager,
     estimate_tokens,
     estimate_tokens_for_messages,
@@ -380,5 +380,10 @@ def test_skill_content_pins_the_boundary_unless_carried():
     assert find_compaction_boundary(messages, keep_recent=4, carry_skills=True) > skill_index
 
 
-def test_payload_bytes_count_utf8_not_characters():
-    assert messages_payload_bytes([{"content": "é"}]) == len('[{"content": "é"}]'.encode())
+def test_compactable_prefix_leaves_recent_entries_and_carries_skills():
+    tail = _skill_run()[1:]
+
+    count = compactable_prefix(tail, keep_recent=4)
+
+    assert count >= 3  # the skill activation no longer pins the boundary
+    assert len(tail) - count >= 4

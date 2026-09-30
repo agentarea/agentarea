@@ -27,6 +27,7 @@ from agentarea_execution.models import (
     ArtifactValidationResult,
     CompactMessagesRequest,
     CompactMessagesResult,
+    ConversationWindow,
     DiscoverToolProvidersResult,
     LLMCallRequest,
     LLMCallResult,
@@ -34,8 +35,6 @@ from agentarea_execution.models import (
     MCPToolRequest,
     MCPToolResult,
     ResolveModelRequest,
-    StoreHistoryRequest,
-    StoreHistoryResult,
     ToolDiscoveryRequest,
     ToolProviderData,
     UpdateTaskStatusRequest,
@@ -43,8 +42,12 @@ from agentarea_execution.models import (
     WorkflowEventsResult,
 )
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
+from agentarea_execution.workflows.context_manager import (
+    compactable_prefix,
+    estimate_tokens_for_messages,
+)
 from temporalio import activity
-from temporalio.client import Client, WorkflowHandle
+from temporalio.client import Client, WorkflowFailureError, WorkflowHandle
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
@@ -103,6 +106,24 @@ class Scenario:
     publish_attempts: collections.Counter = field(default_factory=collections.Counter)
     continue_as_new_publishing: asyncio.Event = field(default_factory=asyncio.Event)
     continue_as_new_released: asyncio.Event = field(default_factory=asyncio.Event)
+    # The task's conversation log, as the activities keep it: seq -> message.
+    log: dict[int, dict[str, Any]] = field(default_factory=dict)
+
+    def write(self, window: ConversationWindow, pending: list[dict[str, Any]]) -> int:
+        for offset, message in enumerate(pending):
+            self.log[window.next_seq + offset] = message
+        return window.next_seq + len(pending)
+
+    def window_messages(
+        self, window: ConversationWindow, end_seq: int
+    ) -> tuple[list[int], list[int]]:
+        head = list(window.head_seqs)
+        tail = [
+            seq
+            for seq in sorted(self.log)
+            if window.tail_start <= seq < end_seq and seq not in head
+        ]
+        return head, tail
 
     def published(self, event_type: str) -> list[dict[str, Any]]:
         return [
@@ -192,7 +213,12 @@ def _activities(scenario: Scenario) -> list[Any]:
         scenario.llm_request_bytes.append(len(request.model_dump_json().encode()))
         cost = scenario.first_call_cost if iteration == 1 and scenario.first_call_cost else None
         cost = cost or scenario.call_cost
-        prompt_tokens = max(1, sum(len(m.get("content") or "") for m in request.messages) // 4)
+        context = request.messages
+        if request.conversation is not None:
+            end_seq = scenario.write(request.conversation, request.messages)
+            head, tail = scenario.window_messages(request.conversation, end_seq)
+            context = [scenario.log[seq] for seq in (*head, *tail)]
+        prompt_tokens = max(1, sum(len(m.get("content") or "") for m in context) // 4)
         usage = LLMUsage(
             prompt_tokens=prompt_tokens, completion_tokens=20, total_tokens=prompt_tokens + 20
         )
@@ -262,21 +288,49 @@ def _activities(scenario: Scenario) -> list[Any]:
 
     @activity.defn(name="compact_messages_activity")
     async def compact(request: CompactMessagesRequest) -> CompactMessagesResult:
+        window = request.conversation
+        end_seq = scenario.write(window, request.pending)
+        head, tail = scenario.window_messages(window, end_seq)
+        count = compactable_prefix([scenario.log[seq] for seq in tail], request.keep_recent)
+        if count == 0:
+            return CompactMessagesResult(
+                conversation=window.model_copy(update={"next_seq": end_seq}),
+                summary="",
+                original_message_count=0,
+                estimated_tokens_saved=0,
+                context_tokens=estimate_tokens_for_messages(
+                    [scenario.log[seq] for seq in (*head, *tail)]
+                ),
+            )
         scenario.compactions += 1
+        summary_seq = end_seq
+        scenario.log[summary_seq] = {
+            "role": "user",
+            "content": f"[Previous conversation summary]\n{count} earlier entries.",
+        }
+        new_head = [head[0], summary_seq]
+        kept = tail[count:]
         return CompactMessagesResult(
-            summary=f"Summary of {len(request.messages_to_compact)} earlier messages.",
-            original_message_count=len(request.messages_to_compact),
+            conversation=ConversationWindow(
+                task_id=window.task_id,
+                head_seqs=new_head,
+                tail_start=kept[0],
+                next_seq=summary_seq + 1,
+            ),
+            summary=f"{count} earlier entries.",
+            original_message_count=count,
             estimated_tokens_saved=1000,
+            context_tokens=estimate_tokens_for_messages(
+                [scenario.log[seq] for seq in (*new_head, *kept)]
+            ),
             cost="0.0001",
             usage=LLMUsage(prompt_tokens=1000, completion_tokens=50, total_tokens=1050),
         )
 
-    @activity.defn(name="store_history_chunk")
-    async def store_history(request: StoreHistoryRequest) -> StoreHistoryResult:
-        return StoreHistoryResult(success=True)
-
     @activity.defn(name="update_task_status_activity")
     async def update_status(request: UpdateTaskStatusRequest) -> bool:
+        if request.conversation is not None:
+            scenario.write(request.conversation, request.conversation_pending)
         return True
 
     @activity.defn(name="validate_artifacts_activity")
@@ -292,7 +346,6 @@ def _activities(scenario: Scenario) -> list[Any]:
         execute_tool,
         publish_events,
         compact,
-        store_history,
         update_status,
         validate_artifacts,
     ]
@@ -452,7 +505,7 @@ async def test_conversation_continues_as_new_between_turns(long_run_env):
         await _wait_until(lambda: len(scenario.published("task.completed")) >= turns)
         runs = await run.run_count(handle)
         await handle.cancel()
-        with pytest.raises(Exception):  # noqa: B017
+        with pytest.raises(WorkflowFailureError):
             await handle.result()
 
     assert {f"follow-up {turn}" for turn in range(1, turns)} <= scenario.user_messages_seen()
@@ -493,7 +546,7 @@ async def test_model_outage_across_three_attempts_does_not_fail_the_run(long_run
 
 
 @pytest.mark.asyncio
-async def test_large_context_model_keeps_payloads_under_the_temporal_limit(long_run_env):
+async def test_large_context_model_does_not_carry_the_conversation_in_payloads(long_run_env):
     scenario = Scenario(
         iterations=30, context_window=1_000_000, reply_content="z" * 100_000, tool_output="ok"
     )
@@ -565,7 +618,7 @@ async def test_cancelled_run_reports_cancelled_not_failed(long_run_env):
         handle = await run.start(_request(scenario))
         await _wait_until(lambda: bool(scenario.published("llm.call.started")))
         await handle.cancel()
-        with pytest.raises(Exception):  # noqa: B017
+        with pytest.raises(WorkflowFailureError):
             await handle.result()
         await _wait_until(lambda: bool(scenario.published("task.cancelled")), timeout=20)
 
@@ -580,8 +633,23 @@ async def test_cancel_during_a_tool_call_stops_the_run(long_run_env):
         handle = await run.start(_request(scenario))
         await _wait_until(lambda: bool(scenario.published("tool.call")))
         await handle.cancel()
-        with pytest.raises(Exception):  # noqa: B017
+        with pytest.raises(WorkflowFailureError):
             await asyncio.wait_for(handle.result(), timeout=20)
 
     assert len(scenario.llm_requests) == 1
     assert scenario.published("task.cancelled")
+
+
+@pytest.mark.asyncio
+async def test_the_conversation_lives_in_the_log_not_in_payloads(long_run_env):
+    scenario = Scenario(iterations=20, context_window=1_000_000, tool_output="w" * 50_000)
+    async with _Run(long_run_env.client, scenario) as run:
+        handle = await run.start(_request(scenario))
+        result = await handle.result()
+
+    assert result.success is True
+    log_bytes = sum(len(json.dumps(message)) for message in scenario.log.values())
+    assert log_bytes > 900_000
+    assert max(scenario.llm_request_bytes) < 200_000
+    assert [scenario.log[seq]["role"] for seq in (0, 1)] == ["system", "user"]
+    assert scenario.log[max(scenario.log)].get("name") == "completion"

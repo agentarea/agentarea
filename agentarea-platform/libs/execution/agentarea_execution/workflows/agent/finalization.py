@@ -113,11 +113,14 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                     workspace_id=self.state.workspace_id,
                     total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
                     own_cost=self._own_cost,
+                    conversation=self._conversation_window(),
+                    conversation_pending=self._conversation_payload(),
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=bookkeeping_retry_policy(),
         )
+        self._mark_conversation_written()
         if self._interaction_contract_enabled:
             self._events.add_event(
                 EventTypes.EXECUTION_FINISHED,
@@ -133,18 +136,6 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
             )
             await self._publish_events_immediately()
 
-        # Return result - convert messages to dict format for response
-        conversation_history: list[dict[str, Any]] = []
-        for msg in self.state.messages:
-            msg_dict: dict[str, Any] = {"role": msg.role, "content": msg.content}
-            if msg.tool_call_id:
-                msg_dict["tool_call_id"] = msg.tool_call_id
-            if msg.name:
-                msg_dict["name"] = msg.name
-            if msg.tool_calls:
-                msg_dict["tool_calls"] = msg.tool_calls
-            conversation_history.append(msg_dict)
-
         return AgentExecutionResult(
             task_id=UUID(self.state.task_id),
             agent_id=UUID(self.state.agent_id),
@@ -157,7 +148,6 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
             total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
             reasoning_iterations_used=self.state.current_iteration,
             total_tool_calls=self.state.tool_calls_used,
-            conversation_history=conversation_history,
         )
 
     async def _handle_workflow_error(self, error: Exception) -> None:
@@ -193,8 +183,11 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                         workspace_id=self.state.workspace_id,
                         total_cost=self.budget_tracker.cost if self.budget_tracker else None,
                         own_cost=self._own_cost if self.budget_tracker else None,
+                        conversation=self._conversation_window(),
+                        conversation_pending=self._conversation_payload(),
                     )
                 ],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
                 retry_policy=bookkeeping_retry_policy(),
             )
+            self._mark_conversation_written()

@@ -100,7 +100,12 @@ class ContinueAsNewState(BaseModel):
     user_id: str
     workspace_id: str
     goal: AgentGoal
-    messages: list[dict[str, Any]]  # Already compacted
+    # Entries not yet in the conversation log, and where the log's window is.
+    messages: list[dict[str, Any]]
+    conversation_next_seq: int = 0
+    context_head_seqs: list[int] = Field(default_factory=lambda: [0])
+    context_tail_start: int = 1
+    last_prompt_tokens: int = 0
     agent_config: dict[str, Any]
     available_tools: list[dict[str, Any]]
     current_iteration: int
@@ -186,7 +191,13 @@ class AgentExecutionState(BaseModel):
     status: str = "initializing"  # Will be set to ExecutionStatus.INITIALIZING in workflow
     current_iteration: int = 0
     tool_calls_used: int = 0
+    # Conversation entries added since the last write to the task's conversation
+    # log; the log holds the rest, and the model reads its window from there.
     messages: list[Message] = Field(default_factory=list)
+    conversation_next_seq: int = 0
+    context_head_seqs: list[int] = Field(default_factory=lambda: [0])
+    context_tail_start: int = 1
+    last_prompt_tokens: int = 0
     agent_config: dict[str, Any] = Field(default_factory=dict)
     available_tools: list[dict[str, Any]] = Field(default_factory=list)
     interaction_capabilities: InteractionCapabilities = Field(

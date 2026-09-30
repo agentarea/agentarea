@@ -145,7 +145,6 @@ class AgentExecutionResult(BaseModel):
     status: str | None = None
     validation_state: str | None = None
     final_response: str | None = None
-    conversation_history: list[dict[str, Any]] = Field(default_factory=list)
 
     # Performance metrics
     reasoning_iterations_used: int = 0
@@ -464,10 +463,30 @@ class ToolDiscoveryResult(BaseModel):
     mcp_tool_routes: dict[str, McpToolRoute] = Field(default_factory=dict)
 
 
+class ConversationWindow(BaseModel):
+    """Where a task's conversation lives in its log and which part the model sees.
+
+    The model sees the ``head_seqs`` entries in that order (system prompt,
+    carried skills, the latest summary), then every other entry from
+    ``tail_start`` on. ``next_seq`` is where the messages a request carries
+    that are not written yet go.
+    """
+
+    task_id: str
+    head_seqs: list[int]
+    tail_start: int
+    next_seq: int
+
+
 class LLMCallRequest(BaseModel):
-    """Request for LLM call."""
+    """Request for LLM call.
+
+    With ``conversation`` set, ``messages`` are only the entries not yet in the
+    log; the activity writes them and reads the whole window from the log.
+    """
 
     messages: list[dict[str, Any]]
+    conversation: ConversationWindow | None = None
     model_id: str
     tools: list[dict[str, Any]] | None = None
     workspace_id: str | None = None
@@ -629,6 +648,9 @@ class UpdateTaskStatusRequest(BaseModel):
     total_cost: Money | None = None
     own_cost: Money | None = None
     user_context_data: dict[str, Any] | None = None
+    # Entries the run added since its last model call, written with the status.
+    conversation: ConversationWindow | None = None
+    conversation_pending: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class UpdateTaskStatusResult(BaseModel):
@@ -671,9 +693,17 @@ class MonthlySpendCapResult(BaseModel):
 
 
 class CompactMessagesRequest(BaseModel):
-    """Request to compact/summarize older messages."""
+    """Summarize the older part of a task's conversation in its log.
 
-    messages_to_compact: list[dict[str, Any]]
+    ``pending`` are entries not written yet; they are written first. The most
+    recent ``keep_recent`` entries stay verbatim. ``history_chunk_index`` asks
+    for the summarized entries to also be kept as a searchable history chunk.
+    """
+
+    conversation: ConversationWindow
+    pending: list[dict[str, Any]] = Field(default_factory=list)
+    keep_recent: int = 4
+    history_chunk_index: int | None = None
     model_id: str
     workspace_id: str
     user_context_data: dict[str, Any] | None = None
@@ -682,13 +712,20 @@ class CompactMessagesRequest(BaseModel):
 
 
 class CompactMessagesResult(BaseModel):
-    """Result of message compaction."""
+    """The conversation window after compaction.
 
+    ``original_message_count`` is 0 when nothing could be compacted; the
+    pending entries are written either way, so ``conversation`` is current.
+    """
+
+    conversation: ConversationWindow
     summary: str
     original_message_count: int
     estimated_tokens_saved: int
-    # Optional only for decoding activity results recorded before accounting
-    # was added. New executions require both fields.
+    # Estimated prompt tokens of the new window, so the run does not compact
+    # again before the next model call reports the real number.
+    context_tokens: int
+    history_chunk_stored: bool = False
     cost: Money | None = None
     usage: LLMUsage | None = None
 

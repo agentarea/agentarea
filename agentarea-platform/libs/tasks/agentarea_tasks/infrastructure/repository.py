@@ -14,8 +14,8 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.base_service import TaskNotFoundError
-from ..domain.models import Task, TaskCreate, TaskEvent, TaskUpdate
-from .orm import TaskEventORM, TaskORM
+from ..domain.models import ConversationEntry, Task, TaskCreate, TaskEvent, TaskUpdate
+from .orm import TaskConversationEntryORM, TaskEventORM, TaskORM
 
 
 class TaskRepository(WorkspaceScopedRepository[TaskORM]):
@@ -566,4 +566,85 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
                 "workspace_id": event_orm.workspace_id,
                 "created_by": event_orm.created_by,
             }
+        )
+
+
+class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntryORM]):
+    """A task's model conversation, stored outside the execution engine."""
+
+    def __init__(self, session: AsyncSession, user_context: UserContext):
+        super().__init__(session, TaskConversationEntryORM, user_context)
+
+    async def write(self, task_id: UUID, entries: Sequence[ConversationEntry]) -> None:
+        """Store entries at their sequence numbers; writing a position again replaces it.
+
+        The workflow is the only writer and assigns positions deterministically,
+        so a retry rewrites the same entry and a later write is the current truth.
+        """
+        if not entries:
+            return
+        rows = [
+            {
+                "task_id": task_id,
+                "seq": entry.seq,
+                "kind": entry.kind,
+                "role": entry.role,
+                "content": entry.content,
+                "tool_calls": entry.tool_calls,
+                "tool_call_id": entry.tool_call_id,
+                "name": entry.name,
+                "workspace_id": self.user_context.workspace_id,
+                "created_by": self.user_context.user_id,
+            }
+            for entry in entries
+        ]
+        statement = pg_insert(TaskConversationEntryORM).values(rows)
+        await self.session.execute(
+            statement.on_conflict_do_update(
+                constraint="uq_task_conversation_entries_seq",
+                set_={
+                    column: statement.excluded[column]
+                    for column in ("kind", "role", "content", "tool_calls", "tool_call_id", "name")
+                },
+                where=TaskConversationEntryORM.workspace_id == self.user_context.workspace_id,
+            )
+        )
+
+    async def read(
+        self, task_id: UUID, *, head_seqs: Sequence[int], tail_start: int, end_seq: int
+    ) -> tuple[list[ConversationEntry], list[ConversationEntry]]:
+        """The head entries in the given order and the tail ``[tail_start, end_seq)``.
+
+        A tail entry that is also in the head is returned once, in the head.
+        """
+        result = await self.session.execute(
+            select(TaskConversationEntryORM).where(
+                TaskConversationEntryORM.task_id == task_id,
+                self._get_workspace_filter(),
+                or_(
+                    TaskConversationEntryORM.seq.in_(list(head_seqs)),
+                    (TaskConversationEntryORM.seq >= tail_start)
+                    & (TaskConversationEntryORM.seq < end_seq),
+                ),
+            )
+        )
+        by_seq = {row.seq: self._orm_to_entry(row) for row in result.scalars().all()}
+        missing = [seq for seq in head_seqs if seq not in by_seq]
+        if missing:
+            raise LookupError(f"task {task_id} conversation has no entries at {missing}")
+        head = [by_seq[seq] for seq in head_seqs]
+        head_set = set(head_seqs)
+        tail = [by_seq[seq] for seq in sorted(by_seq) if seq >= tail_start and seq not in head_set]
+        return head, tail
+
+    @staticmethod
+    def _orm_to_entry(row: TaskConversationEntryORM) -> ConversationEntry:
+        return ConversationEntry(
+            seq=row.seq,
+            kind=row.kind,
+            role=row.role,
+            content=row.content,
+            tool_calls=row.tool_calls,
+            tool_call_id=row.tool_call_id,
+            name=row.name,
         )

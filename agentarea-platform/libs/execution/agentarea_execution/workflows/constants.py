@@ -42,10 +42,6 @@ CONTEXT_COMPACT_THRESHOLD: Final[float] = 0.75  # Compact at 75% of context wind
 CONTEXT_WARNING_THRESHOLD: Final[float] = 0.60  # Warn at 60%
 CONTEXT_RESERVE_FOR_OUTPUT: Final[float] = 0.15  # Reserve 15% for model output
 MIN_RECENT_MESSAGES_TO_KEEP: Final[int] = 6  # Always keep last 6 messages (3 turns)
-# The conversation travels in every model-call and continue-as-new payload, and
-# Temporal rejects payloads over 2 MiB, so it is compacted well before that
-# whatever the model's context window allows.
-CONTEXT_MAX_PAYLOAD_BYTES: Final[int] = 1_500_000
 TOKENS_PER_MESSAGE_OVERHEAD: Final[int] = 4  # ~4 tokens overhead per message
 
 # Dynamic context discovery — output offloading

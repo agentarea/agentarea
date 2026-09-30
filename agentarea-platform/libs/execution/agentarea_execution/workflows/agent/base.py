@@ -17,7 +17,7 @@ with workflow.unsafe.imports_passed_through():
     from ..helpers import BudgetTracker, EventManager
     from ..models import AgentExecutionState, PendingEscalation
 
-from ...models import WorkflowEventsRequest
+from ...models import ConversationWindow, WorkflowEventsRequest
 from ..constants import EVENT_PUBLISH_TIMEOUT, EVENT_PUBLISH_WINDOW, Activities
 from ..retry import make_retry_policy
 from .patches import CANCELLATION_PROPAGATES_PATCH
@@ -106,6 +106,38 @@ class AgentWorkflowBase:
         owning their conversation, so they must not enter await_input.
         """
         return (self._workflow_metadata or {}).get("source") == "agent_delegation"
+
+    def _conversation_payload(self) -> list[dict[str, Any]]:
+        """The entries not yet in the conversation log, as chat messages."""
+        payload: list[dict[str, Any]] = []
+        for msg in self.state.messages:
+            message: dict[str, Any] = {"role": msg.role, "content": msg.content}
+            for key in ("tool_call_id", "name", "tool_calls"):
+                value = getattr(msg, key)
+                if value is not None:
+                    message[key] = value
+            payload.append(message)
+        return payload
+
+    def _conversation_window(self) -> ConversationWindow:
+        return ConversationWindow(
+            task_id=self.state.task_id,
+            head_seqs=list(self.state.context_head_seqs),
+            tail_start=self.state.context_tail_start,
+            next_seq=self.state.conversation_next_seq,
+        )
+
+    def _mark_conversation_written(self) -> None:
+        """Record that an activity wrote the pending entries to the log."""
+        self.state.conversation_next_seq += len(self.state.messages)
+        self.state.messages = []
+
+    def _apply_conversation_window(self, window: ConversationWindow) -> None:
+        """Adopt the window an activity left the log in; nothing is pending after it."""
+        self.state.messages = []
+        self.state.context_head_seqs = list(window.head_seqs)
+        self.state.context_tail_start = window.tail_start
+        self.state.conversation_next_seq = window.next_seq
 
     async def _publish_events_immediately(self) -> None:
         """Persist the pending events before the run moves on.

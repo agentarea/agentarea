@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, DateTime, Index, String, Text, text
+from sqlalchemy import JSON, DateTime, Index, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -53,3 +53,26 @@ class TaskEventORM(EventBaseModel, WorkspaceScopedMixin):
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     event_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default={})
+
+
+class TaskConversationEntryORM(EventBaseModel, WorkspaceScopedMixin):
+    """One entry of the conversation a task's model sees, in order.
+
+    The workflow writes each entry at a sequence number it assigns, so a retried
+    write lands on the same row instead of adding one.
+    """
+
+    __tablename__ = "task_conversation_entries"
+    __table_args__ = (UniqueConstraint("task_id", "seq", name="uq_task_conversation_entries_seq"),)
+
+    task_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    tool_calls: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
+    tool_call_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

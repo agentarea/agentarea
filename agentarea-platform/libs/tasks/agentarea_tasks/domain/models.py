@@ -332,3 +332,24 @@ class TaskEvent(BaseModel):
             workspace_id=workspace_id,
             created_by=created_by,
         )
+
+
+class ConversationEntry(BaseModel):
+    """One entry of a task's model conversation at its position in the log."""
+
+    seq: int
+    kind: str = "message"  # "message" or "summary"
+    role: str
+    content: str
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_call_id: str | None = None
+    name: str | None = None
+
+    def as_message(self) -> dict[str, Any]:
+        """The entry as a chat message, without the fields it does not set."""
+        message: dict[str, Any] = {"role": self.role, "content": self.content}
+        for key in ("tool_call_id", "name", "tool_calls"):
+            value = getattr(self, key)
+            if value is not None:
+                message[key] = value
+        return message

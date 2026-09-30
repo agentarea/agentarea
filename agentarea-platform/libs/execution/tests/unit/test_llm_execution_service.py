@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
 import pytest
+from uuid import uuid4
 from agentarea_agents_sdk.models.llm_model import LLMResponse, LLMUsage
 from agentarea_common.auth.context import UserContext
 from agentarea_common.money import to_money
@@ -679,8 +680,22 @@ async def test_compaction_cost_is_priced_like_the_loop_calls(
     """Compaction spends the same run budget, so it must be in the same currency."""
     from agentarea_execution.activities import agent_execution_activities as activities
     from agentarea_execution.activities.agent import llm as llm_activities
-    from agentarea_execution.models import CompactMessagesRequest
+    from agentarea_execution.models import CompactMessagesRequest, ConversationWindow
+    from agentarea_tasks.domain.models import ConversationEntry
 
+    log = [ConversationEntry(seq=0, role="system", content="system")] + [
+        ConversationEntry(seq=seq, role="user", content=f"turn {seq}") for seq in range(1, 7)
+    ]
+    written: list = []
+
+    async def sync_window(container, user_context, window, pending):
+        return log[:1], log[1:], len(log)
+
+    async def write_entries(container, user_context, task_id, entries):
+        written.extend(entries)
+
+    monkeypatch.setattr(llm_activities.conversation_log, "sync_window", sync_window)
+    monkeypatch.setattr(llm_activities.conversation_log, "write_entries", write_entries)
     monkeypatch.setattr(llm_activities, "LLMModel", provider.constructor)
     functions = {
         fn.__name__: fn for fn in activities.make_agent_activities(activity_boundary.dependencies)
@@ -691,7 +706,10 @@ async def test_compaction_cost_is_priced_like_the_loop_calls(
     result = await ActivityEnvironment().run(
         functions["compact_messages_activity"],
         CompactMessagesRequest(
-            messages_to_compact=[{"role": "user", "content": "old turn"}],
+            conversation=ConversationWindow(
+                task_id=str(uuid4()), head_seqs=[0], tail_start=1, next_seq=7
+            ),
+            keep_recent=2,
             model_id=MODEL_ID,
             workspace_id="test-workspace",
             user_context_data=request.user_context_data,
@@ -701,5 +719,9 @@ async def test_compaction_cost_is_priced_like_the_loop_calls(
     )
 
     assert result.cost == to_money("1.90")
+    assert result.original_message_count == 4
+    assert result.conversation.head_seqs == [0, 7]
+    assert result.conversation.tail_start == 5
+    assert [entry.kind for entry in written] == ["summary"]
     assert registered_pricing.calls[0]["platform_funded"] is True
     assert registered_pricing.calls[0]["model_instance_id"] == MODEL_ID

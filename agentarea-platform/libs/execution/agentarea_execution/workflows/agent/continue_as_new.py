@@ -19,14 +19,13 @@ with workflow.unsafe.imports_passed_through():
     from agentarea_common.money import serialize_money
 
     from ...interaction import resolve_interaction_capabilities
-    from ..context_manager import ContextWindowManager, messages_payload_bytes
+    from ..context_manager import ContextWindowManager
     from ..helpers import BudgetTracker, EventManager
     from ..models import ContinueAsNewState, Message
 
 from ...models import AgentExecutionRequest, ToolProviderData
-from ..constants import CONTEXT_MAX_PAYLOAD_BYTES, EventTypes
+from ..constants import EventTypes
 from .compaction import CompactionMixin
-from .patches import COMPACTION_BOUNDS_PAYLOAD_PATCH
 
 
 class ContinueAsNewMixin(CompactionMixin):
@@ -146,8 +145,11 @@ class ContinueAsNewMixin(CompactionMixin):
         self.state.validation_repair_attempts = state.validation_repair_attempts
         self.state.validation_terminal = state.validation_terminal
 
-        # Restore messages from compacted dicts
         self.state.messages = [Message(**msg) for msg in state.messages]
+        self.state.conversation_next_seq = state.conversation_next_seq
+        self.state.context_head_seqs = list(state.context_head_seqs)
+        self.state.context_tail_start = state.context_tail_start
+        self.state.last_prompt_tokens = state.last_prompt_tokens
 
         # Restore agent tool registry for delegation routing
         self._agent_tool_registry = state.agent_tool_registry
@@ -197,7 +199,7 @@ class ContinueAsNewMixin(CompactionMixin):
             f"Restored from run {state.continued_from_run_id}, "
             f"iteration {state.current_iteration}, "
             f"cost {state.total_cost:.4f}, "
-            f"{len(self.state.messages)} messages, "
+            f"{self.state.conversation_next_seq} logged entries, "
             f"{len(self._agent_tool_registry)} agent tools"
         )
 
@@ -208,13 +210,7 @@ class ContinueAsNewMixin(CompactionMixin):
             f"event history suggests reset"
         )
 
-        if workflow.patched(COMPACTION_BOUNDS_PAYLOAD_PATCH):
-            oversized = (
-                messages_payload_bytes(self._conversation_payload()) > CONTEXT_MAX_PAYLOAD_BYTES
-            )
-            await self._compact_context_if_needed(force=oversized)
-        else:
-            await self._compact_context_if_needed()
+        await self._compact_context_if_needed()
 
         if self.state.goal is None:
             raise ApplicationError(
@@ -230,7 +226,7 @@ class ContinueAsNewMixin(CompactionMixin):
             {
                 "iteration": self.state.current_iteration,
                 "total_cost": serialize_money(self._budget.cost),
-                "messages_carried": len(self.state.messages),
+                "conversation_entries": self.state.conversation_next_seq + len(self.state.messages),
                 "continued_from_run_id": workflow.info().run_id,
                 "reason": "Temporal event history size limit approaching",
             },
@@ -245,6 +241,10 @@ class ContinueAsNewMixin(CompactionMixin):
             workspace_id=self.state.workspace_id,
             goal=self.state.goal,
             messages=self._conversation_payload(),
+            conversation_next_seq=self.state.conversation_next_seq,
+            context_head_seqs=self.state.context_head_seqs,
+            context_tail_start=self.state.context_tail_start,
+            last_prompt_tokens=self.state.last_prompt_tokens,
             agent_config=self.state.agent_config,
             available_tools=self.state.available_tools,
             current_iteration=self.state.current_iteration,

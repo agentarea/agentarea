@@ -11,13 +11,12 @@ with workflow.unsafe.imports_passed_through():
     from agentarea_agents_sdk.tools.disclosure import DisclosureContext, ToolCandidate
     from agentarea_common.money import serialize_money
 
-    from ..context_manager import messages_payload_bytes
+    from ..context_manager import estimate_tokens_for_messages
     from ..helpers import MessageBuilder, ToolCallExtractor
     from ..models import Message, ToolCall
 
 from ...models import LLMCallRequest, LLMCallResult
 from ..constants import (
-    CONTEXT_MAX_PAYLOAD_BYTES,
     HEARTBEAT_TIMEOUT,
     LLM_CALL_TIMEOUT,
     Activities,
@@ -28,7 +27,7 @@ from ..retry import model_call_retry_policy
 from .compaction import CompactionMixin
 from .errors import ErrorReportingMixin
 from .limits import run_limit_reason
-from .patches import COMPACTION_BOUNDS_PAYLOAD_PATCH, THINKING_ONLY_REPLY_PATCH
+from .patches import THINKING_ONLY_REPLY_PATCH
 from .tool_dispatch import ToolDispatchMixin
 
 
@@ -259,32 +258,24 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             #         Message(role="user", content=f"Status: {status_msg}")
             #     )
 
-        # Check context window and compact if needed (skip first iteration)
+        # Check context window and compact if needed (skip first iteration). The
+        # last call's prompt was the window up to then; the pending entries come on top.
         if self.context_manager and iteration > 1:
-            bounds_payload = workflow.patched(COMPACTION_BOUNDS_PAYLOAD_PATCH)
-            messages_dict_est = (
-                self._conversation_payload()
-                if bounds_payload
-                else [
-                    {"role": msg.role, "content": msg.content or ""} for msg in self.state.messages
-                ]
-            )
-            estimated = self.context_manager.estimate_usage(messages_dict_est)
-            self.context_manager.update_usage(estimated)
-            oversized = (
-                bounds_payload
-                and messages_payload_bytes(messages_dict_est) > CONTEXT_MAX_PAYLOAD_BYTES
+            self.context_manager.update_usage(
+                self.state.last_prompt_tokens
+                + estimate_tokens_for_messages(self._conversation_payload())
             )
 
-            if oversized or self.context_manager.needs_compaction():
-                await self._compact_context_if_needed(force=oversized)
+            if self.context_manager.needs_compaction():
+                await self._compact_context_if_needed()
             elif self.context_manager.should_warn():
                 self._events.add_event(
                     EventTypes.CONTEXT_WARNING,
                     {
                         "iteration": self.state.current_iteration,
                         "usage_ratio": self.context_manager.get_usage_ratio(),
-                        "message_count": len(self.state.messages),
+                        "message_count": self.state.conversation_next_seq
+                        + len(self.state.messages),
                     },
                 )
                 await self._publish_events_immediately()
@@ -343,26 +334,12 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             EventTypes.LLM_CALL_STARTED,
             {
                 "iteration": self.state.current_iteration,
-                "message_count": len(self.state.messages),
+                "message_count": self.state.conversation_next_seq + len(self.state.messages),
             },
         )
         await self._publish_events_immediately()
 
         try:
-            # Convert messages to dict format for LLM call - filter out None values to match agent SDK format
-            messages_dict = [
-                MessageBuilder.normalize_message_dict(
-                    {
-                        "role": msg.role,
-                        "content": msg.content,
-                        "tool_call_id": msg.tool_call_id,
-                        "name": msg.name,
-                        "tool_calls": msg.tool_calls,
-                    }
-                )
-                for msg in self.state.messages
-            ]
-
             available_tools = self.state.available_tools
             if not self._questions_available:
                 available_tools = [
@@ -373,7 +350,8 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
 
             # Create Pydantic request model
             llm_request = LLMCallRequest(
-                messages=messages_dict,
+                messages=self._conversation_payload(),
+                conversation=self._conversation_window(),
                 model_id=str(self.state.agent_config.get("model_id") or ""),
                 tools=available_tools,
                 workspace_id=self.state.user_context_data["workspace_id"],
@@ -398,6 +376,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 heartbeat_timeout=HEARTBEAT_TIMEOUT,
                 retry_policy=model_call_retry_policy(),
             )
+            self._mark_conversation_written()
 
             # Normalize response fields to support both Pydantic model and plain dict
             if isinstance(response, dict):
@@ -452,6 +431,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             if self.context_manager and usage_payload:
                 prompt_tokens = usage_payload.get("prompt_tokens", 0)
                 if prompt_tokens > 0:
+                    self.state.last_prompt_tokens = prompt_tokens
                     self.context_manager.update_usage(prompt_tokens)
 
             # Strip A2UI JSON from the content sent to frontend via LLM_CALL_COMPLETED
