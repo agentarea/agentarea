@@ -617,7 +617,7 @@ async def _tail_task_events_sse(
     agent_id: UUID,
     execution_id: str | None,
     *,
-    workspace_id: str,
+    user_context: UserContext,
     emit_connected: bool = True,
     include_chunks: bool = True,
     last_event_id: str | None = None,
@@ -654,7 +654,7 @@ async def _tail_task_events_sse(
     # llm.call.chunk events.
     async for env in open_task_event_feed(
         task_id,
-        workspace_id=workspace_id,
+        user_context=user_context,
         terminal_types=frozenset(_TERMINAL_EVENT_TYPES),
         include_chunks=include_chunks,
         follow_execution=True,
@@ -800,7 +800,7 @@ async def create_task_for_agent_with_stream(
                     task.id,
                     agent_id,
                     task.execution_id,
-                    workspace_id=user_context.workspace_id,
+                    user_context=user_context,
                     emit_connected=False,
                 ):
                     yield chunk
@@ -2270,7 +2270,7 @@ async def stream_task_events(
                     task_id,
                     agent_id,
                     task.execution_id,
-                    workspace_id=user_context.workspace_id,
+                    user_context=user_context,
                     include_chunks=include_chunks,
                     last_event_id=request.headers.get("last-event-id"),
                 ):

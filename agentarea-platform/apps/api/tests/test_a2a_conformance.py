@@ -321,7 +321,7 @@ async def test_streaming_send_follows_the_task_to_completion(streaming_client, s
     assert (final.last_chunk, final.artifact.parts[0].text) == (True, "The answer is 42.")
     assert responses[4].status_update.task_id == task_id
     assert responses[4].status_update.status.state == TaskState.TASK_STATE_COMPLETED
-    assert services.feed_calls[0]["workspace_id"] == WORKSPACE
+    assert services.feed_calls[0]["user_context"].workspace_id == WORKSPACE
 
 
 @pytest.mark.asyncio

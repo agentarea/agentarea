@@ -1,8 +1,8 @@
 """The SSE catch-up read against the migrated ``task_events`` table.
 
 A day-long task has tens of thousands of rows, and every reconnect used to
-fetch all of them in one query. The snapshot is now read in bounded keyset
-batches ordered by ``(timestamp, id)``, and a reconnecting client resumes after
+fetch all of them in one query. The snapshot is now read through the repository in
+bounded keyset batches ordered by ``(timestamp, id)``, and a reconnecting client resumes after
 the last event it saw. Keyset order and the row comparison are Postgres
 semantics a mocked session cannot check.
 
@@ -20,6 +20,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from agentarea_api.api.v1 import task_event_feed
+from agentarea_common.auth.context import UserContext
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -76,6 +77,10 @@ async def _insert(maker, *, workspace_id: str, task_id: str, event_id: UUID, sec
     return str(event_id)
 
 
+def _reader(workspace_id: str) -> UserContext:
+    return UserContext(user_id="reader", workspace_id=workspace_id)
+
+
 async def _ids(snapshot) -> list[str]:
     return [env.event_id async for env in snapshot]
 
@@ -107,7 +112,7 @@ async def test_snapshot_is_read_in_bounded_batches_in_keyset_order(db):
     )
     opened.clear()
 
-    ids = await _ids(task_event_feed._iter_snapshot(task_id, workspace_id, batch_size=2))
+    ids = await _ids(task_event_feed._iter_snapshot(task_id, _reader(workspace_id), batch_size=2))
 
     assert ids == expected
     # Three full batches, then the empty read that ends the snapshot.
@@ -128,9 +133,9 @@ async def test_resumed_snapshot_starts_after_the_last_event_seen(db):
         maker, workspace_id=workspace_id, task_id=task_id, event_id=uuid4(), seconds=2
     )
 
-    cursor = await task_event_feed._load_cursor(task_id, workspace_id, tied[0])
+    cursor = await task_event_feed._load_cursor(task_id, _reader(workspace_id), tied[0])
     assert cursor is not None
-    ids = await _ids(task_event_feed._iter_snapshot(task_id, workspace_id, cursor, batch_size=1))
+    ids = await _ids(task_event_feed._iter_snapshot(task_id, _reader(workspace_id), cursor, batch_size=1))
 
     assert first not in ids
     assert ids == [tied[1], last]
@@ -142,5 +147,5 @@ async def test_a_cursor_from_another_workspace_or_malformed_is_not_found(db):
         maker, workspace_id=f"other-{workspace_id}", task_id=task_id, event_id=uuid4(), seconds=0
     )
 
-    assert await task_event_feed._load_cursor(task_id, workspace_id, foreign) is None
-    assert await task_event_feed._load_cursor(task_id, workspace_id, "not-a-uuid") is None
+    assert await task_event_feed._load_cursor(task_id, _reader(workspace_id), foreign) is None
+    assert await task_event_feed._load_cursor(task_id, _reader(workspace_id), "not-a-uuid") is None

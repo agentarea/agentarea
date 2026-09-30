@@ -8,7 +8,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import Numeric, cast, func, or_, select, update
+from sqlalchemy import Numeric, cast, func, literal, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -465,6 +465,43 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
         event_orms = result.scalars().all()
 
         return [self._orm_to_domain(event_orm) for event_orm in event_orms]
+
+    async def get_task_event(self, task_id: UUID, event_id: UUID) -> TaskEvent | None:
+        """One stored event of this task in this workspace, or None."""
+        result = await self.session.execute(
+            select(TaskEventORM).where(
+                TaskEventORM.id == event_id,
+                TaskEventORM.task_id == task_id,
+                self._get_workspace_filter(),
+            )
+        )
+        orm = result.scalar_one_or_none()
+        return self._orm_to_domain(orm) if orm else None
+
+    async def page_for_task(
+        self,
+        task_id: UUID,
+        *,
+        after: tuple[datetime, UUID] | None,
+        limit: int,
+    ) -> list[TaskEvent]:
+        """A keyset page of a task's events in ``(timestamp, id)`` order, after ``after``."""
+        conditions = [TaskEventORM.task_id == task_id, self._get_workspace_filter()]
+        if after is not None:
+            conditions.append(
+                tuple_(TaskEventORM.timestamp, TaskEventORM.id)
+                > tuple_(
+                    literal(after[0], TaskEventORM.timestamp.type),
+                    literal(after[1], TaskEventORM.id.type),
+                )
+            )
+        result = await self.session.execute(
+            select(TaskEventORM)
+            .where(*conditions)
+            .order_by(TaskEventORM.timestamp.asc(), TaskEventORM.id.asc())
+            .limit(limit)
+        )
+        return [self._orm_to_domain(orm) for orm in result.scalars().all()]
 
     async def list_for_task(
         self,
