@@ -331,11 +331,15 @@ async def install_skill(
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
 
-    await grant_resource_owner(
-        resource_id=skill.id,
-        workspace_id=skill_service.user_context.workspace_id,
-        user_id=skill_service.user_context.user_id,
-    )
+    # The id may already be a tenant skill, or this workspace's earlier fork.
+    # Only the member who created the row is re-granted: a fresh fork was granted
+    # by the repository, and this repairs a grant that failed after it committed.
+    if str(skill.created_by) == str(skill_service.user_context.user_id):
+        await grant_resource_owner(
+            resource_id=skill.id,
+            workspace_id=skill_service.user_context.workspace_id,
+            user_id=skill_service.user_context.user_id,
+        )
     return SkillResponse.from_skill(skill)
 
 

@@ -76,6 +76,12 @@ def _google_metadata(*, registration_endpoint: str | None = None) -> AuthServerM
     )
 
 
+@pytest.fixture(autouse=True)
+def allow_editing_the_instance(monkeypatch):
+    """Authorize checks ``edit`` on the instance; the tests below are about the flow."""
+    monkeypatch.setattr(mcp_oauth_connect, "require_permission", AsyncMock())
+
+
 def _patch_instance_lookup(
     monkeypatch, *, auth_config_id=None, remote_url: str | None = _GMAIL_URL
 ):
@@ -284,6 +290,34 @@ def test_authorize_request_requires_exactly_one_source_per_credential():
 # ---------------------------------------------------------------------------
 # Authorize — behaviour
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
+async def test_authorize_refuses_a_member_who_cannot_edit_the_instance(monkeypatch):
+    """Completing the flow attaches the caller's provider account to the instance,
+    so starting it is an edit: a member with read only must not be able to swap
+    the credential on another member's connection."""
+    instance = _patch_instance_lookup(monkeypatch)
+    discover = AsyncMock()
+    monkeypatch.setattr(mcp_oauth_connect.MCPOAuthClientService, "discover_auth_server", discover)
+    deny = AsyncMock(side_effect=HTTPException(status_code=403, detail="Forbidden"))
+    monkeypatch.setattr(mcp_oauth_connect, "require_permission", deny)
+    user_context = _user_context()
+
+    with pytest.raises(HTTPException) as excinfo:
+        await mcp_oauth_connect.oauth_authorize(
+            MCPOAuthAuthorizeRequest(instance_id=instance.id),
+            user_context,
+            AsyncMock(),
+            AsyncMock(),
+        )
+
+    assert excinfo.value.status_code == 403
+    deny.assert_awaited_once_with(
+        "edit", "mcp_instance", str(instance.id), user_context.user_id
+    )
+    discover.assert_not_awaited()
 
 
 @pytest.mark.asyncio

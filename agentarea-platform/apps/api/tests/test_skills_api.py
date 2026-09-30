@@ -229,6 +229,61 @@ async def test_install_skill_materializes_catalog_skill(async_client, mock_skill
     mock_skill_service.install_catalog_skill.assert_called_once_with(skill_id)
 
 
+def _installed_skill(created_by: str) -> MagicMock:
+    now = datetime.utcnow()
+    skill = MagicMock()
+    skill.id = uuid4()
+    skill.name = "Installed Skill"
+    skill.slug = "installed-skill"
+    skill.description = "d"
+    skill.source_type = "content"
+    skill.source_url = None
+    skill.s3_path = None
+    skill.network_scope = "private"
+    skill.workspace_id = "test_workspace"
+    skill.created_at = now
+    skill.updated_at = now
+    skill.registry_item_id = None
+    skill.is_catalog = False
+    skill.update_available = False
+    skill.created_by = created_by
+    return skill
+
+
+@pytest.mark.asyncio
+async def test_installing_an_existing_skill_of_another_member_grants_nothing(
+    async_client, mock_skill_service, monkeypatch
+):
+    # install resolves an id that is already a tenant skill to that row; it must
+    # not hand the caller ownership of a skill somebody else created.
+    grant = AsyncMock()
+    monkeypatch.setattr("agentarea_api.api.v1.skills.grant_resource_owner", grant)
+    skill = _installed_skill(created_by="another_member")
+    mock_skill_service.install_catalog_skill.return_value = skill
+
+    response = await async_client.post(f"/v1/workspaces/acme/skills/{skill.id}/install")
+
+    assert response.status_code == 200
+    grant.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_installing_a_skill_the_caller_forked_reasserts_their_ownership(
+    async_client, mock_skill_service, monkeypatch
+):
+    grant = AsyncMock()
+    monkeypatch.setattr("agentarea_api.api.v1.skills.grant_resource_owner", grant)
+    skill = _installed_skill(created_by="test_user")
+    mock_skill_service.install_catalog_skill.return_value = skill
+
+    response = await async_client.post(f"/v1/workspaces/acme/skills/{uuid4()}/install")
+
+    assert response.status_code == 200
+    grant.assert_awaited_once_with(
+        resource_id=skill.id, workspace_id="test_workspace", user_id="test_user"
+    )
+
+
 @pytest.mark.asyncio
 async def test_update_catalog_skill_content_uses_forked_skill_id(
     async_client, mock_skill_service, monkeypatch
