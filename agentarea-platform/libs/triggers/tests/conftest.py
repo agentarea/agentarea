@@ -62,6 +62,9 @@ def make_trigger_repository_factory(trigger_repo=None, execution_repo=None, agen
 
     trigger_repo = trigger_repo if trigger_repo is not None else AsyncMock()
     execution_repo = execution_repo if execution_repo is not None else AsyncMock()
+    # A bare AsyncMock answers every question truthily, which would read as
+    # "this webhook id is taken" for every webhook a test creates.
+    trigger_repo.webhook_id_in_use = AsyncMock(return_value=False)
 
     mapping = {
         TriggerRepository: trigger_repo,

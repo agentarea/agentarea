@@ -98,6 +98,32 @@ class TestTriggerServiceErrorHandling:
         assert "does not exist" in str(exc_info.value)
         assert exc_info.value.context["agent_id"] == str(sample_cron_trigger_data.agent_id)
 
+    async def test_create_webhook_trigger_refuses_a_webhook_id_already_in_use(
+        self, trigger_service, mock_dependencies
+    ):
+        """Inbound webhooks are routed by webhook_id alone, across every workspace.
+
+        A second trigger on the same id makes the lookup ambiguous (the owner's
+        endpoint starts failing) and later inherits the traffic, so the id is
+        refused rather than shared.
+        """
+        mock_dependencies["trigger_repository"].webhook_id_in_use.return_value = True
+        webhook = TriggerCreate(
+            name="Copycat",
+            agent_id=uuid4(),
+            trigger_type=TriggerType.WEBHOOK,
+            webhook_id="someone-elses-hook",
+            created_by="test_user",
+        )
+
+        with pytest.raises(TriggerValidationError, match="already in use"):
+            await trigger_service.create_trigger(webhook)
+
+        mock_dependencies["trigger_repository"].webhook_id_in_use.assert_awaited_once_with(
+            "someone-elses-hook"
+        )
+        mock_dependencies["trigger_repository"].create_from_model.assert_not_awaited()
+
     async def test_create_trigger_agent_repository_error(
         self, trigger_service, sample_cron_trigger_data, mock_dependencies
     ):

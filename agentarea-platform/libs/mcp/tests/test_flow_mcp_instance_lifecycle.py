@@ -13,6 +13,7 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from agentarea_common.testing import install_graph_ownership_stub
 from agentarea_common.testing.flows import MainFlow
 from agentarea_mcp.application.service import MCPServerInstanceService
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
@@ -20,6 +21,13 @@ from agentarea_mcp.domain.verification_types import (
     VERIFICATION_SCHEMA_VERSION,
 )
 from agentarea_mcp.schemas.dto import MCPServerInstanceCreate
+
+
+@pytest.fixture(autouse=True)
+def graph(monkeypatch):
+    """Creating an instance writes ownership tuples; record them instead."""
+    return install_graph_ownership_stub(monkeypatch)
+
 
 # ---------------------------------------------------------------------------
 # Helpers — build a lightweight service wired to an in-memory instance store
@@ -250,3 +258,50 @@ async def test_mcp_instance_lifecycle_docker_type_dispatches_background_verify()
     expected_endpoint = f"http://mcp-{instance.id}:8000"
     # The endpoint_url property raises for bundle; docker instances compute it from id
     assert str(instance.id) in expected_endpoint
+
+
+@pytest.mark.flow(MainFlow.MCP_INSTANCE_LIFECYCLE)
+async def test_creating_an_instance_grants_its_creator_ownership(graph, monkeypatch):
+    """The instance is committed with its ownership tuples, not left for the reconcile.
+
+    Without them every check on it fails closed -- its creator cannot edit it,
+    connect OAuth to it, or delete it, and neither can the workspace admin.
+    """
+    server_spec = _make_server_spec("docker")
+    svc = _make_service(server_spec)
+    monkeypatch.setattr("agentarea_mcp.application.service.verify", AsyncMock(return_value={}))
+
+    instance = await svc.create_instance(
+        MCPServerInstanceCreate(name="owned", server_spec_id=server_spec.id, json_spec={})
+    )
+
+    assert instance is not None
+    creator = f"User:{svc.repository.user_context.user_id}"
+    owned = {t.object for t in graph.recorded if t.subject_id == creator}
+    assert str(instance.id) in owned
+    assert {t.relation for t in graph.recorded if t.object == str(instance.id)} >= {
+        "project",
+        "reader",
+        "writer",
+        "manager",
+    }
+
+
+@pytest.mark.flow(MainFlow.MCP_INSTANCE_LIFECYCLE)
+async def test_connecting_a_catalog_spec_grants_ownership_of_the_workspace_copy(graph, monkeypatch):
+    catalog_spec = _make_server_spec("docker")
+    svc = _make_service(catalog_spec)
+    catalog_spec.workspace_id = "platform"
+    copy = _make_server_spec("docker")
+    copy.workspace_id = svc.repository.user_context.workspace_id
+    monkeypatch.setattr(svc, "_materialize_workspace_spec_copy", AsyncMock(return_value=copy))
+    monkeypatch.setattr("agentarea_mcp.application.service.verify", AsyncMock(return_value={}))
+
+    instance = await svc.create_instance(
+        MCPServerInstanceCreate(name="from-catalog", server_spec_id=catalog_spec.id, json_spec={})
+    )
+
+    assert instance is not None
+    creator = f"User:{svc.repository.user_context.user_id}"
+    owned = {t.object for t in graph.recorded if t.subject_id == creator}
+    assert {str(instance.id), str(copy.id)} <= owned

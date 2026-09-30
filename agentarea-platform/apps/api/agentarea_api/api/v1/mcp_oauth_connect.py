@@ -42,6 +42,7 @@ from agentarea_api.api.v1.oauth_app_credentials import (
 )
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.config import get_settings
@@ -303,7 +304,9 @@ async def oauth_preflight(
 
 @router.post(
     "/authorize",
-    dependencies=[unrestricted("OAuth authorization endpoint; unauthenticated by protocol")],
+    dependencies=[
+        enforced_in_handler("edit on the instance: the callback attaches the credential to it")
+    ],
 )
 async def oauth_authorize(
     body: MCPOAuthAuthorizeRequest,
@@ -319,6 +322,7 @@ async def oauth_authorize(
     4. Persist the client credentials on an auth config
     5. Generate PKCE pair and state, and build the authorization URL
     """
+    await require_permission("edit", "mcp_instance", str(body.instance_id), user_context.user_id)
     instance, server_spec, mcp_url = await _load_instance_and_spec(
         body.instance_id, user_context, db_session
     )
