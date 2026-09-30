@@ -18,6 +18,7 @@ import tempfile
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import PurePosixPath
 from typing import Any
 
 from botocore.exceptions import ClientError
@@ -42,6 +43,12 @@ from agentarea_common.exceptions.errors import AppError
 logger = logging.getLogger(__name__)
 
 _WORKSPACE_PREFIX = "workspaces"
+# S3 rejects a longer key with KeyTooLongError; counted in UTF-8 bytes, not characters.
+_MAX_KEY_BYTES = 1024
+# A written file must stay archivable: ``workspaces/{uuid}/`` (48 bytes) plus the
+# ``.trash/{%Y%m%dT%H%M%S.%fZ}/`` header (31 bytes) leaves 945 of the key for the
+# path; 900 keeps headroom and fits ``artifact_events.path`` too.
+MAX_WRITE_PATH_BYTES = 900
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 # Archived files stay in the workspace under this prefix instead of being
@@ -51,7 +58,7 @@ TRASH_PREFIX = ".trash/"
 
 
 class InvalidArtifactPathError(AppError, ValueError):
-    """A path that cannot name an object: a control character or a ``..`` segment."""
+    """A path that cannot name an object: a control character, a ``..`` segment, or too long."""
 
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     code = "invalid_artifact_path"
@@ -161,7 +168,20 @@ class ArtifactService:
             raise InvalidArtifactPathError(f"path may not contain '..' segments: {path!r}")
         if any(ord(character) < 0x20 or ord(character) == 0x7F for character in clean):
             raise InvalidArtifactPathError(f"path may not contain control characters: {path!r}")
-        return f"{_WORKSPACE_PREFIX}/{workspace_id}/{clean}"
+        key = f"{_WORKSPACE_PREFIX}/{workspace_id}/{clean}"
+        if len(key.encode()) > _MAX_KEY_BYTES:
+            raise InvalidArtifactPathError(
+                f"path is too long: its storage key exceeds {_MAX_KEY_BYTES} bytes"
+            )
+        return key
+
+    def _write_key(self, workspace_id: str, path: str) -> str:
+        key = self._key(workspace_id, path)
+        if len(path.lstrip("/").encode()) > MAX_WRITE_PATH_BYTES:
+            raise InvalidArtifactPathError(
+                f"path is too long: a written path may not exceed {MAX_WRITE_PATH_BYTES} bytes"
+            )
+        return key
 
     def _prefix(self, workspace_id: str, path: str = "") -> str:
         if not workspace_id:
@@ -182,7 +202,7 @@ class ArtifactService:
         data: bytes,
         content_type: str | None = None,
     ) -> ArtifactObject:
-        key = self._key(workspace_id, path)
+        key = self._write_key(workspace_id, path)
         ct = content_type or self._guess_content_type(path)
         digest = hashlib.sha256(data).hexdigest()
 
@@ -320,9 +340,11 @@ class ArtifactService:
         file size. ``MetadataDirective`` is left at its ``COPY`` default so the
         sha256 user-metadata written by :meth:`put` survives the move.
         """
-        source_key = self._key(workspace_id, source)
-        destination_key = self._key(workspace_id, destination)
+        await self._copy_object(
+            self._key(workspace_id, source), self._write_key(workspace_id, destination)
+        )
 
+    async def _copy_object(self, source_key: str, destination_key: str) -> None:
         def _call() -> None:
             self._client.copy_object(
                 Bucket=self._bucket,
@@ -368,9 +390,9 @@ class ArtifactService:
             raise FileNotFoundError(clean)
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
         archived_path = f"{TRASH_PREFIX}{stamp}/{clean}"
-        await self.copy(workspace_id, clean, archived_path)
-
+        # Not the write bound: the trash header is what MAX_WRITE_PATH_BYTES leaves room for.
         key = self._key(workspace_id, clean)
+        await self._copy_object(key, self._key(workspace_id, archived_path))
 
         def _call() -> None:
             self._client.delete_object(Bucket=self._bucket, Key=key)
@@ -378,6 +400,24 @@ class ArtifactService:
         await asyncio.to_thread(_call)
         await self._record(workspace_id, clean, ACTION_ARCHIVED)
         return archived_path
+
+    async def restore(self, workspace_id: str, archived_path: str) -> str:
+        """Move an archived file back to the path it was archived from and return that path.
+
+        The file already lived there, so the path is held to the key bound only:
+        a file archived before the write bound existed must still come back.
+        """
+        clean = archived_path.lstrip("/")
+        # .trash/{timestamp}/{original path} — drop the two-segment archive header.
+        parts = PurePosixPath(clean).parts if clean.startswith(TRASH_PREFIX) else ()
+        original = "/".join(parts[2:])
+        if not original:
+            raise InvalidArtifactPathError(f"not an archived path: {archived_path!r}")
+        if not await self.exists(workspace_id, clean):
+            raise FileNotFoundError(clean)
+        await self._copy_object(self._key(workspace_id, clean), self._key(workspace_id, original))
+        await self.delete(workspace_id, clean)
+        return original
 
     async def list(
         self,
@@ -447,7 +487,7 @@ class ArtifactService:
         content does not hash to it, so the upload is content-verified without
         trusting the client.
         """
-        key = self._key(workspace_id, path)
+        key = self._write_key(workspace_id, path)
 
         def _call() -> str:
             params: dict[str, Any] = {"Bucket": self._bucket, "Key": key}

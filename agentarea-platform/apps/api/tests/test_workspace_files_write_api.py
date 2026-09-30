@@ -17,6 +17,7 @@ def _install_service(monkeypatch, **methods):
         "put": AsyncMock(),
         "archive": AsyncMock(return_value=".trash/20260826T101500.000000Z/notes.md"),
         "copy": AsyncMock(),
+        "restore": AsyncMock(side_effect=lambda _ws, path: path.split("/", 2)[2]),
         "delete": AsyncMock(),
         "move": AsyncMock(),
         "exists": AsyncMock(return_value=False),
@@ -168,6 +169,26 @@ async def test_move_refuses_reserved_and_escaping_paths(monkeypatch, source, des
 
 
 @pytest.mark.asyncio
+async def test_move_refuses_a_folder_whose_child_would_land_past_the_write_bound(
+    monkeypatch,
+) -> None:
+    long_child = "wiki/" + "a" * 890
+    service = _install_service(
+        monkeypatch,
+        exists=_exists_only(),
+        list=_list_by_prefix({"wiki/": [_obj("wiki/index.md"), _obj(long_child)]}),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await files.move_workspace_file(
+            files.MoveWorkspaceFileRequest(source="wiki", destination="docs/archive/wiki"), WS
+        )
+
+    assert exc.value.status_code == 422
+    service.move.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_move_refuses_a_destination_inside_the_source(monkeypatch) -> None:
     service = _install_service(monkeypatch, exists=_exists_only())
 
@@ -213,8 +234,7 @@ async def test_restore_puts_an_archived_file_back(monkeypatch) -> None:
 
     result = await files.restore_workspace_file(trash_path, WS)
 
-    service.copy.assert_awaited_once()
-    assert service.copy.await_args.args[1:] == (trash_path, "wiki/index.md")
+    service.restore.assert_awaited_once_with("ws-1", trash_path)
     assert result.path == "wiki/index.md"
 
 
@@ -226,7 +246,7 @@ async def test_restore_rejects_a_path_outside_the_trash(monkeypatch) -> None:
         await files.restore_workspace_file("wiki/index.md", WS)
 
     assert exc.value.status_code == 400
-    service.copy.assert_not_awaited()
+    service.restore.assert_not_awaited()
 
 
 SHA = "a" * 64
