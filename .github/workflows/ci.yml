@@ -49,6 +49,10 @@ jobs:
         uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
         with:
           base: ${{ github.event_name == 'pull_request' && github.base_ref || 'main' }}
+          # 'VERSION' changes only in a release commit. It is in every filter that gates an
+          # image, so that commit builds each component release-publish.yaml retags; a
+          # component whose own files the bump does not touch (mcp-base) was skipped and
+          # the retag found no X.Y.Z-<sha> source image (v0.0.16).
           filters: |
             platform:
               - 'agentarea-platform/**'
@@ -56,23 +60,30 @@ jobs:
               - 'agentarea-platform/libs/**'
             api:
               - 'agentarea-platform/apps/api/**'
+              - 'VERSION'
             worker:
               - 'agentarea-platform/apps/worker/**'
+              - 'VERSION'
             webapp:
               - 'agentarea-webapp/**'
+              - 'VERSION'
             cli:
               - 'agentarea-cli/**'
             mcp_manager:
               - 'agentarea-mcp-manager/**'
+              - 'VERSION'
             mcp_runner:
               - 'agentarea-mcp-manager/Dockerfile.runner'
               - 'agentarea-mcp-manager/cmd/activation-service/**'
             mcp_base:
               - 'mcp-servers/mcp-base/**'
+              - 'VERSION'
             operator:
               - 'agentarea-operator/**'
+              - 'VERSION'
             events:
               - 'agentarea-event-service/**'
+              - 'VERSION'
 
   version-check:
     runs-on: ubuntu-latest
