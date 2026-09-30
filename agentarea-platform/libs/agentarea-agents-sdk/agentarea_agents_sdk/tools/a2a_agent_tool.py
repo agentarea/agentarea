@@ -39,11 +39,16 @@ _TERMINAL_STATES = frozenset(
         TaskState.TASK_STATE_REJECTED,
     }
 )
+# The remote agent is waiting on its caller: more polling will not change that.
+_INTERRUPTED_STATES = frozenset(
+    {TaskState.TASK_STATE_INPUT_REQUIRED, TaskState.TASK_STATE_AUTH_REQUIRED}
+)
 # Polling budget for delegation: stay under the 120s activity timeout.
 _POLL_TOTAL_BUDGET = 110.0
 _POLL_INTERVAL = 2.0
 
 PaymentHandler = Callable[..., Awaitable[dict[str, Any] | None]]
+TokenProvider = Callable[[], Awaitable[str]]
 # Headers httpx derives from the request itself; the payment handler re-sends
 # the body, so replaying them would describe a different request.
 _NON_REPLAYABLE_HEADERS = frozenset(
@@ -51,7 +56,7 @@ _NON_REPLAYABLE_HEADERS = frozenset(
 )
 
 
-def _sanitize_tool_name(agent_name: str) -> str:
+def delegate_tool_name(agent_name: str) -> str:
     """Convert agent name to a valid tool function name."""
     sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", agent_name)
     sanitized = re.sub(r"_+", "_", sanitized).strip("_")
@@ -131,17 +136,20 @@ class A2AAgentTool(BaseTool):
         auth_token: str | None = None,
         payment_handler: PaymentHandler | None = None,
         http_transport: httpx.AsyncBaseTransport | None = None,
+        auth_token_provider: TokenProvider | None = None,
     ):
         self._agent_name = agent_name
         self._agent_description = agent_description
         self._a2a_url = a2a_url
         self._auth_token = auth_token
+        # Resolved per call, so a secret is read only when the delegate is used.
+        self._auth_token_provider = auth_token_provider
         self._payment_handler = payment_handler
         self._http_transport = http_transport
 
     @property
     def name(self) -> str:
-        return _sanitize_tool_name(self._agent_name)
+        return delegate_tool_name(self._agent_name)
 
     @property
     def description(self) -> str:
@@ -164,8 +172,8 @@ class A2AAgentTool(BaseTool):
             }
         }
 
-    def _client(self, transport: httpx.AsyncBaseTransport) -> Client:
-        headers = {"Authorization": f"Bearer {self._auth_token}"} if self._auth_token else {}
+    def _client(self, transport: httpx.AsyncBaseTransport, auth_token: str | None) -> Client:
+        headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
         httpx_client = httpx.AsyncClient(
             transport=transport, timeout=A2A_CALL_TIMEOUT, headers=headers
         )
@@ -191,6 +199,15 @@ class A2AAgentTool(BaseTool):
         if not message_text:
             raise ToolExecutionError(self.name, "message is required")
 
+        auth_token = self._auth_token
+        if self._auth_token_provider:
+            try:
+                auth_token = await self._auth_token_provider()
+            except Exception as e:
+                raise ToolExecutionError(
+                    self.name, f"Could not resolve the credential for '{self._agent_name}': {e}"
+                ) from e
+
         transport: httpx.AsyncBaseTransport = self._http_transport or httpx.AsyncHTTPTransport()
         payments: _PaymentTransport | None = None
         if self._payment_handler:
@@ -203,7 +220,7 @@ class A2AAgentTool(BaseTool):
             )
         )
         try:
-            async with self._client(transport) as client:
+            async with self._client(transport, auth_token) as client:
                 task: Task | None = None
                 async for response in client.send_message(request):
                     if response.HasField("message"):
@@ -214,14 +231,35 @@ class A2AAgentTool(BaseTool):
                     raise ToolExecutionError(self.name, "A2A agent returned no task")
                 payment = payments.payment_result if payments else None
 
-                if task.status.state not in _TERMINAL_STATES:
+                if task.status.state not in _TERMINAL_STATES | _INTERRUPTED_STATES:
                     task = await self._poll_until_terminal(client, task)
-                return self._success(
-                    self._extract_task_result(task),
-                    task_id=task.id,
-                    task_state=TaskState.Name(task.status.state),
-                    payment=payment,
-                )
+                state = TaskState.Name(task.status.state)
+                if task.status.state == TaskState.TASK_STATE_COMPLETED:
+                    return self._success(
+                        self._extract_task_result(task),
+                        task_id=task.id,
+                        task_state=state,
+                        payment=payment,
+                    )
+                if task.status.state in _TERMINAL_STATES:
+                    error = f"'{self._agent_name}' ended the task as {state}: " + (
+                        self._extract_task_result(task)
+                    )
+                elif task.status.state in _INTERRUPTED_STATES:
+                    error = f"'{self._agent_name}' stopped at {state} on task {task.id}: " + (
+                        self._extract_task_result(task)
+                    )
+                else:
+                    error = (
+                        f"'{self._agent_name}' is still working on task {task.id}; "
+                        "no result within the delegation time limit"
+                    )
+                return {
+                    **self._failure(error),
+                    "task_id": task.id,
+                    "task_state": state,
+                    "payment": payment,
+                }
         except ToolExecutionError:
             raise
         except A2AClientTimeoutError as e:
@@ -269,7 +307,7 @@ class A2AAgentTool(BaseTool):
             except A2AError:
                 logger.warning(f"A2A poll for task {task.id} failed", exc_info=True)
                 continue
-            if task.status.state in _TERMINAL_STATES:
+            if task.status.state in _TERMINAL_STATES | _INTERRUPTED_STATES:
                 return task
 
         logger.warning(f"A2A delegation to '{self._agent_name}' did not finish within budget")

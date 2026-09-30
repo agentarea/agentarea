@@ -499,7 +499,10 @@ def create_app() -> FastAPI:
     # domain exception stays free of web concerns; the composition layer renders
     # it via the shared problem+json helper, surfacing the numbers so the UI can
     # show "you've spent $X of $Y, raise the cap or wait".
-    from agentarea_agents.application.agent_service import InvalidModelIdError
+    from agentarea_agents.application.agent_service import (
+        InvalidDelegateError,
+        InvalidModelIdError,
+    )
     from agentarea_agents.application.approval_sync import ApprovalEnforcedByPolicyError
     from agentarea_common.exceptions import problem_response
     from agentarea_common.rebac import ResourceOwnershipError
@@ -515,6 +518,16 @@ def create_app() -> FastAPI:
         return problem_response(
             status_code=400,
             code="invalid_model_id",
+            detail=str(exc),
+        )
+
+    # A delegate the runtime could not reach — a bad URL, a missing or managed
+    # secret, an agent that is not here — is refused on write, like model_id.
+    @app.exception_handler(InvalidDelegateError)
+    async def _invalid_delegate_handler(_request: Request, exc: InvalidDelegateError):
+        return problem_response(
+            status_code=400,
+            code="invalid_delegate",
             detail=str(exc),
         )
 

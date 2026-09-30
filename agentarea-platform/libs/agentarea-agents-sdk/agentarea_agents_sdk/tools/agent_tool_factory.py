@@ -10,7 +10,9 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from .a2a_agent_tool import A2AAgentTool
+import httpx
+
+from .a2a_agent_tool import A2AAgentTool, TokenProvider
 from .agent_delegation_tool import AgentDelegationTool
 from .base_tool import BaseTool
 from .delegation_tool import DelegationTool
@@ -45,6 +47,8 @@ class AgentToolFactory:
         workspace_id: str | None = None,
         user_id: str | None = None,
         payment_handler: PaymentHandler | None = None,
+        auth_token_provider: TokenProvider | None = None,
+        http_transport: httpx.AsyncBaseTransport | None = None,
     ) -> BaseTool | None:
         """Create a delegation tool for a given agent.
 
@@ -59,33 +63,38 @@ class AgentToolFactory:
             workspace_id: Workspace context for internal delegation
             user_id: User context for internal delegation
             payment_handler: Optional HTTP 402 handler for external A2A calls
+            auth_token_provider: Resolves the bearer for an external A2A call when it runs
+            http_transport: Transport for external A2A calls (e.g. an outbound-policy one)
 
         Returns:
             BaseTool instance (AgentDelegationTool or A2AAgentTool), or None if agent not found
         """
         try:
+            # Pick the transport binding for this target agent, then wrap it in the
+            # single DelegationTool facade. The model always sees one delegate_to_<agent>
+            # tool; local-vs-A2A is an execution detail chosen here.
+
+            # Remote agent: an explicit A2A URL forces the A2A binding. The name is
+            # only the tool's label; nothing about the target lives on this platform.
+            if a2a_url_override:
+                logger.info(f"Delegation '{agent_name}': A2A binding -> {a2a_url_override}")
+                binding = A2AAgentTool(
+                    agent_name=agent_name,
+                    agent_description=description_override or f"Remote agent: {agent_name}",
+                    a2a_url=a2a_url_override,
+                    auth_token=auth_token,
+                    payment_handler=payment_handler,
+                    http_transport=http_transport,
+                    auth_token_provider=auth_token_provider,
+                )
+                return DelegationTool(binding, "a2a")
+
             agent = await agent_service.get_by_name(agent_name)
             if not agent:
                 logger.warning(f"Agent '{agent_name}' not found for delegation tool creation")
                 return None
 
             description = description_override or agent.description or f"Agent: {agent_name}"
-
-            # Pick the transport binding for this target agent, then wrap it in the
-            # single DelegationTool facade. The model always sees one delegate_to_<agent>
-            # tool; local-vs-A2A is an execution detail chosen here.
-
-            # Remote agent: an explicit A2A URL forces the A2A binding.
-            if a2a_url_override:
-                logger.info(f"Delegation '{agent_name}': A2A binding -> {a2a_url_override}")
-                binding = A2AAgentTool(
-                    agent_name=agent_name,
-                    agent_description=description,
-                    a2a_url=a2a_url_override,
-                    auth_token=auth_token,
-                    payment_handler=payment_handler,
-                )
-                return DelegationTool(binding, "a2a")
 
             # Same-platform agent: resolved locally and we have execution context →
             # local binding (direct task service, no HTTP/auth overhead).

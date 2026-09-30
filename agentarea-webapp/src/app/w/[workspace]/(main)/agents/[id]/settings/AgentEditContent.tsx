@@ -1,4 +1,4 @@
-import { loadAgentEditData } from "../../shared/useAgentData";
+import { loadAgentEditData, loadDelegationData } from "../../shared/useAgentData";
 import AgentEditClient from "./AgentEditClient";
 
 interface AgentEditContentProps {
@@ -8,7 +8,10 @@ interface AgentEditContentProps {
 export default async function AgentEditContent({
   agentId,
 }: AgentEditContentProps) {
-  const agentData = await loadAgentEditData(agentId);
+  const [agentData, delegation] = await Promise.all([
+    loadAgentEditData(agentId),
+    loadDelegationData(),
+  ]);
 
   return (
     <AgentEditClient
@@ -19,6 +22,7 @@ export default async function AgentEditContent({
       mcpInstanceList={agentData.mcpInstanceList}
       builtinTools={agentData.builtinTools}
       initialData={agentData.initialData}
+      delegation={delegation}
     />
   );
 }

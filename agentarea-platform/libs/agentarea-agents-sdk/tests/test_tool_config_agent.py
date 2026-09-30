@@ -27,6 +27,13 @@ class TestAgentToolSettings:
         settings = AgentToolSettings()
         assert settings.a2a_url is None
         assert settings.description_override is None
+        assert settings.auth_secret_name is None
+
+    def test_remote_agent_names_its_credential_by_secret(self):
+        settings = AgentToolSettings(
+            a2a_url="https://agentarea.ru/v1/agents/x/a2a/rpc", auth_secret_name="aadocs-key"
+        )
+        assert settings.auth_secret_name == "aadocs-key"
 
 
 class TestMcpToolSettings:

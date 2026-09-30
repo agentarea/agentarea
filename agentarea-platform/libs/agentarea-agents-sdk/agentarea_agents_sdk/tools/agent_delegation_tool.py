@@ -11,7 +11,7 @@ import time
 from typing import Any
 from uuid import UUID, uuid4
 
-from .a2a_agent_tool import _sanitize_tool_name
+from .a2a_agent_tool import delegate_tool_name
 from .base_tool import BaseTool, ToolExecutionError
 
 logger = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ class AgentDelegationTool(BaseTool):
 
     @property
     def name(self) -> str:
-        return _sanitize_tool_name(self._agent_name)
+        return delegate_tool_name(self._agent_name)
 
     @property
     def description(self) -> str:

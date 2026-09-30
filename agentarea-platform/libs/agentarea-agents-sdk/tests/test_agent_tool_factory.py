@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 
 from agentarea_agents_sdk.tools.a2a_agent_tool import A2AAgentTool
@@ -122,6 +123,46 @@ class TestAgentToolFactoryCreateTool:
 
         assert tool is not None
         assert tool.binding._auth_token == "secret-token"
+
+    @pytest.mark.asyncio
+    async def test_remote_agent_needs_no_local_agent(self):
+        agent_service = AsyncMock()
+        agent_service.get_by_name = AsyncMock(return_value=None)
+
+        tool = await AgentToolFactory.create_tool(
+            agent_name="aadocs-writer",
+            agent_service=agent_service,
+            base_url="http://localhost:8000",
+            a2a_url_override="https://example.com/v1/agents/x/a2a/rpc",
+            description_override="Writes the docs",
+        )
+
+        assert tool is not None
+        assert tool.binding_kind == "a2a"
+        assert tool.name == "delegate_to_aadocs_writer"
+        assert tool.binding._a2a_url == "https://example.com/v1/agents/x/a2a/rpc"
+        assert "Writes the docs" in tool.description
+        agent_service.get_by_name.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_remote_agent_gets_the_token_provider_and_transport(self):
+        async def token() -> str:
+            return "t"
+
+        transport = httpx.MockTransport(lambda request: httpx.Response(200))
+
+        tool = await AgentToolFactory.create_tool(
+            agent_name="aadocs-writer",
+            agent_service=AsyncMock(),
+            base_url="http://localhost:8000",
+            a2a_url_override="https://example.com/rpc",
+            auth_token_provider=token,
+            http_transport=transport,
+        )
+
+        assert tool is not None
+        assert tool.binding._auth_token_provider is token
+        assert tool.binding._http_transport is transport
 
 
 class TestAgentToolFactoryCreateToolsFromConfig:

@@ -10,6 +10,7 @@ import React from "react";
 import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/create/actions";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import AgentForm from "../shared/AgentForm";
+import type { DelegationData } from "../shared/useAgentData";
 import { addAgent, type AddAgentFormState } from "./actions";
 import type { AgentFormValues } from "./types";
 import { generateAgentName } from "./utils/agentNameGenerator";
@@ -24,6 +25,7 @@ export default function CreateAgentClient({
   builtinTools,
   presets,
   triggerCatalog,
+  delegation,
 }: {
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
@@ -31,6 +33,7 @@ export default function CreateAgentClient({
   builtinTools: unknown[];
   presets: AgentPresetResponse[] | null;
   triggerCatalog: TriggerCatalogEntry[] | null;
+  delegation: DelegationData;
 }) {
   const router = useWorkspaceRouter();
 
@@ -54,6 +57,7 @@ export default function CreateAgentClient({
       mcpInstanceList={mcpInstanceList}
       builtinTools={builtinTools}
       create={{ presets, triggerCatalog }}
+      delegation={delegation}
       initialData={{
         name: generateAgentName(),
         description: "",

@@ -11,6 +11,7 @@ import { Sparkles } from "lucide-react";
 import { ChatWelcome } from "@/components/Chat/componets/ChatWelcome";
 import type { AgentFormValues } from "../../create/types";
 import AgentForm from "../../shared/AgentForm";
+import type { DelegationData } from "../../shared/useAgentData";
 import { updateAgentSettings } from "./actions";
 
 type MCPServer = McpServerResponse;
@@ -24,6 +25,7 @@ interface AgentEditClientProps {
   mcpInstanceList: McpServerInstanceResponse[];
   builtinTools: unknown[];
   initialData: Partial<AgentFormValues>;
+  delegation: DelegationData;
 }
 
 export default function AgentEditClient({
@@ -34,6 +36,7 @@ export default function AgentEditClient({
   mcpInstanceList,
   builtinTools,
   initialData,
+  delegation,
 }: AgentEditClientProps) {
   const router = useWorkspaceRouter();
 
@@ -68,6 +71,7 @@ export default function AgentEditClient({
       builtinTools={builtinTools}
       initialData={initialData}
       agentId={agentId}
+      delegation={delegation}
       triggersHref={`/triggers?search=${encodeURIComponent(agentName)}`}
       onSubmit={handleSubmit}
       submitButtonText="Save Changes"

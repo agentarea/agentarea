@@ -22,7 +22,7 @@ from a2a.types import Artifact, Part, Task, TaskState, TaskStatus
 from agentarea_common.testing.flows import MainFlow
 from google.protobuf.json_format import MessageToDict
 
-from agentarea_agents_sdk.tools.a2a_agent_tool import A2AAgentTool, _sanitize_tool_name
+from agentarea_agents_sdk.tools.a2a_agent_tool import A2AAgentTool, delegate_tool_name
 
 _SPECIALIST_NAME = "data_analyst"
 _SPECIALIST_URL = "http://specialist.internal/a2a/rpc"
@@ -83,7 +83,7 @@ class TestA2ADelegationFlow:
 
     def test_tool_name_matches_delegate_to_convention(self):
         assert self.tool.name == f"delegate_to_{_SPECIALIST_NAME}"
-        assert self.tool.name == _sanitize_tool_name(_SPECIALIST_NAME)
+        assert self.tool.name == delegate_tool_name(_SPECIALIST_NAME)
 
     def test_tool_schema_exposes_message_parameter(self):
         schema = self.tool.get_schema()

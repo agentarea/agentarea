@@ -1,11 +1,12 @@
 import { listAgentPresets } from "@/lib/api";
 import { listTriggerCatalogAction } from "@/app/w/[workspace]/(main)/triggers/create/actions";
-import { loadAgentData } from "../shared/useAgentData";
+import { loadAgentData, loadDelegationData } from "../shared/useAgentData";
 import CreateAgentClient from "./CreateAgentClient";
 
 export default async function CreateAgentContent() {
-  const [agentData, presetsResponse, triggerCatalog] = await Promise.all([
+  const [agentData, delegation, presetsResponse, triggerCatalog] = await Promise.all([
     loadAgentData(),
+    loadDelegationData(),
     listAgentPresets(),
     listTriggerCatalogAction().catch((error) => {
       console.error("Failed to load trigger catalog:", error);
@@ -24,6 +25,7 @@ export default async function CreateAgentContent() {
       builtinTools={agentData.builtinTools}
       presets={presetsResponse.error ? null : (presetsResponse.data ?? [])}
       triggerCatalog={triggerCatalog}
+      delegation={delegation}
     />
   );
 }

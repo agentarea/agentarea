@@ -63,6 +63,7 @@ import {
 } from "../create/utils/agentPreset";
 import { useChat } from "./ChatContext";
 import { delegatesOf, withDelegates } from "./delegationTools";
+import type { DelegationData } from "./useAgentData";
 
 type MCPServer = McpServerResponse;
 type LLMModelInstance = ModelInstanceResponse;
@@ -74,6 +75,7 @@ interface AgentFormProps {
   builtinTools: unknown[];
   initialData?: Partial<AgentFormValues>;
   agentId?: string;
+  delegation: DelegationData;
   /** Create only: presets and trigger types, each `null` when it failed to load. */
   create?: {
     presets: AgentPresetResponse[] | null;
@@ -100,6 +102,7 @@ export default function AgentForm({
   builtinTools,
   initialData,
   agentId,
+  delegation,
   create,
   triggersHref,
   onSubmit,
@@ -456,11 +459,13 @@ export default function AgentForm({
             <Divider />
             <DelegationConfig
               agentId={agentId}
+              agents={delegation.agents}
+              secrets={delegation.secrets}
               delegates={delegatesOf(carriedTools)}
               onDelegatesChange={(delegates) =>
                 setValue(
                   "tools_config.carried_tools",
-                  withDelegates(carriedTools, new Set(delegates))
+                  withDelegates(carriedTools, delegates)
                 )
               }
             />

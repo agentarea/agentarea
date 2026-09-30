@@ -1,9 +1,12 @@
+import type { SecretResponse } from "@/api/client/types.gen";
 import {
   getAgent,
+  listAgents,
   listAllTools,
   listMCPServerInstances,
   listMCPServers,
   listModelInstances,
+  listSecrets,
 } from "@/lib/api";
 import type {
   Agent,
@@ -83,5 +86,25 @@ export async function loadAgentEditData(
     ...baseData,
     agent,
     initialData: fromAgent(agent),
+  };
+}
+
+/** What the delegation picker offers; a list is null when it failed to load. */
+export interface DelegationData {
+  agents: Agent[] | null;
+  secrets: SecretResponse[] | null;
+}
+
+export async function loadDelegationData(): Promise<DelegationData> {
+  const [agents, secrets] = await Promise.all([listAgents(), listSecrets()]);
+  if (agents.error) {
+    console.error("Failed to load agents for delegation:", agents.error);
+  }
+  if (secrets.error) {
+    console.error("Failed to load secrets for delegation:", secrets.error);
+  }
+  return {
+    agents: agents.error ? null : (agents.data ?? []),
+    secrets: secrets.error ? null : (secrets.data ?? []),
   };
 }
