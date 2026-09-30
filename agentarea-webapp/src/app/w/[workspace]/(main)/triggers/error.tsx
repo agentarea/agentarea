@@ -1,5 +1,6 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
 import { ErrorFallback } from "@/components/ui/error-fallback";
 
@@ -12,6 +13,7 @@ export default function TriggersError({
 }) {
   useEffect(() => {
     console.error("[Triggers Error]:", error);
+    Sentry.captureException(error);
   }, [error]);
 
   return (

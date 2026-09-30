@@ -1,5 +1,6 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
 import { ErrorFallback } from "@/components/ui/error-fallback";
 
@@ -12,6 +13,7 @@ export default function MainError({
 }) {
   useEffect(() => {
     console.error("[Main Layout Error]:", error);
+    Sentry.captureException(error);
   }, [error]);
 
   return (

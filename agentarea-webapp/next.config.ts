@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs/config";
 import createNextIntlPlugin from "next-intl/plugin";
 import packageJson from "./package.json";
 import path from "path";
@@ -123,4 +124,9 @@ const nextConfig: NextConfig = {
 };
 
 const withNextIntl = createNextIntlPlugin();
-export default withNextIntl(nextConfig);
+export default withSentryConfig(withNextIntl(nextConfig), {
+  silent: true,
+  telemetry: false,
+  sourcemaps: { disable: true },
+  suppressOnRouterTransitionStartWarning: true,
+});
