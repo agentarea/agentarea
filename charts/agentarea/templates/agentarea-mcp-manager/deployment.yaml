@@ -17,6 +17,10 @@ spec:
       labels:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: mcp-manager
+      annotations:
+        # The manager reads its settings (MCP_BASE_IMAGE among them, which
+        # Image Updater moves) from ConfigMaps at start only.
+        checksum/config: {{ include (print $.Template.BasePath "/env-configmap.yaml") . | sha256sum }}
     spec:
       {{- $dockerBackend := eq (default "kubernetes" .Values.mcpManager.backend) "docker" }}
       {{- $execKubeconfig := include "agentarea.mcpManager.executionKubeconfigPath" . }}
