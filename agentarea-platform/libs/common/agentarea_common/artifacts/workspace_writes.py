@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import PurePosixPath
 from typing import Any, Protocol
 
-from .service import TRASH_PREFIX
+from .service import MAX_WRITE_PATH_BYTES, TRASH_PREFIX
 from .workspace import (
     WorkspaceConflictError,
     WorkspaceError,
@@ -19,11 +19,6 @@ from .workspace import (
 )
 
 MAX_UPLOADS_PER_PLAN = 100
-
-# A written file must stay archivable: ``workspaces/{uuid}/`` (48 bytes) plus the
-# ``.trash/{%Y%m%dT%H%M%S.%fZ}/`` header (31 bytes) leaves 945 of S3's 1024-byte
-# key for the path; 900 keeps headroom and fits ``artifact_events.path`` too.
-MAX_WRITE_PATH_BYTES = 900
 
 # ``staging/`` holds half-finished attachment uploads, ``tasks/`` is the
 # task-owned surface reached through committed manifests, and ``.trash/`` holds

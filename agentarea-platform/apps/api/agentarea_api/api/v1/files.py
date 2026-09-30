@@ -412,9 +412,13 @@ async def move_workspace_file(
     contents = await svc.list(workspace_id, prefix=f"{source}/")
     if not contents:
         raise HTTPException(status_code=404, detail="File not found")
-    for obj in contents:
-        await svc.move(workspace_id, obj.path, f"{destination}/{obj.path[len(source) + 1 :]}")
-    return MovedFileResponse(source=source, destination=destination, moved=len(contents))
+    # Refuse the whole move before copying anything if one child cannot land.
+    moves = [(obj.path, f"{destination}/{obj.path[len(source) + 1 :]}") for obj in contents]
+    for _, target in moves:
+        _resolve_upload_path(target.removesuffix("/"), "")
+    for child, target in moves:
+        await svc.move(workspace_id, child, target)
+    return MovedFileResponse(source=source, destination=destination, moved=len(moves))
 
 
 @router.delete(
