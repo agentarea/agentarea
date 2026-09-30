@@ -104,3 +104,27 @@ def test_governance_decisions_are_not_retried():
     only repeats it and delays the escalation or denial reaching the workflow."""
     assert "GovernanceDeniedError" in NON_RETRYABLE_ERROR_TYPES
     assert "EscalationRequiredError" in NON_RETRYABLE_ERROR_TYPES
+
+
+def test_run_limits_map_to_continuation_reasons():
+    from agentarea_execution.workflows.agent.limits import run_limit_reason
+    from temporalio.exceptions import ApplicationError
+
+    assert run_limit_reason(ApplicationError("x", type="TokenBudgetExceeded")) == "token_limit"
+    assert (
+        run_limit_reason(ApplicationError("x", type="ToolCallLimitExceeded")) == "tool_call_limit"
+    )
+    assert run_limit_reason(ApplicationError("x", type="BudgetExceeded")) == "budget_exceeded"
+    assert run_limit_reason(ApplicationError("x", type="LLMAccountingUnavailable")) is None
+    assert run_limit_reason(RuntimeError("x")) is None
+
+
+def test_model_calls_ride_out_minutes_of_provider_outage():
+    from agentarea_execution.workflows.retry import model_call_retry_policy
+
+    policy = model_call_retry_policy()
+    waits, interval = [], policy.initial_interval.total_seconds()
+    for _ in range(policy.maximum_attempts - 1):
+        waits.append(min(interval, policy.maximum_interval.total_seconds()))
+        interval *= policy.backoff_coefficient
+    assert sum(waits) >= 120

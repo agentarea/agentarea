@@ -2,17 +2,12 @@
 
 import { FileText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useTaskContext } from "../TaskContext";
 
 export default function TaskLogsPage() {
   const { task, taskStatus, loading, error } = useTaskContext();
 
-  const getLogLevelColor = (level: string) => {
-    if (level === "success") return "text-green-600";
-    if (level === "error") return "text-red-600";
-    if (level === "warning") return "text-yellow-600";
-    return "text-blue-600";
-  };
 
   if (loading) {
     return (
@@ -50,7 +45,9 @@ export default function TaskLogsPage() {
               <span className="text-muted-foreground">
                 [{new Date(task.created_at).toLocaleString()}]
               </span>{" "}
-              <span className="text-blue-600">INFO:</span> Task created:{" "}
+              <StatusIndicator kind="active" size="sm">
+                INFO:
+              </StatusIndicator>{" "}
               {task.description || "No description"}
             </div>
           )}
@@ -59,7 +56,9 @@ export default function TaskLogsPage() {
               <span className="text-muted-foreground">
                 [{new Date(taskStatus.start_time).toLocaleString()}]
               </span>{" "}
-              <span className="text-blue-600">INFO:</span> Task execution
+              <StatusIndicator kind="active" size="sm">
+                INFO:
+              </StatusIndicator>{" "}
               started
             </div>
           )}
@@ -68,7 +67,10 @@ export default function TaskLogsPage() {
               <span className="text-muted-foreground">
                 [{new Date().toLocaleString()}]
               </span>{" "}
-              <span className="text-blue-600">INFO:</span> {taskStatus.message}
+              <StatusIndicator kind="active" size="sm">
+                INFO:
+              </StatusIndicator>{" "}
+              {taskStatus.message}
             </div>
           )}
           {taskStatus?.error && (
@@ -76,7 +78,10 @@ export default function TaskLogsPage() {
               <span className="text-muted-foreground">
                 [{new Date().toLocaleString()}]
               </span>{" "}
-              <span className="text-red-600">ERROR:</span> {taskStatus.error}
+              <StatusIndicator kind="failed" size="sm">
+                ERROR:
+              </StatusIndicator>{" "}
+              {taskStatus.error}
             </div>
           )}
           {taskStatus?.end_time && (
@@ -84,13 +89,12 @@ export default function TaskLogsPage() {
               <span className="text-muted-foreground">
                 [{new Date(taskStatus.end_time).toLocaleString()}]
               </span>{" "}
-              <span
-                className={getLogLevelColor(
-                  currentStatus === "completed" ? "success" : "error"
-                )}
+              <StatusIndicator
+                kind={currentStatus === "completed" ? "done" : "failed"}
+                size="sm"
               >
-                {currentStatus === "completed" ? "SUCCESS" : "ERROR"}:
-              </span>{" "}
+                {currentStatus === "completed" ? "SUCCESS:" : "ERROR:"}
+              </StatusIndicator>{" "}
               Task{" "}
               {currentStatus === "completed"
                 ? "completed successfully"
@@ -98,12 +102,13 @@ export default function TaskLogsPage() {
             </div>
           )}
           {isActive && currentStatus === "running" && (
-            <div className="animate-pulse">
+            <div>
               <span className="text-muted-foreground">
                 [{new Date().toLocaleString()}]
               </span>{" "}
-              <span className="text-blue-600">INFO:</span> Task is currently
-              running...
+              <StatusIndicator kind="running" size="sm">
+                INFO: Task is currently running...
+              </StatusIndicator>
             </div>
           )}
           {!isActive && !taskStatus?.end_time && (

@@ -1,9 +1,9 @@
-import Link from "@/components/WorkspaceLink";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { HoverLink } from "@/components/ui/hover-link";
 import ModelBadge from "@/components/ui/model-badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import Link from "@/components/WorkspaceLink";
 import { cn } from "@/lib/utils";
 import { Agent, agentPath } from "@/types";
 import { AgentToolIcon } from "@/utils/agentToolIcons";
@@ -47,15 +47,27 @@ export default function AgentCard({ agent }: AgentCardProps) {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1 pt-0.5">
                   <div className="flex items-center gap-2">
-                    <AgentAvatar agent={{ id: agent.id, name: agent.name, icon: agent.icon }} size="sm" />
+                    <AgentAvatar
+                      agent={{
+                        id: agent.id,
+                        name: agent.name,
+                        icon: agent.icon,
+                      }}
+                      size="sm"
+                    />
                     <h3 className="truncate text-[15px] font-medium leading-tight tracking-tight text-zinc-900 transition-colors duration-300 group-hover:text-primary dark:text-zinc-100 dark:group-hover:text-zinc-50">
                       {agent.name}
                     </h3>
-                    {agent.active_task_count != null && agent.active_task_count > 0 && (
-                      <Badge variant="blue" className="shrink-0 text-xs">
-                        {agent.active_task_count} running
-                      </Badge>
-                    )}
+                    {agent.active_task_count != null &&
+                      agent.active_task_count > 0 && (
+                        <StatusIndicator
+                          kind="running"
+                          size="sm"
+                          className="shrink-0 text-xs"
+                        >
+                          {agent.active_task_count} running
+                        </StatusIndicator>
+                      )}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     <ModelBadge

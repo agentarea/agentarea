@@ -263,6 +263,8 @@ class ToolDisclosureMixin(ToolApprovalMixin):
                 retry_policy=make_retry_policy(2),
             )
         except Exception as e:
+            if self._is_cancellation(e):
+                raise
             workflow.logger.warning(
                 f"Could not materialize skill '{skill_name}': {e}", exc_info=True
             )

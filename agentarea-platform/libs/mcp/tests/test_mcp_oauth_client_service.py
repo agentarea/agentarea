@@ -22,8 +22,10 @@ from agentarea_mcp.application.oauth_client_service import (
     MCPOAuthClientService,
     MCPOAuthDiscoveryError,
     PKCEPair,
+    _as_metadata_urls,
     _parse_resource_metadata_url,
     _parse_scope_from_www_authenticate,
+    oauth_authorize_params,
 )
 
 
@@ -109,12 +111,44 @@ class TestWwwAuthenticateParsing:
 # ---------------------------------------------------------------------------
 
 
+class TestAsMetadataUrls:
+    """The discovery order the MCP authorization spec prescribes."""
+
+    def test_issuer_with_a_path(self):
+        assert _as_metadata_urls("https://github.com/login/oauth") == [
+            "https://github.com/.well-known/oauth-authorization-server/login/oauth",
+            "https://github.com/.well-known/openid-configuration/login/oauth",
+            "https://github.com/login/oauth/.well-known/openid-configuration",
+        ]
+
+    def test_issuer_without_a_path(self):
+        assert _as_metadata_urls("https://accounts.google.com/") == [
+            "https://accounts.google.com/.well-known/oauth-authorization-server",
+            "https://accounts.google.com/.well-known/openid-configuration",
+        ]
+
+
 @pytest.mark.asyncio
 class TestFetchAsMetadata:
-    async def test_known_provider_short_circuits_discovery(self, monkeypatch):
-        # GitHub is in _KNOWN_PROVIDERS, so no HTTP call should be made.
-        def handler(_request):
-            raise AssertionError("no HTTP call expected for known providers")
+    async def test_issuer_with_a_path_is_discovered_at_the_path_inserted_url(
+        self, monkeypatch
+    ):
+        """GitHub's issuer carries a path; RFC 8414 §3.1 inserts the well-known
+        segment before it, and appending it after answers 404."""
+        requested: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requested.append(str(request.url))
+            if request.url.path == "/.well-known/oauth-authorization-server/login/oauth":
+                return httpx.Response(
+                    200,
+                    json={
+                        "issuer": "https://github.com/login/oauth",
+                        "authorization_endpoint": "https://github.com/login/oauth/authorize",
+                        "token_endpoint": "https://github.com/login/oauth/access_token",
+                    },
+                )
+            return httpx.Response(404)
 
         _patch_httpx(monkeypatch, handler)
         svc = MCPOAuthClientService()
@@ -122,9 +156,13 @@ class TestFetchAsMetadata:
         async with httpx.AsyncClient() as client:
             meta = await svc._fetch_as_metadata(client, "https://github.com/login/oauth")
 
+        assert requested == [
+            "https://github.com/.well-known/oauth-authorization-server/login/oauth"
+        ]
+        assert meta.issuer == "https://github.com/login/oauth"
         assert meta.authorization_endpoint == "https://github.com/login/oauth/authorize"
         assert meta.token_endpoint == "https://github.com/login/oauth/access_token"
-        assert meta.registration_endpoint is None  # GitHub has no DCR
+        assert meta.registration_endpoint is None
 
     async def test_rfc_8414_metadata_is_used_first(self, monkeypatch):
         responses = {
@@ -175,9 +213,11 @@ class TestFetchAsMetadata:
 
         _patch_httpx(monkeypatch, handler)
         svc = MCPOAuthClientService()
-        with pytest.raises(MCPOAuthDiscoveryError):
+        with pytest.raises(MCPOAuthDiscoveryError) as exc_info:
             async with httpx.AsyncClient() as client:
-                await svc._fetch_as_metadata(client, "https://as.example.com")
+                await svc._fetch_as_metadata(client, "https://as.example.com/tenant")
+        for url in _as_metadata_urls("https://as.example.com/tenant"):
+            assert url in str(exc_info.value)
 
     async def test_rejects_javascript_scheme_authorization_endpoint(self, monkeypatch):
         """A malicious/compromised AS can advertise any string as
@@ -907,10 +947,12 @@ class TestDiscoveryStaysOnPublicAddresses:
         assert fetched == ["mcp.example.com"]
 
 
-class TestProviderAuthorizeParams:
-    """Refresh tokens are how a connection survives its first hour."""
+class TestExtraAuthorizeParams:
+    """Refresh tokens are how a connection survives its first hour; a provider
+    that asks for them outside OAuth 2.1 (Google: access_type=offline) says so
+    in its catalog spec, not in this module."""
 
-    def _url(self, issuer: str) -> dict[str, list[str]]:
+    def _url(self, issuer: str, extra_params=None) -> dict[str, list[str]]:
         meta = AuthServerMetadata(
             issuer=issuer,
             authorization_endpoint=f"{issuer.rstrip('/')}/authorize",
@@ -922,23 +964,47 @@ class TestProviderAuthorizeParams:
             redirect_uri="https://app/cb",
             pkce=PKCEPair(verifier="v", challenge="c"),
             state="s",
+            extra_params=extra_params,
         )
         return parse_qs(urlparse(url).query)
 
-    def test_google_is_asked_for_offline_access_its_own_way(self):
-        """Google ignores the offline_access scope and issues a refresh token only
-        for access_type=offline; prompt=consent makes it issue one again when an
-        already-approved user reconnects, instead of silently omitting it."""
-        params = self._url("https://accounts.google.com")
+    def test_extra_params_reach_the_authorize_url(self):
+        params = self._url(
+            "https://accounts.google.com",
+            {"access_type": "offline", "prompt": "consent"},
+        )
 
         assert params["access_type"] == ["offline"]
         assert params["prompt"] == ["consent"]
 
-    def test_issuer_matching_tolerates_a_trailing_slash(self):
-        assert self._url("https://accounts.google.com/")["access_type"] == ["offline"]
-
-    def test_other_providers_get_no_provider_specific_params(self):
-        params = self._url("https://as.example.com")
+    def test_no_provider_gets_params_it_was_not_given(self):
+        params = self._url("https://accounts.google.com")
 
         assert "access_type" not in params
         assert "prompt" not in params
+
+    @pytest.mark.parametrize("key", ["client_id", "redirect_uri", "state", "scope", "resource"])
+    def test_extra_params_cannot_replace_protocol_params(self, key):
+        with pytest.raises(ValueError, match=key):
+            self._url("https://as.example.com", {key: "attacker"})
+
+
+class TestOAuthAuthorizeParamsFromSpec:
+    def test_spec_without_metadata_declares_nothing(self):
+        assert oauth_authorize_params({}) == {}
+        assert oauth_authorize_params(None) == {}
+        assert oauth_authorize_params({"metadata": {"agentarea:setup_tier": "x"}}) == {}
+
+    def test_declared_params_are_returned(self):
+        spec = {
+            "metadata": {
+                "agentarea:oauth_authorize_params": {"access_type": "offline", "prompt": "consent"}
+            }
+        }
+
+        assert oauth_authorize_params(spec) == {"access_type": "offline", "prompt": "consent"}
+
+    @pytest.mark.parametrize("value", ["access_type=offline", ["offline"], {"access_type": 1}])
+    def test_malformed_declaration_is_an_error(self, value):
+        with pytest.raises(ValueError, match="oauth_authorize_params"):
+            oauth_authorize_params({"metadata": {"agentarea:oauth_authorize_params": value}})

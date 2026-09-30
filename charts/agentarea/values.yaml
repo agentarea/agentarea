@@ -506,6 +506,14 @@ worker:
   # pod that passes readiness and then crashes cannot retire an old replica.
   minReadySeconds: 10
 
+  # -- Seconds a stopping worker lets in-flight activities (model calls, tools,
+  # event writes) finish before it cancels them. A cancelled model call is paid
+  # for twice when it reruns on another replica.
+  shutdownTimeout: 120
+  # -- Total budget the kubelet allows the worker before SIGKILL. Keep it above
+  # shutdownTimeout, or the drain is cut short.
+  terminationGracePeriodSeconds: 150
+
   # -- Rollout strategy. maxUnavailable 0 keeps every old replica until its
   # replacement is available: a new ReplicaSet that never becomes ready stalls
   # the rollout instead of taking the running workers down.

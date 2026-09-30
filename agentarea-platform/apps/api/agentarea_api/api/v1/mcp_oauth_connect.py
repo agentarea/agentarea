@@ -57,6 +57,7 @@ from agentarea_mcp.application.oauth_client_service import (
     MCPOAuthDiscoveryError,
     PKCEPair,
     oauth_app_required_detail,
+    oauth_authorize_params,
 )
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
@@ -186,10 +187,10 @@ def _resolve_instance_remote_url(server_spec) -> str | None:
     return None
 
 
-async def _load_instance_and_url(
+async def _load_instance_and_spec(
     instance_id: UUID, user_context: UserContext, db_session
-) -> tuple[Any, str | None]:
-    """Fetch a workspace-scoped instance together with its remote MCP URL."""
+) -> tuple[Any, Any | None, str | None]:
+    """Fetch a workspace-scoped instance with its spec and remote MCP URL."""
     instance_repo = MCPServerInstanceRepository(db_session, user_context)
     instance = await instance_repo.get_by_id(instance_id)
     if instance is None:
@@ -199,7 +200,7 @@ async def _load_instance_and_url(
     if instance.server_spec_id:
         server_repo = MCPServerRepository(db_session, user_context)
         server_spec = await server_repo.get_server_by_id(instance.server_spec_id)
-    return instance, _resolve_instance_remote_url(server_spec)
+    return instance, server_spec, _resolve_instance_remote_url(server_spec)
 
 
 def _safe_frontend_base(return_to: str) -> str:
@@ -270,7 +271,7 @@ async def oauth_preflight(
         raise HTTPException(status_code=422, detail="Pass exactly one of instance_id or server_id.")
 
     if instance_id is not None:
-        instance, mcp_url = await _load_instance_and_url(instance_id, user_context, db_session)
+        instance, _, mcp_url = await _load_instance_and_spec(instance_id, user_context, db_session)
         connected = instance.auth_config_id is not None
     else:
         server_spec = await MCPServerRepository(db_session, user_context).get_server_by_id(
@@ -322,12 +323,22 @@ async def oauth_authorize(
     5. Generate PKCE pair and state, and build the authorization URL
     """
     await require_permission("edit", "mcp_instance", str(body.instance_id), user_context.user_id)
-    instance, mcp_url = await _load_instance_and_url(body.instance_id, user_context, db_session)
+    instance, server_spec, mcp_url = await _load_instance_and_spec(
+        body.instance_id, user_context, db_session
+    )
     if not mcp_url:
         raise HTTPException(
             status_code=400,
             detail="Instance has no remote URL configured. OAuth connect requires a URL-type MCP instance.",
         )
+    try:
+        extra_authorize_params = oauth_authorize_params(
+            server_spec.json_spec if server_spec else None
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"The MCP server spec's OAuth settings are invalid: {exc}"
+        ) from exc
 
     oauth_client = MCPOAuthClientService()
     try:
@@ -432,6 +443,7 @@ async def oauth_authorize(
         redirect_uri=redirect_uri,
         pkce=pkce,
         state=state,
+        extra_params=extra_authorize_params,
     )
     return {"authorize_url": auth_url}
 

@@ -42,13 +42,23 @@ def make_task_state_activities(
         """Update task status in the database after workflow completion."""
         from uuid import UUID as _UUID
 
-        from agentarea_tasks.infrastructure.repository import TaskRepository
+        from agentarea_tasks.infrastructure.repository import (
+            TaskConversationRepository,
+            TaskRepository,
+        )
+
+        from .conversation import pending_entries
 
         user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             session = container._database.async_session_factory()
             ctx._sessions.append(session)
             task_repo = TaskRepository(session, user_context)
+            if request.conversation is not None and request.conversation_pending:
+                await TaskConversationRepository(session, user_context).write(
+                    _UUID(request.conversation.task_id),
+                    pending_entries(request.conversation.next_seq, request.conversation_pending),
+                )
             try:
                 additional_fields = {}
                 if (
@@ -82,8 +92,10 @@ def make_task_state_activities(
                     return UpdateTaskStatusResult(success=True)
                 return UpdateTaskStatusResult(success=False, error="Task not found")
             except Exception as e:
+                # Raised, not returned: the workflow does not read the result, and
+                # only a raised error gets the retries that ride out an outage.
                 logger.error(f"Failed to update task status: {e}", exc_info=True)
-                return UpdateTaskStatusResult(success=False, error=str(e))
+                raise
 
     @activity.defn
     async def update_task_governance_snapshot_activity(

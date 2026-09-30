@@ -310,26 +310,46 @@ class TaskEvent(BaseModel):
     def create_workflow_event(
         cls,
         task_id: UUID,
+        event_id: UUID,
         event_type: str,
         data: dict[str, Any],
+        timestamp: datetime,
         workspace_id: str,  # Required - no default
         created_by: str,  # Required - no default
     ) -> "TaskEvent":
-        """Create a workflow event with proper formatting.
+        """Create a workflow event with the identity the workflow minted.
 
-        Args:
-            task_id: Task ID for the event
-            event_type: Type of event
-            data: Event data dictionary
-            workspace_id: Workspace ID (required)
-            created_by: User/entity that created the event (required)
+        ``event_id`` and ``timestamp`` come from the workflow, so a retried
+        publish of the same event maps to the same row.
         """
         return cls(
+            id=event_id,
             task_id=task_id,
             event_type=event_type,
-            timestamp=datetime.now(UTC),
+            timestamp=timestamp,
             data=data,
             metadata={"source": "workflow", "created_at": datetime.now(UTC).isoformat()},
             workspace_id=workspace_id,
             created_by=created_by,
         )
+
+
+class ConversationEntry(BaseModel):
+    """One entry of a task's model conversation at its position in the log."""
+
+    seq: int
+    kind: str = "message"  # "message" or "summary"
+    role: str
+    content: str
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_call_id: str | None = None
+    name: str | None = None
+
+    def as_message(self) -> dict[str, Any]:
+        """The entry as a chat message, without the fields it does not set."""
+        message: dict[str, Any] = {"role": self.role, "content": self.content}
+        for key in ("tool_call_id", "name", "tool_calls"):
+            value = getattr(self, key)
+            if value is not None:
+                message[key] = value
+        return message

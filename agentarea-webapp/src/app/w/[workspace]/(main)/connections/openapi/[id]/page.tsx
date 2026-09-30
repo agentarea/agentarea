@@ -264,10 +264,7 @@ export default function OpenAPIConnectionDetailPage() {
           <div>
             <p className="text-xs text-muted-foreground">{t("status")}</p>
             <div className="mt-1">
-              <StatusIndicator
-                tone={statusPresentation.tone}
-                pulse={statusPresentation.pulse}
-              >
+              <StatusIndicator kind={statusPresentation.kind}>
                 {statusPresentation.label}
               </StatusIndicator>
             </div>

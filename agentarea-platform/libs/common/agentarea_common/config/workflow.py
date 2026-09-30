@@ -24,6 +24,10 @@ class WorkflowSettings(BaseSettings):
     # Worker settings
     TEMPORAL_MAX_CONCURRENT_ACTIVITIES: int = 10
     TEMPORAL_MAX_CONCURRENT_WORKFLOWS: int = 5
+    # Seconds a stopping worker lets in-flight activities finish before cancelling them.
+    TEMPORAL_GRACEFUL_SHUTDOWN_SECONDS: int = 120
+    # Workflows kept in memory between their tasks; each holds its conversation.
+    TEMPORAL_MAX_CACHED_WORKFLOWS: int = 200
 
     # Activity timeouts (in minutes/hours)
     AGENT_VALIDATION_TIMEOUT_MINUTES: int = 5

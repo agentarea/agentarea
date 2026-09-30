@@ -83,7 +83,11 @@ def allow_editing_the_instance(monkeypatch):
 
 
 def _patch_instance_lookup(
-    monkeypatch, *, auth_config_id=None, remote_url: str | None = _GMAIL_URL
+    monkeypatch,
+    *,
+    auth_config_id=None,
+    remote_url: str | None = _GMAIL_URL,
+    spec_metadata: dict | None = None,
 ):
     """Point the endpoint at one URL-type instance without touching a database."""
     instance = SimpleNamespace(
@@ -92,7 +96,10 @@ def _patch_instance_lookup(
         auth_config_id=auth_config_id,
         name="Gmail",
     )
-    server_spec = SimpleNamespace(remote_url=remote_url, json_spec={"type": "url"})
+    json_spec: dict = {"type": "url"}
+    if spec_metadata is not None:
+        json_spec["metadata"] = spec_metadata
+    server_spec = SimpleNamespace(remote_url=remote_url, json_spec=json_spec)
 
     class _InstanceRepository:
         def __init__(self, *_args, **_kwargs):
@@ -548,6 +555,69 @@ async def test_authorize_persists_dcr_credentials_before_redirecting(monkeypatch
     auth_kwargs = auth_create.await_args.kwargs
     assert auth_kwargs["config"]["client_id"] == "dcr-client-id"
     assert auth_kwargs["credentials"]["client_secret"] == "dcr-secret"  # pragma: allowlist secret
+
+
+async def _authorize_with_dcr(monkeypatch, *, spec_metadata: dict | None) -> dict[str, str]:
+    instance = _patch_instance_lookup(monkeypatch, spec_metadata=spec_metadata)
+    _patch_discovery(
+        monkeypatch, _google_metadata(registration_endpoint="https://as.example.com/register")
+    )
+
+    class _AuthService:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        create = AsyncMock(return_value=SimpleNamespace(id=uuid4()))
+
+    async def _register_client(_self, _metadata, _redirect_uri):
+        return SimpleNamespace(client_id="dcr-client-id", client_secret=None)
+
+    monkeypatch.setattr(mcp_oauth_connect, "MCPAuthService", _AuthService)
+    monkeypatch.setattr(
+        mcp_oauth_connect, "get_real_secret_manager", lambda **_kwargs: SimpleNamespace()
+    )
+    monkeypatch.setattr(mcp_oauth_connect, "_store_state", AsyncMock())
+    monkeypatch.setattr(
+        mcp_oauth_connect.MCPOAuthClientService, "register_client", _register_client, raising=True
+    )
+    return await mcp_oauth_connect.oauth_authorize(
+        MCPOAuthAuthorizeRequest(instance_id=instance.id),
+        _user_context(),
+        AsyncMock(),
+        AsyncMock(),
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
+async def test_authorize_adds_the_params_the_catalog_spec_declares(monkeypatch):
+    """Google issues a refresh token only for access_type=offline; the catalog
+    spec says so, the OAuth client carries no per-provider table."""
+    response = await _authorize_with_dcr(
+        monkeypatch,
+        spec_metadata={
+            "agentarea:oauth_authorize_params": {"access_type": "offline", "prompt": "consent"}
+        },
+    )
+
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(response["authorize_url"]).query)
+    assert query["access_type"] == ["offline"]
+    assert query["prompt"] == ["consent"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "declared",
+    [{"access_type": 1}, {"client_id": "someone-else"}, "access_type=offline"],
+)
+async def test_authorize_refuses_a_spec_with_malformed_authorize_params(monkeypatch, declared):
+    with pytest.raises(HTTPException) as exc_info:
+        await _authorize_with_dcr(
+            monkeypatch, spec_metadata={"agentarea:oauth_authorize_params": declared}
+        )
+
+    assert exc_info.value.status_code == 502
+    assert "oauth_authorize_params" in str(exc_info.value.detail)
 
 
 @pytest.mark.asyncio

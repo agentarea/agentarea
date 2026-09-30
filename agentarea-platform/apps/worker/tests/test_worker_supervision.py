@@ -20,7 +20,9 @@ class _Poller:
     def __init__(self, task_queue: str, error: Exception | None = None) -> None:
         self.task_queue = task_queue
         self.is_running = False
+        self.drained = False
         self._error = error
+        self._stop = asyncio.Event()
 
     async def run(self) -> None:
         self.is_running = True
@@ -28,9 +30,13 @@ class _Poller:
             await asyncio.sleep(0)
             if self._error:
                 raise self._error
-            await asyncio.Event().wait()
+            await self._stop.wait()
+            self.drained = True
         finally:
             self.is_running = False
+
+    async def shutdown(self) -> None:
+        self._stop.set()
 
 
 @pytest.fixture
@@ -64,3 +70,19 @@ async def test_run_returns_on_shutdown_signal(worker):
     worker.worker_shutdown_event.set()
     await asyncio.wait_for(run, timeout=5)
     assert worker.health.readiness()[0] is False
+
+
+async def test_shutdown_signal_drains_workers_instead_of_cancelling_them(worker):
+    worker.worker = _Poller("agent-tasks")
+    worker.trigger_worker = _Poller("trigger-schedules")
+
+    run = asyncio.create_task(worker.run())
+    for _ in range(100):
+        if worker.health.readiness()[0]:
+            break
+        await asyncio.sleep(0.01)
+
+    worker.worker_shutdown_event.set()
+    await asyncio.wait_for(run, timeout=5)
+    assert worker.worker.drained is True
+    assert worker.trigger_worker.drained is True

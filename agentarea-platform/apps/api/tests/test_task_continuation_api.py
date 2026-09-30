@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 from agentarea_api.api.v1.agents_tasks import ContinueTaskPayload, continue_task_execution
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 
 @pytest.mark.asyncio
@@ -31,6 +32,48 @@ async def test_continue_endpoint_accepts_waiting_task(test_user_context):
     assert call.args == (task_id,)
     assert call.kwargs["additional_iterations"] == 3
     assert str(call.kwargs["additional_budget_usd"]) == "2.50"
+    assert call.kwargs["additional_tokens"] == 0
+    assert call.kwargs["additional_tool_calls"] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "grant",
+    [{"additional_tokens": 50_000}, {"additional_tool_calls": 25}],
+)
+async def test_continue_endpoint_accepts_token_or_tool_call_grant_alone(
+    test_user_context, grant
+):
+    task_id = uuid4()
+    task_service = AsyncMock()
+    task_service.continue_execution.return_value = {"accepted": True}
+
+    await continue_task_execution(
+        task_id=task_id,
+        payload=ContinueTaskPayload(**grant),
+        user_context=test_user_context,
+        task_service=task_service,
+    )
+
+    call = task_service.continue_execution.await_args
+    assert call.kwargs["additional_tokens"] == grant.get("additional_tokens", 0)
+    assert call.kwargs["additional_tool_calls"] == grant.get("additional_tool_calls", 0)
+    assert call.kwargs["additional_iterations"] == 0
+    assert call.kwargs["additional_budget_usd"] is None
+
+
+@pytest.mark.parametrize(
+    "grant",
+    [
+        {"additional_tokens": -1},
+        {"additional_tokens": 10_000_001},
+        {"additional_tool_calls": -1},
+        {"additional_tool_calls": 10_001},
+    ],
+)
+def test_continue_payload_bounds_token_and_tool_call_grants(grant):
+    with pytest.raises(ValidationError):
+        ContinueTaskPayload(**grant)
 
 
 @pytest.mark.asyncio

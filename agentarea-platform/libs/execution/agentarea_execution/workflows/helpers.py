@@ -335,6 +335,10 @@ class EventManager:
         """Clear pending events (called after immediate publishing)."""
         self._pending_events.clear()
 
+    def requeue_pending_events(self, events: list[dict[str, Any]]) -> None:
+        """Queue events a previous run added but did not get to publish."""
+        self._pending_events.extend(events)
+
     def clear_events(self) -> None:
         """Clear all events (called after publishing)."""
         self._events.clear()
@@ -420,6 +424,15 @@ class BudgetTracker:
     def mark_warning_sent(self) -> None:
         """Mark that warning has been sent."""
         self._warning_sent = True
+
+    @property
+    def warning_sent(self) -> bool:
+        return self._warning_sent
+
+    def restore(self, *, warning_sent: bool, currency: str | None) -> None:
+        """Resume the warning and currency bookkeeping of a previous run."""
+        self._warning_sent = warning_sent
+        self.currency = currency
 
     def get_warning_message(self) -> str:
         """Get budget warning message."""

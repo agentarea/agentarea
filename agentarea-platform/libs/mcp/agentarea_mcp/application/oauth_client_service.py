@@ -20,6 +20,7 @@ import base64
 import hashlib
 import logging
 import secrets
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 from urllib.parse import urlencode, urlparse
@@ -32,23 +33,23 @@ logger = logging.getLogger(__name__)
 # Timeout for outbound HTTP calls during discovery / token exchange
 _HTTP_TIMEOUT = httpx.Timeout(15)
 
-# Known OAuth providers that don't support RFC 8414 AS metadata discovery.
-# Maps AS base URL → hardcoded metadata.
-_KNOWN_PROVIDERS: dict[str, dict[str, str]] = {
-    "https://github.com/login/oauth": {
-        "authorization_endpoint": "https://github.com/login/oauth/authorize",
-        "token_endpoint": "https://github.com/login/oauth/access_token",
-        "registration_endpoint": "",  # GitHub doesn't support DCR
-    },
-}
+# Parameters build_authorize_url() owns; a spec's extra params may not replace them.
+_PROTOCOL_AUTHORIZE_PARAMS = frozenset(
+    {
+        "response_type",
+        "client_id",
+        "redirect_uri",
+        "state",
+        "code_challenge",
+        "code_challenge_method",
+        "scope",
+        "resource",
+    }
+)
 
-# Authorization parameters a provider requires beyond OAuth 2.1, keyed by issuer.
-# Google issues a refresh token only for access_type=offline (it ignores the
-# offline_access scope), and only on a fresh consent — prompt=consent keeps a
-# reconnect from coming back without one.
-_PROVIDER_AUTHORIZE_PARAMS: dict[str, dict[str, str]] = {
-    "https://accounts.google.com": {"access_type": "offline", "prompt": "consent"},
-}
+# Spec metadata key for authorization parameters a provider requires beyond
+# OAuth 2.1 — Google issues a refresh token only for access_type=offline.
+OAUTH_AUTHORIZE_PARAMS_KEY = "agentarea:oauth_authorize_params"
 
 # Hosts allowed to advertise a plain-http endpoint — the same carve-out
 # mcp_oauth_as.py uses for native-client redirect_uris.
@@ -280,26 +281,11 @@ class MCPOAuthClientService:
     async def _fetch_as_metadata(
         self, client: httpx.AsyncClient, as_base: str
     ) -> AuthServerMetadata:
-        """Try known providers, then RFC 8414, then OIDC discovery to get AS metadata."""
-        # Check known providers that don't support standard discovery
-        known = _KNOWN_PROVIDERS.get(as_base)
-        if known:
-            logger.info("Using known provider config for %s", as_base)
-            return AuthServerMetadata(
-                issuer=as_base,
-                authorization_endpoint=_validate_endpoint_url(
-                    known["authorization_endpoint"], "authorization_endpoint"
-                ),
-                token_endpoint=_validate_endpoint_url(known["token_endpoint"], "token_endpoint"),
-                registration_endpoint=known.get("registration_endpoint") or None,
-            )
-
-        for path in (
-            "/.well-known/oauth-authorization-server",
-            "/.well-known/openid-configuration",
-        ):
+        """Fetch AS metadata from the well-known URLs the MCP spec prescribes."""
+        urls = _as_metadata_urls(as_base)
+        for url in urls:
             try:
-                resp = await client.get(f"{as_base}{path}")
+                resp = await client.get(url)
                 if resp.status_code == 200:
                     data = resp.json()
                     advertised = data.get("scopes_supported") or []
@@ -326,7 +312,9 @@ class MCPOAuthClientService:
             except (httpx.HTTPError, KeyError):
                 continue
 
-        raise MCPOAuthDiscoveryError(f"Could not fetch AS metadata from {as_base}")
+        raise MCPOAuthDiscoveryError(
+            f"Could not fetch AS metadata from {as_base} (tried {', '.join(urls)})"
+        )
 
     async def register_client(
         self,
@@ -375,8 +363,14 @@ class MCPOAuthClientService:
         pkce: PKCEPair,
         state: str,
         scopes: list[str] | None = None,
+        extra_params: Mapping[str, str] | None = None,
     ) -> str:
-        """Build the OAuth 2.1 authorization URL with PKCE and resource indicator."""
+        """Build the OAuth 2.1 authorization URL with PKCE and resource indicator.
+
+        ``extra_params`` carries what a provider requires beyond OAuth 2.1, as
+        its catalog spec declares it (see ``oauth_authorize_params``).
+        """
+        extra = _checked_extra_params(extra_params or {})
         scope_list = list(scopes or as_metadata.scopes_supported or [])
         # Request offline_access when the AS advertises it, so it issues a
         # refresh_token; without one, providers like Vercel return a ~1h access
@@ -398,7 +392,7 @@ class MCPOAuthClientService:
             params["scope"] = " ".join(scope_list)
         if as_metadata.resource:
             params["resource"] = as_metadata.resource
-        params.update(_PROVIDER_AUTHORIZE_PARAMS.get(as_metadata.issuer.rstrip("/"), {}))
+        params.update(extra)
 
         return f"{as_metadata.authorization_endpoint}?{urlencode(params)}"
 
@@ -468,3 +462,54 @@ def _parse_scope_from_www_authenticate(www_authenticate: str) -> str:
             value = part.split("scope=", 1)[1].strip().strip('"')
             return value
     return ""
+
+
+def _as_metadata_urls(issuer: str) -> list[str]:
+    """Well-known URLs for an issuer's AS metadata, in MCP-spec order.
+
+    RFC 8414 §3.1 inserts the well-known segment between host and path;
+    OpenID Connect Discovery 1.0 appends it, so an issuer with a path gets
+    both forms of the OIDC document.
+    """
+    parsed = urlparse(issuer.rstrip("/"))
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    path = parsed.path
+    if not path:
+        return [
+            f"{origin}/.well-known/oauth-authorization-server",
+            f"{origin}/.well-known/openid-configuration",
+        ]
+    return [
+        f"{origin}/.well-known/oauth-authorization-server{path}",
+        f"{origin}/.well-known/openid-configuration{path}",
+        f"{origin}{path}/.well-known/openid-configuration",
+    ]
+
+
+def oauth_authorize_params(json_spec: Mapping[str, Any] | None) -> dict[str, str]:
+    """Extra authorization parameters a catalog spec declares for its provider."""
+    metadata = (json_spec or {}).get("metadata") or {}
+    declared = metadata.get(OAUTH_AUTHORIZE_PARAMS_KEY) if isinstance(metadata, Mapping) else None
+    if declared is None:
+        return {}
+    if not isinstance(declared, Mapping):
+        raise ValueError(f"{OAUTH_AUTHORIZE_PARAMS_KEY} must be an object of strings")
+    entries: Mapping[object, object] = declared
+    params = {
+        key: value
+        for key, value in entries.items()
+        if isinstance(key, str) and isinstance(value, str)
+    }
+    if len(params) != len(entries):
+        raise ValueError(f"{OAUTH_AUTHORIZE_PARAMS_KEY} must be an object of strings")
+    try:
+        return _checked_extra_params(params)
+    except ValueError as exc:
+        raise ValueError(f"{OAUTH_AUTHORIZE_PARAMS_KEY}: {exc}") from exc
+
+
+def _checked_extra_params(extra_params: Mapping[str, str]) -> dict[str, str]:
+    reserved = sorted(_PROTOCOL_AUTHORIZE_PARAMS & extra_params.keys())
+    if reserved:
+        raise ValueError(f"extra authorize params may not replace {', '.join(reserved)}")
+    return dict(extra_params)

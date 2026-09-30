@@ -29,12 +29,11 @@ from .agent.lifecycle import LifecycleMixin
 from .agent.patches import APPROVAL_RESPONSE_ONCE_PATCH
 from .constants import (
     ACTIVITY_TIMEOUT,
-    DEFAULT_RETRY_ATTEMPTS,
     Activities,
     EventTypes,
     ExecutionStatus,
 )
-from .retry import make_retry_policy
+from .retry import bookkeeping_retry_policy
 
 
 @workflow.defn
@@ -257,7 +256,7 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
             ],
             result_type=UpdateTaskGovernanceSnapshotResult,
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=bookkeeping_retry_policy(),
         )
         if not result.success:
             raise ApplicationError(
@@ -281,20 +280,29 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
             return await self._finalize_execution(result)
 
         except asyncio.CancelledError:
-            if self._interaction_contract_enabled:
-                self._pending_input_requests.clear()
-                self._awaiting_input = False
-                self.state.status = ExecutionStatus.CANCELLED
-                if not self.state.success:
-                    self.state.failure_reason = "cancelled"
-                    self.state.error_message = "Task cancelled"
-                await asyncio.shield(self._finalize_execution({}))
+            await self._finalize_cancellation()
             raise
 
         except Exception as e:
+            # Cancelling the run cancels the activity it is awaiting, which
+            # surfaces as that activity's error rather than CancelledError.
+            if self._is_cancellation(e):
+                await self._finalize_cancellation()
+                raise
             workflow.logger.error(f"Workflow execution failed: {e}", exc_info=True)
             await self._handle_workflow_error(e)
             raise
+
+    async def _finalize_cancellation(self) -> None:
+        if not self._interaction_contract_enabled:
+            return
+        self._pending_input_requests.clear()
+        self._awaiting_input = False
+        self.state.status = ExecutionStatus.CANCELLED
+        if not self.state.success:
+            self.state.failure_reason = "cancelled"
+            self.state.error_message = "Task cancelled"
+        await asyncio.shield(self._finalize_execution({}))
 
     # Query methods for external inspection
     @workflow.query

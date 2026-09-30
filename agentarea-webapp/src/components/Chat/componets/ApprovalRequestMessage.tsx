@@ -2,8 +2,9 @@
 
 import React, { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Check, ShieldAlert, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Textarea } from "@/components/ui/textarea";
 import BaseMessage from "./BaseMessage";
 import MessageWrapper from "./MessageWrapper";
@@ -64,7 +65,6 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
       <BaseMessage
         headerLeft={
           <div className="flex items-center gap-1.5">
-            <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />
             <span className="font-medium text-foreground">{desc.text}</span>
             {desc.code && (
               <code className="rounded bg-black/5 px-1 py-0.5 font-mono text-xs text-muted-foreground dark:bg-white/10">
@@ -75,11 +75,16 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
         }
         headerRight={
           isResolved ? (
-            <span className={wasApproved ? "text-green-600" : "text-red-600"}>
+            <StatusIndicator
+              kind={wasApproved === false ? "cancelled" : "done"}
+              size="sm"
+            >
               {wasApproved ? t("approved") : t("denied")}
-            </span>
+            </StatusIndicator>
           ) : (
-            <span className="animate-pulse text-amber-600">{t("approvalRequired")}</span>
+            <StatusIndicator kind="attention" size="sm">
+              {t("approvalRequired")}
+            </StatusIndicator>
           )
         }
         collapsed={isResolved}

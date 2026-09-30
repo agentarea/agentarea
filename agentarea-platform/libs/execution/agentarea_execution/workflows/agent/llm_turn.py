@@ -11,6 +11,7 @@ with workflow.unsafe.imports_passed_through():
     from agentarea_agents_sdk.tools.disclosure import DisclosureContext, ToolCandidate
     from agentarea_common.money import serialize_money
 
+    from ..context_manager import estimate_tokens_for_messages
     from ..helpers import MessageBuilder, ToolCallExtractor
     from ..models import Message, ToolCall
 
@@ -18,14 +19,14 @@ from ...models import LLMCallRequest, LLMCallResult
 from ..constants import (
     HEARTBEAT_TIMEOUT,
     LLM_CALL_TIMEOUT,
-    LLM_RETRY_ATTEMPTS,
     Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import make_retry_policy
+from ..retry import model_call_retry_policy
 from .compaction import CompactionMixin
 from .errors import ErrorReportingMixin
+from .limits import run_limit_reason
 from .patches import THINKING_ONLY_REPLY_PATCH
 from .tool_dispatch import ToolDispatchMixin
 
@@ -134,6 +135,8 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 self._completion_event_published = True
 
         except Exception as e:
+            if self._is_cancellation(e) or run_limit_reason(e):
+                raise
             error_details = self._extract_temporal_error_details(e)
             workflow.logger.error(
                 f"Iteration {iteration} failed: {error_details}",
@@ -255,13 +258,13 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             #         Message(role="user", content=f"Status: {status_msg}")
             #     )
 
-        # Check context window and compact if needed (skip first iteration)
+        # Check context window and compact if needed (skip first iteration). The
+        # last call's prompt was the window up to then; the pending entries come on top.
         if self.context_manager and iteration > 1:
-            messages_dict_est = [
-                {"role": msg.role, "content": msg.content or ""} for msg in self.state.messages
-            ]
-            estimated = self.context_manager.estimate_usage(messages_dict_est)
-            self.context_manager.update_usage(estimated)
+            self.context_manager.update_usage(
+                self.state.last_prompt_tokens
+                + estimate_tokens_for_messages(self._conversation_payload())
+            )
 
             if self.context_manager.needs_compaction():
                 await self._compact_context_if_needed()
@@ -271,7 +274,8 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                     {
                         "iteration": self.state.current_iteration,
                         "usage_ratio": self.context_manager.get_usage_ratio(),
-                        "message_count": len(self.state.messages),
+                        "message_count": self.state.conversation_next_seq
+                        + len(self.state.messages),
                     },
                 )
                 await self._publish_events_immediately()
@@ -330,26 +334,12 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             EventTypes.LLM_CALL_STARTED,
             {
                 "iteration": self.state.current_iteration,
-                "message_count": len(self.state.messages),
+                "message_count": self.state.conversation_next_seq + len(self.state.messages),
             },
         )
         await self._publish_events_immediately()
 
         try:
-            # Convert messages to dict format for LLM call - filter out None values to match agent SDK format
-            messages_dict = [
-                MessageBuilder.normalize_message_dict(
-                    {
-                        "role": msg.role,
-                        "content": msg.content,
-                        "tool_call_id": msg.tool_call_id,
-                        "name": msg.name,
-                        "tool_calls": msg.tool_calls,
-                    }
-                )
-                for msg in self.state.messages
-            ]
-
             available_tools = self.state.available_tools
             if not self._questions_available:
                 available_tools = [
@@ -360,7 +350,8 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
 
             # Create Pydantic request model
             llm_request = LLMCallRequest(
-                messages=messages_dict,
+                messages=self._conversation_payload(),
+                conversation=self._conversation_window(),
                 model_id=str(self.state.agent_config.get("model_id") or ""),
                 tools=available_tools,
                 workspace_id=self.state.user_context_data["workspace_id"],
@@ -383,8 +374,9 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 args=[llm_request],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=make_retry_policy(LLM_RETRY_ATTEMPTS),
+                retry_policy=model_call_retry_policy(),
             )
+            self._mark_conversation_written()
 
             # Normalize response fields to support both Pydantic model and plain dict
             if isinstance(response, dict):
@@ -439,6 +431,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             if self.context_manager and usage_payload:
                 prompt_tokens = usage_payload.get("prompt_tokens", 0)
                 if prompt_tokens > 0:
+                    self.state.last_prompt_tokens = prompt_tokens
                     self.context_manager.update_usage(prompt_tokens)
 
             # Strip A2UI JSON from the content sent to frontend via LLM_CALL_COMPLETED
@@ -501,6 +494,10 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             }
 
         except Exception as e:
+            # A budget stop keeps its llm.call.failed event: runs recorded before
+            # this change publish it on their way to the continuation wait.
+            if self._is_cancellation(e) or run_limit_reason(e) == "token_limit":
+                raise
             # Simplified error handling - enriched error events are now published by the activity
             error_message = self._extract_temporal_error_details(e)
             error_lower = error_message.lower()

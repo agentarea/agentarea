@@ -158,6 +158,10 @@ async def test_input_timeout_stops_main_loop_without_second_model_turn(instance)
     with (
         patch(f"{MODULE}.wait_condition", new=AsyncMock(side_effect=TimeoutError)),
         patch(f"{MODULE}.patched", return_value=True),
+        patch(
+            f"{MODULE}.info",
+            return_value=Mock(is_continue_as_new_suggested=Mock(return_value=False)),
+        ),
     ):
         await instance._execute_main_loop()
     assert calls == 1
@@ -445,6 +449,7 @@ async def test_continue_as_new_preserves_capabilities_and_surface_request_identi
     instance._compact_context_if_needed = AsyncMock()
     with (
         patch(f"{MODULE}.info", return_value=Mock(run_id="run-1")),
+        patch(f"{MODULE}.patched", return_value=True),
         patch(f"{MODULE}.continue_as_new") as rollover,
     ):
         await instance._continue_as_new()

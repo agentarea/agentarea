@@ -4,6 +4,7 @@ import { z } from "zod";
 import type {
   AgentResponse,
   AnalyzeRequest,
+  CatalogConnectionPreflight,
   CatalogConnectionRequest,
   CatalogConnectionResponse,
   ImportPreview,
@@ -18,6 +19,7 @@ import {
   zAnalyzeBundleV1BundlesAnalyzePostBody,
   zAnalyzeBundleV1BundlesAnalyzePostResponse,
   zBrowseCatalogV1RegistriesCatalogBrowseGetResponse,
+  zCatalogConnectionPreflight,
   zCatalogConnectionRequest,
   zCatalogConnectionResponse,
   zGetAgentV1AgentsAgentIdGetResponse,
@@ -46,6 +48,7 @@ import {
   installSkill,
   listAgents,
   listModelInstances,
+  preflightCatalogConnection,
   updateAgent,
 } from "@/lib/api";
 import {
@@ -159,6 +162,14 @@ export async function fetchCatalogItemAction(
     data,
     status
   );
+}
+
+export async function catalogConnectionPreflightAction(
+  itemId: string
+): Promise<ActionResult<CatalogConnectionPreflight>> {
+  const { data, error, status } = await preflightCatalogConnection(itemId);
+  if (error || !data) return { error, status };
+  return checked(zCatalogConnectionPreflight, data, status);
 }
 
 export async function connectCatalogConnectionAction(

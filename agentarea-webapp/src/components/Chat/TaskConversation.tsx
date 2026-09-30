@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Loader2, Play } from "lucide-react";
 import ActivityGroup from "@/components/Chat/ActivityGroup";
 import {
   buildActivitySegments,
@@ -11,6 +10,7 @@ import {
 } from "@/components/Chat/activityView";
 import { ChatInputArea } from "@/components/Chat/componets/ChatInputArea";
 import { UserMessage as UserMessageComponent } from "@/components/Chat/componets/UserMessage";
+import { ContinuationGrantForm } from "@/components/Chat/ContinuationGrantForm";
 import { useA2UIActions } from "@/components/Chat/hooks/useA2UIActions";
 import { useFileUpload } from "@/components/Chat/hooks/useFileUpload";
 import { useScrollManagement } from "@/components/Chat/hooks/useScrollManagement";
@@ -26,11 +26,11 @@ import { buildActivitySummary } from "@/components/TaskInfoPanel/buildActivitySu
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { useCurrency } from "@/hooks/useCurrency";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import type { TaskWithAgent } from "@/lib/api";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
+import { latestContinuationReason } from "@/lib/continuation";
 import type { Part } from "@/lib/events/contract";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
 import { useTaskEvents } from "@/lib/events/useTaskEvents";
@@ -72,14 +72,9 @@ export function TaskConversation({
 }: TaskConversationProps) {
   const router = useWorkspaceRouter();
   const t = useTranslations("Chat.errors");
-  const { currency } = useCurrency();
   const [chatInput, setChatInput] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [composerError, setComposerError] = useState<string | null>(null);
-  const [continuationIterations, setContinuationIterations] = useState("10");
-  const [continuationBudget, setContinuationBudget] = useState("");
-  const [continuing, setContinuing] = useState(false);
-  const [continueError, setContinueError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const {
     selectedFiles,
@@ -128,7 +123,7 @@ export function TaskConversation({
   const isActive =
     QUEUEABLE_STATUSES.includes(status) || status === "waiting_for_input";
   const lastAssistantText = lastVisibleAssistantContent(activitySegments);
-  const terminalTone = getTaskStatusPresentation(streamStatus).tone;
+  const terminalKind = getTaskStatusPresentation(streamStatus).kind;
   const showTerminalMessage =
     streamStatus !== "completed" &&
     !!terminalMessage &&
@@ -224,40 +219,6 @@ export function TaskConversation({
     }
   };
 
-  const handleContinueTask = async () => {
-    const iterations = Number.parseInt(continuationIterations, 10);
-    const budget = continuationBudget.trim();
-    setContinueError(null);
-    if (
-      !Number.isInteger(iterations) ||
-      iterations < 0 ||
-      (iterations === 0 && !budget)
-    ) {
-      setContinueError(t("continueGrantRequired"));
-      return;
-    }
-
-    setContinuing(true);
-    try {
-      const { continueAgentTaskAction } = await import("@/lib/server-actions");
-      const result = await continueAgentTaskAction(
-        task.id,
-        iterations,
-        budget || undefined
-      );
-      if (result.error) {
-        setContinueError(apiErrorMessage(result, t("continueFailed")));
-        return;
-      }
-      await onRefresh?.();
-    } catch (error) {
-      console.error("Failed to continue task", error);
-      setContinueError(`${t("continueFailed")}: ${formatApiError(error)}`);
-    } finally {
-      setContinuing(false);
-    }
-  };
-
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
       <div
@@ -336,7 +297,7 @@ export function TaskConversation({
             )
           )}
           {showTerminalMessage && (
-            <StatusIndicator tone={terminalTone}>
+            <StatusIndicator kind={terminalKind}>
               {terminalMessage}
             </StatusIndicator>
           )}
@@ -358,56 +319,11 @@ export function TaskConversation({
       <div className="shrink-0 bg-background">
         <div className="mx-auto w-full max-w-3xl px-4 py-3 md:px-6">
           {status === "waiting_for_continuation" ? (
-            <div className="space-y-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
-              <div>
-                <p className="text-sm font-medium text-amber-950 dark:text-amber-100">
-                  The task reached its iteration or budget limit.
-                </p>
-                <p className="text-xs text-amber-800 dark:text-amber-300">
-                  Grant only the resources you want it to use. It will wait for
-                  up to 24 hours.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-end gap-3">
-                <label className="space-y-1 text-xs font-medium">
-                  Additional iterations
-                  <input
-                    className="block h-9 w-32 rounded-md border bg-background px-3 text-sm"
-                    min="0"
-                    max="1000"
-                    type="number"
-                    value={continuationIterations}
-                    onChange={(event) => {
-                      setContinuationIterations(event.target.value);
-                      setContinueError(null);
-                    }}
-                  />
-                </label>
-                <label className="space-y-1 text-xs font-medium">
-                  Budget top-up ({currency ?? "¤"}, optional)
-                  <input
-                    className="block h-9 w-44 rounded-md border bg-background px-3 text-sm"
-                    min="0.01"
-                    step="0.01"
-                    type="number"
-                    value={continuationBudget}
-                    onChange={(event) => {
-                      setContinuationBudget(event.target.value);
-                      setContinueError(null);
-                    }}
-                  />
-                </label>
-                <Button onClick={handleContinueTask} disabled={continuing}>
-                  {continuing ? (
-                    <Loader2 className="mr-2 animate-spin" />
-                  ) : (
-                    <Play className="mr-2" />
-                  )}
-                  Continue task
-                </Button>
-              </div>
-              {continueError && <FormError>{continueError}</FormError>}
-            </div>
+            <ContinuationGrantForm
+              taskId={task.id}
+              failureReason={latestContinuationReason(timeline)}
+              onContinued={onRefresh}
+            />
           ) : (
             <div>
               {(composerError || a2uiError) && (

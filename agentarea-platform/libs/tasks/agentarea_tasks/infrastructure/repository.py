@@ -8,13 +8,14 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import Numeric, cast, func, or_, select, update
+from sqlalchemy import Numeric, cast, func, literal, or_, select, tuple_, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.base_service import TaskNotFoundError
-from ..domain.models import Task, TaskCreate, TaskEvent, TaskUpdate
-from .orm import TaskEventORM, TaskORM
+from ..domain.models import ConversationEntry, Task, TaskCreate, TaskEvent, TaskUpdate
+from .orm import TaskConversationEntryORM, TaskEventORM, TaskORM
 
 
 class TaskRepository(WorkspaceScopedRepository[TaskORM]):
@@ -415,23 +416,38 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
         super().__init__(session, TaskEventORM, user_context)
 
     async def create_event(self, event: TaskEvent) -> TaskEvent:
-        """Create a new task event."""
-        event_orm = TaskEventORM(
-            id=event.id,
-            task_id=event.task_id,
-            event_type=event.event_type,
-            timestamp=event.timestamp,
-            data=event.data,
-            event_metadata=event.metadata,
-            workspace_id=event.workspace_id,
-            created_by=event.created_by,
+        """Store a task event once per id and return the stored row.
+
+        Storing an id that already exists is a no-op that returns the first
+        write, so a retried publish cannot duplicate history.
+        """
+        if event.workspace_id != self.user_context.workspace_id:
+            raise ValueError(
+                f"Task event {event.id} belongs to workspace {event.workspace_id}, "
+                f"not {self.user_context.workspace_id}"
+            )
+        await self.session.execute(
+            pg_insert(TaskEventORM)
+            .values(
+                id=event.id,
+                task_id=event.task_id,
+                event_type=event.event_type,
+                timestamp=event.timestamp,
+                data=event.data,
+                event_metadata=event.metadata,
+                workspace_id=event.workspace_id,
+                created_by=event.created_by,
+            )
+            .on_conflict_do_nothing(index_elements=[TaskEventORM.id])
         )
-
-        self.session.add(event_orm)
-        await self.session.flush()
-        await self.session.refresh(event_orm)
-
-        return self._orm_to_domain(event_orm)
+        stored = await self.session.scalar(
+            select(TaskEventORM)
+            .where(TaskEventORM.id == event.id, self._get_workspace_filter())
+            .execution_options(populate_existing=True)
+        )
+        if stored is None or stored.task_id != event.task_id:
+            raise ValueError(f"Task event id {event.id} is already stored for another task")
+        return self._orm_to_domain(stored)
 
     async def get_events_for_task(
         self, task_id: UUID, limit: int = 100, offset: int = 0
@@ -449,6 +465,43 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
         event_orms = result.scalars().all()
 
         return [self._orm_to_domain(event_orm) for event_orm in event_orms]
+
+    async def get_task_event(self, task_id: UUID, event_id: UUID) -> TaskEvent | None:
+        """One stored event of this task in this workspace, or None."""
+        result = await self.session.execute(
+            select(TaskEventORM).where(
+                TaskEventORM.id == event_id,
+                TaskEventORM.task_id == task_id,
+                self._get_workspace_filter(),
+            )
+        )
+        orm = result.scalar_one_or_none()
+        return self._orm_to_domain(orm) if orm else None
+
+    async def page_for_task(
+        self,
+        task_id: UUID,
+        *,
+        after: tuple[datetime, UUID] | None,
+        limit: int,
+    ) -> list[TaskEvent]:
+        """A keyset page of a task's events in ``(timestamp, id)`` order, after ``after``."""
+        conditions = [TaskEventORM.task_id == task_id, self._get_workspace_filter()]
+        if after is not None:
+            conditions.append(
+                tuple_(TaskEventORM.timestamp, TaskEventORM.id)
+                > tuple_(
+                    literal(after[0], TaskEventORM.timestamp.type),
+                    literal(after[1], TaskEventORM.id.type),
+                )
+            )
+        result = await self.session.execute(
+            select(TaskEventORM)
+            .where(*conditions)
+            .order_by(TaskEventORM.timestamp.asc(), TaskEventORM.id.asc())
+            .limit(limit)
+        )
+        return [self._orm_to_domain(orm) for orm in result.scalars().all()]
 
     async def list_for_task(
         self,
@@ -513,4 +566,85 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
                 "workspace_id": event_orm.workspace_id,
                 "created_by": event_orm.created_by,
             }
+        )
+
+
+class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntryORM]):
+    """A task's model conversation, stored outside the execution engine."""
+
+    def __init__(self, session: AsyncSession, user_context: UserContext):
+        super().__init__(session, TaskConversationEntryORM, user_context)
+
+    async def write(self, task_id: UUID, entries: Sequence[ConversationEntry]) -> None:
+        """Store entries at their sequence numbers; writing a position again replaces it.
+
+        The workflow is the only writer and assigns positions deterministically,
+        so a retry rewrites the same entry and a later write is the current truth.
+        """
+        if not entries:
+            return
+        rows = [
+            {
+                "task_id": task_id,
+                "seq": entry.seq,
+                "kind": entry.kind,
+                "role": entry.role,
+                "content": entry.content,
+                "tool_calls": entry.tool_calls,
+                "tool_call_id": entry.tool_call_id,
+                "name": entry.name,
+                "workspace_id": self.user_context.workspace_id,
+                "created_by": self.user_context.user_id,
+            }
+            for entry in entries
+        ]
+        statement = pg_insert(TaskConversationEntryORM).values(rows)
+        await self.session.execute(
+            statement.on_conflict_do_update(
+                constraint="uq_task_conversation_entries_seq",
+                set_={
+                    column: statement.excluded[column]
+                    for column in ("kind", "role", "content", "tool_calls", "tool_call_id", "name")
+                },
+                where=TaskConversationEntryORM.workspace_id == self.user_context.workspace_id,
+            )
+        )
+
+    async def read(
+        self, task_id: UUID, *, head_seqs: Sequence[int], tail_start: int, end_seq: int
+    ) -> tuple[list[ConversationEntry], list[ConversationEntry]]:
+        """The head entries in the given order and the tail ``[tail_start, end_seq)``.
+
+        A tail entry that is also in the head is returned once, in the head.
+        """
+        result = await self.session.execute(
+            select(TaskConversationEntryORM).where(
+                TaskConversationEntryORM.task_id == task_id,
+                self._get_workspace_filter(),
+                or_(
+                    TaskConversationEntryORM.seq.in_(list(head_seqs)),
+                    (TaskConversationEntryORM.seq >= tail_start)
+                    & (TaskConversationEntryORM.seq < end_seq),
+                ),
+            )
+        )
+        by_seq = {row.seq: self._orm_to_entry(row) for row in result.scalars().all()}
+        missing = [seq for seq in head_seqs if seq not in by_seq]
+        if missing:
+            raise LookupError(f"task {task_id} conversation has no entries at {missing}")
+        head = [by_seq[seq] for seq in head_seqs]
+        head_set = set(head_seqs)
+        tail = [by_seq[seq] for seq in sorted(by_seq) if seq >= tail_start and seq not in head_set]
+        return head, tail
+
+    @staticmethod
+    def _orm_to_entry(row: TaskConversationEntryORM) -> ConversationEntry:
+        return ConversationEntry(
+            seq=row.seq,
+            kind=row.kind,
+            role=row.role,
+            content=row.content,
+            tool_calls=row.tool_calls,
+            tool_call_id=row.tool_call_id,
+            name=row.name,
         )

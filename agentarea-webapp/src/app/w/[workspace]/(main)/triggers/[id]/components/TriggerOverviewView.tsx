@@ -174,8 +174,7 @@ export async function TriggerOverviewView({
                   {model.name}
                 </h1>
                 <StatusIndicator
-                  tone={model.status.tone}
-                  pulse={model.status.pulse}
+                  kind={model.status.kind}
                   className="whitespace-nowrap text-[13px] font-medium"
                 >
                   {model.status.label}
@@ -279,7 +278,15 @@ export async function TriggerOverviewView({
             value={last ? last.value : "—"}
             unit={relUnit(last, t)}
             bar={null}
-            sub={lastStatus ? lastStatus.label : t("noExecutions")}
+            sub={
+              lastStatus ? (
+                <StatusIndicator kind={lastStatus.kind} size="sm">
+                  {lastStatus.label}
+                </StatusIndicator>
+              ) : (
+                t("noExecutions")
+              )
+            }
           />
           <Stat
             icon={<CalendarClock />}
@@ -504,8 +511,7 @@ function ExecutionRow({
           </span>
           <StatusIndicator
             size="sm"
-            tone={presentation.tone}
-            pulse={presentation.pulse}
+            kind={presentation.kind}
             className="shrink-0 whitespace-nowrap text-[12px] font-medium"
           >
             {presentation.label}

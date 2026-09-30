@@ -423,12 +423,16 @@ class RunsToolset(Toolset):
         run_id: str,
         additional_iterations: int = 0,
         additional_budget_usd: str | None = None,
+        additional_tokens: int = 0,
+        additional_tool_calls: int = 0,
     ) -> str:
-        """Grant more iterations or budget to a run waiting for continuation."""
+        """Grant more iterations, budget, tokens or tool calls to a run waiting for continuation."""
         payload = ContinueTaskPayload.model_validate(
             {
                 "additional_iterations": additional_iterations,
                 "additional_budget_usd": additional_budget_usd,
+                "additional_tokens": additional_tokens,
+                "additional_tool_calls": additional_tool_calls,
             }
         )
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
@@ -439,6 +443,8 @@ class RunsToolset(Toolset):
                 UUID(run_id),
                 additional_iterations=payload.additional_iterations,
                 additional_budget_usd=payload.additional_budget_usd,
+                additional_tokens=payload.additional_tokens,
+                additional_tool_calls=payload.additional_tool_calls,
             )
             return json.dumps(result, default=str)
 

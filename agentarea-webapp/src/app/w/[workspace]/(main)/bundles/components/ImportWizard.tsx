@@ -3,15 +3,17 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "@/components/WorkspaceLink";
-import { AlertTriangle, CheckCircle2, PackagePlus, RotateCcw } from "lucide-react";
+import { PackagePlus, RotateCcw } from "lucide-react";
 import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import { Button } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Textarea } from "@/components/ui/textarea";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import SetupForm from "@/components/SetupForm";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
+import type { StatusKind } from "@/lib/status";
 import type {
   ImportPreview,
   InstallResult,
@@ -37,26 +39,24 @@ const KIND_LABELS: Record<EntityKind, string> = {
 };
 
 const ENTITY_ORDER: EntityKind[] = ["agent", "skill", "mcp", "automation", "policy"];
+const ENTITY_STATUS_KIND: Record<EntityStatus, StatusKind> = {
+  will_create: "queued",
+  already_exists: "active",
+  unsupported: "failed",
+};
 
 function EntityStatusChip({ status }: { status: EntityStatus }) {
-  if (status === "will_create") {
-    return (
-      <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-        will create
-      </span>
-    );
-  }
-  if (status === "already_exists") {
-    return (
-      <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-        already exists
-      </span>
-    );
-  }
+  const label =
+    status === "will_create"
+      ? "will create"
+      : status === "already_exists"
+        ? "already exists"
+        : "unsupported";
+
   return (
-    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-      unsupported
-    </span>
+    <StatusIndicator kind={ENTITY_STATUS_KIND[status]} size="sm">
+      {label}
+    </StatusIndicator>
   );
 }
 
@@ -418,8 +418,14 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
                 key={idx}
                 className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30"
               >
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-                <p className="text-sm text-red-700 dark:text-red-400">{issue.message}</p>
+                <StatusIndicator
+                  kind="failed"
+                  size="sm"
+                  iconClassName="mt-0.5 h-4 w-4"
+                  className="text-sm"
+                >
+                  {issue.message}
+                </StatusIndicator>
               </div>
             ))}
             {warnIssues.map((issue, idx) => (
@@ -427,8 +433,13 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
                 key={idx}
                 className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/30"
               >
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                <p className="text-sm text-amber-700 dark:text-amber-400">{issue.message}</p>
+                <StatusIndicator
+                  kind="attention"
+                  size="sm"
+                  className="text-sm"
+                >
+                  {issue.message}
+                </StatusIndicator>
               </div>
             ))}
           </div>
@@ -457,8 +468,14 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
         {/* Install error */}
         {installError && (
           <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-            <p className="text-sm text-red-700 dark:text-red-400">{installError}</p>
+            <StatusIndicator
+              kind="failed"
+              size="sm"
+              iconClassName="mt-0.5 h-4 w-4"
+              className="text-sm"
+            >
+              {installError}
+            </StatusIndicator>
           </div>
         )}
 
@@ -491,15 +508,21 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
       <div className="mx-auto max-w-2xl space-y-4">
         {/* Success header */}
         <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-5 py-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
-          <div>
-            <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">
-              Package installed successfully
-            </p>
-            <p className="text-xs text-emerald-700 dark:text-emerald-400">
-              {result.bundle_name}
-            </p>
-          </div>
+          <StatusIndicator
+            kind="done"
+            size="sm"
+            iconClassName="h-5 w-5"
+            className="items-start gap-3"
+          >
+            <span>
+              <span className="block text-sm font-medium text-foreground">
+                Package installed successfully
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {result.bundle_name}
+              </span>
+            </span>
+          </StatusIndicator>
         </div>
 
         {/* Installed entities */}

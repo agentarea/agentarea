@@ -5,6 +5,7 @@ import Link from "@/components/WorkspaceLink";
 import { useTranslations } from "next-intl";
 import { Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import type { MCPInstanceConsumer } from "@/lib/api";
 
 // How many tool badges a row shows before collapsing. A connection granted with
@@ -39,10 +40,10 @@ function ConsumerTools({ consumer }: { consumer: MCPInstanceConsumer }) {
       {visible.map((tool) => {
         const needsConfirm = consumer.confirm_tools?.includes(tool) ?? false;
         return (
-          <Badge key={tool} variant={needsConfirm ? "amber" : "success"} size="sm">
+          <StatusIndicator key={tool} kind={needsConfirm ? "attention" : "active"} size="sm">
             {tool}
             {needsConfirm ? t("confirmSuffix") : ""}
-          </Badge>
+          </StatusIndicator>
         );
       })}
       {hidden > 0 && (

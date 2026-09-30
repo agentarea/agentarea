@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { AlertTriangle, BadgeCheck, ExternalLink, Loader2 } from "lucide-react";
 
 import { CustomOAuthAppFields } from "@/components/CustomOAuthAppFields";
 import { Button } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { CopyableText } from "@/components/ui/copyable-text";
+import { apiErrorMessage } from "@/lib/api-errors";
 import type { CustomOAuthAppCredentials } from "@/lib/oauth-app";
 import { isSafeRedirectUrl } from "@/lib/safe-redirect";
 import {
@@ -15,8 +17,14 @@ import {
 } from "@/lib/server-actions";
 
 import {
+  catalogConnectionPreflightAction,
+  connectCatalogConnectionAction,
+} from "../bundles/components/actions";
+import {
   buildAuthorizeRequest,
+  buildCatalogConnectRequest,
   canAuthorize,
+  catalogPreflightToMCP,
   deriveOAuthConnectState,
   type MCPOAuthPreflight,
   type OAuthConnectState,
@@ -31,12 +39,14 @@ import {
  * actually complete the flow gets a bare Connect button.
  */
 /**
- * What is being authorized: an existing connection, or a catalog spec whose
- * connection is created only once the user commits to Connect.
+ * What is being authorized: an existing connection, a catalog spec whose
+ * connection is created only once the user commits to Connect, or a catalog
+ * HTTP API template the API materializes on Connect.
  */
 export type OAuthConnectTarget =
   | { kind: "instance"; instanceId: string }
-  | { kind: "spec"; serverId: string; ensureInstance: () => Promise<string> };
+  | { kind: "spec"; serverId: string; ensureInstance: () => Promise<string> }
+  | { kind: "catalog"; itemId: string };
 
 export function OAuthConnectPanel({
   target,
@@ -62,11 +72,28 @@ export function OAuthConnectPanel({
   const [connectError, setConnectError] = useState<string | null>(null);
   const targetKind = target.kind;
   const targetKey =
-    target.kind === "instance" ? target.instanceId : target.serverId;
+    target.kind === "instance"
+      ? target.instanceId
+      : target.kind === "catalog"
+        ? target.itemId
+        : target.serverId;
 
   useEffect(() => {
     if (!isUrlType) return;
     let active = true;
+    if (targetKind === "catalog") {
+      catalogConnectionPreflightAction(targetKey).then((result) => {
+        if (!active) return;
+        if (result.error || !result.data) {
+          setPreflightError(apiErrorMessage(result, t("preflightFailed")));
+          return;
+        }
+        setPreflight(catalogPreflightToMCP(result.data));
+      });
+      return () => {
+        active = false;
+      };
+    }
     mcpOAuthPreflightAction(
       targetKind === "instance"
         ? { instance_id: targetKey }
@@ -105,27 +132,47 @@ export function OAuthConnectPanel({
     setConnectError(null);
     onConnectStart?.();
     try {
-      const instanceId =
-        target.kind === "instance"
-          ? target.instanceId
-          : await target.ensureInstance();
-      const request = buildAuthorizeRequest({
-        instanceId,
-        state,
-        credentials,
-        returnTo: window.location.origin,
-      });
-      if (!request) return;
-      const { data, error } = await oauthAuthorizeAction(request);
-      if (
-        error ||
-        !data?.authorize_url ||
-        !isSafeRedirectUrl(data.authorize_url)
-      ) {
-        setConnectError(error || t("startFailed"));
+      let authorizeUrl: string;
+      if (target.kind === "catalog") {
+        const request = buildCatalogConnectRequest({
+          state,
+          credentials,
+          returnTo: window.location.origin,
+        });
+        if (!request) return;
+        const result = await connectCatalogConnectionAction(
+          target.itemId,
+          request
+        );
+        if (result.error || !result.data) {
+          setConnectError(apiErrorMessage(result, t("startFailed")));
+          return;
+        }
+        authorizeUrl = result.data.authorize_url;
+      } else {
+        const instanceId =
+          target.kind === "instance"
+            ? target.instanceId
+            : await target.ensureInstance();
+        const request = buildAuthorizeRequest({
+          instanceId,
+          state,
+          credentials,
+          returnTo: window.location.origin,
+        });
+        if (!request) return;
+        const { data, error } = await oauthAuthorizeAction(request);
+        if (error || !data?.authorize_url) {
+          setConnectError(error || t("startFailed"));
+          return;
+        }
+        authorizeUrl = data.authorize_url;
+      }
+      if (!isSafeRedirectUrl(authorizeUrl)) {
+        setConnectError(t("startFailed"));
         return;
       }
-      window.location.href = data.authorize_url;
+      window.location.href = authorizeUrl;
     } catch (error) {
       setConnectError(error instanceof Error ? error.message : t("startFailed"));
     } finally {
@@ -138,7 +185,14 @@ export function OAuthConnectPanel({
   if (state.kind === "loading") {
     return (
       <Row>
-        <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+        <StatusIndicator
+          kind="running"
+          size="sm"
+          className="mt-0.5 shrink-0"
+          iconClassName="h-4 w-4"
+          aria-label={t("checkingTitle")}
+          title={t("checkingTitle")}
+        />
         <div className="min-w-0">
           <p className="text-sm font-medium">{t("checkingTitle")}</p>
           <p className="text-xs text-muted-foreground">{t("checkingDetail")}</p>
@@ -150,7 +204,13 @@ export function OAuthConnectPanel({
   if (state.kind === "unsupported") {
     return (
       <Row>
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <StatusIndicator
+          kind="attention"
+          size="sm"
+          className="mt-0.5 shrink-0"
+          aria-label={state.reason}
+          title={state.reason}
+        />
         <div className="min-w-0">
           <p className="text-sm font-medium">{t("unsupportedTitle")}</p>
           <p className="text-xs text-muted-foreground">{state.reason}</p>
@@ -167,9 +227,23 @@ export function OAuthConnectPanel({
       <div className="space-y-2">
         <Row>
           {state.connected ? (
-            <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <StatusIndicator
+              kind="active"
+              size="sm"
+              className="mt-0.5 shrink-0"
+              iconClassName="h-4 w-4"
+              aria-label={t("authorizedTitle")}
+              title={t("authorizedTitle")}
+            />
           ) : (
-            <ExternalLink className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <StatusIndicator
+              kind="draft"
+              size="sm"
+              className="mt-0.5 shrink-0"
+              iconClassName="h-4 w-4"
+              aria-label={t("readyTitle")}
+              title={t("readyTitle")}
+            />
           )}
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">
@@ -197,7 +271,13 @@ export function OAuthConnectPanel({
   return (
     <div className="space-y-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-3">
       <div className="flex items-start gap-2">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <StatusIndicator
+          kind="attention"
+          size="sm"
+          className="mt-0.5 shrink-0"
+          aria-label={state.reason}
+          title={state.reason}
+        />
         <div className="min-w-0">
           <p className="text-sm font-medium">
             {state.connected
@@ -207,6 +287,12 @@ export function OAuthConnectPanel({
           <p className="text-xs text-muted-foreground">{state.reason}</p>
         </div>
       </div>
+      {state.redirectUri && (
+        <div className="space-y-1">
+          <p className="text-xs font-medium">{t("redirectUriLabel")}</p>
+          <CopyableText text={state.redirectUri} />
+        </div>
+      )}
       <CustomOAuthAppFields
         loadSecrets={listWorkspaceSecretsAction}
         onChange={setCredentials}

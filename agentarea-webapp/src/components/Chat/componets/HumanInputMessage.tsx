@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useId, useMemo, useState } from "react";
-import { Check, KeyRound, Lock } from "lucide-react";
+import { KeyRound, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   HumanInputField,
@@ -239,16 +240,14 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
         );
     }
   };
-
   if (isResolved) {
     return (
-      <MessageWrapper
-        type="tool-result"
-        icon={<Check className="h-4 w-4 text-muted-foreground" />}
-      >
+      <MessageWrapper type="tool-result">
         <details className="group min-w-0 flex-1 text-[13px] leading-5">
           <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-1 py-0.5 text-foreground/80 outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-            <span className="font-medium">Information provided</span>
+            <StatusIndicator kind="done" size="sm">
+              Information provided
+            </StatusIndicator>
             <span className="min-w-0 truncate text-muted-foreground">
               {data.question || "Additional information"}
             </span>
@@ -272,11 +271,7 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
     <MessageWrapper
       type="tool-call"
       icon={
-        hasSecret ? (
-          <KeyRound className="h-4 w-4 text-amber-500" />
-        ) : (
-          <Check className="h-4 w-4 text-zinc-700 dark:text-zinc-200" />
-        )
+        hasSecret ? <KeyRound className="h-4 w-4 text-amber-500" /> : undefined
       }
     >
       <BaseMessage
@@ -288,7 +283,9 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
           </div>
         }
         headerRight={
-          <span className="animate-pulse text-amber-600">Input required</span>
+          <StatusIndicator kind="attention" size="sm">
+            Input required
+          </StatusIndicator>
         }
         collapsed={false}
       >

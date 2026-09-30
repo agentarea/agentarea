@@ -72,8 +72,9 @@ There is no retry endpoint. Retrying means starting a new task.
   </Step>
 
   <Step title="Continue a task waiting on a limit">
-    A task that exhausts its iteration budget or its spend cap does not fail
-    immediately. It writes `waiting_for_continuation`, emits
+    A task that exhausts its iterations, its spend cap, its token budget
+    (`tokens.max_tokens`) or its total tool-call budget
+    (`execution.max_tool_calls_total`) does not fail immediately. It writes `waiting_for_continuation`, emits
     `task.awaiting_continuation`, and idles for up to 24 hours.
 
     The grant must match the reason it stopped:
@@ -94,13 +95,24 @@ There is no retry endpoint. Retrying means starting a new task.
     }
     ```
 
-    For a budget stop, send `additional_budget_usd`. Send both if you are unsure:
+    Each stop reason has its own grant:
+
+    | `failure_reason` | Required grant | Raises |
+    |---|---|---|
+    | `iteration_limit` | `additional_iterations` (1-1000) | `execution.max_model_turns` |
+    | `budget_exceeded` | `additional_budget_usd` | `budget.run_budget_usd` |
+    | `token_limit` | `additional_tokens` (1-10,000,000) | `tokens.max_tokens` |
+    | `tool_call_limit` | `additional_tool_calls` (1-10,000) | `execution.max_tool_calls_total` |
+
+    Other grants may ride along. The raised limits are re-resolved against the
+    workspace and agent policy ceilings, so a grant past a ceiling is refused
+    with `policy_ceiling`. Send several if you are unsure:
 
     ```bash
     curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/tasks/$TASK_ID/continue" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
-      -d '{"additional_iterations": 20, "additional_budget_usd": "5.00"}'
+      -d '{"additional_iterations": 20, "additional_budget_usd": "5.00", "additional_tokens": 100000, "additional_tool_calls": 50}'
     ```
 
     Note the path: this one is **not** nested under the agent.
@@ -183,14 +195,20 @@ running
     The task is not in `waiting_for_continuation` . Either it never hit a limit,
     or the 24-hour window expired and it already failed.
   </Accordion>
-  <Accordion title="409 with `additional_iterations_required` or `additional_budget_required`">
+  <Accordion title="409 with `additional_*_required`">
     The grant did not match the stop reason. A task stopped on `iteration_limit`
-    needs iterations; one stopped on `budget_exceeded` needs budget. Read
-    `failure_reason` from the task to see which.
+    needs iterations, `budget_exceeded` needs budget, `token_limit` needs
+    tokens, and `tool_call_limit` needs tool calls. Read `failure_reason` from
+    the `task.awaiting_continuation` event to see which.
+  </Accordion>
+  <Accordion title="409 with `policy_ceiling`">
+    The raised limit exceeds a workspace or agent policy ceiling. Grant less, or
+    raise the ceiling first.
   </Accordion>
   <Accordion title="422 from `/continue`">
-    Both `additional_iterations` and `additional_budget_usd` were absent or
-    zero. At least one resource must be granted.
+    `additional_iterations`, `additional_budget_usd`, `additional_tokens` and
+    `additional_tool_calls` were all absent or zero. At least one resource must
+    be granted.
   </Accordion>
   <Accordion title="404 from `DELETE` on a task you can see">
     The endpoint returns 404 when the workflow could not be cancelled, which

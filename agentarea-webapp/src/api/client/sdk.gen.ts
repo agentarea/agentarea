@@ -635,6 +635,9 @@ import type {
   PlanWorkspaceUploadsV1FilesUploadUrlsPostData,
   PlanWorkspaceUploadsV1FilesUploadUrlsPostErrors,
   PlanWorkspaceUploadsV1FilesUploadUrlsPostResponses,
+  PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetData,
+  PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors,
+  PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses,
   PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostData,
   PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors,
   PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses,
@@ -3825,6 +3828,39 @@ export const connectCatalogItemV1ConnectionsCatalogItemIdConnectPost = <
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * Preflight Catalog Item
+ *
+ * Report whether a catalog connection can use the platform OAuth app.
+ */
+export const preflightCatalogItemV1ConnectionsCatalogItemIdPreflightGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses,
+  PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses,
+    PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/connections/catalog/{item_id}/preflight",
+    ...options,
   });
 
 /**
@@ -9223,7 +9259,7 @@ export const getTaskByIdV1TasksTaskIdGet = <
 /**
  * Continue Task Execution
  *
- * Grant more iterations or budget to a task waiting on a hard limit.
+ * Grant more iterations, budget, tokens or tool calls to a task waiting on a hard limit.
  */
 export const continueTaskExecutionV1TasksTaskIdContinuePost = <
   ThrowOnError extends boolean = false,

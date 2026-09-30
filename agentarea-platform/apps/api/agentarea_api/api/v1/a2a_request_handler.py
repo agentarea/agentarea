@@ -377,13 +377,13 @@ class AgentAreaRequestHandler(RequestHandler):
                 )
         return created
 
-    async def _follow(self, task: AgentTask) -> AsyncGenerator[Event]:
+    async def _follow(self, task: AgentTask, user: UserContext) -> AsyncGenerator[Event]:
         """Stream the task's events (catch-up, then live) until it is terminal."""
         task_id = str(task.id)
         context_id = context_id_for(task)
         async for env in self._event_feed(
             task.id,
-            workspace_id=str(task.workspace_id),
+            user_context=user,
             terminal_types=TERMINAL_EVENT_TYPES,
         ):
             events, terminal = workflow_event_to_a2a(
@@ -414,7 +414,7 @@ class AgentAreaRequestHandler(RequestHandler):
         with _Operation("message_stream", scope, context) as op:
             created = await self._submit(params, context, op)
             yield to_a2a_task(created)
-            async for event in self._follow(created):
+            async for event in self._follow(created, _user_context(scope)):
                 yield event
 
     # -- tasks -------------------------------------------------------------
@@ -487,7 +487,7 @@ class AgentAreaRequestHandler(RequestHandler):
     ) -> AsyncGenerator[Event]:
         scope = _scope(context)
         with _Operation("task_subscribe", scope, context, task_id=params.id):
-            _user_context(scope)
+            user = _user_context(scope)
             task = await self._owned_task(params.id, scope, live=True)
             state = task_state(task.status)
             if state in TERMINAL_STATES:
@@ -495,7 +495,7 @@ class AgentAreaRequestHandler(RequestHandler):
                     message=f"Task {task.id} is in terminal state {TaskState.Name(state)}"
                 )
             yield to_a2a_task(task)
-            async for event in self._follow(task):
+            async for event in self._follow(task, user):
                 yield event
 
     # -- push notification configs ----------------------------------------

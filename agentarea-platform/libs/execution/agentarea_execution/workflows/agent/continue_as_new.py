@@ -8,20 +8,45 @@ with workflow.unsafe.imports_passed_through():
 
     from agentarea_agents_sdk.skills import SkillActivationTool, SkillCatalogBuilder, SkillEntry
     from agentarea_agents_sdk.tools.disclosure import NamedLookupPolicy
+    from agentarea_agents_sdk.tools.tool_catalog import ToolCatalog
+    from agentarea_agents_sdk.tools.tool_provider import (
+        AgentToolProvider,
+        BuiltinToolProvider,
+        CodeToolProvider,
+        MCPToolProvider,
+        ToolProvider,
+    )
     from agentarea_common.money import serialize_money
 
     from ...interaction import resolve_interaction_capabilities
     from ..context_manager import ContextWindowManager
-    from ..helpers import BudgetTracker, EventManager, MessageBuilder
+    from ..helpers import BudgetTracker, EventManager
     from ..models import ContinueAsNewState, Message
 
-from ...models import AgentExecutionRequest
+from ...models import AgentExecutionRequest, ToolProviderData
 from ..constants import EventTypes
 from .compaction import CompactionMixin
 
 
 class ContinueAsNewMixin(CompactionMixin):
     """Carrying the run's state across continue-as-new."""
+
+    def _rebuild_tool_catalog(self) -> tuple[ToolCatalog, list[ToolProvider]]:
+        """Build the DYNAMIC tool catalog from the discovered tool sources."""
+        factories = {
+            "mcp": lambda d: MCPToolProvider(name=d.name, instance_id="", tools=d.tools),
+            "code": lambda d: CodeToolProvider(name=d.name, tools=d.tools),
+            "agent": lambda d: AgentToolProvider(name=d.name, agent_id="", tools=d.tools),
+            "builtin": lambda d: BuiltinToolProvider(name=d.name, tools=d.tools),
+        }
+        providers: list[ToolProvider] = []
+        for data in (ToolProviderData(**raw) for raw in self.state.tool_providers):
+            factory = factories.get(data.provider_type)
+            if factory:
+                providers.append(factory(data))
+        catalog = ToolCatalog(providers, activated=set(self.state.activated_tool_sources))
+        self._tool_catalog = catalog
+        return catalog, providers
 
     async def _restore_from_continued_state(self, continued_state: dict) -> None:
         """Restore workflow state from a continue-as-new restart."""
@@ -47,6 +72,9 @@ class ContinueAsNewMixin(CompactionMixin):
         self.state.context_strategy = state.context_strategy
         self.state.history_chunk_counter = state.history_chunk_counter
         self.state.activated_tool_sources = state.activated_tool_sources
+        self.state.tool_providers = state.tool_providers
+        if self.state.tool_providers:
+            self._rebuild_tool_catalog()
         self.state.searchable_tool_pool = state.searchable_tool_pool
         self.state.revealed_openapi_tools = state.revealed_openapi_tools
         self.state.mcp_tool_routes = state.mcp_tool_routes
@@ -117,8 +145,11 @@ class ContinueAsNewMixin(CompactionMixin):
         self.state.validation_repair_attempts = state.validation_repair_attempts
         self.state.validation_terminal = state.validation_terminal
 
-        # Restore messages from compacted dicts
         self.state.messages = [Message(**msg) for msg in state.messages]
+        self.state.conversation_next_seq = state.conversation_next_seq
+        self.state.context_head_seqs = list(state.context_head_seqs)
+        self.state.context_tail_start = state.context_tail_start
+        self.state.last_prompt_tokens = state.last_prompt_tokens
 
         # Restore agent tool registry for delegation routing
         self._agent_tool_registry = state.agent_tool_registry
@@ -149,8 +180,10 @@ class ContinueAsNewMixin(CompactionMixin):
             execution_id=self.state.execution_id,
             workspace_id=self.state.workspace_id,
         )
+        self.event_manager.requeue_pending_events(state.pending_events)
         self.budget_tracker = BudgetTracker(self.state.budget_usd)
         self.budget_tracker.add_cost(state.total_cost)
+        self.budget_tracker.restore(warning_sent=state.budget_warning_sent, currency=state.currency)
         if self.state.context_window is None:
             raise ApplicationError(
                 "continued execution state has no ModelSpec context_window",
@@ -158,12 +191,15 @@ class ContinueAsNewMixin(CompactionMixin):
                 non_retryable=True,
             )
         self.context_manager = ContextWindowManager(self.state.context_window)
+        self.context_manager.restore(
+            warning_sent=state.context_warning_sent, compaction_count=state.compaction_count
+        )
 
         workflow.logger.info(
             f"Restored from run {state.continued_from_run_id}, "
             f"iteration {state.current_iteration}, "
             f"cost {state.total_cost:.4f}, "
-            f"{len(self.state.messages)} messages, "
+            f"{self.state.conversation_next_seq} logged entries, "
             f"{len(self._agent_tool_registry)} agent tools"
         )
 
@@ -174,22 +210,7 @@ class ContinueAsNewMixin(CompactionMixin):
             f"event history suggests reset"
         )
 
-        # Compact messages before carrying state forward
         await self._compact_context_if_needed()
-
-        # Serialize messages to dicts
-        messages_dict = [
-            MessageBuilder.normalize_message_dict(
-                {
-                    "role": msg.role,
-                    "content": msg.content,
-                    "tool_call_id": msg.tool_call_id,
-                    "name": msg.name,
-                    "tool_calls": msg.tool_calls,
-                }
-            )
-            for msg in self.state.messages
-        ]
 
         if self.state.goal is None:
             raise ApplicationError(
@@ -198,6 +219,20 @@ class ContinueAsNewMixin(CompactionMixin):
                 non_retryable=True,
             )
 
+        # Published before the state is captured: a signal handled while this
+        # publish is in flight changes the state, and it must ride along.
+        self._events.add_event(
+            EventTypes.WORKFLOW_CONTINUED_AS_NEW,
+            {
+                "iteration": self.state.current_iteration,
+                "total_cost": serialize_money(self._budget.cost),
+                "conversation_entries": self.state.conversation_next_seq + len(self.state.messages),
+                "continued_from_run_id": workflow.info().run_id,
+                "reason": "Temporal event history size limit approaching",
+            },
+        )
+        await self._publish_events_immediately()
+
         continued_state = ContinueAsNewState(
             execution_id=self.state.execution_id,
             agent_id=self.state.agent_id,
@@ -205,7 +240,11 @@ class ContinueAsNewMixin(CompactionMixin):
             user_id=self.state.user_id,
             workspace_id=self.state.workspace_id,
             goal=self.state.goal,
-            messages=messages_dict,
+            messages=self._conversation_payload(),
+            conversation_next_seq=self.state.conversation_next_seq,
+            context_head_seqs=self.state.context_head_seqs,
+            context_tail_start=self.state.context_tail_start,
+            last_prompt_tokens=self.state.last_prompt_tokens,
             agent_config=self.state.agent_config,
             available_tools=self.state.available_tools,
             current_iteration=self.state.current_iteration,
@@ -222,6 +261,7 @@ class ContinueAsNewMixin(CompactionMixin):
             context_strategy=self.state.context_strategy,
             history_chunk_counter=self.state.history_chunk_counter,
             activated_tool_sources=self.state.activated_tool_sources,
+            tool_providers=self.state.tool_providers,
             searchable_tool_pool=self.state.searchable_tool_pool,
             revealed_openapi_tools=self.state.revealed_openapi_tools,
             mcp_tool_routes=self.state.mcp_tool_routes,
@@ -255,22 +295,15 @@ class ContinueAsNewMixin(CompactionMixin):
             validation_state=self.state.validation_state,
             validation_repair_attempts=self.state.validation_repair_attempts,
             validation_terminal=self.state.validation_terminal,
+            pending_events=self._events.get_pending_events(),
+            budget_warning_sent=self._budget.warning_sent,
+            currency=self._budget.currency,
+            context_warning_sent=self.context_manager.warning_sent
+            if self.context_manager
+            else False,
+            compaction_count=self.context_manager.compaction_count if self.context_manager else 0,
         )
 
-        # Publish event before continuing (persisted in DB via tier 2)
-        self._events.add_event(
-            EventTypes.WORKFLOW_CONTINUED_AS_NEW,
-            {
-                "iteration": self.state.current_iteration,
-                "total_cost": serialize_money(self._budget.cost),
-                "messages_carried": len(self.state.messages),
-                "continued_from_run_id": workflow.info().run_id,
-                "reason": "Temporal event history size limit approaching",
-            },
-        )
-        await self._publish_events_immediately()
-
-        # Build new request with continued state
         new_request = AgentExecutionRequest(
             task_id=UUID(self.state.task_id),
             agent_id=UUID(self.state.agent_id),

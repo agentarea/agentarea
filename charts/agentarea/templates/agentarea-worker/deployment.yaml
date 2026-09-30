@@ -40,6 +40,7 @@ spec:
         {{- end }}
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.worker.terminationGracePeriodSeconds }}
       {{- with .Values.global.security.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
@@ -95,6 +96,8 @@ spec:
                   key: {{ include "agentarea.mcpGatewaySecretKey" . }}
             {{- include "agentarea.temporal.envs" . | nindent 12 }}
             {{- include "agentarea.worker.envs" . | nindent 12 }}
+            - name: WORKFLOW__TEMPORAL_GRACEFUL_SHUTDOWN_SECONDS
+              value: {{ .Values.worker.shutdownTimeout | quote }}
             {{- if .Values.keto.enabled }}
             - name: ACCESS_CONTROL_BACKEND
               value: "keto"

@@ -1,10 +1,14 @@
 import { useTranslations } from "next-intl";
 import { Activity } from "lucide-react";
 import { BoardSectionHeader } from "@/components/board";
-import { computeDelta, DeltaBadge, Sparkline } from "@/components/charts/Sparkline";
+import {
+  computeDelta,
+  DeltaBadge,
+  Sparkline,
+} from "@/components/charts/Sparkline";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import type { DailyTaskCounts } from "@/lib/api-dashboard";
-import { getTaskStatusPresentation, STATUS_TONE_COLOR } from "@/lib/status";
+import { getTaskStatusPresentation, STATUS_KIND_COLOR } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -41,9 +45,25 @@ export function ActivityStrip({ data }: Props) {
       />
 
       <div className="mt-2.5 flex flex-1 flex-col gap-2 sm:grid sm:grid-cols-3 lg:flex lg:flex-col lg:gap-1.5">
-        <StatCard label={t("completed")} tone="completed" values={completed} goodDirection="up" />
-        <StatCard label={t("failed")} tone="failed" values={failed} goodDirection="down" bad />
-        <StatCard label={t("awaiting")} tone="awaiting" values={awaiting} goodDirection="down" />
+        <StatCard
+          label={t("completed")}
+          series="completed"
+          values={completed}
+          goodDirection="up"
+        />
+        <StatCard
+          label={t("failed")}
+          series="failed"
+          values={failed}
+          goodDirection="down"
+          bad
+        />
+        <StatCard
+          label={t("awaiting")}
+          series="awaiting"
+          values={awaiting}
+          goodDirection="down"
+        />
       </div>
     </div>
   );
@@ -51,21 +71,21 @@ export function ActivityStrip({ data }: Props) {
 
 function StatCard({
   label,
-  tone,
+  series,
   values,
   goodDirection,
   bad = false,
 }: {
   label: string;
-  tone: keyof typeof SERIES;
+  series: keyof typeof SERIES;
   values: number[];
   goodDirection: "up" | "down";
   bad?: boolean;
 }) {
   const delta = computeDelta(values, 1);
   const today = values.at(-1) ?? 0;
-  const presentation = SERIES[tone];
-  const color = muted(STATUS_TONE_COLOR[presentation.tone]);
+  const presentation = SERIES[series];
+  const color = muted(STATUS_KIND_COLOR[presentation.kind]);
 
   return (
     <div
@@ -78,8 +98,7 @@ function StatCard({
     >
       <div className="flex min-w-0 flex-1 flex-row items-baseline gap-3 sm:flex-none sm:flex-col sm:items-start sm:gap-0 lg:min-w-[120px] lg:flex-none lg:justify-center">
         <StatusIndicator
-          tone={presentation.tone}
-          icon={presentation.icon}
+          kind={presentation.kind}
           size="sm"
           className="text-[11.5px] font-medium"
         >
