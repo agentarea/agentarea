@@ -12,7 +12,6 @@ import React, {
   useTransition,
 } from "react";
 import { useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
 import {
   ArrowDownAZ,
   BadgeCheck,
@@ -34,12 +33,6 @@ import {
   Star,
   Telescope,
 } from "lucide-react";
-import {
-  apiErrorMessage,
-  formatApiError,
-  isApiNotFound,
-} from "@/lib/api-errors";
-import { getCategoryIcon } from "@/lib/category-icons";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { Streamdown } from "streamdown";
 import { AgentAvatar } from "@/components/AgentAvatar";
@@ -71,8 +64,15 @@ import {
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { ToolbarButton } from "@/components/ui/toolbar";
-import { cn } from "@/lib/utils";
+import Link from "@/components/WorkspaceLink";
+import {
+  apiErrorMessage,
+  formatApiError,
+  isApiNotFound,
+} from "@/lib/api-errors";
+import { getCategoryIcon } from "@/lib/category-icons";
 import type { StatusKind } from "@/lib/status";
+import { cn } from "@/lib/utils";
 import { getCookie, setCookie } from "@/utils/cookies";
 import {
   addCatalogSkillToAgentAction,
@@ -118,6 +118,7 @@ import {
   initialPaging,
   type CategoryFacet,
 } from "./catalog-paging";
+import type { CatalogSection } from "./catalog-sections";
 
 // ── Registry types ──────────────────────────────────────────────────────────
 // One gallery for every catalog type. The look-and-feel is shared; the type is
@@ -148,12 +149,20 @@ const TYPES: { key: CatalogType; label: string; icon: LucideIcon }[] = [
 const BRING_YOUR_OWN: Record<CatalogType, { text: string; href?: string }[]> = {
   connections: [
     { text: "Connect your own MCP server", href: "/connections/add" },
-    { text: "Point at any REST API you already have", href: "/connections/add-openapi" },
-    { text: "Or describe it to an agent and have it wire the connection up", href: "/workplace" },
+    {
+      text: "Point at any REST API you already have",
+      href: "/connections/add-openapi",
+    },
+    {
+      text: "Or describe it to an agent and have it wire the connection up",
+      href: "/workplace",
+    },
   ],
   skills: [{ text: "Write the skill yourself", href: "/skills/create" }],
   agents: [{ text: "Build the agent yourself", href: "/agents/create" }],
-  bundles: [{ text: "Import a bundle you already have", href: "/bundles/import" }],
+  bundles: [
+    { text: "Import a bundle you already have", href: "/bundles/import" },
+  ],
 };
 
 const BRING_YOUR_OWN_ACTION: Record<
@@ -424,6 +433,8 @@ type CatalogGalleryProps = {
   initialError?: string | null;
   /** Persisted grid/table choice (cookie), seeds the view nuqs default. */
   initialView?: ViewMode;
+  /** Recommended / Popular shelves for the unfiltered catalog (catalog-sections.ts). */
+  initialSections?: CatalogSection[];
 };
 
 export default function CatalogGallery({
@@ -434,6 +445,7 @@ export default function CatalogGallery({
   initialProtocols,
   initialError = null,
   initialView = "grid",
+  initialSections = [],
 }: CatalogGalleryProps) {
   // Catalog UI state lives in the URL (nuqs) so views are shareable/back-able.
   //
@@ -614,6 +626,8 @@ export default function CatalogGallery({
       return;
     }
     if (paging.entries.some((e) => e.id === itemId)) return; // already in the list
+    if (initialSections.some((sec) => sec.entries.some((e) => e.id === itemId)))
+      return; // on a shelf
     if (deepItem?.id === itemId) return; // already fetched
     let alive = true;
     setDeepLoading(true);
@@ -639,15 +653,28 @@ export default function CatalogGallery({
     return () => {
       alive = false;
     };
-  }, [itemId, paging.entries, type, deepItem?.id, deepAttempt, tBundle]);
+  }, [
+    itemId,
+    paging.entries,
+    initialSections,
+    type,
+    deepItem?.id,
+    deepAttempt,
+    tBundle,
+  ]);
 
   // Selected item (from ?item=) — resolved against the loaded page first, then
   // the deep-link fallback. When set, the main column shows the detail in place
   // — tabs + facets stay, so it feels like browsing a marketplace rather than a
   // full-page takeover.
   const active =
-    (itemId ? (paging.entries.find((e) => e.id === itemId) ?? null) : null) ??
-    (deepItem?.id === itemId ? deepItem : null);
+    (itemId
+      ? (paging.entries.find((e) => e.id === itemId) ??
+        initialSections
+          .flatMap((sec) => sec.entries)
+          .find((e) => e.id === itemId) ??
+        null)
+      : null) ?? (deepItem?.id === itemId ? deepItem : null);
   // Drives the empty-state copy + "Clear filters" affordance.
   const hasFilters =
     query.trim() !== "" || category !== ALL || protocol !== ALL;
@@ -811,6 +838,39 @@ export default function CatalogGallery({
                 />
               )}
 
+            {/* Shelves are server-picked for the unfiltered catalog; any filter
+                round-trips the page and the next render simply has none. */}
+            {!busy &&
+              !hasFilters &&
+              sort === DEFAULT_SORT &&
+              initialSections.map((sec) => (
+                <section key={sec.key} className="space-y-2">
+                  <CatalogShelfHeading
+                    title={sec.title}
+                    description={sec.description}
+                  />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                    {sec.entries.map((e) => (
+                      <CatalogCard
+                        key={e.id}
+                        entry={e}
+                        onOpen={() => void setItemId(e.id)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            {!busy &&
+              !hasFilters &&
+              sort === DEFAULT_SORT &&
+              initialSections.length > 0 &&
+              paging.entries.length > 0 && (
+                <CatalogShelfHeading
+                  title={`All ${TYPES.find((t) => t.key === type)?.label.toLowerCase() ?? ""}`}
+                  description={`${paging.total.toLocaleString()} in the catalog.`}
+                />
+              )}
+
             {!busy && paging.entries.length > 0 && (
               <div
                 className={cn(
@@ -866,6 +926,21 @@ export default function CatalogGallery({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function CatalogShelfHeading({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-baseline gap-2 pt-2">
+      <h2 className="text-sm font-semibold">{title}</h2>
+      <p className="truncate text-xs text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -976,31 +1051,31 @@ function FacetGroup({
           // but it still takes the icon's width so the labels line up.
           const Icon = icons && value !== ALL ? icons(value) : null;
           return (
-          <button
-            key={value}
-            onClick={() => onSelect(value)}
-            className={cn(
-              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-              selected === value
-                ? "bg-muted font-medium text-foreground"
-                : "text-muted-foreground hover:bg-muted/50"
-            )}
-          >
-            {icons &&
-              (Icon ? (
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-              ) : (
-                <span className="h-3.5 w-3.5 shrink-0" />
-              ))}
-            <span className="min-w-0 flex-1 truncate text-left capitalize">
-              {value === ALL ? "All" : (labels?.[value] ?? value)}
-            </span>
-            {count !== null && (
-              <span className="text-[10px] tabular-nums text-muted-foreground">
-                {count}
+            <button
+              key={value}
+              onClick={() => onSelect(value)}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+                selected === value
+                  ? "bg-muted font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-muted/50"
+              )}
+            >
+              {icons &&
+                (Icon ? (
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                ) : (
+                  <span className="h-3.5 w-3.5 shrink-0" />
+                ))}
+              <span className="min-w-0 flex-1 truncate text-left capitalize">
+                {value === ALL ? "All" : (labels?.[value] ?? value)}
               </span>
-            )}
-          </button>
+              {count !== null && (
+                <span className="text-[10px] tabular-nums text-muted-foreground">
+                  {count}
+                </span>
+              )}
+            </button>
           );
         })}
       </div>
@@ -1509,7 +1584,11 @@ function ConnectionSetup({ tier }: { tier: SetupTier }) {
   return (
     <div className="space-y-2">
       <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
-        <StatusIndicator kind={c.kind} size="sm" className="text-sm font-medium">
+        <StatusIndicator
+          kind={c.kind}
+          size="sm"
+          className="text-sm font-medium"
+        >
           {c.title}
         </StatusIndicator>
         <div className="min-w-0">
@@ -1902,7 +1981,9 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
       .catch((e: unknown) => {
         console.error("Failed to load workspace agents", e);
         if (active) {
-          setAgentsError(`${tBundle("agentsLoadFailed")}: ${formatApiError(e)}`);
+          setAgentsError(
+            `${tBundle("agentsLoadFailed")}: ${formatApiError(e)}`
+          );
         }
       });
     return () => {
