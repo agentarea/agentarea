@@ -1032,6 +1032,8 @@ class TriggerService:
         """
         if not trigger_data.webhook_id:
             raise TriggerValidationError("Webhook ID is required for WEBHOOK triggers")
+        if await self.trigger_repository.webhook_id_in_use(trigger_data.webhook_id):
+            raise TriggerValidationError("Webhook ID is already in use")
 
         # Validate HTTP methods
         if not trigger_data.allowed_methods:

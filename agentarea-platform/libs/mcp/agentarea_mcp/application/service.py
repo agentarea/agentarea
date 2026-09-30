@@ -16,6 +16,7 @@ from agentarea_common.config import get_database, get_settings
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.errors import BadRequestError
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.rebac.ownership import grant_resource_owner
 from agentarea_common.utils.url_safety import (
     OutboundPolicy,
     UnsafeUrlError,
@@ -539,6 +540,19 @@ class MCPServerInstanceService:
         await auth_service.get_for_use(config_id)
 
     @audited("mcp_instance.create", resource_type="mcp_instance")
+    async def _grant_creator_ownership(self, resource_id: UUID | str) -> None:
+        """Record the caller as owner of a row this service committed itself.
+
+        These rows are added to the session directly rather than through
+        ``WorkspaceScopedRepository.create``, which is what grants everywhere
+        else; without the grant every check on them fails closed.
+        """
+        await grant_resource_owner(
+            resource_id=resource_id,
+            workspace_id=self.repository.user_context.workspace_id,
+            user_id=self.repository.user_context.user_id,
+        )
+
     async def create_instance(self, payload: MCPServerInstanceCreate) -> MCPServerInstance | None:
         name = payload.name
         description = payload.description
@@ -546,6 +560,7 @@ class MCPServerInstanceService:
         auth_config_id = payload.auth_config_id
 
         submitted_spec = _normalize_url_keys(payload.json_spec or {})
+        created_spec_id: str | None = None
 
         try:
             if server_spec_id:
@@ -559,10 +574,12 @@ class MCPServerInstanceService:
                     self.repository.user_context.workspace_id
                 ):
                     server_spec = await self._materialize_workspace_spec_copy(server_spec)
+                    created_spec_id = str(server_spec.id)
                 server_spec_id = str(server_spec.id)
             else:
                 server_spec = await self._auto_create_spec_for_instance(payload)
                 server_spec_id = str(server_spec.id)
+                created_spec_id = server_spec_id
 
             transport_spec = _server_transport_spec(server_spec)
             validation_errors = MCPConfigurationValidator.validate_json_spec(transport_spec)
@@ -608,6 +625,10 @@ class MCPServerInstanceService:
         except Exception:
             await self.repository.session.rollback()
             raise
+
+        if created_spec_id is not None:
+            await self._grant_creator_ownership(created_spec_id)
+        await self._grant_creator_ownership(instance.id)
 
         is_url_type = instance_type == "url"
 
@@ -692,7 +713,9 @@ class MCPServerInstanceService:
             json_spec=instance_payload.json_spec,
             auth_config_id=instance_payload.auth_config_id,
         )
-        return await self.create_instance(payload)
+        instance = await self.create_instance(payload)
+        await self._grant_creator_ownership(server.id)
+        return instance
 
     @audited("mcp_instance.update", resource_type="mcp_instance", resource_id_param="id")
     async def update_instance(

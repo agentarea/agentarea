@@ -46,6 +46,21 @@ def forked_agent():
         instruction="help",
         model_id="m1",
         registry_item_id=str(uuid4()),
+        created_by="test_user",
+    )
+
+
+@pytest.fixture
+def foreign_agent():
+    """An agent another member created; the caller only has read on it."""
+    return Agent(
+        id=uuid4(),
+        name="Someone Else's",
+        slug="someone-elses",
+        status="active",
+        instruction="help",
+        model_id="m1",
+        created_by="another_member",
     )
 
 
@@ -119,3 +134,38 @@ async def test_update_agent_grants_owner_tuple(
         workspace_id="test_workspace",
         user_id="test_user",
     )
+
+
+@pytest.mark.flow(MainFlow.AUTH_WORKSPACE_SCOPING)
+@pytest.mark.asyncio
+async def test_installing_an_existing_agent_of_another_member_grants_nothing(
+    async_client, mock_agent_service, foreign_agent, captured_grant
+):
+    # install resolves an id that is already a tenant agent to that row; it must
+    # not hand the caller ownership of an agent somebody else created.
+    mock_agent_service.install_catalog_agent.return_value = foreign_agent
+    mock_agent_service.get_with_skills.return_value = foreign_agent
+
+    resp = await async_client.post(f"/v1/workspaces/acme/agents/{foreign_agent.id}/install")
+
+    assert resp.status_code == 200
+    captured_grant.assert_not_awaited()
+
+
+@pytest.mark.flow(MainFlow.AUTH_WORKSPACE_SCOPING)
+@pytest.mark.asyncio
+async def test_editing_another_members_agent_grants_nothing(
+    async_client, mock_agent_service, foreign_agent, captured_grant, monkeypatch
+):
+    # can_write lets the caller edit; it must not also make them the manager.
+    monkeypatch.setattr("agentarea_api.api.v1.agents.require_permission", AsyncMock())
+    monkeypatch.setattr("agentarea_api.api.v1.agents._overlay_approval_flags", AsyncMock())
+    mock_agent_service.update_agent.return_value = foreign_agent
+    mock_agent_service.get_with_skills.return_value = foreign_agent
+
+    resp = await async_client.patch(
+        f"/v1/workspaces/acme/agents/{foreign_agent.id}", json={"name": "Renamed"}
+    )
+
+    assert resp.status_code == 200
+    captured_grant.assert_not_awaited()

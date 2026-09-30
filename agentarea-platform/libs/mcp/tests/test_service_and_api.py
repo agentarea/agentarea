@@ -5,6 +5,7 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from agentarea_common.testing import install_graph_ownership_stub
 from agentarea_mcp.application.auth_service import AuthConfigAccessDeniedError
 from agentarea_mcp.application.service import (
     MCPServerInstanceService,
@@ -17,6 +18,12 @@ from agentarea_mcp.schemas.dto import (
     MCPServerInstanceCreate,
     MCPServerInstanceUpdate,
 )
+
+
+@pytest.fixture(autouse=True)
+def graph(monkeypatch):
+    """Creating an instance writes ownership tuples; record them instead."""
+    return install_graph_ownership_stub(monkeypatch)
 
 # ---------------------------------------------------------------------------
 # Helpers
