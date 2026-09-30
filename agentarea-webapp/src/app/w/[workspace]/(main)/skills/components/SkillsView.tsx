@@ -88,8 +88,9 @@ async function fetchAllSkills(): Promise<Skill[]> {
       page,
       page_size: 100,
       paginated: true,
-      // Only your own skills here — the registry/catalog lives in Explore.
-      from_registry: false,
+      // Only your own skills here, installed ones included — the catalog
+      // lives in Explore.
+      include_catalog: false,
     });
     const res = data as PaginatedSkills | null;
     if (!res?.items?.length) break;

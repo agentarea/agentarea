@@ -531,6 +531,7 @@ class SkillService:
         ``ids`` narrows the tenant half to what the caller may read. The
         catalog half is untouched by it: catalog items are platform data with
         no ownership tuples, and filtering them would empty Explore.
+        ``include_catalog=False`` leaves the catalog half out entirely.
         """
         repo = self._get_repository()
         tenant_page, tenant_total = await repo.list_paginated(
