@@ -13,7 +13,8 @@ export default function TriggersError({
 }) {
   useEffect(() => {
     console.error("[Triggers Error]:", error);
-    Sentry.captureException(error);
+    // A digest means a server failure onRequestError already reported.
+    if (!error.digest) Sentry.captureException(error);
   }, [error]);
 
   return (

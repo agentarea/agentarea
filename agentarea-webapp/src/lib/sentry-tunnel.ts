@@ -35,7 +35,8 @@ export function envelopeUpstream(
   const segments = own.pathname.split("/").filter(Boolean);
   const projectId = segments.pop();
   const prefix = segments.map((segment) => `/${segment}`).join("");
-  return `${own.protocol}//${own.host}${prefix}/api/${projectId}/envelope/`;
+  const auth = `sentry_version=7&sentry_key=${encodeURIComponent(own.username)}`;
+  return `${own.protocol}//${own.host}${prefix}/api/${projectId}/envelope/?${auth}`;
 }
 
 function parseDsn(dsn: string): URL | null {
@@ -44,4 +45,32 @@ function parseDsn(dsn: string): URL | null {
   } catch {
     return null;
   }
+}
+
+/** The body, or null once it grows past `maxBytes`; stops reading there. */
+export async function readCapped(
+  stream: ReadableStream<Uint8Array> | null,
+  maxBytes: number
+): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (!stream) return new Uint8Array(0);
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body;
 }

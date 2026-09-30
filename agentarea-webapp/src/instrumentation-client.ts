@@ -13,4 +13,7 @@ const runtimeEnv = (
 Sentry.init({
   ...sentryOptions(runtimeEnv?.SENTRY_DSN, runtimeEnv?.SENTRY_ENVIRONMENT),
   tunnel: SENTRY_TUNNEL_PATH,
+  // Errors only: no session envelope on every page view.
+  integrations: (defaults) =>
+    defaults.filter((integration) => integration.name !== "BrowserSession"),
 });

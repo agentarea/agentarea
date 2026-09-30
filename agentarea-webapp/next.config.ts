@@ -128,5 +128,6 @@ export default withSentryConfig(withNextIntl(nextConfig), {
   silent: true,
   telemetry: false,
   sourcemaps: { disable: true },
+  release: { create: false },
   suppressOnRouterTransitionStartWarning: true,
 });

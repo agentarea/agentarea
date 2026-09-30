@@ -13,7 +13,8 @@ export default function NetworkError({
 }) {
   useEffect(() => {
     console.error("[Network Error]:", error);
-    Sentry.captureException(error);
+    // A digest means a server failure onRequestError already reported.
+    if (!error.digest) Sentry.captureException(error);
   }, [error]);
 
   return (

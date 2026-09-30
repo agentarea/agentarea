@@ -277,7 +277,8 @@ deployment. The frontend reports browser errors, errors caught by the page error
 boundaries, and server rendering and server action failures. Browser reports go
 through the frontend's own `/api/monitoring` route, which forwards only to the
 configured DSN and does not pass on the client IP. Events carry no user,
-cookies, headers or request bodies; page URLs are included.
+cookies, headers or request bodies, and URLs lose their query string and
+fragment, which can hold invitation tokens and login flow ids.
 
 ### Application secrets (group `application`)
 
