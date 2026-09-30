@@ -9,8 +9,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from agentarea_common.artifacts import WorkspaceConflictError, WorkspaceValidationError
+from agentarea_common.artifacts import (
+    ArtifactService,
+    WorkspaceConflictError,
+    WorkspaceValidationError,
+)
 from agentarea_common.artifacts.workspace_writes import (
+    MAX_WRITE_PATH_BYTES,
     ensure_writable_file,
     is_reserved_path,
     plan_uploads,
@@ -51,6 +56,29 @@ def test_reserved_prefixes_cannot_be_written(reserved: str) -> None:
     assert is_reserved_path(reserved)
     with pytest.raises(WorkspaceValidationError):
         resolve_write_path(reserved)
+
+
+@pytest.mark.parametrize(
+    "long_path",
+    [
+        pytest.param("a" * (MAX_WRITE_PATH_BYTES + 1), id="ascii"),
+        pytest.param("é" * (MAX_WRITE_PATH_BYTES // 2 + 1), id="two-byte"),
+    ],
+)
+def test_a_path_longer_than_the_write_bound_is_refused(long_path: str) -> None:
+    with pytest.raises(WorkspaceValidationError):
+        resolve_write_path(long_path)
+
+
+def test_a_file_written_at_the_bound_can_still_be_archived() -> None:
+    path = resolve_write_path("a" * MAX_WRITE_PATH_BYTES)
+    service = ArtifactService(client=object(), public_client=object(), bucket="b")
+
+    archived_key = service._key(
+        "0b6f5a4e-2c1d-4e8f-9a7b-3c5d6e7f8a9b", f".trash/20261001T120000.000000Z/{path}"
+    )
+
+    assert len(archived_key.encode()) <= 1024
 
 
 @pytest.mark.asyncio

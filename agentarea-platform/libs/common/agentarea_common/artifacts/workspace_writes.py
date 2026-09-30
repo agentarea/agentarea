@@ -20,6 +20,11 @@ from .workspace import (
 
 MAX_UPLOADS_PER_PLAN = 100
 
+# A written file must stay archivable: ``workspaces/{uuid}/`` (48 bytes) plus the
+# ``.trash/{%Y%m%dT%H%M%S.%fZ}/`` header (31 bytes) leaves 945 of S3's 1024-byte
+# key for the path; 900 keeps headroom and fits ``artifact_events.path`` too.
+MAX_WRITE_PATH_BYTES = 900
+
 # ``staging/`` holds half-finished attachment uploads, ``tasks/`` is the
 # task-owned surface reached through committed manifests, and ``.trash/`` holds
 # archived files that only the restore endpoint may resurrect.
@@ -54,6 +59,10 @@ def resolve_write_path(path: str, filename: str = "") -> str:
     if not path:
         path = PurePosixPath(filename or "unnamed").name or "unnamed"
     resolved = normalize_workspace_path(path)
+    if len(resolved.encode()) > MAX_WRITE_PATH_BYTES:
+        raise WorkspaceValidationError(
+            f"workspace path exceeds {MAX_WRITE_PATH_BYTES} bytes of UTF-8"
+        )
     if is_reserved_path(resolved):
         raise WorkspaceValidationError(
             f"{resolved!r} is a reserved prefix and cannot be written directly"

@@ -27,6 +27,7 @@ from agentarea_common.artifacts import (
     ArtifactIntegrityError,
     ArtifactService,
     DbArtifactEventRecorder,
+    InvalidArtifactPathError,
     WorkspaceConflictError,
     WorkspaceRepository,
     WorkspaceValidationError,
@@ -445,7 +446,11 @@ async def delete_workspace_file(
         recorder=DbArtifactEventRecorder(),
         actor=ArtifactActor(user_id=user_context.user_id),
     )
-    if not await svc.exists(user_context.workspace_id, clean):
+    try:
+        exists = await svc.exists(user_context.workspace_id, clean)
+    except InvalidArtifactPathError:
+        exists = False
+    if not exists:
         raise HTTPException(status_code=404, detail="File not found")
     archived_path = await svc.archive(user_context.workspace_id, clean)
     return ArchivedFileResponse(path=clean, archived_path=archived_path)
@@ -474,7 +479,10 @@ async def restore_workspace_file(
         recorder=DbArtifactEventRecorder(),
         actor=ArtifactActor(user_id=user_context.user_id),
     )
-    await svc.copy(user_context.workspace_id, clean, original)
+    try:
+        await svc.copy(user_context.workspace_id, clean, original)
+    except InvalidArtifactPathError:
+        raise HTTPException(status_code=404, detail="File not found") from None
     await svc.delete(user_context.workspace_id, clean)
     return RestoredFileResponse(path=original, restored_from=clean)
 
@@ -538,7 +546,12 @@ async def stream_workspace_file(
             body, content_type, size = await _get_artifact_service().stream(
                 user_context.workspace_id, file_path
             )
-    except (ArtifactIntegrityError, FileNotFoundError, WorkspaceValidationError):
+    except (
+        ArtifactIntegrityError,
+        FileNotFoundError,
+        InvalidArtifactPathError,
+        WorkspaceValidationError,
+    ):
         raise HTTPException(status_code=404, detail="File not found") from None
 
     filename = PurePosixPath(file_path).name or "file.bin"
@@ -571,7 +584,7 @@ async def download_workspace_file(
             exists = not is_reserved_path(file_path) and await _get_artifact_service().exists(
                 user_context.workspace_id, file_path
             )
-    except WorkspaceValidationError:
+    except (InvalidArtifactPathError, WorkspaceValidationError):
         exists = False
     if not exists:
         raise HTTPException(status_code=404, detail="File not found")

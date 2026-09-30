@@ -42,6 +42,8 @@ from agentarea_common.exceptions.errors import AppError
 logger = logging.getLogger(__name__)
 
 _WORKSPACE_PREFIX = "workspaces"
+# S3 rejects a longer key with KeyTooLongError; counted in UTF-8 bytes, not characters.
+_MAX_KEY_BYTES = 1024
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 # Archived files stay in the workspace under this prefix instead of being
@@ -51,7 +53,7 @@ TRASH_PREFIX = ".trash/"
 
 
 class InvalidArtifactPathError(AppError, ValueError):
-    """A path that cannot name an object: a control character or a ``..`` segment."""
+    """A path that cannot name an object: a control character, a ``..`` segment, or too long."""
 
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     code = "invalid_artifact_path"
@@ -161,7 +163,12 @@ class ArtifactService:
             raise InvalidArtifactPathError(f"path may not contain '..' segments: {path!r}")
         if any(ord(character) < 0x20 or ord(character) == 0x7F for character in clean):
             raise InvalidArtifactPathError(f"path may not contain control characters: {path!r}")
-        return f"{_WORKSPACE_PREFIX}/{workspace_id}/{clean}"
+        key = f"{_WORKSPACE_PREFIX}/{workspace_id}/{clean}"
+        if len(key.encode()) > _MAX_KEY_BYTES:
+            raise InvalidArtifactPathError(
+                f"path is too long: its storage key exceeds {_MAX_KEY_BYTES} bytes"
+            )
+        return key
 
     def _prefix(self, workspace_id: str, path: str = "") -> str:
         if not workspace_id:
