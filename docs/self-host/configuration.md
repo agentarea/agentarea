@@ -270,6 +270,16 @@ embedded by `WEBAPP_PUBLIC_ORIGIN`. With `APPS_SANDBOX_ORIGIN` empty, or equal
 to the webapp origin, the Apps page lists apps but opens none. The ingress side
 is in [networking](/self-host/networking).
 
+Error reporting to Sentry (or a Sentry-compatible server such as GlitchTip) is
+off until you set `SENTRY_DSN` through `frontend.envVars`; `SENTRY_ENVIRONMENT`
+labels the events. Both are read at runtime, so one image serves every
+deployment. The frontend reports browser errors, errors caught by the page error
+boundaries, and server rendering and server action failures. Browser reports go
+through the frontend's own `/api/monitoring` route, which forwards only to the
+configured DSN and does not pass on the client IP. Events carry no user,
+cookies, headers or request bodies, and URLs lose their query string and
+fragment, which can hold invitation tokens and login flow ids.
+
 ### Application secrets (group `application`)
 
 | Variable | Helm value | Default |

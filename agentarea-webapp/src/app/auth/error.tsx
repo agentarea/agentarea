@@ -1,5 +1,6 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ErrorFallback } from "@/components/ui/error-fallback";
@@ -15,6 +16,8 @@ export default function AuthError({
 
   useEffect(() => {
     console.error("[Auth Error]:", error);
+    // A digest means a server failure onRequestError already reported.
+    if (!error.digest) Sentry.captureException(error);
   }, [error]);
 
   return (
