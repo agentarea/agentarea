@@ -19,6 +19,11 @@ import {
   type RegistryItem,
   type SortMode,
 } from "../bundles/components/catalog-data";
+import {
+  catalogSections,
+  SECTION_SOURCE_SIZE,
+  showsSections,
+} from "../bundles/components/catalog-sections";
 import CatalogGallery, {
   ExplorePendingProvider,
   ExploreSortSelect,
@@ -68,8 +73,22 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         ? "table"
         : "grid";
 
-  const { items, total, categories, protocols, error, status } =
-    await browseCatalog({
+  // The unfiltered catalog opens on Recommended / Popular shelves above the
+  // full list. They are picked from the head of the recommended order, which
+  // for most types is the first page itself; skills need a longer head.
+  const withSections = showsSections({
+    query: query ?? "",
+    category,
+    protocol,
+    sort,
+    all: ALL,
+  });
+  const sourceSize = SECTION_SOURCE_SIZE[type];
+  const [
+    { items, total, categories, protocols, error, status },
+    sectionSource,
+  ] = await Promise.all([
+    browseCatalog({
       registryType: REGISTRY_TYPE[type],
       q: query,
       category,
@@ -77,11 +96,30 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       sort,
       limit: PAGE,
       offset: 0,
-    });
+    }),
+    withSections && sourceSize > PAGE
+      ? browseCatalog({
+          registryType: REGISTRY_TYPE[type],
+          sort,
+          limit: sourceSize,
+          offset: 0,
+        })
+      : null,
+  ]);
   const tBundle = await getTranslations("BundleInstall");
   const entries: CatalogEntry[] = (items as RegistryItem[]).map((it) =>
     normalize(type, it)
   );
+  const sections = withSections
+    ? catalogSections(
+        type,
+        sectionSource
+          ? (sectionSource.items as RegistryItem[]).map((it) =>
+              normalize(type, it)
+            )
+          : entries
+      )
+    : [];
 
   return (
     // Provider wraps both the subheader (type tabs trigger the transition) and
@@ -115,6 +153,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
               : null
           }
           initialView={initialView}
+          initialSections={sections}
         />
       </ContentBlock>
     </ExplorePendingProvider>
