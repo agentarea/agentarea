@@ -56,13 +56,25 @@ class ObjectStore:
         return "https://store.example/put"
 
 
-def _artifact_service() -> ArtifactService:
-    store = ObjectStore()
+class StoredObjects(ObjectStore):
+    """Every key within the limit exists, as an archived file does in the trash."""
+
+    def head_object(self, *, Key, **_):
+        self._check(Key, "HeadObject")
+        return {}
+
+    def copy_object(self, *, Key, CopySource, **_):
+        self._check(CopySource["Key"], "CopyObject")
+        self._check(Key, "CopyObject")
+
+
+def _artifact_service(store: ObjectStore | None = None) -> ArtifactService:
+    store = store or ObjectStore()
     return ArtifactService(client=store, public_client=store, bucket="artifacts")
 
 
-def _client(monkeypatch) -> AsyncClient:
-    service = _artifact_service()
+def _client(monkeypatch, store: ObjectStore | None = None) -> AsyncClient:
+    service = _artifact_service(store)
     monkeypatch.setattr(files, "ArtifactService", lambda **kwargs: service)
     monkeypatch.setattr(files, "_get_artifact_service", lambda: service)
     app = FastAPI()
@@ -169,3 +181,25 @@ async def test_the_mcp_files_tool_reports_a_too_long_path_as_not_found(
         result = json.loads(await getattr(files_toolset.FilesToolset(), tool)(path=path))
 
     assert result["error"] == "File not found"
+
+
+@pytest.mark.asyncio
+async def test_a_file_archived_before_the_write_bound_can_be_restored(monkeypatch) -> None:
+    original = "a" * 920
+    async with _client(monkeypatch, StoredObjects()) as client:
+        response = await client.post(
+            f"/v1/workspaces/acme/files/restore/.trash/20261001T120000.000000Z/{original}"
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["path"] == original
+
+
+@pytest.mark.asyncio
+async def test_restoring_an_archive_that_does_not_exist_is_not_found(monkeypatch) -> None:
+    async with _client(monkeypatch) as client:
+        response = await client.post(
+            "/v1/workspaces/acme/files/restore/.trash/20261001T120000.000000Z/notes.md"
+        )
+
+    assert response.status_code == 404, response.text

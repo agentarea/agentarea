@@ -475,19 +475,14 @@ async def restore_workspace_file(
     clean = file_path.lstrip("/")
     if not clean.startswith(TRASH_PREFIX):
         raise HTTPException(status_code=400, detail="Not an archived file")
-    # .trash/{timestamp}/{original path} — drop the two-segment archive header.
-    original = "/".join(PurePosixPath(clean).parts[2:])
-    if not original:
-        raise HTTPException(status_code=400, detail="Archived path carries no original path")
     svc = ArtifactService(
         recorder=DbArtifactEventRecorder(),
         actor=ArtifactActor(user_id=user_context.user_id),
     )
     try:
-        await svc.copy(user_context.workspace_id, clean, original)
-    except InvalidArtifactPathError:
+        original = await svc.restore(user_context.workspace_id, clean)
+    except (FileNotFoundError, InvalidArtifactPathError):
         raise HTTPException(status_code=404, detail="File not found") from None
-    await svc.delete(user_context.workspace_id, clean)
     return RestoredFileResponse(path=original, restored_from=clean)
 
 

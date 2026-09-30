@@ -18,6 +18,7 @@ import tempfile
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import PurePosixPath
 from typing import Any
 
 from botocore.exceptions import ClientError
@@ -399,6 +400,24 @@ class ArtifactService:
         await asyncio.to_thread(_call)
         await self._record(workspace_id, clean, ACTION_ARCHIVED)
         return archived_path
+
+    async def restore(self, workspace_id: str, archived_path: str) -> str:
+        """Move an archived file back to the path it was archived from and return that path.
+
+        The file already lived there, so the path is held to the key bound only:
+        a file archived before the write bound existed must still come back.
+        """
+        clean = archived_path.lstrip("/")
+        # .trash/{timestamp}/{original path} — drop the two-segment archive header.
+        parts = PurePosixPath(clean).parts if clean.startswith(TRASH_PREFIX) else ()
+        original = "/".join(parts[2:])
+        if not original:
+            raise InvalidArtifactPathError(f"not an archived path: {archived_path!r}")
+        if not await self.exists(workspace_id, clean):
+            raise FileNotFoundError(clean)
+        await self._copy_object(self._key(workspace_id, clean), self._key(workspace_id, original))
+        await self.delete(workspace_id, clean)
+        return original
 
     async def list(
         self,

@@ -83,6 +83,7 @@ async def test_a_write_past_the_archivable_bound_is_refused(path: str) -> None:
 class RecordingS3Client:
     def __init__(self) -> None:
         self.copied: list[tuple[str, str]] = []
+        self.deleted: list[str] = []
 
     def head_object(self, **_):
         return {}
@@ -90,8 +91,8 @@ class RecordingS3Client:
     def copy_object(self, *, Key, CopySource, **_):
         self.copied.append((CopySource["Key"], Key))
 
-    def delete_object(self, **_):
-        return None
+    def delete_object(self, *, Key, **_):
+        self.deleted.append(Key)
 
 
 async def test_a_file_written_at_the_bound_can_still_be_archived() -> None:
@@ -104,3 +105,18 @@ async def test_a_file_written_at_the_bound_can_still_be_archived() -> None:
     assert client.copied == [
         (f"workspaces/{WORKSPACE_ID}/{path}", f"workspaces/{WORKSPACE_ID}/{archived}")
     ]
+
+
+async def test_a_file_archived_past_the_write_bound_can_still_be_restored() -> None:
+    client = RecordingS3Client()
+    service = ArtifactService(client=client, public_client=client, bucket="b")
+    original = "a" * (MAX_WRITE_PATH_BYTES + 20)
+    archived = f".trash/20261001T120000.000000Z/{original}"
+
+    restored = await service.restore(WORKSPACE_ID, archived)
+
+    assert restored == original
+    assert client.copied == [
+        (f"workspaces/{WORKSPACE_ID}/{archived}", f"workspaces/{WORKSPACE_ID}/{original}")
+    ]
+    assert client.deleted == [f"workspaces/{WORKSPACE_ID}/{archived}"]
