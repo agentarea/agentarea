@@ -116,7 +116,8 @@
             "pages": [
               "guides/agents/create-and-configure",
               "guides/agents/choose-a-model",
-              "guides/agents/attach-skills"
+              "guides/agents/attach-skills",
+              "guides/agents/delegate-to-another-workspace"
             ]
           },
           {
