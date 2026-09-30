@@ -5724,6 +5724,7 @@ export const zListSkillsV1SkillsGetQuery = z.object({
   source_type: z.string().nullish(),
   network_scope: z.string().nullish(),
   from_registry: z.boolean().nullish(),
+  include_catalog: z.boolean().optional().default(true),
   page: z.number().int().gte(1).lte(1000000).optional().default(1),
   page_size: z.number().int().gte(1).lte(100).optional().default(50),
   search: z.string().nullish(),

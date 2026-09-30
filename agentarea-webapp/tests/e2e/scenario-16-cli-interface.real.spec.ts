@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import {
+  apiBaseURL,
   createKratosUser,
   deleteKratosUser,
   type AuthedUser,
@@ -53,27 +54,37 @@ test.describe("Scenario 16 MP - use the CLI external interface", () => {
       await execFileAsync("pnpm", ["--dir", "../agentarea-cli", "install"], {
         timeout: 90_000,
       });
+      await execFileAsync(
+        "pnpm",
+        ["--filter", "@agentarea/api-client", "run", "build"],
+        { timeout: 90_000 }
+      );
       await execFileAsync("pnpm", ["--dir", "../agentarea-cli", "build"], {
         timeout: 90_000,
       });
     } catch (error) {
       test.skip(
         true,
-        `BLOCKED-ENV: pnpm --dir ../agentarea-cli install && pnpm --dir ../agentarea-cli build failed: ${
+        `BLOCKED-ENV: installing and building ../agentarea-cli and its @agentarea/api-client failed: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
     }
 
     const { stdout, stderr } = await execFileAsync(
-      "pnpm",
-      ["--dir", "../agentarea-cli", "exec", "agentarea", "agents", "list"],
+      "node",
+      [
+        `../agentarea-cli/${pkg.bin.agentarea}`,
+        "agents",
+        "list",
+        `--workspace=${user.workspace}`,
+      ],
       {
         timeout: 25_000,
         env: {
           ...process.env,
           AGENTAREA_TOKEN: user.jwt,
-          AGENTAREA_API_URL: "http://localhost:8000",
+          API_URL: apiBaseURL,
         },
       }
     );

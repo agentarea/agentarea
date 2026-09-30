@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  appPath,
   createKratosUser,
   deleteKratosUser,
   installBrowserSession,
@@ -57,9 +58,9 @@ test.describe("Scenario 09 MP - create and attach a skill", () => {
 
     await page.getByText(name, { exact: false }).click();
     await expect
-      .poll(() => new URL(page.url()).pathname, { timeout: 15_000 })
+      .poll(() => appPath(page), { timeout: 15_000 })
       .toMatch(/^\/skills\/[^/]+$/);
-    skillId = new URL(page.url()).pathname.split("/").pop();
+    skillId = appPath(page).split("/").pop();
 
     await page.getByRole("button", { name: /edit/i }).click();
     await page.getByRole("textbox").fill(`# ${name}\n\n${edited}`);

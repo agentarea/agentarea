@@ -519,6 +519,7 @@ class SkillService:
         network_scope: str | None = None,
         from_registry: bool | None = None,
         ids: set[str] | None = None,
+        include_catalog: bool = True,
     ) -> tuple[list[Skill], int]:
         """List skills with pagination metadata, merging catalog projections.
 
@@ -545,7 +546,7 @@ class SkillService:
 
         # Catalog items are registry-backed by definition, so an explicit
         # "not from a registry" filter excludes the whole catalog half.
-        if from_registry is False:
+        if from_registry is False or not include_catalog:
             return tenant_page, tenant_total
 
         catalog_rows, catalog_total = await self._get_catalog_repository().list_page(

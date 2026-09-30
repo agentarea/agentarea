@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  appPath,
   createKratosUser,
   deleteKratosUser,
   installBrowserSession,
@@ -53,20 +54,21 @@ test.describe("Scenario 05 MP - create a policy and verify enforcement", () => {
     await page.getByRole("button", { name: "Create rule" }).click();
 
     await expect
-      .poll(() => new URL(page.url()).pathname, { timeout: 30_000 })
+      .poll(() => appPath(page), { timeout: 30_000 })
       .toBe("/policies");
 
+    // A new workspace already carries a default monthly budget, so the rule
+    // is found by its amount.
     await page.reload({ waitUntil: "commit" });
-    await expect(page.getByText("Monthly budget")).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.getByText("$17.13")).toBeVisible();
+    const created = page.getByRole("row").filter({ hasText: "$17.13" });
+    await expect(created).toHaveCount(1, { timeout: 15_000 });
+    await expect(created.getByText("Monthly budget")).toBeVisible();
 
-    await page.getByText("Monthly budget").click();
+    await created.getByText("Monthly budget").click();
     await expect
-      .poll(() => new URL(page.url()).pathname, { timeout: 15_000 })
+      .poll(() => appPath(page), { timeout: 15_000 })
       .toMatch(/^\/policies\/[^/]+$/);
-    policyId = new URL(page.url()).pathname.split("/").pop();
+    policyId = appPath(page).split("/").pop();
     // Detail view may format the amount without a leading "$" - match the value.
     await expect(page.getByText(/17\.13/).first()).toBeVisible({ timeout: 15_000 });
   });

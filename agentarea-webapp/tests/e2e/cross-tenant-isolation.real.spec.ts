@@ -1,10 +1,11 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import {
-  apiBaseURL,
+  apiURL,
   authedRequest,
   createKratosUser,
   deleteKratosUser,
   responseBody,
+  workspaceApiPath,
   type AuthedUser,
 } from "./helpers/real-stack";
 import {
@@ -30,6 +31,10 @@ import {
  * the negative (stranger B cannot) so a blanket "deny everything" bug can't make
  * these pass vacuously. We accept either 403 or 404 for denials - returning 404
  * to avoid leaking existence is a legitimate ReBAC choice - but never 200.
+ *
+ * The workspace is named in the API path, so every denial is checked twice: Bob
+ * addressing Alice's resource from his own workspace, and Bob naming Alice's
+ * workspace in the path.
  */
 test.describe("Cross-tenant isolation - workspace B cannot touch workspace A", () => {
   test.skip(!runRealStack, "Set PLAYWRIGHT_REAL_STACK=1");
@@ -67,13 +72,18 @@ test.describe("Cross-tenant isolation - workspace B cannot touch workspace A", (
     label: string,
     options: Record<string, unknown> = {}
   ) {
-    const res = await authedRequest(request, user, method, path, options);
-    expect(
-      DENIED,
-      `${label}: expected 403/404, got ${res.status()} ${JSON.stringify(
-        await responseBody(res)
-      )}`
-    ).toContain(res.status());
+    for (const [scope, target] of [
+      ["own workspace", path],
+      ["owner's workspace", workspaceApiPath(alice.workspace, path)],
+    ]) {
+      const res = await authedRequest(request, user, method, target, options);
+      expect(
+        DENIED,
+        `${label} via ${scope}: expected 403/404, got ${res.status()} ${JSON.stringify(
+          await responseBody(res)
+        )}`
+      ).toContain(res.status());
+    }
   }
 
   test("Bob cannot read Alice's agent, but Alice can", async ({ request }) => {
@@ -102,6 +112,17 @@ test.describe("Cross-tenant isolation - workspace B cannot touch workspace A", (
     expect(strangerIds, "Bob's list must not leak Alice's agent").not.toContain(
       agent.id
     );
+
+    const foreignList = await authedRequest(
+      request,
+      bob,
+      "get",
+      workspaceApiPath(alice.workspace, "/v1/agents/")
+    );
+    expect(
+      DENIED,
+      `Bob listing Alice's workspace: expected 403/404, got ${foreignList.status()}`
+    ).toContain(foreignList.status());
   });
 
   test("Bob cannot delete Alice's agent, and it survives the attempt", async ({
@@ -170,7 +191,7 @@ test.describe("Cross-tenant isolation - workspace B cannot touch workspace A", (
   });
 
   test("Unauthenticated requests are rejected with 401", async ({ request }) => {
-    const res = await request.get(`${apiBaseURL}/v1/agents/${agent.id}`);
+    const res = await request.get(apiURL(alice, `/v1/agents/${agent.id}`));
     expect(
       res.status(),
       `unauthenticated read must be 401, got ${res.status()}`

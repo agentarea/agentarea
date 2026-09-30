@@ -80,7 +80,7 @@ test.describe("Detail-route smoke (seeded via API, no AI)", () => {
       description: "smoke test server",
     });
     await installBrowserSession(context, user);
-    await assertRenders(page, `/mcp-servers/${id}`);
+    await assertRenders(page, `/connections/create/${id}`);
   });
 
   test("skill detail renders", async ({ request, context, page }) => {
@@ -98,7 +98,7 @@ test.describe("Detail-route smoke (seeded via API, no AI)", () => {
     const id = await seed(request, "/v1/policies", {
       subject_type: "workspace",
       subject_id: user.identityId,
-      target: "*",
+      target: "tool:e2e_smoke",
       effect: "allow",
     });
     await installBrowserSession(context, user);

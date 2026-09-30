@@ -1,5 +1,10 @@
-import type { BrowserContext, APIRequestContext } from "@playwright/test";
+import type { BrowserContext, APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
+import {
+  isWorkspaceRoute,
+  workspacePath,
+} from "../../../src/lib/workspace-routes";
+import { isPersonalWorkspace, type Workspace } from "../../../src/lib/workspaces";
 
 export const apiBaseURL =
   process.env.PLAYWRIGHT_API_BASE_URL ?? process.env.API_URL ?? "http://localhost:8000";
@@ -21,6 +26,7 @@ export type AuthedUser = {
   email: string;
   jwt: string;
   sessionCookie: { name: string; value: string };
+  workspace: string;
 };
 
 export function uniqueLabel(prefix: string) {
@@ -132,13 +138,51 @@ export async function createKratosUser(prefix: string): Promise<AuthedUser> {
   );
   expect(whoami.response.ok).toBeTruthy();
   expect(whoami.json.identity.id).toBe(identityId);
+  const jwt = whoami.json.tokenized as string;
 
   return {
     identityId,
     email,
-    jwt: whoami.json.tokenized,
+    jwt,
     sessionCookie: { name: "ory_kratos_session", value: sessionCookieValue ?? "" },
+    workspace: await personalWorkspaceSlug(jwt),
   };
+}
+
+async function personalWorkspaceSlug(jwt: string) {
+  const listed = await fetchJson(`${apiBaseURL}/v1/workspaces`, {
+    headers: { accept: "application/json", Authorization: `Bearer ${jwt}` },
+  });
+  expect(listed.response.ok, `GET /v1/workspaces: ${listed.response.status}`).toBeTruthy();
+  const personal = (listed.json as Workspace[]).find(isPersonalWorkspace);
+  if (!personal) {
+    throw new Error(`No personal workspace in ${JSON.stringify(listed.json)}`);
+  }
+  return personal.slug;
+}
+
+// API paths that name no workspace: user-level routes and the id-addressed
+// A2A / MCP-proxy / OAuth-callback contracts. Every other /v1 path is scoped.
+const UNSCOPED_API_PATHS = [
+  /^\/v1\/workspaces(?=[/?]|$)/,
+  /^\/v1\/invitations\//,
+  /^\/v1\/pricing\//,
+  /^\/v1\/agents\/[^/]+\/(?:\.well-known|a2a)(?=[/?]|$)/,
+  /^\/v1\/mcp\//,
+  /^\/v1\/mcp-oauth\/callback/,
+  /^\/v1\/connections\/oauth\/callback/,
+];
+
+/** `/v1/agents/` → `/v1/workspaces/{slug}/agents/`; unscoped paths unchanged. */
+export function workspaceApiPath(slug: string, path: string) {
+  if (!path.startsWith("/v1/") || UNSCOPED_API_PATHS.some((re) => re.test(path))) {
+    return path;
+  }
+  return `/v1/workspaces/${encodeURIComponent(slug)}${path.slice("/v1".length)}`;
+}
+
+export function apiURL(user: AuthedUser, path: string) {
+  return `${apiBaseURL}${workspaceApiPath(user.workspace, path)}`;
 }
 
 export async function deleteKratosUser(identityId: string) {
@@ -147,10 +191,34 @@ export async function deleteKratosUser(identityId: string) {
   }).catch(() => undefined);
 }
 
+const sessionWorkspaces = new WeakMap<BrowserContext, string>();
+
+function sessionWorkspace(page: Page) {
+  const slug = sessionWorkspaces.get(page.context());
+  if (!slug) {
+    throw new Error("No browser session installed: call installBrowserSession first");
+  }
+  return slug;
+}
+
+/** An in-app path as the browser session's workspace serves it: `/agents` → `/w/{slug}/agents`. */
+export function appHref(page: Page, route: string) {
+  return isWorkspaceRoute(route) ? workspacePath(sessionWorkspace(page), route) : route;
+}
+
+/** The current pathname with the session's own `/w/{slug}` prefix removed. */
+export function appPath(page: Page) {
+  const pathname = new URL(page.url()).pathname;
+  const prefix = workspacePath(sessionWorkspace(page), "/");
+  if (pathname === prefix) return "/";
+  return pathname.startsWith(`${prefix}/`) ? pathname.slice(prefix.length) : pathname;
+}
+
 export async function installBrowserSession(
   context: BrowserContext,
   user: AuthedUser
 ) {
+  sessionWorkspaces.set(context, user.workspace);
   await context.addCookies([
     {
       name: user.sessionCookie.name,
@@ -171,7 +239,7 @@ export async function authedRequest(
   path: string,
   options: Record<string, unknown> = {}
 ) {
-  return request[method](`${apiBaseURL}${path}`, {
+  return request[method](apiURL(user, path), {
     ...options,
     headers: {
       Authorization: `Bearer ${user.jwt}`,
@@ -187,7 +255,7 @@ export async function authedFetch(
   path: string,
   options: Record<string, unknown> = {}
 ) {
-  return request.fetch(`${apiBaseURL}${path}`, {
+  return request.fetch(apiURL(user, path), {
     ...options,
     method,
     headers: {

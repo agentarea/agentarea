@@ -38,14 +38,15 @@ test.describe("Scenario 13 MP - inspect audit and dashboard activity", () => {
     // Outcome: the audit log records a real governance event (seedAgent creates
     // the agent -> an `agent.create` event), and it is DURABLE: still present
     // after a reload (not stream-only). This is the actual FR being verified.
+    // The log shows the verb and resource type; the raw action is the title.
+    const agentCreated = page
+      .getByRole("row")
+      .filter({ hasText: agent?.name ?? "" })
+      .getByTitle("agent.create", { exact: true });
     await gotoCommitted(page, "/settings/audit");
-    await expect(page.getByText("agent.create").first()).toBeVisible({
-      timeout: 15_000,
-    });
+    await expect(agentCreated).toBeVisible({ timeout: 15_000 });
     await page.reload({ waitUntil: "commit" });
-    await expect(page.getByText("agent.create").first()).toBeVisible({
-      timeout: 15_000,
-    });
+    await expect(agentCreated).toBeVisible({ timeout: 15_000 });
 
     await gotoCommitted(page, "/dashboard");
     await expect(page.getByText("Dashboard").first()).toBeVisible({
@@ -55,8 +56,6 @@ test.describe("Scenario 13 MP - inspect audit and dashboard activity", () => {
       timeout: 15_000,
     });
     await gotoCommitted(page, "/settings/audit");
-    await expect(page.getByText("agent.create").first()).toBeVisible({
-      timeout: 15_000,
-    });
+    await expect(agentCreated).toBeVisible({ timeout: 15_000 });
   });
 });

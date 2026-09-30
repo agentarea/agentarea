@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  appPath,
   createKratosUser,
   deleteKratosUser,
   installBrowserSession,
@@ -36,7 +37,7 @@ test.describe("Scenario 08 MP - register an LLM provider and test a model", () =
 
     providerConfigName = uniqueLabel("scenario-08-provider");
 
-    await gotoCommitted(page, "/admin/provider-configs/create");
+    await gotoCommitted(page, "/models/create");
     await page.getByRole("combobox").first().click();
     await page.getByRole("option").first().click();
     await page.locator("#name").fill(providerConfigName);
@@ -53,8 +54,8 @@ test.describe("Scenario 08 MP - register an LLM provider and test a model", () =
     await page.getByRole("button", { name: /create config/i }).click();
 
     await expect
-      .poll(() => new URL(page.url()).pathname, { timeout: 30_000 })
-      .toBe("/admin/provider-configs");
+      .poll(() => appPath(page), { timeout: 30_000 })
+      .toBe("/models");
     await page.reload({ waitUntil: "commit" });
     await expect(
       page.getByText(providerConfigName, { exact: false }),

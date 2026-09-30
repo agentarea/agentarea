@@ -29625,6 +29625,18 @@
             }
           },
           {
+            "description": "Merge in catalog skills not installed in the workspace",
+            "in": "query",
+            "name": "include_catalog",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Merge in catalog skills not installed in the workspace",
+              "title": "Include Catalog",
+              "type": "boolean"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
