@@ -53,13 +53,13 @@ test.describe("Scenario 07 MP - workspace access control, grants, and API keys",
     // FUNCTIONAL OUTCOME: the new key is listed by its name (a fresh user has
     // exactly this one), and survives a reload (persisted, not just the toast).
     await expect(
-      page.getByText(keyName, { exact: false }),
+      page.getByText(keyName, { exact: true }),
       "new API key should appear in the list"
     ).toBeVisible({ timeout: 15_000 });
 
     await page.reload({ waitUntil: "commit" });
     await expect(
-      page.getByText(keyName, { exact: false }),
+      page.getByText(keyName, { exact: true }),
       "API key should persist after reload"
     ).toBeVisible({ timeout: 15_000 });
   });
