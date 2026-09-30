@@ -229,9 +229,12 @@ def _item_scans(nodes: list[dict]) -> list[dict]:
 
 
 def _scoped_to_type(node: dict) -> bool:
-    # A walk over an index that merely contains registry_type still reads the
-    # whole catalog; only a condition on it bounds the scan to one type.
-    return "registry_type" in node.get("Index Cond", "")
+    # The browse-order index, and a condition on its leading registry_type: a
+    # walk over an index that merely contains registry_type still reads the
+    # whole catalog, and any other index cannot yield the sort_key order.
+    return node.get("Index Name") == "ix_registry_items_browse_name" and (
+        "registry_type" in node.get("Index Cond", "")
+    )
 
 
 async def test_the_page_and_its_total_are_read_from_an_index_in_order(seeded):
