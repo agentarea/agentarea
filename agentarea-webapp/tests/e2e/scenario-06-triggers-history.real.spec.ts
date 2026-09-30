@@ -68,8 +68,8 @@ test.describe("Scenario 06 MP - create cron and webhook triggers", () => {
       .getByPlaceholder("Text to pass into each task created by this trigger")
       .fill("Cron trigger scenario task");
 
-    // Submit the form by its id rather than fuzzy button text.
-    await page.locator('#create-trigger-form button[type="submit"]').click();
+    // The submit button sits in the page header and names the form by id.
+    await page.locator('button[type="submit"][form="create-trigger-form"]').click();
 
     // On success the form pushes to /triggers and calls router.refresh(), which
     // refetches the list — so the just-created trigger renders without a manual
