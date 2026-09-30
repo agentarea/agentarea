@@ -15214,6 +15214,12 @@ export type ListSkillsV1SkillsGetData = {
          */
         from_registry?: boolean | null;
         /**
+         * Include Catalog
+         *
+         * Merge in catalog skills not installed in the workspace
+         */
+        include_catalog?: boolean;
+        /**
          * Page
          */
         page?: number;

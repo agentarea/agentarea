@@ -270,6 +270,9 @@ async def list_skills(
     source_type: str | None = Query(None, description="Filter by source type"),
     network_scope: str | None = Query(None, description="Filter by network scope"),
     from_registry: bool | None = Query(None, description="Filter registry-created skills"),
+    include_catalog: bool = Query(
+        True, description="Merge in catalog skills not installed in the workspace"
+    ),
 ):
     """List skills in the workspace."""
     skills, total = await skill_service.list_paginated(
@@ -279,6 +282,7 @@ async def list_skills(
         source_type=source_type,
         network_scope=network_scope,
         from_registry=from_registry,
+        include_catalog=include_catalog,
         ids=await readable_resource_ids(user_context.user_id),
     )
     return PaginatedResponse(

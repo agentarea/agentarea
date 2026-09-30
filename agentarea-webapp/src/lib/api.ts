@@ -919,6 +919,7 @@ export async function listSkills(
     ...(options.from_registry !== undefined
       ? { from_registry: options.from_registry }
       : {}),
+    ...(options.paginated ? {} : { include_catalog: false }),
   });
 
   const { data, error } = await sdk.listSkillsV1SkillsGet({

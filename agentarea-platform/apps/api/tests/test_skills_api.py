@@ -142,6 +142,7 @@ async def test_list_skills_returns_metadata_only(async_client, mock_skill_servic
         source_type=None,
         network_scope=None,
         from_registry=None,
+        include_catalog=True,
         ids={str(skill_one.id), str(skill_two.id)},
     )
 
@@ -172,10 +173,22 @@ async def test_list_skills_accepts_pagination_and_search(async_client, mock_skil
         source_type="github",
         network_scope="egress",
         from_registry=False,
+        include_catalog=True,
         # The readable set is a filter like any other, and it reaches SQL rather
         # than trimming the page afterwards, so `total` stays truthful.
         ids={"b1f0a3d6-0000-4000-8000-000000000001"},
     )
+
+
+@pytest.mark.asyncio
+async def test_list_skills_can_leave_out_the_catalog(async_client, mock_skill_service, graph):
+    mock_skill_service.list_paginated.return_value = ([], 0)
+    graph.list_objects.return_value = []
+
+    response = await async_client.get("/v1/workspaces/acme/skills?include_catalog=false")
+
+    assert response.status_code == 200
+    assert mock_skill_service.list_paginated.call_args.kwargs["include_catalog"] is False
 
 
 @pytest.mark.asyncio
