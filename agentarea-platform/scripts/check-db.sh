@@ -50,6 +50,8 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #     preset's skill key is matched against hashed catalog names with LIKE.
 #   MCP spec list: tenant specs and catalog items are paged, filtered and
 #     looked up by id in SQL; the catalog is never materialized per request.
+#   skill list: the catalog half, its total and the fork update check are
+#     served by the partial browse indexes and the primary key, never a scan.
 #   tenant scope: every workspace-scoped model stays in its workspace through
 #     the ORM hook, against the migrated schema rather than create_all.
 #   task events and conversation: a retried publish batch stores each event once
@@ -70,6 +72,7 @@ PY_SUITES=(
   libs/registry/tests/test_catalog_browse_plans_db.py
   libs/agents/tests/test_catalog_presets_db.py
   libs/mcp/tests/test_mcp_spec_list_db.py
+  libs/agents/tests/test_catalog_skill_list_db.py
   tests/unit/test_tenant_scope_isolation.py
   libs/tasks/tests/test_task_event_idempotency_db.py
   libs/tasks/tests/test_task_conversation_db.py

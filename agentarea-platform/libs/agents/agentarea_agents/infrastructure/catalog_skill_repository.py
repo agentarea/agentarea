@@ -5,10 +5,14 @@ table; they are ``registry_items`` of ``registry_type='skills'`` whose full
 definition lives in the item's ``spec`` JSONB. This repository reads those
 catalog items so the skill service can project them as read-only skills.
 
-It deliberately uses raw SQL against ``registry_items`` / ``registries`` to avoid
-a cross-library dependency on ``agentarea-registry``. The catalog is global
+It deliberately uses raw SQL against ``registry_items`` to avoid a
+cross-library dependency on ``agentarea-registry``. The catalog is global
 infrastructure (ADR-003): registries/registry_items are not workspace-scoped, so
 every tenant reads the same built-in skill definitions with no workspace filter.
+
+Every read filters on the registry type and active flag each item carries, as
+the bare ``registry_active`` column: that is the predicate of the partial browse
+indexes, and joining ``registries`` instead leaves the planner no index to use.
 """
 
 from __future__ import annotations
@@ -17,7 +21,7 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from agentarea_common.auth.context import UserContext
 from sqlalchemy import bindparam, text
@@ -55,7 +59,6 @@ class CatalogSkillSummary:
     source_type: str
     source_url: str | None
     network_scope: str
-    installed_version: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -74,11 +77,10 @@ class CatalogSkillRepository:
             "rii.installed_entity_id, rii.installed_version, "
             "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
-            "JOIN registries r ON r.id = ri.registry_id "
             "LEFT JOIN registry_item_installs rii "
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
-            "WHERE r.registry_type = 'skills' "
+            "WHERE ri.registry_type = 'skills' AND ri.registry_active "
             "ORDER BY ri.name"
         )
         result = await self.session.execute(query, {"workspace_id": self.user_context.workspace_id})
@@ -96,24 +98,22 @@ class CatalogSkillRepository:
     ) -> tuple[list[CatalogSkillSummary], int]:
         """Page the catalog in SQL, returning ``(rows, total_matching)``.
 
-        ``exclude_item_ids`` drops items the workspace has already forked, so
-        the tenant copy shadows them exactly as the merged list expects.
+        Pages in the browse order (``sort_key``) so the page and its total are
+        read from the partial browse indexes. ``exclude_item_ids`` drops items
+        the workspace has already forked, so the tenant copy shadows them
+        exactly as the merged list expects.
         """
-        where = ["r.registry_type = 'skills'"]
-        params: dict[str, Any] = {"workspace_id": self.user_context.workspace_id}
+        where = ["ri.registry_type = 'skills'", "ri.registry_active"]
+        params: dict[str, Any] = {}
+        expanding: list[str] = []
 
         if exclude_item_ids:
-            where.append("ri.id::text NOT IN :exclude_ids")
-            params["exclude_ids"] = tuple(str(i) for i in exclude_item_ids)
+            where.append("ri.id NOT IN :exclude_ids")
+            params["exclude_ids"] = [UUID(str(i)) for i in exclude_item_ids]
+            expanding.append("exclude_ids")
         if search:
-            # Search the same description the row projects, or an item whose
-            # description lives only in `spec` is unfindable by the very text
-            # the list shows for it.
-            where.append(
-                "(ri.name ILIKE :search "
-                "OR COALESCE(ri.description, ri.spec->>'description') ILIKE :search "
-                "OR ri.spec->>'source_url' ILIKE :search)"
-            )
+            # The columns the trigram indexes cover, as /explore searches.
+            where.append("(ri.name ILIKE :search OR ri.description ILIKE :search)")
             params["search"] = f"%{search.strip()}%"
         if source_type:
             where.append("COALESCE(ri.spec->>'source_type', 'content') = :source_type")
@@ -122,35 +122,35 @@ class CatalogSkillRepository:
             where.append("COALESCE(ri.spec->>'network_scope', 'private') = :network_scope")
             params["network_scope"] = network_scope
 
+        # Only the fixed clauses above are interpolated; every value is bound.
         where_sql = " AND ".join(where)
-        joins = (
-            "FROM registry_items ri "
-            "JOIN registries r ON r.id = ri.registry_id "
-            "LEFT JOIN registry_item_installs rii "
-            "  ON rii.registry_item_id = ri.id "
-            " AND rii.workspace_id = :workspace_id "
-            f"WHERE {where_sql}"
-        )
+        bind = [bindparam(name, expanding=True) for name in expanding]
+        total = (
+            await self.session.execute(
+                text(
+                    f"SELECT COUNT(*) FROM registry_items ri WHERE {where_sql}"  # noqa: S608
+                ).bindparams(*bind),
+                params,
+            )
+        ).scalar_one()
+        if limit <= 0 or offset >= total:
+            return [], total
 
-        count_stmt = self._bind(text(f"SELECT COUNT(*) {joins}"), params)
-        total = (await self.session.execute(count_stmt, params)).scalar_one()
-
-        rows_stmt = self._bind(
+        result = await self.session.execute(
             text(
-                "SELECT ri.id, ri.name, "
+                "SELECT ri.id, ri.name, "  # noqa: S608
                 "COALESCE(ri.description, ri.spec->>'description') AS description, "
                 "ri.version, "
                 "COALESCE(ri.spec->>'source_type', 'content') AS source_type, "
                 "ri.spec->>'source_url' AS source_url, "
                 "COALESCE(ri.spec->>'network_scope', 'private') AS network_scope, "
-                "rii.installed_version, ri.created_at, ri.updated_at "
-                f"{joins} "
-                "ORDER BY ri.name, ri.id "
+                "ri.created_at, ri.updated_at "
+                f"FROM registry_items ri WHERE {where_sql} "
+                "ORDER BY ri.sort_key, ri.id "
                 "LIMIT :limit OFFSET :offset"
-            ),
-            params,
+            ).bindparams(*bind),
+            {**params, "limit": limit, "offset": offset},
         )
-        result = await self.session.execute(rows_stmt, {**params, "limit": limit, "offset": offset})
         return [self._row_to_summary(row) for row in result.fetchall()], total
 
     async def versions_for(
@@ -166,27 +166,19 @@ class CatalogSkillRepository:
         stmt = text(
             "SELECT ri.id, ri.version, rii.installed_version "
             "FROM registry_items ri "
-            "JOIN registries r ON r.id = ri.registry_id "
             "LEFT JOIN registry_item_installs rii "
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
-            "WHERE r.registry_type = 'skills' AND ri.id::text IN :item_ids"
+            "WHERE ri.registry_type = 'skills' AND ri.registry_active AND ri.id IN :item_ids"
         ).bindparams(bindparam("item_ids", expanding=True))
         result = await self.session.execute(
             stmt,
             {
                 "workspace_id": self.user_context.workspace_id,
-                "item_ids": tuple(str(i) for i in item_ids),
+                "item_ids": [UUID(str(i)) for i in item_ids],
             },
         )
         return {str(row.id): (row.version, row.installed_version) for row in result.fetchall()}
-
-    @staticmethod
-    def _bind(stmt: Any, params: dict[str, Any]) -> Any:
-        """Mark the id-exclusion parameter as expanding when it is present."""
-        if "exclude_ids" in params:
-            return stmt.bindparams(bindparam("exclude_ids", expanding=True))
-        return stmt
 
     async def get_item(self, item_id: str) -> CatalogSkillItem | None:
         """Get a single catalog skill item by its registry-item id."""
@@ -195,11 +187,10 @@ class CatalogSkillRepository:
             "rii.installed_entity_id, rii.installed_version, "
             "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
-            "JOIN registries r ON r.id = ri.registry_id "
             "LEFT JOIN registry_item_installs rii "
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
-            "WHERE r.registry_type = 'skills' "
+            "WHERE ri.registry_type = 'skills' AND ri.registry_active "
             "AND ri.id = :item_id"
         )
         result = await self.session.execute(
@@ -221,11 +212,10 @@ class CatalogSkillRepository:
             "rii.installed_entity_id, rii.installed_version, "
             "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
-            "JOIN registries r ON r.id = ri.registry_id "
             "LEFT JOIN registry_item_installs rii "
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
-            "WHERE r.registry_type = 'skills' "
+            "WHERE ri.registry_type = 'skills' AND ri.registry_active "
             "AND (ri.name = :key OR ri.name LIKE :prefix) "
             "ORDER BY ri.updated_at DESC, ri.id "
             "LIMIT 1"
@@ -277,7 +267,6 @@ class CatalogSkillRepository:
             source_type=row.source_type,
             source_url=row.source_url,
             network_scope=row.network_scope,
-            installed_version=row.installed_version,
             created_at=created_at,
             updated_at=row.updated_at or created_at,
         )
