@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
+  appHref,
+  appPath,
   createKratosUser,
   deleteKratosUser,
   installBrowserSession,
@@ -57,7 +59,7 @@ test.describe("UI create-flows (deterministic, no AI)", () => {
     test.setTimeout(60_000);
     await installBrowserSession(context, user);
 
-    await page.goto(`${baseURL}/mcp-servers/add`);
+    await page.goto(`${baseURL}${appHref(page, "/connections/add")}`);
     expect(page.url()).not.toMatch(/\/auth\/login/);
 
     const name = `e2e-mcp-${Date.now()}`;
@@ -77,8 +79,8 @@ test.describe("UI create-flows (deterministic, no AI)", () => {
     await expect
       .poll(
         async () => {
-          const path = new URL(page.url()).pathname;
-          if (path !== "/mcp-servers/add") return "redirected";
+          const path = appPath(page);
+          if (path !== "/connections/add") return "redirected";
           const errs = await page
             .locator(".form-error, .text-destructive")
             .allTextContents()
@@ -98,15 +100,10 @@ test.describe("UI create-flows (deterministic, no AI)", () => {
     ).toHaveCount(0);
   });
 
-  // KNOWN BUG (red on purpose): creating an OpenAPI connection through the UI is
-  // broken even though the backend works. Verified directly: POST
-  // /v1/openapi-connections/ with a resolvable base_url (example.com) returns 201
-  // in ~270ms with discovered tools. But this form's submit (server-action path)
-  // never completes - no redirect, no error - so the UI hangs. Separately, on any
-  // backend 422 the form renders the raw FastAPI `detail` array as `{error}`
-  // (add-openapi/form.tsx ~L461) -> "Objects are not valid as a React child" ->
-  // error boundary. (base_url must be a resolvable host; the backend DNS-resolves
-  // it, so non-resolvable hosts 422.)
+  // Regression guard: this form's submit used to never complete (no redirect,
+  // no error) although the API returned 201, and a backend 422 rendered the raw
+  // FastAPI `detail` array as a React child. base_url must be a resolvable host;
+  // the backend DNS-resolves it.
   test("create an OpenAPI connection through the form", async ({
     context,
     page,
@@ -114,7 +111,7 @@ test.describe("UI create-flows (deterministic, no AI)", () => {
     test.setTimeout(60_000);
     await installBrowserSession(context, user);
 
-    await page.goto(`${baseURL}/mcp-servers/add-openapi`);
+    await page.goto(`${baseURL}${appHref(page, "/connections/add-openapi")}`);
     expect(page.url()).not.toMatch(/\/auth\/login/);
 
     // Use the "Paste JSON" mode so the preview is parsed client-side (no
@@ -136,8 +133,8 @@ test.describe("UI create-flows (deterministic, no AI)", () => {
     await expect
       .poll(
         async () => {
-          const path = new URL(page.url()).pathname;
-          if (path !== "/mcp-servers/add-openapi") return "redirected";
+          const path = appPath(page);
+          if (path !== "/connections/add-openapi") return "redirected";
           const errs = await page
             .locator(".text-destructive, .text-amber-600")
             .allTextContents()
@@ -147,7 +144,7 @@ test.describe("UI create-flows (deterministic, no AI)", () => {
         },
         {
           message:
-            "Create Connection should redirect away from the form (currently hangs - server-action never completes although the API returns 201 in ~270ms)",
+            "Create Connection should redirect away from the form on success",
           timeout: 30_000,
         }
       )
@@ -165,7 +162,7 @@ test.describe("UI create-flows (deterministic, no AI)", () => {
     test.setTimeout(60_000);
     await installBrowserSession(context, user);
 
-    await page.goto(`${baseURL}/skills/create`);
+    await page.goto(`${baseURL}${appHref(page, "/skills/create")}`);
     expect(page.url()).not.toMatch(/\/auth\/login/);
 
     const name = `e2e-skill-${Date.now()}`;
@@ -183,7 +180,7 @@ test.describe("UI create-flows (deterministic, no AI)", () => {
     await expect
       .poll(
         async () => {
-          const path = new URL(page.url()).pathname;
+          const path = appPath(page);
           if (path !== "/skills/create") return "redirected";
           const errs = await page
             .locator("[role=status], li[data-state], .text-destructive")

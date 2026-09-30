@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  appPath,
   createKratosUser,
   deleteKratosUser,
   installBrowserSession,
@@ -79,9 +80,9 @@ test.describe("Scenario 02 MP - create an agent and set its configuration", () =
     // real agent ref, NOT still "/agents/create".
     await expectRedirectedAwayFrom(page, "/agents/create", 30_000);
     await expect
-      .poll(() => new URL(page.url()).pathname)
+      .poll(() => appPath(page))
       .toMatch(/^\/agents\/(?!create$)[^/]+$/);
-    createdRef = new URL(page.url()).pathname.split("/").pop();
+    createdRef = appPath(page).split("/").pop();
     expect(createdRef, "created agent ref from URL").toBeTruthy();
 
     // --- FUNCTIONAL OUTCOME 1: the agent now exists in the workspace -------

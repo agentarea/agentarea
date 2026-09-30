@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   apiBaseURL,
+  appHref,
   authedRequest,
   createKratosUser,
   deleteKratosUser,
@@ -33,9 +34,9 @@ test.describe("real stack smoke", () => {
         const openapi = await request.get(`${apiBaseURL}/openapi.json`);
         expect(openapi.ok()).toBeTruthy();
         const spec = await openapi.json();
-        expect(spec.paths).toHaveProperty("/v1/agents/");
-        expect(spec.paths).toHaveProperty("/v1/triggers/");
-        expect(spec.paths).toHaveProperty("/v1/mcp-servers/");
+        expect(spec.paths).toHaveProperty(["/v1/workspaces/{workspace}/agents/"]);
+        expect(spec.paths).toHaveProperty(["/v1/workspaces/{workspace}/triggers/"]);
+        expect(spec.paths).toHaveProperty(["/v1/workspaces/{workspace}/mcp-servers/"]);
 
         const agents = await authedRequest(request, user, "get", "/v1/agents/");
         expect(agents.ok()).toBeTruthy();
@@ -55,7 +56,7 @@ test.describe("real stack smoke", () => {
       const user = await createKratosUser("pw-ui");
       try {
         await installBrowserSession(context, user);
-        await page.goto("/agents");
+        await page.goto(appHref(page, "/agents"));
 
         await expect(page).not.toHaveURL(/\/auth\/login/);
         await expect(
@@ -83,7 +84,7 @@ test.describe("real stack smoke", () => {
           request,
           alice,
           "post",
-          `/v1/workspaces/${alice.identityId}/invitations`,
+          `/v1/workspaces/${alice.workspace}/invitations`,
           { data: { email: bob.email } }
         );
         expect(invitation.status()).toBe(201);
@@ -107,7 +108,7 @@ test.describe("real stack smoke", () => {
           request,
           bob,
           "get",
-          `/v1/workspaces/${alice.identityId}/members`
+          `/v1/workspaces/${alice.workspace}/members`
         );
         expect(members.ok()).toBeTruthy();
         const memberPayload = await members.json();

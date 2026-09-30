@@ -92,51 +92,45 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
     });
     await expect(inspector).toBeVisible();
     await expect(
-      inspector.getByRole("link", { name: "Open full page", exact: true })
-    ).toHaveAttribute("href", `/agents/${agent.id}`);
-    await expect(
       inspector.getByText(agent.name, { exact: true })
     ).toBeVisible();
     await expect(
-      inspector.getByText("Tool allowlist", { exact: true })
-    ).toBeVisible({
-      timeout: 15_000,
-    });
+      inspector.getByText("Tool permission rules", { exact: true })
+    ).toBeVisible();
     await expect(
       inspector.getByText("Resolving policy…", { exact: true })
-    ).toHaveCount(0);
+    ).toHaveCount(0, { timeout: 15_000 });
     await expect(inspector.getByText(/Permissions are unknown/)).toHaveCount(0);
 
-    for (const rule of [
-      {
-        title: "Denied tool patterns",
-        items: policy.tools?.denied ?? [],
-        empty: "No explicit deny patterns in this preview.",
-      },
-      {
-        title: "Tool allowlist",
-        items: policy.tools?.allowed ?? [],
-        empty: "No extra allowlist. Only connected tools are candidates.",
-      },
+    // A rule list renders only when it has entries; with none at all the
+    // inspector says the agent is unrestricted instead.
+    const rules = [
+      { title: "Denied tool patterns", items: policy.tools?.denied ?? [] },
+      { title: "Tool allowlist", items: policy.tools?.allowed ?? [] },
       {
         title: "Human approval required",
         items: policy.approval?.requires_human_approval
           ? ["Every tool call"]
           : (policy.approval?.escalation_rules ?? []),
-        empty: "No approval requirement in this preview.",
       },
-    ]) {
+    ];
+    for (const rule of rules) {
       const ruleHeading = inspector.getByText(rule.title, { exact: true });
-      await expect(ruleHeading).toBeVisible();
-      const ruleGroup = ruleHeading.locator("..");
       if (rule.items.length) {
-        await expect(ruleGroup.getByRole("listitem")).toHaveText(rule.items);
-      } else {
+        await expect(ruleHeading).toBeVisible();
         await expect(
-          ruleGroup.getByText(rule.empty, { exact: true })
-        ).toBeVisible();
+          ruleHeading.locator("..").getByRole("listitem")
+        ).toHaveText(rule.items);
+      } else {
+        await expect(ruleHeading).toHaveCount(0);
       }
     }
+    await expect(
+      inspector.getByText(
+        "Every connected tool is callable — no deny patterns, allowlist or approval step.",
+        { exact: true }
+      )
+    ).toHaveCount(rules.some((rule) => rule.items.length) ? 0 : 1);
 
     await inspector
       .getByRole("button", { name: "Show agent path", exact: true })
@@ -186,8 +180,8 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
       .click();
     await expect(inspector).toBeVisible();
     await expect(
-      inspector.getByRole("link", { name: "Open full page", exact: true })
-    ).toHaveAttribute("href", `/agents/${agent.id}`);
+      inspector.getByText(agent.name, { exact: true })
+    ).toBeVisible();
     await expect(
       inspector.getByText("Tool permission rules", { exact: true })
     ).toBeVisible();
@@ -210,8 +204,8 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
       .click();
     await expect(inspector).toBeVisible();
     await expect(
-      inspector.getByRole("link", { name: "Open full page", exact: true })
-    ).toHaveAttribute("href", `/agents/${agent.id}`);
+      inspector.getByText(agent.name, { exact: true })
+    ).toBeVisible();
     await expect(
       inspector.getByText("Tool permission rules", { exact: true })
     ).toBeVisible();

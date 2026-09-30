@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import {
+  appHref,
   createKratosUser,
   deleteKratosUser,
   installBrowserSession,
@@ -12,11 +13,12 @@ const profileForm = (page: Page) =>
   page.getByTestId("ory/screen/settings/group/profile");
 
 async function openSettings(page: Page, path = "/settings") {
-  await page.goto(path);
+  await page.goto(appHref(page, path));
   await expect(profileForm(page)).toBeVisible();
   await expect(page).toHaveURL(
     (url) =>
-      url.pathname === "/settings" && Boolean(url.searchParams.get("flow"))
+      url.pathname === appHref(page, "/settings") &&
+      Boolean(url.searchParams.get("flow"))
   );
 }
 

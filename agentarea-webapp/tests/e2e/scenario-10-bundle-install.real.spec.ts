@@ -6,15 +6,17 @@ import {
   uniqueLabel,
   type AuthedUser,
 } from "./helpers/real-stack";
-import { gotoCommitted, runRealStack } from "./helpers/scenarios";
+import { gotoCommitted, runRealStack, seedModelChain } from "./helpers/scenarios";
 
 test.describe("Scenario 10 MP - analyze and install a bundle", () => {
   test.skip(!runRealStack, "Set PLAYWRIGHT_REAL_STACK=1");
 
   let user: AuthedUser;
+  let modelInstanceId: string;
 
-  test.beforeAll(async () => {
+  test.beforeAll(async ({ request }) => {
     user = await createKratosUser("scenario-10");
+    ({ modelInstanceId } = await seedModelChain(request, user, "scenario-10"));
   });
 
   test.afterAll(async () => {
@@ -34,17 +36,20 @@ test.describe("Scenario 10 MP - analyze and install a bundle", () => {
     const skillName = uniqueLabel("scenario-10-skill");
     await page.locator("#package-source").fill(
       JSON.stringify({
-        schema_version: "1",
+        schema_version: "0.1.0",
         name: bundleName,
         display_name: "Scenario 10 Bundle",
         agents: [
           {
+            key: "agent",
             name: agentName,
-            instructions: "Bundle-installed test agent.",
+            instruction: "Bundle-installed test agent.",
+            model: modelInstanceId,
           },
         ],
         skills: [
           {
+            key: "skill",
             name: skillName,
             content: "# Scenario bundle skill",
           },

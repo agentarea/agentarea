@@ -1,5 +1,7 @@
 import { expect, type APIRequestContext, type APIResponse, type Page } from "@playwright/test";
 import {
+  appHref,
+  appPath,
   authedRequest,
   responseBody,
   uniqueLabel,
@@ -14,7 +16,7 @@ export const baseURL =
 
 export async function gotoCommitted(page: Page, route: string) {
   try {
-    const response = await page.goto(`${baseURL}${route}`, {
+    const response = await page.goto(`${baseURL}${appHref(page, route)}`, {
       waitUntil: "commit",
       timeout: 60_000,
     });
@@ -44,7 +46,7 @@ export async function gotoCommitted(page: Page, route: string) {
 
 export async function expectPath(page: Page, path: string, timeout = 25_000) {
   await expect
-    .poll(() => new URL(page.url()).pathname, { timeout })
+    .poll(() => appPath(page), { timeout })
     .toBe(path);
 }
 
@@ -56,13 +58,12 @@ export async function expectRedirectedAwayFrom(
   await expect
     .poll(
       async () => {
-        const current = new URL(page.url()).pathname;
-        if (current !== path) return "redirected";
+        if (appPath(page) !== path) return "redirected";
         const errors = await page
           .locator(
             ".form-error, .text-destructive, [role=alert], [data-nextjs-error-boundary], body"
           )
-          .allTextContents()
+          .allInnerTexts()
           .catch(() => [] as string[]);
         const joined = errors
           .map((text) => text.trim())
@@ -87,20 +88,67 @@ async function expectOk(response: APIResponse, label: string) {
   }
 }
 
-// Builtin catalog ids (global). Local Ollama gives seeded agents a REAL,
-// executable model (zero cost / rate-limit). The worker rewrites localhost ->
-// host.docker.internal, so endpoint_url "http://localhost:11434" reaches host
-// Ollama. Requires `ollama serve` + the qwen3:0.6b model pulled.
-const OLLAMA_PROVIDER_SPEC = "55cd391c-c58b-43fd-ae4b-99d4a00ea00c";
-const OLLAMA_QWEN3_MODEL_SPEC = "368ea505-76c6-426e-ad6e-23458efbfc1d"; // qwen3:0.6b
+// Local Ollama gives seeded agents a REAL, executable model (zero cost /
+// rate-limit). The worker rewrites localhost -> host.docker.internal, so
+// endpoint_url "http://localhost:11434" reaches host Ollama. Only a run needs
+// `ollama serve` with the model pulled; seeding the chain does not.
+const OLLAMA_PROVIDER_KEY = "ollama";
+const OLLAMA_MODEL = "qwen3:0.6b";
 
-export async function seedModelChain(
+export const runLiveModel = process.env.PLAYWRIGHT_LIVE_MODEL === "1";
+export const liveModelSkipReason = `Set PLAYWRIGHT_LIVE_MODEL=1 with \`ollama serve\` running and ${OLLAMA_MODEL} pulled: this needs a model that actually answers`;
+
+type ModelChain = {
+  providerSpecId: string;
+  providerConfigId: string;
+  modelSpecId: string;
+  modelInstanceId: string;
+  modelInstanceName: string;
+};
+
+// A workspace holds one spec per provider + model name, so each user gets one
+// chain, shared by every agent seeded for them.
+const userModelChains = new Map<string, Promise<ModelChain>>();
+
+export function seedModelChain(
   request: APIRequestContext,
   user: AuthedUser,
   prefix: string
 ) {
-  const provider = { id: OLLAMA_PROVIDER_SPEC };
-  const modelSpecBody = { id: OLLAMA_QWEN3_MODEL_SPEC };
+  let chain = userModelChains.get(user.identityId);
+  if (!chain) {
+    chain = createModelChain(request, user, prefix);
+    userModelChains.set(user.identityId, chain);
+  }
+  return chain;
+}
+
+async function createModelChain(
+  request: APIRequestContext,
+  user: AuthedUser,
+  prefix: string
+): Promise<ModelChain> {
+  const provider = await authedRequest(
+    request,
+    user,
+    "get",
+    `/v1/provider-specs/by-key/${OLLAMA_PROVIDER_KEY}`
+  );
+  await expectOk(provider, `GET /v1/provider-specs/by-key/${OLLAMA_PROVIDER_KEY}`);
+  const providerSpecId = (await provider.json()).id as string;
+
+  const modelSpec = await authedRequest(request, user, "post", "/v1/model-specs/", {
+    data: {
+      provider_spec_id: providerSpecId,
+      model_name: OLLAMA_MODEL,
+      display_name: OLLAMA_MODEL,
+      context_window: 40960,
+      input_cost_per_token: "0",
+      output_cost_per_token: "0",
+    },
+  });
+  await expectOk(modelSpec, "POST /v1/model-specs/");
+  const modelSpecBody = await modelSpec.json();
 
   const providerConfig = await authedRequest(
     request,
@@ -109,7 +157,7 @@ export async function seedModelChain(
     "/v1/provider-configs/",
     {
       data: {
-        provider_spec_id: provider.id,
+        provider_spec_id: providerSpecId,
         name: uniqueLabel(`${prefix}-provider`),
         endpoint_url: "http://localhost:11434",
       },
@@ -128,7 +176,7 @@ export async function seedModelChain(
         provider_config_id: providerConfigBody.id,
         model_spec_id: modelSpecBody.id,
         name: uniqueLabel(`${prefix}-instance`),
-        description: "Playwright scenario model instance (local Ollama qwen3:0.6b)",
+        description: `Playwright scenario model instance (local Ollama ${OLLAMA_MODEL})`,
       },
     }
   );
@@ -136,7 +184,7 @@ export async function seedModelChain(
   const modelInstanceBody = await modelInstance.json();
 
   return {
-    providerSpecId: provider.id as string,
+    providerSpecId,
     providerConfigId: providerConfigBody.id as string,
     modelSpecId: modelSpecBody.id as string,
     modelInstanceId: modelInstanceBody.id as string,
@@ -184,7 +232,7 @@ export async function seedAgent(
   request: APIRequestContext,
   user: AuthedUser,
   prefix = "scenario-agent",
-  modelId = "gpt-4o-mini"
+  modelId?: string
 ) {
   const name = uniqueLabel(prefix);
   const response = await authedRequest(request, user, "post", "/v1/agents/", {
@@ -192,7 +240,8 @@ export async function seedAgent(
       name,
       description: "Playwright scenario prerequisite agent",
       instruction: "Keep responses concise for deterministic tests.",
-      model_id: modelId,
+      model_id:
+        modelId ?? (await seedModelChain(request, user, prefix)).modelInstanceId,
       tools: [],
       planning: false,
       agent_type: "stateless",

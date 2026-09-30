@@ -52,10 +52,11 @@ test.describe("Workspace folder view", () => {
       name: "File tree",
       exact: true,
     });
-    const breadcrumb = page.getByRole("navigation", {
-      name: "Folder path",
-      exact: true,
-    });
+    // The open folder is the selected tab of the file manager.
+    const openFolder = (name: string) =>
+      page
+        .getByRole("tablist", { name: "Open files", exact: true })
+        .getByRole("tab", { name, exact: true, selected: true });
     await expect(folderTree).toBeVisible();
     await expect(
       folderTree.getByText("All files", { exact: true })
@@ -66,9 +67,7 @@ test.describe("Workspace folder view", () => {
     await contentRow(page, "Materials")
       .getByText("Materials", { exact: true })
       .click();
-    await expect(
-      breadcrumb.getByText("Materials", { exact: true })
-    ).toBeVisible();
+    await expect(openFolder("Materials")).toBeVisible();
 
     await createFolder(page, "Drafts");
     await expect(contentRow(page, "Drafts")).toBeVisible();
@@ -76,7 +75,7 @@ test.describe("Workspace folder view", () => {
     // Re-fetch the root from the server before navigating back to the empty
     // child. This proves folders survive beyond the creating page's state.
     await page.reload({ waitUntil: "domcontentloaded" });
-    await breadcrumb.getByText("All files", { exact: true }).click();
+    await folderTree.getByText("All files", { exact: true }).click();
     await contentRow(page, "Materials")
       .getByText("Materials", { exact: true })
       .click();
@@ -89,7 +88,7 @@ test.describe("Workspace folder view", () => {
     await contentRow(page, "Drafts")
       .getByText("Drafts", { exact: true })
       .click();
-    await expect(breadcrumb.getByText("Drafts", { exact: true })).toBeVisible();
+    await expect(openFolder("Drafts")).toBeVisible();
 
     const filename =
       "Quarterly-research-notes-with-a-long-descriptive-filename.txt";

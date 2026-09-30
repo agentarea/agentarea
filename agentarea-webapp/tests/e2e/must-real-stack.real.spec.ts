@@ -2,6 +2,7 @@ import type { APIRequestContext, APIResponse } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import {
   apiBaseURL,
+  apiURL,
   authedRequest,
   createKratosUser,
   deleteKratosUser,
@@ -9,6 +10,7 @@ import {
   uniqueLabel,
   type AuthedUser,
 } from "./helpers/real-stack";
+import { seedModelChain } from "./helpers/scenarios";
 import { requirementTitle } from "./requirements";
 
 const runRealStack = process.env.PLAYWRIGHT_REAL_STACK === "1";
@@ -36,12 +38,13 @@ async function expectOk(response: APIResponse) {
 
 async function createAgent(request: APIRequestContext, user: AuthedUser, prefix = "pw-agent") {
   const name = uniqueLabel(prefix);
+  const { modelInstanceId } = await seedModelChain(request, user, prefix);
   const response = await authedRequest(request, user, "post", "/v1/agents/", {
     data: {
       name,
       description: "Playwright real-stack agent",
       instruction: "Keep responses concise.",
-      model_id: "gpt-4o-mini",
+      model_id: modelInstanceId,
       tools: [],
       planning: false,
       agent_type: "stateless",
@@ -69,7 +72,9 @@ test.describe("must functional requirements real stack", () => {
         const created = await createAgent(request, user, "pw-fr03-agent");
         agentId = created.id;
         expect(created.name).toMatch(/^pw-fr03-agent-/);
-        expect(created.model_id).toBe("gpt-4o-mini");
+        expect(created.model_id).toBe(
+          (await seedModelChain(request, user, "pw-fr03")).modelInstanceId
+        );
 
         const detail = await authedRequest(request, user, "get", `/v1/agents/${agentId}`);
         await expectOk(detail);
@@ -123,6 +128,8 @@ test.describe("must functional requirements real stack", () => {
             model_name: uniqueLabel("pw-fr04-model"),
             display_name: "Playwright Model",
             context_window: 4096,
+            input_cost_per_token: "0",
+            output_cost_per_token: "0",
           },
         });
         await expectOk(createdSpec);
@@ -249,7 +256,7 @@ test.describe("must functional requirements real stack", () => {
 
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 15_000);
-        const response = await fetch(`${apiBaseURL}/v1/agents/${agentId}/tasks/`, {
+        const response = await fetch(apiURL(user, `/v1/agents/${agentId}/tasks/`), {
           method: "POST",
           headers: {
             Authorization: `Bearer ${user.jwt}`,
@@ -407,7 +414,7 @@ test.describe("must functional requirements real stack", () => {
             name: uniqueLabel("pw-fr08-agent"),
             description: "Agent with OpenAPI tool",
             instruction: "Use the attached OpenAPI tool when needed.",
-            model_id: "gpt-4o-mini",
+            model_id: (await seedModelChain(request, user, "pw-fr08")).modelInstanceId,
             tools: [{ type: "openapi", name: "listPets", settings: { connection_id: connectionId } }],
           },
         });

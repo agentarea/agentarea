@@ -28,11 +28,14 @@ test.describe("Scenario 15 MP - install an agent from the registry", () => {
     await installBrowserSession(context, user);
 
     await gotoCommitted(page, "/explore?type=agents");
-    const firstAgentCard = page.getByRole("button").filter({
-      hasText: /agent|assistant|support|research|sales/i,
-    }).first();
+    // Type tabs and category facets are buttons too; a catalog card is the
+    // button carrying the "View" affordance.
+    const firstAgentCard = page
+      .getByRole("button")
+      .filter({ hasText: "View" })
+      .filter({ hasText: /agent|assistant|support|research|sales/i })
+      .first();
     await expect(firstAgentCard).toBeVisible({ timeout: 15_000 });
-    const installedName = (await firstAgentCard.innerText()).split("\n")[0].trim();
 
     await firstAgentCard.click();
     await expect(
@@ -40,6 +43,10 @@ test.describe("Scenario 15 MP - install an agent from the registry", () => {
     ).toBeVisible({
       timeout: 15_000,
     });
+    const installedName = (
+      await page.getByRole("heading", { level: 2 }).first().innerText()
+    ).trim();
+    expect(installedName).not.toBe("");
     await page.getByRole("button", { name: /add to workspace/i }).click();
     await expect(
       page.getByText(/added to your workspace|install failed/i)

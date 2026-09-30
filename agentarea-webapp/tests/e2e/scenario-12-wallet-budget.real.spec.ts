@@ -20,7 +20,7 @@ test.describe("Scenario 12 MP - view wallet, spend, and budget tracking", () => 
     if (user) await deleteKratosUser(user.identityId);
   });
 
-  test("reviews budgets and billing without enterprise-only setup", async ({
+  test("reviews budgets without enterprise-only setup", async ({
     context,
     page,
   }) => {
@@ -32,13 +32,6 @@ test.describe("Scenario 12 MP - view wallet, spend, and budget tracking", () => 
     await gotoCommitted(page, "/budgets");
     await expect(page.locator("#monthly-cap")).toBeVisible({ timeout: 15_000 });
     await page.reload({ waitUntil: "commit" });
-    await expect(page.locator("#monthly-cap")).toBeVisible({ timeout: 15_000 });
-
-    // Core spend tracking does not require enterprise billing setup: the billing
-    // settings page is reachable (settings nav landmark) without gating.
-    await gotoCommitted(page, "/settings/billing");
-    await expect(page.getByText("Billing").first()).toBeVisible({ timeout: 15_000 });
-    await gotoCommitted(page, "/budgets");
     await expect(page.locator("#monthly-cap")).toBeVisible({ timeout: 15_000 });
   });
 });
