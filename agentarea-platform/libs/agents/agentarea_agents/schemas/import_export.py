@@ -104,6 +104,10 @@ class AgentToolSettings(BaseToolSettings):
 
     description_override: str | None = None
     a2a_url: str | None = None
+    auth_secret_name: str | None = Field(
+        default=None,
+        description="Workspace secret holding the bearer token sent to ``a2a_url``.",
+    )
 
 
 class OpenApiToolSettings(BaseToolSettings):

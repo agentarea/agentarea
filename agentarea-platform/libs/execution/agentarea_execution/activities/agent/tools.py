@@ -31,6 +31,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _secret_token_provider(secret_manager: Any, secret_name: str) -> Callable[[], Awaitable[str]]:
+    """Reads the workspace secret when the delegate is called, not when it is built."""
+
+    async def resolve() -> str:
+        token = await secret_manager.get_secret(secret_name)
+        if not token:
+            raise LookupError(f"secret '{secret_name}' not found in this workspace")
+        return token
+
+    return resolve
+
+
 def _mcp_attachment(tools: list[dict[str, Any]] | None, attachment_ref: str) -> dict | None:
     """The agent's MCP attachment that references its server as ``attachment_ref``."""
     return next(
@@ -485,21 +497,43 @@ def make_tools_activities(
                     )
 
                     from agentarea_agents_sdk.tools.agent_tool_factory import AgentToolFactory
+                    from agentarea_common.utils.url_safety import (
+                        OutboundPolicy,
+                        SafeOutboundTransport,
+                    )
+
+                    delegation_secrets = dependencies.secret_manager_factory.create(
+                        session=delegation_session, user_context=user_context
+                    )
 
                     for tool_config in agent_configs:
                         agent_name = tool_config.get("name")
                         if not agent_name:
                             continue
+                        settings = tool_config.get("settings") or {}
+                        a2a_url = settings.get("a2a_url")
+                        secret_name = settings.get("auth_secret_name")
 
                         delegation_tool = await AgentToolFactory.create_tool(
                             agent_name=agent_name,
                             agent_service=agent_service,
                             base_url=base_url,
-                            a2a_url_override=(tool_config.get("settings") or {}).get("a2a_url"),
+                            a2a_url_override=a2a_url,
                             task_service=delegation_task_service,
                             workspace_id=request.workspace_id,
                             user_id=user_context.user_id,
                             payment_handler=payment_handler,
+                            auth_token_provider=(
+                                _secret_token_provider(delegation_secrets, secret_name)
+                                if secret_name
+                                else None
+                            ),
+                            # The URL is member-supplied: vet every hop like OpenAPI calls.
+                            http_transport=(
+                                SafeOutboundTransport(OutboundPolicy.from_env())
+                                if a2a_url
+                                else None
+                            ),
                         )
                         if delegation_tool:
                             tool_executor.register_tool(delegation_tool)

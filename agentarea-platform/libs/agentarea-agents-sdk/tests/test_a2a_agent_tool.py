@@ -10,7 +10,7 @@ from google.protobuf.json_format import MessageToDict
 from agentarea_agents_sdk.tools import a2a_agent_tool
 from agentarea_agents_sdk.tools.a2a_agent_tool import (
     A2AAgentTool,
-    _sanitize_tool_name,
+    delegate_tool_name,
 )
 from agentarea_agents_sdk.tools.base_tool import ToolExecutionError
 
@@ -55,29 +55,29 @@ def _get_result(state=TaskState.TASK_STATE_COMPLETED, *texts: str):
 
 
 class TestSanitizeToolName:
-    """Tests for _sanitize_tool_name helper."""
+    """Tests for delegate_tool_name helper."""
 
     def test_simple_name(self):
-        assert _sanitize_tool_name("researcher") == "delegate_to_researcher"
+        assert delegate_tool_name("researcher") == "delegate_to_researcher"
 
     def test_name_with_spaces(self):
-        assert _sanitize_tool_name("my agent") == "delegate_to_my_agent"
+        assert delegate_tool_name("my agent") == "delegate_to_my_agent"
 
     def test_name_with_special_chars(self):
-        assert _sanitize_tool_name("agent-v2.0!") == "delegate_to_agent_v2_0"
+        assert delegate_tool_name("agent-v2.0!") == "delegate_to_agent_v2_0"
 
     def test_name_starting_with_digit(self):
-        assert _sanitize_tool_name("123bot") == "delegate_to_agent_123bot"
+        assert delegate_tool_name("123bot") == "delegate_to_agent_123bot"
 
     def test_empty_name(self):
-        assert _sanitize_tool_name("") == "delegate_to_agent_"
+        assert delegate_tool_name("") == "delegate_to_agent_"
 
     def test_only_special_chars(self):
         # All chars stripped, empty -> prepend agent_
-        assert _sanitize_tool_name("---") == "delegate_to_agent_"
+        assert delegate_tool_name("---") == "delegate_to_agent_"
 
     def test_consecutive_underscores_collapsed(self):
-        assert _sanitize_tool_name("a  b") == "delegate_to_a_b"
+        assert delegate_tool_name("a  b") == "delegate_to_a_b"
 
 
 class TestA2AAgentToolProperties:
@@ -155,6 +155,34 @@ class TestA2AAgentToolExecute:
         assert body["params"]["configuration"]["returnImmediately"] is True
 
     @pytest.mark.asyncio
+    async def test_execute_resolves_the_bearer_at_call_time(self):
+        transport, seen = _transport(_send_result())
+        resolved = []
+
+        async def token() -> str:
+            resolved.append(True)
+            return "from-secret"
+
+        tool = _tool(transport, auth_token_provider=token)
+        assert resolved == []
+
+        await tool.execute(message="hello")
+
+        [request] = seen
+        assert request.headers["Authorization"] == "Bearer from-secret"
+
+    @pytest.mark.asyncio
+    async def test_execute_fails_loud_when_the_bearer_cannot_be_resolved(self):
+        transport, seen = _transport()
+
+        async def token() -> str:
+            raise LookupError("secret 'aadocs-key' not found")
+
+        with pytest.raises(ToolExecutionError, match="aadocs-key"):
+            await _tool(transport, auth_token_provider=token).execute(message="hello")
+        assert seen == []
+
+    @pytest.mark.asyncio
     async def test_execute_polls_until_the_task_is_terminal(self, monkeypatch):
         monkeypatch.setattr(a2a_agent_tool, "_POLL_INTERVAL", 0.0)
         transport, seen = _transport(
@@ -173,6 +201,44 @@ class TestA2AAgentToolExecute:
         assert json.loads(seen[1].content)["params"] == {"id": "task-1"}
         assert result["result"] == "done"
         assert result["task_state"] == "TASK_STATE_COMPLETED"
+
+    @pytest.mark.asyncio
+    async def test_a_task_still_running_after_the_budget_is_not_a_success(self, monkeypatch):
+        monkeypatch.setattr(a2a_agent_tool, "_POLL_INTERVAL", 0.0)
+        monkeypatch.setattr(a2a_agent_tool, "_POLL_TOTAL_BUDGET", 0.0)
+        transport, _ = _transport(_send_result(TaskState.TASK_STATE_WORKING))
+
+        result = await _tool(transport).execute(message="hello")
+
+        assert result["success"] is False
+        assert result["task_id"] == "task-1"
+        assert result["task_state"] == "TASK_STATE_WORKING"
+        assert "still working" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_a_task_waiting_for_input_stops_polling_and_says_so(self, monkeypatch):
+        monkeypatch.setattr(a2a_agent_tool, "_POLL_INTERVAL", 0.0)
+        transport, seen = _transport(
+            _send_result(TaskState.TASK_STATE_WORKING),
+            _get_result(TaskState.TASK_STATE_INPUT_REQUIRED, "Which repo?"),
+        )
+
+        result = await _tool(transport).execute(message="hello")
+
+        assert len(seen) == 2
+        assert result["success"] is False
+        assert result["task_state"] == "TASK_STATE_INPUT_REQUIRED"
+        assert "Which repo?" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_a_failed_task_is_not_a_success(self):
+        transport, _ = _transport(_send_result(TaskState.TASK_STATE_FAILED, "model quota exceeded"))
+
+        result = await _tool(transport).execute(message="hello")
+
+        assert result["success"] is False
+        assert result["task_state"] == "TASK_STATE_FAILED"
+        assert "model quota exceeded" in result["error"]
 
     @pytest.mark.asyncio
     async def test_execute_returns_a_direct_message_reply(self):

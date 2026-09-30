@@ -10,7 +10,7 @@ related:
   - /concepts/execution/durable-execution
   - /concepts/governance/tool-authorization
   - /concepts/agents/skills
-last_updated: 2026-09-25
+last_updated: 2026-09-30
 ---
 
 When one agent hands work to another, the concept is delegation. A2A — the
@@ -44,8 +44,8 @@ What is needed is one concept with two bindings, and a rule for picking.
 
 ### Delegation is the concept, A2A is a binding
 
-`AgentToolFactory.create_tool` resolves the target agent and picks a binding,
-then wraps it in a `DelegationTool` facade. The facade forwards `name`,
+`AgentToolFactory.create_tool` picks a binding for the target and wraps it in a
+`DelegationTool` facade. The facade forwards `name`,
 `description`, `get_schema` and `execute` straight through, and carries a
 `binding_kind` of `"local"` or `"a2a"` for observability only.
 
@@ -60,9 +60,19 @@ The rule is:
 The third row is a fallback, not a design goal. It logs that `task_service`
 should have been passed so a same-platform agent would use the local binding.
 
-The tool name is derived from the target agent's name, sanitized to
-`delegate_to_<name>`, and both bindings produce the same one-parameter schema: a
-`message` string.
+With an `a2a_url`, nothing is looked up on this platform: the tool config's
+`name` is only the label the model sees, and the description comes from
+`settings.description_override`. Without one, the target is resolved by name in
+the caller's workspace.
+
+Delegates are checked when the agent is saved, not when it is read, so a stored
+config that no longer passes still loads. Saving is refused with `400
+invalid_delegate` when a local delegate names no agent in the workspace, an
+`a2a_url` is not an http(s) URL with a host, or two delegates' names sanitize
+to the same tool name.
+
+The tool name is derived from that name, sanitized to `delegate_to_<name>`, and
+both bindings produce the same one-parameter schema: a `message` string.
 
 ### The local binding
 
@@ -239,9 +249,34 @@ waiting is a series of polls rather than one long-held connection. The
 configured `a2a_url` is the RPC endpoint itself; the tool does not fetch the
 remote card.
 
-It reads artifacts first, then falls back to `status.message`, and returns
-`"(No output from agent)"` when neither carries anything. A JSON-RPC error from
-the remote agent comes back as `success: false`; an HTTP failure raises.
+The credential is a reference, not a value. `settings.auth_secret_name` names a
+secret in the calling agent's workspace; the worker reads it when the delegate
+is called, not when the agent is saved or the tool is built, and sends it as
+`Authorization: Bearer`. A secret that no longer exists fails that call with an
+error naming the secret.
+
+Binding a secret to a URL sends that secret to whoever serves the URL, so it
+takes the same authority as reusing a secret for a provider key: only a
+workspace admin may add a binding or change the URL or secret of one. A member
+may still edit the rest of an agent that already carries a binding. The secret
+must exist in the workspace and must not be managed by a connection, whose
+rotations would silently change it. Setting `auth_secret_name` without
+`a2a_url` is refused.
+
+The URL is member-supplied, so every request goes through the same outbound
+guard as OpenAPI connections: an `a2a_url` that resolves to a private address is
+refused unless the deployment allows it through `OUTBOUND_PRIVATE_ALLOWLIST` or
+`ALLOW_PRIVATE_URLS`.
+
+Only `TASK_STATE_COMPLETED` is a success. The tool reads artifacts first, then
+falls back to `status.message`, and returns `"(No output from agent)"` when
+neither carries anything. Any other terminal state, a task stopped at
+`TASK_STATE_INPUT_REQUIRED` or `TASK_STATE_AUTH_REQUIRED` (polling ends there,
+since the remote agent is waiting on its caller), and a task still running when
+the budget runs out all come back as `success: false` with the remote `task_id`
+and `task_state`, so the calling model is told the delegate did not answer
+rather than handed an empty answer. A JSON-RPC error from the remote
+agent is also `success: false`; an HTTP failure raises.
 
 A `402 Payment Required` response is handed to an optional payment handler
 below the SDK client, at the HTTP transport, and the paid response is returned
@@ -292,9 +327,16 @@ mapping in one case and the task row in the other.
   (`pageSize`, `pageToken`) works.
 - **Push authentication schemes are not supported.** A push config must carry a
   `token`; one with `authentication` is refused.
-- **Delegation over A2A can return a non-terminal result.** If the poll budget
-  elapses, the tool returns the latest task it saw and logs a warning rather
-  than failing. The caller receives whatever text was available at that moment.
+- **A2A delegation gives up after 110 seconds.** A remote task still running
+  then is reported as a failure carrying its `task_id`; the remote task keeps
+  running, and its result never reaches the caller.
+- **A delegated A2A task is not linked to the task that delegated it.** On the
+  receiving side it is an ordinary task started by whoever owns the API key, so
+  the caller's task view does not show it as a child.
+- **An agent in another workspace of the same deployment is reached over A2A.**
+  The local binding resolves names only in the caller's workspace, so crossing
+  workspaces pays the A2A cost and limits above — see
+  [delegate to an agent in another workspace](/guides/agents/delegate-to-another-workspace).
 - **Only JSON-RPC is implemented.** The gRPC and HTTP+JSON transports the spec
   permits are not built; v1.0.0 requires only one.
 - **Push authentication is a single echoed bearer token.** There is no webhook
@@ -317,5 +359,8 @@ mapping in one case and the task row in the other.
   </Card>
   <Card title="Tool authorization" icon="scale-balanced" href="/concepts/governance/tool-authorization">
     The gate a `delegate_to_<agent>` call clears
+  </Card>
+  <Card title="Delegate to another workspace" icon="robot" href="/guides/agents/delegate-to-another-workspace">
+    Hand tasks to your agent in a different workspace
   </Card>
 </Columns>

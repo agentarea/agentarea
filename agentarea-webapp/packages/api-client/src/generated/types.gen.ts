@@ -458,6 +458,12 @@ export type AgentToolSettings = {
      */
     a2a_url?: string | null;
     /**
+     * Auth Secret Name
+     *
+     * Workspace secret holding the bearer token sent to ``a2a_url``.
+     */
+    auth_secret_name?: string | null;
+    /**
      * Description Override
      */
     description_override?: string | null;

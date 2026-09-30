@@ -2,8 +2,10 @@ import builtins
 import logging
 from dataclasses import dataclass
 from typing import Any, cast
+from urllib.parse import urlsplit
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.a2a_agent_tool import delegate_tool_name
 from agentarea_common.audit import audited
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.base import RepositoryFactory
@@ -49,6 +51,26 @@ class AgentPreset:
 
 class InvalidModelIdError(ValueError):
     """Raised when ``model_id`` does not resolve to a usable model instance."""
+
+
+class InvalidDelegateError(ValueError):
+    """Raised when an agent tool names a delegate the runtime could not use."""
+
+
+def _credential_bindings(tools: list[dict] | None) -> set[tuple[str, str, str]]:
+    """Each ``(delegate, a2a_url, secret)`` a tool config sends a secret to."""
+    bindings = set()
+    for tool in tools or []:
+        settings = tool.get("settings") or {}
+        if tool.get("type") == "agent" and settings.get("auth_secret_name"):
+            bindings.add(
+                (
+                    str(tool.get("name")),
+                    str(settings.get("a2a_url")),
+                    str(settings["auth_secret_name"]),
+                )
+            )
+    return bindings
 
 
 def _project_catalog_item(item: CatalogAgentItem) -> Agent:
@@ -169,6 +191,77 @@ class AgentService(BaseCrudService[Agent]):
             )
         return model_id
 
+    async def _validate_delegates(
+        self, tools: list[dict] | None, previous: list[dict] | None = None
+    ) -> None:
+        """Every delegate the agent names is one the runtime can reach.
+
+        Checked on write only: a stored config that no longer passes must still
+        read back, or one bad row takes the whole agent list down.
+        """
+        delegates = [tool for tool in tools or [] if tool.get("type") == "agent"]
+        seen: dict[str, str] = {}
+        for tool in delegates:
+            name = str(tool.get("name"))
+            tool_name = delegate_tool_name(name)
+            if tool_name in seen:
+                raise InvalidDelegateError(
+                    f"Delegates '{seen[tool_name]}' and '{name}' both become the tool "
+                    f"{tool_name}; rename one."
+                )
+            seen[tool_name] = name
+            settings = tool.get("settings") or {}
+            url = settings.get("a2a_url")
+            if url is not None:
+                # A pasted URL often carries a trailing space the worker would send.
+                url = settings["a2a_url"] = url.strip()
+                parts = urlsplit(url)
+                if parts.scheme not in ("http", "https") or not parts.hostname:
+                    raise InvalidDelegateError(
+                        f"Delegate '{name}': a2a_url must be an http(s) URL with a host."
+                    )
+            elif settings.get("auth_secret_name"):
+                raise InvalidDelegateError(
+                    f"Delegate '{name}': auth_secret_name is only sent to an a2a_url."
+                )
+            elif await self.get_by_name(name) is None:
+                raise InvalidDelegateError(f"No agent named '{name}' in this workspace.")
+
+        new_bindings = _credential_bindings(delegates) - _credential_bindings(previous)
+        if not new_bindings:
+            return
+        # Binding a secret to a URL sends that secret there: the same authority
+        # as reusing a secret for a provider key, which is admin-only.
+        context = self._user_context
+        if not await self._authz.can_administer_workspace(context, context.workspace_id):
+            raise PermissionError(
+                "Only a workspace admin may send a workspace secret to a remote delegate."
+            )
+        for name, _url, secret_name in sorted(new_bindings):
+            await self._require_delegate_secret(name, secret_name)
+
+    async def _require_delegate_secret(self, delegate: str, secret_name: str) -> None:
+        from agentarea_secrets.models import EncryptedSecret
+        from sqlalchemy import select
+
+        result = await self.repository_factory.session.execute(
+            select(EncryptedSecret).where(
+                EncryptedSecret.secret_name == secret_name,
+                EncryptedSecret.workspace_id == self._user_context.workspace_id,
+            )
+        )
+        secret = result.scalar_one_or_none()
+        if secret is None:
+            raise InvalidDelegateError(
+                f"Delegate '{delegate}': no secret named '{secret_name}' in this workspace."
+            )
+        if secret.owner_type is not None:
+            # A managed secret changes whenever its connection rotates it.
+            raise InvalidDelegateError(
+                f"Delegate '{delegate}': secret '{secret_name}' is managed by "
+                f"{secret.owner_type} and cannot be sent to a remote agent."
+            )
+
     def _get_catalog_repository(self) -> CatalogAgentRepository:
         """Get the read-only catalog (registry_items) repository for agents."""
         return CatalogAgentRepository(
@@ -269,6 +362,7 @@ class AgentService(BaseCrudService[Agent]):
     async def create_agent(self, payload: AgentCreate) -> Agent:
         tools = [t.model_dump(exclude_none=True) for t in payload.tools]
         approval_targets, tools = self._lift_approval_toggles(tools)
+        await self._validate_delegates(tools)
 
         slug = await self._resolve_unique_slug(payload.name)
         model_id = await self._validate_model_id(payload.model_id)
@@ -414,7 +508,12 @@ class AgentService(BaseCrudService[Agent]):
 
         patch = payload.model_dump(exclude_unset=True)
         tools_edited = "tools" in patch and payload.tools is not None
+        edited_tools = [t.model_dump(exclude_none=True) for t in (payload.tools or [])]
         if tools_edited:
+            await self._validate_delegates(
+                edited_tools,
+                agent.tools if isinstance(agent.tools, list) else None,
+            )
             await release_unticked_approvals(
                 self.repository_factory.session,
                 self.repository_factory.user_context,
@@ -434,8 +533,7 @@ class AgentService(BaseCrudService[Agent]):
             agent.model_id = await self._validate_model_id(patch["model_id"])
         approval_targets: set[str] = set()
         if tools_edited:
-            dumped = [t.model_dump(exclude_none=True) for t in (payload.tools or [])]
-            approval_targets, agent.tools = self._lift_approval_toggles(dumped)
+            approval_targets, agent.tools = self._lift_approval_toggles(edited_tools)
         if "planning" in patch:
             agent.planning = patch["planning"]
         if "a2ui_enabled" in patch:

@@ -101,6 +101,7 @@ export const zAgentRow = z.object({
  */
 export const zAgentToolSettings = z.object({
   a2a_url: z.string().nullish(),
+  auth_secret_name: z.string().nullish(),
   description_override: z.string().nullish(),
   requires_user_confirmation: z.boolean().nullish(),
 });

@@ -32,6 +32,7 @@ import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/cr
 import {
   AgentTriggersLink,
   BasicInformation,
+  DelegationConfig,
   PresetPicker,
   SkillsConfig,
   ToolConfig,
@@ -46,6 +47,8 @@ import type { AddAgentFormState } from "../create/actions";
 import type { AgentFormValues, AgentSkill } from "../create/types";
 import { preferredModelId, presetFormValues } from "../create/utils/agentPreset";
 import { useChat } from "./ChatContext";
+import { delegatesOf, withDelegates } from "./delegationTools";
+import type { DelegationData } from "./useAgentData";
 
 type MCPServer = McpServerResponse;
 type LLMModelInstance = ModelInstanceResponse;
@@ -57,6 +60,7 @@ interface AgentFormProps {
   builtinTools: unknown[];
   initialData?: Partial<AgentFormValues>;
   agentId?: string;
+  delegation: DelegationData;
   /** Create only: presets and trigger types, each `null` when it failed to load. */
   create?: {
     presets: AgentPresetResponse[] | null;
@@ -83,6 +87,7 @@ export default function AgentForm({
   builtinTools,
   initialData,
   agentId,
+  delegation,
   create,
   triggersHref,
   onSubmit,
@@ -156,6 +161,7 @@ export default function AgentForm({
 
   // Watch agent name for chat header
   const watchedName = watch("name");
+  const carriedTools = watch("tools_config.carried_tools") ?? [];
   const [agentName, setAgentName] = useState("");
 
   // Skills state (managed separately from react-hook-form)
@@ -405,6 +411,19 @@ export default function AgentForm({
             <SkillsConfig
               selectedSkills={selectedSkills}
               onSkillsChange={handleSkillsChange}
+            />
+            <Divider />
+            <DelegationConfig
+              agentId={agentId}
+              agents={delegation.agents}
+              secrets={delegation.secrets}
+              delegates={delegatesOf(carriedTools)}
+              onDelegatesChange={(delegates) =>
+                setValue(
+                  "tools_config.carried_tools",
+                  withDelegates(carriedTools, delegates)
+                )
+              }
             />
             {/* Submit button moved to header controls */}
           </form>

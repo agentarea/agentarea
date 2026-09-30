@@ -802,6 +802,18 @@
             ],
             "title": "A2A Url"
           },
+          "auth_secret_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Workspace secret holding the bearer token sent to ``a2a_url``.",
+            "title": "Auth Secret Name"
+          },
           "description_override": {
             "anyOf": [
               {
