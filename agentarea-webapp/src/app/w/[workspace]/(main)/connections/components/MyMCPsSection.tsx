@@ -307,10 +307,7 @@ export function MyMCPsSection({
 
         return (
           <div className="flex flex-col gap-0.5">
-            <StatusIndicator
-              tone={connectionState.tone}
-              pulse={connectionState.pulse}
-            >
+            <StatusIndicator kind={connectionState.kind}>
               {t(`state.${connectionState.key}`)}
             </StatusIndicator>
             {secondary && (

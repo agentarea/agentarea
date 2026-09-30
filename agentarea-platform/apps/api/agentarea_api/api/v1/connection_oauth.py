@@ -10,6 +10,7 @@ import re
 import secrets
 import time
 import urllib.parse
+from dataclasses import dataclass
 from typing import Any, Literal
 from uuid import UUID
 
@@ -79,6 +80,21 @@ class CatalogConnectionRequest(CustomOAuthAppFields):
 class CatalogConnectionResponse(BaseModel):
     connection_id: UUID
     authorize_url: str
+
+
+class CatalogConnectionPreflight(BaseModel):
+    """What the connect form needs to know before it offers Connect.
+
+    ``ready`` — this installation holds an OAuth app for the provider.
+    ``oauth_app_required`` — the user must register their own app first.
+    """
+
+    item_id: UUID
+    name: str
+    description: str | None = None
+    status: Literal["ready", "oauth_app_required"]
+    detail: str
+    redirect_uri: str
 
 
 class ManagedOAuthAppRequest(BaseModel):
@@ -198,13 +214,11 @@ def _managed_secret_manager(db_session: AsyncSession):
     )
 
 
-async def _managed_credentials(manager, key: str) -> tuple[str, str]:
+async def _managed_app(manager, key: str) -> tuple[str, str] | None:
+    """The platform OAuth app for a provider, or None when none is configured."""
     raw = await manager.get_secret(key)
     if not raw:
-        raise HTTPException(
-            status_code=503,
-            detail="This connection is not configured by the AgentArea operator yet.",
-        )
+        return None
     try:
         value = json.loads(raw)
         client_id = str(value.get("client_id") or "")
@@ -214,6 +228,60 @@ async def _managed_credentials(manager, key: str) -> tuple[str, str]:
     if not client_id or not client_secret:
         raise HTTPException(status_code=500, detail="Managed OAuth app secret is incomplete")
     return client_id, client_secret
+
+
+async def _managed_credentials(manager, key: str) -> tuple[str, str]:
+    app = await _managed_app(manager, key)
+    if app is None:
+        raise HTTPException(
+            status_code=503,
+            detail="This connection is not configured by the AgentArea operator yet.",
+        )
+    return app
+
+
+@dataclass(frozen=True)
+class _CatalogTemplate:
+    item: Any
+    spec: dict[str, Any]
+    oauth: dict[str, Any]
+    base_url: str
+    allowed_origins: list[str]
+
+
+async def _catalog_template(
+    item_id: UUID, user_context: UserContext, db_session: AsyncSession
+) -> _CatalogTemplate:
+    item = await RegistryItemRepository(db_session, user_context).get_by_id(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Catalog connection not found")
+    registry = await RegistryRepository(db_session, user_context).get_by_id(item.registry_id)
+    spec = item.spec or {}
+    if (
+        registry is None
+        or not registry.is_active
+        or registry.registry_type != "mcp_servers"
+        or spec.get("connection_type") != "openapi"
+    ):
+        raise HTTPException(
+            status_code=400, detail="Catalog item is not a one-click API connection"
+        )
+
+    oauth = _oauth_profile(spec)
+    base_url = str(spec.get("base_url") or "")
+    base_origin = _origin(base_url)
+    allowed_origins = oauth.get("allowed_api_origins") or [base_origin]
+    if not isinstance(allowed_origins, list) or base_origin not in allowed_origins:
+        raise HTTPException(status_code=500, detail="Catalog OAuth API origin is not allowlisted")
+    if any(_origin(str(origin)) != origin for origin in allowed_origins):
+        raise HTTPException(status_code=500, detail="Catalog OAuth origin must be an exact origin")
+    return _CatalogTemplate(
+        item=item,
+        spec=spec,
+        oauth=oauth,
+        base_url=base_url,
+        allowed_origins=[str(origin) for origin in allowed_origins],
+    )
 
 
 @router.put(
@@ -237,6 +305,46 @@ async def configure_managed_oauth_app(
     return ManagedOAuthAppResponse(provider_key=provider_key, configured=True)
 
 
+@router.get(
+    "/catalog/{item_id}/preflight",
+    response_model=CatalogConnectionPreflight,
+    dependencies=[
+        unrestricted(
+            "reads a trusted catalog template and whether a platform OAuth app exists for it; the app's credentials are never returned"
+        )
+    ],
+)
+async def preflight_catalog_item(
+    item_id: UUID,
+    user_context: UserContextDep,
+    db_session: DatabaseSessionDep,
+) -> CatalogConnectionPreflight:
+    """Report whether a catalog connection can use the platform OAuth app."""
+    template = await _catalog_template(item_id, user_context, db_session)
+    managed = await _managed_app(
+        _managed_secret_manager(db_session), str(template.oauth["managed_credentials_key"])
+    )
+    item = template.item
+    if managed is None:
+        status: Literal["ready", "oauth_app_required"] = "oauth_app_required"
+        detail = (
+            f"This AgentArea installation has no OAuth app for {item.name}. "
+            f"Register your own OAuth app with {item.name} using the redirect URI "
+            "below, then enter its client ID and client secret."
+        )
+    else:
+        status = "ready"
+        detail = f"Sign in to {item.name} and approve access to connect."
+    return CatalogConnectionPreflight(
+        item_id=item_id,
+        name=item.name,
+        description=item.description,
+        status=status,
+        detail=detail,
+        redirect_uri=_callback_uri(),
+    )
+
+
 @router.post(
     "/catalog/{item_id}/connect",
     response_model=CatalogConnectionResponse,
@@ -254,30 +362,8 @@ async def connect_catalog_item(
     secret_catalog: SecretCatalogServiceDep,
 ) -> CatalogConnectionResponse:
     """Materialize a trusted OpenAPI template and start its OAuth flow."""
-    item_repo = RegistryItemRepository(db_session, user_context)
-    item = await item_repo.get_by_id(item_id)
-    if item is None:
-        raise HTTPException(status_code=404, detail="Catalog connection not found")
-    registry = await RegistryRepository(db_session, user_context).get_by_id(item.registry_id)
-    spec = item.spec or {}
-    if (
-        registry is None
-        or not registry.is_active
-        or registry.registry_type != "mcp_servers"
-        or spec.get("connection_type") != "openapi"
-    ):
-        raise HTTPException(
-            status_code=400, detail="Catalog item is not a one-click API connection"
-        )
-
-    oauth = _oauth_profile(spec)
-    base_url = str(spec.get("base_url") or "")
-    base_origin = _origin(base_url)
-    allowed_origins = oauth.get("allowed_api_origins") or [base_origin]
-    if not isinstance(allowed_origins, list) or base_origin not in allowed_origins:
-        raise HTTPException(status_code=500, detail="Catalog OAuth API origin is not allowlisted")
-    if any(_origin(str(origin)) != origin for origin in allowed_origins):
-        raise HTTPException(status_code=500, detail="Catalog OAuth origin must be an exact origin")
+    template = await _catalog_template(item_id, user_context, db_session)
+    item, spec, oauth = template.item, template.spec, template.oauth
 
     workspace_secret_manager = get_real_secret_manager(
         session=db_session, user_context=user_context
@@ -315,12 +401,12 @@ async def connect_catalog_item(
         OpenAPIConnectionCreate(
             name=item.name,
             description=item.description,
-            base_url=base_url,
+            base_url=template.base_url,
             spec_url=spec.get("spec_url"),
             spec_content=spec.get("spec_content"),
         ),
         registry_item_id=item_id,
-        allowed_auth_origins=[str(origin) for origin in allowed_origins],
+        allowed_auth_origins=template.allowed_origins,
         status="pending",
     )
 

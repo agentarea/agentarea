@@ -266,6 +266,8 @@ class DelegationMixin(ToolApprovalMixin):
             )
 
         except Exception as e:
+            if self._is_cancellation(e):
+                raise
             if child_task_created and not child_cost_accounted:
                 # A failed child does not return AgentExecutionResult, so the
                 # parent cannot recover its exact spend from Temporal. Consume

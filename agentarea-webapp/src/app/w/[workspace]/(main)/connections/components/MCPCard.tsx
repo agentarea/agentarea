@@ -159,8 +159,7 @@ export function MCPInstanceCard({
         <div className="flex items-center gap-1.5 w-full">
           <StatusIndicator
             size="sm"
-            tone={connectionState.tone}
-            pulse={connectionState.pulse}
+            kind={connectionState.kind}
             className="shrink-0"
           >
             {tState(connectionState.key)}

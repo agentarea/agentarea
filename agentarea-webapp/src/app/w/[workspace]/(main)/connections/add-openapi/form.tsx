@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { Braces, Link, Loader2, Lock, Plus, Trash2, Unlock } from "lucide-react";
+import { Braces, Link, Lock, Plus, Trash2, Unlock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -340,7 +341,13 @@ export function AddOpenAPIForm() {
                 type="url"
               />
               {fetching && (
-                <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                <StatusIndicator
+                  kind="running"
+                  size="sm"
+                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                  aria-label={t("openApiSpec")}
+                  title={t("openApiSpec")}
+                />
               )}
             </div>
             <p className="text-xs text-muted-foreground">{t("urlHint")}</p>

@@ -8,66 +8,52 @@ payload against the identity the contract actually derives, rather than against
 a hand-written payload the producer never emits.
 """
 
+from functools import partial
+
 from agentarea_common.events.adapters.redis_streams import decode
-from agentarea_common.events.base_events import DomainEvent
-from agentarea_common.events.broker import EventBroker
 from agentarea_common.events.contract import Part, derive_part, reduce_parts
 from agentarea_common.events.ports import IntegrationEvent
 from agentarea_execution.activities.event_publisher import create_event_publisher
 
-
-class CapturingBroker(EventBroker):
-    def __init__(self) -> None:
-        self.events: list[DomainEvent] = []
-
-    async def publish(self, event: DomainEvent) -> None:
-        self.events.append(event)
+# Every delta is published, so each step's snapshot can be checked.
+publisher_per_delta = partial(create_event_publisher, min_interval_seconds=0)
 
 
 class CapturingStreamBroker:
     def __init__(self) -> None:
         self.events: list[IntegrationEvent] = []
 
-    async def submit(self, topic: str, fields: dict[str, str], *, maxlen: int) -> str:
+    async def submit(self, topic: str, fields: dict[str, str], *, maxlen, ttl_seconds) -> str:
         self.events.append(decode(fields))
         return f"{len(self.events)}-0"
 
 
-def _published_parts(
-    broker: CapturingBroker, stream: CapturingStreamBroker
-) -> tuple[list[Part], list[Part]]:
-    return (
-        reduce_parts((event.event_type, event.data["original_data"]) for event in broker.events),
-        reduce_parts((event.type, event.data) for event in stream.events),
-    )
+def _published_parts(stream: CapturingStreamBroker) -> list[Part]:
+    return reduce_parts((event.type, event.data) for event in stream.events)
 
 
-def _published_chunk_data(broker) -> dict:
-    return broker.events[0].data["original_data"]
+def _published_chunk_data(stream: CapturingStreamBroker) -> dict:
+    return stream.events[0].data
 
 
 async def test_chunk_carries_the_fields_the_part_id_is_built_from() -> None:
-    broker = CapturingBroker()
-    publish_chunk = create_event_publisher(
-        broker, "task-1", execution_id="task-1-exec", iteration=2
-    )
+    stream = CapturingStreamBroker()
+    publish_chunk = publisher_per_delta(stream, "task-1", execution_id="task-1-exec", iteration=2)
 
     await publish_chunk("pong", 0)
 
-    data = _published_chunk_data(broker)
+    data = _published_chunk_data(stream)
     assert data["execution_id"] == "task-1-exec"
     assert data["iteration"] == 2
 
 
 async def test_chunk_derives_a_part_instead_of_falling_through() -> None:
-    broker = CapturingBroker()
-    publish_chunk = create_event_publisher(
-        broker, "task-1", execution_id="task-1-exec", iteration=2
-    )
+    stream = CapturingStreamBroker()
+    publish_chunk = publisher_per_delta(stream, "task-1", execution_id="task-1-exec", iteration=2)
 
     await publish_chunk("pong", 0)
 
-    part = derive_part("llm.call.chunk", _published_chunk_data(broker))
+    part = derive_part("llm.call.chunk", _published_chunk_data(stream))
     assert part is not None, "chunk must resolve to a part, not the raw timeline"
     assert part.kind == "llm"
     assert part.part_id == "task-1-exec:2"
@@ -76,13 +62,11 @@ async def test_chunk_derives_a_part_instead_of_falling_through() -> None:
 async def test_chunk_and_completed_call_share_one_part_id() -> None:
     # This is the whole point: the streamed text and the final message must be
     # the same part, so the final supersedes the stream in place.
-    broker = CapturingBroker()
-    publish_chunk = create_event_publisher(
-        broker, "task-1", execution_id="task-1-exec", iteration=2
-    )
+    stream = CapturingStreamBroker()
+    publish_chunk = publisher_per_delta(stream, "task-1", execution_id="task-1-exec", iteration=2)
     await publish_chunk("pon", 0)
 
-    chunk_part = derive_part("llm.call.chunk", _published_chunk_data(broker))
+    chunk_part = derive_part("llm.call.chunk", _published_chunk_data(stream))
     completed_part = derive_part(
         "llm.call.completed",
         {"task_id": "task-1", "execution_id": "task-1-exec", "iteration": 2, "content": "pong"},
@@ -94,44 +78,38 @@ async def test_chunk_and_completed_call_share_one_part_id() -> None:
 
 
 async def test_chunks_of_different_iterations_are_different_parts() -> None:
-    broker = CapturingBroker()
-    first = create_event_publisher(broker, "task-1", execution_id="e", iteration=1)
+    stream = CapturingStreamBroker()
+    first = publisher_per_delta(stream, "task-1", execution_id="e", iteration=1)
     await first("a", 0)
-    second = create_event_publisher(broker, "task-1", execution_id="e", iteration=2)
+    second = publisher_per_delta(stream, "task-1", execution_id="e", iteration=2)
     await second("b", 0)
 
-    parts = [derive_part("llm.call.chunk", e.data["original_data"]) for e in broker.events]
+    parts = [derive_part("llm.call.chunk", e.data) for e in stream.events]
     assert parts[0] is not None
     assert parts[1] is not None
     assert parts[0].part_id != parts[1].part_id
 
 
 async def test_chunk_snapshots_preserve_text_through_empty_final_marker() -> None:
-    broker = CapturingBroker()
     stream = CapturingStreamBroker()
-    publish_chunk = create_event_publisher(
-        broker, "task-1", execution_id="e", iteration=2, broker_client=stream
-    )
+    publish_chunk = publisher_per_delta(stream, "task-1", execution_id="e", iteration=2)
 
     for index, (delta, is_final, expected) in enumerate(
         [("hel", False, "hel"), ("lo", False, "hello"), ("", True, "hello")]
     ):
         await publish_chunk(delta, index, is_final)
 
-        for parts in _published_parts(broker, stream):
-            assert len(parts) == 1
-            assert parts[0].part_id == "e:2"
-            assert parts[0].data["chunk"] == expected
-            assert parts[0].data["thinking"] == ""
-            assert parts[0].data["is_final"] is is_final
+        parts = _published_parts(stream)
+        assert len(parts) == 1
+        assert parts[0].part_id == "e:2"
+        assert parts[0].data["chunk"] == expected
+        assert parts[0].data["thinking"] == ""
+        assert parts[0].data["is_final"] is is_final
 
 
 async def test_thinking_and_text_accumulate_without_replacing_each_other() -> None:
-    broker = CapturingBroker()
     stream = CapturingStreamBroker()
-    publish_chunk = create_event_publisher(
-        broker, "task-1", execution_id="e", iteration=2, broker_client=stream
-    )
+    publish_chunk = publisher_per_delta(stream, "task-1", execution_id="e", iteration=2)
     steps = [
         ("Let", "thinking", False, "", "Let"),
         ("hel", "text", False, "hel", "Let"),
@@ -143,30 +121,25 @@ async def test_thinking_and_text_accumulate_without_replacing_each_other() -> No
     for index, (delta, channel, is_final, text, thinking) in enumerate(steps):
         await publish_chunk(delta, index, is_final, chunk_type=channel)
 
-        for parts in _published_parts(broker, stream):
-            assert len(parts) == 1
-            assert parts[0].part_id == "e:2"
-            assert parts[0].data["chunk"] == text
-            assert parts[0].data["thinking"] == thinking
-            assert parts[0].data["chunk_type"] == channel
+        parts = _published_parts(stream)
+        assert len(parts) == 1
+        assert parts[0].part_id == "e:2"
+        assert parts[0].data["chunk"] == text
+        assert parts[0].data["thinking"] == thinking
+        assert parts[0].data["chunk_type"] == channel
 
 
 async def test_new_attempt_replaces_previous_text_and_thinking() -> None:
-    broker = CapturingBroker()
     stream = CapturingStreamBroker()
-    first = create_event_publisher(
-        broker, "task-1", execution_id="e", iteration=2, broker_client=stream
-    )
+    first = publisher_per_delta(stream, "task-1", execution_id="e", iteration=2)
     await first("old reasoning", 0, chunk_type="thinking")
     await first("old answer", 1)
-    retry = create_event_publisher(
-        broker, "task-1", execution_id="e", iteration=2, broker_client=stream
-    )
+    retry = publisher_per_delta(stream, "task-1", execution_id="e", iteration=2)
 
     await retry("new", 0)
 
-    for parts in _published_parts(broker, stream):
-        assert len(parts) == 1
-        assert parts[0].part_id == "e:2"
-        assert parts[0].data["chunk"] == "new"
-        assert parts[0].data["thinking"] == ""
+    parts = _published_parts(stream)
+    assert len(parts) == 1
+    assert parts[0].part_id == "e:2"
+    assert parts[0].data["chunk"] == "new"
+    assert parts[0].data["thinking"] == ""

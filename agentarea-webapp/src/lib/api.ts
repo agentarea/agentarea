@@ -179,6 +179,15 @@ export const connectCatalogItem = async (
   return withStatus(result);
 };
 
+export const preflightCatalogConnection = async (itemId: string) => {
+  const result =
+    await sdk.preflightCatalogItemV1ConnectionsCatalogItemIdPreflightGet({
+      client: serverClient,
+      path: { item_id: itemId },
+    });
+  return withStatus(result);
+};
+
 export const analyzeBundle = async (body: AnalyzeRequest) => {
   const result = await sdk.analyzeBundleV1BundlesAnalyzePost({
     client: serverClient,
@@ -315,15 +324,8 @@ export const resumeAgentTask = async (agentId: string, taskId: string) => {
 
 export const continueAgentTask = async (
   taskId: string,
-  additionalIterations: number,
-  additionalBudgetUsd?: string
+  body: ContinueTaskPayload
 ) => {
-  const body: ContinueTaskPayload = {
-    additional_iterations: additionalIterations,
-  };
-  if (additionalBudgetUsd) {
-    body.additional_budget_usd = additionalBudgetUsd;
-  }
   const { data, error } =
     await sdk.continueTaskExecutionV1TasksTaskIdContinuePost({
       client: serverClient,

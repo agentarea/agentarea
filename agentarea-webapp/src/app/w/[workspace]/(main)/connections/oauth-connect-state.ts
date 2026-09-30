@@ -9,6 +9,7 @@
  * OAuth app.
  */
 
+import type { CatalogConnectionPreflight } from "@/api/client";
 import type { CustomOAuthAppCredentials } from "@/lib/oauth-app";
 
 export type { CustomOAuthAppCredentials };
@@ -22,6 +23,8 @@ export type MCPOAuthPreflight = {
   issuer: string | null;
   authorization_endpoint: string | null;
   scopes: string[];
+  /** Callback the user's own OAuth app must allow, when the API names one. */
+  redirect_uri?: string | null;
 };
 
 export type OAuthConnectState =
@@ -38,13 +41,22 @@ export type OAuthConnectState =
       connected: boolean;
       reason: string;
       issuer: string | null;
+      redirectUri?: string;
     };
+
+type CredentialFields<ReadyMode extends string> = {
+  credential_mode: ReadyMode | "custom";
+} & CustomOAuthAppCredentials;
 
 export type AuthorizeRequest = {
   instance_id: string;
-  credential_mode: "auto" | "custom";
   return_to?: string;
-} & CustomOAuthAppCredentials;
+} & CredentialFields<"auto">;
+
+/** A catalog template runs on the platform's OAuth app, or the user's own. */
+export type CatalogConnectRequest = {
+  return_to?: string;
+} & CredentialFields<"managed">;
 
 export function deriveOAuthConnectState({
   isUrlType,
@@ -68,10 +80,31 @@ export function deriveOAuthConnectState({
         connected: preflight.connected,
         reason: preflight.detail,
         issuer: preflight.issuer,
+        redirectUri: preflight.redirect_uri ?? undefined,
       };
     case "unsupported":
       return { kind: "unsupported", reason: preflight.detail };
   }
+}
+
+/**
+ * A catalog template answers the same question as an MCP server: the platform
+ * app is its "ready", the user's own app its "oauth_app_required". It never
+ * names an existing connection, so it is never already connected.
+ */
+export function catalogPreflightToMCP(
+  preflight: CatalogConnectionPreflight
+): MCPOAuthPreflight {
+  return {
+    instance_id: null,
+    status: preflight.status,
+    connected: false,
+    detail: preflight.detail,
+    issuer: null,
+    authorization_endpoint: null,
+    scopes: [],
+    redirect_uri: preflight.redirect_uri,
+  };
 }
 
 /**
@@ -92,13 +125,28 @@ export function buildAuthorizeRequest({
   credentials?: CustomOAuthAppCredentials | null;
   returnTo?: string;
 }): AuthorizeRequest | null {
-  const fields = authorizeFields(state, credentials);
+  const fields = credentialFields(state, credentials, "auto");
   if (!fields) return null;
   return {
     instance_id: instanceId,
     ...fields,
     ...(returnTo ? { return_to: returnTo } : {}),
   };
+}
+
+/** The catalog counterpart of `buildAuthorizeRequest`, under the same rule. */
+export function buildCatalogConnectRequest({
+  state,
+  credentials,
+  returnTo,
+}: {
+  state: OAuthConnectState;
+  credentials?: CustomOAuthAppCredentials | null;
+  returnTo?: string;
+}): CatalogConnectRequest | null {
+  const fields = credentialFields(state, credentials, "managed");
+  if (!fields) return null;
+  return { ...fields, ...(returnTo ? { return_to: returnTo } : {}) };
 }
 
 /**
@@ -112,14 +160,15 @@ export function canAuthorize({
   state: OAuthConnectState;
   credentials?: CustomOAuthAppCredentials | null;
 }): boolean {
-  return authorizeFields(state, credentials) !== null;
+  return credentialFields(state, credentials, "auto") !== null;
 }
 
-function authorizeFields(
+function credentialFields<ReadyMode extends string>(
   state: OAuthConnectState,
-  credentials: CustomOAuthAppCredentials | null | undefined
-): Omit<AuthorizeRequest, "instance_id" | "return_to"> | null {
-  if (state.kind === "ready") return { credential_mode: "auto" };
+  credentials: CustomOAuthAppCredentials | null | undefined,
+  readyMode: ReadyMode
+): CredentialFields<ReadyMode> | null {
+  if (state.kind === "ready") return { credential_mode: readyMode };
 
   if (state.kind !== "needs_oauth_app" || !credentials) return null;
 

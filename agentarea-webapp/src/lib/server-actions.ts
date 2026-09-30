@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type {
+  ContinueTaskPayload,
   CreateWalletRequest,
   CreateWorkspaceDirectoryRequest,
   FundWalletRequest,
@@ -196,14 +197,9 @@ export async function resumeAgentTaskAction(agentId: string, taskId: string) {
 
 export async function continueAgentTaskAction(
   taskId: string,
-  additionalIterations: number,
-  additionalBudgetUsd?: string
+  body: ContinueTaskPayload
 ) {
-  return await continueAgentTask(
-    taskId,
-    additionalIterations,
-    additionalBudgetUsd
-  );
+  return await continueAgentTask(taskId, body);
 }
 
 export async function sendTaskCommandAction(

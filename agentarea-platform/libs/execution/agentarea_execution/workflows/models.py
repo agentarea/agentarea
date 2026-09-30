@@ -163,6 +163,15 @@ class ContinueAsNewState(BaseModel):
     validation_state: str = "pending"
     validation_repair_attempts: int = 0
     validation_terminal: bool = False
+    # Events added after the last publish (e.g. by a signal handler during it);
+    # the next run publishes them.
+    pending_events: list[dict[str, Any]] = Field(default_factory=list)
+    budget_warning_sent: bool = False
+    currency: str | None = None
+    context_warning_sent: bool = False
+    compaction_count: int = 0
+    # DYNAMIC strategy: the discovered tool sources, so the catalog survives.
+    tool_providers: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AgentExecutionState(BaseModel):
@@ -201,6 +210,8 @@ class AgentExecutionState(BaseModel):
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0
     activated_tool_sources: list[str] = Field(default_factory=list)
+    # DYNAMIC strategy: the discovered tool sources the catalog is built from.
+    tool_providers: list[dict[str, Any]] = Field(default_factory=list)
     # Searchable OpenAPI pool: ToolCandidate-shaped dicts kept in workflow state
     # only — never sent to the LLM directly. Catalog text + `load_tools` meta-tool
     # mediate access (issue #115).

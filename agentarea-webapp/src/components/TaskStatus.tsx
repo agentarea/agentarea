@@ -45,14 +45,12 @@ export function TaskStatus({
   const label = useTaskStatusLabel(status);
   const showCaption =
     caption === "always" ||
-    (caption === "auto" && presentation.icon !== "check");
+    (caption === "auto" && presentation.kind !== "done");
 
   return (
     <StatusIndicator
       size={size}
-      tone={presentation.tone}
-      pulse={presentation.pulse}
-      icon={presentation.icon}
+      kind={presentation.kind}
       className={className}
       // The marker itself is aria-hidden, so a captionless indicator has to
       // carry the name on the root; the tooltip comes along for free.

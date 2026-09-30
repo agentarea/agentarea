@@ -32,6 +32,7 @@ import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/cr
 import {
   AgentTriggersLink,
   BasicInformation,
+  DelegationConfig,
   PresetPicker,
   SkillsConfig,
   ToolConfig,
@@ -46,6 +47,7 @@ import type { AddAgentFormState } from "../create/actions";
 import type { AgentFormValues, AgentSkill } from "../create/types";
 import { preferredModelId, presetFormValues } from "../create/utils/agentPreset";
 import { useChat } from "./ChatContext";
+import { delegatesOf, withDelegates } from "./delegationTools";
 
 type MCPServer = McpServerResponse;
 type LLMModelInstance = ModelInstanceResponse;
@@ -156,6 +158,7 @@ export default function AgentForm({
 
   // Watch agent name for chat header
   const watchedName = watch("name");
+  const carriedTools = watch("tools_config.carried_tools") ?? [];
   const [agentName, setAgentName] = useState("");
 
   // Skills state (managed separately from react-hook-form)
@@ -405,6 +408,17 @@ export default function AgentForm({
             <SkillsConfig
               selectedSkills={selectedSkills}
               onSkillsChange={handleSkillsChange}
+            />
+            <Divider />
+            <DelegationConfig
+              agentId={agentId}
+              delegates={delegatesOf(carriedTools)}
+              onDelegatesChange={(delegates) =>
+                setValue(
+                  "tools_config.carried_tools",
+                  withDelegates(carriedTools, new Set(delegates))
+                )
+              }
             />
             {/* Submit button moved to header controls */}
           </form>

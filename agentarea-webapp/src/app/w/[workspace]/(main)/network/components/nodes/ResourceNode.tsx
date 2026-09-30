@@ -11,9 +11,16 @@ import {
 } from "@xyflow/react";
 import { Globe, HelpCircle, LockKeyhole, Users } from "lucide-react";
 import EntityMark from "@/components/EntityMark";
+import {
+  StatusIndicator,
+  type StatusKind,
+} from "@/components/ui/status-indicator";
 import { cn } from "@/lib/utils";
 import type { NetworkFlowNodeData } from "../../types";
-import { getNetworkScope, getNodeIdentity } from "../../utils/networkConnections";
+import {
+  getNetworkScope,
+  getNodeIdentity,
+} from "../../utils/networkConnections";
 import { RESOURCE_TILE } from "../../utils/networkMapLayout";
 
 /**
@@ -40,6 +47,16 @@ export default function ResourceNode({
     status &&
     ["active", "running", "enabled", "connected", "available"].includes(status);
   const failed = status && ["error", "failed", "unhealthy"].includes(status);
+  const statusKind: StatusKind | null =
+    status === "active" || status === "running"
+      ? "running"
+      : failed
+        ? "failed"
+        : status === "inactive" || status === "disabled"
+          ? "off"
+          : active
+            ? "active"
+            : null;
   const statusLabel = status
     ? t.has(`statuses.${status}`)
       ? t(`statuses.${status}`)
@@ -80,13 +97,13 @@ export default function ResourceNode({
             className="h-5 w-5 rounded-[3px]"
           />
         </span>
-        {status && (
-          <span
-            className={cn(
-              "absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border-2 border-background bg-zinc-400",
-              active && "bg-emerald-500",
-              failed && "bg-red-500"
-            )}
+        {statusKind && (
+          <StatusIndicator
+            kind={statusKind}
+            size="sm"
+            aria-label={statusLabel ?? status}
+            title={statusLabel ?? status}
+            className="absolute -right-1 -top-1 rounded-full bg-background p-0.5"
           />
         )}
       </div>

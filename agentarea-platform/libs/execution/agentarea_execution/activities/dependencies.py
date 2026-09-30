@@ -235,17 +235,22 @@ class ActivityContext:
             self._scope.__exit__(exc_type, exc_val, exc_tb)
 
     async def _finish(self, exc_type) -> None:
-        # Handle commits/rollbacks first
+        # A failed commit means the activity's writes are lost, so it must fail
+        # the activity; a failed rollback only accompanies an error already raised.
+        commit_error: Exception | None = None
         for session in self._sessions:
+            committing = exc_type is None and self.auto_commit and commit_error is None
             try:
-                if exc_type is None and self.auto_commit:
-                    # No exception occurred, commit the transaction
+                if committing:
                     await session.commit()
                 else:
-                    # Exception occurred or auto_commit disabled, rollback
                     await session.rollback()
             except Exception as e:
-                logger.warning(f"Failed to commit/rollback session: {e}", exc_info=True)
+                if committing:
+                    logger.error(f"Failed to commit session: {e}", exc_info=True)
+                    commit_error = e
+                else:
+                    logger.warning(f"Failed to roll back session: {e}", exc_info=True)
 
         # Clean up sessions
         for session in self._sessions:
@@ -253,6 +258,9 @@ class ActivityContext:
                 await session.close()
             except Exception as e:
                 logger.warning(f"Failed to close session: {e}", exc_info=True)
+
+        if commit_error is not None:
+            raise commit_error
 
     async def get_agent_service(self) -> AgentService:
         """Get AgentService for this context."""

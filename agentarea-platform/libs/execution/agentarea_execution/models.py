@@ -98,6 +98,8 @@ class ContinueExecutionPayload(BaseModel):
 
     additional_iterations: int = Field(default=0, ge=0, le=1000)
     additional_budget_usd: Money | None = Field(default=None, gt=ZERO)
+    additional_tokens: int = Field(default=0, ge=0)
+    additional_tool_calls: int = Field(default=0, ge=0)
     effective_policy: dict[str, Any] | None = None
     governance_snapshot: dict[str, Any] | None = None
 

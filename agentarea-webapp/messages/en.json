@@ -467,7 +467,6 @@
     "activeTasks": "Active Tasks",
     "currentTasks": "Tasks",
     "payments": "Payments",
-    "delegation": "Delegation",
     "a2ui": "A2UI",
     "wallet": "Wallet & Payments",
     "browseAgents": "Browse Agents",
@@ -600,11 +599,16 @@
       "validationFailed": "Some fields are invalid.",
       "createFailed": "Couldn't create the agent"
     },
-    "delegationPage": {
-      "saveFailed": "Couldn't save delegation",
-      "description": "Enable delegation to allow this agent to start tasks on other agents.",
-      "saving": "Saving...",
-      "noOtherAgents": "No other agents in this workspace to delegate to."
+    "delegationConfig": {
+      "title": "Delegation",
+      "note": "Agents this agent can hand tasks to. Each one becomes a tool the agent can call.",
+      "sheetDescription": "Choose the agents this agent can delegate tasks to",
+      "add": "Agent",
+      "available": "Available agents",
+      "noOtherAgents": "No other agents in this workspace to delegate to.",
+      "createAgent": "Create an agent",
+      "empty": "No delegates. Add agents this agent can hand tasks to.",
+      "remove": "Remove {name}"
     },
     "list": {
       "loadFailed": "Couldn't load agents",
@@ -645,6 +649,12 @@
     "filters": {
       "type": "Type",
       "category": "Category"
+    },
+    "catalogConnect": {
+      "breadcrumb": "Connect",
+      "breadcrumbWithName": "Connect {name}",
+      "back": "Back to catalog",
+      "loadFailed": "Could not load this catalog connection"
     },
     "createInstance": {
       "breadcrumb": "Create instance",
@@ -749,6 +759,7 @@
         "needsAppTitle": "Needs an OAuth app",
         "needsAppTitleConnected": "Re-authorizing needs your OAuth app",
         "needsAppHint": "Enter a client ID and secret, or pick them from workspace secrets.",
+        "redirectUriLabel": "Redirect URI to register with the provider",
         "unauthorizedNote": "This server lists its tools without a token, so verification succeeds while nobody is authorized — tool calls stay unauthorized until you connect."
       },
       "status": {
@@ -1082,10 +1093,35 @@
       "createTaskFailed": "Couldn't start a new task",
       "sendFailed": "Couldn't send the message",
       "actionRejected": "The task did not accept the action",
-      "continueFailed": "Couldn't continue the task",
-      "continueGrantRequired": "Grant at least one iteration or a budget top-up.",
       "pauseFailed": "Couldn't pause the task",
       "resumeFailed": "Couldn't resume the task"
+    },
+    "continuation": {
+      "title": {
+        "iteration_limit": "The task reached its iteration limit.",
+        "budget_exceeded": "The task reached its budget limit.",
+        "token_limit": "The task reached its token limit.",
+        "tool_call_limit": "The task reached its tool-call limit.",
+        "unknown": "The task reached one of its limits."
+      },
+      "hint": "Grant only the resources you want it to use. It will wait for up to 24 hours.",
+      "fields": {
+        "iterations": "Additional iterations",
+        "budget": "Budget top-up ({currency})",
+        "tokens": "Additional tokens",
+        "toolCalls": "Additional tool calls"
+      },
+      "optionalField": "{label}, optional",
+      "submit": "Continue task",
+      "failed": "Couldn't continue the task",
+      "errors": {
+        "invalid": "Enter whole numbers within the allowed range and a positive budget.",
+        "grant_required": "Grant at least one resource to continue.",
+        "iterations_required": "Grant additional iterations to lift the iteration limit.",
+        "budget_required": "Add a budget top-up to lift the budget limit.",
+        "tokens_required": "Grant additional tokens to lift the token limit.",
+        "toolCalls_required": "Grant additional tool calls to lift the tool-call limit."
+      }
     }
   },
   "TasksPage": {
@@ -2577,8 +2613,6 @@
     "skillFilesLoadFailed": "Couldn't load the skill files",
     "catalogLoadFailed": "Couldn't load the catalog",
     "itemLoadFailed": "Couldn't load the catalog item",
-    "connectFailed": "Couldn't connect this account",
-    "unsafeRedirect": "the provider returned an unsafe sign-in address",
     "analyzeFailed": "Couldn't analyze the bundle",
     "installFailed": "Couldn't install the bundle",
     "agentInstallFailed": "Couldn't add the agent",

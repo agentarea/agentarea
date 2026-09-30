@@ -8,7 +8,6 @@ import {
   List,
   Play,
   SlidersHorizontal,
-  Users,
 } from "lucide-react";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 
@@ -17,7 +16,6 @@ const TABS = [
   { key: "new-task", icon: Play, labelKey: "createTask" },
   { key: "tasks", icon: List, labelKey: "currentTasks", counted: true },
   { key: "payments", icon: CreditCard, labelKey: "payments" },
-  { key: "delegation", icon: Users, labelKey: "delegation" },
   { key: "settings", icon: SlidersHorizontal, labelKey: "settings" },
 ] as const;
 

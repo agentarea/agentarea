@@ -87,6 +87,20 @@ async def test_autoclaim_recovers_from_dead_consumer(
     assert reclaimed[0].id == msg_id
 
 
+async def test_submit_with_ttl_refreshes_expiry_and_keeps_the_entry(
+    broker: RedisStreamsBroker, stream_name: str
+):
+    first = await broker.submit(stream_name, {"n": "1"}, maxlen=10, ttl_seconds=60)
+    client = await broker._get_client()
+    await client.expire(stream_name, 5)
+    second = await broker.submit(stream_name, {"n": "2"}, maxlen=10, ttl_seconds=60)
+
+    assert first != second
+    assert 5 < await client.ttl(stream_name) <= 60
+    _, messages = await broker.tail(stream_name, last_id="0", block_ms=100)
+    assert [m.id for m in messages] == [first, second]
+
+
 async def test_ensure_group_idempotent(broker: RedisStreamsBroker, stream_name: str):
     await broker.ensure_group(stream_name, GROUP)
     # Second call must not raise BUSYGROUP.

@@ -1,9 +1,13 @@
 """Compacting the conversation when it approaches the context window."""
 
+from typing import Any
+
 from temporalio import workflow
 from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
+    from agentarea_agents_sdk.skills import SkillContextGuard
+
     from ..context_manager import find_compaction_boundary, validate_tool_pairs
     from ..context_strategy import ContextStrategy, allows_history_preservation
     from ..helpers import MessageBuilder
@@ -22,15 +26,31 @@ from ..constants import (
     Activities,
     EventTypes,
 )
-from ..retry import make_retry_policy
+from ..retry import make_retry_policy, model_call_retry_policy
 from .budget import BudgetMixin
+from .patches import COMPACTION_BOUNDS_PAYLOAD_PATCH
 
 
 class CompactionMixin(BudgetMixin):
     """Compacting the conversation when it approaches the context window."""
 
-    async def _compact_context_if_needed(self) -> bool:
-        """Check context usage and compact if threshold exceeded.
+    def _conversation_payload(self) -> list[dict[str, Any]]:
+        """The conversation as it is sent to the model and carried across runs."""
+        return [
+            MessageBuilder.normalize_message_dict(
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "tool_call_id": msg.tool_call_id,
+                    "name": msg.name,
+                    "tool_calls": msg.tool_calls,
+                }
+            )
+            for msg in self.state.messages
+        ]
+
+    async def _compact_context_if_needed(self, *, force: bool = False) -> bool:
+        """Compact when the context window fills up, or unconditionally with ``force``.
 
         Uses the head-and-tail strategy:
         1. Keep system prompt (head)
@@ -40,7 +60,9 @@ class CompactionMixin(BudgetMixin):
 
         Returns True if compaction was performed.
         """
-        if not self.context_manager or not self.context_manager.needs_compaction():
+        if not self.context_manager:
+            return False
+        if not force and not self.context_manager.needs_compaction():
             return False
 
         workflow.logger.info(
@@ -61,14 +83,25 @@ class CompactionMixin(BudgetMixin):
             for msg in self.state.messages
         ]
 
-        # Find safe compaction boundary
-        boundary = find_compaction_boundary(messages_dict, keep_recent=4)
+        carry_skills = workflow.patched(COMPACTION_BOUNDS_PAYLOAD_PATCH)
+        boundary = find_compaction_boundary(messages_dict, keep_recent=4, carry_skills=carry_skills)
         if boundary <= 1:
             workflow.logger.warning("No safe compaction boundary found, skipping")
             return False
 
-        # Messages to compact: everything between system prompt and boundary
-        messages_to_compact = messages_dict[1:boundary]
+        # Messages to compact: everything between system prompt and boundary.
+        # Activated skill content is carried over verbatim, never summarized.
+        removed = messages_dict[1:boundary]
+        carried_skills = [
+            Message(role="user", content=message["content"])
+            for message in removed
+            if carry_skills and SkillContextGuard.is_protected(message)
+        ]
+        messages_to_compact = [
+            message
+            for message in removed
+            if not (carry_skills and SkillContextGuard.is_protected(message))
+        ]
         if not messages_to_compact:
             return False
 
@@ -99,6 +132,8 @@ class CompactionMixin(BudgetMixin):
                         f"History chunk store failed: {store_hist_result.error}"
                     )
             except Exception as e:
+                if self._is_cancellation(e):
+                    raise
                 workflow.logger.warning(
                     f"History preservation failed (non-blocking): {e}", exc_info=True
                 )
@@ -117,9 +152,10 @@ class CompactionMixin(BudgetMixin):
             result: CompactMessagesResult = await workflow.execute_activity(
                 Activities.COMPACT_MESSAGES,
                 args=[compact_request],
+                result_type=CompactMessagesResult,
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=make_retry_policy(2),
+                retry_policy=model_call_retry_policy(),
             )
             if result.cost is None or result.usage is None:
                 raise ApplicationError(
@@ -142,7 +178,7 @@ class CompactionMixin(BudgetMixin):
                 content=f"[Previous conversation summary]\n{result.summary}",
             )
 
-            self.state.messages = [system_msg, summary_msg, *recent_messages]
+            self.state.messages = [system_msg, *carried_skills, summary_msg, *recent_messages]
 
             # Validate tool pairs in new message list
             new_messages_dict = [
@@ -195,5 +231,7 @@ class CompactionMixin(BudgetMixin):
             return True
 
         except Exception as e:
+            if self._is_cancellation(e):
+                raise
             workflow.logger.error(f"Context compaction failed: {e}", exc_info=True)
             raise

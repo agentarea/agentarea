@@ -39,13 +39,19 @@ class BrokerClient(Protocol):
     """Durable stream broker."""
 
     async def submit(
-        self, stream: str, fields: dict[str, str], *, maxlen: int | None = None
+        self,
+        stream: str,
+        fields: dict[str, str],
+        *,
+        maxlen: int | None = None,
+        ttl_seconds: int | None = None,
     ) -> str:
         """Append a message to `stream`. Returns the broker-assigned message id.
 
         `maxlen` caps stream length with approximate trimming (the channel's
         retention policy for bounded buffers, e.g. live-tail streams). `None`
-        leaves the stream unbounded (durable log).
+        leaves the stream unbounded (durable log). `ttl_seconds` expires the
+        whole stream that long after its latest append; `None` never expires it.
         """
         raise NotImplementedError
 

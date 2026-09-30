@@ -1,6 +1,6 @@
 """Basic functionality tests to verify the setup works."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from agentarea_tasks.domain.models import TaskEvent
@@ -41,10 +41,14 @@ class TestBasicFunctionality:
         event_type = "LLMCallCompleted"
         data = {"tokens": 150, "cost": 0.001}
 
+        event_id = uuid4()
+        minted_at = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
         event = TaskEvent.create_workflow_event(
             task_id=task_id,
+            event_id=event_id,
             event_type=event_type,
             data=data,
+            timestamp=minted_at,
             workspace_id="test-workspace",
             created_by="test",
         )
@@ -55,8 +59,8 @@ class TestBasicFunctionality:
         assert event.workspace_id == "test-workspace"
         assert event.created_by == "test"
 
-        assert event.id is not None
-        assert isinstance(event.timestamp, datetime)
+        assert event.id == event_id
+        assert event.timestamp == minted_at
         assert event.metadata["source"] == "workflow"
 
     def test_task_event_with_defaults(self):
@@ -65,7 +69,9 @@ class TestBasicFunctionality:
 
         event = TaskEvent.create_workflow_event(
             task_id=task_id,
+            event_id=uuid4(),
             event_type="TaskStarted",
+            timestamp=datetime.now(UTC),
             data={"agent_id": str(uuid4())},
             workspace_id="default",
             created_by="workflow",
@@ -81,7 +87,9 @@ class TestBasicFunctionality:
 
         event = TaskEvent.create_workflow_event(
             task_id=task_id,
+            event_id=uuid4(),
             event_type="LLMCallStarted",
+            timestamp=datetime.now(UTC),
             data={"model": "gpt-4", "temperature": 0.7},
             workspace_id="test-workspace",
             created_by="workflow",

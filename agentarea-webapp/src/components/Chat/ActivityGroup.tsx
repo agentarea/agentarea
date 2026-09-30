@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type {
   A2UIActionHandler,
   HumanInputSecretValue,
@@ -15,6 +15,8 @@ import { ToolIcon } from "@/components/Chat/utils/toolIcon";
 import type { Part } from "@/lib/events/contract";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
 import { cn } from "@/lib/utils";
+import type { StatusKind } from "@/lib/status";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import type { ActivityRun } from "./activityView";
 
 interface ActivityGroupProps {
@@ -55,6 +57,13 @@ export function ActivityGroup({
       : run.terminalType === "task.cancelled"
         ? "Work stopped"
         : "Work completed";
+  const runKind: StatusKind = !run.completed
+    ? "running"
+    : run.terminalType === "task.failed"
+      ? "failed"
+      : run.terminalType === "task.cancelled"
+        ? "cancelled"
+        : "done";
   const toolParts = run.parts.filter((part) => part.kind === "tool");
   const actionSummary = summarizeToolGroup(
     toolParts.map((part) =>
@@ -102,17 +111,13 @@ export function ActivityGroup({
             className="h-4 w-4 shrink-0 text-muted-foreground"
           />
         ) : null}
-        {!run.completed && (
-          <Loader2
-            aria-hidden
-            className="h-3 w-3 animate-spin motion-reduce:animate-none"
-          />
-        )}
         <span className="text-foreground/80">{actionSummary || summary}</span>
         <span className="text-muted-foreground/60" aria-hidden>
           ·
         </span>
-        <span>{summary}</span>
+        <StatusIndicator kind={runKind} size="sm">
+          {summary}
+        </StatusIndicator>
         <span className="text-muted-foreground/60" aria-hidden>
           ·
         </span>
@@ -120,9 +125,14 @@ export function ActivityGroup({
           {run.actionCount} {run.actionCount === 1 ? "action" : "actions"}
         </span>
         {run.errorCount > 0 && (
-          <span className="text-red-600 dark:text-red-400">
-            · {run.errorCount} failed
-          </span>
+          <>
+            <span className="text-muted-foreground/60" aria-hidden>
+              ·
+            </span>
+            <StatusIndicator kind="failed" size="sm">
+              {run.errorCount} failed
+            </StatusIndicator>
+          </>
         )}
         <ChevronRight
           aria-hidden

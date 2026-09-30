@@ -38,7 +38,11 @@ def _record_replay_histories(request, monkeypatch):
 
     async def save(handle: WorkflowHandle) -> None:
         client = handle._client
-        candidates = [handle, client.get_workflow_handle(handle.id)]
+        candidates = [
+            client.get_workflow_handle(handle.id, run_id=handle.first_execution_run_id),
+            handle,
+            client.get_workflow_handle(handle.id),
+        ]
         for candidate in candidates:
             history = await candidate.fetch_history()
             for event in history.events:

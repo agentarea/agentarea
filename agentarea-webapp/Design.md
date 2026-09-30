@@ -487,22 +487,44 @@ heading are too heavy for that scale.
 
 ### Status / banners
 
-**One entity, one status component.** A status is a shared visual
-language, not a per-page decision: never re-derive a tone, label, dot,
-or icon at the call site.
+**One status component, icons only.** A status is a shared visual
+language, not a per-page decision: a status is always a lucide glyph from
+`<StatusIndicator kind>` — never a plain coloured dot, a coloured `<Badge>`,
+or a glyph/colour picked at the call site.
+
+The whole vocabulary is a closed set of **kinds** (`StatusKind` in
+`src/lib/status.ts`). The kind fixes the glyph and its colour; the label
+next to it stays neutral:
+
+| kind | glyph | colour | means |
+|---|---|---|---|
+| `draft` | `CircleDashed` | muted | not set up, never attempted, unknown |
+| `queued` | `Circle` | muted | accepted, not started |
+| `scheduled` | `Clock` | muted | waiting for its moment |
+| `running` | `LoaderCircle` (spins, motion-safe) | `--status-info` | in flight |
+| `attention` | `CircleAlert` | `--status-warning` | waiting on a person |
+| `paused` | `CirclePause` | muted | paused |
+| `active` | `CircleDot` | `--status-success` | switched on and healthy |
+| `off` | `CircleMinus` | muted | switched off, stopped, expired |
+| `done` | `CircleCheck` | `--primary` | finished successfully |
+| `failed` | `CircleX` | `--status-danger` | error, broken |
+| `cancelled` | `CircleSlash` | muted | cancelled, revoked, rejected |
 
 - **Task status** — every surface that shows a task's state (list row,
   table cell, page header, inbox, filter select, detail sheet) renders
-  `<TaskStatus status={…} />` from `src/components/TaskStatus.tsx`. It
-  owns tone, pulse, the "done" check marker, and the translated caption.
-  Use `caption="auto" | "never"` for dense rows, and
+  `<TaskStatus status={…} />` from `src/components/TaskStatus.tsx`. Use
+  `caption="auto" | "never"` for dense rows, and
   `useTaskStatusLabel(status)` when prose needs the name on its own.
-- **Every other entity status** (agent, trigger, trigger execution, MCP
-  health/verification, OpenAPI connection, API key, payment, policy,
-  invitation, sandbox) — take the presentation from
-  `src/lib/status.ts` (`get<Entity>StatusPresentation`) and feed it to
-  `<StatusIndicator tone pulse icon>`. A status the helpers don't cover
-  gets a new case in `src/lib/status.ts`, never a local colour map.
+- **Every other status** (agent, trigger, trigger execution, MCP,
+  connection, API key, payment, policy, invitation, billing) — a
+  `get<Entity>StatusPresentation()` in `src/lib/status.ts` returns
+  `{ label, kind }`; render `<StatusIndicator kind={p.kind}>`. A status the
+  helpers don't cover gets a new case there, never a local map at the call
+  site. A local vocabulary (connection verdict, invitation expiry) maps to
+  `StatusKind`, not to colours.
+- **Glyph only** — `<StatusIndicator kind="…" aria-label="…" />` without
+  children (avatar corner, graph node, group header marker). Charts that
+  need the raw colour read `STATUS_KIND_COLOR[kind]`.
 - **Inline destructive accent** (e.g. failure count): only the
   number/value turns `text-red-600`; surrounding row stays neutral.
 - **Pills / tags** (e.g. A2UI marker): `rounded-full bg-blue-100
@@ -608,9 +630,10 @@ ship a "we'll do dark mode later" component.
   affordance.
 - Mixing icon libraries.
 - Skipping i18n keys "for now".
-- Re-implementing a status pill/dot at the call site (`bg-green-500`,
-  a bare `<Badge>`, a local `tone` map) instead of `<TaskStatus>` /
-  `src/lib/status.ts` — the copies drift the moment the design moves.
+- Re-implementing a status at the call site — a coloured dot
+  (`bg-green-500`), a coloured `<Badge>`, a lucide `CheckCircle`/`XCircle`
+  chosen locally, a state→colour map — instead of `<StatusIndicator kind>`
+  / `<TaskStatus>`. The copies drift the moment the design moves.
 - Copy-pasting a block of JSX that already exists as a component.
   Second occurrence of a UI pattern → extract it into
   `src/components/` and use it in both places in the same change.
@@ -631,9 +654,9 @@ ship a "we'll do dark mode later" component.
 - [ ] Surface choice is intentional — clickable card vs static panel.
 - [ ] Searched `src/components/` first — reused the existing component
       instead of a second variant of it.
-- [ ] Status shown through `<TaskStatus>` (tasks) or a
-      `src/lib/status.ts` presentation + `<StatusIndicator>` (everything
-      else).
+- [ ] Status shown through `<TaskStatus>` (tasks) or
+      `<StatusIndicator kind>` fed by a `src/lib/status.ts` presentation
+      (everything else) — no dots, no coloured badges.
 
 ### References
 
@@ -652,4 +675,4 @@ ship a "we'll do dark mode later" component.
 
 ---
 
-*Last updated: 2026-09-20*
+*Last updated: 2026-09-29*

@@ -106,9 +106,23 @@ supply per connection. Ask the preflight endpoint rather than guessing.
     endpoint itself accepts. `offline_access` is added only when the authorization
     server advertises it — asking a provider for a scope it never claimed risks
     `invalid_scope` on the consent screen, which costs the whole authorization
-    rather than just its refresh token. Google ignores `offline_access` altogether and
-    issues a refresh token only for `access_type=offline` on a fresh consent, so
-    its authorize URL carries `access_type=offline` and `prompt=consent` instead.
+    rather than just its refresh token.
+
+    A provider that needs more than OAuth 2.1 declares it on the server's catalog
+    spec, under `metadata["agentarea:oauth_authorize_params"]`, and those parameters
+    are added to the authorize URL. Google ignores `offline_access` and issues a
+    refresh token only for `access_type=offline` on a fresh consent, so its catalog
+    entries declare:
+
+    ```json
+    "agentarea:oauth_authorize_params": { "access_type": "offline", "prompt": "consent" }
+    ```
+
+    A spec without the key gets no extra parameters — a hand-made Google spec then
+    connects, but without a refresh token, and needs reconnecting once the access
+    token expires. The key may not replace a parameter the flow sets itself
+    (`client_id`, `redirect_uri`, `state`, `scope`, `resource`, PKCE); such a spec
+    is refused with a 502.
 
     `return_to` is where the browser lands afterwards. It is validated against an
     allowed base, so an arbitrary URL is rejected.

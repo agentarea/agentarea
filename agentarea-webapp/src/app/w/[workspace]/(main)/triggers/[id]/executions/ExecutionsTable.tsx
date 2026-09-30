@@ -47,8 +47,7 @@ export default function ExecutionsTable({
         return (
           <StatusIndicator
             size="sm"
-            tone={status.tone}
-            pulse={status.pulse}
+            kind={status.kind}
             className="whitespace-nowrap"
           >
             {status.label}

@@ -16,7 +16,16 @@ from temporalio.worker.workflow_sandbox import (
 # the default sandbox that env read raises RestrictedWorkflowAccessError and
 # fails the workflow task — which Temporal then retries forever, hanging the run.
 # Passthrough is Temporal's documented fix for libraries that touch os.environ.
-_PASSTHROUGH_MODULES = ("opentelemetry",)
+# The model modules are passed through for speed: every new run (continue-as-new,
+# replay after eviction) re-imports the rest, and under CPU load a slow import
+# trips Temporal's 2 s deadlock detector.
+_PASSTHROUGH_MODULES = (
+    "opentelemetry",
+    "pydantic",
+    "pydantic_core",
+    "agentarea_execution.models",
+    "agentarea_execution.workflows.models",
+)
 
 
 def create_workflow_runner() -> SandboxedWorkflowRunner:

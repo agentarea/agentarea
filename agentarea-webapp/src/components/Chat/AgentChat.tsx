@@ -1,9 +1,8 @@
 "use client";
 
 import React from "react";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { ChevronDown } from "lucide-react";
 import type { HumanInputSecretValue } from "@/components/Chat/types";
 import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,9 @@ import {
 } from "@/components/ui/card";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useTaskActions } from "@/hooks/useTaskActions";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
+import { latestContinuationReason } from "@/lib/continuation";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
 import { useTaskEvents } from "@/lib/events/useTaskEvents";
 import { getTaskStatusPresentation } from "@/lib/status";
@@ -24,6 +25,7 @@ import { cn } from "@/lib/utils";
 import ActivityGroup from "./ActivityGroup";
 import { buildActivitySegments } from "./activityView";
 import { ChatInputArea } from "./componets/ChatInputArea";
+import { ContinuationGrantForm } from "./ContinuationGrantForm";
 import { useA2UIActions } from "./hooks/useA2UIActions";
 import { useFileUpload } from "./hooks/useFileUpload";
 import { useScrollManagement } from "./hooks/useScrollManagement";
@@ -40,6 +42,7 @@ interface AgentChatProps {
   status?: string;
   className?: string;
   height?: string;
+  onContinued?: () => Promise<void> | void;
 }
 
 // Statuses where the workflow is still alive and a free-text message should be
@@ -51,6 +54,7 @@ export default function AgentChat({
   taskId,
   status = "",
   className = "",
+  onContinued,
 }: AgentChatProps) {
   const router = useWorkspaceRouter();
   const t = useTranslations("Chat.errors");
@@ -58,6 +62,7 @@ export default function AgentChat({
 
   const {
     parts,
+    timeline,
     executionStatus,
     isInteractionClosed,
     pendingForm,
@@ -72,10 +77,7 @@ export default function AgentChat({
   });
 
   const actions = useTaskActions(agent.id, taskId);
-  const { dispatchAction, error: a2uiError } = useA2UIActions(
-    agent.id,
-    taskId
-  );
+  const { dispatchAction, error: a2uiError } = useA2UIActions(agent.id, taskId);
   const effectiveStatus = parts.length > 0 ? streamStatus : status;
 
   const {
@@ -98,9 +100,7 @@ export default function AgentChat({
 
   const [input, setInput] = React.useState("");
   const [sending, setSending] = React.useState(false);
-  const [composerError, setComposerError] = React.useState<string | null>(
-    null
-  );
+  const [composerError, setComposerError] = React.useState<string | null>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   const isActive =
@@ -182,9 +182,8 @@ export default function AgentChat({
     }
   };
 
-  // The banner colour is the task's own status colour — same source as the
-  // status chip on every list, header and inbox row.
-  const terminalTone = getTaskStatusPresentation(streamStatus).tone;
+  // The terminal banner uses the same status kind as the shared status chip.
+  const terminalKind = getTaskStatusPresentation(streamStatus).kind;
 
   return (
     <Card
@@ -233,7 +232,7 @@ export default function AgentChat({
             )
           )}
           {terminalMessage && streamStatus !== "completed" && (
-            <StatusIndicator tone={terminalTone}>
+            <StatusIndicator kind={terminalKind}>
               {terminalMessage}
             </StatusIndicator>
           )}
@@ -261,39 +260,49 @@ export default function AgentChat({
       <CardFooter className="p-0">
         <div className="w-full bg-background">
           <div className="mx-auto w-full max-w-3xl px-4 py-3 md:px-6">
-            {(composerError || a2uiError) && (
-              <div className="mb-2 space-y-2">
-                {composerError && <FormError>{composerError}</FormError>}
-                {a2uiError && <FormError>{a2uiError}</FormError>}
-              </div>
+            {effectiveStatus === "waiting_for_continuation" ? (
+              <ContinuationGrantForm
+                taskId={taskId}
+                failureReason={latestContinuationReason(timeline)}
+                onContinued={onContinued}
+              />
+            ) : (
+              <>
+                {(composerError || a2uiError) && (
+                  <div className="mb-2 space-y-2">
+                    {composerError && <FormError>{composerError}</FormError>}
+                    {a2uiError && <FormError>{a2uiError}</FormError>}
+                  </div>
+                )}
+                <ChatInputArea
+                  input={input}
+                  onInputChange={handleInputChange}
+                  onSubmit={handleSend}
+                  isLoading={sending}
+                  placeholder={
+                    isActive
+                      ? `Message ${agent.name}...`
+                      : `Send a follow-up to ${agent.name}...`
+                  }
+                  selectedFiles={selectedFiles}
+                  onRemoveFile={removeFile}
+                  onOpenFileDialog={openFileDialog}
+                  onFileSelect={handleFileSelect}
+                  attachmentNotice={`Files will be sent in a new task with ${agent.name}.`}
+                  fileInputRef={fileInputRef}
+                  textareaRef={textareaRef}
+                  variant="default"
+                  sendButtonIcon="send"
+                  rows={1}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend(e);
+                    }
+                  }}
+                />
+              </>
             )}
-            <ChatInputArea
-              input={input}
-              onInputChange={handleInputChange}
-              onSubmit={handleSend}
-              isLoading={sending}
-              placeholder={
-                isActive
-                  ? `Message ${agent.name}...`
-                  : `Send a follow-up to ${agent.name}...`
-              }
-              selectedFiles={selectedFiles}
-              onRemoveFile={removeFile}
-              onOpenFileDialog={openFileDialog}
-              onFileSelect={handleFileSelect}
-              attachmentNotice={`Files will be sent in a new task with ${agent.name}.`}
-              fileInputRef={fileInputRef}
-              textareaRef={textareaRef}
-              variant="default"
-              sendButtonIcon="send"
-              rows={1}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend(e);
-                }
-              }}
-            />
           </div>
         </div>
       </CardFooter>

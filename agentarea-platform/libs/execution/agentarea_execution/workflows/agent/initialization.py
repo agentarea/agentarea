@@ -10,19 +10,11 @@ with workflow.unsafe.imports_passed_through():
 
     from agentarea_agents_sdk.skills import SkillActivationTool, SkillCatalogBuilder, SkillEntry
     from agentarea_agents_sdk.tools.disclosure import DisclosureContext, NamedLookupPolicy
-    from agentarea_agents_sdk.tools.tool_catalog import ToolCatalog
-    from agentarea_agents_sdk.tools.tool_provider import (
-        AgentToolProvider,
-        BuiltinToolProvider,
-        CodeToolProvider,
-        MCPToolProvider,
-    )
     from agentarea_common.money import serialize_money
 
     from ...interaction import resolve_interaction_capabilities
     from ..context_manager import ContextWindowManager
     from ..context_strategy import (
-        allows_output_offloading,
         allows_tool_progressive_disclosure,
         resolve_context_strategy,
     )
@@ -201,6 +193,8 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
                     f"{self.state.resolved_model.get('model_name') if self.state.resolved_model else None}"
                 )
             except Exception as e:
+                if self._is_cancellation(e):
+                    raise
                 workflow.logger.warning(
                     f"Could not pre-resolve model {model_id}, will fall back to per-call lookup: {e}",
                     exc_info=True,
@@ -235,23 +229,11 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
             )
 
             self.state.mcp_tool_routes = dict(providers_result.mcp_tool_routes)
-
-            # Reconstruct ToolProviders from serialized data
-            providers = []
-            for pd in providers_result.providers:
-                provider_map = {
-                    "mcp": lambda d: MCPToolProvider(name=d.name, instance_id="", tools=d.tools),
-                    "code": lambda d: CodeToolProvider(name=d.name, tools=d.tools),
-                    "agent": lambda d: AgentToolProvider(name=d.name, agent_id="", tools=d.tools),
-                    "builtin": lambda d: BuiltinToolProvider(name=d.name, tools=d.tools),
-                }
-                factory = provider_map.get(pd.provider_type)
-                if factory:
-                    providers.append(factory(pd))
-
-            # Build catalog with previously activated sources carried from continue-as-new
-            activated = set(getattr(self.state, "activated_tool_sources", []) or [])
-            self._tool_catalog = ToolCatalog(providers, activated=activated)
+            self.state.tool_providers = [
+                provider.model_dump() for provider in providers_result.providers
+            ]
+            catalog, providers = self._rebuild_tool_catalog()
+            activated = set(self.state.activated_tool_sources)
 
             # Start with tools from already-activated sources + builtin tools
             available_tools: list[dict[str, Any]] = []
@@ -260,7 +242,7 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
                     available_tools.extend(p.get_tool_definitions())
 
             # Add activate_tool_source tool
-            available_tools.append(self._tool_catalog.get_activate_tool_source_definition())
+            available_tools.append(catalog.get_activate_tool_source_definition())
 
         else:
             # STATIC/HYBRID mode: load all tools upfront (current behavior).
@@ -364,9 +346,9 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         # recall_history — query past execution context
         available_tools.append(recall_history_tool_schema())
 
-        # Inject read_tool_output for retrieving offloaded large outputs (hybrid/dynamic)
-        if allows_output_offloading(strategy):
-            available_tools.append(read_tool_output_tool_schema())
+        # Tool activities offload large outputs under every strategy, and the
+        # summary they leave points the model at read_tool_output.
+        available_tools.append(read_tool_output_tool_schema())
 
         # Inject built-in activate_skill tool for progressive skill disclosure
         skills = self.state.agent_config.get("skills", [])

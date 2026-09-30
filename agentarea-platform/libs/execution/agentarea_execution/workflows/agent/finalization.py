@@ -14,12 +14,11 @@ with workflow.unsafe.imports_passed_through():
 from ...models import AgentExecutionResult, UpdateTaskStatusRequest
 from ..constants import (
     ACTIVITY_TIMEOUT,
-    DEFAULT_RETRY_ATTEMPTS,
     Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import make_retry_policy
+from ..retry import bookkeeping_retry_policy
 from .budget import BudgetMixin
 from .errors import ErrorReportingMixin
 
@@ -117,7 +116,7 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=bookkeeping_retry_policy(),
         )
         if self._interaction_contract_enabled:
             self._events.add_event(
@@ -197,5 +196,5 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                     )
                 ],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=bookkeeping_retry_policy(),
             )

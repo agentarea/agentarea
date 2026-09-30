@@ -170,18 +170,24 @@ _ALL_ACTIVITIES = [
 ]
 
 
-def _policy(*, max_model_turns: int, run_budget_usd: str) -> dict[str, Any]:
+def _policy(
+    *,
+    max_model_turns: int,
+    run_budget_usd: str,
+    max_tokens: int = 20_000,
+    max_tool_calls_total: int = 100,
+) -> dict[str, Any]:
     return effective_policy_from_json(
         {
             "budget": {"run_budget_usd": run_budget_usd},
             "tokens": {
-                "max_tokens": 20_000,
+                "max_tokens": max_tokens,
                 "max_tokens_per_call": 2_000,
             },
             "execution": {
                 "max_model_turns": max_model_turns,
                 "max_tool_calls_per_turn": 10,
-                "max_tool_calls_total": 100,
+                "max_tool_calls_total": max_tool_calls_total,
             },
         }
     ).to_json_dict()
@@ -193,14 +199,22 @@ def _continuation_payload(
     current_budget_usd: str,
     additional_iterations: int = 0,
     additional_budget_usd: str | None = None,
+    current_tokens: int = 20_000,
+    additional_tokens: int = 0,
+    current_tool_calls: int = 100,
+    additional_tool_calls: int = 0,
 ) -> dict[str, Any]:
     next_budget = to_money(current_budget_usd) + to_money(additional_budget_usd or "0")
     policy = _policy(
         max_model_turns=current_iterations + additional_iterations,
         run_budget_usd=serialize_money(next_budget),
+        max_tokens=current_tokens + additional_tokens,
+        max_tool_calls_total=current_tool_calls + additional_tool_calls,
     )
     payload: dict[str, Any] = {
         "additional_iterations": additional_iterations,
+        "additional_tokens": additional_tokens,
+        "additional_tool_calls": additional_tool_calls,
         "effective_policy": policy,
         "governance_snapshot": {
             "effective_policy": policy,
@@ -216,6 +230,8 @@ def _make_request(
     max_iterations: int = 1,
     budget_usd: float = 1.0,
     workflow_metadata: dict[str, Any] | None = None,
+    max_tokens: int = 20_000,
+    max_tool_calls_total: int = 100,
 ) -> AgentExecutionRequest:
     return AgentExecutionRequest(
         task_id=uuid.uuid4(),
@@ -230,6 +246,8 @@ def _make_request(
         effective_policy=_policy(
             max_model_turns=max_iterations,
             run_budget_usd=str(budget_usd),
+            max_tokens=max_tokens,
+            max_tool_calls_total=max_tool_calls_total,
         ),
     )
 
@@ -494,3 +512,85 @@ async def test_continue_signal_ignored_when_not_waiting():
 
                 assert result.success is True
                 assert "waiting_for_continuation" not in _status_updates
+
+
+async def _run_until_limit_then_grant(
+    request: AgentExecutionRequest,
+    failure_reason: str,
+    grant: dict[str, Any],
+) -> Any:
+    env = await WorkflowEnvironment.start_time_skipping(
+        data_converter=pydantic_data_converter,
+    )
+    async with env:
+        task_queue = f"test-{uuid.uuid4()}"
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            worker = Worker(
+                env.client,
+                task_queue=task_queue,
+                workflows=[AgentExecutionWorkflow],
+                activities=_ALL_ACTIVITIES,
+                activity_executor=executor,
+            )
+            async with worker:
+                handle = await env.client.start_workflow(
+                    AgentExecutionWorkflow.run,
+                    request,
+                    id=f"test-{uuid.uuid4()}",
+                    task_queue=task_queue,
+                    execution_timeout=timedelta(days=2),
+                )
+                await _wait_for_status(handle, "waiting_for_continuation")
+                await _wait_for_event("task.awaiting_continuation")
+                awaiting = next(
+                    e for e in _published if e.get("event_type") == "task.awaiting_continuation"
+                )
+                assert awaiting["data"]["failure_reason"] == failure_reason
+                assert "task.failed" not in _published_types()
+
+                rejected = await handle.execute_update(
+                    AgentExecutionWorkflow.continue_execution,
+                    _continuation_payload(
+                        current_iterations=10,
+                        current_budget_usd="1.0",
+                        additional_iterations=5,
+                    ),
+                )
+                assert rejected["accepted"] is False
+
+                accepted = await handle.execute_update(
+                    AgentExecutionWorkflow.continue_execution,
+                    _continuation_payload(current_iterations=10, current_budget_usd="1.0", **grant),
+                )
+                assert accepted["accepted"] is True
+                return await handle.result()
+
+
+@pytest.mark.asyncio
+async def test_token_limit_waits_then_granted_tokens_complete_task():
+    global _complete_on_call
+    _complete_on_call = 3
+
+    result = await _run_until_limit_then_grant(
+        _make_request(max_iterations=10, max_tokens=20),
+        "token_limit",
+        {"current_tokens": 20, "additional_tokens": 1_000},
+    )
+
+    assert result.success is True
+    assert result.final_response == "finished after continuation"
+
+
+@pytest.mark.asyncio
+async def test_tool_call_limit_waits_then_granted_calls_complete_task():
+    global _complete_on_call
+    _complete_on_call = 4
+
+    result = await _run_until_limit_then_grant(
+        _make_request(max_iterations=10, max_tool_calls_total=2),
+        "tool_call_limit",
+        {"current_tool_calls": 2, "additional_tool_calls": 10},
+    )
+
+    assert result.success is True
+    assert result.final_response == "finished after continuation"
