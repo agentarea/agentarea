@@ -5,7 +5,7 @@ from typing import Any, cast
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from agentarea_agents_sdk.tools.a2a_agent_tool import delegate_tool_name
+from agentarea_agents_sdk.tools.a2a_agent_tool import agent_address, delegate_tool_name
 from agentarea_common.audit import audited
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.base import RepositoryFactory
@@ -213,8 +213,8 @@ class AgentService(BaseCrudService[Agent]):
             settings = tool.get("settings") or {}
             url = settings.get("a2a_url")
             if url is not None:
-                # A pasted URL often carries a trailing space the worker would send.
-                url = settings["a2a_url"] = url.strip()
+                # Stored as the agent's address, however it was pasted.
+                url = settings["a2a_url"] = agent_address(url)
                 parts = urlsplit(url)
                 if parts.scheme not in ("http", "https") or not parts.hostname:
                     raise InvalidDelegateError(

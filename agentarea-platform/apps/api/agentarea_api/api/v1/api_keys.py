@@ -10,14 +10,16 @@ API Key lifecycle (management — JWT-protected):
 import logging
 from uuid import UUID
 
+from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_api.api.deps.services import DatabaseSessionDep
 from agentarea_common.auth.authorization import assert_workspace_admin, is_workspace_admin
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.access_token_service import APIKeyService
 from agentarea_mcp.infrastructure.auth_repository import APIKeyRepository
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,13 @@ class APIKeyCreateRequest(BaseModel):
         le=3650,
         description="Optional expiry in days (omit for non-expiring)",
     )
+    agent_id: UUID | None = Field(
+        default=None,
+        description=(
+            "Bind the key to one agent of this workspace: it then reaches only that "
+            "agent over A2A, nothing else. The key to hand to a caller outside the workspace."
+        ),
+    )
 
 
 class APIKeyResponse(BaseModel):
@@ -67,6 +76,9 @@ class APIKeyResponse(BaseModel):
     access_count: int
     last_accessed_at: UtcDatetime | None
     created_at: UtcDatetime
+    agent_id: UUID | None = Field(
+        default=None, description="The one agent the key reaches over A2A; None for a workspace key"
+    )
 
     class Config:
         """Pydantic config."""
@@ -98,13 +110,20 @@ class APIKeyCreateResponse(APIKeyResponse):
 )
 async def create_api_key(
     data: APIKeyCreateRequest,
+    db_session: DatabaseSessionDep,
+    user_context: UserContextDep,
     service: APIKeyService = Depends(get_api_key_service),
 ):
     """Create a new API key. The raw ``token`` value is returned once — store it securely."""
+    if data.agent_id is not None:
+        agents = RepositoryFactory(db_session, user_context).create_repository(AgentRepository)
+        if await agents.get_by_id(data.agent_id) is None:
+            raise HTTPException(status_code=404, detail="Agent not found")
     try:
         record, raw_token = await service.create_token(
             name=data.name,
             expires_in_days=data.expires_in_days,
+            agent_id=data.agent_id,
         )
         base = APIKeyResponse.model_validate(record)
         return APIKeyCreateResponse(**base.model_dump(), token=raw_token)
@@ -123,13 +142,14 @@ async def create_api_key(
 )
 async def list_api_keys(
     user_context: UserContextDep,
+    agent_id: UUID | None = Query(default=None, description="Only the keys bound to this agent"),
     service: APIKeyService = Depends(get_api_key_service),
 ):
     """List the API keys the caller may see: all of the workspace's for an admin, else their own."""
     if await is_workspace_admin(user_context):
-        tokens = await service.list_tokens()
+        tokens = await service.list_tokens(agent_id=agent_id)
     else:
-        tokens = await service.list_tokens(created_by=user_context.user_id)
+        tokens = await service.list_tokens(created_by=user_context.user_id, agent_id=agent_id)
     return [APIKeyResponse.model_validate(t) for t in tokens]
 
 

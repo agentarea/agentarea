@@ -55,7 +55,7 @@ def _authz():
 def _client(context: UserContext) -> TestClient:
     keys = {MINE.id: MINE, THEIRS.id: THEIRS}
 
-    async def list_tokens(created_by: str | None = None):
+    async def list_tokens(created_by: str | None = None, agent_id=None):
         return [k for k in keys.values() if created_by is None or k.created_by == created_by]
 
     service = AsyncMock()

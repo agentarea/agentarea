@@ -18,14 +18,15 @@ import json
 
 import httpx
 import pytest
-from a2a.types import Artifact, Part, Task, TaskState, TaskStatus
+from a2a.types import AgentCard, AgentInterface, Artifact, Part, Task, TaskState, TaskStatus
 from agentarea_common.testing.flows import MainFlow
 from google.protobuf.json_format import MessageToDict
 
 from agentarea_agents_sdk.tools.a2a_agent_tool import A2AAgentTool, delegate_tool_name
 
 _SPECIALIST_NAME = "data_analyst"
-_SPECIALIST_URL = "http://specialist.internal/a2a/rpc"
+_SPECIALIST_URL = "http://specialist.internal"
+_SPECIALIST_RPC_URL = f"{_SPECIALIST_URL}/a2a/rpc"
 _SPECIALIST_RESULT = "Analysis complete: revenue up 12% QoQ."
 
 
@@ -45,6 +46,16 @@ def _specialist(result: dict | None = None, *, error: dict | None = None, status
     seen: list[httpx.Request] = []
 
     def handle(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path == "/.well-known/agent-card.json":
+            card = AgentCard(
+                name=_SPECIALIST_NAME,
+                supported_interfaces=[
+                    AgentInterface(
+                        url=_SPECIALIST_RPC_URL, protocol_binding="JSONRPC", protocol_version="1.0"
+                    )
+                ],
+            )
+            return httpx.Response(200, json=MessageToDict(card))
         seen.append(request)
         if status_code != 200:
             return httpx.Response(status_code)
@@ -119,7 +130,7 @@ class TestA2ADelegationFlow:
 
         # The outbound request must be a valid A2A SendMessage JSON-RPC call.
         [request] = seen
-        assert str(request.url) == _SPECIALIST_URL
+        assert str(request.url) == _SPECIALIST_RPC_URL
         body = json.loads(request.content)
         assert body["method"] == "SendMessage"
         assert body["jsonrpc"] == "2.0"

@@ -23,7 +23,7 @@ from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig
 from agentarea_secrets.models import EncryptedSecret
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-URL = "https://agentarea.ru/v1/agents/x/a2a/rpc"
+URL = "https://x.a2a.agentarea.ru"
 
 
 @pytest.fixture(autouse=True)
@@ -111,7 +111,7 @@ async def test_an_admin_binds_a_workspace_secret_to_a_remote_delegate(session):
 
     agent = await _service(session, admin=True).create_agent(_create([_remote()]))
 
-    assert agent.tools[0]["settings"]["auth_secret_name"] == "aadocs-key"
+    assert agent.tools[0]["settings"]["auth_secret_name"] == "aadocs-key"  # pragma: allowlist secret
 
 
 async def test_a_member_may_not_bind_a_secret(session):
@@ -158,7 +158,7 @@ async def test_a_managed_secret_is_refused(session):
     await _secret(session, "oauth-token", owner_type="connection")
 
     with pytest.raises(InvalidDelegateError, match="managed"):
-        await _service(session, admin=True).create_agent(_create([_remote(secret="oauth-token")]))
+        await _service(session, admin=True).create_agent(_create([_remote(secret="oauth-token")]))  # pragma: allowlist secret
 
 
 @pytest.mark.parametrize("url", ["", "ftp://host/rpc", "agentarea.ru/rpc", "https://"])
@@ -170,6 +170,17 @@ async def test_a_remote_delegate_needs_an_http_url(session, url):
 async def test_a_pasted_url_is_stored_without_surrounding_spaces(session):
     agent = await _service(session, admin=True).create_agent(
         _create([_remote(url=f"  {URL} ", secret=None)])
+    )
+
+    assert agent.tools[0]["settings"]["a2a_url"] == URL
+
+
+@pytest.mark.parametrize(
+    "pasted", [f"{URL}/", f"{URL}/.well-known/agent-card.json", f" {URL}/.well-known/agent-card.json "]
+)
+async def test_a_pasted_card_url_is_stored_as_the_agents_address(session, pasted):
+    agent = await _service(session, admin=True).create_agent(
+        _create([_remote(url=pasted, secret=None)])
     )
 
     assert agent.tools[0]["settings"]["a2a_url"] == URL
@@ -189,7 +200,7 @@ async def test_an_edited_url_is_stored_without_surrounding_spaces(session):
 
 async def test_a_secret_without_a_url_is_refused(session):
     await _secret(session, "aadocs-key")
-    tool = {"type": "agent", "name": "docs-writer", "settings": {"auth_secret_name": "aadocs-key"}}
+    tool = {"type": "agent", "name": "docs-writer", "settings": {"auth_secret_name": "aadocs-key"}}  # pragma: allowlist secret
 
     with pytest.raises(InvalidDelegateError, match="a2a_url"):
         await _service(session, admin=True).create_agent(_create([tool]))

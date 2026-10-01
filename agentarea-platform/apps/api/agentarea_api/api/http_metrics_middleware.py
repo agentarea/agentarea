@@ -12,7 +12,7 @@ from agentarea_common.observability.metrics import (
     HTTP_REQUEST_DURATION,
     HTTP_REQUESTS_IN_PROGRESS,
 )
-from starlette.routing import Match
+from starlette.routing import BaseRoute, Host, Match
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 UNMATCHED_ROUTE = "<unmatched>"
@@ -21,15 +21,23 @@ KNOWN_METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPT
 OTHER_METHOD = "OTHER"
 
 
+def _template(route: BaseRoute) -> str:
+    return route.host if isinstance(route, Host) else getattr(route, "path", UNMATCHED_ROUTE)
+
+
 def route_template(scope: Scope) -> str:
-    """The template of the route ``scope`` resolves to, as the router would pick it."""
+    """The template of the route ``scope`` resolves to, as the router would pick it.
+
+    A route matched by host, such as an agent's own A2A host, is labelled by
+    its host template.
+    """
     partial: str | None = None
     for route in scope["app"].router.routes:
         match, _ = route.matches(scope)
         if match == Match.FULL:
-            return route.path
+            return _template(route)
         if match == Match.PARTIAL and partial is None:
-            partial = route.path
+            partial = _template(route)
     return partial or UNMATCHED_ROUTE
 
 

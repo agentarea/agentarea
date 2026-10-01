@@ -66,6 +66,10 @@ class UserPrincipal:
     client_id: str | None = None
     # An API key acts only in the workspace it was issued for.
     bound_workspace_id: str | None = None
+    # An agent's key reaches that one agent over A2A and no workspace at all.
+    bound_agent_id: str | None = None
+    # The API key that authenticated the request, if one did.
+    api_key_id: str | None = None
     # ``None`` until resolved per request; ``[]`` means resolved and none.
     accessible_workspaces: list[str] | None = None
     admin_workspaces: list[str] | None = None

@@ -1,21 +1,23 @@
-"""Agent-specific well-known endpoints for A2A protocol.
+"""Agent-specific well-known endpoints for A2A protocol, under the API host.
 
-This module provides well-known endpoints for individual agents.
-Each agent gets its own /.well-known/agent-card.json endpoint at
-/v1/agents/{agent_id}/.well-known/agent-card.json
-
-This allows for proper A2A compliance where each agent can be discovered
-individually, and later can be proxied to subdomains
-(agent1.domain.com -> /v1/agents/{id}/.well-known/)
+An agent's canonical address is its own host (``A2A_AGENT_URL``), whose root
+carries the card; see :mod:`agentarea_api.api.v1.agents_a2a`. These routes
+serve the same agent at ``/v1/agents/{agent_id}/.well-known/...`` for clients
+configured with the API host.
 """
 
 import logging
 from uuid import UUID
 
 from agentarea_agents.domain.models import Agent
-from agentarea_api.api.v1.a2a_card import agent_card_json, build_agent_card, get_base_url
+from agentarea_api.api.v1.a2a_card import (
+    agent_card_json,
+    agent_rpc_url,
+    build_agent_card,
+)
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.base.tenant_scope import unscoped
+from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_read_db_session
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -36,15 +38,13 @@ async def get_public_agent(agent_id: UUID, session: AsyncSession) -> Agent | Non
 
 
 async def public_agent_card_response(
-    agent_id: UUID, request: Request, db_session: AsyncSession
+    agent_id: UUID, db_session: AsyncSession, *, rpc_url: str
 ) -> JSONResponse:
     """The agent's public A2A card as protocol JSON; 404 when the agent is unknown."""
     agent = await get_public_agent(agent_id, db_session)
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
-    card = build_agent_card(
-        agent, base_url=get_base_url(request), agent_id=agent_id, extended=False
-    )
+    card = build_agent_card(agent, rpc_url=rpc_url, extended=False)
     logger.info(f"Agent well-known discovery: {agent.name} ({agent_id})")
     return JSONResponse(agent_card_json(card))
 
@@ -61,16 +61,8 @@ async def get_agent_well_known_card(
     request: Request,
     db_session: AsyncSession = Depends(get_read_db_session),
 ) -> JSONResponse:
-    """Agent-specific well-known discovery endpoint.
-
-    Returns the agent card for this specific agent, at
-    /v1/agents/{agent_id}/.well-known/agent-card.json
-
-    This allows each agent to have its own well-known endpoint, which is A2A compliant.
-    Later, this can be proxied to subdomains:
-    - agent1.domain.com/.well-known/agent-card.json -> /v1/agents/{id}/.well-known/agent-card.json
-    """
-    return await public_agent_card_response(agent_id, request, db_session)
+    """The agent card under the API host; its endpoint is on the API host too."""
+    return await public_agent_card_response(agent_id, db_session, rpc_url=agent_rpc_url(agent_id))
 
 
 @router.get(
@@ -94,7 +86,7 @@ async def get_agent_a2a_info(
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
-        base_url = get_base_url(request)
+        base_url = get_settings().app.API_BASE_URL.rstrip("/")
 
         return {
             "protocol": "A2A",
@@ -111,14 +103,11 @@ async def get_agent_a2a_info(
                 "rfc_8615": "https://tools.ietf.org/html/rfc8615",
                 "json_rpc": "https://www.jsonrpc.org/specification/v2",
             },
+            "a2a_url": get_settings().app.a2a_agent_url(agent_id),
             "endpoints": {
                 "agent_card": f"{base_url}/v1/agents/{agent_id}/.well-known/agent-card.json",
-                "rpc": f"{base_url}/v1/agents/{agent_id}/rpc",
-                "stream": f"{base_url}/v1/agents/{agent_id}/stream",
-                "tasks": f"{base_url}/v1/agents/{agent_id}/tasks/",
+                "rpc": agent_rpc_url(agent_id),
             },
-            "future_subdomain": f"agent-{agent_id}.{request.url.hostname}",
-            "subdomain_note": "This agent will be available at its own subdomain in the future",
             "supported_methods": [
                 "SendMessage",
                 "SendStreamingMessage",
@@ -169,7 +158,7 @@ async def get_agent_well_known_index(
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
-        base_url = get_base_url(request)
+        base_url = get_settings().app.API_BASE_URL.rstrip("/")
 
         return {
             "message": f"A2A Protocol Well-Known Endpoints for {agent.name}",
@@ -180,7 +169,7 @@ async def get_agent_well_known_index(
             },
             "specification": "https://a2aproject.github.io/A2A/latest/specification/",
             "rfc": "https://tools.ietf.org/html/rfc8615",
-            "note": "This agent-specific well-known endpoint can be proxied to a subdomain",
+            "a2a_url": get_settings().app.a2a_agent_url(agent_id),
         }
 
     except HTTPException:

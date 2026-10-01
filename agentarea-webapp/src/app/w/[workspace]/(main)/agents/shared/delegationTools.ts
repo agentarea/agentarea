@@ -29,6 +29,18 @@ export function delegateToolName(name: string): string {
   return `delegate_to_${sanitized}`;
 }
 
+const AGENT_CARD_PATH = "/.well-known/agent-card.json";
+
+// Mirrors the backend: an agent is stored by its address, the URL its card is
+// discovered under, whether its origin or its card URL was pasted.
+export function agentAddress(url: string): string {
+  let address = url.trim();
+  if (address.endsWith(AGENT_CARD_PATH)) {
+    address = address.slice(0, -AGENT_CARD_PATH.length);
+  }
+  return address.replace(/\/+$/, "");
+}
+
 // Any URL, empty included, marks the delegate remote: clearing the field to
 // retype it must not turn it into a local one.
 export function isRemoteDelegate(delegate: AgentToolConfig): boolean {

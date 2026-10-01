@@ -11,6 +11,7 @@ import { Sparkles } from "lucide-react";
 import { ChatWelcome } from "@/components/Chat/componets/ChatWelcome";
 import type { AgentFormValues } from "../../create/types";
 import AgentForm from "../../shared/AgentForm";
+import type { A2AAccess } from "../../shared/AgentForm";
 import type { DelegationData } from "../../shared/useAgentData";
 import { updateAgentSettings } from "./actions";
 
@@ -26,6 +27,7 @@ interface AgentEditClientProps {
   builtinTools: unknown[];
   initialData: Partial<AgentFormValues>;
   delegation: DelegationData;
+  a2aAccess: A2AAccess | null;
 }
 
 export default function AgentEditClient({
@@ -37,6 +39,7 @@ export default function AgentEditClient({
   builtinTools,
   initialData,
   delegation,
+  a2aAccess,
 }: AgentEditClientProps) {
   const router = useWorkspaceRouter();
 
@@ -72,6 +75,7 @@ export default function AgentEditClient({
       initialData={initialData}
       agentId={agentId}
       delegation={delegation}
+      a2aAccess={a2aAccess}
       triggersHref={`/triggers?search=${encodeURIComponent(agentName)}`}
       onSubmit={handleSubmit}
       submitButtonText="Save Changes"
