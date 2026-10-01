@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import SearchInput from "@/components/SearchInput";
-import { listProviderSpecsWithModels } from "@/lib/api";
+import { listProviderConfigs, listProviderSpecsWithModels } from "@/lib/api";
 import AddProviderButton from "../components/AddProviderButton";
 import ModelsSectionTabs from "../components/ModelsSectionTabs";
 import ProviderHeaderTabs from "../components/ProviderHeaderTabs";
@@ -52,9 +52,20 @@ export default async function ModelsSectionsLayout({
   );
 }
 
-// The catalog size on the Available tab, streamed in so a slow catalog never
-// holds the header back. A failed lookup just hides the number.
+// How many configs are connected and how big the catalog is, streamed in so
+// a slow lookup never holds the header back. A failed one just hides its
+// number. Connected counts platform-supplied configs too: that tab lists them.
 async function CountedSectionTabs() {
-  const { data } = await listProviderSpecsWithModels();
-  return <ModelsSectionTabs availableCount={data?.length} />;
+  const [configs, specs] = await Promise.all([
+    listProviderConfigs(),
+    listProviderSpecsWithModels(),
+  ]);
+  return (
+    <ModelsSectionTabs
+      counts={{
+        connected: configs.data?.length,
+        available: specs.data?.length,
+      }}
+    />
+  );
 }

@@ -8,8 +8,12 @@ import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 
 const TABS = [
   { href: "/models", icon: Brain, labelKey: "connected" },
-  { href: "/models/specs", icon: Store, labelKey: "available", counted: true },
+  { href: "/models/specs", icon: Store, labelKey: "available" },
 ] as const;
+
+export type ModelsSectionCounts = Partial<
+  Record<(typeof TABS)[number]["labelKey"], number>
+>;
 
 /**
  * Connected models and the catalog of providers you could still add are two
@@ -21,9 +25,9 @@ const TABS = [
  * goes along, since the header holding both stays mounted across the switch.
  */
 export default function ModelsSectionTabs({
-  availableCount,
+  counts,
 }: {
-  availableCount?: number;
+  counts?: ModelsSectionCounts;
 }) {
   const t = useTranslations("Models.sections");
   const pathname = useWorkspacePathname();
@@ -39,10 +43,7 @@ export default function ModelsSectionTabs({
       <CountSegmentedControl
         items={TABS.map((tab) => {
           const Icon = tab.icon;
-          const count =
-            "counted" in tab && tab.counted && availableCount
-              ? availableCount
-              : undefined;
+          const count = counts?.[tab.labelKey] || undefined;
 
           return {
             value: tab.href,
