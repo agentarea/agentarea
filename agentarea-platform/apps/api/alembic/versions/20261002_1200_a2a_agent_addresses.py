@@ -9,9 +9,9 @@ endpoint (``.../v1/agents/<id>/a2a/rpc``) are rewritten to the agent path
 under the same host, which serves that agent's card. Any other server's URL is
 left as it is: what its card is published under cannot be known here.
 
-Revision ID: 20261001_1200_a2a_agent_addrs
-Revises: 20260927_1200_catalog_cleanup
-Create Date: 2026-10-01 12:00:00.000000
+Revision ID: 20261002_1200_a2a_agent_addrs
+Revises: 20261001_1200_model_inst_tags
+Create Date: 2026-10-02 12:00:00.000000
 """
 
 import json
@@ -22,8 +22,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "20261001_1200_a2a_agent_addrs"
-down_revision: str | None = "20260927_1200_catalog_cleanup"
+revision: str = "20261002_1200_a2a_agent_addrs"
+down_revision: str | None = "20261001_1200_model_inst_tags"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

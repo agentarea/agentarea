@@ -241,16 +241,11 @@ class AgentService(BaseCrudService[Agent]):
             await self._require_delegate_secret(name, secret_name)
 
     async def _require_delegate_secret(self, delegate: str, secret_name: str) -> None:
-        from agentarea_secrets.models import EncryptedSecret
-        from sqlalchemy import select
+        from agentarea_secrets.catalog_service import find_secret
 
-        result = await self.repository_factory.session.execute(
-            select(EncryptedSecret).where(
-                EncryptedSecret.secret_name == secret_name,
-                EncryptedSecret.workspace_id == self._user_context.workspace_id,
-            )
+        secret = await find_secret(
+            self.repository_factory.session, self._user_context.workspace_id, secret_name
         )
-        secret = result.scalar_one_or_none()
         if secret is None:
             raise InvalidDelegateError(
                 f"Delegate '{delegate}': no secret named '{secret_name}' in this workspace."
