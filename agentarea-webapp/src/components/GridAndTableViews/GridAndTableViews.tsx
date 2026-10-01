@@ -103,6 +103,10 @@ export default function GridAndTableViews<T extends GridItem>({
   /** Extra attributes for each row and card, e.g. drag source or drop target. */
   rowProps?: (item: T) => React.HTMLAttributes<HTMLElement>;
 }) {
+  // TabsContent's top margin spaces the content off the toolbar; without the
+  // toolbar it would only push the content below the page's own padding.
+  const contentClassName = toolbar === false ? "mt-0" : undefined;
+
   return (
     <TabsView
       routeChange={routeChange}
@@ -114,7 +118,7 @@ export default function GridAndTableViews<T extends GridItem>({
         emptyState
       ) : (
         <>
-          <TabsContent value="grid">
+          <TabsContent value="grid" className={contentClassName}>
             <div
               className={cn(CARD_GRID_GALLERY, gridClassName)}
             >
@@ -151,7 +155,7 @@ export default function GridAndTableViews<T extends GridItem>({
               })}
             </div>
           </TabsContent>
-          <TabsContent value="table">
+          <TabsContent value="table" className={contentClassName}>
             <Table
               data={data}
               columns={columns}
