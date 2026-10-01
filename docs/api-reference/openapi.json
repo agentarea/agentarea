@@ -6097,6 +6097,17 @@
             "title": "Is Public",
             "type": "boolean"
           },
+          "managed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Managed By"
+          },
           "model_display_name": {
             "anyOf": [
               {

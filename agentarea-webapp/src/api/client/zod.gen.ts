@@ -1353,6 +1353,7 @@ export const zModelInstanceResponse = z.object({
   id: z.string(),
   is_active: z.boolean(),
   is_public: z.boolean(),
+  managed_by: z.string().nullish(),
   model_display_name: z.string().nullish(),
   model_name: z.string().nullish(),
   model_spec_id: z.string(),

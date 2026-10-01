@@ -101,6 +101,9 @@ function getRuntimeConfig() {
     // the link in the sidebar would have pointed at an internal cluster URL that no
     // browser can reach.
     CLIENT_BILLING_URL: process.env.BILLING_PAGE_URL || "",
+    // model_name of the platform model a new agent starts on. Empty picks the
+    // first platform model by name; no platform model leaves the picker empty.
+    DEFAULT_PLATFORM_MODEL: process.env.DEFAULT_PLATFORM_MODEL || "",
     APPS_SANDBOX_ORIGIN: process.env.APPS_SANDBOX_ORIGIN || "",
     SENTRY_DSN: process.env.SENTRY_DSN || "",
     SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT || "",

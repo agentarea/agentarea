@@ -65,6 +65,7 @@ import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Switch } from "@/components/ui/switch";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
+import { useDefaultModelId } from "@/lib/use-default-model";
 import { cn } from "@/lib/utils";
 import {
   analyzeBundleAction,
@@ -318,6 +319,18 @@ export function BundleInstallWizard({
     }
     return keys;
   }, [preview]);
+
+  // A model field the bundle leaves open starts on the platform default; one the
+  // bundle names a model for keeps it, as a preset's preferred model does.
+  const defaultModelId = useDefaultModelId(models);
+  useEffect(() => {
+    if (phase.kind !== "form" || !defaultModelId) return;
+    for (const key of modelFieldKeys) {
+      if (!setupValues[key]) {
+        dispatch({ type: "setSetup", key, value: defaultModelId });
+      }
+    }
+  }, [phase.kind, defaultModelId, modelFieldKeys, setupValues]);
 
   const agents = useMemo(() => preview?.bundle.agents ?? [], [preview]);
   const mcps = useMemo(() => preview?.bundle.mcps ?? [], [preview]);

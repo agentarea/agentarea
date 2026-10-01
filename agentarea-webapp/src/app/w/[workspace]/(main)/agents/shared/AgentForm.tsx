@@ -27,6 +27,13 @@ import {
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { formatApiError } from "@/lib/api-errors";
+import {
+  withDefaultModel,
+  withPresetModel,
+  type ModelSelection,
+  type ModelSource,
+} from "@/lib/default-model";
+import { useDefaultModelId } from "@/lib/use-default-model";
 import { cn } from "@/lib/utils";
 import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/create/actions";
 import {
@@ -174,12 +181,44 @@ export default function AgentForm({
     null
   );
 
+  // Who set model_id decides who may replace it: see ModelSource. Tracked rather
+  // than read off the field, because a preselected default is not empty and must
+  // still give way to a preset's preferred model.
+  const modelSource = useRef<ModelSource>(
+    initialData?.model_id ? "chosen" : "none"
+  );
+  const defaultModelId = useDefaultModelId(llmModelInstances);
+
+  const selectModel = (next: ModelSelection) => {
+    modelSource.current = next.source;
+    if (next.modelId !== getValues("model_id")) {
+      setValue("model_id", next.modelId);
+    }
+  };
+
+  // Covers create and an edited agent without a model (a catalog fork) alike.
+  useEffect(() => {
+    if (defaultModelId === undefined) return;
+    selectModel(
+      withDefaultModel(
+        { modelId: getValues("model_id"), source: modelSource.current },
+        defaultModelId
+      )
+    );
+    // selectModel only reads the ref and the form; the default is the trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultModelId]);
+
   useEffect(() => {
     setAgentName(watchedName || "New Agent");
   }, [watchedName]);
 
   useEffect(() => {
-    const subscription = watch(() => {
+    const subscription = watch((_, { name, type }) => {
+      // "change" is the user's own pick; setValue reports no type.
+      if (name === "model_id" && type === "change") {
+        modelSource.current = "chosen";
+      }
       setFormError(null);
       setSaved(false);
     });
@@ -204,10 +243,13 @@ export default function AgentForm({
     setSelectedSkills(values.skills);
     setTriggerDrafts(toTriggerDrafts(values.triggers));
     setShowTriggerErrors(false);
-    const modelId = preset
-      ? preferredModelId(preset, llmModelInstances)
-      : null;
-    if (modelId && !getValues("model_id")) setValue("model_id", modelId);
+    selectModel(
+      withPresetModel(
+        { modelId: getValues("model_id"), source: modelSource.current },
+        preset ? preferredModelId(preset, llmModelInstances) : null,
+        defaultModelId ?? null
+      )
+    );
     setSelectedPresetId(preset?.id ?? null);
   };
 

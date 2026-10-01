@@ -3491,6 +3491,10 @@ export type ModelInstanceResponse = {
      */
     is_public: boolean;
     /**
+     * Managed By
+     */
+    managed_by?: string | null;
+    /**
      * Model Display Name
      */
     model_display_name?: string | null;

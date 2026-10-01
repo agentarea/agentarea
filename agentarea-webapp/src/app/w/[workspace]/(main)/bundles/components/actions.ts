@@ -67,6 +67,8 @@ export type WorkspaceModel = Pick<
   | "model_display_name"
   | "provider_name"
   | "provider_icon_url"
+  | "is_active"
+  | "managed_by"
 >;
 
 // The reusable-secret list lives in @/lib/server-actions, where every Connect
@@ -235,6 +237,8 @@ export async function listActiveModelInstancesAction() {
           model_display_name: model.model_display_name,
           provider_name: model.provider_name,
           provider_icon_url: model.provider_icon_url,
+          is_active: model.is_active,
+          managed_by: model.managed_by,
         }))
     : undefined;
   return { data, error: result.error, status: result.status };

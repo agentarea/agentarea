@@ -226,6 +226,9 @@ async def test_platform_model_instances_are_visible_and_unwritable(session):
     repo = ModelInstanceRepository(session, _ctx(TENANT_B))
     instances = await repo.list_instances()
     assert [i.name for i in instances] == ["Test Model mini"]
+    # Loaded with the list, under the tenant's context: the picker preselects a
+    # platform model from this, so it must not take a second query per instance.
+    assert instances[0].provider_config.managed_by == MANAGED_BY_PLATFORM
 
     instance_id = instances[0].id
     assert await repo.delete(instance_id) is False

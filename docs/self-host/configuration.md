@@ -280,6 +280,16 @@ configured DSN and does not pass on the client IP. Events carry no user,
 cookies, headers or request bodies, and URLs lose their query string and
 fragment, which can hold invitation tokens and login flow ids.
 
+New agents, and model fields in a bundle install that the bundle leaves open,
+start on a platform-managed model when the workspace has one. Set
+`DEFAULT_PLATFORM_MODEL` through `frontend.envVars` to the `model_name` of the
+platform model to preselect, for example `kimi-k2.6`. Unset, or naming a model
+that is not offered, the first platform model by name is preselected. A
+workspace with no platform models gets no preselection, and a model on the
+workspace's own provider key is never preselected. A preset's preferred model
+replaces the default, and a model the user picks is never replaced. The value is
+read at runtime.
+
 ### Application secrets (group `application`)
 
 | Variable | Helm value | Default |
