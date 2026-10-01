@@ -218,6 +218,24 @@ func (p *OpenSandboxProvider) openSandboxResourceRequests() opensandbox.Resource
 	return requests
 }
 
+// openSandboxInventoryResources reports the limits every sandbox carries and
+// the requests it was stamped with. A sandbox without requests reserves its
+// limits, so the request keys are absent rather than guessed.
+func openSandboxInventoryResources(metadata map[string]string) map[string]string {
+	resources := map[string]string{
+		"cpu":     metadata["agentarea.resource_cpu"],
+		"memory":  metadata["agentarea.resource_memory"],
+		"storage": metadata["agentarea.resource_storage"],
+	}
+	if request := metadata["agentarea.resource_request_cpu"]; request != "" {
+		resources["cpu_request"] = request
+	}
+	if request := metadata["agentarea.resource_request_memory"]; request != "" {
+		resources["memory_request"] = request
+	}
+	return resources
+}
+
 func resolveOpenSandboxEgress(cfg *OpenSandboxConfig) error {
 	cfg.EgressMode = strings.ToLower(strings.TrimSpace(cfg.EgressMode))
 	switch cfg.EgressMode {
@@ -272,6 +290,15 @@ func (p *OpenSandboxProvider) Create(ctx context.Context, req CreateRequest) (*S
 	if len(imageDigest) == 64 {
 		metadata["agentarea.image_digest_0"] = imageDigest[:32]
 		metadata["agentarea.image_digest_1"] = imageDigest[32:]
+	}
+	// What the scheduler reserves for this sandbox, recorded beside the limits
+	// so inventory reports the allocation it was created with even after the
+	// configured requests change.
+	if p.cfg.ResourceRequestCPU != "" {
+		metadata["agentarea.resource_request_cpu"] = p.cfg.ResourceRequestCPU
+	}
+	if p.cfg.ResourceRequestMemory != "" {
+		metadata["agentarea.resource_request_memory"] = p.cfg.ResourceRequestMemory
 	}
 	// A lifecycle create is not idempotent. Keep retries enabled for read and
 	// maintenance calls, but issue exactly one POST for this durable provisioning
@@ -957,12 +984,8 @@ func (p *OpenSandboxProvider) listInventory(ctx context.Context, workspaceID str
 				State:       strings.ToLower(string(info.Status.State)),
 				CreatedAt:   info.CreatedAt,
 				ExpiresAt:   info.ExpiresAt,
-				Resources: map[string]string{
-					"cpu":     metadata["agentarea.resource_cpu"],
-					"memory":  metadata["agentarea.resource_memory"],
-					"storage": metadata["agentarea.resource_storage"],
-				},
-				Isolation: metadata["agentarea.isolation"],
+				Resources:   openSandboxInventoryResources(metadata),
+				Isolation:   metadata["agentarea.isolation"],
 			})
 		}
 		if !response.Pagination.HasNextPage {
