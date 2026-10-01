@@ -37,7 +37,7 @@ from sqlalchemy.orm import RelationshipProperty, selectinload
 from sqlalchemy.pool import StaticPool
 
 PLATFORM_ROOT = Path(__file__).resolve().parents[2]
-EXPECTED_MODEL_COUNT = 26
+EXPECTED_MODEL_COUNT = 27
 
 WS_A = "tenant-scope-a"
 WS_B = "tenant-scope-b"

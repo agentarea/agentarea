@@ -538,6 +538,26 @@
       "tool": "Tool",
       "activeMcpServers": "Active MCP Servers",
       "builtinTools": "Built-in Tools",
+      "codeToolModels": {
+        "placeholder": "Select a model",
+        "addModel": "Add a model",
+        "clear": "Clear {label}",
+        "loadFailed": "Could not load models",
+        "pickAtLeastOne": "Pick an image or a video model: the toolset needs at least one.",
+        "pickOne": "Pick a decision model: the toolset needs one.",
+        "image": {
+          "label": "Image model",
+          "empty": "No image models in this workspace."
+        },
+        "video": {
+          "label": "Video model",
+          "empty": "No video models in this workspace."
+        },
+        "decision": {
+          "label": "Decision model",
+          "empty": "No decision models in this workspace."
+        }
+      },
       "availableMcpServers": "Available MCP Servers",
       "availableOpenAPIConnections": "Available OpenAPI Connections",
       "openAPIConnections": "OpenAPI Connections",
@@ -596,7 +616,9 @@
     "form": {
       "saveFailed": "Couldn't save the agent",
       "validationFailed": "Some fields are invalid.",
-      "createFailed": "Couldn't create the agent"
+      "createFailed": "Couldn't create the agent",
+      "testAgent": "Test agent",
+      "closeTest": "Close test chat"
     },
     "delegationConfig": {
       "title": "Delegation",
@@ -1058,6 +1080,13 @@
       "loadingDataEdit": "Failed to load provider configuration for editing. Please try again."
     }
   },
+  "ModelKind": {
+    "chat": "Chat",
+    "embedding": "Embedding",
+    "image": "Image",
+    "video": "Video",
+    "decision": "Decision"
+  },
   "ProviderConfigForm": {
     "title": "Provider Configuration",
     "description": "Configure your provider",
@@ -1213,12 +1242,13 @@
       "running": "Running",
       "completed": "Completed",
       "success": "Success",
-      "inputRequired": "Input Required",
+      "needsAction": "Needs action",
       "approvalRequired": "Approval Required",
+      "blocked": "Blocked",
       "continuationRequired": "Continuation Required",
+      "inputRequired": "Input Required",
       "failed": "Failed",
       "error": "Error",
-      "blocked": "Blocked",
       "cancelled": "Cancelled",
       "paused": "Paused",
       "pending": "Pending",

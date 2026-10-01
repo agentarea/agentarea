@@ -388,6 +388,7 @@ version = "0.1.0"
 source = { editable = "libs/openapi" }
 dependencies = [
     { name = "agentarea-common" },
+    { name = "agentarea-governance" },
     { name = "httpx" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -396,6 +397,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "agentarea-common", editable = "libs/common" },
+    { name = "agentarea-governance", editable = "libs/governance" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "pydantic", specifier = ">=2.4.2" },
     { name = "pyyaml", specifier = ">=6.0" },

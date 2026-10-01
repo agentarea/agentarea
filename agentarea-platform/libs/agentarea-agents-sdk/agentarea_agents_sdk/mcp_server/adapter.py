@@ -11,12 +11,12 @@ import logging
 from collections.abc import Callable
 from typing import Annotated, Any
 
-from mcp.server.mcpserver import MCPServer
 from pydantic import Field
 
 from ..tools.base_tool import BaseTool
 from ..tools.decorator_tool import Toolset
 from .auth import bind_workspace
+from .toolsets import RegisteredToolset, ToolsetMCPServer
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class MCPToolAdapter:
     ``workspace_scoped = False`` (it acts on no single workspace).
     """
 
-    def __init__(self, server: MCPServer, *, workspace_argument: bool):
+    def __init__(self, server: ToolsetMCPServer, *, workspace_argument: bool):
         self._server = server
         self._workspace_argument = workspace_argument
 
@@ -47,6 +47,7 @@ class MCPToolAdapter:
 
         Each method becomes a separate MCP tool named ``{toolset.name}_{method_name}``.
         """
+        tools: dict[str, str] = {}
         for method_name, method in toolset._tool_methods.items():
             tool_name = f"{toolset.name}_{method_name}"
             description = getattr(method, "_tool_description", f"{method_name}")
@@ -55,11 +56,18 @@ class MCPToolAdapter:
                 handler = _bind_workspace_argument(handler)
 
             self._server.add_tool(handler, name=tool_name, description=description)
+            tools[method_name] = tool_name
             logger.debug(f"Registered MCP tool: {tool_name}")
 
-        logger.info(
-            f"Registered toolset '{toolset.name}' with {len(toolset._tool_methods)} MCP tools"
+        meta = toolset.metadata
+        self._server.register_toolset(
+            RegisteredToolset(
+                name=toolset.name,
+                namespace=meta.namespace if meta and meta.namespace else toolset.name,
+                tools=tools,
+            )
         )
+        logger.info(f"Registered toolset '{toolset.name}' with {len(tools)} MCP tools")
 
     def register_tool(self, tool: BaseTool) -> None:
         """Register a single BaseTool as an MCP tool."""

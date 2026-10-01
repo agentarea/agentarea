@@ -179,3 +179,47 @@ async def test_isolation_builtin_visible_no_foreign_custom_leak():
     repo = _repo(FakeCatalogRepo([item_builtin]))
     projections = await repo._catalog_projections(set(), provider_spec_id=None, is_active=None)
     assert [str(s.id) for s in projections] == [item_builtin.id]
+
+
+def test_projection_carries_the_catalog_kind():
+    spec = _project_catalog_model_spec(
+        _item(spec={"model_name": "veo", "provider_key": "openrouter", "kind": "video"})
+    )
+
+    assert spec.kind == "video"
+    assert spec.context_window is None
+
+
+def test_projection_of_an_item_without_kind_is_chat():
+    assert _project_catalog_model_spec(_item()).kind == "chat"
+
+
+async def test_a_media_model_is_projected_without_token_prices():
+    pid = str(uuid4())
+    video = _item(
+        name="Veo",
+        provider_spec_id=pid,
+        spec={"model_name": "veo", "provider_key": "openrouter", "kind": "video"},
+    )
+
+    repo = _repo(FakeCatalogRepo([video]))
+    projections = await repo._catalog_projections(set(), provider_spec_id=None, is_active=None)
+
+    assert [str(s.id) for s in projections] == [video.id]
+
+
+async def test_catalog_projections_filter_by_kind():
+    pid = str(uuid4())
+    chat = _item(name="Chat", provider_spec_id=pid, spec=_spec("gpt-4"))
+    image = _item(
+        name="Image",
+        provider_spec_id=pid,
+        spec={"model_name": "flux", "provider_key": "openai", "kind": "image"},
+    )
+
+    repo = _repo(FakeCatalogRepo([chat, image]))
+    projections = await repo._catalog_projections(
+        set(), provider_spec_id=None, is_active=None, kind="image"
+    )
+
+    assert [str(s.id) for s in projections] == [image.id]

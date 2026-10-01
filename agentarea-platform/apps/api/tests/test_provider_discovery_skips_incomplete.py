@@ -77,3 +77,18 @@ def test_a_batch_with_nothing_runnable_still_fails_loudly():
 
 def test_usable_models_pass_the_gate():
     _require_any_usable_model("openrouter", [_model("openai/gpt-5")], [])
+
+
+def test_a_media_model_needs_no_token_prices_or_context_window():
+    from agentarea_llm.domain.models import ModelKind
+
+    for kind in (ModelKind.IMAGE, ModelKind.VIDEO, ModelKind.DECISION):
+        model = _model("veo", inp=None, out=None, context_window=None)
+        model.kind = kind
+        assert _missing_runtime_metadata(model) == []
+
+
+def test_a_model_no_surface_takes_is_skipped_as_kindless():
+    model = _model("tts")
+    model.kind = None
+    assert _missing_runtime_metadata(model) == ["kind"]

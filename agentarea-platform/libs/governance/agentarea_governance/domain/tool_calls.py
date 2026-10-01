@@ -4,14 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+WAIT_TOOL_NAME = "wait"
+
 # Terminal control flow: it ends the run, so it cannot be repeated to spend
 # quota, and charging the agent for saying it is finished would be nonsense.
 # This is the only exemption from the governed tool-call budget.
 UNMETERED_TOOL_CALL_NAMES = frozenset({"completion", "task_complete"})
 
-# Control flow that can be repeated. Each dispatches a real activity and a turn
-# may carry any number of them, so they stay metered even though policy never
-# gates them.
+# Control flow that can be repeated. Each dispatches a real activity or holds
+# the run, and a turn may carry any number of them, so they stay metered even
+# though policy never gates them.
 _REPEATABLE_CONTROL_FLOW_TOOL_NAMES = frozenset(
     {
         "request_user_input",
@@ -20,6 +22,7 @@ _REPEATABLE_CONTROL_FLOW_TOOL_NAMES = frozenset(
         "activate_tool_source",
         "activate_skill",
         "load_tools",
+        WAIT_TOOL_NAME,
     }
 )
 

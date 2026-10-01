@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
@@ -11,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from agentarea_llm.domain.models import ModelSpec, ProviderSpec
+from agentarea_llm.domain.models import ModelKind, ModelSpec, ProviderSpec
 from agentarea_llm.infrastructure.catalog_model_spec_repository import (
     CatalogModelSpecItem,
     CatalogModelSpecRepository,
@@ -38,12 +39,16 @@ def _project_catalog_model_spec(item: CatalogModelSpecItem) -> ModelSpec:
     using the DB provider_spec_id resolved by the catalog repository.
     """
     spec = item.spec or {}
+    kind = ModelKind(spec.get("kind", ModelKind.CHAT))
 
     model = ModelSpec(
         model_name=spec.get("model_name") or item.name,
         display_name=item.name,
         description=item.description if item.description is not None else spec.get("description"),
-        context_window=spec["context_window"],
+        kind=kind.value,
+        context_window=spec["context_window"]
+        if kind.priced_per_token
+        else spec.get("context_window"),
         max_output_tokens=spec.get("max_output_tokens"),
         input_cost_per_token=to_optional_money(spec.get("input_cost_per_token")),
         output_cost_per_token=to_optional_money(spec.get("output_cost_per_token")),
@@ -78,6 +83,9 @@ def _model_key(spec: ModelSpec) -> tuple[str, str]:
 
 
 def _is_priced(spec: ModelSpec) -> bool:
+    """Whether a run on the spec can be billed; the provider prices the per-call kinds."""
+    if not ModelKind(spec.kind).priced_per_token:
+        return True
     return spec.input_cost_per_token is not None and spec.output_cost_per_token is not None
 
 
@@ -142,13 +150,16 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         limit: int = 100,
         offset: int = 0,
         creator_scoped: bool = False,
+        kind: str | None = None,
     ) -> list[ModelSpec]:
         """List model specs with filtering and relationships."""
-        filters = {}
+        filters: dict[str, Any] = {}
         if provider_spec_id is not None:
             filters["provider_spec_id"] = provider_spec_id
         if is_active is not None:
             filters["is_active"] = is_active
+        if kind is not None:
+            filters["kind"] = kind
 
         specs = await self.list_all(creator_scoped=creator_scoped, **filters)
 
@@ -168,7 +179,10 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         # registry catalog only, ADR-003). A model this workspace already has a
         # row for is shadowed by that row, whatever the filters kept of it.
         projections = await self._catalog_projections(
-            await self._own_model_keys(), provider_spec_id=provider_spec_id, is_active=is_active
+            await self._own_model_keys(),
+            provider_spec_id=provider_spec_id,
+            is_active=is_active,
+            kind=kind,
         )
 
         merged = [*tenant_specs, *projections]
@@ -192,6 +206,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         *,
         provider_spec_id: UUID | None,
         is_active: bool | None,
+        kind: str | None = None,
     ) -> list[ModelSpec]:
         """Project catalog items as read-only specs, one per ``(provider_spec_id, model_name)``.
 
@@ -214,6 +229,8 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
             if provider_spec_id is not None and str(spec.provider_spec_id) != str(provider_spec_id):
                 continue
             if is_active is not None and spec.is_active != is_active:
+                continue
+            if kind is not None and spec.kind != kind:
                 continue
             projections.append(spec)
         projections.sort(key=lambda spec: spec.display_name)
@@ -270,6 +287,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
                 model_name=model_name,
                 display_name=preferred.display_name,
                 description=preferred.description,
+                kind=preferred.kind,
                 context_window=preferred.context_window,
                 max_output_tokens=preferred.max_output_tokens,
                 input_cost_per_token=preferred.input_cost_per_token,

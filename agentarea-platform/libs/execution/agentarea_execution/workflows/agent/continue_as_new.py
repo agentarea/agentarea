@@ -19,13 +19,14 @@ with workflow.unsafe.imports_passed_through():
     from agentarea_common.money import serialize_money
 
     from ...interaction import resolve_interaction_capabilities
-    from ..context_manager import ContextWindowManager
+    from ..context_manager import ContextWindowManager, messages_payload_bytes
     from ..helpers import BudgetTracker, EventManager
     from ..models import ContinueAsNewState, Message
 
 from ...models import AgentExecutionRequest, ToolProviderData
-from ..constants import EventTypes
+from ..constants import CONTEXT_MAX_PAYLOAD_BYTES, EventTypes
 from .compaction import CompactionMixin
+from .patches import COMPACTION_BOUNDS_PAYLOAD_PATCH
 
 
 class ContinueAsNewMixin(CompactionMixin):
@@ -210,7 +211,13 @@ class ContinueAsNewMixin(CompactionMixin):
             f"event history suggests reset"
         )
 
-        await self._compact_context_if_needed()
+        if workflow.patched(COMPACTION_BOUNDS_PAYLOAD_PATCH):
+            oversized = (
+                messages_payload_bytes(self._conversation_payload()) > CONTEXT_MAX_PAYLOAD_BYTES
+            )
+            await self._compact_context_if_needed(force=oversized)
+        else:
+            await self._compact_context_if_needed()
 
         if self.state.goal is None:
             raise ApplicationError(

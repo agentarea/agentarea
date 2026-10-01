@@ -83,12 +83,6 @@ export default async function AppsPage({
         columns={columns}
         routeChange="/apps"
         itemLink={appLink}
-        leftComponent={
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <EntityIcon kind="app" className="text-primary" />
-            <span>{items.length}</span>
-          </div>
-        }
         emptyState={
           <EmptyState
             title={t("emptyTitle")}

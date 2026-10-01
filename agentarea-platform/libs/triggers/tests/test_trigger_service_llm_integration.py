@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -103,11 +104,15 @@ class TestTriggerServiceLLMIntegration:
                 "type": "llm",
                 "description": "when user sends a file attachment or document",
                 "context_fields": ["request.body", "request.headers"],
+                "model_id": str(uuid4()),
             },
             task_parameters={
                 "llm_parameter_extraction": "analyze the uploaded file and respond with insights"
             },
             created_by="test_user",
+        )
+        trigger_service.model_instance_repository.get_by_id.return_value = SimpleNamespace(
+            model_spec=SimpleNamespace(kind="chat")
         )
 
         # Mock repository response
@@ -415,11 +420,13 @@ class TestTriggerServiceLLMIntegration:
         evaluator = LLMConditionEvaluator(
             model_instance_service=AsyncMock(),
             secret_manager=MagicMock(),
+            model_service=AsyncMock(),
         )
 
         conditions = {
             "type": "llm",
             "description": "when user sends a file",
+            "model_id": str(uuid4()),
             "context_fields": ["request.body"],
         }
 
@@ -439,10 +446,12 @@ class TestTriggerServiceLLMIntegration:
         evaluator = LLMConditionEvaluator(
             model_instance_service=AsyncMock(),
             secret_manager=MagicMock(),
+            model_service=AsyncMock(),
         )
 
         conditions = {
-            "type": "llm"
+            "type": "llm",
+            "model_id": str(uuid4()),
             # Missing required description
         }
 

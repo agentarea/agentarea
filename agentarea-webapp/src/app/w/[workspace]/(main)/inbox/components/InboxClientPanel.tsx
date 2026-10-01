@@ -151,7 +151,7 @@ export function InboxClientPanel({
       </header>
 
       {pend && (
-        <div className="shrink-0 border-b border-amber-500/25 bg-amber-500/10 px-5 py-2.5 text-sm leading-relaxed text-foreground/85 sm:px-6">
+        <div className="shrink-0 border-b border-orange-500/25 bg-orange-500/10 px-5 py-2.5 text-sm leading-relaxed text-foreground/85 sm:px-6">
           <div className="flex items-start gap-2.5">
             <StatusIndicator
               kind="attention"

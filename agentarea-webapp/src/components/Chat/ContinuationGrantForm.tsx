@@ -89,7 +89,7 @@ export function ContinuationGrantForm({
   return (
     <div
       className={cn(
-        "space-y-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30",
+        "space-y-3 rounded-2xl border border-orange-200 bg-orange-50/60 p-4 dark:border-orange-900/60 dark:bg-orange-950/20",
         className
       )}
     >
@@ -97,7 +97,7 @@ export function ContinuationGrantForm({
         <StatusIndicator kind="attention" size="sm">
           {t(`title.${limit === null ? "unknown" : failureReason}`)}
         </StatusIndicator>
-        <p className="text-xs text-amber-800 dark:text-amber-300">
+        <p className="text-xs text-muted-foreground">
           {t("hint")}
         </p>
       </div>

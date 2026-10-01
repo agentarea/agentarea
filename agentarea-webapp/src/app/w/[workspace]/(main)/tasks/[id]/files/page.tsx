@@ -12,16 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useWorkspaceSlug } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { listTaskSandboxFilesAction } from "@/lib/server-actions";
-import { fillWorkspace } from "@/lib/workspace-url";
+import { taskSandboxFileUrl } from "@/lib/task-files";
 import { useTaskContext } from "../TaskContext";
-
-function encodeFilePath(path: string): string {
-  return path
-    .split("/")
-    .filter(Boolean)
-    .map((part) => encodeURIComponent(part))
-    .join("/");
-}
 
 export default function TaskFilesPage() {
   const { task, loading: taskLoading, error: taskError } = useTaskContext();
@@ -66,14 +58,7 @@ export default function TaskFilesPage() {
   const fetchUrl = useCallback(
     async (path: string) => ({
       data: task
-        ? fillWorkspace(
-            `/api/proxy/v1/workspaces/{workspace}/agents/${encodeURIComponent(
-              task.agent_id
-            )}/tasks/${encodeURIComponent(task.id)}/sandbox/files/${encodeFilePath(
-              path
-            )}`,
-            workspaceSlug
-          )
+        ? taskSandboxFileUrl(task.agent_id, task.id, path, workspaceSlug)
         : null,
     }),
     [task, workspaceSlug]

@@ -23,6 +23,7 @@ import {
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import type { StatusKind } from "@/lib/status";
 import type { Part } from "../contract";
+import { ArtifactMedia } from "./ArtifactMedia";
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object"
@@ -465,7 +466,7 @@ export const ToolPart: React.FC<{
           </span>
           <div className="flex flex-wrap gap-2">
             {artifactPaths.map((path) => (
-              <FileChip key={path} name={path} />
+              <ArtifactMedia key={path} path={path} name={fileBasename(path)} />
             ))}
           </div>
         </div>

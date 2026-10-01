@@ -1,5 +1,7 @@
 """Client (agent-proxy) application service."""
 
+from __future__ import annotations
+
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -11,7 +13,11 @@ from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRep
 from agentarea_common.exceptions.errors import NotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agentarea_mcp.domain.client_models import Client
+from agentarea_mcp.domain.client_models import (
+    Client,
+    ClientMcpInstanceLink,
+    ClientPlatformToolset,
+)
 from agentarea_mcp.infrastructure.client_repository import ClientRepository
 from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
 from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
@@ -90,12 +96,37 @@ class ClientService:
         client_id: UUID | str,
         mcp_instance_id: UUID | str,
         namespace_prefix: str | None = None,
+        allowed_tools: list[str] | None = None,
     ) -> None:
         await self.repository.add_mcp_instance(
             await self._client_id(client_id),
             await self._in_workspace(MCPServerInstanceRepository, mcp_instance_id, "MCP instance"),
             namespace_prefix,
+            allowed_tools,
         )
 
     async def remove_mcp_instance(self, client_id: UUID | str, mcp_instance_id: UUID | str) -> None:
         await self.repository.remove_mcp_instance(await self._client_id(client_id), mcp_instance_id)
+
+    async def instance_links(
+        self, client_ids: list[UUID]
+    ) -> dict[str, dict[str, ClientMcpInstanceLink]]:
+        return await self.repository.get_instance_links(client_ids)
+
+    # The caller resolves ``toolset`` to a platform toolset's namespace: which
+    # toolsets exist is known to the API that serves them, not to this library.
+
+    async def set_platform_toolset(
+        self, client_id: UUID | str, toolset: str, disabled_methods: list[str] | None
+    ) -> None:
+        await self.repository.set_platform_toolset(
+            await self._client_id(client_id), toolset, disabled_methods
+        )
+
+    async def remove_platform_toolset(self, client_id: UUID | str, toolset: str) -> None:
+        await self.repository.remove_platform_toolset(await self._client_id(client_id), toolset)
+
+    async def platform_toolsets(
+        self, client_ids: list[UUID]
+    ) -> dict[str, list[ClientPlatformToolset]]:
+        return await self.repository.get_platform_toolsets(client_ids)

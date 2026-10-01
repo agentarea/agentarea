@@ -44,6 +44,7 @@ import { MethodsList } from "./MethodsList";
 import type { Method } from "./MethodsList";
 import { SelectableList } from "@/components/SelectableList";
 import { TriggerControl } from "./TriggerControl";
+import { CodeToolModelSettings } from "./CodeToolModelSettings";
 
 type MCPServer = McpServerResponse;
 type ToolGroup = NonNullable<ToolResponse["group"]>;
@@ -1030,7 +1031,14 @@ const ToolConfig = ({
                           checked
                         )
                       }
-                    />
+                    >
+                      <CodeToolModelSettings
+                        toolName={builtinTool.name}
+                        index={index}
+                        control={control}
+                        setValue={setValue}
+                      />
+                    </TriggerControl>
                   );
                 })}
               </Accordion>

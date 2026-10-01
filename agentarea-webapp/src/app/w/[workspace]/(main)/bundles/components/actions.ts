@@ -228,7 +228,7 @@ export async function listWorkspaceAgentsAction(): Promise<
 }
 
 export async function listActiveModelInstancesAction() {
-  const result = await listModelInstances({ is_active: true });
+  const result = await listModelInstances({ is_active: true, kind: "chat" });
   const data: WorkspaceModel[] | undefined = result.data
     ? zListModelInstancesV1ModelInstancesGetResponse
         .parse(result.data)

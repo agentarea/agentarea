@@ -49,6 +49,7 @@ from agentarea_common.utils.types import UtcDatetime
 from agentarea_common.workspaces.lookup import workspace_api_prefix
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_secrets.naming import has_reserved_prefix
 from agentarea_tasks.domain.exceptions import (
     AgentModelNotConfiguredError,
@@ -1958,6 +1959,11 @@ async def _resolve_model_info(
         raise HTTPException(
             status_code=409,
             detail="Model instance has incomplete provider or model configuration",
+        )
+    if model_spec.kind != ModelKind.CHAT:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Model instance is a {model_spec.kind} model; a task runs on a chat model",
         )
 
     return {

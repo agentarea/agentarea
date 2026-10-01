@@ -11,6 +11,7 @@ from uuid import UUID
 from agentarea_agents.domain.config_hash import compute_agent_config_hash
 from agentarea_agents_sdk import ToolManager
 from agentarea_common.auth.context import UserContext
+from agentarea_llm.domain.model_kind import ModelKind
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
@@ -307,6 +308,11 @@ def make_config_activities(
             if not model_instance or not model_instance.model_spec:
                 raise ModelInstanceNotFoundError(
                     f"Model instance {model_id_str} or its ModelSpec was not found"
+                )
+            if model_instance.model_spec.kind != ModelKind.CHAT:
+                raise ValueError(
+                    f"Model instance {model_id_str} is a {model_instance.model_spec.kind} model; "
+                    "an agent runs on a chat model"
                 )
             context_window = model_instance.model_spec.context_window
             if (

@@ -11,6 +11,7 @@ with workflow.unsafe.imports_passed_through():
     from agentarea_agents_sdk.skills import SkillActivationTool, SkillCatalogBuilder, SkillEntry
     from agentarea_agents_sdk.tools.disclosure import DisclosureContext, NamedLookupPolicy
     from agentarea_common.money import serialize_money
+    from agentarea_governance.domain.tool_calls import WAIT_TOOL_NAME
 
     from ...interaction import resolve_interaction_capabilities
     from ..context_manager import ContextWindowManager
@@ -24,6 +25,7 @@ with workflow.unsafe.imports_passed_through():
         StateValidator,
         filter_disclosed_tools,
         resolve_effective_budget,
+        tool_definition_name,
     )
     from ..models import AgentGoal
 
@@ -49,10 +51,11 @@ from .builtin_tools import (
     read_tool_output_tool_schema,
     recall_history_tool_schema,
     request_user_input_tool_schema,
+    wait_tool_schema,
 )
 from .continue_as_new import ContinueAsNewMixin
 from .delegation import DelegationMixin
-from .patches import INTERACTION_CONTRACT_PATCH
+from .patches import INTERACTION_CONTRACT_PATCH, WAIT_TOOL_PATCH
 
 
 class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
@@ -62,6 +65,7 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         """Initialize workflow state and dependencies."""
         workflow.logger.info(f"Initializing workflow for agent {request.agent_id}")
         self._interaction_contract_enabled = workflow.patched(INTERACTION_CONTRACT_PATCH)
+        self._wait_tool_enabled = workflow.patched(WAIT_TOOL_PATCH)
 
         # Check if this is a continue-as-new restart
         if request.continued_state:
@@ -349,6 +353,16 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         # Tool activities offload large outputs under every strategy, and the
         # summary they leave points the model at read_tool_output.
         available_tools.append(read_tool_output_tool_schema())
+
+        if self._wait_tool_enabled:
+            if any(tool_definition_name(tool) == WAIT_TOOL_NAME for tool in available_tools):
+                raise ApplicationError(
+                    f"tool name {WAIT_TOOL_NAME!r} is reserved for the workflow's built-in "
+                    "wait; rename the agent tool that uses it",
+                    type="ReservedToolName",
+                    non_retryable=True,
+                )
+            available_tools.append(wait_tool_schema())
 
         # Inject built-in activate_skill tool for progressive skill disclosure
         skills = self.state.agent_config.get("skills", [])

@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
@@ -6,7 +7,12 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from agentarea_llm.domain.models import MANAGED_BY_PLATFORM, ModelInstance, ProviderConfig
+from agentarea_llm.domain.models import (
+    MANAGED_BY_PLATFORM,
+    ModelInstance,
+    ModelSpec,
+    ProviderConfig,
+)
 
 
 class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
@@ -95,9 +101,10 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
         limit: int = 100,
         offset: int = 0,
         creator_scoped: bool = False,
+        kind: str | None = None,
     ) -> list[ModelInstance]:
         """List model instances with filtering and relationships."""
-        filters = {}
+        filters: dict[str, Any] = {}
         if provider_config_id is not None:
             filters["provider_config_id"] = provider_config_id
         if model_spec_id is not None:
@@ -107,8 +114,16 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
         if is_public is not None:
             filters["is_public"] = is_public
 
+        ids: set[str] | None = None
+        if kind is not None:
+            of_kind = await self.session.execute(
+                select(ModelInstance.id)
+                .join(ModelSpec, ModelInstance.model_spec_id == ModelSpec.id)
+                .where(ModelSpec.kind == kind, self._get_workspace_filter())
+            )
+            ids = {str(instance_id) for instance_id in of_kind.scalars()}
         instances = await self.list_all(
-            creator_scoped=creator_scoped, limit=limit, offset=offset, **filters
+            creator_scoped=creator_scoped, limit=limit, offset=offset, ids=ids, **filters
         )
 
         # Load relationships for each instance

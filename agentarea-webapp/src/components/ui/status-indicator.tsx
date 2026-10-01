@@ -27,7 +27,7 @@ const KIND_STYLES = {
     color:
       "text-[color:var(--status-info)] motion-safe:animate-spin [animation-duration:2.4s]",
   },
-  attention: { Icon: CircleAlert, color: "text-[color:var(--status-warning)]" },
+  attention: { Icon: CircleAlert, color: "text-[color:var(--status-attention)]" },
   paused: { Icon: CirclePause, color: "text-muted-foreground" },
   active: { Icon: CircleDot, color: "text-[color:var(--status-success)]" },
   off: { Icon: CircleMinus, color: "text-muted-foreground" },

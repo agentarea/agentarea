@@ -26,6 +26,7 @@ from uuid import UUID
 import yaml
 from agentarea_common.money import to_optional_money
 from agentarea_common.utils.slug import generate_slug
+from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
 
 from agentarea_registry.application.catalog_facets import apply_facets, derive_facets
@@ -798,24 +799,31 @@ class RegistryService:
             raise ValueError(
                 f"Provider '{spec['provider_key']}' not found; sync llm_providers registry first"
             )
+        kind = ModelKind(spec.get("kind", ModelKind.CHAT))
         context_window = spec.get("context_window")
-        if (
-            isinstance(context_window, bool)
-            or not isinstance(context_window, int)
-            or context_window <= 0
-        ):
-            raise ValueError(
-                f"Model '{spec['model_name']}' has no explicit positive context_window"
-            )
-        if spec.get("input_cost_per_token") is None:
-            raise ValueError(f"Model '{spec['model_name']}' has no explicit input_cost_per_token")
-        if spec.get("output_cost_per_token") is None:
-            raise ValueError(f"Model '{spec['model_name']}' has no explicit output_cost_per_token")
+        if kind.priced_per_token:
+            if (
+                isinstance(context_window, bool)
+                or not isinstance(context_window, int)
+                or context_window <= 0
+            ):
+                raise ValueError(
+                    f"Model '{spec['model_name']}' has no explicit positive context_window"
+                )
+            if spec.get("input_cost_per_token") is None:
+                raise ValueError(
+                    f"Model '{spec['model_name']}' has no explicit input_cost_per_token"
+                )
+            if spec.get("output_cost_per_token") is None:
+                raise ValueError(
+                    f"Model '{spec['model_name']}' has no explicit output_cost_per_token"
+                )
         model = await self.model_spec_repo.upsert_by_provider_and_model_kwargs(
             provider_spec_id=provider.id,
             model_name=spec["model_name"],
             display_name=item.name,
             description=item.description,
+            kind=kind.value,
             context_window=context_window,
             max_output_tokens=spec.get("max_output_tokens"),
             input_cost_per_token=to_optional_money(spec.get("input_cost_per_token")),
@@ -1225,6 +1233,12 @@ class RegistryService:
             model_name = entry.get("model_name")
             if not provider_key or not model_name:
                 continue
+            kind = entry.get("kind", ModelKind.CHAT)
+            if kind not in _MODEL_KINDS:
+                raise ValueError(
+                    f"Model '{provider_key}/{model_name}' has unknown kind {kind!r}; "
+                    f"expected one of {', '.join(_MODEL_KINDS)}"
+                )
             items.append(
                 {
                     "external_id": f"{provider_key}/{model_name}",
@@ -1234,6 +1248,7 @@ class RegistryService:
                     "spec": {
                         "provider_key": provider_key,
                         "model_name": model_name,
+                        "kind": kind,
                         "context_window": entry.get("context_window"),
                         "max_output_tokens": entry.get("max_output_tokens"),
                         "input_cost_per_token": entry.get("input_cost_per_token"),
@@ -1317,6 +1332,10 @@ class RegistryService:
                 }
             )
         return items
+
+
+# ModelKind values; a catalog file names them as strings.
+_MODEL_KINDS = tuple(kind.value for kind in ModelKind)
 
 
 def _agent_preferred_models(entry: dict[str, Any]) -> list[str]:

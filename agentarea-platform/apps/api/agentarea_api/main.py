@@ -6,7 +6,6 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import cast
 
 # Suppress noisy third-party loggers before any imports trigger them
 for _noisy_logger in ("LiteLLM", "LiteLLM Proxy", "LiteLLM Router", "httpcore", "httpx"):
@@ -252,48 +251,42 @@ def create_app() -> FastAPI:
     # via session_manager.run() in the lifespan.
     from agentarea_agents_sdk.mcp_server import (
         PinnedWorkspaceMiddleware,
-        create_mcp_server,
+        ToolsetSelectionMiddleware,
         mount_mcp_app,
     )
     from agentarea_agents_sdk.mcp_server.auth import MCPAuthMiddleware
-    from agentarea_agents_sdk.tools.base_tool import BaseTool
-    from agentarea_agents_sdk.tools.decorator_tool import Toolset
     from mcp.server.transport_security import TransportSecuritySettings
 
-    from agentarea_api.tools import get_platform_tools, get_spanning_mcp_tools
+    from agentarea_api.platform_mcp import create_platform_mcp_server
 
-    _mcp_description = "AgentArea platform — agents, runs, MCP servers, providers, models, secrets"
     _transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
     # Bare /mcp spans every workspace the caller can reach: workspace-scoped
     # tools take a required `workspace` argument, found via workspaces_list.
-    _mcp_server = create_mcp_server(
-        toolsets=cast(list[Toolset | BaseTool], get_spanning_mcp_tools()),
-        name="AgentArea",
-        description=_mcp_description,
-        workspace_argument=True,
-    )
+    # Both platform mounts take `?toolsets=` to serve only some toolsets.
+    _mcp_server = create_platform_mcp_server(spanning=True)
     _mcp_app = MCPAuthMiddleware(
-        _mcp_server.streamable_http_app(
-            streamable_http_path="/",
-            stateless_http=True,
-            transport_security=_transport_security,
+        ToolsetSelectionMiddleware(
+            _mcp_server.streamable_http_app(
+                streamable_http_path="/",
+                stateless_http=True,
+                transport_security=_transport_security,
+            ),
+            _mcp_server,
         )
     )
 
     # /mcp/w/{workspace} pins one workspace by URL, so its tools carry no
     # `workspace` argument.
-    _pinned_mcp_server = create_mcp_server(
-        toolsets=cast(list[Toolset | BaseTool], get_platform_tools()),
-        name="AgentArea",
-        description=_mcp_description,
-        workspace_argument=False,
-    )
+    _pinned_mcp_server = create_platform_mcp_server(spanning=False)
     _pinned_mcp_app = PinnedWorkspaceMiddleware(
         MCPAuthMiddleware(
-            _pinned_mcp_server.streamable_http_app(
-                streamable_http_path="/",
-                stateless_http=True,
-                transport_security=_transport_security,
+            ToolsetSelectionMiddleware(
+                _pinned_mcp_server.streamable_http_app(
+                    streamable_http_path="/",
+                    stateless_http=True,
+                    transport_security=_transport_security,
+                ),
+                _pinned_mcp_server,
             )
         ),
         prefix="/mcp/w",
@@ -493,8 +486,11 @@ def create_app() -> FastAPI:
     app.mount("/client-mcp", _legacy_client_mcp_app)
     mount_mcp_app(app, "/mcp", _mcp_app)
 
-    _tool_count = sum(len(ts._tool_methods) for ts in get_platform_tools())
-    logger.info("Native MCP server mounted at /mcp with %d platform tools", _tool_count)
+    logger.info(
+        "Native MCP server mounted at /mcp with %d platform toolsets, %d tools",
+        len(_pinned_mcp_server.toolsets),
+        sum(len(toolset.tools) for toolset in _pinned_mcp_server.toolsets.values()),
+    )
 
     # Register the unified error handlers (RFC 9457 problem+json): AppError,
     # PermissionError, validation, HTTPException, DB integrity, and a catch-all

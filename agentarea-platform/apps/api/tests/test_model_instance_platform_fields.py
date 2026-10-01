@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 
 from agentarea_api.api.v1.model_instances import ModelInstanceResponse
 from agentarea_common.constants import MANAGED_BY_PLATFORM
+from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
@@ -28,7 +29,7 @@ def _instance(provider_config: ProviderConfig | None, tags: list[str]) -> ModelI
         created_at=NOW,
         updated_at=NOW,
         provider_config=provider_config,
-        model_spec=ModelSpec(model_name="kimi-k2.6", display_name="Kimi K2.6"),
+        model_spec=ModelSpec(model_name="kimi-k2.6", display_name="Kimi K2.6", kind=ModelKind.CHAT),
     )
 
 

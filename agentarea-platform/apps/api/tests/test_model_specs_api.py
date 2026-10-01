@@ -31,6 +31,7 @@ def _spec(provider_spec_id, model_name="gpt-4"):
     spec.model_name = model_name
     spec.display_name = "GPT-4"
     spec.description = None
+    spec.kind = "chat"
     spec.context_window = 8192
     spec.max_output_tokens = 4096
     spec.input_cost_per_token = 0.0

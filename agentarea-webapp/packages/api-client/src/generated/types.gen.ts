@@ -1540,6 +1540,42 @@ export type ClientCreate = {
 };
 
 /**
+ * ClientMcpInstanceRef
+ */
+export type ClientMcpInstanceRef = {
+    /**
+     * Allowed Tools
+     */
+    allowed_tools?: Array<string> | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Namespace Prefix
+     */
+    namespace_prefix?: string | null;
+};
+
+/**
+ * ClientPlatformToolsetRef
+ */
+export type ClientPlatformToolsetRef = {
+    /**
+     * Disabled Methods
+     */
+    disabled_methods?: Array<string> | null;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
  * ClientRef
  */
 export type ClientRef = {
@@ -1580,11 +1616,15 @@ export type ClientResponse = {
     /**
      * Mcp Instances
      */
-    mcp_instances?: Array<ClientRef>;
+    mcp_instances?: Array<ClientMcpInstanceRef>;
     /**
      * Name
      */
     name: string;
+    /**
+     * Platform Toolsets
+     */
+    platform_toolsets?: Array<ClientPlatformToolsetRef>;
     /**
      * Skills
      */
@@ -1634,6 +1674,10 @@ export type CodeToolConfig = {
  * CodeToolSettings
  *
  * Settings for a built-in code toolset.
+ *
+ * The model ids are model instances of the workspace, each of the kind its
+ * toolset needs: ``agentarea/media`` takes an image and/or a video model,
+ * ``agentarea/decide`` a decision model. No other toolset takes one.
  */
 export type CodeToolSettings = {
     /**
@@ -1641,9 +1685,27 @@ export type CodeToolSettings = {
      */
     disabled_methods?: Array<string> | null;
     /**
+     * Image Model Id
+     *
+     * agentarea/media: model instance generating images.
+     */
+    image_model_id?: string | null;
+    /**
+     * Model Id
+     *
+     * agentarea/decide: decision model instance.
+     */
+    model_id?: string | null;
+    /**
      * Requires User Confirmation
      */
     requires_user_confirmation?: boolean | null;
+    /**
+     * Video Model Id
+     *
+     * agentarea/media: model instance generating videos.
+     */
+    video_model_id?: string | null;
 };
 
 /**
@@ -1874,7 +1936,7 @@ export type DiscoverPreviewModelResponse = {
     /**
      * Context Window
      */
-    context_window: number;
+    context_window: number | null;
     /**
      * Description
      */
@@ -1895,6 +1957,7 @@ export type DiscoverPreviewModelResponse = {
      * Is New
      */
     is_new?: boolean;
+    kind?: ModelKind;
     /**
      * Max Output Tokens
      */
@@ -1968,7 +2031,7 @@ export type DiscoveredModelResponse = {
     /**
      * Context Window
      */
-    context_window: number;
+    context_window: number | null;
     /**
      * Description
      */
@@ -1985,6 +2048,7 @@ export type DiscoveredModelResponse = {
      * Is New
      */
     is_new?: boolean;
+    kind?: ModelKind;
     /**
      * Max Output Tokens
      */
@@ -3471,8 +3535,14 @@ export type ManagedOAuthAppResponse = {
 
 /**
  * McpInstanceAssociationBody
+ *
+ * Attach an instance, or replace how an attached one is served.
  */
 export type McpInstanceAssociationBody = {
+    /**
+     * Allowed Tools
+     */
+    allowed_tools?: Array<string> | null;
     /**
      * Id
      */
@@ -3712,6 +3782,7 @@ export type ModelInstanceResponse = {
      * Model Display Name
      */
     model_display_name?: string | null;
+    model_kind?: ModelKind | null;
     /**
      * Model Name
      */
@@ -3811,13 +3882,24 @@ export type ModelInstanceTestResponse = {
 };
 
 /**
+ * ModelKind
+ *
+ * What a model produces, which decides every surface it may be bound to.
+ *
+ * An agent's main model is ``chat``; the media toolset takes ``image`` and
+ * ``video``; the decide toolset and decision-backed trigger conditions take
+ * ``decision``. A model has exactly one kind.
+ */
+export type ModelKind = 'chat' | 'embedding' | 'image' | 'video' | 'decision';
+
+/**
  * ModelSpecCreate
  */
 export type ModelSpecCreate = {
     /**
      * Context Window
      */
-    context_window: number;
+    context_window?: number | null;
     /**
      * Default Context Strategy
      */
@@ -3833,11 +3915,12 @@ export type ModelSpecCreate = {
     /**
      * Input Cost Per Token
      */
-    input_cost_per_token: number | string;
+    input_cost_per_token?: number | string | null;
     /**
      * Is Active
      */
     is_active?: boolean;
+    kind?: ModelKind;
     /**
      * Max Output Tokens
      */
@@ -3849,7 +3932,7 @@ export type ModelSpecCreate = {
     /**
      * Output Cost Per Token
      */
-    output_cost_per_token: number | string;
+    output_cost_per_token?: number | string | null;
     /**
      * Provider Spec Id
      */
@@ -4572,6 +4655,68 @@ export type PlannedUpload = {
      * Upload Url
      */
     upload_url?: string | null;
+};
+
+/**
+ * PlatformToolsetAssociationBody
+ *
+ * Attach a platform toolset, or replace the methods an attached one leaves out.
+ */
+export type PlatformToolsetAssociationBody = {
+    /**
+     * Disabled Methods
+     */
+    disabled_methods?: Array<string> | null;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * PlatformToolsetMethod
+ */
+export type PlatformToolsetMethod = {
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Effect
+     */
+    effect?: 'read' | 'write' | 'destructive' | 'privileged' | null;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * PlatformToolsetResponse
+ *
+ * A platform toolset a client can carry.
+ */
+export type PlatformToolsetResponse = {
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Methods
+     */
+    methods: Array<PlatformToolsetMethod>;
+    /**
+     * Name
+     */
+    name: string;
 };
 
 /**
@@ -6960,7 +7105,7 @@ export type TriggerCreate = {
     /**
      * Conditions
      *
-     * Optional conditions evaluated against event data before firing.
+     * Optional conditions evaluated against event data before firing. An LLM condition ({"type": "llm", "description": ...}) must name the chat or decision model instance that evaluates it in "model_id"; each sub-condition of a combined condition names its own.
      */
     conditions?: {
         [key: string]: unknown;
@@ -7326,7 +7471,7 @@ export type TriggerSpec = {
     /**
      * Conditions
      *
-     * Optional conditions evaluated against event data before firing.
+     * Optional conditions evaluated against event data before firing. An LLM condition ({"type": "llm", "description": ...}) must name the chat or decision model instance that evaluates it in "model_id"; each sub-condition of a combined condition names its own.
      */
     conditions?: {
         [key: string]: unknown;
@@ -7993,7 +8138,7 @@ export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
     /**
      * Context Window
      */
-    context_window: number;
+    context_window: number | null;
     /**
      * Created At
      */
@@ -8022,6 +8167,7 @@ export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
      * Is Active
      */
     is_active: boolean;
+    kind?: ModelKind;
     /**
      * Max Output Tokens
      */
@@ -8071,7 +8217,7 @@ export type AgentareaApiApiV1ProviderSpecsModelSpecResponse = {
     /**
      * Context Window
      */
-    context_window: number;
+    context_window: number | null;
     /**
      * Created At
      */
@@ -8096,6 +8242,7 @@ export type AgentareaApiApiV1ProviderSpecsModelSpecResponse = {
      * Is Active
      */
     is_active: boolean;
+    kind?: ModelKind;
     /**
      * Max Output Tokens
      */
@@ -10630,6 +10777,33 @@ export type CreateClientV1ClientsPostResponses = {
 
 export type CreateClientV1ClientsPostResponse = CreateClientV1ClientsPostResponses[keyof CreateClientV1ClientsPostResponses];
 
+export type ListPlatformToolsetsV1ClientsPlatformToolsetsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/platform-toolsets';
+};
+
+export type ListPlatformToolsetsV1ClientsPlatformToolsetsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListPlatformToolsetsV1ClientsPlatformToolsetsGetError = ListPlatformToolsetsV1ClientsPlatformToolsetsGetErrors[keyof ListPlatformToolsetsV1ClientsPlatformToolsetsGetErrors];
+
+export type ListPlatformToolsetsV1ClientsPlatformToolsetsGetResponses = {
+    /**
+     * Response List Platform Toolsets V1 Clients Platform Toolsets Get
+     *
+     * Successful Response
+     */
+    200: Array<PlatformToolsetResponse>;
+};
+
+export type ListPlatformToolsetsV1ClientsPlatformToolsetsGetResponse = ListPlatformToolsetsV1ClientsPlatformToolsetsGetResponses[keyof ListPlatformToolsetsV1ClientsPlatformToolsetsGetResponses];
+
 export type DeleteClientV1ClientsClientIdDeleteData = {
     body?: never;
     path: {
@@ -10783,6 +10957,70 @@ export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceI
 };
 
 export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponse = RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses[keyof RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses];
+
+export type AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostData = {
+    body: PlatformToolsetAssociationBody;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets';
+};
+
+export type AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostError = AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostErrors[keyof AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostErrors];
+
+export type AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostResponse = AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostResponses[keyof AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostResponses];
+
+export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+        /**
+         * Toolset
+         */
+        toolset: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets/{toolset}';
+};
+
+export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteError = RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteErrors[keyof RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteErrors];
+
+export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponse = RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses[keyof RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses];
 
 export type AddSkillToClientV1ClientsClientIdSkillsPostData = {
     body: AssociationBody;
@@ -12550,6 +12788,10 @@ export type ListModelInstancesV1ModelInstancesGetData = {
          * Is Active
          */
         is_active?: boolean | null;
+        /**
+         * Kind
+         */
+        kind?: ModelKind | null;
     };
     url: '/v1/workspaces/{workspace}/model-instances/';
 };
@@ -12719,6 +12961,10 @@ export type ListModelSpecsV1ModelSpecsGetData = {
          * Is Active
          */
         is_active?: boolean | null;
+        /**
+         * Kind
+         */
+        kind?: ModelKind | null;
     };
     url: '/v1/workspaces/{workspace}/model-specs/';
 };

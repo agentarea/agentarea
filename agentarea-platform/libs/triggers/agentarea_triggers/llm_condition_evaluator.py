@@ -13,9 +13,23 @@ from uuid import UUID
 import litellm
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_llm.application.model_service import ModelService
+from agentarea_llm.domain.media import DecisionQuestionType
+from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_llm.domain.provider_profiles import profile_for
+from agentarea_secrets.secret_manager_factory import SecretManagerFactory
+
+from .domain.enums import ConditionType
 
 logger = logging.getLogger(__name__)
+
+
+def _condition_type(condition: dict[str, Any]) -> ConditionType | None:
+    """The condition's type (untyped means LLM), or None when it names no known one."""
+    try:
+        return ConditionType(condition.get("type", ConditionType.LLM))
+    except ValueError:
+        return None
 
 
 class LLMConditionEvaluationError(Exception):
@@ -24,8 +38,19 @@ class LLMConditionEvaluationError(Exception):
     pass
 
 
+# The one question a decision model is asked about a condition, and its options.
+_CONDITION_QUESTION = "condition_met"
+_MET = "true"
+_NOT_MET = "false"
+
+
 def build_condition_evaluator(
-    *, session: Any, user_context: Any, secret_manager: BaseSecretManager, event_broker: Any
+    *,
+    session: Any,
+    user_context: Any,
+    secret_manager: BaseSecretManager,
+    secret_manager_factory: SecretManagerFactory,
+    event_broker: Any,
 ) -> "LLMConditionEvaluator | None":
     """The evaluator a TriggerService gets outside a request, when enabled.
 
@@ -34,6 +59,7 @@ def build_condition_evaluator(
     dependencies.
     """
     from agentarea_common.config import get_settings
+    from agentarea_llm.application.model_service import build_model_service
     from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 
     if not get_settings().triggers.ENABLE_LLM_CONDITIONS:
@@ -45,6 +71,11 @@ def build_condition_evaluator(
             secret_manager=secret_manager,
         ),
         secret_manager=secret_manager,
+        model_service=build_model_service(
+            session=session,
+            user_context=user_context,
+            secret_manager_factory=secret_manager_factory,
+        ),
     )
 
 
@@ -55,6 +86,7 @@ class LLMConditionEvaluator:
         self,
         model_instance_service: ModelInstanceService,
         secret_manager: BaseSecretManager,
+        model_service: ModelService,
         default_model_id: UUID | None = None,
     ):
         """Initialize the LLM condition evaluator.
@@ -62,10 +94,12 @@ class LLMConditionEvaluator:
         Args:
             model_instance_service: Service for managing LLM model instances
             secret_manager: Service for managing API keys and secrets
+            model_service: Resolves decision models, which answer a condition directly
             default_model_id: Default model instance ID to use if none specified
         """
         self.model_instance_service = model_instance_service
         self.secret_manager = secret_manager
+        self.model_service = model_service
         self.default_model_id = default_model_id
 
     async def evaluate_condition(
@@ -73,15 +107,16 @@ class LLMConditionEvaluator:
         condition: dict[str, Any],
         event_data: dict[str, Any],
         trigger_context: dict[str, Any] | None = None,
-        model_id: UUID | None = None,
     ) -> bool:
         """Evaluate a condition against event data using LLM.
+
+        Each LLM condition is evaluated with the model instance it names in
+        ``model_id``; there is no default.
 
         Args:
             condition: The condition configuration to evaluate
             event_data: The event data to evaluate against
             trigger_context: Optional trigger context for evaluation
-            model_id: Optional model instance ID to use for evaluation
 
         Returns:
             True if condition is met, False otherwise
@@ -90,21 +125,16 @@ class LLMConditionEvaluator:
             LLMConditionEvaluationError: If evaluation fails
         """
         try:
-            # Determine condition type
-            condition_type = condition.get("type", "llm")
-
-            if condition_type == "rule":
+            condition_type = _condition_type(condition)
+            if condition_type is None:
+                raise LLMConditionEvaluationError(
+                    f"Unknown condition type: {condition.get('type')}"
+                )
+            if condition_type is ConditionType.RULE:
                 return await self._evaluate_rule_condition(condition, event_data)
-            elif condition_type == "llm":
-                return await self._evaluate_llm_condition(
-                    condition, event_data, trigger_context, model_id
-                )
-            elif condition_type == "combined":
-                return await self._evaluate_combined_condition(
-                    condition, event_data, trigger_context, model_id
-                )
-            else:
-                raise LLMConditionEvaluationError(f"Unknown condition type: {condition_type}")
+            if condition_type is ConditionType.LLM:
+                return await self._evaluate_llm_condition(condition, event_data, trigger_context)
+            return await self._evaluate_combined_condition(condition, event_data, trigger_context)
 
         except Exception as e:
             logger.exception(f"Condition evaluation failed: {e}")
@@ -182,15 +212,13 @@ class LLMConditionEvaluator:
         condition: dict[str, Any],
         event_data: dict[str, Any],
         trigger_context: dict[str, Any] | None = None,
-        model_id: UUID | None = None,
     ) -> bool:
         """Evaluate an LLM-based natural language condition.
 
         Args:
-            condition: LLM condition configuration
+            condition: LLM condition configuration, naming its model in ``model_id``
             event_data: Event data to evaluate
             trigger_context: Optional trigger context
-            model_id: Optional model instance ID
 
         Returns:
             True if LLM determines condition is met
@@ -207,23 +235,78 @@ class LLMConditionEvaluator:
         for field in context_fields:
             context_data[field] = self._get_nested_value(event_data, field)
 
+        raw_model_id = condition.get("model_id")
+        if not raw_model_id:
+            raise LLMConditionEvaluationError("LLM condition has no model_id")
+        try:
+            effective_model_id = UUID(str(raw_model_id))
+        except ValueError as error:
+            raise LLMConditionEvaluationError(
+                f"LLM condition model_id '{raw_model_id}' is not a model instance id"
+            ) from error
+        model_instance = await self.model_instance_service.get(effective_model_id)
+        if not model_instance:
+            raise LLMConditionEvaluationError(f"Model instance {effective_model_id} not found")
+        kind = model_instance.model_spec.kind
+        if kind == ModelKind.DECISION:
+            return await self._decide_condition(
+                effective_model_id, description, event_data, context_data, examples, trigger_context
+            )
+        if kind != ModelKind.CHAT:
+            raise LLMConditionEvaluationError(
+                f"Model instance {effective_model_id} is a {kind} model; "
+                "a condition needs a chat or decision model"
+            )
+
         # Build evaluation prompt
         prompt = self._build_evaluation_prompt(
             description, event_data, context_data, examples, trigger_context
         )
 
         # Call LLM for evaluation
-        response = await self._call_llm(prompt, model_id)
+        response = await self._call_llm(prompt, effective_model_id)
 
         # Parse response
         return self._parse_evaluation_response(response)
+
+    async def _decide_condition(
+        self,
+        model_id: UUID,
+        description: str,
+        event_data: dict[str, Any],
+        context_data: dict[str, Any],
+        examples: list[dict[str, Any]],
+        trigger_context: dict[str, Any] | None,
+    ) -> bool:
+        """Ask a decision model whether the event meets the condition."""
+        state: dict[str, Any] = {"event": event_data}
+        if context_data:
+            state["relevant_context"] = context_data
+        if trigger_context:
+            state["trigger_context"] = trigger_context
+        if examples:
+            state["examples"] = examples
+        model = await self.model_service.decision_model(model_id)
+        result = await model.evaluate(
+            state,
+            {
+                _CONDITION_QUESTION: {
+                    "type": DecisionQuestionType.CHOICE,
+                    "instructions": f"Is this condition met by the event: {description}",
+                    "criteria": {
+                        _MET: "The event meets the condition",
+                        _NOT_MET: "The event does not meet the condition",
+                    },
+                }
+            },
+        )
+        return result.answers[_CONDITION_QUESTION][DecisionQuestionType.CHOICE] == _MET
 
     async def _evaluate_combined_condition(
         self,
         condition: dict[str, Any],
         event_data: dict[str, Any],
         trigger_context: dict[str, Any] | None = None,
-        model_id: UUID | None = None,
     ) -> bool:
         """Evaluate a combined condition with multiple sub-conditions.
 
@@ -231,7 +314,6 @@ class LLMConditionEvaluator:
             condition: Combined condition configuration
             event_data: Event data to evaluate
             trigger_context: Optional trigger context
-            model_id: Optional model instance ID
 
         Returns:
             True if combined condition is met
@@ -244,9 +326,7 @@ class LLMConditionEvaluator:
 
         results = []
         for sub_condition in conditions:
-            result = await self.evaluate_condition(
-                sub_condition, event_data, trigger_context, model_id
-            )
+            result = await self.evaluate_condition(sub_condition, event_data, trigger_context)
             results.append(result)
 
         # Apply logic
@@ -336,16 +416,15 @@ class LLMConditionEvaluator:
         errors = []
 
         try:
-            condition_type = condition.get("type", "llm")
-
-            if condition_type == "rule":
+            condition_type = _condition_type(condition)
+            if condition_type is None:
+                errors.append(f"Unknown condition type: {condition.get('type')}")
+            elif condition_type is ConditionType.RULE:
                 errors.extend(self._validate_rule_condition(condition))
-            elif condition_type == "llm":
+            elif condition_type is ConditionType.LLM:
                 errors.extend(self._validate_llm_condition(condition))
-            elif condition_type == "combined":
-                errors.extend(self._validate_combined_condition(condition))
             else:
-                errors.append(f"Unknown condition type: {condition_type}")
+                errors.extend(self._validate_combined_condition(condition))
 
         except Exception as e:
             errors.append(f"Validation error: {e}")
@@ -401,6 +480,8 @@ class LLMConditionEvaluator:
 
         if not condition.get("description"):
             errors.append("LLM condition must have a 'description'")
+        if not condition.get("model_id"):
+            errors.append("LLM condition must name its 'model_id'")
 
         context_fields = condition.get("context_fields", [])
         if context_fields and not isinstance(context_fields, list):
@@ -600,19 +681,13 @@ class LLMConditionEvaluator:
                     "No model ID provided and no default model configured"
                 )
 
-            # Get model instance details
-            model_instance = await self.model_instance_service.get(effective_model_id)
-            if not model_instance:
-                raise LLMConditionEvaluationError(f"Model instance {effective_model_id} not found")
-
-            # Extract model configuration
-            provider_type = model_instance.provider_config.provider_spec.provider_type
-            model_type = model_instance.model_spec.model_name
-            api_key = getattr(model_instance.provider_config, "api_key", None)
-            endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
+            # The credential is read by reference from the workspace that owns
+            # it; the configuration only stores the secret's name.
+            endpoint = await self.model_service.resolve(effective_model_id, ModelKind.CHAT)
+            provider_type = endpoint.provider_type
 
             # Build litellm parameters
-            litellm_model = f"{provider_type}/{model_type}"
+            litellm_model = f"{provider_type}/{endpoint.model_name}"
             litellm_params = {
                 "model": litellm_model,
                 "messages": [{"role": "user", "content": prompt}],
@@ -620,10 +695,10 @@ class LLMConditionEvaluator:
                 "max_tokens": 1000,
             }
 
-            if api_key:
-                litellm_params["api_key"] = api_key
-            if endpoint_url:
-                url = endpoint_url
+            if endpoint.api_key:
+                litellm_params["api_key"] = endpoint.api_key
+            if endpoint.endpoint_url:
+                url = endpoint.endpoint_url
                 if not url.startswith("http"):
                     url = f"http://{url}"
                 litellm_params["base_url"] = url

@@ -146,7 +146,6 @@ def make_llm_activities(
                 request = request.model_copy(
                     update={"messages": [entry.as_message() for entry in (*head, *tail)]}
                 )
-
             on_chunk = None
             if request.task_id and dependencies.broker_client is not None:
                 on_chunk = create_event_publisher(

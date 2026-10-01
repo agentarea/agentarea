@@ -6,6 +6,8 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.a2a_agent_tool import agent_address, delegate_tool_name
+from agentarea_agents_sdk.tools.decide_toolset import DECIDE_TOOLSET
+from agentarea_agents_sdk.tools.media_toolset import MEDIA_TOOLSET
 from agentarea_common.audit import audited
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.base import RepositoryFactory
@@ -13,6 +15,7 @@ from agentarea_common.base.service import BaseCrudService
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.utils.slug import generate_slug
+from agentarea_llm.domain.models import ModelKind
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 
 from agentarea_agents.application.approval_sync import (
@@ -71,6 +74,15 @@ def _credential_bindings(tools: list[dict] | None) -> set[tuple[str, str, str]]:
                 )
             )
     return bindings
+
+
+# The model settings each code toolset takes, and the kind each must be. A
+# toolset needs at least one of its settings; no other toolset takes any.
+_TOOL_MODEL_SETTINGS: dict[str, dict[str, ModelKind]] = {
+    MEDIA_TOOLSET: {"image_model_id": ModelKind.IMAGE, "video_model_id": ModelKind.VIDEO},
+    DECIDE_TOOLSET: {"model_id": ModelKind.DECISION},
+}
+_MODEL_SETTING_KEYS = frozenset(key for keys in _TOOL_MODEL_SETTINGS.values() for key in keys)
 
 
 def _project_catalog_item(item: CatalogAgentItem) -> Agent:
@@ -171,12 +183,21 @@ class AgentService(BaseCrudService[Agent]):
         """
         if model_id is None or not model_id.strip():
             return None
+        kind = await self._model_instance_kind(model_id, "model_id")
+        if kind != ModelKind.CHAT:
+            raise InvalidModelIdError(
+                f"Model instance '{model_id}' is a {kind} model; an agent's main model "
+                "must be a chat model."
+            )
+        return model_id
 
+    async def _model_instance_kind(self, model_id: str, setting: str) -> str:
+        """The kind of the workspace's model instance ``model_id``, or reject it."""
         try:
             model_uuid = UUID(model_id)
         except ValueError as exc:
             raise InvalidModelIdError(
-                f"Invalid model_id '{model_id}': expected the UUID of a model instance. "
+                f"Invalid {setting} '{model_id}': expected the UUID of a model instance. "
                 "List available instances via GET /v1/model-instances."
             ) from exc
 
@@ -184,12 +205,37 @@ class AgentService(BaseCrudService[Agent]):
             session=self.repository_factory.session,
             user_context=self._user_context,
         )
-        if await repo.get_by_id(model_uuid) is None:
+        instance = await repo.get_by_id(model_uuid)
+        if instance is None:
             raise InvalidModelIdError(
                 f"Model instance '{model_id}' does not exist in this workspace. "
                 "Create one via POST /v1/model-instances."
             )
-        return model_id
+        return instance.model_spec.kind
+
+    async def _validate_tool_models(self, tools: list[dict] | None) -> None:
+        """Every model a code toolset names exists here and is of the kind it needs."""
+        for tool in tools or []:
+            if tool.get("type") != "code":
+                continue
+            name = str(tool.get("name"))
+            settings = tool.get("settings") or {}
+            expected = _TOOL_MODEL_SETTINGS.get(name)
+            if expected is None:
+                stray = sorted(key for key in _MODEL_SETTING_KEYS if settings.get(key))
+                if stray:
+                    raise InvalidModelIdError(f"{name} takes no model; remove {', '.join(stray)}")
+                continue
+            named = {key: settings.get(key) for key in expected if settings.get(key)}
+            if not named:
+                raise InvalidModelIdError(f"{name} needs {' or '.join(expected)}")
+            for key, model_id in named.items():
+                kind = await self._model_instance_kind(str(model_id), key)
+                if kind != expected[key]:
+                    raise InvalidModelIdError(
+                        f"Model instance '{model_id}' is a {kind} model; {name} needs a "
+                        f"{expected[key]} model for {key}."
+                    )
 
     async def _validate_delegates(
         self, tools: list[dict] | None, previous: list[dict] | None = None
@@ -357,6 +403,7 @@ class AgentService(BaseCrudService[Agent]):
     async def create_agent(self, payload: AgentCreate) -> Agent:
         tools = [t.model_dump(exclude_none=True) for t in payload.tools]
         approval_targets, tools = self._lift_approval_toggles(tools)
+        await self._validate_tool_models(tools)
         await self._validate_delegates(tools)
 
         slug = await self._resolve_unique_slug(payload.name)
@@ -505,6 +552,7 @@ class AgentService(BaseCrudService[Agent]):
         tools_edited = "tools" in patch and payload.tools is not None
         edited_tools = [t.model_dump(exclude_none=True) for t in (payload.tools or [])]
         if tools_edited:
+            await self._validate_tool_models(edited_tools)
             await self._validate_delegates(
                 edited_tools,
                 agent.tools if isinstance(agent.tools, list) else None,

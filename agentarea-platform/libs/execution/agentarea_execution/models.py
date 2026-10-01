@@ -578,6 +578,10 @@ class MCPToolResult(BaseModel):
     outcome: str | None = None  # "exit" | "timeout" | "error"
     artifact_paths: list[str] = Field(default_factory=list)
     service_cost: Money = ZERO
+    # Spend on a platform model (image, video, decision) the tool called, already
+    # in the billing currency; it counts toward the run budget and task total the
+    # way an LLM call's cost does.
+    model_cost: Money = ZERO
     payment: dict[str, Any] | None = None
     # Tool-call attribution surfaced to the UI.
     source: str | None = None  # "mcp" | "builtin" | "openapi"

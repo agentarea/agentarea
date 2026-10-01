@@ -233,6 +233,7 @@ class InboundMessageStreamConsumer:
                         secret_manager=self._secret_manager_factory.create(
                             session=session, user_context=user_context
                         ),
+                        secret_manager_factory=self._secret_manager_factory,
                         event_broker=self._event_broker,
                     ),
                 )

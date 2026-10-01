@@ -1,4 +1,8 @@
-import type { AgentUpdate, TriggerSpec } from "@/api/client/types.gen";
+import type {
+  AgentUpdate,
+  CodeToolSettings,
+  TriggerSpec,
+} from "@/api/client/types.gen";
 
 /**
  * MCP Tool configuration type
@@ -39,7 +43,15 @@ export type BuiltinToolConfig = {
   requires_user_confirmation?: boolean;
   enabled?: boolean;
   disabled_methods?: { [methodName: string]: boolean };
-};
+} & CodeToolModelIds;
+
+/**
+ * Model instances a code toolset runs on (agentarea/media, agentarea/decide)
+ */
+export type CodeToolModelIds = Pick<
+  CodeToolSettings,
+  "image_model_id" | "video_model_id" | "model_id"
+>;
 
 /**
  * Agent skill reference for form state

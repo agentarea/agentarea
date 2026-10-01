@@ -50,6 +50,11 @@ class AggregatedMember:
     # A member-supplied URL is dialed only at vetted addresses; only the
     # platform's own gateway URL may opt out.
     pinned: bool = True
+    # The member's tools the aggregate serves; None serves all of them.
+    allowed_tools: frozenset[str] | None = None
+
+    def serves(self, tool_name: str) -> bool:
+        return self.allowed_tools is None or tool_name in self.allowed_tools
 
 
 class MCPAggregatorProxy:
@@ -253,6 +258,8 @@ class MCPAggregatorProxy:
             tools = await self._discover_member_tools(member)
             instance_name = self.instance_names.get(str(member.mcp_instance_id), "unknown")
             for tool in tools:
+                if not member.serves(tool["name"]):
+                    continue
                 namespaced_name = f"{namespace}{NS_SEP}{tool['name']}"
                 handler = self._make_proxy_handler(
                     member, tool["name"], tool.get("inputSchema", {})
@@ -280,6 +287,8 @@ class MCPAggregatorProxy:
         for member, tools in zip(self.members, discovered, strict=True):
             namespace = self._get_namespace(member)
             for tool in tools:
+                if not member.serves(tool["name"]):
+                    continue
                 aggregated.append(
                     {
                         "name": f"{namespace}{NS_SEP}{tool['name']}",
@@ -295,10 +304,11 @@ class MCPAggregatorProxy:
             namespace = self._get_namespace(member)
             prefix = f"{namespace}{NS_SEP}"
             if namespaced_name.startswith(prefix):
+                tool_name = namespaced_name[len(prefix) :]
+                if not member.serves(tool_name):
+                    break
                 try:
-                    return await self._call_member_tool(
-                        member, namespaced_name[len(prefix) :], arguments
-                    )
+                    return await self._call_member_tool(member, tool_name, arguments)
                 except Exception:
                     if self._tool_cache is not None:
                         instance_id = str(member.mcp_instance_id)

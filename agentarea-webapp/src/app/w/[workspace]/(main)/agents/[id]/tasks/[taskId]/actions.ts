@@ -32,7 +32,7 @@ export async function cancelTask(agentId: string, taskId: string) {
 }
 
 export async function listTaskModelOptions() {
-  return await listModelInstances({ is_active: true });
+  return await listModelInstances({ is_active: true, kind: "chat" });
 }
 
 export async function changeTaskModel(

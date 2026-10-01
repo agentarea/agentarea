@@ -144,7 +144,7 @@ function inText(iso: string, t: Translator): string {
 // guardrail summary does not turn into a second, competing palette.
 const EFFECT_MARKER_COLOR: Record<PolicyEffect, string> = {
   deny: "var(--status-danger)",
-  approval: "var(--status-warning)",
+  approval: "var(--status-attention)",
   cap: "hsl(var(--primary))",
   allow: "hsl(var(--muted-foreground) / 0.72)",
   safety: "hsl(var(--muted-foreground) / 0.72)",
@@ -554,7 +554,7 @@ export async function AgentOverviewView({
                     rounded={7}
                     color={
                       model.pendingApprovals.length > 0
-                        ? "var(--status-warning)"
+                        ? "var(--status-attention)"
                         : "hsl(var(--muted-foreground))"
                     }
                     icon={<Clock strokeWidth={1.8} />}
@@ -580,9 +580,9 @@ export async function AgentOverviewView({
                     <span
                       className="rounded-[2px] px-[7px] py-px text-[11px] font-bold tabular-nums"
                       style={{
-                        color: "var(--status-warning)",
+                        color: "var(--status-attention)",
                         background:
-                          "color-mix(in srgb, var(--status-warning) 14%, transparent)",
+                          "color-mix(in srgb, var(--status-attention) 14%, transparent)",
                       }}
                     >
                       {model.pendingApprovals.length}

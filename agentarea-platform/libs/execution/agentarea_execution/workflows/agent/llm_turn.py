@@ -11,12 +11,13 @@ with workflow.unsafe.imports_passed_through():
     from agentarea_agents_sdk.tools.disclosure import DisclosureContext, ToolCandidate
     from agentarea_common.money import serialize_money
 
-    from ..context_manager import estimate_tokens_for_messages
+    from ..context_manager import estimate_tokens_for_messages, messages_payload_bytes
     from ..helpers import MessageBuilder, ToolCallExtractor
     from ..models import Message, ToolCall
 
 from ...models import LLMCallRequest, LLMCallResult
 from ..constants import (
+    CONTEXT_MAX_PAYLOAD_BYTES,
     HEARTBEAT_TIMEOUT,
     LLM_CALL_TIMEOUT,
     Activities,
@@ -27,7 +28,7 @@ from ..retry import model_call_retry_policy
 from .compaction import CompactionMixin
 from .errors import ErrorReportingMixin
 from .limits import run_limit_reason
-from .patches import THINKING_ONLY_REPLY_PATCH
+from .patches import COMPACTION_BOUNDS_PAYLOAD_PATCH, THINKING_ONLY_REPLY_PATCH
 from .tool_dispatch import ToolDispatchMixin
 
 
@@ -261,13 +262,19 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
         # Check context window and compact if needed (skip first iteration). The
         # last call's prompt was the window up to then; the pending entries come on top.
         if self.context_manager and iteration > 1:
-            self.context_manager.update_usage(
-                self.state.last_prompt_tokens
-                + estimate_tokens_for_messages(self._conversation_payload())
+            bounds_payload = workflow.patched(COMPACTION_BOUNDS_PAYLOAD_PATCH)
+            messages_dict_est = self._conversation_payload()
+            estimated = self.state.last_prompt_tokens + estimate_tokens_for_messages(
+                messages_dict_est
+            )
+            self.context_manager.update_usage(estimated)
+            oversized = (
+                bounds_payload
+                and messages_payload_bytes(messages_dict_est) > CONTEXT_MAX_PAYLOAD_BYTES
             )
 
-            if self.context_manager.needs_compaction():
-                await self._compact_context_if_needed()
+            if oversized or self.context_manager.needs_compaction():
+                await self._compact_context_if_needed(force=oversized)
             elif self.context_manager.should_warn():
                 self._events.add_event(
                     EventTypes.CONTEXT_WARNING,

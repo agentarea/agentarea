@@ -50,7 +50,7 @@ export async function loadAgentData(): Promise<AgentData> {
   });
 
   // Fetch LLM model instances
-  const llmResponse = await listModelInstances();
+  const llmResponse = await listModelInstances({ kind: "chat" });
   const llmModelInstances = llmResponse.data || [];
 
   // Fetch MCP server instances
