@@ -4,6 +4,7 @@ import Link from "@/components/WorkspaceLink";
 import HeaderTabs from "@/components/HeaderTabs";
 import Table from "@/components/Table/Table";
 import { TabsContent } from "@/components/ui/tabs";
+import { CARD_GRID_GALLERY } from "@/lib/collectionGrids";
 import { cn } from "@/lib/utils";
 import { TabsWithNavigation } from "./components/TabsWithNavigation";
 
@@ -24,11 +25,13 @@ const TabsView = ({
   searchParams,
   leftComponent,
   routeChange,
+  toolbar = true,
   children,
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
   leftComponent?: React.ReactNode;
   routeChange: string;
+  toolbar?: boolean;
   children: React.ReactNode;
 }) => {
   const t = useTranslations("Common");
@@ -41,23 +44,25 @@ const TabsView = ({
 
   return (
     <TabsWithNavigation activeTab={activeTab} routeChange={routeChange}>
-      <div className="mb-3 flex flex-row items-center justify-between gap-[10px]">
-        <div className="flex flex-1 flex-row items-center gap-[10px]">
-          {leftComponent}
-        </div>
+      {toolbar && (
+        <div className="mb-3 flex flex-row items-center justify-between gap-[10px]">
+          <div className="flex flex-1 flex-row items-center gap-[10px]">
+            {leftComponent}
+          </div>
 
-        <div>
-          <HeaderTabs
-            paramName="tab"
-            defaultTab="grid"
-            currentTab={activeTab}
-            tabs={[
-              { value: "table", label: t("table") },
-              { value: "grid", label: t("grid") },
-            ]}
-          />
+          <div>
+            <HeaderTabs
+              paramName="tab"
+              defaultTab="grid"
+              currentTab={activeTab}
+              tabs={[
+                { value: "table", label: t("table") },
+                { value: "grid", label: t("grid") },
+              ]}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {children}
     </TabsWithNavigation>
@@ -76,6 +81,7 @@ export default function GridAndTableViews<T extends GridItem>({
   cardClassName,
   gridClassName,
   rowProps,
+  toolbar,
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
   isEmpty?: boolean;
@@ -83,6 +89,11 @@ export default function GridAndTableViews<T extends GridItem>({
   emptyState: React.ReactNode;
   leftComponent?: React.ReactNode;
   routeChange: string;
+  /**
+   * false drops the search + view-toggle row, for a page that already puts
+   * both in its ContentBlock subheader. The view still follows `?tab=`.
+   */
+  toolbar?: boolean;
   data: T[];
   columns: Column<T>[];
   cardContent: (item: T) => React.ReactNode;
@@ -97,6 +108,7 @@ export default function GridAndTableViews<T extends GridItem>({
       routeChange={routeChange}
       searchParams={searchParams}
       leftComponent={leftComponent}
+      toolbar={toolbar}
     >
       {!data.length ? (
         emptyState
@@ -104,10 +116,7 @@ export default function GridAndTableViews<T extends GridItem>({
         <>
           <TabsContent value="grid">
             <div
-              className={cn(
-                "grid grid-cols-1 gap-[12px] md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
-                gridClassName
-              )}
+              className={cn(CARD_GRID_GALLERY, gridClassName)}
             >
               {data.map((item) => {
                 const linkFunction = item.itemLink || itemLink;
@@ -216,10 +225,7 @@ export function GridAndTableSectionsViews<T extends GridItem>({
                 <>
                   <TabsContent value="grid">
                     <div
-                      className={cn(
-                        "grid grid-cols-1 gap-[12px] md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
-                        gridClassName
-                      )}
+                      className={cn(CARD_GRID_GALLERY, gridClassName)}
                     >
                       {sectionData.data.map((item) => {
                         const linkFunction = sectionData.itemLink || itemLink;

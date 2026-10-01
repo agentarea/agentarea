@@ -376,6 +376,8 @@
     "title": "Providers",
     "description": "Manage AI provider specifications and their available models",
     "noProviders": "No providers found",
+    "noMatches": "No matching providers",
+    "noMatchesDescription": "No providers match your search query: \"{query}\"",
     "addProvider": "Add Provider",
     "emptyDescription": "Provider specs are supplied by the platform registry — this deployment has none synced yet. Connect a provider with your own key instead.",
     "table": {

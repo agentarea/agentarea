@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Brain, Store } from "lucide-react";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
@@ -16,7 +17,8 @@ const TABS = [
  * that it drowned the handful of providers actually in use.
  *
  * Solid segmented control, same as the explore type switcher: these entries
- * switch the page's primary content, not filter it.
+ * switch the page's primary content, not filter it. The query (search, view)
+ * goes along, since the header holding both stays mounted across the switch.
  */
 export default function ModelsSectionTabs({
   availableCount,
@@ -26,6 +28,7 @@ export default function ModelsSectionTabs({
   const t = useTranslations("Models.sections");
   const pathname = useWorkspacePathname();
   const router = useWorkspaceRouter();
+  const searchParams = useSearchParams();
 
   const activeTab =
     TABS.find((tab) => tab.href !== "/models" && pathname.startsWith(tab.href))
@@ -53,7 +56,10 @@ export default function ModelsSectionTabs({
           };
         })}
         value={activeTab}
-        onChange={(next) => router.push(next)}
+        onChange={(next) => {
+          const query = searchParams.toString();
+          router.push(query ? `${next}?${query}` : next);
+        }}
         variant="solid"
         layoutId="models-section-control"
       />
