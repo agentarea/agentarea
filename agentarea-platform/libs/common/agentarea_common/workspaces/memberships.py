@@ -6,43 +6,26 @@ from agentarea_common.config import get_settings
 from agentarea_common.di.container import get_container
 from agentarea_common.rebac import (
     CheckResult,
-    KetoClient,
-    KetoError,
     OpenFGAClient,
     OpenFGAError,
     RelationQuery,
     RelationTuple,
 )
 
-MembershipGraph = KetoClient | OpenFGAClient
 
-
-def get_workspace_membership_graph() -> MembershipGraph:
-    """Resolve the configured relationship graph for workspace memberships."""
-    settings = get_settings()
-    if settings.access_control.ACCESS_CONTROL_BACKEND == "openfga":
-        try:
-            return get_container().get(OpenFGAClient)
-        except ValueError:
-            return OpenFGAClient(
-                api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-                store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-                authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-                timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
-                api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
-            )
-    if settings.access_control.ACCESS_CONTROL_BACKEND == "keto":
-        try:
-            return get_container().get(KetoClient)
-        except ValueError:
-            return KetoClient(
-                read_url=settings.keto.ACCESS_CONTROL_KETO_READ_URL,
-                write_url=settings.keto.ACCESS_CONTROL_KETO_WRITE_URL,
-                timeout_seconds=settings.keto.ACCESS_CONTROL_KETO_TIMEOUT_SECONDS,
-            )
-    raise ValueError(
-        f"Unknown ACCESS_CONTROL_BACKEND {settings.access_control.ACCESS_CONTROL_BACKEND!r}"
-    )
+def get_workspace_membership_graph() -> OpenFGAClient:
+    """Resolve the relationship graph for workspace memberships."""
+    try:
+        return get_container().get(OpenFGAClient)
+    except ValueError:
+        settings = get_settings()
+        return OpenFGAClient(
+            api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
+            store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
+            authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
+            timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
+            api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
+        )
 
 
 def workspace_membership(workspace_id: str, user_id: str) -> RelationTuple:
@@ -55,7 +38,7 @@ def workspace_membership(workspace_id: str, user_id: str) -> RelationTuple:
 
 
 async def check_workspace_membership(
-    graph: MembershipGraph,
+    graph: OpenFGAClient,
     *,
     workspace_id: str,
     user_id: str,
@@ -69,7 +52,7 @@ async def check_workspace_membership(
     return result.allowed
 
 
-async def list_workspace_member_ids(graph: MembershipGraph, workspace_id: str) -> list[str]:
+async def list_workspace_member_ids(graph: OpenFGAClient, workspace_id: str) -> list[str]:
     relationships = await graph.query_all_tuples(
         RelationQuery(namespace="Workspace", object=workspace_id, relation="members")
     )
@@ -81,7 +64,7 @@ async def list_workspace_member_ids(graph: MembershipGraph, workspace_id: str) -
     return sorted(member_ids)
 
 
-async def list_workspace_ids_for_member(graph: MembershipGraph, user_id: str) -> list[str]:
+async def list_workspace_ids_for_member(graph: OpenFGAClient, user_id: str) -> list[str]:
     relationships = await graph.query_all_tuples(
         RelationQuery(namespace="Workspace", relation="members", subject_id=_user_subject(user_id))
     )
@@ -115,7 +98,7 @@ def workspace_baseline_role(workspace_id: str, user_id: str) -> RelationTuple:
 
 
 async def grant_workspace_membership(
-    graph: MembershipGraph,
+    graph: OpenFGAClient,
     *,
     workspace_id: str,
     user_id: str,
@@ -126,14 +109,14 @@ async def grant_workspace_membership(
     ):
         try:
             await graph.write_tuple(relationship)
-        except (KetoError, OpenFGAError) as exc:
+        except OpenFGAError as exc:
             if "already exist" in str(exc):
                 continue
             raise
 
 
 async def revoke_workspace_membership(
-    graph: MembershipGraph,
+    graph: OpenFGAClient,
     *,
     workspace_id: str,
     user_id: str,
@@ -144,7 +127,7 @@ async def revoke_workspace_membership(
     ):
         try:
             await graph.delete_tuple(relationship)
-        except (KetoError, OpenFGAError) as exc:
+        except OpenFGAError as exc:
             if "did not exist" in str(exc) or "does not exist" in str(exc):
                 continue
             raise

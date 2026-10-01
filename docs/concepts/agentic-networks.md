@@ -54,7 +54,7 @@ construct any repository, via `RepositoryFactory`. There is no ambient
 ### Relationships decide access inside the boundary
 
 Within a workspace, authorization is relationship-based (ReBAC), evaluated by
-OpenFGA or Ory Keto. The deployed model defines these types:
+OpenFGA. The deployed model defines these types:
 
 | Type | Relations |
 |---|---|
@@ -91,7 +91,7 @@ This distinction matters more than the analogy, so it gets its own table.
 | Claim | Status |
 |---|---|
 | Workspace data isolation | **Enforced.** Repository-level filter on `workspace_id`, applied to every read. |
-| Project and resource permissions | **Enforced.** OpenFGA/Keto relation checks, fail-closed. |
+| Project and resource permissions | **Enforced.** OpenFGA relation checks, fail-closed. |
 | `network_scope` on skills and MCP instances | **Presentation and filtering only.** Stored on the entity, usable as a list filter, rendered in the UI. No policy consults it and nothing blocks traffic because of it. |
 | Zone-crossing risk highlight | **Presentation only.** A visual indicator, not an interception point. |
 | Per-agent-pair communication rules | **Does not exist.** There is no rule format for "agent A may message agent B" and no component that evaluates one. |

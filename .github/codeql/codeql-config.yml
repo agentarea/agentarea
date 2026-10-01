@@ -10,10 +10,6 @@ name: "AgentArea CodeQL config"
 # (py/call/wrong-arguments, py/call/wrong-named-argument, py/unused-import in
 # fixture-only conftests, etc.) produce noise on tests without catching shipped
 # vulnerabilities, so exclude test suites and fixtures from analysis.
-#
-# The Ory Keto files under config/auth/keto are an Ory Permission Language (OPL)
-# schema: every `class X implements Namespace` is a ReBAC namespace consumed by
-# the Keto compiler, so CodeQL's js/unused-* queries flag them all as dead code.
 paths-ignore:
   - "**/alembic/versions/**"
   - "**/tests/**"
@@ -22,7 +18,6 @@ paths-ignore:
   - "**/*.spec.ts"
   - "**/*.test.ts"
   - "**/e2e/**"
-  - "config/auth/keto/**"
 
 # Queries whose preconditions do not hold in this codebase. Each was verified
 # against every one of its alerts before being excluded here; re-check before

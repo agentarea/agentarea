@@ -16,9 +16,8 @@ from ..auth.context import UserContext
 from ..auth.identity_directory import IdentityDirectory, IdentityDirectoryUnavailableError
 from ..events.base_events import EventEnvelope
 from ..events.outbox_relay import OutboxHandler
-from ..rebac import KetoError, OpenFGAError
+from ..rebac import OpenFGAClient, OpenFGAError
 from .memberships import (
-    MembershipGraph,
     grant_workspace_membership,
     list_workspace_member_ids,
     revoke_workspace_membership,
@@ -232,7 +231,7 @@ class WorkspaceMembershipService:
         *,
         membership_repo: WorkspaceMembershipRepository,
         workspace_repo: WorkspaceRepository,
-        graph: MembershipGraph,
+        graph: OpenFGAClient,
         identities: IdentityDirectory | None,
     ) -> None:
         self.membership_repo = membership_repo
@@ -339,7 +338,7 @@ class WorkspaceMembershipService:
         )
         try:
             await self.finish_removal(workspace_id, target_user_id)
-        except (KetoError, OpenFGAError):
+        except OpenFGAError:
             logger.warning(
                 "graph revocation for %s in workspace %s failed; the outbox relay retries it",
                 target_user_id,
@@ -386,7 +385,7 @@ class WorkspaceMembershipService:
         return workspace.owner_user_id if workspace is not None else workspace_id
 
 
-def membership_removal_handler(graph: MembershipGraph) -> OutboxHandler:
+def membership_removal_handler(graph: OpenFGAClient) -> OutboxHandler:
     """The outbox relay's side of a removal: finish it in the graph."""
 
     async def finish(session: AsyncSession, envelope: EventEnvelope) -> None:

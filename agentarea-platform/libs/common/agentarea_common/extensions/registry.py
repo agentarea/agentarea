@@ -9,7 +9,7 @@ class ExtensionRegistry:
 
     Factory callables create instances of the corresponding interface.
     This allows enterprise implementations to manage their own dependencies
-    (e.g., KetoPermissionService needs a keto_client).
+    (e.g., a PermissionService that needs its own graph client).
     """
 
     _factories: ClassVar[dict[str, Callable[[], Any]]] = {}

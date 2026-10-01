@@ -18,12 +18,7 @@ from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config import get_database
-from agentarea_common.rebac import (
-    KetoError,
-    KetoUnavailableError,
-    OpenFGAError,
-    OpenFGAUnavailableError,
-)
+from agentarea_common.rebac import OpenFGAError
 from agentarea_common.workspaces import (
     Workspace,
     WorkspaceRepository,
@@ -206,7 +201,7 @@ async def create_workspace(
         await seed_workspace(workspace_id=workspace.id, creator_user_id=user.user_id)
     except HTTPException:
         raise
-    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+    except OpenFGAError as exc:
         logger.exception("Failed to seed authorization graph for workspace %s", workspace.id)
         raise HTTPException(
             status_code=503, detail="Workspace authorization graph unavailable"

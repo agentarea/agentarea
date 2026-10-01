@@ -26,12 +26,7 @@ from agentarea_common.auth.route_authz import (
     unrestricted,
 )
 from agentarea_common.config import get_database
-from agentarea_common.rebac import (
-    KetoError,
-    KetoUnavailableError,
-    OpenFGAError,
-    OpenFGAUnavailableError,
-)
+from agentarea_common.rebac import OpenFGAError
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_common.workspaces import (
     InvitationAddressedElsewhere,
@@ -257,8 +252,6 @@ def _raise_membership_graph_unavailable(exc: Exception) -> NoReturn:
     raise HTTPException(status_code=503, detail="Workspace membership graph unavailable") from exc
 
 
-GRAPH_ERRORS = (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError)
-
 INVITATION_ERROR_STATUS: dict[type[Exception], int] = {
     InvitationNotFound: 404,
     InvitationAddressedElsewhere: 403,
@@ -279,7 +272,7 @@ async def _list_member_ids(workspace_id: str) -> list[str]:
         raise HTTPException(status_code=503, detail="Workspace membership graph is disabled")
     try:
         return await list_workspace_member_ids(graph, workspace_id)
-    except GRAPH_ERRORS as exc:
+    except OpenFGAError as exc:
         logger.exception("Failed to list workspace memberships")
         _raise_membership_graph_unavailable(exc)
 
@@ -444,7 +437,7 @@ async def accept_invitation(
         await memberships.admit(invitation, user.user_id)
     except INVITATION_ERRORS as exc:
         _raise_invitation_error(exc)
-    except GRAPH_ERRORS as exc:
+    except OpenFGAError as exc:
         logger.exception("Failed to grant workspace membership")
         _raise_membership_graph_unavailable(exc)
 
@@ -474,7 +467,7 @@ async def list_members(
             )
         members = await memberships.list_members(workspace_id)
         owner_user_id = await memberships.owner_user_id(workspace_id)
-    except GRAPH_ERRORS as exc:
+    except OpenFGAError as exc:
         logger.exception("Failed to list workspace memberships")
         _raise_membership_graph_unavailable(exc)
 
@@ -520,7 +513,7 @@ async def remove_member(
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except (OwnerRemovalRejected, LastMemberRemovalRejected) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except GRAPH_ERRORS as exc:
+    except OpenFGAError as exc:
         logger.exception("Failed to revoke workspace membership")
         _raise_membership_graph_unavailable(exc)
     if not revoked:

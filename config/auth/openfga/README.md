@@ -1,7 +1,6 @@
 # OpenFGA Access-Control Config
 
-OpenFGA is the preferred graph backend for new AgentArea capability
-authorization work. Keto remains supported as a fallback during migration.
+OpenFGA is AgentArea's authorization graph backend.
 
 - `model.fga` is the human-readable OpenFGA DSL model.
 - `model.fga.yaml` is the FGA CLI test fixture for the model.

@@ -116,7 +116,7 @@ class TestAdminAuthorization:
         )
 
         # Try to access admin endpoint (example). Authorization here is
-        # ReBAC-based (Ory Keto), not a dedicated admin router, so this
+        # ReBAC-based (OpenFGA), not a dedicated admin router, so this
         # placeholder route doesn't exist -- 404 is the correct response.
         response = client.get(
             "/admin/users",

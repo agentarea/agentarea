@@ -259,39 +259,24 @@ async def _register_graph_client() -> None:
     # The graph settings alone: the full application Settings also demands
     # Temporal configuration, which a reconcile pod has no use for.
     from agentarea_common.config.access_control import AccessControlSettings
-    from agentarea_common.config.keto import KetoSettings
     from agentarea_common.config.openfga import OpenFGASettings
     from agentarea_common.di.container import register_singleton
+    from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
+    from agentarea_common.rebac.openfga_client import OpenFGAClient
 
     backend = AccessControlSettings().ACCESS_CONTROL_BACKEND
-    if backend == "openfga":
-        from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
-        from agentarea_common.rebac.openfga_client import OpenFGAClient
-
-        openfga = OpenFGASettings()
-        await bootstrap_openfga(openfga)
-        register_singleton(
-            OpenFGAClient,
-            OpenFGAClient(
-                api_url=openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-                store_id=openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-                authorization_model_id=openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-                timeout_seconds=openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
-                api_token=openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
-            ),
-        )
-    elif backend == "keto":
-        from agentarea_common.rebac.keto_client import KetoClient
-
-        keto = KetoSettings()
-        register_singleton(
-            KetoClient,
-            KetoClient(
-                read_url=keto.ACCESS_CONTROL_KETO_READ_URL,
-                write_url=keto.ACCESS_CONTROL_KETO_WRITE_URL,
-                timeout_seconds=keto.ACCESS_CONTROL_KETO_TIMEOUT_SECONDS,
-            ),
-        )
+    openfga = OpenFGASettings()
+    await bootstrap_openfga(openfga)
+    register_singleton(
+        OpenFGAClient,
+        OpenFGAClient(
+            api_url=openfga.ACCESS_CONTROL_OPENFGA_API_URL,
+            store_id=openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
+            authorization_model_id=openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
+            timeout_seconds=openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
+            api_token=openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
+        ),
+    )
     click.echo(f"Authorization graph: {backend}")
 
 

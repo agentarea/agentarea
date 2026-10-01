@@ -17,14 +17,10 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from .keto_client import KetoClient, KetoError, KetoUnavailableError
 from .models import RelationTuple
-from .openfga_client import OpenFGAClient, OpenFGAError, OpenFGAUnavailableError
+from .openfga_client import OpenFGAClient, OpenFGAError
 
 logger = logging.getLogger(__name__)
-
-GraphClient = KetoClient | OpenFGAClient
-_GRAPH_WRITE_ERRORS = (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError)
 
 #: Bits granted to a creator. The model uses INDEPENDENT permission bits with no
 #: roll-up, so ``manager`` alone would confer neither read nor write.
@@ -55,49 +51,31 @@ def _is_existing_tuple_error(exc: Exception) -> bool:
     return "already exists" in message or "tuple to be written already existed" in message
 
 
-def resolve_graph_client() -> tuple[GraphClient, str] | None:
-    """Return (client, backend name) for the configured graph.
+def resolve_graph_client() -> OpenFGAClient:
+    """Return the registered OpenFGA client.
 
-    ``None`` means no graph backend is configured at all, which the application
-    refuses to start with -- see ``apps/api/main.py``. Reaching it from a
-    repository would mean the process started without one, so callers treat it
-    as a misconfiguration rather than as permission to skip the grant.
+    The application refuses to start without one -- see ``apps/api/main.py`` --
+    so its absence here is a misconfiguration, not permission to skip the grant.
     """
-    from agentarea_common.config.access_control import AccessControlSettings
     from agentarea_common.di.container import get_container
 
-    # Only the backend choice, not the whole application config: a process that
-    # creates resources without running workflows (the catalog reconcile) has
-    # no Temporal settings, and the full Settings refuses to build without them.
-    backend = AccessControlSettings().ACCESS_CONTROL_BACKEND
-    if backend == "openfga":
-        client_type: type[GraphClient] = OpenFGAClient
-        backend_name = "OpenFGA"
-    elif backend == "keto":
-        client_type = KetoClient
-        backend_name = "Keto"
-    else:
-        return None
     try:
-        return get_container().get(client_type), backend_name
+        return get_container().get(OpenFGAClient)
     except ValueError as exc:
         raise ResourceOwnershipError(
-            f"{backend_name} is the configured access-control backend but no client "
-            "is registered; ownership of new resources cannot be recorded"
+            "no OpenFGA client is registered; ownership of new resources cannot be recorded"
         ) from exc
 
 
-async def write_tuple_idempotent(
-    client: GraphClient, backend: str, relationship: RelationTuple
-) -> None:
+async def write_tuple_idempotent(client: OpenFGAClient, relationship: RelationTuple) -> None:
     try:
         await client.write_tuple(relationship)
-    except _GRAPH_WRITE_ERRORS as exc:
+    except OpenFGAError as exc:
         if _is_existing_tuple_error(exc):
-            logger.debug("Relation already exists in %s: %s", backend, relationship)
+            logger.debug("Relation already exists: %s", relationship)
             return
-        logger.exception("Failed to write relation in %s: %s", backend, relationship)
-        raise ResourceOwnershipError(f"{backend} grant write failed") from exc
+        logger.exception("Failed to write relation: %s", relationship)
+        raise ResourceOwnershipError("OpenFGA grant write failed") from exc
 
 
 async def grant_resource_owner(
@@ -113,15 +91,11 @@ async def grant_resource_owner(
     the resource through the workspace -> root-project -> resource cascade.
     Idempotent, so re-asserting on a later write is harmless.
     """
-    resolved = resolve_graph_client()
-    if resolved is None:
-        return
-    client, backend = resolved
+    client = resolve_graph_client()
     resource_obj = str(resource_id)
 
     await write_tuple_idempotent(
         client,
-        backend,
         RelationTuple(
             namespace="resource",
             object=resource_obj,
@@ -132,7 +106,6 @@ async def grant_resource_owner(
     for relation in OWNER_RELATIONS:
         await write_tuple_idempotent(
             client,
-            backend,
             RelationTuple(
                 namespace="resource",
                 object=resource_obj,

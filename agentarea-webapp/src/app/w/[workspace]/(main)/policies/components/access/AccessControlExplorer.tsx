@@ -247,7 +247,7 @@ export default function AccessControlExplorer({
                 Access control is not enabled
               </div>
               <p style={{ lineHeight: 1.5 }}>
-                Relationship-based access control (Ory Keto) is not configured
+                Relationship-based access control (OpenFGA) is not configured
                 for this workspace. Once enabled, agents, collections, and their
                 relationship rules will appear here as an explorable graph.
               </p>

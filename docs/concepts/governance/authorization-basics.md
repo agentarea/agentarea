@@ -95,8 +95,8 @@ permissions by walking them. Alice can read `doc:1` because she is an editor of
 `folder:9`, and `doc:1` sits in `folder:9`. Nothing about that permission is
 stored on `doc:1`; it is computed from two relationships.
 
-The design comes from Google's Zanzibar paper and is implemented by OpenFGA,
-SpiceDB and Ory Keto. It is the model behind Drive-style, Notion-style and
+The design comes from Google's Zanzibar paper and is implemented by OpenFGA
+and SpiceDB, among others. It is the model behind Drive-style, Notion-style and
 Figma-style sharing, and it answers all three questions:
 
 - **Check** — may this subject do this to this object (walk the graph).

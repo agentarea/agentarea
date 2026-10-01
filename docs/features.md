@@ -308,8 +308,7 @@ graph TB
 
 ### Authorization
 
-- **Role-Based Access Control** (RBAC)
-- **Relationship-Based Access Control** (ReBAC) via Keto
+- **Relationship-Based Access Control** (ReBAC) via OpenFGA
 - **Workspace-level permissions**
 - **Agent-level permissions**
 

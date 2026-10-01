@@ -59,7 +59,7 @@ def _repo(model, recorded: list[RelationTuple], monkeypatch) -> WorkspaceScopedR
     client.write_tuple.side_effect = lambda tuple_: recorded.append(tuple_)
     monkeypatch.setattr(
         "agentarea_common.rebac.ownership.resolve_graph_client",
-        lambda: (client, "OpenFGA"),
+        lambda: client,
     )
     return repo
 

@@ -1,3 +1,0 @@
-{{- if and .Values.keto.enabled .Values.openfga.enabled }}
-{{- fail "keto.enabled and openfga.enabled are mutually exclusive access-control backends" }}
-{{- end }}

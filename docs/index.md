@@ -45,8 +45,8 @@ and more like infrastructure.
   </Card>
   <Card title="Relationship-based authorization" icon="scale-balanced" href="/concepts/governance/authorization-basics">
     Permissions come from relationships in a graph — this user manages this
-    project, this project contains this agent — evaluated by OpenFGA or Ory
-    Keto. Checks fail closed.
+    project, this project contains this agent — evaluated by OpenFGA. Checks
+    fail closed.
   </Card>
   <Card title="Sandboxed execution" icon="box" href="/concepts/sandbox/why-a-sandbox">
     Commands and skills run in isolated sandboxes managed by a dedicated Go
@@ -76,7 +76,7 @@ graph TB
     subgraph Control["Control plane"]
         API[FastAPI API]
         WORKER[Temporal worker]
-        AUTHZ[OpenFGA / Keto]
+        AUTHZ[OpenFGA]
         PG[(PostgreSQL)]
     end
 
@@ -114,7 +114,7 @@ follows a single request across it.
 | Database | PostgreSQL 18 |
 | Cache and streams | Valkey 8 |
 | Object storage | RustFS, S3-compatible |
-| Authorization | OpenFGA or Ory Keto |
+| Authorization | OpenFGA |
 | Identity | Ory Kratos, Hydra |
 
 ## Why not an agent framework?

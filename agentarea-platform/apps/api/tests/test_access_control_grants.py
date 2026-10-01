@@ -17,10 +17,6 @@ from agentarea_common.rebac import OpenFGAError, OpenFGAUnavailableError, owners
 from fastapi import HTTPException
 
 
-def _settings(backend: str):
-    return SimpleNamespace(ACCESS_CONTROL_BACKEND=backend)
-
-
 class _Container:
     def __init__(self, client=None, error: Exception | None = None):
         self.client = client
@@ -34,13 +30,9 @@ class _Container:
 
 @pytest.fixture
 def graph(monkeypatch):
-    """Install a container and settings the ownership module will resolve."""
+    """Install a container the ownership module will resolve."""
 
     def _install(client=None, error: Exception | None = None):
-        monkeypatch.setattr(
-            "agentarea_common.config.access_control.AccessControlSettings",
-            lambda: _settings("openfga"),
-        )
         monkeypatch.setattr(
             "agentarea_common.di.container.get_container",
             lambda: _Container(client=client, error=error),

@@ -92,7 +92,6 @@ metrics. Read the section below before wiring a scrape config against them.
     | Backend | `LOG_LEVEL` | `info` (chart), `info` (Compose) |
     | MCP Manager | `LOG_LEVEL` | `INFO` |
     | Worker | not configurable by environment | `DEBUG` — `main.py` calls `setup_logging(level="DEBUG")` |
-    | Keto | `keto.config.log.level` | `info` |
     | OpenFGA | `openfga.log.level` / `openfga.log.format` | `info` / `json` |
 
     The worker's level is hardcoded at its call site, so a `LOG_LEVEL` set on the
@@ -244,8 +243,8 @@ metrics. Read the section below before wiring a scrape config against them.
     - **No shipped dashboards or alert rules.**
 
     Third-party components in the stack do expose metrics on their own ports:
-    OpenFGA on `openfga.service.metricsPort` (2112) and Keto on 4468. Those are
-    genuine and scrapeable.
+    OpenFGA on `openfga.service.metricsPort` (2112). Those are genuine and
+    scrapeable.
   </Step>
 </Steps>
 

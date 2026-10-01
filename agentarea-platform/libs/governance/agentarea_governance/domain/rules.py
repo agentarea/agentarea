@@ -206,7 +206,7 @@ class ExecutionCapParams(BaseModel):
 
 
 class ApprovalParams(BaseModel):
-    """``params`` for an ``approval`` rule; approvers are Keto-style subject refs."""
+    """``params`` for an ``approval`` rule; approvers are ReBAC subject refs."""
 
     model_config = ConfigDict(extra="forbid")
 

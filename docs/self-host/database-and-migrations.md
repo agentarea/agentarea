@@ -138,7 +138,6 @@ reason.
     | `temporal` | Temporal | `temporalio/auto-setup` on start |
     | `kratos` | Ory Kratos | the `kratos-migrate` container / Job |
     | `openfga` | OpenFGA | the `openfga-migrate` container / Job |
-    | `keto` | Ory Keto | the `keto-migrate` container / Job |
 
     Under Compose these are created by `postgres_init`, which is idempotent. On
     Kubernetes each has its own `create-*-db-job`.

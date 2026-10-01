@@ -199,26 +199,6 @@ async def test_api_add_skill_is_db_only(session_factory):
 # ---------------------------------------------------------------------------
 
 
-async def test_graph_disabled_still_lists_nodes(session_factory, monkeypatch):
-    monkeypatch.setattr(access_control, "get_graph_client", lambda: None)
-    monkeypatch.setattr(access_control, "_assert_workspace_admin", AsyncMock())
-    async with session_factory() as session:
-        context = _context()
-        service = SkillCollectionService(RepositoryFactory(session, context))
-        await service.create(name="Pack")
-        await _make_skill(session, context, "Skill A")
-        await _make_skill(session, context, "Skill B")
-
-        result = await access_control.get_graph(context, session)
-
-        assert result.enabled is False
-        kinds = {n.kind for n in result.nodes}
-        assert "collection" in kinds
-        assert result.edges == []
-        assert result.stats.governed_skill_count == 2
-        assert result.stats.rule_count == 0
-
-
 async def test_graph_builds_edges_from_graph_relationships(session_factory, monkeypatch):
     async with session_factory() as session:
         context = _context()
@@ -264,16 +244,6 @@ async def test_graph_builds_edges_from_graph_relationships(session_factory, monk
         assert edge["to"] == f"SkillCollection:{collection.id}"
         assert edge["relation"] == "editor"
         assert result.stats.rule_count == 1
-
-
-async def test_relationships_disabled_returns_empty(session_factory, monkeypatch):
-    monkeypatch.setattr(access_control, "get_graph_client", lambda: None)
-    monkeypatch.setattr(access_control, "_assert_workspace_admin", AsyncMock())
-    async with session_factory() as session:
-        context = _context()
-        result = await access_control.list_relationships(context, session)
-        assert result.count == 0
-        assert result.relationships == []
 
 
 async def test_relationships_maps_collection_grant(session_factory, monkeypatch):
@@ -439,31 +409,6 @@ async def test_check_rejects_object_outside_workspace(session_factory, monkeypat
 
         assert exc.value.status_code == 403
         graph.check.assert_not_called()
-
-
-async def test_check_disabled_returns_false(session_factory, monkeypatch):
-    monkeypatch.setattr(access_control, "get_graph_client", lambda: None)
-    monkeypatch.setattr(access_control, "_assert_workspace_admin", AsyncMock())
-    async with session_factory() as session:
-        context = _context()
-        req = access_control.CheckRequest(
-            namespace="Skill", object=str(uuid4()), relation="use", subject_id="Agent:x"
-        )
-        result = await access_control.check_permission(req, context, session)
-        assert result.allowed is False
-
-
-async def test_create_relationship_disabled_raises_503(monkeypatch):
-    monkeypatch.setattr(access_control, "get_graph_client", lambda: None)
-    context = _context()
-    req = access_control.RelationshipWriteRequest(
-        namespace="Skill", object=str(uuid4()), relation="viewers", subject_id="Agent:x"
-    )
-    with pytest.raises(access_control.HTTPException) as exc_info:
-        await access_control.create_relationship(
-            req, context, None
-        )  # db_session unused: 503 precedes the guard
-    assert exc_info.value.status_code == 503
 
 
 async def test_sync_grants_mirrors_workspace_members(session_factory, monkeypatch):

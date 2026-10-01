@@ -30,7 +30,7 @@ WORKSPACE = "workspace-1"
 
 
 class FakeGraph:
-    """Minimal stand-in for the Keto/OpenFGA client used by membership helpers."""
+    """Minimal stand-in for the OpenFGA client used by membership helpers."""
 
     def __init__(self, member_ids: list[str] | None = None) -> None:
         self.tuples: list[RelationTuple] = [

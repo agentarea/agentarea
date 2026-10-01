@@ -23,7 +23,7 @@ AgentArea ships two supported deployment targets:
 | Kubernetes | the `agentarea` Helm chart | `charts/agentarea/values.yaml` |
 
 `docker-compose.dev.yaml` is a third file used for development. It starts the
-same platform plus Traefik, Keto, OpenFGA, Hydra, and Mailpit, and it
+same platform plus Traefik, Hydra, and Mailpit, and it
 bind-mounts source into the containers. It is not a deployment target.
 
 ## Parameters
@@ -77,7 +77,6 @@ the corresponding `global.*` key at a managed service instead.
 | Temporal | `temporalio/auto-setup:1.29.1` | `temporal.enabled` | `true` |
 | Ory Kratos | `oryd/kratos:v1.3.1` | `kratos.enabled` | `true` |
 | OpenFGA | `openfga/openfga:v1.18.0` | `openfga.enabled` | `true` |
-| Ory Keto | `oryd/keto:v0.12.0` | `keto.enabled` | `false` |
 
 The bundled PostgreSQL is a single StatefulSet with no replication and no backup.
 `charts/agentarea/values.yaml` marks it "not for production". For anything you
@@ -98,7 +97,6 @@ One PostgreSQL instance, several logical databases. Compose creates them in
 | `temporal` (`temporal.database.name`) | `postgres_init` / `create-temporal-db-job` | `temporal.enabled=true` |
 | `kratos` (`kratos.database.name`) | `postgres_init` / `create-kratos-db-job` | `kratos.enabled=true` |
 | `openfga` (`openfga.database.name`) | `create-openfga-db-job` | `openfga.enabled=true` |
-| `keto` (`keto.database.name`) | `create-keto-db-job` | `keto.enabled=true` |
 
 ### Service ports
 
@@ -115,7 +113,6 @@ One PostgreSQL instance, several logical databases. Compose creates them in
 | Kratos public | 4433 | 4433 |
 | Kratos admin | not published | 4434 |
 | OpenFGA | HTTP 8080, gRPC 8081, metrics 2112 | same |
-| Keto | read 4466, write 4467, metrics 4468 | same |
 
 ### Building from source
 
