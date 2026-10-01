@@ -79,13 +79,13 @@ documentation work to `docs-writer` in the `aadocs` workspace.
     same delegate is one entry in the agent's `tools`; the update replaces the
     whole list, so send every tool the agent should keep:
 
-    ```json
+    ```jsonc
     {
       "type": "agent",
       "name": "docs-writer",
       "settings": {
         "a2a_url": "https://78c3874a-e9b9-42dd-ad07-574086ca7034.a2a.example.com",
-        "auth_secret_name": "aadocs-key",
+        "auth_secret_name": "aadocs-key", // pragma: allowlist secret
         "description_override": "Hand over any request to write documentation."
       }
     }
