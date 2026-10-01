@@ -184,6 +184,12 @@ async def seeded():
         await conn.execute(
             text("DELETE FROM registries WHERE name LIKE :p"), {"p": f"{PLAN_PREFIX}%"}
         )
+    # The deleted filler leaves the browse indexes bloated, and a bloated index
+    # tips the next suite's planner (the /explore facet plans) off them.
+    async with engine.connect() as conn:
+        conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+        await conn.exec_driver_sql("VACUUM ANALYZE registry_items")
+        await conn.exec_driver_sql("REINDEX TABLE registry_items")
     await engine.dispose()
 
 
