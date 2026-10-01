@@ -44,10 +44,12 @@ export default async function ProviderSpecsPage({
 
   const skeletonColumns = [
     { header: tProviders("table.provider"), barClassName: "h-4 w-32" },
-    { header: tProviders("table.description"), barClassName: "h-3 w-48" },
-    { header: tProviders("table.type"), barClassName: "h-5 w-20 rounded-full" },
+    {
+      header: tProviders("table.description"),
+      cellClassName: "w-full",
+      barClassName: "h-3 w-2/3",
+    },
     { header: tProviders("table.models"), barClassName: "h-3 w-16" },
-    { header: tProviders("table.status"), barClassName: "h-5 w-16 rounded-full" },
   ];
 
   return (
@@ -103,26 +105,31 @@ async function ProviderSpecsContent({
       )
     : providerSpecs;
 
+  // Same cell styles as the Connected table and the other lists: logo on a
+  // plate, medium-weight name over an 11px key, a one-line description. Type
+  // and built-in status are left out: in the registry the type is the key
+  // again, and every catalog entry is built in.
   const columns = [
     {
       header: tProviders("table.provider"),
       accessor: "name",
       render: (value: string, row: ProviderSpecWithModelsResponse) => (
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           {row.icon_url && (
-            <Image
-              src={row.icon_url}
-              alt={`${value} icon`}
-              width={24}
-              height={24}
-              className="h-6 w-6 rounded"
-            />
+            <span className="avatar-plate grid h-6 w-6 flex-shrink-0 place-items-center rounded-[6px]">
+              <Image
+                src={row.icon_url}
+                alt=""
+                aria-hidden="true"
+                width={20}
+                height={20}
+                className="h-[16px] w-[16px] object-contain"
+              />
+            </span>
           )}
-          <div>
-            <div className="text-[14px] font-semibold md:text-[16px]">
-              {value}
-            </div>
-            <div className="text-xs text-muted-foreground">
+          <div className="min-w-0">
+            <div className="truncate font-medium">{value}</div>
+            <div className="truncate text-[11px] text-muted-foreground">
               {row.provider_key}
             </div>
           </div>
@@ -132,19 +139,12 @@ async function ProviderSpecsContent({
     {
       header: tProviders("table.description"),
       accessor: "description",
-      cellClassName: "text-[12px] md:text-[14px]",
+      // w-full + max-w-0 lets the description take the spare width and
+      // truncate inside it instead of stretching the table.
+      cellClassName: "w-full max-w-0",
       render: (value: string) => (
-        <div className="line-clamp-3 md:line-clamp-none">
-          {value || tProviders("table.noDescription")}
-        </div>
-      ),
-    },
-    {
-      header: tProviders("table.type"),
-      accessor: "provider_type",
-      render: (value: string) => (
-        <div className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">
-          {value}
+        <div className="table-description truncate" title={value || undefined}>
+          {value || "—"}
         </div>
       ),
     },
@@ -152,22 +152,9 @@ async function ProviderSpecsContent({
       header: tProviders("table.models"),
       accessor: "models",
       render: (models: ProviderSpecWithModelsResponse["models"]) => (
-        <div className="text-xs text-muted-foreground">
-          {models?.length || 0} {tProviders("table.modelsCount")}
-        </div>
-      ),
-    },
-    {
-      header: tProviders("table.status"),
-      accessor: "is_builtin",
-      render: (value: boolean) => (
-        <div
-          className={`rounded-full px-2 py-1 text-xs ${
-            value ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-          }`}
-        >
-          {value ? tProviders("table.builtIn") : tProviders("table.custom")}
-        </div>
+        <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+          {tProviders("table.modelCount", { count: models?.length ?? 0 })}
+        </span>
       ),
     },
   ];
@@ -206,6 +193,14 @@ async function ProviderSpecsContent({
         )
       }
       routeChange="/models/specs"
+      // A catalog entry leads to connecting it. Only for those who can: a
+      // member would land on a page that refuses them.
+      itemLink={
+        canAdminister
+          ? (spec: ProviderSpecWithModelsResponse) =>
+              `/models/create/${spec.id}`
+          : undefined
+      }
       cardContent={(item: ProviderSpecWithModelsResponse) => (
         <div className="flex flex-col gap-2">
           <div className="mb-2 flex items-center gap-3">

@@ -386,7 +386,7 @@
       "noDescription": "No description",
       "type": "Type",
       "models": "Models",
-      "modelsCount": "models",
+      "modelCount": "{count, plural, one {# model} other {# models}}",
       "status": "Status",
       "builtIn": "Built-in",
       "custom": "Custom"

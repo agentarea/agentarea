@@ -386,7 +386,7 @@
       "noDescription": "Нет описания",
       "type": "Тип",
       "models": "Модели",
-      "modelsCount": "моделей",
+      "modelCount": "{count, plural, one {# модель} few {# модели} many {# моделей} other {# модели}}",
       "status": "Статус",
       "builtIn": "Встроенный",
       "custom": "Пользовательский"
