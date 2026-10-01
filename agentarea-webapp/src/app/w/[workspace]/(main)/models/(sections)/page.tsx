@@ -1,14 +1,9 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ProvidersData from "../components/ProvidersData";
 import ProvidersSkeleton from "../components/ProvidersSkeleton";
 import { MODELS_VIEW_COOKIE, resolveViewMode } from "../components/viewMode";
-
-export const metadata: Metadata = {
-  title: "Models",
-};
 
 interface ProviderConfigsPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;

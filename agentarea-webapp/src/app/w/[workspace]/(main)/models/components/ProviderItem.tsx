@@ -1,4 +1,5 @@
 import { AlertCircle, Check } from "lucide-react";
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -12,6 +13,7 @@ interface ProviderConfigCardProps {
 }
 
 export function ProviderConfigCard({ config }: ProviderConfigCardProps) {
+  const t = useTranslations("Models");
   const modelInstances = config.model_instances || [];
 
   return (
@@ -21,7 +23,7 @@ export function ProviderConfigCard({ config }: ProviderConfigCardProps) {
       icon={config.spec?.icon_url}
       type="edit"
       subtitle={
-        <p className="truncate text-xs text-gray-500 w-full">
+        <p className="w-full truncate text-xs text-muted-foreground">
           {config.spec?.name}
         </p>
       }
@@ -29,13 +31,9 @@ export function ProviderConfigCard({ config }: ProviderConfigCardProps) {
       {modelInstances.length > 0 ? (
         <ModelsList models={modelInstances} />
       ) : (
-        <Badge
-          variant="secondary"
-          className="w-fit bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border-yellow-200"
-          size="sm"
-        >
-          <AlertCircle className="mr-1 h-3 w-3" />
-          No instances configured
+        <Badge variant="yellow" size="sm" className="w-fit">
+          <AlertCircle className="h-3 w-3" />
+          {t("noInstancesConfigured")}
         </Badge>
       )}
     </LinkedCard>
@@ -74,7 +72,9 @@ export function PlatformProviderConfigCard({
           <h4 className="truncate text-[15px] font-medium leading-tight tracking-tight text-zinc-900 dark:text-zinc-100">
             {config.name}
           </h4>
-          <p className="truncate text-xs text-gray-500">{config.spec?.name}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {config.spec?.name}
+          </p>
         </div>
       </div>
 
@@ -114,7 +114,7 @@ export function ProviderSpecCard({ spec }: ProviderSpecCardProps) {
       icon={spec.icon_url ?? undefined}
       type="config"
       subtitle={
-        <p className="truncate text-xs text-gray-500 w-full">
+        <p className="w-full truncate text-xs text-muted-foreground">
           {spec.provider_key}
         </p>
       }

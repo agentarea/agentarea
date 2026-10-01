@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
@@ -8,6 +9,12 @@ import AddProviderButton from "../components/AddProviderButton";
 import ModelsSectionTabs from "../components/ModelsSectionTabs";
 import ProviderHeaderTabs from "../components/ProviderHeaderTabs";
 import { MODELS_VIEW_COOKIE, resolveViewMode } from "../components/viewMode";
+
+// One browser-tab title for both tabs, the same one the header shows.
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("Models");
+  return { title: t("title") };
+}
 
 /**
  * Chrome shared by the Connected and Available tabs. It lives in a layout so
@@ -40,7 +47,9 @@ export default async function ModelsSectionsLayout({
           <Suspense fallback={<ModelsSectionTabs />}>
             <CountedSectionTabs />
           </Suspense>
-          <div className="flex flex-1 items-center justify-end gap-3">
+          {/* Keeps room for a usable search box when the row is narrow; the
+              section switch scrolls instead. */}
+          <div className="flex min-w-[11rem] flex-1 items-center justify-end gap-3">
             <SearchInput urlParamName="search" />
             <ProviderHeaderTabs initialView={initialView} />
           </div>

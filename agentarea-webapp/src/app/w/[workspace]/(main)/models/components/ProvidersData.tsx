@@ -28,11 +28,13 @@ export default async function ProvidersData({
   const [
     t,
     tAdmin,
+    tCommon,
     { canAdminister },
     { specs: specsResponse, configs: configsResponse },
   ] = await Promise.all([
     getTranslations("Models"),
     getTranslations("AdminOnly"),
+    getTranslations("Common"),
     getViewerCapabilities(),
     listProviderConfigsWithModelInstances(),
   ]);
@@ -79,29 +81,6 @@ export default async function ProvidersData({
     (config) => config.managed_by !== "platform"
   );
 
-  // A spec already covered by a platform config isn't something the customer
-  // can add themselves, so it's dropped from "available providers" entirely
-  // rather than showing up as both configured and addable.
-  const platformSpecIds = new Set(
-    platformConfigs.map((config) => config.provider_spec_id)
-  );
-  const availableProviderSpecs = providerSpecs.filter(
-    (spec) => !platformSpecIds.has(spec.id)
-  );
-
-  // Filter provider specs based on search query
-  let filteredProviderSpecs = availableProviderSpecs;
-  if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase();
-    filteredProviderSpecs = availableProviderSpecs.filter(
-      (spec) =>
-        spec.name?.toLowerCase().includes(query) ||
-        spec.provider_key?.toLowerCase().includes(query) ||
-        // spec.description?.toLowerCase().includes(query) ||
-        spec.provider_type?.toLowerCase().includes(query)
-    );
-  }
-
   // Filter configs based on search query
   let filteredPlatformConfigs = platformConfigs;
   let filteredOwnConfigs = ownConfigs;
@@ -120,34 +99,31 @@ export default async function ProvidersData({
   // none; hasNoOwnConfigs is scoped to the customer's own section only.
   const hasNoConfigs = enhancedConfigs.length === 0;
   const hasNoOwnConfigs = ownConfigs.length === 0;
-  const hasNoSpecs = availableProviderSpecs.length === 0;
-  const hasNoData = hasNoConfigs && hasNoSpecs;
   const hasNoResults =
     filteredPlatformConfigs.length === 0 &&
     filteredOwnConfigs.length === 0 &&
-    filteredProviderSpecs.length === 0 &&
-    !hasNoData;
+    !hasNoConfigs;
 
   // Handle global empty states
-  if (hasNoData) {
+  if (hasNoConfigs) {
     return (
       <EmptyState
-        title="No models connected"
-        description="Agents cannot run without a model. Connect a provider with your own key — OpenAI, Anthropic, or any compatible endpoint."
+        title={t("empty.noModels.title")}
+        description={t("empty.noModels.description")}
         hints={[
           canAdminister
             ? {
-                text: "Add a provider and paste its API key",
+                text: t("empty.noModels.hintAdd"),
                 href: "/models/create",
               }
             : { text: tAdmin("hints.manageProvider") },
-          { text: "Choose which of its models this workspace may use" },
-          { text: "Agents then pick a model from what you allowed" },
+          { text: t("empty.noModels.hintChoose") },
+          { text: t("empty.noModels.hintPick") },
         ]}
         iconsType="llm"
         action={
           canAdminister
-            ? { label: "Add provider", href: "/models/create" }
+            ? { label: t("empty.addProvider"), href: "/models/create" }
             : undefined
         }
       />
@@ -157,10 +133,10 @@ export default async function ProvidersData({
   if (hasNoResults) {
     return (
       <EmptyState
-        title="No matching providers"
-        description={`No providers match your search query: "${searchQuery}"`}
+        title={t("empty.noMatches")}
+        description={t("empty.noMatchesDescription", { query: searchQuery })}
         iconsType="llm"
-        action={{ label: "Clear search", href: "/models" }}
+        action={{ label: tCommon("clearSearch"), href: "/models" }}
       />
     );
   }

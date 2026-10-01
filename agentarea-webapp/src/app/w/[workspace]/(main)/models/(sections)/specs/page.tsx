@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import type { ProviderSpecWithModelsResponse } from "@/api/client/types.gen";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
@@ -13,10 +12,6 @@ import {
   resolveViewMode,
   type ModelsViewMode,
 } from "../../components/viewMode";
-
-export const metadata: Metadata = {
-  title: "Providers",
-};
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 
@@ -75,17 +70,17 @@ async function ProviderSpecsContent({
   ]);
 
   let providerSpecs: ProviderSpecWithModelsResponse[] = [];
-  let loadError: string | null = null;
+  let loadFailed = false;
 
   try {
     const providersResponse = await listProviderSpecsWithModels();
     providerSpecs = (providersResponse.data as ProviderSpecWithModelsResponse[]) || [];
     if (providersResponse.error) {
-      loadError = "Failed to load provider specifications";
+      loadFailed = true;
     }
   } catch (error) {
     console.error("Failed to load provider specifications:", error);
-    loadError = "Failed to load provider specifications";
+    loadFailed = true;
   }
 
   const query = searchQuery.toLowerCase();
@@ -99,7 +94,7 @@ async function ProviderSpecsContent({
     : providerSpecs;
 
   if (visibleSpecs.length === 0) {
-    return searchQuery && !loadError && providerSpecs.length > 0 ? (
+    return searchQuery && !loadFailed && providerSpecs.length > 0 ? (
       <EmptyState
         title={tProviders("noMatches")}
         description={tProviders("noMatchesDescription", {
@@ -110,16 +105,18 @@ async function ProviderSpecsContent({
       />
     ) : (
       <EmptyState
-        title={loadError || tProviders("noProviders")}
+        title={
+          loadFailed ? tProviders("loadFailed") : tProviders("noProviders")
+        }
         description={
-          loadError
-            ? "Provider specifications could not be loaded."
+          loadFailed
+            ? tProviders("loadFailedDescription")
             : tProviders("emptyDescription")
         }
         iconsType="llm"
         action={
           canAdminister
-            ? { label: tProviders("addProvider"), href: "/models" }
+            ? { label: tProviders("addProvider"), href: "/models/create" }
             : undefined
         }
       />

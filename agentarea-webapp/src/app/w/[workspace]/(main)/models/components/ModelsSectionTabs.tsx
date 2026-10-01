@@ -23,6 +23,8 @@ export type ModelsSectionCounts = Partial<
  * Solid segmented control, same as the explore type switcher: these entries
  * switch the page's primary content, not filter it. The query (search, view)
  * goes along, since the header holding both stays mounted across the switch.
+ * Where the row runs out of width (a phone) the switch scrolls sideways, as
+ * the explore type switcher does, rather than squeezing search out.
  */
 export default function ModelsSectionTabs({
   counts,
@@ -62,6 +64,7 @@ export default function ModelsSectionTabs({
           router.push(query ? `${next}?${query}` : next);
         }}
         variant="solid"
+        className="max-w-full"
         layoutId="models-section-control"
       />
     </nav>
