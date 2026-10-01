@@ -23,16 +23,18 @@ import { assertRenders } from "./helpers/smoke";
  * (Tier 2, Stagehand) which is slower and costs LLM tokens.
  */
 
-// Every STATIC route under app/(main) - i.e. routes that render without a
-// seeded `[id]`. Dynamic detail routes (/agents/[id], /tasks/[id], ...) need a
-// real entity and are covered separately (seeded smoke / AI tier), not here.
+// Every STATIC route under app/w/[workspace]/(main) - i.e. routes that render
+// without a seeded `[id]` - given unprefixed; the helper serves each one in the
+// test user's workspace. Dynamic detail routes (/agents/[id], /tasks/[id], ...)
+// need a real entity and are covered separately (seeded smoke / AI tier), not here.
 const ROUTES = [
   // Primary surfaces
   "/dashboard",
   "/agents",
   "/models",
-  "/mcp-servers",
   "/connections",
+  "/clients",
+  "/apps",
   "/tasks",
   "/triggers",
   "/projects",
@@ -50,26 +52,23 @@ const ROUTES = [
   // Create / add forms
   "/agents/create",
   "/skills/create",
-  "/projects/create",
   "/policies/new",
   "/triggers/create",
   "/triggers/new",
-  "/mcp-servers/add",
-  "/mcp-servers/add-openapi",
+  "/connections/add",
+  "/connections/add-openapi",
+  "/models/create",
+  "/models/specs",
   // Bundles
   "/bundles/catalog",
   "/bundles/import",
-  // Admin
-  "/admin/api-keys",
+  // Legacy redirect into /models
   "/admin/provider-configs",
-  "/admin/provider-configs/create",
-  "/admin/providers",
-  "/admin/workspace",
   // Settings sub-pages
+  "/settings/api-keys",
   "/settings/audit",
-  "/settings/billing",
   "/settings/ory",
-  // Misc
+  // Outside any workspace
   "/invite",
 ] as const;
 

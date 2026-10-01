@@ -142,6 +142,7 @@ async def test_list_skills_returns_metadata_only(async_client, mock_skill_servic
         source_type=None,
         network_scope=None,
         from_registry=None,
+        include_catalog=True,
         ids={str(skill_one.id), str(skill_two.id)},
     )
 
@@ -172,10 +173,22 @@ async def test_list_skills_accepts_pagination_and_search(async_client, mock_skil
         source_type="github",
         network_scope="egress",
         from_registry=False,
+        include_catalog=True,
         # The readable set is a filter like any other, and it reaches SQL rather
         # than trimming the page afterwards, so `total` stays truthful.
         ids={"b1f0a3d6-0000-4000-8000-000000000001"},
     )
+
+
+@pytest.mark.asyncio
+async def test_list_skills_can_leave_out_the_catalog(async_client, mock_skill_service, graph):
+    mock_skill_service.list_paginated.return_value = ([], 0)
+    graph.list_objects.return_value = []
+
+    response = await async_client.get("/v1/workspaces/acme/skills?include_catalog=false")
+
+    assert response.status_code == 200
+    assert mock_skill_service.list_paginated.call_args.kwargs["include_catalog"] is False
 
 
 @pytest.mark.asyncio
@@ -227,6 +240,61 @@ async def test_install_skill_materializes_catalog_skill(async_client, mock_skill
     assert data["registry_item_id"] == str(skill_id)
     assert data["is_catalog"] is False
     mock_skill_service.install_catalog_skill.assert_called_once_with(skill_id)
+
+
+def _installed_skill(created_by: str) -> MagicMock:
+    now = datetime.utcnow()
+    skill = MagicMock()
+    skill.id = uuid4()
+    skill.name = "Installed Skill"
+    skill.slug = "installed-skill"
+    skill.description = "d"
+    skill.source_type = "content"
+    skill.source_url = None
+    skill.s3_path = None
+    skill.network_scope = "private"
+    skill.workspace_id = "test_workspace"
+    skill.created_at = now
+    skill.updated_at = now
+    skill.registry_item_id = None
+    skill.is_catalog = False
+    skill.update_available = False
+    skill.created_by = created_by
+    return skill
+
+
+@pytest.mark.asyncio
+async def test_installing_an_existing_skill_of_another_member_grants_nothing(
+    async_client, mock_skill_service, monkeypatch
+):
+    # install resolves an id that is already a tenant skill to that row; it must
+    # not hand the caller ownership of a skill somebody else created.
+    grant = AsyncMock()
+    monkeypatch.setattr("agentarea_api.api.v1.skills.grant_resource_owner", grant)
+    skill = _installed_skill(created_by="another_member")
+    mock_skill_service.install_catalog_skill.return_value = skill
+
+    response = await async_client.post(f"/v1/workspaces/acme/skills/{skill.id}/install")
+
+    assert response.status_code == 200
+    grant.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_installing_a_skill_the_caller_forked_reasserts_their_ownership(
+    async_client, mock_skill_service, monkeypatch
+):
+    grant = AsyncMock()
+    monkeypatch.setattr("agentarea_api.api.v1.skills.grant_resource_owner", grant)
+    skill = _installed_skill(created_by="test_user")
+    mock_skill_service.install_catalog_skill.return_value = skill
+
+    response = await async_client.post(f"/v1/workspaces/acme/skills/{uuid4()}/install")
+
+    assert response.status_code == 200
+    grant.assert_awaited_once_with(
+        resource_id=skill.id, workspace_id="test_workspace", user_id="test_user"
+    )
 
 
 @pytest.mark.asyncio

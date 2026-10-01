@@ -118,7 +118,7 @@ groups:
       LOG_LEVEL: 'INFO'
       CORE_API_URL: 'http://{{ include "agentarea.fullname" . }}-backend:8000'
       SERVER_HOST: '0.0.0.0'
-      SERVER_PORT: '80'
+      SERVER_PORT: '8000'
       # Derived from whether mcpManager.dataPlane names a host, so the backend
       # and the address it is given cannot disagree. Half-configuration stops
       # the render — see the helper.
@@ -166,6 +166,8 @@ groups:
       MCP_REQUEST_LEASE_TTL: '{{ .Values.mcpManager.serverless.requestLeaseTTL }}'
       MCP_GATEWAY_STARTUP_TIMEOUT: '{{ .Values.mcpManager.serverless.startupTimeout }}'
       MCP_BASE_IMAGE: '{{ .Values.mcpManager.mcpBase.image.repository }}:{{ .Values.mcpManager.mcpBase.image.tag }}'
+      MCP_PACKAGE_REPOSITORY: '{{ .Values.mcpManager.packageImages.repository }}'
+      MCP_PACKAGE_IMPORT_TIMEOUT: '{{ .Values.mcpManager.packageImages.importTimeout }}'
     secrets:
       # The shared token the data plane checks on every call. Carried from a
       # Secret rather than the ConfigMap because it grants container creation on

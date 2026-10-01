@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 # Secret manager key prefix so auth creds are grouped
 _SECRET_PREFIX = "mcp_auth_cred"  # noqa: S105
 _MANAGED_CREDENTIALS_PREFIX = "connection_oauth_client:"
+# Token endpoints such as GitHub's answer form-encoded unless asked for JSON.
+_TOKEN_RESPONSE_HEADERS = {"Accept": "application/json"}
 
 
 def _managed_credentials_key(config: dict[str, Any]) -> str | None:
@@ -279,11 +281,14 @@ class MCPAuthService:
                     resp = await client.post(
                         token_url,
                         data=payload,
+                        headers=_TOKEN_RESPONSE_HEADERS,
                         auth=(client_id, client_secret),
                         timeout=10,
                     )
                 else:
-                    resp = await client.post(token_url, data=payload, timeout=10)
+                    resp = await client.post(
+                        token_url, data=payload, headers=_TOKEN_RESPONSE_HEADERS, timeout=10
+                    )
                 resp.raise_for_status()
                 data = resp.json()
         except httpx.HTTPStatusError as exc:
@@ -296,6 +301,13 @@ class MCPAuthService:
                 ) from exc
             raise
 
+        if "error" in data or "access_token" not in data:
+            # RFC 6749 §5.2 errors arrive as 400, but GitHub answers a spent
+            # refresh token with 200 and an error body — the same dead grant.
+            reason = data.get("error", "no access_token")
+            raise OAuthReauthRequiredError(
+                f"token refresh rejected ({reason}) for auth config {config.id}; reconnect required"
+            )
         access_token: str = data["access_token"]
         expires_in_raw = data.get("expires_in")
 

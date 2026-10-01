@@ -519,6 +519,7 @@ class SkillService:
         network_scope: str | None = None,
         from_registry: bool | None = None,
         ids: set[str] | None = None,
+        include_catalog: bool = True,
     ) -> tuple[list[Skill], int]:
         """List skills with pagination metadata, merging catalog projections.
 
@@ -530,6 +531,7 @@ class SkillService:
         ``ids`` narrows the tenant half to what the caller may read. The
         catalog half is untouched by it: catalog items are platform data with
         no ownership tuples, and filtering them would empty Explore.
+        ``include_catalog=False`` leaves the catalog half out entirely.
         """
         repo = self._get_repository()
         tenant_page, tenant_total = await repo.list_paginated(
@@ -545,7 +547,7 @@ class SkillService:
 
         # Catalog items are registry-backed by definition, so an explicit
         # "not from a registry" filter excludes the whole catalog half.
-        if from_registry is False:
+        if from_registry is False or not include_catalog:
             return tenant_page, tenant_total
 
         catalog_rows, catalog_total = await self._get_catalog_repository().list_page(

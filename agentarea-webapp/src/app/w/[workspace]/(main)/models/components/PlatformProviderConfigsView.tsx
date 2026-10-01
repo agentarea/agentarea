@@ -41,7 +41,7 @@ export default function PlatformProviderConfigsView({
               />
             </span>
           )}
-          <span className="truncate">{value}</span>
+          <span className="truncate font-medium">{value}</span>
         </div>
       ),
     },

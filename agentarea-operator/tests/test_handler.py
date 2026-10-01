@@ -197,6 +197,54 @@ def test_the_instance_gets_the_derived_id_so_billing_can_name_it():
     assert instance["id"] == handler.platform_instance_id("moonshot", "kimi-k2.5")
 
 
+class _ExistingInstanceConn(_RecordingConn):
+    """Every SELECT finds a row: the reconcile after the first."""
+
+    def execute(self, statement, params=None):
+        self.calls.append((str(statement), params or {}))
+
+        class _Result:
+            @staticmethod
+            def fetchone():
+                return ("33333333-3333-3333-3333-333333333333",)
+
+        return _Result()
+
+
+def test_a_new_instance_is_written_with_its_tags():
+    conn = _RecordingConn()
+
+    handler._upsert_model_instance(
+        conn, "moonshot", "cfg", "spec", "kimi-k2.6", handler.PLATFORM_WORKSPACE_ID, ["default"]
+    )
+
+    assert conn.params_for("INSERT INTO model_instances")["tags"] == '["default"]'
+
+
+def test_removing_a_tag_in_the_resource_removes_it_from_the_model():
+    """The default model moves by editing the resource, so a reconcile must clear too."""
+    conn = _ExistingInstanceConn()
+
+    handler._upsert_model_instance(
+        conn, "moonshot", "cfg", "spec", "kimi-k2.6", handler.PLATFORM_WORKSPACE_ID, []
+    )
+
+    updated = conn.params_for("UPDATE model_instances SET tags")
+    assert updated["tags"] == "[]"
+    assert updated["ws"] == handler.PLATFORM_WORKSPACE_ID
+
+
+def test_a_discovered_model_keeps_its_tags():
+    """Discovery has no resource entry to read tags from, so it must not wipe them."""
+    conn = _ExistingInstanceConn()
+
+    handler._upsert_model_instance(
+        conn, "openrouter", "cfg", "spec", "some/model", handler.PLATFORM_WORKSPACE_ID
+    )
+
+    assert not any("UPDATE model_instances" in sql for sql, _ in conn.calls)
+
+
 class _Patch:
     """The part of kopf's patch object these handlers touch."""
 
@@ -385,3 +433,15 @@ def test_a_spec_another_workspace_owns_is_not_repriced():
     update = next((s for s, _ in conn.calls if "UPDATE model_specs" in s), None)
     if update is not None:
         assert "workspace_id = :ws" in update, "an update could reach another workspace's spec"
+
+
+def test_one_default_model_is_not_a_warning():
+    assert handler.default_tag_warning([]) is None
+    assert handler.default_tag_warning(["kimi-k2.6"]) is None
+
+
+def test_two_default_models_say_which_one_wins():
+    warning = handler.default_tag_warning(["deepseek-v3", "kimi-k2.6"])
+
+    assert warning is not None
+    assert "new agents start on deepseek-v3" in warning

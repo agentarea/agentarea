@@ -801,7 +801,7 @@ export default function FullChat({
     return items;
   }, [eventState.completedRuns, userEntries, parts, visiblePartIds]);
 
-  const terminalTone = getTaskStatusPresentation(eventState.status).tone;
+  const terminalKind = getTaskStatusPresentation(eventState.status).kind;
 
   // Keydown handler
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -921,7 +921,7 @@ export default function FullChat({
             );
           })}
           {eventState.terminalMessage && eventState.status !== "completed" && (
-            <StatusIndicator tone={terminalTone}>
+            <StatusIndicator kind={terminalKind}>
               {eventState.terminalMessage}
             </StatusIndicator>
           )}

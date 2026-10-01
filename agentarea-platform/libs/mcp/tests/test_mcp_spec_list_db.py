@@ -196,3 +196,22 @@ async def test_another_workspaces_spec_never_appears(session, context, marker):
 
     assert total == 1
     assert [str(s.id) for s in servers] == [item]
+
+
+async def test_a_platform_catalog_mirror_reads_as_catalog_from_another_workspace(session, context):
+    # Reconcile mirrors catalog specs into mcp_servers under the platform
+    # workspace and records the platform principal as their owner. Another
+    # workspace reading one must get catalog data, not a tenant spec whose graph
+    # check refuses it.
+    registry = await _registry(session)
+    item = await _catalog_item(session, registry, "mirrored")
+    platform = UserContext(user_id="platform", workspace_id="platform")
+    mirror_id = await _tenant_spec(session, platform, "mirrored", registry_item_id=item)
+    own_id = await _tenant_spec(session, context, "own")
+
+    repo = MCPServerRepository(session, context)
+    mirror = await repo.get_server_by_id(mirror_id)
+    own = await repo.get_server_by_id(own_id)
+
+    assert mirror is not None and getattr(mirror, "is_catalog", False)
+    assert own is not None and not getattr(own, "is_catalog", False)

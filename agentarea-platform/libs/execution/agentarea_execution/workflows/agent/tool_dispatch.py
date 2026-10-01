@@ -12,6 +12,7 @@ with workflow.unsafe.imports_passed_through():
     from ..models import Message, ToolCall
 
 
+from ..constants import EventTypes
 from .completion import CompletionMixin
 from .delegation import DelegationMixin
 from .disclosure import ToolDisclosureMixin
@@ -50,12 +51,34 @@ class ToolDispatchMixin(
             tool_call.function["name"] for tool_call in tool_calls
         )
         if metered_calls_this_turn > max_per_turn:
-            raise ApplicationError(
-                f"model requested {metered_calls_this_turn} metered tool calls; "
-                f"policy allows {max_per_turn} per turn",
-                type="ToolCallLimitExceeded",
-                non_retryable=True,
+            # An oversized turn is the model's mistake to repair, like a malformed
+            # completion: none of its calls run, and it hears why.
+            refusal = (
+                f"Not executed: this turn requested {metered_calls_this_turn} tool calls "
+                f"and the policy allows {max_per_turn} per turn. Request at most "
+                f"{max_per_turn} at once."
             )
+            for tool_call in tool_calls:
+                self.state.messages.append(
+                    Message(
+                        role="tool",
+                        content=refusal,
+                        tool_call_id=tool_call.id,
+                        name=tool_call.function["name"],
+                    )
+                )
+                self._events.add_event(
+                    EventTypes.TOOL_CALL_FAILED,
+                    {
+                        "tool_name": tool_call.function["name"],
+                        "tool_call_id": tool_call.id,
+                        "success": False,
+                        "error": refusal,
+                        "iteration": self.state.current_iteration,
+                    },
+                )
+            await self._publish_events_immediately()
+            return
         attempted_total = self.state.tool_calls_used + metered_calls_this_turn
         if attempted_total > max_total:
             raise ApplicationError(

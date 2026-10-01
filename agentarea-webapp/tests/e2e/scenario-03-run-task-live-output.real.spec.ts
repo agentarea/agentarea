@@ -9,6 +9,8 @@ import {
   cleanupModelChain,
   deleteAgent,
   gotoCommitted,
+  liveModelSkipReason,
+  runLiveModel,
   runRealStack,
   seedAgent,
   seedModelChain,
@@ -16,6 +18,7 @@ import {
 
 test.describe("Scenario 03 MP - run a task and watch live output", () => {
   test.skip(!runRealStack, "Set PLAYWRIGHT_REAL_STACK=1");
+  test.skip(!runLiveModel, liveModelSkipReason);
 
   let user: AuthedUser;
   let modelChain: Awaited<ReturnType<typeof seedModelChain>> | undefined;

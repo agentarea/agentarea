@@ -1,30 +1,30 @@
 """Event publisher utilities for activities."""
 
 import logging
+import time
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
 from uuid import uuid4
 
-from agentarea_common.events.base_events import DomainEvent
-from agentarea_common.events.broker import EventBroker
+from agentarea_common.broker import BrokerClient
+from agentarea_common.events.contract import LLM_CHUNK
+from agentarea_common.events.task_stream import publish_task_event
 
 logger = logging.getLogger(__name__)
 
-
-def resolve_event_broker(event_broker: Any) -> EventBroker:
-    """Return the publish-capable EventBroker from worker/API event dependencies."""
-    if isinstance(event_broker, EventBroker):
-        return event_broker
-
-    raise TypeError(f"event_broker must implement EventBroker, got {type(event_broker).__name__}")
+# Each chunk carries the whole reply so far, so one per provider delta sends
+# O(n^2) bytes; deltas inside this window collapse into the next snapshot.
+CHUNK_PUBLISH_INTERVAL_SECONDS = 0.1
 
 
 def create_event_publisher(
-    event_broker,
+    broker_client: BrokerClient,
     task_id: str,
     execution_id: str | None = None,
     iteration: int | None = None,
-    broker_client=None,
+    *,
+    min_interval_seconds: float = CHUNK_PUBLISH_INTERVAL_SECONDS,
+    clock: Callable[[], float] = time.monotonic,
 ):
     """Create a publisher that converts callback deltas into chunk snapshots.
 
@@ -35,15 +35,17 @@ def create_event_publisher(
 
     Each snapshot carries cumulative ``chunk`` text and ``thinking`` reasoning
     for this invocation, including the empty final callback. A new publisher
-    starts a fresh snapshot for a retry of the same part.
+    starts a fresh snapshot for a retry of the same part. At most one snapshot
+    goes out per ``min_interval_seconds``; the final one and the first after a
+    switch between text and thinking always go out.
 
-    ``broker_client`` (a ``BrokerClient``) additionally XADDs each chunk to the
-    per-task live stream so the A2A read side tails tokens the same way it tails
-    durable events (ADR-0018). Chunks are stream-only (not persisted); the DB
-    keeps only durable events.
+    Snapshots are XADDed to the per-task live stream (ADR-0018) only; the DB
+    keeps durable events, and the completed call supersedes the last snapshot.
     """
     text = ""
     thinking = ""
+    published_at: float | None = None
+    published_type: str | None = None
 
     async def publish_chunk_event(
         chunk: str,
@@ -59,21 +61,29 @@ def create_event_publisher(
             is_final: Whether this is the last chunk.
             chunk_type: "text" for regular content, "thinking" for reasoning blocks.
         """
-        nonlocal text, thinking
+        nonlocal text, thinking, published_at, published_type
 
         if chunk_type == "thinking":
             thinking += chunk
         else:
             text += chunk
 
-        try:
-            publisher = resolve_event_broker(event_broker)
+        now = clock()
+        if not (
+            is_final
+            or published_at is None
+            or chunk_type != published_type
+            or now - published_at >= min_interval_seconds
+        ):
+            return
+        published_at, published_type = now, chunk_type
 
-            chunk_event = {
-                "event_type": "llm.call.chunk",
-                "event_id": str(uuid4()),
-                "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-                "data": {
+        try:
+            await publish_task_event(
+                broker_client,
+                task_id=task_id,
+                event_type=LLM_CHUNK,
+                data={
                     "task_id": task_id,
                     "execution_id": execution_id,
                     "iteration": iteration,
@@ -83,159 +93,15 @@ def create_event_publisher(
                     "is_final": is_final,
                     "chunk_type": chunk_type,
                 },
-            }
-
-            # Create proper domain event
-            domain_event = DomainEvent(
-                event_id=chunk_event["event_id"],
-                event_type=f"workflow.{chunk_event['event_type']}",
-                timestamp=datetime.fromisoformat(chunk_event["timestamp"].replace("Z", "+00:00")),
-                aggregate_id=task_id,
-                aggregate_type="task",
-                original_event_type=chunk_event["event_type"],
-                original_timestamp=chunk_event["timestamp"],
-                original_data=chunk_event["data"],
+                event_id=str(uuid4()),
+                timestamp=datetime.now(UTC).isoformat(),
             )
-
-            # Publish via RedisEventBroker (pub/sub) for existing consumers.
-            await publisher.publish(domain_event)
-
-            # Also XADD to the per-task live stream (ADR-0018) so the A2A read
-            # side tails chunks. Best-effort: publish_task_event never raises.
-            if broker_client is not None:
-                from agentarea_common.events.task_stream import publish_task_event
-
-                await publish_task_event(
-                    broker_client,
-                    task_id=task_id,
-                    event_type=chunk_event["event_type"],
-                    data=chunk_event["data"],
-                    event_id=chunk_event["event_id"],
-                    timestamp=chunk_event["timestamp"],
-                )
-            logger.debug(f"Published LLM chunk event {chunk_index} for task {task_id}")
-
-        except Exception as e:
-            logger.error(f"Failed to publish chunk event: {e}", exc_info=True)
+        except Exception:
+            # A snapshot is superseded by the next one and by the completed
+            # call, so a lost one must not fail (and re-bill) the model call.
+            logger.error(f"Failed to publish chunk event for task {task_id}", exc_info=True)
 
     return publish_chunk_event
-
-
-async def publish_a2ui_event(
-    event_type: str,
-    task_id: str,
-    data: dict,
-    event_broker,
-):
-    """Publish an A2UI v0.9 protocol event.
-
-    Args:
-        event_type: One of "A2UICreateSurface", "A2UIUpdateComponents",
-                    "A2UIUpdateDataModel", "A2UIDeleteSurface".
-        task_id: Associated task ID.
-        data: Event payload — must include "surface_id" and type-specific fields:
-              - A2UICreateSurface: catalog_id, theme, send_data_model
-              - A2UIUpdateComponents: components (flat adjacency-list)
-              - A2UIUpdateDataModel: path, value
-              - A2UIDeleteSurface: (no extra fields)
-        event_broker: FastStream event broker/router.
-    """
-    try:
-        publisher = resolve_event_broker(event_broker)
-
-        a2ui_event = {
-            "event_type": event_type,
-            "event_id": str(uuid4()),
-            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-            "data": {"task_id": task_id, **data},
-        }
-
-        domain_event = DomainEvent(
-            event_id=a2ui_event["event_id"],
-            event_type=f"workflow.{event_type}",
-            timestamp=datetime.fromisoformat(a2ui_event["timestamp"].replace("Z", "+00:00")),
-            aggregate_id=task_id,
-            aggregate_type="task",
-            original_event_type=event_type,
-            original_timestamp=a2ui_event["timestamp"],
-            original_data=a2ui_event["data"],
-        )
-
-        await publisher.publish(domain_event)
-        logger.debug(f"Published {event_type} event for task {task_id}")
-
-    except Exception as e:
-        logger.error(f"Failed to publish A2UI event {event_type}: {e}", exc_info=True)
-
-
-async def publish_enriched_llm_error_event(
-    error: Exception,
-    task_id: str,
-    agent_id: str,
-    execution_id: str,
-    model_id: str,
-    provider_type: str | None,
-    event_broker,
-):
-    """Publish enriched LLM error event with detailed error information."""
-    try:
-        publisher = resolve_event_broker(event_broker)
-
-        error_type = type(error).__name__
-        error_message = str(error)
-
-        # Analyze error type and extract details
-        error_data = {
-            "task_id": task_id,
-            "agent_id": agent_id,
-            "execution_id": execution_id,
-            "error": error_message,
-            "error_type": error_type,
-            "model_id": model_id,
-            "provider_type": provider_type,
-            "is_auth_error": _is_auth_error(error),
-            "is_rate_limit_error": _is_rate_limit_error(error),
-            "is_quota_error": _is_quota_error(error),
-            "is_model_error": _is_model_error(error),
-            "is_network_error": _is_network_error(error),
-            "retryable": not _is_non_retryable_error(error),
-        }
-
-        # Add specific error details based on type
-        if error_data["is_rate_limit_error"]:
-            error_data["retry_after"] = _extract_retry_after(error)
-
-        if error_data["is_quota_error"]:
-            error_data["quota_type"] = _extract_quota_type(error)
-
-        if error_data["is_network_error"]:
-            error_data["status_code"] = _extract_status_code(error)
-
-        error_event = {
-            "event_type": "LLMCallFailed",
-            "event_id": str(uuid4()),
-            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-            "data": error_data,
-        }
-
-        # Create proper domain event
-        domain_event = DomainEvent(
-            event_id=error_event["event_id"],
-            event_type=f"workflow.{error_event['event_type']}",
-            timestamp=datetime.fromisoformat(error_event["timestamp"].replace("Z", "+00:00")),
-            aggregate_id=task_id,
-            aggregate_type="task",
-            original_event_type=error_event["event_type"],
-            original_timestamp=error_event["timestamp"],
-            original_data=error_event["data"],
-        )
-
-        # Publish via RedisEventBroker for real-time SSE
-        await publisher.publish(domain_event)
-        logger.info(f"Published enriched LLM error event for task {task_id}: {error_type}")
-
-    except Exception as e:
-        logger.error(f"Failed to publish enriched LLM error event: {e}", exc_info=True)
 
 
 def _is_auth_error(error: Exception) -> bool:
@@ -285,19 +151,6 @@ def _is_model_error(error: Exception) -> bool:
     )
 
 
-def _is_network_error(error: Exception) -> bool:
-    """Check if error is network-related."""
-    error_str = str(error).lower()
-    error_type = type(error).__name__
-    return (
-        "connectionerror" in error_type.lower()
-        or "timeouterror" in error_type.lower()
-        or "network" in error_str
-        or "connection" in error_str
-        or "timeout" in error_str
-    )
-
-
 def _is_non_retryable_error(error: Exception) -> bool:
     """Determine if error should not be retried.
 
@@ -320,38 +173,3 @@ def _is_non_retryable_error(error: Exception) -> bool:
         or _is_quota_error(error)
         or _is_model_error(error)
     )
-
-
-def _extract_retry_after(error: Exception) -> int | None:
-    """Extract retry-after header from rate limit errors."""
-    error_str = str(error)
-    # Simple pattern matching - could be enhanced
-    import re
-
-    match = re.search(r"retry.*?(\d+)", error_str, re.IGNORECASE)
-    if match:
-        return int(match.group(1))
-    return None
-
-
-def _extract_quota_type(error: Exception) -> str | None:
-    """Extract quota type from quota errors."""
-    error_str = str(error).lower()
-    if "monthly" in error_str:
-        return "monthly"
-    elif "daily" in error_str:
-        return "daily"
-    elif "token" in error_str:
-        return "tokens"
-    return None
-
-
-def _extract_status_code(error: Exception) -> int | None:
-    """Extract HTTP status code from network errors."""
-    error_str = str(error)
-    import re
-
-    match = re.search(r"(\d{3})", error_str)
-    if match:
-        return int(match.group(1))
-    return None

@@ -1,157 +1,84 @@
 import * as React from "react";
-import { Check } from "lucide-react";
-import type { StatusIcon, StatusIndicatorSize, StatusTone } from "@/lib/status";
+import {
+  Circle,
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleDot,
+  CircleMinus,
+  CirclePause,
+  CircleSlash,
+  CircleX,
+  Clock,
+  LoaderCircle,
+  type LucideIcon,
+} from "lucide-react";
+import type { StatusIndicatorSize, StatusKind } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
-const TONE_STYLES = {
-  success: {
-    text: "text-emerald-600 dark:text-emerald-400",
-    dot: "bg-emerald-500",
-    halo: "bg-emerald-100/80 dark:bg-emerald-500/30",
-    solid: "bg-emerald-500 text-white",
+/** One glyph and one colour per kind — the whole status vocabulary. Colours
+ * track `STATUS_KIND_COLOR` in `@/lib/status`. */
+const KIND_STYLES = {
+  draft: { Icon: CircleDashed, color: "text-muted-foreground" },
+  queued: { Icon: Circle, color: "text-muted-foreground" },
+  scheduled: { Icon: Clock, color: "text-muted-foreground" },
+  running: {
+    Icon: LoaderCircle,
+    color:
+      "text-[color:var(--status-info)] motion-safe:animate-spin [animation-duration:2.4s]",
   },
-  warning: {
-    text: "text-amber-600 dark:text-amber-400",
-    dot: "bg-amber-500",
-    halo: "bg-amber-100/80 dark:bg-amber-500/30",
-    solid: "bg-amber-500 text-white",
-  },
-  danger: {
-    text: "text-red-600 dark:text-red-400",
-    dot: "bg-red-500",
-    halo: "bg-red-100/80 dark:bg-red-500/30",
-    solid: "bg-red-500 text-white",
-  },
-  info: {
-    text: "text-sky-600 dark:text-sky-400",
-    dot: "bg-sky-500",
-    halo: "bg-sky-100/80 dark:bg-sky-500/30",
-    solid: "bg-sky-500 text-white",
-  },
-  neutral: {
-    text: "text-muted-foreground",
-    dot: "bg-zinc-400 dark:bg-zinc-500",
-    halo: "bg-zinc-100/80 dark:bg-zinc-500/30",
-    solid: "bg-zinc-400 text-white dark:bg-zinc-500",
-  },
-  brand: {
-    text: "text-primary",
-    dot: "bg-primary",
-    halo: "bg-primary/15",
-    solid: "bg-primary text-primary-foreground",
-  },
-} satisfies Record<
-  StatusTone,
-  { text: string; dot: string; halo: string; solid: string }
->;
+  attention: { Icon: CircleAlert, color: "text-[color:var(--status-warning)]" },
+  paused: { Icon: CirclePause, color: "text-muted-foreground" },
+  active: { Icon: CircleDot, color: "text-[color:var(--status-success)]" },
+  off: { Icon: CircleMinus, color: "text-muted-foreground" },
+  done: { Icon: CircleCheck, color: "text-primary" },
+  failed: { Icon: CircleX, color: "text-[color:var(--status-danger)]" },
+  cancelled: { Icon: CircleSlash, color: "text-muted-foreground" },
+} satisfies Record<StatusKind, { Icon: LucideIcon; color: string }>;
 
 const SIZE_STYLES = {
-  default: {
-    root: "gap-2 text-[12.5px]",
-    dotWrap: "h-[12px] w-[12px]",
-    halo: "h-[12px] w-[12px]",
-    dot: "h-[6px] w-[6px]",
-    glyph: "h-[8px] w-[8px]",
-  },
-  sm: {
-    root: "gap-1.5 text-xs",
-    dotWrap: "h-[10px] w-[10px]",
-    halo: "h-[10px] w-[10px]",
-    dot: "h-[5px] w-[5px]",
-    glyph: "h-[7px] w-[7px]",
-  },
-} satisfies Record<
-  StatusIndicatorSize,
-  { root: string; dotWrap: string; halo: string; dot: string; glyph: string }
->;
+  default: { root: "gap-1.5 text-[12.5px]", icon: "h-3.5 w-3.5" },
+  sm: { root: "gap-1 text-xs", icon: "h-3 w-3" },
+} satisfies Record<StatusIndicatorSize, { root: string; icon: string }>;
 
-export type StatusIndicatorTone = StatusTone;
-export type { StatusIndicatorSize } from "@/lib/status";
+export type { StatusIndicatorSize, StatusKind } from "@/lib/status";
 
 export interface StatusIndicatorProps
   extends React.HTMLAttributes<HTMLSpanElement> {
-  tone?: StatusIndicatorTone;
+  kind: StatusKind;
   size?: StatusIndicatorSize;
-  dotClassName?: string;
-  haloClassName?: string;
-  pulse?: boolean;
-  /** Replaces the dot with a filled marker. Terminal states only — a pulse
-      would contradict it, so it wins over `pulse`. */
-  icon?: StatusIcon;
+  iconClassName?: string;
 }
 
+/**
+ * The only way a status reaches the screen: a coloured glyph and a neutral
+ * label. Without children it is the glyph alone — give it an `aria-label`.
+ */
 export function StatusIndicator({
-  tone = "neutral",
+  kind,
   size = "default",
   className,
-  dotClassName,
-  haloClassName,
-  pulse = false,
-  icon,
+  iconClassName,
   children,
   ...props
 }: StatusIndicatorProps) {
-  const toneStyles = TONE_STYLES[tone];
+  const { Icon, color } = KIND_STYLES[kind];
   const sizeStyles = SIZE_STYLES[size];
 
   return (
     <span
       className={cn(
         "inline-flex w-fit items-center font-normal",
-        toneStyles.text,
         sizeStyles.root,
         className
       )}
       {...props}
     >
-      <span
+      <Icon
         aria-hidden="true"
-        className={cn(
-          "relative inline-flex shrink-0 items-center justify-center",
-          sizeStyles.dotWrap
-        )}
-      >
-        {icon === "check" ? (
-          <span
-            className={cn(
-              "absolute inset-0 inline-flex items-center justify-center rounded-full",
-              toneStyles.solid,
-              dotClassName
-            )}
-          >
-            <Check className={sizeStyles.glyph} strokeWidth={3.5} />
-          </span>
-        ) : (
-          <>
-            <span
-              className={cn(
-                "absolute inset-0 m-auto rounded-full",
-                toneStyles.halo,
-                sizeStyles.halo,
-                haloClassName
-              )}
-            />
-            {pulse && (
-              <span
-                className={cn(
-                  "absolute inset-0 m-auto rounded-full animate-ping",
-                  toneStyles.halo,
-                  sizeStyles.halo,
-                  haloClassName
-                )}
-              />
-            )}
-            <span
-              className={cn(
-                "relative rounded-full",
-                toneStyles.dot,
-                sizeStyles.dot,
-                dotClassName
-              )}
-            />
-          </>
-        )}
-      </span>
+        strokeWidth={2.25}
+        className={cn("shrink-0", sizeStyles.icon, color, iconClassName)}
+      />
       {children ? <span>{children}</span> : null}
     </span>
   );

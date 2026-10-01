@@ -9,6 +9,7 @@ from agentarea_execution.workflows.constants import (
     CONTEXT_WARNING_THRESHOLD,
 )
 from agentarea_execution.workflows.context_manager import (
+    compactable_prefix,
     ContextWindowManager,
     estimate_tokens,
     estimate_tokens_for_messages,
@@ -350,3 +351,39 @@ class TestContextWindowManager:
         mgr.update_usage(mgr._effective_limit // 2)
         ratio = mgr.get_usage_ratio()
         assert 0.4 < ratio < 0.6  # approximately 0.5
+
+
+def _skill_run() -> list[dict]:
+    return [
+        {"role": "system", "content": "system"},
+        {"role": "user", "content": "task"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{"id": "s1", "function": {"name": "activate_skill"}}],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "s1",
+            "name": "activate_skill",
+            "content": '<skill_content name="deploy">steps</skill_content>',
+        },
+        *[{"role": "user", "content": f"turn {n}"} for n in range(8)],
+    ]
+
+
+def test_skill_content_pins_the_boundary_unless_carried():
+    messages = _skill_run()
+    skill_index = 3
+
+    assert find_compaction_boundary(messages, keep_recent=4) <= skill_index
+    assert find_compaction_boundary(messages, keep_recent=4, carry_skills=True) > skill_index
+
+
+def test_compactable_prefix_leaves_recent_entries_and_carries_skills():
+    tail = _skill_run()[1:]
+
+    count = compactable_prefix(tail, keep_recent=4)
+
+    assert count >= 3  # the skill activation no longer pins the boundary
+    assert len(tail) - count >= 4

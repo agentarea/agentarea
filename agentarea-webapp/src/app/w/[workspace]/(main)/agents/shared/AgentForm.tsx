@@ -1,15 +1,21 @@
 "use client";
 
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
+import { useTranslations } from "next-intl";
+import { useFieldArray, useForm } from "react-hook-form";
 import type {
   AgentPresetResponse,
   McpServerInstanceResponse,
   McpServerResponse,
   ModelInstanceResponse,
 } from "@/api/client/types.gen";
-import React, { useEffect, useRef, useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { useFieldArray, useForm } from "react-hook-form";
+import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/create/actions";
 import FullChat from "@/components/Chat/FullChat";
 import FormError from "@/components/FormError";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
@@ -26,12 +32,20 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { formatApiError } from "@/lib/api-errors";
+import {
+  defaultModelId as pickDefaultModelId,
+  withDefaultModel,
+  withPresetModel,
+  type ModelSelection,
+} from "@/lib/default-model";
 import { cn } from "@/lib/utils";
-import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/create/actions";
+import type { AddAgentFormState } from "../create/actions";
 import {
   AgentTriggersLink,
   BasicInformation,
+  DelegationConfig,
   PresetPicker,
   SkillsConfig,
   ToolConfig,
@@ -42,10 +56,13 @@ import {
   toTriggerDrafts,
   type TriggerDraft,
 } from "../create/components/TriggersConfig";
-import type { AddAgentFormState } from "../create/actions";
 import type { AgentFormValues, AgentSkill } from "../create/types";
-import { preferredModelId, presetFormValues } from "../create/utils/agentPreset";
+import {
+  preferredModelId,
+  presetFormValues,
+} from "../create/utils/agentPreset";
 import { useChat } from "./ChatContext";
+import { delegatesOf, withDelegates } from "./delegationTools";
 
 type MCPServer = McpServerResponse;
 type LLMModelInstance = ModelInstanceResponse;
@@ -101,6 +118,23 @@ export default function AgentForm({
   const tCommon = useTranslations("Common");
   const [formError, setFormError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const defaultModelId = useMemo(
+    () => pickDefaultModelId(llmModelInstances),
+    [llmModelInstances]
+  );
+  // Who set model_id decides who may replace it: see ModelSource. Tracked rather
+  // than read off the field, because a preselected default is not empty and must
+  // still give way to a preset's preferred model. The default also fills an
+  // edited agent without a model (a catalog fork).
+  const [initialModel] = useState<ModelSelection>(() =>
+    withDefaultModel(
+      initialData?.model_id
+        ? { modelId: initialData.model_id, source: "chosen" }
+        : { modelId: "", source: "none" },
+      defaultModelId
+    )
+  );
+  const modelSource = useRef(initialModel.source);
   const {
     register,
     control,
@@ -114,7 +148,7 @@ export default function AgentForm({
       name: initialData?.name || "",
       description: initialData?.description || "",
       instruction: initialData?.instruction || "",
-      model_id: initialData?.model_id || "",
+      model_id: initialModel.modelId,
       tools_config: initialData?.tools_config || {
         mcp_server_configs: [],
         builtin_tools: [],
@@ -156,6 +190,7 @@ export default function AgentForm({
 
   // Watch agent name for chat header
   const watchedName = watch("name");
+  const carriedTools = watch("tools_config.carried_tools") ?? [];
   const [agentName, setAgentName] = useState("");
 
   // Skills state (managed separately from react-hook-form)
@@ -167,16 +202,25 @@ export default function AgentForm({
     toTriggerDrafts(initialData?.triggers ?? [])
   );
   const [showTriggerErrors, setShowTriggerErrors] = useState(false);
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
-    null
-  );
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+
+  const selectModel = (next: ModelSelection) => {
+    modelSource.current = next.source;
+    if (next.modelId !== getValues("model_id")) {
+      setValue("model_id", next.modelId);
+    }
+  };
 
   useEffect(() => {
     setAgentName(watchedName || "New Agent");
   }, [watchedName]);
 
   useEffect(() => {
-    const subscription = watch(() => {
+    const subscription = watch((_, { name, type }) => {
+      // "change" is the user's own pick; setValue reports no type.
+      if (name === "model_id" && type === "change") {
+        modelSource.current = "chosen";
+      }
       setFormError(null);
       setSaved(false);
     });
@@ -201,10 +245,13 @@ export default function AgentForm({
     setSelectedSkills(values.skills);
     setTriggerDrafts(toTriggerDrafts(values.triggers));
     setShowTriggerErrors(false);
-    const modelId = preset
-      ? preferredModelId(preset, llmModelInstances)
-      : null;
-    if (modelId && !getValues("model_id")) setValue("model_id", modelId);
+    selectModel(
+      withPresetModel(
+        { modelId: getValues("model_id"), source: modelSource.current },
+        preset ? preferredModelId(preset, llmModelInstances) : null,
+        defaultModelId
+      )
+    );
     setSelectedPresetId(preset?.id ?? null);
   };
 
@@ -405,6 +452,17 @@ export default function AgentForm({
             <SkillsConfig
               selectedSkills={selectedSkills}
               onSkillsChange={handleSkillsChange}
+            />
+            <Divider />
+            <DelegationConfig
+              agentId={agentId}
+              delegates={delegatesOf(carriedTools)}
+              onDelegatesChange={(delegates) =>
+                setValue(
+                  "tools_config.carried_tools",
+                  withDelegates(carriedTools, new Set(delegates))
+                )
+              }
             />
             {/* Submit button moved to header controls */}
           </form>

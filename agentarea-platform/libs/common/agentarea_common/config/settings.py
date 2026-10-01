@@ -11,7 +11,6 @@ from .aws import AWSSettings
 from .broker import BrokerSettings, KafkaSettings, RedisSettings
 from .channels import ChannelDeliverySettings
 from .database import DatabaseSettings
-from .keto import KetoSettings
 from .mcp import MCPManagerSettings, MCPSettings
 from .observability import ObservabilitySettings
 from .openfga import OpenFGASettings
@@ -36,7 +35,6 @@ class Settings(BaseSettings):
     triggers: TriggerSettings = Field(default_factory=TriggerSettings)
     channel_delivery: ChannelDeliverySettings = Field(default_factory=ChannelDeliverySettings)
     access_control: AccessControlSettings = Field(default_factory=AccessControlSettings)
-    keto: KetoSettings = Field(default_factory=KetoSettings)
     openfga: OpenFGASettings = Field(default_factory=OpenFGASettings)
 
     model_config = {"env_file": ".env", "extra": "ignore"}
@@ -62,6 +60,5 @@ def get_settings() -> Settings:
         triggers=TriggerSettings(),
         channel_delivery=ChannelDeliverySettings(),
         access_control=AccessControlSettings(),
-        keto=KetoSettings(),
         openfga=OpenFGASettings(),
     )

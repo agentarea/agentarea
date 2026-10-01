@@ -25,6 +25,8 @@ export default function ProviderConfigsView({
   hasNoData,
 }: ProviderConfigsViewProps) {
   const t = useTranslations("Models.table");
+  const tEmpty = useTranslations("Models.empty");
+  const tCommon = useTranslations("Common");
   const tAdmin = useTranslations("AdminOnly");
   const router = useWorkspaceRouter();
   const { canAdminister } = useViewerCapabilities();
@@ -47,7 +49,7 @@ export default function ProviderConfigsView({
               />
             </span>
           )}
-          <span className="truncate">{value}</span>
+          <span className="truncate font-medium">{value}</span>
         </div>
       ),
     },
@@ -67,23 +69,27 @@ export default function ProviderConfigsView({
     return (
       <div className="py-1">
         <EmptyState
-          title={hasNoData ? "No providers connected" : "No matching configs"}
+          title={
+            hasNoData
+              ? tEmpty("noOwnConfigs.title")
+              : tEmpty("noMatchingConfigs")
+          }
           description={
             hasNoData
-              ? "A provider config is one API key plus the models it unlocks for this workspace."
-              : `No configs match your search query: "${searchQuery}"`
+              ? tEmpty("noOwnConfigs.description")
+              : tEmpty("noMatchingConfigsDescription", { query: searchQuery })
           }
           hints={
             hasNoData
               ? [
                   canAdminister
                     ? {
-                        text: "Add a provider and paste its API key",
+                        text: tEmpty("noOwnConfigs.hintAdd"),
                         href: "/models/create",
                       }
                     : { text: tAdmin("hints.manageProvider") },
-                  { text: "Enable only the models you want agents to reach" },
-                  { text: "The key is stored as a secret, never shown again" },
+                  { text: tEmpty("noOwnConfigs.hintEnable") },
+                  { text: tEmpty("noOwnConfigs.hintSecret") },
                 ]
               : undefined
           }
@@ -91,9 +97,9 @@ export default function ProviderConfigsView({
           action={
             hasNoData
               ? canAdminister
-                ? { label: "Add provider", href: "/models/create" }
+                ? { label: tEmpty("addProvider"), href: "/models/create" }
                 : undefined
-              : { label: "Clear search", href: "/models" }
+              : { label: tCommon("clearSearch"), href: "/models" }
           }
         />
       </div>

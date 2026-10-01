@@ -270,6 +270,9 @@ async def list_skills(
     source_type: str | None = Query(None, description="Filter by source type"),
     network_scope: str | None = Query(None, description="Filter by network scope"),
     from_registry: bool | None = Query(None, description="Filter registry-created skills"),
+    include_catalog: bool = Query(
+        True, description="Merge in catalog skills not installed in the workspace"
+    ),
 ):
     """List skills in the workspace."""
     skills, total = await skill_service.list_paginated(
@@ -279,6 +282,7 @@ async def list_skills(
         source_type=source_type,
         network_scope=network_scope,
         from_registry=from_registry,
+        include_catalog=include_catalog,
         ids=await readable_resource_ids(user_context.user_id),
     )
     return PaginatedResponse(
@@ -331,11 +335,15 @@ async def install_skill(
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
 
-    await grant_resource_owner(
-        resource_id=skill.id,
-        workspace_id=skill_service.user_context.workspace_id,
-        user_id=skill_service.user_context.user_id,
-    )
+    # The id may already be a tenant skill, or this workspace's earlier fork.
+    # Only the member who created the row is re-granted: a fresh fork was granted
+    # by the repository, and this repairs a grant that failed after it committed.
+    if str(skill.created_by) == str(skill_service.user_context.user_id):
+        await grant_resource_owner(
+            resource_id=skill.id,
+            workspace_id=skill_service.user_context.workspace_id,
+            user_id=skill_service.user_context.user_id,
+        )
     return SkillResponse.from_skill(skill)
 
 

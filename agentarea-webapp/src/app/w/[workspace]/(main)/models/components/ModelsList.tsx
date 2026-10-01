@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import ModelBadge from "@/components/ui/model-badge";
 
 export interface ModelEntry {
@@ -10,6 +11,7 @@ export interface ModelEntry {
 }
 
 export default function ModelsList({ models }: { models: ModelEntry[] }) {
+  const t = useTranslations("Models");
   return (
     <div>
       {models && models.length > 0 && (
@@ -28,7 +30,7 @@ export default function ModelsList({ models }: { models: ModelEntry[] }) {
                 model.display_name ||
                 model.model_name ||
                 model.name ||
-                "Unknown"
+                t("unknownModel")
               }
             />
           ))}

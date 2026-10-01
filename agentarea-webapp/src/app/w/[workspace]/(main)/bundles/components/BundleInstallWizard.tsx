@@ -12,17 +12,13 @@
 // bundle, and /install takes a (possibly edited) bundle + setup values. We edit
 // the analyzed bundle in place and send the result.
 import React, { useEffect, useMemo, useReducer, useState } from "react";
-import Image from "next/image";
 import { useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
+import Image from "next/image";
 import {
-  AlertTriangle,
   Check,
-  CheckCircle2,
   ChevronLeft,
   ChevronsUpDown,
   Clock,
-  Loader2,
   Plug,
   Plus,
   Puzzle,
@@ -43,7 +39,9 @@ import type {
 import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import ConfigSheet from "@/components/ConfigSheet";
+import EntityMark from "@/components/EntityMark";
 import FormError from "@/components/FormError";
+import { ModelTags } from "@/components/ModelTags";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,9 +62,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Switch } from "@/components/ui/switch";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import Link from "@/components/WorkspaceLink";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
+import { defaultModelId as pickDefaultModelId } from "@/lib/default-model";
+import type { EntityIdentity } from "@/lib/entity-identity";
 import { cn } from "@/lib/utils";
 import {
   analyzeBundleAction,
@@ -75,8 +77,6 @@ import {
   type WorkspaceModel,
 } from "./actions";
 import { str } from "./catalog-data";
-import EntityMark from "@/components/EntityMark";
-import type { EntityIdentity } from "@/lib/entity-identity";
 
 // ${setup.<key>} reference used by an agent's model / a connection binding.
 const SETUP_REF = /^\$\{setup\.([a-zA-Z0-9_]+)\}$/;
@@ -281,6 +281,15 @@ export function BundleInstallWizard({
         for (const f of pv.setup ?? []) {
           if (f.default !== undefined && f.default !== null)
             sv[f.key] = f.default;
+        }
+        // A model field the bundle leaves open starts on the platform default;
+        // one the bundle names a model for keeps it, as a preset's model does.
+        const defaultModelId = pickDefaultModelId(ms);
+        for (const agent of bundle.agents ?? []) {
+          const key = setupRefKey(agent.model);
+          if (key && defaultModelId && sv[key] === undefined) {
+            sv[key] = defaultModelId;
+          }
         }
         dispatch({
           type: "init",
@@ -506,15 +515,22 @@ export function BundleInstallWizard({
 
       {phase.kind === "analyzing" && (
         <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Analyzing bundle…
+          <StatusIndicator kind="running" size="sm">
+            Analyzing bundle…
+          </StatusIndicator>
         </div>
       )}
 
       {phase.kind === "error" && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          {phase.message}
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
+          <StatusIndicator
+            kind="failed"
+            size="sm"
+            iconClassName="mt-0.5 h-4 w-4"
+            className="text-sm"
+          >
+            {phase.message}
+          </StatusIndicator>
         </div>
       )}
 
@@ -525,19 +541,31 @@ export function BundleInstallWizard({
       {(phase.kind === "form" || phase.kind === "installing") && preview && (
         <div className="space-y-7">
           {blockIssues.length > 0 && (
-            <div className="space-y-1 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
+            <div className="space-y-1 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
               {blockIssues.map((i, idx) => (
-                <p key={idx} className="flex items-start gap-2">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <StatusIndicator
+                  key={idx}
+                  kind="failed"
+                  size="sm"
+                  iconClassName="mt-0.5 h-4 w-4"
+                  className="text-sm"
+                >
                   {i.message}
-                </p>
+                </StatusIndicator>
               ))}
             </div>
           )}
           {warnIssues.length > 0 && (
-            <div className="space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30">
+            <div className="space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/30">
               {warnIssues.map((i, idx) => (
-                <p key={idx}>{i.message}</p>
+                <StatusIndicator
+                  key={idx}
+                  kind="attention"
+                  size="sm"
+                  className="text-xs"
+                >
+                  {i.message}
+                </StatusIndicator>
               ))}
             </div>
           )}
@@ -548,9 +576,7 @@ export function BundleInstallWizard({
               <div className="space-y-4">
                 {modelsError && modelFieldKeys.size > 0 ? (
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                    <FormError className="flex-1">
-                      {modelsError}
-                    </FormError>
+                    <FormError className="flex-1">{modelsError}</FormError>
                     <Button
                       size="xs"
                       variant="outline"
@@ -655,23 +681,29 @@ export function BundleInstallWizard({
                             return null;
                           return (
                             <div className="mt-3 flex flex-wrap items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 dark:border-amber-900/40 dark:bg-amber-950/20">
-                              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                              {allowed.length > 0 ? (
-                                <span className="text-[11px] text-amber-700 dark:text-amber-300">
-                                  Tools locked to:{" "}
-                                  <span className="font-medium">
-                                    {allowed.join(", ")}
-                                  </span>{" "}
-                                  — all others blocked
-                                </span>
-                              ) : (
-                                <span className="text-[11px] text-amber-700 dark:text-amber-300">
-                                  Blocked tools:{" "}
-                                  <span className="font-medium">
-                                    {denied.join(", ")}
-                                  </span>
-                                </span>
-                              )}
+                              <StatusIndicator
+                                kind="attention"
+                                size="sm"
+                                iconClassName="h-3.5 w-3.5"
+                                className="text-[11px]"
+                              >
+                                {allowed.length > 0 ? (
+                                  <>
+                                    Tools locked to:{" "}
+                                    <span className="font-medium">
+                                      {allowed.join(", ")}
+                                    </span>{" "}
+                                    — all others blocked
+                                  </>
+                                ) : (
+                                  <>
+                                    Blocked tools:{" "}
+                                    <span className="font-medium">
+                                      {denied.join(", ")}
+                                    </span>
+                                  </>
+                                )}
+                              </StatusIndicator>
                             </div>
                           );
                         })()}
@@ -850,10 +882,10 @@ export function BundleInstallWizard({
           {/* Footer / commit */}
           <div className="flex flex-col gap-2 border-t border-border/60 pt-5">
             {missingRequired.length > 0 && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
+              <StatusIndicator kind="attention" size="sm" className="text-xs">
                 Fill required fields:{" "}
                 {missingRequired.map((f) => f.label).join(", ")}
-              </p>
+              </StatusIndicator>
             )}
             <div className="flex items-center gap-2">
               <StartAgentButton
@@ -1092,6 +1124,7 @@ function ModelPicker({
                     <span className="min-w-0 flex-1 truncate">
                       {m.model_display_name || m.model_name}
                     </span>
+                    <ModelTags tags={m.tags} className="ml-2" />
                     <span className="ml-2 shrink-0 text-xs text-muted-foreground">
                       {m.provider_name}
                     </span>
@@ -1144,11 +1177,12 @@ function InstallSummary({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-        <CheckCircle2 className="h-4 w-4 shrink-0" />
-        Installed {result.bundle_name} — {created.length} created
-        {reused.length > 0 ? `, ${reused.length} reused` : ""}
-        {skipped.length > 0 ? `, ${skipped.length} skipped` : ""}.
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm dark:border-emerald-900/50 dark:bg-emerald-950/30">
+        <StatusIndicator kind="done" iconClassName="h-4 w-4">
+          Installed {result.bundle_name} — {created.length} created
+          {reused.length > 0 ? `, ${reused.length} reused` : ""}
+          {skipped.length > 0 ? `, ${skipped.length} skipped` : ""}.
+        </StatusIndicator>
       </div>
 
       <ul className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border/60 text-sm">

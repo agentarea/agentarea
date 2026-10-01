@@ -12,21 +12,17 @@ import React, {
   useTransition,
 } from "react";
 import { useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
 import {
-  AlertTriangle,
   ArrowDownAZ,
   BadgeCheck,
   Blocks,
   Bot,
-  CheckCircle2,
   ChevronLeft,
   Clock,
   Compass,
   ExternalLink,
   FileText,
   Globe,
-  Loader2,
   Plug,
   Puzzle,
   Search,
@@ -37,24 +33,14 @@ import {
   Star,
   Telescope,
 } from "lucide-react";
-import {
-  apiErrorMessage,
-  formatApiError,
-  isApiNotFound,
-} from "@/lib/api-errors";
-import { getCategoryIcon } from "@/lib/category-icons";
-import { isSafeRedirectUrl } from "@/lib/safe-redirect";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { Streamdown } from "streamdown";
-import type {
-  CatalogConnectionRequest,
-} from "@/api/client/types.gen";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import { CustomOAuthAppFields } from "@/components/CustomOAuthAppFields";
 import EmptyState from "@/components/EmptyState";
 import EntityMark from "@/components/EntityMark";
 import FormError from "@/components/FormError";
 import HeaderTabs from "@/components/HeaderTabs";
+import Table, { type Column } from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -76,12 +62,20 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { ToolbarButton } from "@/components/ui/toolbar";
+import Link from "@/components/WorkspaceLink";
+import {
+  apiErrorMessage,
+  formatApiError,
+  isApiNotFound,
+} from "@/lib/api-errors";
+import { getCategoryIcon } from "@/lib/category-icons";
+import type { StatusKind } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { getCookie, setCookie } from "@/utils/cookies";
 import {
   addCatalogSkillToAgentAction,
-  connectCatalogConnectionAction,
   fetchCatalogItemAction,
   fetchCatalogPageAction,
   getSkillFileUrlAction,
@@ -94,7 +88,6 @@ import {
   type AgentLite,
   type WorkspaceModel,
 } from "./actions";
-import { listWorkspaceSecretsAction } from "@/lib/server-actions";
 import { BundleInstallWizard } from "./BundleInstallWizard";
 import {
   ALL,
@@ -125,6 +118,7 @@ import {
   initialPaging,
   type CategoryFacet,
 } from "./catalog-paging";
+import type { CatalogSection } from "./catalog-sections";
 
 // ── Registry types ──────────────────────────────────────────────────────────
 // One gallery for every catalog type. The look-and-feel is shared; the type is
@@ -155,12 +149,20 @@ const TYPES: { key: CatalogType; label: string; icon: LucideIcon }[] = [
 const BRING_YOUR_OWN: Record<CatalogType, { text: string; href?: string }[]> = {
   connections: [
     { text: "Connect your own MCP server", href: "/connections/add" },
-    { text: "Point at any REST API you already have", href: "/connections/add-openapi" },
-    { text: "Or describe it to an agent and have it wire the connection up", href: "/workplace" },
+    {
+      text: "Point at any REST API you already have",
+      href: "/connections/add-openapi",
+    },
+    {
+      text: "Or describe it to an agent and have it wire the connection up",
+      href: "/workplace",
+    },
   ],
   skills: [{ text: "Write the skill yourself", href: "/skills/create" }],
   agents: [{ text: "Build the agent yourself", href: "/agents/create" }],
-  bundles: [{ text: "Import a bundle you already have", href: "/bundles/import" }],
+  bundles: [
+    { text: "Import a bundle you already have", href: "/bundles/import" },
+  ],
 };
 
 const BRING_YOUR_OWN_ACTION: Record<
@@ -431,6 +433,8 @@ type CatalogGalleryProps = {
   initialError?: string | null;
   /** Persisted grid/table choice (cookie), seeds the view nuqs default. */
   initialView?: ViewMode;
+  /** Recommended / Popular shelves for the unfiltered catalog (catalog-sections.ts). */
+  initialSections?: CatalogSection[];
 };
 
 export default function CatalogGallery({
@@ -441,6 +445,7 @@ export default function CatalogGallery({
   initialProtocols,
   initialError = null,
   initialView = "grid",
+  initialSections = [],
 }: CatalogGalleryProps) {
   // Catalog UI state lives in the URL (nuqs) so views are shareable/back-able.
   //
@@ -621,6 +626,8 @@ export default function CatalogGallery({
       return;
     }
     if (paging.entries.some((e) => e.id === itemId)) return; // already in the list
+    if (initialSections.some((sec) => sec.entries.some((e) => e.id === itemId)))
+      return; // on a shelf
     if (deepItem?.id === itemId) return; // already fetched
     let alive = true;
     setDeepLoading(true);
@@ -646,15 +653,28 @@ export default function CatalogGallery({
     return () => {
       alive = false;
     };
-  }, [itemId, paging.entries, type, deepItem?.id, deepAttempt, tBundle]);
+  }, [
+    itemId,
+    paging.entries,
+    initialSections,
+    type,
+    deepItem?.id,
+    deepAttempt,
+    tBundle,
+  ]);
 
   // Selected item (from ?item=) — resolved against the loaded page first, then
   // the deep-link fallback. When set, the main column shows the detail in place
   // — tabs + facets stay, so it feels like browsing a marketplace rather than a
   // full-page takeover.
   const active =
-    (itemId ? (paging.entries.find((e) => e.id === itemId) ?? null) : null) ??
-    (deepItem?.id === itemId ? deepItem : null);
+    (itemId
+      ? (paging.entries.find((e) => e.id === itemId) ??
+        initialSections
+          .flatMap((sec) => sec.entries)
+          .find((e) => e.id === itemId) ??
+        null)
+      : null) ?? (deepItem?.id === itemId ? deepItem : null);
   // Drives the empty-state copy + "Clear filters" affordance.
   const hasFilters =
     query.trim() !== "" || category !== ALL || protocol !== ALL;
@@ -722,10 +742,9 @@ export default function CatalogGallery({
         ) : itemId ? (
           <DeepItemStatus onBack={() => void setItemId(null)}>
             {deepLoading ? (
-              <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
+              <StatusIndicator kind="running" size="sm">
                 Loading…
-              </span>
+              </StatusIndicator>
             ) : deepError && !deepNotFound ? (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                 <FormError className="flex-1">{deepError}</FormError>
@@ -767,11 +786,10 @@ export default function CatalogGallery({
             </div>
 
             {paging.error && (
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
-                <span className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
+                <StatusIndicator kind="failed" size="sm" className="text-sm">
                   {paging.error}
-                </span>
+                </StatusIndicator>
                 {/* A failed page used to end infinite scroll for good. It's a
                   retry, not the end of the catalog. */}
                 {moreAvailable && (
@@ -820,6 +838,39 @@ export default function CatalogGallery({
                 />
               )}
 
+            {/* Shelves are server-picked for the unfiltered catalog; any filter
+                round-trips the page and the next render simply has none. */}
+            {!busy &&
+              !hasFilters &&
+              sort === DEFAULT_SORT &&
+              initialSections.map((sec) => (
+                <section key={sec.key} className="space-y-2">
+                  <CatalogShelfHeading
+                    title={sec.title}
+                    description={sec.description}
+                  />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                    {sec.entries.map((e) => (
+                      <CatalogCard
+                        key={e.id}
+                        entry={e}
+                        onOpen={() => void setItemId(e.id)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            {!busy &&
+              !hasFilters &&
+              sort === DEFAULT_SORT &&
+              initialSections.length > 0 &&
+              paging.entries.length > 0 && (
+                <CatalogShelfHeading
+                  title={`All ${TYPES.find((t) => t.key === type)?.label.toLowerCase() ?? ""}`}
+                  description={`${paging.total.toLocaleString()} in the catalog.`}
+                />
+              )}
+
             {!busy && paging.entries.length > 0 && (
               <div
                 className={cn(
@@ -856,7 +907,12 @@ export default function CatalogGallery({
                 <div ref={sentinelRef} className="h-px" aria-hidden />
                 <div className="flex justify-center pt-2">
                   {paging.status === "appending" ? (
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <StatusIndicator
+                      kind="running"
+                      size="sm"
+                      aria-label="Loading…"
+                      title="Loading…"
+                    />
                   ) : (
                     !paging.error && (
                       <Button variant="outline" onClick={() => void loadMore()}>
@@ -874,7 +930,65 @@ export default function CatalogGallery({
   );
 }
 
+function CatalogShelfHeading({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-baseline gap-2 pt-2">
+      <h2 className="text-sm font-semibold">{title}</h2>
+      <p className="truncate text-xs text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
 // ── Table view (compact, scannable; same click → drawer) ──
+
+// Fixed layout with the category in its own column: inline after the title it
+// landed wherever the name ended, so no two rows lined up.
+const CATALOG_COLUMNS: Column<CatalogEntry>[] = [
+  {
+    header: "Name",
+    accessor: "title",
+    headerClassName: "w-[40%] md:w-[32%]",
+    render: (_, e) =>
+      e ? (
+        <div className="flex min-w-0 items-center gap-2.5">
+          <EntityMark
+            identity={e.identity}
+            brandFallback={false}
+            className="h-7 w-7 shrink-0 rounded-md border border-border/60 bg-white p-[3px] text-[10px] dark:bg-zinc-800"
+          />
+          <span className="min-w-0 truncate text-sm font-medium">
+            {e.title}
+          </span>
+          {e.verified && (
+            <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+          )}
+        </div>
+      ) : null,
+  },
+  {
+    header: "Category",
+    accessor: "category",
+    headerClassName: "hidden w-[200px] sm:table-cell",
+    cellClassName: "hidden sm:table-cell",
+    render: (_, e) =>
+      e?.category ? <CategoryBadge category={e.category} /> : null,
+  },
+  {
+    header: "Description",
+    accessor: "description",
+    headerClassName: "hidden md:table-cell",
+    cellClassName: "hidden md:table-cell",
+    render: (_, e) => (
+      <div className="table-description truncate">{e?.description}</div>
+    ),
+  },
+];
 
 function CatalogTable({
   entries,
@@ -884,60 +998,12 @@ function CatalogTable({
   onOpen: (e: CatalogEntry) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-border/60">
-      <table className="w-full table-fixed text-sm">
-        <colgroup>
-          <col className="w-10" />
-          <col className="md:w-[42%]" />
-          <col className="hidden md:table-column" />
-        </colgroup>
-        <tbody>
-          {entries.map((e) => (
-            <tr
-              key={e.id}
-              onClick={() => onOpen(e)}
-              className="cursor-pointer border-b border-border/40 last:border-0 hover:bg-muted/40"
-            >
-              <td className="w-10 py-2 pl-3 pr-0">
-                <EntityMark
-                  identity={e.identity}
-                  brandFallback={false}
-                  className="h-7 w-7 rounded-md border border-border/60 bg-white p-[3px] text-[10px] dark:bg-zinc-800"
-                />
-              </td>
-              {/* Title column is capped (responsive) so a long name
-                    truncates with an ellipsis instead of wrapping to multiple
-                    lines and blowing up the row height. `min-w-0` on the flex
-                    row + the name lets the name shrink; the badges stay
-                    `shrink-0` so they're never clipped. */}
-              <td className="max-w-[160px] py-2 pl-2 pr-3 align-middle sm:max-w-[240px] lg:max-w-[340px]">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="min-w-0 truncate font-medium">
-                    {e.title}
-                  </span>
-                  {e.verified && (
-                    <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />
-                  )}
-                  {e.category && <CategoryBadge category={e.category} />}
-                </div>
-              </td>
-              {/* Description absorbs the remaining row width and truncates
-                    with an ellipsis. `w-full` grabs the leftover space (pinning
-                    the title column to its content, no dead gap); `max-w-0` is
-                    what makes truncation actually work — without it auto table
-                    layout grows the column to fit the nowrap text and it spills
-                    past the edge with no ellipsis. Together they give the inner
-                    block a definite width to clip against. Hidden below md. */}
-              <td className="hidden w-full max-w-0 py-2 pr-4 md:table-cell">
-                <div className="table-description truncate">
-                  {e.description}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table
+      className="table-fixed"
+      data={entries}
+      columns={CATALOG_COLUMNS}
+      onRowClick={onOpen}
+    />
   );
 }
 
@@ -985,31 +1051,31 @@ function FacetGroup({
           // but it still takes the icon's width so the labels line up.
           const Icon = icons && value !== ALL ? icons(value) : null;
           return (
-          <button
-            key={value}
-            onClick={() => onSelect(value)}
-            className={cn(
-              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-              selected === value
-                ? "bg-muted font-medium text-foreground"
-                : "text-muted-foreground hover:bg-muted/50"
-            )}
-          >
-            {icons &&
-              (Icon ? (
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-              ) : (
-                <span className="h-3.5 w-3.5 shrink-0" />
-              ))}
-            <span className="min-w-0 flex-1 truncate text-left capitalize">
-              {value === ALL ? "All" : (labels?.[value] ?? value)}
-            </span>
-            {count !== null && (
-              <span className="text-[10px] tabular-nums text-muted-foreground">
-                {count}
+            <button
+              key={value}
+              onClick={() => onSelect(value)}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+                selected === value
+                  ? "bg-muted font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-muted/50"
+              )}
+            >
+              {icons &&
+                (Icon ? (
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                ) : (
+                  <span className="h-3.5 w-3.5 shrink-0" />
+                ))}
+              <span className="min-w-0 flex-1 truncate text-left capitalize">
+                {value === ALL ? "All" : (labels?.[value] ?? value)}
               </span>
-            )}
-          </button>
+              {count !== null && (
+                <span className="text-[10px] tabular-nums text-muted-foreground">
+                  {count}
+                </span>
+              )}
+            </button>
           );
         })}
       </div>
@@ -1150,7 +1216,6 @@ function CatalogCard({
 type InstallState =
   | { phase: "idle" }
   | { phase: "loading" }
-  | { phase: "connecting" }
   | { phase: "needs_config" }
   | { phase: "done"; created: number }
   | { phase: "error"; message: string };
@@ -1163,14 +1228,6 @@ type SetupTier =
   | "needs_oauth_app"
   | "needs_tenant_config"
   | "unverified";
-
-type CustomOAuthAppInput = Pick<
-  CatalogConnectionRequest,
-  | "client_id"
-  | "client_secret"
-  | "client_id_secret_id"
-  | "client_secret_secret_id"
->;
 
 function DetailView({
   entry,
@@ -1201,11 +1258,13 @@ function DetailView({
     (t) => !t.includes(":") && t !== FEATURED_TAG && !capabilitySet.has(t)
   );
 
-  // Setup reuses the existing "create instance from spec" page — the catalog
-  // never configures inline. Each catalog connection links to an MCP spec.
-  const connectHref = entry.installEntityId
-    ? `/connections/create/${entry.installEntityId}`
-    : "/connections/add";
+  // Setup runs on a connections page — the catalog never configures inline.
+  // An MCP entry links to its spec; an HTTP API entry to its connect form.
+  const connectHref = isCatalogApi
+    ? `/connections/catalog/${entry.id}`
+    : entry.installEntityId
+      ? `/connections/create/${entry.installEntityId}`
+      : "/connections/add";
 
   useEffect(() => {
     // Reset only when the selected item changes.
@@ -1236,43 +1295,7 @@ function DetailView({
     }
   }
 
-  async function connectCatalogApi(
-    credentialMode: "managed" | "custom",
-    custom?: CustomOAuthAppInput
-  ) {
-    setState({ phase: "connecting" });
-    try {
-      const result = await connectCatalogConnectionAction(entry.id, {
-        credential_mode: credentialMode,
-        ...custom,
-        return_to: window.location.origin,
-      });
-      if (result.error || !result.data) {
-        setState({
-          phase: "error",
-          message: apiErrorMessage(result, tBundle("connectFailed")),
-        });
-        return;
-      }
-      if (!isSafeRedirectUrl(result.data.authorize_url)) {
-        setState({
-          phase: "error",
-          message: `${tBundle("connectFailed")}: ${tBundle("unsafeRedirect")}`,
-        });
-        return;
-      }
-      window.location.assign(result.data.authorize_url);
-    } catch (e) {
-      console.error("Failed to connect catalog connection", e);
-      setState({
-        phase: "error",
-        message: `${tBundle("connectFailed")}: ${formatApiError(e)}`,
-      });
-    }
-  }
-
   const installing = state.phase === "loading";
-  const connecting = state.phase === "connecting";
 
   // Bundles route through the configure-then-install wizard in place of the
   // detail view; everything else keeps the look-first detail layout.
@@ -1334,19 +1357,9 @@ function DetailView({
               <Link href="/agents">Go to Agents</Link>
             </Button>
           ) : entry.type === "connections" ? (
-            isCatalogApi ? (
-              <StartAgentButton
-                size="xs"
-                isLoading={connecting}
-                onClick={() => void connectCatalogApi("managed")}
-              >
-                Connect
-              </StartAgentButton>
-            ) : (
-              <StartAgentButton asChild size="xs">
-                <Link href={connectHref}>Connect</Link>
-              </StartAgentButton>
-            )
+            <StartAgentButton asChild size="xs">
+              <Link href={connectHref}>Connect</Link>
+            </StartAgentButton>
           ) : (
             <StartAgentButton
               size="xs"
@@ -1365,17 +1378,29 @@ function DetailView({
 
       {/* install feedback */}
       {state.phase === "error" && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          {state.message}
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
+          <StatusIndicator
+            kind="failed"
+            size="sm"
+            iconClassName="mt-0.5 h-4 w-4"
+            className="text-sm"
+          >
+            {state.message}
+          </StatusIndicator>
         </div>
       )}
       {state.phase === "done" && (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          {entry.type === "agents"
-            ? "Added to your workspace — it's now an editable copy you own."
-            : `Installed — ${state.created} entities created.`}
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+          <StatusIndicator
+            kind="done"
+            size="sm"
+            iconClassName="h-4 w-4"
+            className="text-sm"
+          >
+            {entry.type === "agents"
+              ? "Added to your workspace — it's now an editable copy you own."
+              : `Installed — ${state.created} entities created.`}
+          </StatusIndicator>
         </div>
       )}
 
@@ -1393,18 +1418,8 @@ function DetailView({
       <div className="space-y-5 border-t border-border/60 pt-6">
         {entry.type === "bundles" && <BundleContents spec={spec} />}
         {entry.type === "agents" && <PreferredModels models={entry.meta} />}
-        {entry.type === "connections" && (
-          <>
-            <ConnectionSetup tier={tier} />
-            {isCatalogApi && (
-              <CustomOAuthApp
-                connecting={connecting}
-                onConnect={(credentials) =>
-                  void connectCatalogApi("custom", credentials)
-                }
-              />
-            )}
-          </>
+        {entry.type === "connections" && !isCatalogApi && (
+          <ConnectionSetup tier={tier} />
         )}
         {entry.type === "skills" && (
           <>
@@ -1491,19 +1506,14 @@ function PreferredModels({ models }: { models: string[] }) {
                       best.model_display_name || best.model_name || slug
                     }
                   />
-                  <Badge variant="success" size="sm" className="gap-1">
-                    <CheckCircle2 className="h-3 w-3" />
+                  <StatusIndicator kind="active" size="sm">
                     In your workspace
-                  </Badge>
+                  </StatusIndicator>
                 </span>
               ) : (
-                <Badge
-                  variant="light"
-                  size="sm"
-                  className="shrink-0 text-muted-foreground"
-                >
+                <StatusIndicator kind="draft" size="sm">
                   Not configured
-                </Badge>
+                </StatusIndicator>
               )}
             </li>
           );
@@ -1540,98 +1550,52 @@ function PreferredModels({ models }: { models: string[] }) {
 function ConnectionSetup({ tier }: { tier: SetupTier }) {
   const COPY: Record<
     SetupTier,
-    { icon: LucideIcon; title: string; detail: string }
+    { kind: StatusKind; title: string; detail: string }
   > = {
     one_click: {
-      icon: BadgeCheck,
+      kind: "draft",
       title: "One-click connect",
       detail: "Authorize access in the next step — nothing to set up.",
     },
     oauth: {
-      icon: BadgeCheck,
+      kind: "draft",
       title: "Ready to connect",
       detail: "Click Connect, then sign in and approve access.",
     },
     needs_oauth_app: {
-      icon: AlertTriangle,
+      kind: "attention",
       title: "Needs an OAuth app",
       detail:
         "This vendor requires a one-time OAuth app (client ID/secret). You can add it now and finish auth on the connection page.",
     },
     needs_tenant_config: {
-      icon: Plug,
+      kind: "attention",
       title: "Enter your workspace URL",
       detail:
         "This connection is hosted in your own tenant — paste your full MCP URL.",
     },
     unverified: {
-      icon: AlertTriangle,
+      kind: "attention",
       title: "Not verified yet",
       detail: "We'll try to connect; you may need to finish setup manually.",
     },
   };
   const c = COPY[tier];
-  const Icon = c.icon;
   return (
     <div className="space-y-2">
       <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
-        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <StatusIndicator
+          kind={c.kind}
+          size="sm"
+          className="text-sm font-medium"
+        >
+          {c.title}
+        </StatusIndicator>
         <div className="min-w-0">
-          <p className="text-sm font-medium">{c.title}</p>
           <p className="text-xs text-muted-foreground">{c.detail}</p>
         </div>
       </div>
     </div>
-  );
-}
-
-function CustomOAuthApp({
-  connecting,
-  onConnect,
-}: {
-  connecting: boolean;
-  onConnect: (credentials: CustomOAuthAppInput) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [credentials, setCredentials] = useState<CustomOAuthAppInput | null>(
-    null
-  );
-  const ready = Boolean(
-    credentials &&
-      Boolean(credentials.client_id || credentials.client_id_secret_id) &&
-      Boolean(credentials.client_secret || credentials.client_secret_secret_id)
-  );
-
-  return (
-    <details
-      className="group rounded-lg border border-border/60"
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary className="cursor-pointer list-none px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground">
-        Advanced
-      </summary>
-      <div className="space-y-3 border-t border-border/60 px-3 py-3">
-        <p className="text-xs text-muted-foreground">
-          Use your own OAuth app credentials instead of the AgentArea app.
-        </p>
-        {/* Mounted only once opened, so closed cards don't each fetch secrets. */}
-        {open && (
-          <CustomOAuthAppFields
-            loadSecrets={listWorkspaceSecretsAction}
-            onChange={setCredentials}
-            disabled={connecting}
-          />
-        )}
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!ready || connecting}
-          onClick={() => credentials && onConnect(credentials)}
-        >
-          Connect with custom app
-        </Button>
-      </div>
-    </details>
   );
 }
 
@@ -1857,11 +1821,14 @@ function BundleContents({ spec }: { spec: RawSpec }) {
                 const allowed = agentAllowedTools(String(a.key ?? ""));
                 if (allowed.length === 0) return null;
                 return (
-                  <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
-                    <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                  <StatusIndicator
+                    kind="attention"
+                    size="sm"
+                    className="text-[11px]"
+                  >
                     Tools locked to{" "}
                     <span className="font-medium">{allowed.join(", ")}</span>
-                  </p>
+                  </StatusIndicator>
                 );
               })()}
             </div>
@@ -2014,7 +1981,9 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
       .catch((e: unknown) => {
         console.error("Failed to load workspace agents", e);
         if (active) {
-          setAgentsError(`${tBundle("agentsLoadFailed")}: ${formatApiError(e)}`);
+          setAgentsError(
+            `${tBundle("agentsLoadFailed")}: ${formatApiError(e)}`
+          );
         }
       });
     return () => {
@@ -2063,10 +2032,9 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
   if (phase === "done" && result) {
     return (
       <div className="flex flex-col items-start gap-1.5 md:items-end">
-        <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
-          <CheckCircle2 className="h-4 w-4" />
+        <StatusIndicator kind="done" size="sm" className="font-medium">
           Added
-        </span>
+        </StatusIndicator>
         <Button asChild variant="outline" size="sm">
           <Link href={result.href}>{result.label}</Link>
         </Button>
@@ -2099,10 +2067,9 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
                   </Button>
                 </div>
               ) : agents === null ? (
-                <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <StatusIndicator kind="running" size="sm">
                   Loading…
-                </div>
+                </StatusIndicator>
               ) : (
                 <>
                   <CommandEmpty>
@@ -2142,9 +2109,13 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
         Add to workspace
       </StartAgentButton>
       {phase === "error" && (
-        <span className="max-w-[15rem] text-xs text-red-600 md:text-right dark:text-red-400">
+        <StatusIndicator
+          kind="failed"
+          size="sm"
+          className="max-w-[15rem] text-xs md:text-right"
+        >
           {message}
-        </span>
+        </StatusIndicator>
       )}
     </div>
   );
@@ -2419,10 +2390,9 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
   }
   if (files === null) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
+      <StatusIndicator kind="running" size="sm">
         Loading skill…
-      </div>
+      </StatusIndicator>
     );
   }
   if (files.length === 0) return null;
@@ -2434,10 +2404,9 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
   const pane = (
     <div className="max-h-[480px] min-w-0 overflow-auto rounded-lg border border-border/60 bg-muted/20 p-4">
       {!body ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
+        <StatusIndicator kind="running" size="sm">
           Loading…
-        </div>
+        </StatusIndicator>
       ) : body.kind === "md" ? (
         <Streamdown className="prose prose-sm max-w-none dark:prose-invert">
           {body.value}
@@ -2629,30 +2598,47 @@ function CatalogCardSkeleton() {
   );
 }
 
-// Mirrors CatalogTable rows: icon + title + (md) description.
+// Mirrors CATALOG_COLUMNS so the table does not shift when entries arrive.
+const SKELETON_COLUMNS: Column<{ id: number }>[] = [
+  {
+    header: "Name",
+    accessor: "title",
+    headerClassName: "w-[40%] md:w-[32%]",
+    render: () => (
+      <div className="flex items-center gap-2.5">
+        <div className="h-7 w-7 animate-pulse rounded-md bg-muted" />
+        <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+      </div>
+    ),
+  },
+  {
+    header: "Category",
+    accessor: "category",
+    headerClassName: "hidden w-[200px] sm:table-cell",
+    cellClassName: "hidden sm:table-cell",
+    render: () => (
+      <div className="h-4 w-24 animate-pulse rounded bg-muted/60" />
+    ),
+  },
+  {
+    header: "Description",
+    accessor: "description",
+    headerClassName: "hidden md:table-cell",
+    cellClassName: "hidden md:table-cell",
+    render: () => (
+      <div className="h-3 w-64 animate-pulse rounded bg-muted/60" />
+    ),
+  },
+];
+
 function CatalogTableSkeleton() {
   return (
-    <div
-      className="overflow-hidden rounded-lg border border-border/60"
-      aria-hidden="true"
-    >
-      <table className="w-full text-sm">
-        <tbody>
-          {Array.from({ length: 8 }).map((_, i) => (
-            <tr key={i} className="border-b border-border/40 last:border-0">
-              <td className="w-10 py-2 pl-3 pr-0">
-                <div className="h-6 w-6 animate-pulse rounded bg-muted" />
-              </td>
-              <td className="py-2 pl-2 pr-3">
-                <div className="h-4 w-40 animate-pulse rounded bg-muted" />
-              </td>
-              <td className="hidden w-full max-w-0 py-2 pr-4 md:table-cell">
-                <div className="h-3 w-64 animate-pulse rounded bg-muted/60" />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div aria-hidden="true">
+      <Table
+        className="table-fixed"
+        data={Array.from({ length: 8 }, (_, id) => ({ id }))}
+        columns={SKELETON_COLUMNS}
+      />
     </div>
   );
 }

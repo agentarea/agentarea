@@ -49,6 +49,10 @@ jobs:
         uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
         with:
           base: ${{ github.event_name == 'pull_request' && github.base_ref || 'main' }}
+          # 'VERSION' changes only in a release commit. It is in every filter that gates an
+          # image, so that commit builds each component release-publish.yaml retags; a
+          # component whose own files the bump does not touch (mcp-base) was skipped and
+          # the retag found no X.Y.Z-<sha> source image (v0.0.16).
           filters: |
             platform:
               - 'agentarea-platform/**'
@@ -56,23 +60,34 @@ jobs:
               - 'agentarea-platform/libs/**'
             api:
               - 'agentarea-platform/apps/api/**'
+              - 'VERSION'
+              - 'agentarea-platform/pyproject.toml'
+              - 'agentarea-platform/uv.lock'
             worker:
               - 'agentarea-platform/apps/worker/**'
+              - 'VERSION'
+              - 'agentarea-platform/pyproject.toml'
+              - 'agentarea-platform/uv.lock'
             webapp:
               - 'agentarea-webapp/**'
+              - 'VERSION'
             cli:
               - 'agentarea-cli/**'
             mcp_manager:
               - 'agentarea-mcp-manager/**'
+              - 'VERSION'
             mcp_runner:
               - 'agentarea-mcp-manager/Dockerfile.runner'
               - 'agentarea-mcp-manager/cmd/activation-service/**'
             mcp_base:
               - 'mcp-servers/mcp-base/**'
+              - 'VERSION'
             operator:
               - 'agentarea-operator/**'
+              - 'VERSION'
             events:
               - 'agentarea-event-service/**'
+              - 'VERSION'
 
   version-check:
     runs-on: ubuntu-latest
@@ -709,7 +724,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26'
 
       # Must match GOLANGCI_LINT_VERSION in agentarea-mcp-manager/Makefile.
       - name: Install golangci-lint
@@ -737,7 +752,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26'
 
       # Must match GOLANGCI_LINT_VERSION in agentarea-event-service/Makefile.
       - name: Install golangci-lint
@@ -808,6 +823,30 @@ jobs:
       - name: Run tests
         run: make -C agentarea-operator check
 
+  # The pack mode that builds package images lives in the mcp-base image, so
+  # its tests run against the image's own pinned requirements.
+  mcp-base-test:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: |
+      always() && !cancelled() && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.mcp_base == 'true'
+      )
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        with:
+          version: "0.8.22"
+
+      - name: Run tests
+        working-directory: mcp-servers/mcp-base
+        run: uv run --no-project --python 3.12 --with-requirements requirements.txt --with pytest python -m pytest -q tests
+
   # Migration safety gate: a broken or conflicting migration is a top cause of
   # prod incidents. Prove migrations apply cleanly on a fresh DB, that there is
   # exactly one head (no unmerged branches), and that a downgrade roundtrips.
@@ -871,7 +910,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26'
 
       # Migrations heads/upgrade/roundtrip, then every schema-backed suite
       # (Python, MCP manager Go SQL, operator SQL). The list lives in
@@ -898,6 +937,7 @@ jobs:
       - webapp-test
       - cli-test
       - mcp-manager-lint-test
+      - mcp-base-test
       - events-lint-test
       - operator-test
       - docker-api

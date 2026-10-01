@@ -27,6 +27,7 @@ from agentarea_common.artifacts import (
     ArtifactIntegrityError,
     ArtifactService,
     DbArtifactEventRecorder,
+    InvalidArtifactPathError,
     WorkspaceConflictError,
     WorkspaceRepository,
     WorkspaceValidationError,
@@ -411,9 +412,13 @@ async def move_workspace_file(
     contents = await svc.list(workspace_id, prefix=f"{source}/")
     if not contents:
         raise HTTPException(status_code=404, detail="File not found")
-    for obj in contents:
-        await svc.move(workspace_id, obj.path, f"{destination}/{obj.path[len(source) + 1 :]}")
-    return MovedFileResponse(source=source, destination=destination, moved=len(contents))
+    # Refuse the whole move before copying anything if one child cannot land.
+    moves = [(obj.path, f"{destination}/{obj.path[len(source) + 1 :]}") for obj in contents]
+    for _, target in moves:
+        _resolve_upload_path(target.removesuffix("/"), "")
+    for child, target in moves:
+        await svc.move(workspace_id, child, target)
+    return MovedFileResponse(source=source, destination=destination, moved=len(moves))
 
 
 @router.delete(
@@ -445,7 +450,11 @@ async def delete_workspace_file(
         recorder=DbArtifactEventRecorder(),
         actor=ArtifactActor(user_id=user_context.user_id),
     )
-    if not await svc.exists(user_context.workspace_id, clean):
+    try:
+        exists = await svc.exists(user_context.workspace_id, clean)
+    except InvalidArtifactPathError:
+        exists = False
+    if not exists:
         raise HTTPException(status_code=404, detail="File not found")
     archived_path = await svc.archive(user_context.workspace_id, clean)
     return ArchivedFileResponse(path=clean, archived_path=archived_path)
@@ -466,16 +475,14 @@ async def restore_workspace_file(
     clean = file_path.lstrip("/")
     if not clean.startswith(TRASH_PREFIX):
         raise HTTPException(status_code=400, detail="Not an archived file")
-    # .trash/{timestamp}/{original path} — drop the two-segment archive header.
-    original = "/".join(PurePosixPath(clean).parts[2:])
-    if not original:
-        raise HTTPException(status_code=400, detail="Archived path carries no original path")
     svc = ArtifactService(
         recorder=DbArtifactEventRecorder(),
         actor=ArtifactActor(user_id=user_context.user_id),
     )
-    await svc.copy(user_context.workspace_id, clean, original)
-    await svc.delete(user_context.workspace_id, clean)
+    try:
+        original = await svc.restore(user_context.workspace_id, clean)
+    except (FileNotFoundError, InvalidArtifactPathError):
+        raise HTTPException(status_code=404, detail="File not found") from None
     return RestoredFileResponse(path=original, restored_from=clean)
 
 
@@ -538,7 +545,12 @@ async def stream_workspace_file(
             body, content_type, size = await _get_artifact_service().stream(
                 user_context.workspace_id, file_path
             )
-    except (ArtifactIntegrityError, FileNotFoundError, WorkspaceValidationError):
+    except (
+        ArtifactIntegrityError,
+        FileNotFoundError,
+        InvalidArtifactPathError,
+        WorkspaceValidationError,
+    ):
         raise HTTPException(status_code=404, detail="File not found") from None
 
     filename = PurePosixPath(file_path).name or "file.bin"
@@ -571,7 +583,7 @@ async def download_workspace_file(
             exists = not is_reserved_path(file_path) and await _get_artifact_service().exists(
                 user_context.workspace_id, file_path
             )
-    except WorkspaceValidationError:
+    except (InvalidArtifactPathError, WorkspaceValidationError):
         exists = False
     if not exists:
         raise HTTPException(status_code=404, detail="File not found")

@@ -42,12 +42,12 @@ class RuntimePolicyContract(NamedTuple):
 
 
 def parse_subject(ref: str) -> tuple[str, str, str | None]:
-    """Parse a Keto-style subject ref into (type, id, relation|None).
+    """Parse a ReBAC subject ref into (type, id, relation|None).
 
     Accepts ``type:id`` (SubjectID, e.g. ``user:alice``) or
     ``type:id#relation`` (SubjectSet/userset, e.g. ``group:eng#member``).
     Raises ValueError for anything else (notably a bare id with no type) so the
-    data stays ReBAC/Keto-native and raw ids cannot leak in.
+    data stays ReBAC-native and raw ids cannot leak in.
     """
     if not isinstance(ref, str) or ":" not in ref:
         raise ValueError(f"invalid subject ref {ref!r}: expected 'type:id' or 'type:id#relation'")
@@ -143,7 +143,7 @@ class ApprovalPolicy(BaseModel):
 
     requires_human_approval: bool | None = None
     escalation_rules: list[str] = Field(default_factory=list)
-    # Who may approve, as Keto-style subject refs: "user:<id>", "group:<id>",
+    # Who may approve, as ReBAC subject refs: "user:<id>", "group:<id>",
     # or a userset "<type>:<id>#<relation>". Empty = any workspace member (soft
     # default — see issue #198 / ADR-005 for the zero-trust posture decision).
     # ``approvers`` holds GLOBAL approvers (a requires_human_approval / tool:*

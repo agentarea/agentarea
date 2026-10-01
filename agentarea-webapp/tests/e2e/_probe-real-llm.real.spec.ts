@@ -7,22 +7,15 @@ import {
   uniqueLabel,
   type AuthedUser,
 } from "./helpers/real-stack";
+import { liveModelSkipReason, runLiveModel, seedModelChain } from "./helpers/scenarios";
 
 /**
  * TEMPORARY PROBE: does the core loop (provider -> model -> agent -> task ->
  * worker -> LLM -> result) actually work end to end with a REAL model?
- * Requires OPENROUTER_API_KEY in the env. Builtin catalog ids are global.
  */
-// Local Ollama: zero cost, zero rate-limit, reproducible. Worker (in Docker)
-// rewrites localhost -> host.docker.internal, so it reaches host Ollama.
-const OLLAMA_SPEC = "55cd391c-c58b-43fd-ae4b-99d4a00ea00c";
-const QWEN3_06B_SPEC = "368ea505-76c6-426e-ad6e-23458efbfc1d";
-
 test.describe("PROBE real LLM end-to-end", () => {
-  test.skip(
-    process.env.PLAYWRIGHT_REAL_STACK !== "1" || !process.env.OPENROUTER_API_KEY,
-    "needs PLAYWRIGHT_REAL_STACK=1 and OPENROUTER_API_KEY"
-  );
+  test.skip(process.env.PLAYWRIGHT_REAL_STACK !== "1", "Set PLAYWRIGHT_REAL_STACK=1");
+  test.skip(!runLiveModel, liveModelSkipReason);
 
   let user: AuthedUser;
   test.beforeAll(async () => {
@@ -35,27 +28,7 @@ test.describe("PROBE real LLM end-to-end", () => {
   test("runs a real task and gets a real result", async ({ request }) => {
     test.setTimeout(120_000);
 
-    const specId = QWEN3_06B_SPEC;
-
-    const cfg = await authedRequest(request, user, "post", "/v1/provider-configs/", {
-      data: {
-        provider_spec_id: OLLAMA_SPEC,
-        name: uniqueLabel("probe-ollama"),
-        endpoint_url: "http://localhost:11434",
-      },
-    });
-    expect(cfg.ok(), `provider-config: ${cfg.status()} ${JSON.stringify(await responseBody(cfg))}`).toBeTruthy();
-    const cfgId = (await cfg.json()).id;
-
-    const inst = await authedRequest(request, user, "post", "/v1/model-instances/", {
-      data: {
-        provider_config_id: cfgId,
-        model_spec_id: specId,
-        name: uniqueLabel("probe-instance"),
-      },
-    });
-    expect(inst.ok(), `model-instance: ${inst.status()} ${JSON.stringify(await responseBody(inst))}`).toBeTruthy();
-    const instId = (await inst.json()).id;
+    const { modelInstanceId: instId } = await seedModelChain(request, user, "probe");
 
     const agent = await authedRequest(request, user, "post", "/v1/agents/", {
       data: {

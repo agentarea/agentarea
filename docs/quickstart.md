@@ -117,8 +117,8 @@ The services you will actually interact with:
 | Mailpit | 8025 | Catches sign-up emails locally; SMTP stays internal |
 | OpenFGA | 8088 / 8089 | Authorization, HTTP and gRPC |
 
-The dev stack additionally runs Keto, OpenFGA and Hydra, which the production
-Compose file does not.
+The dev stack additionally runs Hydra, which the production Compose file does
+not.
 
 ## Stop the stack
 

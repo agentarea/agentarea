@@ -13,7 +13,6 @@ turns into an exposure, and answering "nothing" would look like data loss.
 
 from __future__ import annotations
 
-from ..rebac.openfga_client import OpenFGAClient
 from ..rebac.ownership import ResourceOwnershipError, resolve_graph_client
 
 
@@ -30,16 +29,9 @@ async def readable_resource_ids(user_id: str) -> set[str]:
     them directly.
     """
     try:
-        resolved = resolve_graph_client()
+        client = resolve_graph_client()
     except ResourceOwnershipError as exc:
         raise ResourceVisibilityError(str(exc)) from exc
-    if resolved is None:
-        raise ResourceVisibilityError("no access-control backend is configured")
-    client, backend = resolved
-    if not isinstance(client, OpenFGAClient):
-        raise ResourceVisibilityError(
-            f"{backend} cannot enumerate readable resources; list filtering needs OpenFGA"
-        )
     return set(
         await client.list_objects(
             namespace="resource",

@@ -2101,6 +2101,56 @@
         "title": "CatalogBrowseResponse",
         "type": "object"
       },
+      "CatalogConnectionPreflight": {
+        "description": "What the connect form needs to know before it offers Connect.\n\n``ready`` \u2014 this installation holds an OAuth app for the provider.\n``oauth_app_required`` \u2014 the user must register their own app first.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "redirect_uri": {
+            "title": "Redirect Uri",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "oauth_app_required"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "name",
+          "status",
+          "detail",
+          "redirect_uri"
+        ],
+        "title": "CatalogConnectionPreflight",
+        "type": "object"
+      },
       "CatalogConnectionRequest": {
         "additionalProperties": false,
         "description": "Connect with AgentArea credentials, or override them from Advanced.",
@@ -2808,6 +2858,20 @@
             "maximum": 1000.0,
             "minimum": 0.0,
             "title": "Additional Iterations",
+            "type": "integer"
+          },
+          "additional_tokens": {
+            "default": 0,
+            "maximum": 10000000.0,
+            "minimum": 0.0,
+            "title": "Additional Tokens",
+            "type": "integer"
+          },
+          "additional_tool_calls": {
+            "default": 0,
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Additional Tool Calls",
             "type": "integer"
           }
         },
@@ -6033,6 +6097,17 @@
             "title": "Is Public",
             "type": "boolean"
           },
+          "managed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Managed By"
+          },
           "model_display_name": {
             "anyOf": [
               {
@@ -6099,6 +6174,13 @@
               }
             ],
             "title": "Provider Name"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
           },
           "updated_at": {
             "title": "Updated At",
@@ -19457,6 +19539,70 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/connections/catalog/{item_id}/preflight": {
+      "get": {
+        "description": "Report whether a catalog connection can use the platform OAuth app.",
+        "operationId": "preflight_catalog_item_v1_connections_catalog__item_id__preflight_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogConnectionPreflight"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preflight Catalog Item",
+        "tags": [
+          "v1",
+          "protected",
+          "connections"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/connections/oauth/apps/{provider_key}": {
       "put": {
         "description": "Configure one platform-wide OAuth app without exposing it to tenants.",
@@ -29497,6 +29643,18 @@
             }
           },
           {
+            "description": "Merge in catalog skills not installed in the workspace",
+            "in": "query",
+            "name": "include_catalog",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Merge in catalog skills not installed in the workspace",
+              "title": "Include Catalog",
+              "type": "boolean"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
@@ -30713,7 +30871,7 @@
     },
     "/v1/workspaces/{workspace}/tasks/{task_id}/continue": {
       "post": {
-        "description": "Grant more iterations or budget to a task waiting on a hard limit.",
+        "description": "Grant more iterations, budget, tokens or tool calls to a task waiting on a hard limit.",
         "operationId": "continue_task_execution_v1_tasks__task_id__continue_post",
         "parameters": [
           {

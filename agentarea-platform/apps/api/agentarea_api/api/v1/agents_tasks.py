@@ -38,9 +38,11 @@ from agentarea_common.channel_origin import reject_channel_origin
 from agentarea_common.config import get_settings
 from agentarea_common.events.contract import (
     EXECUTION_FINISHED,
+    LLM_CHUNK,
     TASK_CANCELLED,
     TASK_COMPLETED,
     TASK_FAILED,
+    canonical_type,
 )
 from agentarea_common.money import ZERO, Money, serialize_money
 from agentarea_common.utils.types import UtcDatetime
@@ -56,7 +58,7 @@ from agentarea_tasks.domain.statuses import TaskStatus
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
 from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig, require_future_instant
 from agentarea_tasks.task_service import TaskService
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import text
@@ -260,8 +262,19 @@ class TaskCommandPayload(BaseModel):
 class ContinueTaskPayload(BaseModel):
     additional_iterations: int = Field(default=0, ge=0, le=1000)
     additional_budget_usd: Money | None = Field(default=None, gt=ZERO)
+    additional_tokens: int = Field(default=0, ge=0, le=10_000_000)
+    additional_tool_calls: int = Field(default=0, ge=0, le=10_000)
 
     model_config = {"extra": "forbid"}
+
+    @property
+    def grants_nothing(self) -> bool:
+        return (
+            self.additional_iterations == 0
+            and self.additional_budget_usd is None
+            and self.additional_tokens == 0
+            and self.additional_tool_calls == 0
+        )
 
 
 @global_tasks_router.post(
@@ -274,9 +287,9 @@ async def continue_task_execution(
     user_context: UserContextDep,
     task_service: TaskService = Depends(get_task_service),
 ):
-    """Grant more iterations or budget to a task waiting on a hard limit."""
+    """Grant more iterations, budget, tokens or tool calls to a task waiting on a hard limit."""
     _ = user_context
-    if payload.additional_iterations == 0 and payload.additional_budget_usd is None:
+    if payload.grants_nothing:
         raise HTTPException(
             status_code=422,
             detail="At least one continuation resource must be granted",
@@ -286,6 +299,8 @@ async def continue_task_execution(
         task_id,
         additional_iterations=payload.additional_iterations,
         additional_budget_usd=payload.additional_budget_usd,
+        additional_tokens=payload.additional_tokens,
+        additional_tool_calls=payload.additional_tool_calls,
     )
     if result.get("reason") == "task_not_found":
         raise HTTPException(status_code=404, detail="Task not found")
@@ -293,7 +308,7 @@ async def continue_task_execution(
         raise HTTPException(
             status_code=409,
             detail={
-                "message": "Task is not waiting for continuation",
+                "message": "Continuation was not accepted",
                 "reason": result.get("reason", "continuation_rejected"),
             },
         )
@@ -602,18 +617,23 @@ async def _tail_task_events_sse(
     agent_id: UUID,
     execution_id: str | None,
     *,
-    workspace_id: str,
+    user_context: UserContext,
     emit_connected: bool = True,
     include_chunks: bool = True,
+    last_event_id: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """Stream a task's events as SSE: catch-up (DB) then live (Redis stream).
 
     This is a CQRS read side (ADR-0018), not a poll of the write model. The
-    full history is replayed from the durable ``task_events`` table (catch-up),
+    history is replayed from the durable ``task_events`` table (catch-up),
     then new events are tailed live from the per-task Redis stream the worker
     XADDs to. Dedup by event id makes the catch-up->live hand-off race-free, so
     a fast task whose events land before the reader attaches loses nothing
     (the old reason this used DB polling) — without the 0.25s poll.
+
+    Durable events carry their stored id as the SSE ``id``, so a reconnecting
+    EventSource sends it back as ``Last-Event-ID`` and resumes after it. Chunks
+    are stream-only and carry none.
     """
     from agentarea_api.api.v1.task_event_feed import open_task_event_feed
 
@@ -634,10 +654,11 @@ async def _tail_task_events_sse(
     # llm.call.chunk events.
     async for env in open_task_event_feed(
         task_id,
-        workspace_id=workspace_id,
+        user_context=user_context,
         terminal_types=frozenset(_TERMINAL_EVENT_TYPES),
         include_chunks=include_chunks,
         follow_execution=True,
+        last_event_id=last_event_id,
     ):
         sse_event = {
             "event_type": env.event_type,
@@ -645,7 +666,10 @@ async def _tail_task_events_sse(
             "timestamp": env.timestamp,
             "data": _filter_domain_fields(dict(env.data)),
         }
-        yield _format_sse_event(env.event_type, sse_event)
+        durable = canonical_type(env.event_type) != LLM_CHUNK
+        yield _format_sse_event(
+            env.event_type, sse_event, event_id=env.event_id if durable else None
+        )
 
 
 @router.post(
@@ -776,7 +800,7 @@ async def create_task_for_agent_with_stream(
                     task.id,
                     agent_id,
                     task.execution_id,
-                    workspace_id=user_context.workspace_id,
+                    user_context=user_context,
                     emit_connected=False,
                 ):
                     yield chunk
@@ -2221,6 +2245,7 @@ async def list_pending_escalations(
 async def stream_task_events(
     agent_id: UUID,
     task_id: UUID,
+    request: Request,
     user_context: UserContextDep,
     include_chunks: bool = Query(
         True, description="Include incremental llm.call.chunk token events in the stream"
@@ -2245,8 +2270,9 @@ async def stream_task_events(
                     task_id,
                     agent_id,
                     task.execution_id,
-                    workspace_id=user_context.workspace_id,
+                    user_context=user_context,
                     include_chunks=include_chunks,
+                    last_event_id=request.headers.get("last-event-id"),
                 ):
                     yield chunk
 
@@ -2351,9 +2377,10 @@ def _filter_domain_fields(data: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in data.items() if k not in ("original_event_type", "original_data")}
 
 
-def _format_sse_event(event_type: str, data: dict[str, Any]) -> str:
+def _format_sse_event(event_type: str, data: dict[str, Any], event_id: str | None = None) -> str:
     """Format data as Server-Sent Event."""
     import json
 
     event_data = json.dumps(data)
-    return f"event: {event_type}\ndata: {event_data}\n\n"
+    id_line = f"id: {event_id}\n" if event_id else ""
+    return f"{id_line}event: {event_type}\ndata: {event_data}\n\n"

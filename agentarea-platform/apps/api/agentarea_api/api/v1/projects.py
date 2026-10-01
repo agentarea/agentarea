@@ -11,6 +11,7 @@ from agentarea_common.artifacts import (
     ArtifactActor,
     ArtifactService,
     DbArtifactEventRecorder,
+    InvalidArtifactPathError,
     secure_download_headers,
 )
 from agentarea_common.artifacts.workspace_writes import plan_uploads
@@ -430,7 +431,7 @@ async def stream_project_file(
     full_path = _project_path(project_id, file_path)
     try:
         data, content_type = await svc.get(user_context.workspace_id, full_path)
-    except FileNotFoundError:
+    except (FileNotFoundError, InvalidArtifactPathError):
         raise HTTPException(status_code=404, detail="File not found") from None
 
     filename = PurePosixPath(file_path).name or "file.bin"
@@ -458,7 +459,11 @@ async def download_project_file(
 
     svc = ArtifactService()
     full_path = _project_path(project_id, file_path)
-    if not await svc.exists(user_context.workspace_id, full_path):
+    try:
+        exists = await svc.exists(user_context.workspace_id, full_path)
+    except InvalidArtifactPathError:
+        exists = False
+    if not exists:
         raise HTTPException(status_code=404, detail="File not found")
     url = await _project_file_download_url(user_context, project_id, file_path)
     return ProjectFileDownloadResponse(url=url, path=file_path)
@@ -486,4 +491,7 @@ async def delete_project_file(
         recorder=DbArtifactEventRecorder(),
         actor=ArtifactActor(user_id=user_context.user_id),
     )
-    await svc.delete(user_context.workspace_id, _project_path(project_id, file_path))
+    try:
+        await svc.delete(user_context.workspace_id, _project_path(project_id, file_path))
+    except InvalidArtifactPathError:
+        raise HTTPException(status_code=404, detail="File not found") from None

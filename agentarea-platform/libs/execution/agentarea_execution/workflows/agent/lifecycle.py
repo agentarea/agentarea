@@ -8,20 +8,23 @@ from temporalio.exceptions import ApplicationError
 with workflow.unsafe.imports_passed_through():
     from agentarea_common.money import serialize_money
 
+    from ..models import Message
+
 
 from ...models import UpdateTaskStatusRequest
 from ..constants import (
     ACTIVITY_TIMEOUT,
     CONTINUATION_TIMEOUT,
-    DEFAULT_RETRY_ATTEMPTS,
     Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import make_retry_policy
+from ..retry import bookkeeping_retry_policy
 from .budget import MONTHLY_CAP_FAILURE_REASON
 from .continue_as_new import ContinueAsNewMixin
+from .limits import run_limit_reason
 from .llm_turn import LLMTurnMixin
+from .patches import LONG_RUN_LOOP_PATCH
 
 
 class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
@@ -38,8 +41,19 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
 
         self.state.status = ExecutionStatus.EXECUTING
         await self._check_monthly_spend_cap()
+        loop_checks = workflow.patched(LONG_RUN_LOOP_PATCH)
 
         while True:
+            # Every path back to the top — a follow-up turn, a granted
+            # continuation, a resume — honours a pause and rolls the history
+            # over when Temporal asks, not only the plain next-iteration path.
+            if loop_checks:
+                if self._paused:
+                    await workflow.wait_condition(lambda: not self._paused)
+                    await self._check_monthly_spend_cap()
+                if workflow.info().is_continue_as_new_suggested():
+                    await self._continue_as_new()
+
             # Increment iteration count
             self.state.current_iteration += 1
 
@@ -63,16 +77,17 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
             try:
                 await self._execute_iteration()
             except ApplicationError as error:
-                if error.type != "BudgetExceeded":
+                failure_reason = run_limit_reason(error)
+                if failure_reason is None:
                     raise
-                reason = (
-                    f"Budget exceeded ({self._budget.describe(self._budget.cost, 2)}/"
-                    f"{self._budget.describe(self._budget.budget_limit, 2)})"
+                self._answer_unanswered_tool_calls(
+                    "Not executed: the run stopped at a resource limit before this call ran."
                 )
-                if await self._await_continuation("budget_exceeded", reason):
+                reason = self._run_limit_message(failure_reason)
+                if await self._await_continuation(failure_reason, reason):
                     await self._check_monthly_spend_cap()
                     continue
-                self._record_unsuccessful_termination("budget_exceeded", reason)
+                self._record_unsuccessful_termination(failure_reason, reason)
                 break
 
             if self.state.validation_terminal:
@@ -152,7 +167,7 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=bookkeeping_retry_policy(),
         )
         self._events.add_event(
             EventTypes.WORKFLOW_AWAITING_CONTINUATION,
@@ -163,6 +178,10 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
                 "max_iterations": self.state.goal.max_iterations if self.state.goal else None,
                 "cost": serialize_money(self._budget.cost),
                 "budget_usd": serialize_money(self._budget.budget_limit),
+                "tokens_used": self.state.tokens_used,
+                "max_tokens": self._policy_limit("tokens", "max_tokens"),
+                "tool_calls_used": self.state.tool_calls_used,
+                "max_tool_calls_total": self._policy_limit("execution", "max_tool_calls_total"),
                 "continuation_timeout_seconds": int(CONTINUATION_TIMEOUT.total_seconds()),
             },
         )
@@ -201,7 +220,7 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=bookkeeping_retry_policy(),
         )
         self._continuation_failure_reason = None
         self._continuation_message = None
@@ -245,7 +264,7 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=bookkeeping_retry_policy(),
         )
 
     def _should_continue_execution(self) -> tuple[bool, str | None, str]:
@@ -310,6 +329,56 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
 
         # If we get here, execution should continue
         return True, None, "Continue execution"
+
+    def _policy_limit(self, section: str, key: str) -> int | None:
+        return ((self.state.effective_policy or {}).get(section) or {}).get(key)
+
+    def _run_limit_message(self, failure_reason: str) -> str:
+        """The user-facing explanation of why the run stopped at a limit."""
+        if failure_reason == "token_limit":
+            limit = self._policy_limit("tokens", "max_tokens")
+            return f"Token budget exhausted ({self.state.tokens_used}/{limit} tokens)"
+        if failure_reason == "tool_call_limit":
+            limit = self._policy_limit("execution", "max_tool_calls_total")
+            return f"Tool-call budget exhausted ({self.state.tool_calls_used}/{limit} calls)"
+        return (
+            f"Budget exceeded ({self._budget.describe(self._budget.cost, 2)}/"
+            f"{self._budget.describe(self._budget.budget_limit, 2)})"
+        )
+
+    def _answer_unanswered_tool_calls(self, content: str) -> None:
+        """Give every tool call of the last model turn a result.
+
+        A turn that stops before its tool calls ran would otherwise leave the
+        conversation with calls no result answers, and providers reject that on
+        the next model call.
+        """
+        last_assistant = next(
+            (
+                index
+                for index in range(len(self.state.messages) - 1, -1, -1)
+                if self.state.messages[index].role == "assistant"
+            ),
+            None,
+        )
+        if last_assistant is None:
+            return
+        answered = {
+            message.tool_call_id
+            for message in self.state.messages[last_assistant + 1 :]
+            if message.role == "tool"
+        }
+        for tool_call in self.state.messages[last_assistant].tool_calls or []:
+            call_id = tool_call.get("id") if isinstance(tool_call, dict) else None
+            if call_id and call_id not in answered:
+                self.state.messages.append(
+                    Message(
+                        role="tool",
+                        content=content,
+                        tool_call_id=call_id,
+                        name=(tool_call.get("function") or {}).get("name"),
+                    )
+                )
 
     def _record_unsuccessful_termination(self, failure_reason: str | None, message: str) -> None:
         """Persist a stable failure code and a user-facing explanation."""

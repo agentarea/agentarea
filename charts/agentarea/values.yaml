@@ -506,6 +506,14 @@ worker:
   # pod that passes readiness and then crashes cannot retire an old replica.
   minReadySeconds: 10
 
+  # -- Seconds a stopping worker lets in-flight activities (model calls, tools,
+  # event writes) finish before it cancels them. A cancelled model call is paid
+  # for twice when it reruns on another replica.
+  shutdownTimeout: 120
+  # -- Total budget the kubelet allows the worker before SIGKILL. Keep it above
+  # shutdownTimeout, or the drain is cut short.
+  terminationGracePeriodSeconds: 150
+
   # -- Rollout strategy. maxUnavailable 0 keeps every old replica until its
   # replacement is available: a new ReplicaSet that never becomes ready stalls
   # the rollout instead of taking the running workers down.
@@ -667,6 +675,16 @@ mcpManager:
     image:
       repository: agentarea/agentarea-mcp-base
       tag: "latest"
+  packageImages:
+    # -- Registry repository where immutable images built from npm/PyPI packages
+    # are stored. Leave empty to use the local Docker daemon with the Docker
+    # backend; Kubernetes and data-plane backends require a repository.
+    repository: ""
+    # -- Existing dockerconfigjson Secret used to authenticate package-image
+    # registry lookups and pushes. The Secret is mounted read-only in the manager.
+    registrySecret: ""
+    # -- Maximum time allowed for one package-image import.
+    importTimeout: "15m"
 
   # Run MCP containers on a remote host instead of in this cluster.
   #
@@ -1195,125 +1213,7 @@ registryReconcile:
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json
       recommendation_priority: 10
 
-# Ory Kratos Identity Server
-# Ory Keto (ReBAC) — powers Govern -> Policies -> Access (the relationship graph).
-# Disabled by default; enable to turn on real relationship-based access checks.
-keto:
-  enabled: false
-  replicaCount: 1
-  image:
-    repository: oryd/keto
-    tag: "v0.12.0"
-  database:
-    name: "keto"
-    createJob:
-      enabled: true
-  configMapOverrideName: ""
-  # Keto server config (DSN injected from the postgres secret via $DSN).
-  config: |
-    version: v0.12.0
-    dsn: ${DSN}
-    namespaces:
-      location: file:///etc/config/keto/namespaces.keto.ts
-    serve:
-      read:
-        host: 0.0.0.0
-        port: 4466
-      write:
-        host: 0.0.0.0
-        port: 4467
-      metrics:
-        host: 0.0.0.0
-        port: 4468
-    log:
-      level: info
-      format: json
-  # Ory Permission Language model. Keep in sync with
-  # config/auth/keto/namespaces.keto.ts (used by docker-compose dev).
-  namespaces: |
-    import { Namespace, Context, SubjectSet } from "@ory/keto-namespace-types"
-
-    class User implements Namespace {}
-
-    class Workspace implements Namespace {
-      related: {
-        members: (User | Agent)[]
-      }
-    }
-
-    class SkillCollection implements Namespace {
-      related: {
-        parents: Workspace[]
-        viewers: (User | Agent | SubjectSet<Workspace, "members">)[]
-        editors: (User | Agent | SubjectSet<Workspace, "members">)[]
-        owners: (User | Agent)[]
-      }
-      permits = {
-        use: (ctx: Context): boolean =>
-          this.related.viewers.includes(ctx.subject) ||
-          this.related.editors.includes(ctx.subject) ||
-          this.related.owners.includes(ctx.subject),
-        configure: (ctx: Context): boolean =>
-          this.related.editors.includes(ctx.subject) ||
-          this.related.owners.includes(ctx.subject),
-        manage: (ctx: Context): boolean =>
-          this.related.owners.includes(ctx.subject),
-      }
-    }
-
-    class Skill implements Namespace {
-      related: {
-        collections: SkillCollection[]
-        viewers: (User | Agent)[]
-        editors: (User | Agent)[]
-        owners: (User | Agent)[]
-      }
-      permits = {
-        use: (ctx: Context): boolean =>
-          this.related.viewers.includes(ctx.subject) ||
-          this.related.editors.includes(ctx.subject) ||
-          this.related.owners.includes(ctx.subject) ||
-          this.related.collections.traverse((c) => c.permits.use(ctx)),
-        configure: (ctx: Context): boolean =>
-          this.related.editors.includes(ctx.subject) ||
-          this.related.owners.includes(ctx.subject) ||
-          this.related.collections.traverse((c) => c.permits.configure(ctx)),
-        manage: (ctx: Context): boolean =>
-          this.related.owners.includes(ctx.subject) ||
-          this.related.collections.traverse((c) => c.permits.manage(ctx)),
-      }
-    }
-
-    class MCPServer implements Namespace {
-      related: {
-        connectors: (User | Agent | SubjectSet<Workspace, "members">)[]
-        operators: (User | Agent)[]
-      }
-      permits = {
-        connect: (ctx: Context): boolean =>
-          this.related.connectors.includes(ctx.subject) ||
-          this.related.operators.includes(ctx.subject),
-        manage: (ctx: Context): boolean =>
-          this.related.operators.includes(ctx.subject),
-      }
-    }
-
-    class Agent implements Namespace {
-      related: {
-        operators: (User | Agent | SubjectSet<Workspace, "members">)[]
-        owners: User[]
-      }
-      permits = {
-        operate: (ctx: Context): boolean =>
-          this.related.operators.includes(ctx.subject) ||
-          this.related.owners.includes(ctx.subject),
-        own: (ctx: Context): boolean => this.related.owners.includes(ctx.subject),
-      }
-    }
-
-# OpenFGA ReBAC permission server.
-# Preferred backend for agent/task/tool authorization. Disabled by default while
-# deployments migrate from Keto.
+# OpenFGA ReBAC permission server: the authorization graph backend.
 openfga:
   enabled: true
   replicaCount: 1
@@ -1341,6 +1241,7 @@ openfga:
     autoBootstrap: true
     autoApplyModel: true
 
+# Ory Kratos Identity Server
 kratos:
   enabled: true
   replicaCount: 1

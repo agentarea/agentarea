@@ -179,6 +179,15 @@ export const connectCatalogItem = async (
   return withStatus(result);
 };
 
+export const preflightCatalogConnection = async (itemId: string) => {
+  const result =
+    await sdk.preflightCatalogItemV1ConnectionsCatalogItemIdPreflightGet({
+      client: serverClient,
+      path: { item_id: itemId },
+    });
+  return withStatus(result);
+};
+
 export const analyzeBundle = async (body: AnalyzeRequest) => {
   const result = await sdk.analyzeBundleV1BundlesAnalyzePost({
     client: serverClient,
@@ -315,15 +324,8 @@ export const resumeAgentTask = async (agentId: string, taskId: string) => {
 
 export const continueAgentTask = async (
   taskId: string,
-  additionalIterations: number,
-  additionalBudgetUsd?: string
+  body: ContinueTaskPayload
 ) => {
-  const body: ContinueTaskPayload = {
-    additional_iterations: additionalIterations,
-  };
-  if (additionalBudgetUsd) {
-    body.additional_budget_usd = additionalBudgetUsd;
-  }
   const { data, error } =
     await sdk.continueTaskExecutionV1TasksTaskIdContinuePost({
       client: serverClient,
@@ -895,8 +897,13 @@ type ListSkillsOptions = {
 
 type ListSkillsError = HttpValidationError | undefined;
 
+/**
+ * Unpaginated, this is the workspace's own skills and never the catalog: the
+ * catalog holds ~150k skills, and walking it page by page cost ~1,500 requests
+ * per call. Catalog skills are browsed paged, in Explore.
+ */
 export async function listSkills(
-  options: ListSkillsOptions & { paginated: true }
+  options: ListSkillsOptions & { paginated: true; include_catalog?: boolean }
 ): Promise<{
   data: PaginatedResponseSkillResponse | undefined;
   error: ListSkillsError;
@@ -905,12 +912,19 @@ export async function listSkills(
   options?: ListSkillsOptions & { paginated?: false }
 ): Promise<{ data: SkillResponse[]; error: ListSkillsError }>;
 export async function listSkills(
-  options: ListSkillsOptions & { paginated?: boolean } = {}
+  options: ListSkillsOptions & {
+    paginated?: boolean;
+    include_catalog?: boolean;
+  } = {}
 ) {
   const pageSize = options.page_size || (options.paginated ? 50 : 100);
+  const includeCatalog = options.paginated
+    ? (options.include_catalog ?? true)
+    : false;
   const query = (page: number) => ({
     page,
     page_size: pageSize,
+    include_catalog: includeCatalog,
     ...(options.search ? { search: options.search } : {}),
     ...(options.source_type ? { source_type: options.source_type } : {}),
     ...(options.network_scope ? { network_scope: options.network_scope } : {}),

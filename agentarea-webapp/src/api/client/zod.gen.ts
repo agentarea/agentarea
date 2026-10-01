@@ -362,6 +362,23 @@ export const zBundleSkill = z.object({
 });
 
 /**
+ * CatalogConnectionPreflight
+ *
+ * What the connect form needs to know before it offers Connect.
+ *
+ * ``ready`` — this installation holds an OAuth app for the provider.
+ * ``oauth_app_required`` — the user must register their own app first.
+ */
+export const zCatalogConnectionPreflight = z.object({
+  description: z.string().nullish(),
+  detail: z.string(),
+  item_id: z.string().uuid(),
+  name: z.string(),
+  redirect_uri: z.string(),
+  status: z.enum(["ready", "oauth_app_required"]),
+});
+
+/**
  * CatalogConnectionRequest
  *
  * Connect with AgentArea credentials, or override them from Advanced.
@@ -547,6 +564,20 @@ export const zContinueTaskPayload = z.object({
     .int()
     .gte(0)
     .lte(1000)
+    .optional()
+    .default(0),
+  additional_tokens: z
+    .number()
+    .int()
+    .gte(0)
+    .lte(10000000)
+    .optional()
+    .default(0),
+  additional_tool_calls: z
+    .number()
+    .int()
+    .gte(0)
+    .lte(10000)
     .optional()
     .default(0),
 });
@@ -1322,6 +1353,7 @@ export const zModelInstanceResponse = z.object({
   id: z.string(),
   is_active: z.boolean(),
   is_public: z.boolean(),
+  managed_by: z.string().nullish(),
   model_display_name: z.string().nullish(),
   model_name: z.string().nullish(),
   model_spec_id: z.string(),
@@ -1330,6 +1362,7 @@ export const zModelInstanceResponse = z.object({
   provider_icon_url: z.string().nullish(),
   provider_key: z.string().nullish(),
   provider_name: z.string().nullish(),
+  tags: z.array(z.string()).optional(),
   updated_at: z.string(),
 });
 
@@ -4254,6 +4287,17 @@ export const zConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostPath =
 export const zConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponse =
   zCatalogConnectionResponse;
 
+export const zPreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetPath =
+  z.object({
+    item_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zPreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponse =
+  zCatalogConnectionPreflight;
+
 export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutBody =
   zManagedOAuthAppRequest;
 
@@ -5682,6 +5726,7 @@ export const zListSkillsV1SkillsGetQuery = z.object({
   source_type: z.string().nullish(),
   network_scope: z.string().nullish(),
   from_registry: z.boolean().nullish(),
+  include_catalog: z.boolean().optional().default(true),
   page: z.number().int().gte(1).lte(1000000).optional().default(1),
   page_size: z.number().int().gte(1).lte(100).optional().default(50),
   search: z.string().nullish(),

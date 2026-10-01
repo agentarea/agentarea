@@ -1,6 +1,7 @@
 """Integration tests for TaskEvent functionality."""
 
-from uuid import UUID, uuid4
+from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -74,7 +75,9 @@ class TestTaskEventRepositoryIntegration:
         task_id = uuid4()
         event = TaskEvent.create_workflow_event(
             task_id=task_id,
+            event_id=uuid4(),
             event_type="LLMCallStarted",
+            timestamp=datetime.now(UTC),
             data={"model": "gpt-4", "tokens": 150},
             workspace_id="test-workspace",
             created_by="workflow",
@@ -112,21 +115,27 @@ class TestTaskEventRepositoryIntegration:
         events = [
             TaskEvent.create_workflow_event(
                 task_id=task_id,
+                event_id=uuid4(),
                 event_type="LLMCallStarted",
+                timestamp=datetime.now(UTC),
                 data={"model": "gpt-4"},
                 workspace_id="test-workspace",
                 created_by="test_user",
             ),
             TaskEvent.create_workflow_event(
                 task_id=task_id,
+                event_id=uuid4(),
                 event_type="LLMCallCompleted",
+                timestamp=datetime.now(UTC),
                 data={"tokens": 150},
                 workspace_id="test-workspace",
                 created_by="test_user",
             ),
             TaskEvent.create_workflow_event(
                 task_id=task_id,
+                event_id=uuid4(),
                 event_type="TaskCompleted",
+                timestamp=datetime.now(UTC),
                 data={"result": "success"},
                 workspace_id="test-workspace",
                 created_by="test_user",
@@ -158,21 +167,27 @@ class TestTaskEventRepositoryIntegration:
         events = [
             TaskEvent.create_workflow_event(
                 task_id=task_id_1,
+                event_id=uuid4(),
                 event_type="LLMCallStarted",
+                timestamp=datetime.now(UTC),
                 data={"model": "gpt-4"},
                 workspace_id="test-workspace",
                 created_by="test_user",
             ),
             TaskEvent.create_workflow_event(
                 task_id=task_id_2,
+                event_id=uuid4(),
                 event_type="LLMCallStarted",
+                timestamp=datetime.now(UTC),
                 data={"model": "claude-3"},
                 workspace_id="test-workspace",
                 created_by="test_user",
             ),
             TaskEvent.create_workflow_event(
                 task_id=task_id_1,
+                event_id=uuid4(),
                 event_type="TaskCompleted",
+                timestamp=datetime.now(UTC),
                 data={"result": "success"},
                 workspace_id="test-workspace",
                 created_by="test_user",
@@ -213,7 +228,9 @@ class TestTaskEventRepositoryIntegration:
         # Create events in different workspaces
         event1 = TaskEvent.create_workflow_event(
             task_id=task_id,
+            event_id=uuid4(),
             event_type="LLMCallStarted",
+            timestamp=datetime.now(UTC),
             data={"model": "gpt-4"},
             workspace_id="workspace1",
             created_by="test_user",
@@ -221,7 +238,9 @@ class TestTaskEventRepositoryIntegration:
 
         event2 = TaskEvent.create_workflow_event(
             task_id=task_id,
+            event_id=uuid4(),
             event_type="LLMCallStarted",
+            timestamp=datetime.now(UTC),
             data={"model": "claude-3"},
             workspace_id="workspace2",
             created_by="test_user",
@@ -257,7 +276,9 @@ class TestTaskEventServiceIntegration:
         # Create event using service
         created_event = await task_event_service.create_workflow_event(
             task_id=task_id,
+            event_id=uuid4(),
             event_type=event_type,
+            timestamp=datetime.now(UTC),
             data=data,
             workspace_id=workspace_id,
             created_by="integration_test",
@@ -277,46 +298,14 @@ class TestTaskEventServiceIntegration:
         assert retrieved_events[0].id == created_event.id
 
     @pytest.mark.asyncio
-    async def test_create_multiple_events_end_to_end(self, task_event_service, db_session):
-        """Test creating multiple events end-to-end."""
-        events_data = [
-            {
-                "task_id": str(uuid4()),
-                "event_type": "LLMCallStarted",
-                "data": {"model": "gpt-4"},
-                "workspace_id": "test-workspace",
-                "created_by": "integration_test",
-            },
-            {
-                "task_id": str(uuid4()),
-                "event_type": "LLMCallCompleted",
-                "data": {"tokens": 150},
-                "workspace_id": "test-workspace",
-                "created_by": "integration_test",
-            },
-        ]
-
-        # Create events using service
-        created_events = await task_event_service.create_multiple_events(events_data)
-        await db_session.commit()
-
-        # Verify events were created
-        assert len(created_events) == 2
-
-        # Verify each event can be retrieved
-        for i, event in enumerate(created_events):
-            task_id = UUID(events_data[i]["task_id"])
-            retrieved_events = await task_event_service.get_task_events(task_id)
-            assert len(retrieved_events) == 1
-            assert retrieved_events[0].id == event.id
-
-    @pytest.mark.asyncio
     async def test_get_events_by_type_end_to_end(self, task_event_service, db_session):
         """Test retrieving events by type end-to-end."""
         # Create events of different types
         await task_event_service.create_workflow_event(
             task_id=uuid4(),
+            event_id=uuid4(),
             event_type="LLMCallStarted",
+            timestamp=datetime.now(UTC),
             data={"model": "gpt-4"},
             workspace_id="test-workspace",
             created_by="test_user",
@@ -324,7 +313,9 @@ class TestTaskEventServiceIntegration:
 
         await task_event_service.create_workflow_event(
             task_id=uuid4(),
+            event_id=uuid4(),
             event_type="LLMCallStarted",
+            timestamp=datetime.now(UTC),
             data={"model": "claude-3"},
             workspace_id="test-workspace",
             created_by="test_user",
@@ -332,7 +323,9 @@ class TestTaskEventServiceIntegration:
 
         await task_event_service.create_workflow_event(
             task_id=uuid4(),
+            event_id=uuid4(),
             event_type="TaskCompleted",
+            timestamp=datetime.now(UTC),
             data={"result": "success"},
             workspace_id="test-workspace",
             created_by="test_user",

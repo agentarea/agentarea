@@ -231,13 +231,9 @@ project per resource, same-workspace edges only, an acyclic project graph, and
 each `role_assignment` attached to exactly one object.
 
 ## Limits
-- **The graph is off by default in code.** `ACCESS_CONTROL_BACKEND` defaults to
-  `disabled`, in which case the permission service is
-  `WorkspaceScopedPermissionService`, whose `check` returns `True`
-  unconditionally. The only boundary in that configuration is workspace scoping
-  in the repository layer. The shipped `docker-compose.dev.yaml` and the Helm
-  chart both set the backend to `openfga`, so a standard deployment has the graph
-  on — but a process started without those environment variables does not.
+- **The graph is required.** OpenFGA is the only backend, and the API and worker
+  refuse to start without it. There is no mode in which permission checks are
+  skipped.
 - **Seven call sites check, and one of them is a no-op.** `require_permission` is
   called on agent edit and delete, skill edit and delete, MCP server edit and
   delete, and model instance delete. The model instance call cannot deny

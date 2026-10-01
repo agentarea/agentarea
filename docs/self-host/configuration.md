@@ -190,7 +190,7 @@ are not rendered into environment variables.
 | `LOG_LEVEL` | fixed | `INFO` |
 | `CORE_API_URL` | the backend service, port 8000 | derived |
 | `SERVER_HOST` | fixed | `0.0.0.0` |
-| `SERVER_PORT` | fixed | `80` |
+| `SERVER_PORT` | fixed; the Service still answers on `mcpManager.service.port` | `8000` |
 | `BACKEND_TYPE` | fixed to `kubernetes` in `config.yaml` | `kubernetes` |
 | `KUBERNETES_ENABLED` | fixed | `true` |
 | `KUBERNETES_NAMESPACE` | the release namespace | derived |
@@ -211,6 +211,18 @@ are not rendered into environment variables.
 | `MCP_REQUEST_LEASE_TTL` | `mcpManager.serverless.requestLeaseTTL` | `90s` |
 | `MCP_GATEWAY_STARTUP_TIMEOUT` | `mcpManager.serverless.startupTimeout` | `5m` |
 | `MCP_GATEWAY_AUTH_SECRET` | optional; the gateway's shared secret | `""` |
+| `MCP_PACKAGE_REPOSITORY` | `mcpManager.packageImages.repository` | `""` |
+| `MCP_PACKAGE_IMPORT_TIMEOUT` | `mcpManager.packageImages.importTimeout` | `15m` |
+| `DOCKER_CONFIG` | `mcpManager.packageImages.registrySecret` | not set; `/etc/agentarea/mcp-registry` when a registry Secret is configured |
+
+An empty `MCP_PACKAGE_REPOSITORY` uses the local Docker image store only when
+the manager's backend is Docker; Kubernetes and data-plane backends require a
+repository.
+
+`mcpManager.packageImages.registrySecret` names an existing
+`kubernetes.io/dockerconfigjson` Secret. The manager projects its
+`.dockerconfigjson` key as `config.json` in a read-only mount at
+`/etc/agentarea/mcp-registry`, and `DOCKER_CONFIG` points at that directory.
 
 All four gateway durations are **required** — the manager refuses to start when
 one is missing or unparseable, and only `MCP_IDLE_TIMEOUT` may be zero
@@ -257,6 +269,16 @@ request's `Host` matches that origin, and the sandbox refuses to run unless it i
 embedded by `WEBAPP_PUBLIC_ORIGIN`. With `APPS_SANDBOX_ORIGIN` empty, or equal
 to the webapp origin, the Apps page lists apps but opens none. The ingress side
 is in [networking](/self-host/networking).
+
+Error reporting to Sentry (or a Sentry-compatible server such as GlitchTip) is
+off until you set `SENTRY_DSN` through `frontend.envVars`; `SENTRY_ENVIRONMENT`
+labels the events. Both are read at runtime, so one image serves every
+deployment. The frontend reports browser errors, errors caught by the page error
+boundaries, and server rendering and server action failures. Browser reports go
+through the frontend's own `/api/monitoring` route, which forwards only to the
+configured DSN and does not pass on the client IP. Events carry no user,
+cookies, headers or request bodies, and URLs lose their query string and
+fragment, which can hold invitation tokens and login flow ids.
 
 ### Application secrets (group `application`)
 

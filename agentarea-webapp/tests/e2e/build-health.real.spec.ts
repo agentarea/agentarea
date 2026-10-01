@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  appHref,
   createKratosUser,
   deleteKratosUser,
   installBrowserSession,
@@ -77,7 +78,7 @@ test.describe("Build health - every key route renders without a broken build", (
         }
       });
 
-      const response = await page.goto(`${baseURL}${route}`, {
+      const response = await page.goto(`${baseURL}${appHref(page, route)}`, {
         waitUntil: "commit",
         timeout: 30_000,
       });

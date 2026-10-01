@@ -61,12 +61,9 @@ async def seed_workspace(*, workspace_id: str, creator_user_id: str) -> None:
     a dependency on the governance domain.
     """
     try:
-        resolved = resolve_graph_client()
+        client = resolve_graph_client()
     except ResourceOwnershipError as exc:
         raise _as_http(exc) from exc
-    if resolved is None:
-        return
-    client, backend = resolved
 
     tuples = (
         RelationTuple(
@@ -90,6 +87,6 @@ async def seed_workspace(*, workspace_id: str, creator_user_id: str) -> None:
     )
     try:
         for relationship in tuples:
-            await write_tuple_idempotent(client, backend, relationship)
+            await write_tuple_idempotent(client, relationship)
     except ResourceOwnershipError as exc:
         raise _as_http(exc) from exc

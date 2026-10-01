@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type {
+  ContinueTaskPayload,
   CreateWalletRequest,
   CreateWorkspaceDirectoryRequest,
   FundWalletRequest,
@@ -196,14 +197,9 @@ export async function resumeAgentTaskAction(agentId: string, taskId: string) {
 
 export async function continueAgentTaskAction(
   taskId: string,
-  additionalIterations: number,
-  additionalBudgetUsd?: string
+  body: ContinueTaskPayload
 ) {
-  return await continueAgentTask(
-    taskId,
-    additionalIterations,
-    additionalBudgetUsd
-  );
+  return await continueAgentTask(taskId, body);
 }
 
 export async function sendTaskCommandAction(
@@ -293,7 +289,10 @@ type ListSkillsActionOptions = {
 };
 
 export async function listSkillsAction(
-  params: ListSkillsActionOptions & { paginated: true }
+  params: ListSkillsActionOptions & {
+    paginated: true;
+    include_catalog?: boolean;
+  }
 ): Promise<{
   data: PaginatedResponseSkillResponse | undefined;
   error: unknown;
@@ -302,7 +301,10 @@ export async function listSkillsAction(
   params?: ListSkillsActionOptions & { paginated?: false }
 ): Promise<{ data: SkillResponse[]; error: unknown }>;
 export async function listSkillsAction(
-  params: ListSkillsActionOptions & { paginated?: boolean } = {}
+  params: ListSkillsActionOptions & {
+    paginated?: boolean;
+    include_catalog?: boolean;
+  } = {}
 ): Promise<
   | { data: PaginatedResponseSkillResponse | undefined; error: unknown }
   | { data: SkillResponse[]; error: unknown }

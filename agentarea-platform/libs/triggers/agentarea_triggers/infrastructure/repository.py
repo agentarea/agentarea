@@ -54,6 +54,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, TriggerORM, user_context)
 
+    async def webhook_id_in_use(self, webhook_id: str) -> bool:
+        """Whether any trigger, in any workspace, already answers on ``webhook_id``."""
+        return await find_trigger_by_webhook_id(self.session, webhook_id) is not None
+
     async def get_trigger(self, id: UUID) -> Trigger | None:
         """Get a trigger by ID and convert to domain model."""
         trigger_orm = await self.get_by_id(id)

@@ -8,7 +8,7 @@ function row(
   key: ConnectionStateKey,
   usage?: ConnectionUsage
 ): ConnectionListRow {
-  return { name, _state: { key, tone: "neutral", at: null }, _usage: usage };
+  return { name, _state: { key, kind: "draft", at: null }, _usage: usage };
 }
 
 const rows = [

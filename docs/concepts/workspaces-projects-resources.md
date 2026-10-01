@@ -139,8 +139,8 @@ it. It also expresses inheritance natively — a resource inherits from its
 project, a project from its parent — which a flat role model can only simulate
 by expanding grants and then keeping the expansion current.
 
-The cost is real: authorization now depends on an external service (OpenFGA or
-Keto) being reachable, and a graph is harder to eyeball than a role column.
+The cost is real: authorization now depends on an external service (OpenFGA)
+being reachable, and a graph is harder to eyeball than a role column.
 Checks fail closed, which turns an authorization-service outage into denied
 requests rather than granted ones.
 

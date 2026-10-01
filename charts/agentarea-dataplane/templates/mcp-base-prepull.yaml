@@ -1,0 +1,53 @@
+{{- $mcpBaseImage := printf "%s:%s" .Values.mcpBase.image.repository .Values.mcpBase.image.tag }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "dataplane.fullname" . }}-mcp-base-prepull
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dataplane.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-base-prepull
+spec:
+  selector:
+    matchLabels:
+      {{- include "dataplane.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mcp-base-prepull
+  template:
+    metadata:
+      labels:
+        {{- include "dataplane.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mcp-base-prepull
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: pull-mcp-base
+          image: {{ $mcpBaseImage | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/sh", "-c", "true"]
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 1m
+              memory: 1Mi
+            limits:
+              cpu: 10m
+              memory: 16Mi

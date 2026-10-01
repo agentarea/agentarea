@@ -15,7 +15,7 @@ describe("getMcpConnectionState", () => {
     });
 
     expect(state.key).toBe("failing");
-    expect(state.tone).toBe("danger");
+    expect(state.kind).toBe("failed");
   });
 
   it("prefers the newer signal when the probe failed after the last good call", () => {
@@ -66,7 +66,7 @@ describe("getMcpConnectionState", () => {
     });
 
     expect(state.key).toBe("verifying");
-    expect(state.pulse).toBe(true);
+    expect(state.kind).toBe("running");
   });
 });
 

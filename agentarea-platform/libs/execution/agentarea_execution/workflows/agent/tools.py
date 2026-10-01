@@ -232,6 +232,8 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
             workflow.logger.info(f"MCP tool '{tool_name}' executed successfully")
 
         except Exception as e:
+            if self._is_cancellation(e):
+                raise
             workflow.logger.error(f"MCP tool call {tool_name} failed: {e}", exc_info=True)
 
             # Add error message to conversation
@@ -280,6 +282,8 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
                 retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
         except ActivityError as error:
+            if self._is_cancellation(error):
+                raise
             verdict = _governance_verdict(error)
             # An escalation of a call a human already approved is not asked
             # twice; it fails the call like any other activity error.

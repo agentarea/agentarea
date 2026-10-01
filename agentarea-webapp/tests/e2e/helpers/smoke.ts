@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { appHref } from "./real-stack";
 
 /**
  * Shared "did this route render without crashing" assertion for the
@@ -13,7 +14,10 @@ import { expect, type Page } from "@playwright/test";
 export async function assertRenders(page: Page, route: string) {
   let response = null;
   try {
-    response = await page.goto(route, { waitUntil: "commit", timeout: 25_000 });
+    response = await page.goto(appHref(page, route), {
+      waitUntil: "commit",
+      timeout: 25_000,
+    });
   } catch (error) {
     const message = String(error);
     if (message.includes("ERR_ABORTED")) {

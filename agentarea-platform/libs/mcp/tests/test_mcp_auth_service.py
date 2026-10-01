@@ -47,6 +47,7 @@ class _FakeClient:
     def __init__(self, resp: _FakeResp):
         self._resp = resp
         self.posted: dict | None = None
+        self.headers: dict | None = None
 
     async def __aenter__(self):
         return self
@@ -54,8 +55,9 @@ class _FakeClient:
     async def __aexit__(self, *args):
         return False
 
-    async def post(self, url, data=None, timeout=None):
+    async def post(self, url, data=None, timeout=None, headers=None, auth=None):
         self.posted = data
+        self.headers = headers
         return self._resp
 
 
@@ -236,6 +238,20 @@ class TestOAuth2Refresh:
         assert "client_secret" not in client.posted
         sm.set_secret.assert_called()  # persisted the rotated creds
 
+    async def test_refresh_asks_the_token_endpoint_for_json(self):
+        """GitHub answers form-encoded unless asked for JSON, as the code
+        exchange already does; without it every GitHub App connection breaks
+        when its first 8-hour token expires."""
+        svc, _, sm = _make_service()
+        sm.get_secret.return_value = json.dumps(
+            {"access_token": "old", "expires_at": 0, "refresh_token": "rt"}
+        )
+        client = _FakeClient(_FakeResp(200, {"access_token": "new", "expires_in": 28800}))
+        with patch("httpx.AsyncClient", lambda *a, **k: client):
+            await svc.get_auth_headers(_oauth_config())
+
+        assert client.headers == {"Accept": "application/json"}
+
     async def test_refresh_never_posts_credentials_to_a_non_public_token_url(self):
         from agentarea_common.utils.url_safety import UnsafeUrlError
 
@@ -328,6 +344,19 @@ class TestOAuth2Refresh:
             with pytest.raises(OAuthReauthRequiredError):
                 await svc.get_auth_headers(_oauth_config())
 
+
+    async def test_refresh_error_answered_with_200_requires_reauth(self):
+        """GitHub reports a spent refresh token as HTTP 200 with an error body;
+        that is a dead grant like any 4xx, not a missing access_token."""
+        svc, _, sm = _make_service()
+        sm.get_secret.return_value = json.dumps(
+            {"access_token": "old", "expires_at": 0, "refresh_token": "spent"}
+        )
+        client = _FakeClient(_FakeResp(200, {"error": "bad_refresh_token"}))
+        with patch("httpx.AsyncClient", lambda *a, **k: client):
+            with pytest.raises(OAuthReauthRequiredError, match="bad_refresh_token"):
+                await svc.get_auth_headers(_oauth_config())
+        sm.set_secret.assert_not_called()
 
 # ---------------------------------------------------------------------------
 # create / delete

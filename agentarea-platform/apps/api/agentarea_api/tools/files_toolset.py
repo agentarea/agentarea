@@ -11,6 +11,7 @@ from agentarea_common.artifacts import (
     ArtifactActor,
     ArtifactService,
     DbArtifactEventRecorder,
+    InvalidArtifactPathError,
 )
 from agentarea_common.artifacts.workspace_writes import MAX_UPLOADS_PER_PLAN, plan_uploads
 from agentarea_common.auth.context import UserContext
@@ -24,6 +25,13 @@ async def _workspace_file_download_url(user_context: UserContext, path: str) -> 
     base = get_app_settings().API_BASE_URL.rstrip("/")
     encoded_path = quote(path.lstrip("/"), safe="/")
     return f"{base}{await workspace_api_prefix(user_context)}/files/download/{encoded_path}"
+
+
+async def _exists(svc: ArtifactService, workspace_id: str, path: str) -> bool:
+    try:
+        return await svc.exists(workspace_id, path)
+    except InvalidArtifactPathError:
+        return False
 
 
 @toolset(
@@ -64,7 +72,7 @@ class FilesToolset(Toolset):
         """Get an AgentArea API download URL for a workspace file."""
         async with platform_read_context() as (_session, user_ctx, _repo, _broker, _secret):
             svc = ArtifactService()
-            if not await svc.exists(user_ctx.workspace_id, path):
+            if not await _exists(svc, user_ctx.workspace_id, path):
                 return json.dumps({"error": "File not found"})
             url = await _workspace_file_download_url(user_ctx, path)
             return json.dumps({"url": url, "path": path, "expires_in": expires_in})
@@ -101,7 +109,7 @@ class FilesToolset(Toolset):
         """Delete a workspace file."""
         async with platform_context() as (_session, user_ctx, _repo, _broker, _secret):
             svc = ArtifactService()
-            if not await svc.exists(user_ctx.workspace_id, path):
+            if not await _exists(svc, user_ctx.workspace_id, path):
                 return json.dumps({"deleted": False, "error": "File not found"})
             await svc.delete(user_ctx.workspace_id, path)
             return json.dumps({"deleted": True, "path": path})

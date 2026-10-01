@@ -20,7 +20,6 @@ def wire_di(
     deployment_mode: str = "oss",
     backend: str = "",
     openfga_impl: PermissionService | None = None,
-    keto_impl: PermissionService | None = None,
 ):
     """Simulate the startup wiring logic (mirrors apps/api + apps/worker main.py).
 
@@ -42,8 +41,6 @@ def wire_di(
     perm_factory = ExtensionRegistry.get_factory("permissions")
     if backend == "openfga" and openfga_impl is not None:
         container.register_singleton(PermissionService, openfga_impl)
-    elif backend == "keto" and keto_impl is not None:
-        container.register_singleton(PermissionService, keto_impl)
     elif perm_factory:
         container.register_factory(PermissionService, perm_factory)
     else:
@@ -88,8 +85,7 @@ def test_explicit_backend_shadows_extension():
     """An EXPLICIT ACCESS_CONTROL_BACKEND must win over an installed extension.
 
     Regression guard: a registered "permissions" extension used to be checked
-    first and silently overrode the configured backend (an installed keto
-    extension shadowed ACCESS_CONTROL_BACKEND=openfga, so OpenFGA never enforced).
+    first and silently overrode the configured backend, so OpenFGA never enforced.
     """
 
     class FakeExtensionPermissionService(PermissionService):

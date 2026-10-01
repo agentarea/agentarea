@@ -24,7 +24,7 @@ from ..constants import (
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import make_retry_policy
+from ..retry import bookkeeping_retry_policy, make_retry_policy
 from .budget import BudgetMixin
 
 
@@ -200,7 +200,7 @@ class CompletionMixin(BudgetMixin):
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=bookkeeping_retry_policy(),
         )
         if (
             self._interaction_contract_enabled
@@ -298,6 +298,8 @@ class CompletionMixin(BudgetMixin):
             if isinstance(result, dict):
                 result = ArtifactValidationResult.model_validate(result)
         except ActivityError as exc:
+            if self._is_cancellation(exc):
+                raise
             workflow.logger.error("Artifact validation activity failed: %s", exc, exc_info=True)
             result = ArtifactValidationResult(
                 state="unavailable",

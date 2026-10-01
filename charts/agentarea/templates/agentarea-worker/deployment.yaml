@@ -40,6 +40,7 @@ spec:
         {{- end }}
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.worker.terminationGracePeriodSeconds }}
       {{- with .Values.global.security.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
@@ -95,14 +96,8 @@ spec:
                   key: {{ include "agentarea.mcpGatewaySecretKey" . }}
             {{- include "agentarea.temporal.envs" . | nindent 12 }}
             {{- include "agentarea.worker.envs" . | nindent 12 }}
-            {{- if .Values.keto.enabled }}
-            - name: ACCESS_CONTROL_BACKEND
-              value: "keto"
-            - name: ACCESS_CONTROL_KETO_READ_URL
-              value: "http://{{ include "agentarea.fullname" . }}-keto-read:4466"
-            - name: ACCESS_CONTROL_KETO_WRITE_URL
-              value: "http://{{ include "agentarea.fullname" . }}-keto-write:4467"
-            {{- end }}
+            - name: WORKFLOW__TEMPORAL_GRACEFUL_SHUTDOWN_SECONDS
+              value: {{ .Values.worker.shutdownTimeout | quote }}
             {{- if .Values.openfga.enabled }}
             - name: ACCESS_CONTROL_BACKEND
               value: "openfga"

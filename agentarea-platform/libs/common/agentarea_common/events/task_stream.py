@@ -3,8 +3,9 @@
 The frontend SSE and A2A streaming serve a task's event feed. This is a CQRS
 read side, not a poll of the write model:
 
-- **Catch-up** replays the full history from the durable ``task_events`` table
-  (a snapshot loader supplied by the caller, which owns DB access).
+- **Catch-up** replays the history from the durable ``task_events`` table (a
+  snapshot loader supplied by the caller, which owns DB access). A reconnecting
+  client resumes after the last event it saw instead of replaying everything.
 - **Live** tails a per-task Redis stream (``EventStream`` broadcast read) for
   events appended after the snapshot.
 
@@ -21,7 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -35,6 +36,9 @@ logger = logging.getLogger(__name__)
 # Live-tail buffer cap for a per-task stream. Full history lives in the DB, so
 # this only needs to cover the snapshot->live hand-off plus recent live events.
 TASK_STREAM_MAXLEN = 4096
+# Refreshed on every append, so the stream of a finished or abandoned task
+# expires instead of living in Redis forever.
+TASK_STREAM_TTL_SECONDS = 24 * 60 * 60
 
 _SOURCE = "agentarea-worker"
 
@@ -80,46 +84,61 @@ async def publish_task_event(
 ) -> None:
     """XADD one task event to the per-task live stream (bounded retention).
 
-    Best-effort: a publish failure is logged, never raised — the durable record
-    is the DB, and live tailing is at-most-once by contract.
+    Raises on failure; the caller decides whether the event is worth retrying.
     """
-    try:
-        try:
-            occurred_at = datetime.fromisoformat(timestamp) if timestamp else datetime.now(UTC)
-        except ValueError:
-            occurred_at = datetime.now(UTC)
+    event = IntegrationEvent(
+        id=UUID(event_id) if event_id else uuid4(),
+        type=event_type,
+        source=_SOURCE,
+        subject=task_id,
+        time=datetime.fromisoformat(timestamp) if timestamp else datetime.now(UTC),
+        data=data,
+    )
+    await broker.submit(
+        topic_for(task_stream_name(task_id)),
+        encode(event),
+        maxlen=TASK_STREAM_MAXLEN,
+        ttl_seconds=TASK_STREAM_TTL_SECONDS,
+    )
 
-        event = IntegrationEvent(
-            id=UUID(event_id) if event_id else uuid4(),
-            type=event_type,
-            source=_SOURCE,
-            subject=task_id,
-            time=occurred_at,
-            data=data,
-        )
-        await broker.submit(
-            topic_for(task_stream_name(task_id)),
-            encode(event),
-            maxlen=TASK_STREAM_MAXLEN,
-        )
-    except Exception:
-        logger.exception("Failed to publish task event %s for task %s", event_type, task_id)
+
+def _ends_feed(env: TaskEventEnvelope, terminal: frozenset[str], follow_execution: bool) -> bool:
+    return canonical_type(env.event_type) in terminal and not (
+        follow_execution and env.data.get("execution_status") == "waiting"
+    )
+
+
+def _position(env: TaskEventEnvelope) -> tuple[datetime, str] | None:
+    if not env.timestamp:
+        return None
+    moment = datetime.fromisoformat(env.timestamp)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return moment, env.event_id
+
+
+def _is_after(env: TaskEventEnvelope, cursor: tuple[datetime, str] | None) -> bool:
+    position = _position(env)
+    return cursor is None or position is None or position > cursor
 
 
 async def iter_task_event_feed(
     *,
     stream: EventStream,
     task_id: str,
-    snapshot: Callable[[], Awaitable[list[TaskEventEnvelope]]],
+    snapshot: Callable[[], AsyncIterator[TaskEventEnvelope]],
     terminal_types: frozenset[str],
     exclude_types: frozenset[str] = frozenset(),
     follow_execution: bool = False,
+    resume_after: TaskEventEnvelope | None = None,
     max_wall_time_seconds: float = 30 * 60,
 ) -> AsyncIterator[TaskEventEnvelope]:
-    """Yield a task's events: full history (catch-up) then live, dedup'd.
+    """Yield a task's events: history (catch-up) then live, dedup'd.
 
     Stops after a terminal event or ``max_wall_time_seconds`` (so a stuck task
-    does not tail forever). ``snapshot`` returns the DB history in order.
+    does not tail forever). ``snapshot`` yields the DB history in order.
+    ``resume_after`` is the last durable event the client already has: the
+    snapshot must start after it, and live entries at or before it are skipped.
     ``exclude_types`` are silently dropped (e.g. a consumer that does not want
     high-volume incremental ``llm.call.chunk`` events) — this never contains a
     terminal type, so it cannot suppress feed termination.
@@ -134,15 +153,16 @@ async def iter_task_event_feed(
     terminal = frozenset(canonical_type(t) for t in terminal_types)
     excluded = frozenset(canonical_type(t) for t in exclude_types)
 
-    for env in await snapshot():
-        canonical = canonical_type(env.event_type)
-        if canonical in excluded or env.event_id in seen:
+    if resume_after is not None and _ends_feed(resume_after, terminal, follow_execution):
+        return
+    cursor = _position(resume_after) if resume_after is not None else None
+
+    async for env in snapshot():
+        if canonical_type(env.event_type) in excluded or env.event_id in seen:
             continue
         seen.add(env.event_id)
         yield env
-        if canonical in terminal and not (
-            follow_execution and env.data.get("execution_status") == "waiting"
-        ):
+        if _ends_feed(env, terminal, follow_execution):
             return
 
     # Live tail from the start of the retained stream; dedup against the
@@ -153,14 +173,15 @@ async def iter_task_event_feed(
         async with asyncio.timeout(max_wall_time_seconds):
             async for event in stream.read(stream=task_stream_name(task_id), from_offset="0"):
                 env = envelope_from_event(event)
-                canonical = canonical_type(env.event_type)
-                if canonical in excluded or env.event_id in seen:
+                if (
+                    canonical_type(env.event_type) in excluded
+                    or env.event_id in seen
+                    or not _is_after(env, cursor)
+                ):
                     continue
                 seen.add(env.event_id)
                 yield env
-                if canonical in terminal and not (
-                    follow_execution and env.data.get("execution_status") == "waiting"
-                ):
+                if _ends_feed(env, terminal, follow_execution):
                     return
                 if loop.time() >= deadline:
                     return

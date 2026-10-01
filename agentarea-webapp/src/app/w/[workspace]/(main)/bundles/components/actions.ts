@@ -4,6 +4,7 @@ import { z } from "zod";
 import type {
   AgentResponse,
   AnalyzeRequest,
+  CatalogConnectionPreflight,
   CatalogConnectionRequest,
   CatalogConnectionResponse,
   ImportPreview,
@@ -18,6 +19,7 @@ import {
   zAnalyzeBundleV1BundlesAnalyzePostBody,
   zAnalyzeBundleV1BundlesAnalyzePostResponse,
   zBrowseCatalogV1RegistriesCatalogBrowseGetResponse,
+  zCatalogConnectionPreflight,
   zCatalogConnectionRequest,
   zCatalogConnectionResponse,
   zGetAgentV1AgentsAgentIdGetResponse,
@@ -46,6 +48,7 @@ import {
   installSkill,
   listAgents,
   listModelInstances,
+  preflightCatalogConnection,
   updateAgent,
 } from "@/lib/api";
 import {
@@ -64,6 +67,9 @@ export type WorkspaceModel = Pick<
   | "model_display_name"
   | "provider_name"
   | "provider_icon_url"
+  | "is_active"
+  | "managed_by"
+  | "tags"
 >;
 
 // The reusable-secret list lives in @/lib/server-actions, where every Connect
@@ -161,6 +167,14 @@ export async function fetchCatalogItemAction(
   );
 }
 
+export async function catalogConnectionPreflightAction(
+  itemId: string
+): Promise<ActionResult<CatalogConnectionPreflight>> {
+  const { data, error, status } = await preflightCatalogConnection(itemId);
+  if (error || !data) return { error, status };
+  return checked(zCatalogConnectionPreflight, data, status);
+}
+
 export async function connectCatalogConnectionAction(
   itemId: string,
   input: CatalogConnectionRequest
@@ -224,6 +238,9 @@ export async function listActiveModelInstancesAction() {
           model_display_name: model.model_display_name,
           provider_name: model.provider_name,
           provider_icon_url: model.provider_icon_url,
+          is_active: model.is_active,
+          managed_by: model.managed_by,
+          tags: model.tags,
         }))
     : undefined;
   return { data, error: result.error, status: result.status };
@@ -249,7 +266,8 @@ export async function addCatalogSkillToAgentAction(
   agentId: string
 ): Promise<ActionResult<string>> {
   const installed = await installCatalogSkillAction(skillId);
-  if (!installed.data) return { error: installed.error, status: installed.status };
+  if (!installed.data)
+    return { error: installed.error, status: installed.status };
   const tenantSkillId = installed.data;
 
   const agentRes = await getAgent(agentId);

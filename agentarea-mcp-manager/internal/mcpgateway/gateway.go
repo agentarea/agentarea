@@ -333,24 +333,24 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		g.finishRequest(instanceID, requestID)
 	}()
 
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	proxy.FlushInterval = -1
-	originalDirector := proxy.Director
-	proxy.Director = func(outbound *http.Request) {
-		originalDirector(outbound)
-		outbound.URL.Path = target.Path
-		outbound.URL.RawPath = ""
-		outbound.Host = target.Host
-		if remoteHop {
-			// Set, never add: whatever the caller sent is replaced, so a client
-			// can neither read this credential nor smuggle its own to the data
-			// plane. The header exists only on this outgoing request.
-			outbound.Header.Set("Authorization", "Bearer "+g.remote.Token)
-		}
-	}
-	proxy.ErrorHandler = func(writer http.ResponseWriter, _ *http.Request, proxyErr error) {
-		g.logger.Warn("MCP upstream request failed", slog.String("instance_id", instanceID), slog.String("error", proxyErr.Error()))
-		http.Error(writer, "MCP upstream request failed", http.StatusBadGateway)
+	proxy := &httputil.ReverseProxy{
+		FlushInterval: -1,
+		Rewrite: func(outbound *httputil.ProxyRequest) {
+			outbound.SetURL(target)
+			outbound.SetXForwarded()
+			outbound.Out.URL.Path = target.Path
+			outbound.Out.URL.RawPath = ""
+			if remoteHop {
+				// Set, never add: whatever the caller sent is replaced, so a client
+				// can neither read this credential nor smuggle its own to the data
+				// plane. The header exists only on this outgoing request.
+				outbound.Out.Header.Set("Authorization", "Bearer "+g.remote.Token)
+			}
+		},
+		ErrorHandler: func(writer http.ResponseWriter, _ *http.Request, proxyErr error) {
+			g.logger.Warn("MCP upstream request failed", slog.String("instance_id", instanceID), slog.String("error", proxyErr.Error()))
+			http.Error(writer, "MCP upstream request failed", http.StatusBadGateway)
+		},
 	}
 	proxy.ServeHTTP(response, request.WithContext(proxyCtx))
 

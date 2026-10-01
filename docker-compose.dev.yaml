@@ -63,8 +63,6 @@ services:
       - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:3000}
       # Access-control backend
       - ACCESS_CONTROL_BACKEND=${ACCESS_CONTROL_BACKEND:-openfga}
-      - ACCESS_CONTROL_KETO_READ_URL=${ACCESS_CONTROL_KETO_READ_URL:-http://keto:4466}
-      - ACCESS_CONTROL_KETO_WRITE_URL=${ACCESS_CONTROL_KETO_WRITE_URL:-http://keto:4467}
       - ACCESS_CONTROL_OPENFGA_API_URL=${ACCESS_CONTROL_OPENFGA_API_URL:-http://openfga:8080}
       - ACCESS_CONTROL_OPENFGA_STORE_ID=${ACCESS_CONTROL_OPENFGA_STORE_ID:-}
       - ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID=${ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID:-}
@@ -193,7 +191,7 @@ services:
       - -c
       - |
         set -e
-        for db in "${POSTGRES_DB:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${HYDRA_DB:-hydra}" "${INFISICAL_DB:-infisical}" "${KETO_DB:-keto}" "${OPENFGA_DB:-openfga}"; do
+        for db in "${POSTGRES_DB:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${HYDRA_DB:-hydra}" "${INFISICAL_DB:-infisical}" "${OPENFGA_DB:-openfga}"; do
           exists=$$(psql -tAc "SELECT 1 FROM pg_database WHERE datname='$$db'")
           if [ "$$exists" != "1" ]; then
             echo "Creating database $$db"
@@ -391,6 +389,8 @@ services:
       # `command` connections (npx/uvx) run on this image, built by the
       # mcp-base service below.
       MCP_BASE_IMAGE: agentarea/agentarea-mcp-base:dev
+      # Empty keeps package images in the local Docker daemon.
+      MCP_PACKAGE_REPOSITORY: ${MCP_PACKAGE_REPOSITORY:-}
       # MCP servers run third-party npm/PyPI packages and images. The untrusted
       # tier pins --runtime to gVisor, which no Docker Desktop has, so every
       # instance would fail to create with a bare "exit status 125"; this dev
@@ -590,8 +590,6 @@ services:
       - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
       # Access-control backend
       - ACCESS_CONTROL_BACKEND=${ACCESS_CONTROL_BACKEND:-openfga}
-      - ACCESS_CONTROL_KETO_READ_URL=${ACCESS_CONTROL_KETO_READ_URL:-http://keto:4466}
-      - ACCESS_CONTROL_KETO_WRITE_URL=${ACCESS_CONTROL_KETO_WRITE_URL:-http://keto:4467}
       - ACCESS_CONTROL_OPENFGA_API_URL=${ACCESS_CONTROL_OPENFGA_API_URL:-http://openfga:8080}
       - ACCESS_CONTROL_OPENFGA_STORE_ID=${ACCESS_CONTROL_OPENFGA_STORE_ID:-}
       - ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID=${ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID:-}
@@ -709,50 +707,7 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
-  # Ory Keto ReBAC migration
-  # Opt-in only (OpenFGA is the default backend). Enable with: --profile keto
-  keto-migrate:
-    image: oryd/keto:v0.12.0
-    profiles: ["keto"]
-    environment:
-      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KETO_DB:-keto}?sslmode=disable&max_conns=20&max_idle_conns=4
-    command: migrate up -y -c /etc/config/keto/keto.yml
-    volumes:
-      - ./config/auth/keto:/etc/config/keto
-    networks:
-      - auth-network
-    depends_on:
-      db:
-        condition: service_healthy
-      postgres_init:
-        condition: service_completed_successfully
-
-  # Ory Keto ReBAC permission server
-  # Opt-in only (OpenFGA is the default backend). Enable with: --profile keto
-  keto:
-    image: oryd/keto:v0.12.0
-    profiles: ["keto"]
-    ports:
-      - "4466:4466" # read API
-      - "4467:4467" # write API
-      - "4468:4468" # metrics
-    environment:
-      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KETO_DB:-keto}?sslmode=disable&max_conns=20&max_idle_conns=4
-      LOG_LEVEL: debug
-    command: serve -c /etc/config/keto/keto.yml
-    volumes:
-      - ./config/auth/keto:/etc/config/keto
-    networks:
-      - auth-network
-      - default
-    depends_on:
-      db:
-        condition: service_healthy
-      keto-migrate:
-        condition: service_completed_successfully
-    restart: unless-stopped
-
-  # OpenFGA migration (preferred ReBAC backend for agent/task authorization)
+  # OpenFGA migration (ReBAC backend for agent/task authorization)
   openfga-migrate:
     image: ${OPENFGA_IMAGE:-openfga/openfga:latest}
     command: migrate

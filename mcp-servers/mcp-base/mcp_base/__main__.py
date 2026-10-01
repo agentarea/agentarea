@@ -10,7 +10,9 @@ server that speaks Streamable HTTP itself sets its own ``ENTRYPOINT``
 instead and does not need the bridge.
 """
 
+
 from __future__ import annotations
+from builtins import BaseExceptionGroup
 
 import functools
 import logging
@@ -20,7 +22,7 @@ import sys
 import anyio
 from mcp import MCPError
 
-from . import stdio_bridge
+from . import pack, stdio_bridge
 
 # Settings of the bridge itself. The child must not see PORT in particular:
 # some servers switch to serving HTTP on it, which would collide with ours.
@@ -36,6 +38,9 @@ def _first_leaf(group: BaseExceptionGroup) -> BaseException:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="[mcp-base] %(message)s")
+    if "MCP_BASE_PACK_ECOSYSTEM" in os.environ:
+        pack.main()
+        return
     command = sys.argv[1:]
     if not command:
         sys.exit(__doc__)

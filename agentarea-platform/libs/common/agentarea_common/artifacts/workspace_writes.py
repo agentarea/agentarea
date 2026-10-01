@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import PurePosixPath
 from typing import Any, Protocol
 
-from .service import TRASH_PREFIX
+from .service import MAX_WRITE_PATH_BYTES, TRASH_PREFIX
 from .workspace import (
     WorkspaceConflictError,
     WorkspaceError,
@@ -54,6 +54,10 @@ def resolve_write_path(path: str, filename: str = "") -> str:
     if not path:
         path = PurePosixPath(filename or "unnamed").name or "unnamed"
     resolved = normalize_workspace_path(path)
+    if len(resolved.encode()) > MAX_WRITE_PATH_BYTES:
+        raise WorkspaceValidationError(
+            f"workspace path exceeds {MAX_WRITE_PATH_BYTES} bytes of UTF-8"
+        )
     if is_reserved_path(resolved):
         raise WorkspaceValidationError(
             f"{resolved!r} is a reserved prefix and cannot be written directly"

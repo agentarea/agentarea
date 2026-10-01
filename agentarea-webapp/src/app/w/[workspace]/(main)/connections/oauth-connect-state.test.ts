@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildAuthorizeRequest,
+  buildCatalogConnectRequest,
   canAuthorize,
+  catalogPreflightToMCP,
   deriveOAuthConnectState,
   summarizeAuthorization,
   type MCPOAuthPreflight,
@@ -254,5 +256,83 @@ describe("canAuthorize", () => {
         credentials: { client_id: "cid", client_secret: "shh" },
       })
     ).toBe(true);
+  });
+});
+
+describe("catalog connections", () => {
+  const REDIRECT_URI = "https://api.agentarea.ru/v1/connections/oauth/callback";
+
+  function catalogState(status: "ready" | "oauth_app_required") {
+    return deriveOAuthConnectState({
+      isUrlType: true,
+      preflight: catalogPreflightToMCP({
+        item_id: INSTANCE_ID,
+        name: "Yandex Metrica",
+        status,
+        detail: "No AgentArea OAuth app for Yandex Metrica",
+        redirect_uri: REDIRECT_URI,
+      }),
+    });
+  }
+
+  it("offers Connect on the platform app when the installation holds one", () => {
+    expect(catalogState("ready")).toEqual({ kind: "ready", connected: false });
+  });
+
+  it("asks for the user's own app and names the redirect URI to register", () => {
+    expect(catalogState("oauth_app_required")).toEqual({
+      kind: "needs_oauth_app",
+      connected: false,
+      reason: "No AgentArea OAuth app for Yandex Metrica",
+      issuer: null,
+      redirectUri: REDIRECT_URI,
+    });
+  });
+
+  it("connects on the platform app without any credentials", () => {
+    expect(
+      buildCatalogConnectRequest({
+        state: catalogState("ready"),
+        returnTo: "https://app.agentarea.ru",
+      })
+    ).toEqual({
+      credential_mode: "managed",
+      return_to: "https://app.agentarea.ru",
+    });
+  });
+
+  it("sends the user's own app as custom credentials", () => {
+    expect(
+      buildCatalogConnectRequest({
+        state: catalogState("oauth_app_required"),
+        credentials: {
+          client_id: " cid ",
+          client_secret_secret_id: "secret-2",
+        },
+      })
+    ).toEqual({
+      credential_mode: "custom",
+      client_id: "cid",
+      client_secret_secret_id: "secret-2",
+    });
+  });
+
+  it("applies the same one-source-per-credential rule as MCP", () => {
+    expect(
+      buildCatalogConnectRequest({
+        state: catalogState("oauth_app_required"),
+        credentials: { client_id: "cid" },
+      })
+    ).toBeNull();
+    expect(
+      buildCatalogConnectRequest({
+        state: catalogState("oauth_app_required"),
+        credentials: {
+          client_id: "cid",
+          client_id_secret_id: "secret-1",
+          client_secret: "shh", // pragma: allowlist secret
+        },
+      })
+    ).toBeNull();
   });
 });

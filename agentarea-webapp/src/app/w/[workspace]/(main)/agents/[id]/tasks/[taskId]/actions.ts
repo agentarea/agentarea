@@ -2,7 +2,6 @@
 
 import {
   cancelAgentTask,
-  continueAgentTask,
   getAgentTaskMessages,
   getAgentTaskStatus,
   listModelInstances,
@@ -30,18 +29,6 @@ export async function resumeTask(agentId: string, taskId: string) {
 
 export async function cancelTask(agentId: string, taskId: string) {
   return await cancelAgentTask(agentId, taskId);
-}
-
-export async function continueTask(
-  taskId: string,
-  additionalIterations: number,
-  additionalBudgetUsd?: string
-) {
-  return await continueAgentTask(
-    taskId,
-    additionalIterations,
-    additionalBudgetUsd
-  );
 }
 
 export async function listTaskModelOptions() {

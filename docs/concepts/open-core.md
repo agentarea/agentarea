@@ -83,7 +83,7 @@ takes its own path.
 
 | Name | Where core resolves it | Behaviour without an extension |
 |---|---|---|
-| `permissions` | `apps/api` and `apps/worker` startup | Falls back to the backend named by `ACCESS_CONTROL_BACKEND`, or `WorkspaceScopedPermissionService` |
+| `permissions` | `apps/api` and `apps/worker` startup | OpenFGA (`ACCESS_CONTROL_BACKEND=openfga`) |
 | `authorization` | `apps/api` and `apps/worker` startup | `WorkspaceScopedAuthorizationService` |
 | `audit_sink` | `AuditService`, after the event is persisted | Events are written to the database only |
 | `entitlement_guard` | `create_governance_pipeline()`, priority 120 | The gate is not registered; the pipeline runs without it |
@@ -97,7 +97,7 @@ open-source edition is not a demo with holes in it.
 selector: if an operator sets `ACCESS_CONTROL_BACKEND=openfga`, core wires
 `OpenFGAPermissionService` and logs a warning that the installed extension is
 being ignored. This rule exists because the earlier order — extension first —
-meant an installed Keto extension shadowed a configured OpenFGA backend, so
+meant an installed extension shadowed a configured OpenFGA backend, so
 OpenFGA never enforced while the configuration claimed it did. An extension is a
 fallback for an unmade decision, never a veto over a made one.
 
@@ -119,15 +119,14 @@ changes what the interface displays. It does not add enforcement.
 
 Core includes more than the original open-core plan reserved for it. Relationship
 -based access control was once positioned as a commercial differentiator; it is
-now in core. `OpenFGAPermissionService` and `KetoPermissionService` both ship in
-`agentarea_common`, and the enterprise package's Keto `permissions` extension was
-removed as redundant.
+now in core. `OpenFGAPermissionService` ships in `agentarea_common`, and the
+enterprise package's own `permissions` extension was removed as redundant.
 
 | In core | Commercial |
 |---|---|
 | Agent execution, tasks, Temporal workflows | Plan entitlement gating |
 | Sandbox execution and MCP hosting | Usage metering and billing |
-| ReBAC authorization (OpenFGA or Keto) | External audit sinks (SIEM forwarding) |
+| ReBAC authorization (OpenFGA) | External audit sinks (SIEM forwarding) |
 | Workspaces, projects, resources | Container egress enforcement (declared, not yet wired) |
 | Governance pipeline: budget gates, security filters, observers | |
 | Audit events persisted to the database | |

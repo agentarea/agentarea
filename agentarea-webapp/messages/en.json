@@ -101,6 +101,8 @@
     "table": "Table",
     "delete": "Delete",
     "edit": "Edit",
+    "view": "View",
+    "configure": "Configure",
     "add": "Add",
     "cancel": "Cancel",
     "save": "Save",
@@ -117,7 +119,8 @@
     "copyFailed": "Couldn’t copy to clipboard",
     "saved": "Saved",
     "deleteFailed": "Couldn’t delete {itemName}",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "display": "Display"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -255,7 +258,6 @@
     "tabMembers": "Members",
     "tabInvitations": "Invitations",
     "searchPlaceholder": "Search by user ID or email…",
-    "display": "Display",
     "ordering": "Ordering",
     "orderAccess": "Access",
     "orderUserId": "User ID",
@@ -373,21 +375,18 @@
     }
   },
   "ProvidersPage": {
-    "title": "Providers",
-    "description": "Manage AI provider specifications and their available models",
     "noProviders": "No providers found",
+    "noMatches": "No matching providers",
+    "noMatchesDescription": "No providers match your search query: \"{query}\"",
+    "loadFailed": "Failed to load providers",
+    "loadFailedDescription": "The provider catalog could not be loaded.",
     "addProvider": "Add Provider",
     "emptyDescription": "Provider specs are supplied by the platform registry — this deployment has none synced yet. Connect a provider with your own key instead.",
     "table": {
       "provider": "Provider",
       "description": "Description",
-      "noDescription": "No description",
-      "type": "Type",
       "models": "Models",
-      "modelsCount": "models",
-      "status": "Status",
-      "builtIn": "Built-in",
-      "custom": "Custom"
+      "modelCount": "{count, plural, one {# model} other {# models}}"
     }
   },
   "ProviderConfigsPage": {
@@ -467,7 +466,6 @@
     "activeTasks": "Active Tasks",
     "currentTasks": "Tasks",
     "payments": "Payments",
-    "delegation": "Delegation",
     "a2ui": "A2UI",
     "wallet": "Wallet & Payments",
     "browseAgents": "Browse Agents",
@@ -600,11 +598,16 @@
       "validationFailed": "Some fields are invalid.",
       "createFailed": "Couldn't create the agent"
     },
-    "delegationPage": {
-      "saveFailed": "Couldn't save delegation",
-      "description": "Enable delegation to allow this agent to start tasks on other agents.",
-      "saving": "Saving...",
-      "noOtherAgents": "No other agents in this workspace to delegate to."
+    "delegationConfig": {
+      "title": "Delegation",
+      "note": "Agents this agent can hand tasks to. Each one becomes a tool the agent can call.",
+      "sheetDescription": "Choose the agents this agent can delegate tasks to",
+      "add": "Agent",
+      "available": "Available agents",
+      "noOtherAgents": "No other agents in this workspace to delegate to.",
+      "createAgent": "Create an agent",
+      "empty": "No delegates. Add agents this agent can hand tasks to.",
+      "remove": "Remove {name}"
     },
     "list": {
       "loadFailed": "Couldn't load agents",
@@ -645,6 +648,12 @@
     "filters": {
       "type": "Type",
       "category": "Category"
+    },
+    "catalogConnect": {
+      "breadcrumb": "Connect",
+      "breadcrumbWithName": "Connect {name}",
+      "back": "Back to catalog",
+      "loadFailed": "Could not load this catalog connection"
     },
     "createInstance": {
       "breadcrumb": "Create instance",
@@ -749,6 +758,7 @@
         "needsAppTitle": "Needs an OAuth app",
         "needsAppTitleConnected": "Re-authorizing needs your OAuth app",
         "needsAppHint": "Enter a client ID and secret, or pick them from workspace secrets.",
+        "redirectUriLabel": "Redirect URI to register with the provider",
         "unauthorizedNote": "This server lists its tools without a token, so verification succeeds while nobody is authorized — tool calls stay unauthorized until you connect."
       },
       "status": {
@@ -966,36 +976,46 @@
     "title": "Provider Management",
     "description": "Manage AI provider configurations and discover available providers",
     "createButton": "Add Configuration",
-    "editConfiguration": "Edit",
-    "configureProvider": "Configure",
-    "availableProviders": "Available Providers",
     "providerConfigsSection": "Provider Configs",
-    "providerSpecsSection": "Provider Specs",
-    "browseProviders": "{count, plural, one {# more provider you can add} other {# more providers you can add}}",
     "platformProviderConfigsSection": "Provided by the platform",
     "platformManagedBadge": "No setup needed",
-    "deleteProviderConfiguration": "Delete Provider Configuration",
     "createConfig": "Create Configuration",
-    "deleteProviderConfigurationDescription": "Are you sure you want to delete the provider configuration \"{configName}\"? This action cannot be undone and will permanently remove the configuration.",
-    "thisProviderConfiguration": "this provider configuration",
     "table": {
       "name": "Name",
       "provider": "Provider",
-      "description": "Description",
       "models": "Models"
     },
     "noInstancesConfigured": "No instances configured",
-    "emptyState": {
-      "title": "No configurations yet",
-      "description": "Create your first provider configuration to get started"
+    "unknownModel": "Unknown",
+    "empty": {
+      "noModels": {
+        "title": "No models connected",
+        "description": "Agents cannot run without a model. Connect a provider with your own key — OpenAI, Anthropic, or any compatible endpoint.",
+        "hintAdd": "Add a provider and paste its API key",
+        "hintChoose": "Choose which of its models this workspace may use",
+        "hintPick": "Agents then pick a model from what you allowed"
+      },
+      "noOwnConfigs": {
+        "title": "No providers connected",
+        "description": "A provider config is one API key plus the models it unlocks for this workspace.",
+        "hintAdd": "Add a provider and paste its API key",
+        "hintEnable": "Enable only the models you want agents to reach",
+        "hintSecret": "The key is stored as a secret, never shown again"
+      },
+      "addProvider": "Add provider",
+      "noMatches": "No matching providers",
+      "noMatchesDescription": "No providers match your search query: \"{query}\"",
+      "noMatchingConfigs": "No matching configs",
+      "noMatchingConfigsDescription": "No configs match your search query: \"{query}\""
+    },
+    "sections": {
+      "label": "Model sections",
+      "connected": "Connected",
+      "available": "Available"
     },
     "error": {
       "loadingData": "Error loading data",
-      "loadingDataEdit": "Failed to load provider configuration for editing. Please try again.",
-      "noConfigIdProvided": "No configuration ID provided for deletion",
-      "failedToDeleteConfiguration": "Failed to delete configuration",
-      "unknownError": "Unknown error",
-      "unexpectedErrorWhileDeleting": "An unexpected error occurred while deleting the configuration"
+      "loadingDataEdit": "Failed to load provider configuration for editing. Please try again."
     }
   },
   "ProviderConfigForm": {
@@ -1083,10 +1103,35 @@
       "createTaskFailed": "Couldn't start a new task",
       "sendFailed": "Couldn't send the message",
       "actionRejected": "The task did not accept the action",
-      "continueFailed": "Couldn't continue the task",
-      "continueGrantRequired": "Grant at least one iteration or a budget top-up.",
       "pauseFailed": "Couldn't pause the task",
       "resumeFailed": "Couldn't resume the task"
+    },
+    "continuation": {
+      "title": {
+        "iteration_limit": "The task reached its iteration limit.",
+        "budget_exceeded": "The task reached its budget limit.",
+        "token_limit": "The task reached its token limit.",
+        "tool_call_limit": "The task reached its tool-call limit.",
+        "unknown": "The task reached one of its limits."
+      },
+      "hint": "Grant only the resources you want it to use. It will wait for up to 24 hours.",
+      "fields": {
+        "iterations": "Additional iterations",
+        "budget": "Budget top-up ({currency})",
+        "tokens": "Additional tokens",
+        "toolCalls": "Additional tool calls"
+      },
+      "optionalField": "{label}, optional",
+      "submit": "Continue task",
+      "failed": "Couldn't continue the task",
+      "errors": {
+        "invalid": "Enter whole numbers within the allowed range and a positive budget.",
+        "grant_required": "Grant at least one resource to continue.",
+        "iterations_required": "Grant additional iterations to lift the iteration limit.",
+        "budget_required": "Add a budget top-up to lift the budget limit.",
+        "tokens_required": "Grant additional tokens to lift the token limit.",
+        "toolCalls_required": "Grant additional tool calls to lift the tool-call limit."
+      }
     }
   },
   "TasksPage": {
@@ -1323,7 +1368,6 @@
       "chipSkillInside": "SKILL.md inside"
     },
     "display": {
-      "display": "Display",
       "grouping": "Grouping",
       "source": "Source",
       "scope": "Scope",
@@ -1528,6 +1572,7 @@
       "schedules": "Schedules"
     },
     "group": {
+      "grouping": "Grouping",
       "byChannel": "Channels",
       "none": "No grouping"
     },
@@ -2600,8 +2645,6 @@
     "skillFilesLoadFailed": "Couldn't load the skill files",
     "catalogLoadFailed": "Couldn't load the catalog",
     "itemLoadFailed": "Couldn't load the catalog item",
-    "connectFailed": "Couldn't connect this account",
-    "unsafeRedirect": "the provider returned an unsafe sign-in address",
     "analyzeFailed": "Couldn't analyze the bundle",
     "installFailed": "Couldn't install the bundle",
     "agentInstallFailed": "Couldn't add the agent",

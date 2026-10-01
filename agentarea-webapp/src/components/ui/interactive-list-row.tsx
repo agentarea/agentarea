@@ -2,17 +2,7 @@
 
 import { ArrowUpRight } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
-import type { StatusTone } from "@/lib/status";
 import { cn } from "@/lib/utils";
-
-const DECORATION_TINT_STYLES = {
-  success: "[background-image:var(--row-tint-success)]",
-  warning: "[background-image:var(--row-tint-warning)]",
-  danger: "[background-image:var(--row-tint-danger)]",
-  info: "[background-image:var(--row-tint-info)]",
-  neutral: "[background-image:var(--row-tint-neutral)]",
-  brand: "[background-image:var(--row-tint-brand)]",
-} satisfies Record<StatusTone, string>;
 
 interface InteractiveListRowProps {
   children: ReactNode;
@@ -27,7 +17,6 @@ interface InteractiveListRowProps {
   className?: string;
   dividerClassName?: string;
   contentClassName?: string;
-  decorationTone?: StatusTone;
   decorationTintClassName?: string;
   decorationVisible?: boolean;
   hoverClassName?: string;
@@ -51,7 +40,6 @@ export function InteractiveListRow({
   className,
   dividerClassName = "border-b border-zinc-200 dark:border-zinc-700",
   contentClassName,
-  decorationTone,
   decorationTintClassName,
   decorationVisible = false,
   hoverClassName = "hover:bg-muted/60 dark:hover:bg-zinc-700/20",
@@ -97,7 +85,6 @@ export function InteractiveListRow({
         data-visible={decorationVisible || undefined}
         className={cn(
           "pointer-events-none absolute inset-y-0 right-0 z-0 w-[230px] translate-x-[14px] opacity-0 [-webkit-mask-image:linear-gradient(90deg,transparent,#000_82%)] [mask-image:linear-gradient(90deg,transparent,#000_82%)] transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] data-[visible=true]:translate-x-0 data-[visible=true]:opacity-100",
-          decorationTone ? DECORATION_TINT_STYLES[decorationTone] : undefined,
           decorationTintClassName
         )}
       />

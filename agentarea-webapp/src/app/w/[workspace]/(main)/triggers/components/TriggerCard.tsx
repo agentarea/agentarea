@@ -43,8 +43,7 @@ export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {
           </Badge>
           <StatusIndicator
             size="sm"
-            tone={status.tone}
-            pulse={status.pulse}
+            kind={status.kind}
             className="whitespace-nowrap"
           >
             {isActive ? t("status.active") : t("status.inactive")}
@@ -55,7 +54,10 @@ export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {
       {trigger.agent_name && (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <AgentAvatar
-            agent={{ id: trigger.agent_id || trigger.agent_name, name: trigger.agent_name }}
+            agent={{
+              id: trigger.agent_id || trigger.agent_name,
+              name: trigger.agent_name,
+            }}
             size="xs"
           />
           {trigger.agent_name}

@@ -10,8 +10,8 @@ with workflow.unsafe.imports_passed_through():
     from ..helpers import BudgetTracker
 
 from ...models import MonthlySpendCapRequest, MonthlySpendCapResult
-from ..constants import ACTIVITY_TIMEOUT, DEFAULT_RETRY_ATTEMPTS, Activities, EventTypes
-from ..retry import make_retry_policy
+from ..constants import ACTIVITY_TIMEOUT, Activities, EventTypes
+from ..retry import bookkeeping_retry_policy
 from .base import AgentWorkflowBase
 from .patches import MONTHLY_CAP_AT_START_PATCH
 
@@ -123,7 +123,7 @@ class BudgetMixin(AgentWorkflowBase):
             ],
             result_type=MonthlySpendCapResult,
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=bookkeeping_retry_policy(),
         )
         if result.exceeded:
             unit = f" {result.currency}" if result.currency else ""

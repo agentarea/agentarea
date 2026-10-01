@@ -29,11 +29,9 @@ export const TextPart: React.FC<{ part: Part }> = ({ part }) => {
         </details>
       )}
       {failed ? (
-        <StatusIndicator tone="danger">LLM call failed</StatusIndicator>
+        <StatusIndicator kind="failed">LLM call failed</StatusIndicator>
       ) : streaming && !content ? (
-        <StatusIndicator tone="info" pulse>
-          Thinking
-        </StatusIndicator>
+        <StatusIndicator kind="running">Thinking</StatusIndicator>
       ) : null}
       {content ? (
         <MessageMarkdown content={content} isStreaming={streaming} />

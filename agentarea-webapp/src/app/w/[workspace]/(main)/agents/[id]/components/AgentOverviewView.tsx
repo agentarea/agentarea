@@ -1,14 +1,19 @@
 import { createElement } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 import {
+  Ban,
   Boxes,
+  Check,
   Clock,
   Gauge,
   ListChecks,
   Shield,
+  ShieldCheck,
   SquareCheckBig,
+  UserCheck,
   Wallet,
   Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { formatRelTime } from "@/app/w/[workspace]/(main)/dashboard/components/relTime";
 import { HeroDescription } from "@/components/Overview/HeroDescription";
@@ -144,6 +149,13 @@ const EFFECT_MARKER_COLOR: Record<PolicyEffect, string> = {
   allow: "hsl(var(--muted-foreground) / 0.72)",
   safety: "hsl(var(--muted-foreground) / 0.72)",
 };
+const EFFECT_MARKER_ICON: Record<PolicyEffect, LucideIcon> = {
+  deny: Ban,
+  approval: UserCheck,
+  cap: Gauge,
+  allow: Check,
+  safety: ShieldCheck,
+};
 const EFFECT_ORDER: PolicyEffect[] = [
   "deny",
   "approval",
@@ -216,8 +228,7 @@ export async function AgentOverviewView({
                   {model.name}
                 </h1>
                 <StatusIndicator
-                  tone={model.status.tone}
-                  pulse={model.status.pulse}
+                  kind={model.status.kind}
                   className="whitespace-nowrap text-[13px] font-medium"
                 >
                   {model.status.label}
@@ -359,7 +370,13 @@ export async function AgentOverviewView({
             <CollapsibleGroup
               label={t("upcoming")}
               count={model.upcoming.length}
-              color="hsl(var(--muted-foreground) / 0.6)"
+              icon={
+                <StatusIndicator
+                  kind="scheduled"
+                  size="sm"
+                  aria-label={t("upcoming")}
+                />
+              }
               sticky={false}
               headerClassName="h-[30px] px-[15px]"
             >
@@ -380,7 +397,13 @@ export async function AgentOverviewView({
                 <CollapsibleGroup
                   label={t("running")}
                   count={model.runningTasks.length}
-                  color="hsl(var(--primary))"
+                  icon={
+                    <StatusIndicator
+                      kind="running"
+                      size="sm"
+                      aria-label={t("running")}
+                    />
+                  }
                   sticky={false}
                   headerClassName="h-[30px] px-[15px]"
                 >
@@ -402,7 +425,6 @@ export async function AgentOverviewView({
                 <CollapsibleGroup
                   label={t("recent")}
                   count={model.recentTasks.length}
-                  color="hsl(var(--muted-foreground) / 0.6)"
                   sticky={false}
                   headerClassName="h-[30px] px-[15px]"
                 >
@@ -595,13 +617,14 @@ export async function AgentOverviewView({
                             key={e}
                             className="font-medium text-foreground/70"
                           >
-                            <span
-                              aria-hidden
-                              className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle"
-                              style={{
-                                backgroundColor: EFFECT_MARKER_COLOR[e],
-                              }}
-                            />
+                            {createElement(EFFECT_MARKER_ICON[e], {
+                              "aria-hidden": true,
+                              className:
+                                "mr-1 inline-block h-3 w-3 align-middle",
+                              style: {
+                                color: EFFECT_MARKER_COLOR[e],
+                              },
+                            })}
                             {t(EFFECT_KEY[e], {
                               count: policies.effectCounts[e] ?? 0,
                             })}

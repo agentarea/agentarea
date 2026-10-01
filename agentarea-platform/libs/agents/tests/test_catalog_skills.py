@@ -148,7 +148,6 @@ class FakeCatalogRepo:
                 source_type=(i.spec or {}).get("source_type") or "content",
                 source_url=(i.spec or {}).get("source_url"),
                 network_scope=(i.spec or {}).get("network_scope") or "private",
-                installed_version=i.installed_version,
                 created_at=i.created_at,
                 updated_at=i.updated_at,
             )
@@ -496,3 +495,23 @@ async def test_list_paginated_from_registry_false_skips_the_catalog():
     assert total == 0
     assert catalog.page_calls == []
     assert catalog.list_items_calls == 0
+
+
+async def test_list_paginated_without_catalog_keeps_installed_skills_only():
+    installed_item = _item(name="Installed")
+    catalog = FakeCatalogRepo([installed_item, _item(name="Not installed")])
+    own = Skill(id=uuid4(), name="Own", slug="own", source_type="content")
+    installed = Skill(
+        id=uuid4(),
+        name="Installed copy",
+        slug="installed-copy",
+        source_type="content",
+        registry_item_id=installed_item.id,
+    )
+    svc = _service(FakeSkillRepo([own, installed]), catalog)
+
+    page, total = await svc.list_paginated(limit=10, offset=0, include_catalog=False)
+
+    assert [s.name for s in page] == ["Own", "Installed copy"]
+    assert total == 2
+    assert catalog.page_calls == []

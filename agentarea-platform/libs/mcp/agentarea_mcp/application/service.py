@@ -16,6 +16,7 @@ from agentarea_common.config import get_database, get_settings
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.errors import BadRequestError
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.rebac.ownership import grant_resource_owner
 from agentarea_common.utils.url_safety import (
     OutboundPolicy,
     UnsafeUrlError,
@@ -59,6 +60,7 @@ from agentarea_mcp.schemas.dto import (
     MCPServerUpdate,
 )
 from agentarea_mcp.tool_serialization import serialize_mcp_tool
+from agentarea_mcp.transport_spec import merge_transport_spec, server_transport_spec
 from agentarea_mcp.verification import declared_remote_transport, verify
 
 from .mcp_env_service import MCPEnvironmentService
@@ -70,6 +72,7 @@ logger = logging.getLogger(__name__)
 # Sentinel value for masked secrets — must match across backend and frontend
 SECRET_MASKED_VALUE = "*" * 6
 INSTANCE_TRANSPORT_FIELDS = {"type", "endpoint_url", "image", "command", "args"}
+INSTANCE_SYSTEM_FIELDS = INSTANCE_TRANSPORT_FIELDS | {"port", "package", "source"}
 
 
 def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
@@ -92,21 +95,9 @@ def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
 
 
 def _server_transport_spec(server_spec: MCPServer) -> dict[str, Any]:
-    spec = dict(server_spec.json_spec or {})
-    if server_spec.remote_url:
-        spec.setdefault("type", "url")
-        spec.setdefault("endpoint_url", server_spec.remote_url)
-    elif server_spec.cmd:
-        spec.setdefault("type", "command")
-        spec.setdefault("command", server_spec.cmd[0] if server_spec.cmd else "")
-        if len(server_spec.cmd or []) > 1:
-            spec.setdefault("args", list(server_spec.cmd[1:]))
-    elif server_spec.docker_image_url:
-        spec.setdefault("type", "docker")
-        spec.setdefault("image", server_spec.docker_image_url)
-    else:
-        spec.setdefault("type", "docker")
-    return _normalize_url_keys(spec)
+    """Build the effective transport fields declared by a server row."""
+    spec = server_transport_spec(server_spec)
+    return spec
 
 
 def _is_mcp_protocol_error(exc: BaseException) -> bool:
@@ -451,7 +442,7 @@ class MCPServerInstanceService:
         server_spec = await self.mcp_server_repository.get_server_by_id(instance.server_spec_id)
         if not server_spec:
             raise ValueError(f"MCP server spec {instance.server_spec_id} not found")
-        return {**_server_transport_spec(server_spec), **(instance.json_spec or {})}
+        return merge_transport_spec(_server_transport_spec(server_spec), instance.json_spec)
 
     def _endpoint_url_from_spec(self, instance: MCPServerInstance, spec: dict[str, Any]) -> str:
         instance_type = spec.get("type", "docker")
@@ -549,6 +540,19 @@ class MCPServerInstanceService:
         await auth_service.get_for_use(config_id)
 
     @audited("mcp_instance.create", resource_type="mcp_instance")
+    async def _grant_creator_ownership(self, resource_id: UUID | str) -> None:
+        """Record the caller as owner of a row this service committed itself.
+
+        These rows are added to the session directly rather than through
+        ``WorkspaceScopedRepository.create``, which is what grants everywhere
+        else; without the grant every check on them fails closed.
+        """
+        await grant_resource_owner(
+            resource_id=resource_id,
+            workspace_id=self.repository.user_context.workspace_id,
+            user_id=self.repository.user_context.user_id,
+        )
+
     async def create_instance(self, payload: MCPServerInstanceCreate) -> MCPServerInstance | None:
         name = payload.name
         description = payload.description
@@ -556,6 +560,7 @@ class MCPServerInstanceService:
         auth_config_id = payload.auth_config_id
 
         submitted_spec = _normalize_url_keys(payload.json_spec or {})
+        created_spec_id: str | None = None
 
         try:
             if server_spec_id:
@@ -569,10 +574,12 @@ class MCPServerInstanceService:
                     self.repository.user_context.workspace_id
                 ):
                     server_spec = await self._materialize_workspace_spec_copy(server_spec)
+                    created_spec_id = str(server_spec.id)
                 server_spec_id = str(server_spec.id)
             else:
                 server_spec = await self._auto_create_spec_for_instance(payload)
                 server_spec_id = str(server_spec.id)
+                created_spec_id = server_spec_id
 
             transport_spec = _server_transport_spec(server_spec)
             validation_errors = MCPConfigurationValidator.validate_json_spec(transport_spec)
@@ -618,6 +625,10 @@ class MCPServerInstanceService:
         except Exception:
             await self.repository.session.rollback()
             raise
+
+        if created_spec_id is not None:
+            await self._grant_creator_ownership(created_spec_id)
+        await self._grant_creator_ownership(instance.id)
 
         is_url_type = instance_type == "url"
 
@@ -702,7 +713,9 @@ class MCPServerInstanceService:
             json_spec=instance_payload.json_spec,
             auth_config_id=instance_payload.auth_config_id,
         )
-        return await self.create_instance(payload)
+        instance = await self.create_instance(payload)
+        await self._grant_creator_ownership(server.id)
+        return instance
 
     @audited("mcp_instance.update", resource_type="mcp_instance", resource_id_param="id")
     async def update_instance(
@@ -731,7 +744,7 @@ class MCPServerInstanceService:
                 # instance configuration; otherwise every legitimate PATCH drops
                 # ``type`` (and URL endpoints) merely because callers are forbidden
                 # from sending those fields back.
-                for field in INSTANCE_TRANSPORT_FIELDS:
+                for field in INSTANCE_SYSTEM_FIELDS:
                     if field in (instance.json_spec or {}):
                         cleaned_spec.setdefault(field, instance.json_spec[field])
                 masked_placeholders = {SECRET_MASKED_VALUE, "\u2022" * 6}
@@ -938,31 +951,18 @@ class MCPServerInstanceService:
         return deleted
 
     async def _retire_runtime_before_mutation(self, instance_id: UUID) -> None:
-        settings = get_settings().mcp
-        url = settings.manager_retire_url(instance_id)
-        headers = settings.manager_gateway_headers()
-        retryable = {409, 502, 503, 504}
-        last_error: Exception | None = None
+        from agentarea_mcp.package_import import retire_runtime_before_mutation
 
-        async with httpx.AsyncClient(timeout=settings.MCP_CLIENT_TIMEOUT) as client:
-            for attempt in range(3):
-                try:
-                    response = await client.delete(url, headers=headers)
-                    if response.status_code == 204:
-                        return
-                    if response.status_code not in retryable:
-                        response.raise_for_status()
-                    last_error = RuntimeError(
-                        f"MCP manager retirement returned HTTP {response.status_code}"
-                    )
-                except (httpx.TransportError, httpx.TimeoutException) as exc:
-                    last_error = exc
-                if attempt < 2:
-                    await asyncio.sleep(0.2 * (attempt + 1))
+        await retire_runtime_before_mutation(
+            instance_id,
+            settings=get_settings().mcp,
+        )
 
-        raise RuntimeError(
-            f"MCP runtime retirement failed for {instance_id}; desired state was preserved"
-        ) from last_error
+    async def import_package_image(self, instance_id: UUID) -> None:
+        """Import a verified command instance into an immutable package image."""
+        from agentarea_mcp.package_import import import_package_image
+
+        await import_package_image(instance_id, session=self.repository.session)
 
     async def get(self, id: UUID) -> MCPServerInstance | None:
         return await self.repository.get_by_id(id)

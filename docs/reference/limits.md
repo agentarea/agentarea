@@ -194,7 +194,7 @@ for a process started without the corresponding environment variable.
 
 | Setting | Code default | `docker-compose.dev.yaml` | `docker-compose.yaml` | Helm |
 |---|---|---|---|---|
-| `ACCESS_CONTROL_BACKEND` | `disabled` | `openfga` | **absent — code default applies** | `openfga` when `openfga.enabled=true`, the chart default |
+| `ACCESS_CONTROL_BACKEND` | `openfga` (the only accepted value) | `openfga` | `openfga` | `openfga` |
 | `ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP` | `false` | `true` | absent | `true` |
 | `ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL` | `false` | `true` | absent | `true` |
 | `ACCESS_CONTROL_OPENFGA_STORE_NAME` | `agentarea` | `agentarea` | absent | — |

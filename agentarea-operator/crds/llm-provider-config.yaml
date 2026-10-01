@@ -97,6 +97,16 @@ spec:
                       outputCostPerToken:
                         type: number
                         description: "Provider cost per output token"
+                      # Labels the webapp reads. "default" is the model a new agent
+                      # starts on; tag exactly one. Written on every reconcile, so
+                      # removing a tag here removes it from the model.
+                      tags:
+                        type: array
+                        maxItems: 16
+                        description: "Model labels, e.g. default, fast, cheap, reasoning, code"
+                        items:
+                          type: string
+                          pattern: "^[a-z0-9][a-z0-9-]{0,31}$"
             status:
               type: object
               properties:

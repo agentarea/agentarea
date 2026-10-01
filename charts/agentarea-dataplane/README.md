@@ -114,6 +114,8 @@ rejected by the API server.
 | image.tag | string | `""` | Defaults to the chart's appVersion. Keep equal to the control plane's tag. |
 | image.pullPolicy | string | `"IfNotPresent"` | Pull policy for the data plane image. |
 | imagePullSecrets | list | `[]` | Pull secrets for the data plane's own image. MCP server images are pulled by the nodes of this cluster; give them registry credentials there. |
+| mcpBase.image.repository | string | `"agentarea/agentarea-mcp-base"` | mcp-base image pre-pulled on every node before package workloads start. |
+| mcpBase.image.tag | string | `"latest"` |  |
 | dataPlane.id | required | `""` | Stamped on every instance this data plane creates. A data plane refuses instances without its own id, so two data planes never claim each other's workloads. |
 | dataPlane.auth.existingSecret | string | `""` | Secret holding the shared token: the value the control plane sends. |
 | dataPlane.auth.existingSecretKey | string | `"token"` | Key in existingSecret. |

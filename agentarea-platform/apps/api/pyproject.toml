@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentarea-api"
-version = "0.0.15"
+version = "0.1.0"
 description = "AgentArea API application"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.12"
@@ -30,7 +30,7 @@ dependencies = [
     "mcp[cli]>=2.2.0,<3",
     "python-multipart>=0.0.30",
     "click>=8.1.8",
-    "pyjwt[crypto]>=2.13.0",
+    "pyjwt[crypto]>=2.15.1",
     "fastmcp>=4.0.9",
     "croniter>=6.2.2",
     "opentelemetry-instrumentation-fastapi>=0.51b0",

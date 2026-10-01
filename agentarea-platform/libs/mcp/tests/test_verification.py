@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from agentarea_mcp.application.mcp_client import platform_client_factory
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
-from agentarea_mcp.verification import _list_tools
+from agentarea_mcp.verification import _list_tools, _RuntimeInstance
 
 # ---------------------------------------------------------------------------
 # _in_progress_is_stale — wedged-verifying self-heal
@@ -71,6 +71,33 @@ class _FakeInstance:
 
 def _make_instance(instance_type="docker", verification=None):
     return _FakeInstance(instance_type=instance_type, verification=verification)
+
+
+def test_runtime_instance_uses_converted_transport_as_authority():
+    instance = _make_instance("docker")
+    instance.json_spec = {
+        "type": "docker",
+        "image": "registry.example/server@sha256:" + "f" * 64,
+        "command": ["/opt/mcp-pkg/bin/server"],
+        "port": 8080,
+    }
+
+    runtime = _RuntimeInstance(
+        instance,
+        {
+            "type": "command",
+            "command": "npx",
+            "args": ["mcp-server-time"],
+            "endpoint_url": "http://server.example",
+        },
+    )
+
+    assert runtime.json_spec["type"] == "docker"
+    assert runtime.json_spec["image"] == instance.json_spec["image"]
+    assert runtime.json_spec["command"] == ["/opt/mcp-pkg/bin/server"]
+    assert "args" not in runtime.json_spec
+    assert "endpoint_url" not in runtime.json_spec
+
 
 
 class _AsyncContextManagerMock:

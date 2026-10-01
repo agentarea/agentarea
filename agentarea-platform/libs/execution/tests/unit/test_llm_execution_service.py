@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
 import pytest
+from uuid import uuid4
 from agentarea_agents_sdk.models.llm_model import LLMResponse, LLMUsage
 from agentarea_common.auth.context import UserContext
 from agentarea_common.money import to_money
@@ -617,7 +618,6 @@ async def test_pricing_failure_fails_the_call_without_recording_provider_cost(
 def activity_boundary(monkeypatch):
     from agentarea_execution.activities import agent_execution_activities as activities
     from agentarea_execution.activities import dependencies
-    from agentarea_execution.activities.agent import llm as llm_activities
 
     # The cached-model route never needs the container's database-backed services.
     monkeypatch.setattr(dependencies, "ActivityServiceContainer", Mock())
@@ -629,12 +629,8 @@ def activity_boundary(monkeypatch):
         event_broker=SimpleNamespace(publish=AsyncMock()),
         broker_client=None,
     )
-    enriched_error = AsyncMock()
-    monkeypatch.setattr(llm_activities, "publish_enriched_llm_error_event", enriched_error)
     functions = {fn.__name__: fn for fn in activities.make_agent_activities(injected)}
-    return SimpleNamespace(
-        call=functions["call_llm_activity"], errors=enriched_error, dependencies=injected
-    )
+    return SimpleNamespace(call=functions["call_llm_activity"], dependencies=injected)
 
 
 def _activity_request(**overrides):
@@ -651,20 +647,9 @@ async def test_activity_maps_missing_usage_to_nonretryable_error_once(provider, 
     assert raised.value.non_retryable is True
     assert raised.value.type == "RuntimeError"
     assert isinstance(raised.value.__cause__, RuntimeError)
-    activity_boundary.errors.assert_awaited_once_with(
-        error=raised.value.__cause__,
-        task_id="task-1",
-        agent_id="agent-1",
-        execution_id="execution-1",
-        model_id=MODEL_ID,
-        provider_type="openai",
-        event_broker=activity_boundary.dependencies.event_broker,
-    )
 
 
-async def test_activity_preserves_retryable_rate_limit_and_publishes_error_once(
-    provider, activity_boundary
-):
+async def test_activity_preserves_retryable_rate_limit(provider, activity_boundary):
     original = RuntimeError("rate limit exceeded")
     provider.ainvoke_stream.side_effect = original
 
@@ -674,25 +659,17 @@ async def test_activity_preserves_retryable_rate_limit_and_publishes_error_once(
     assert raised.value.non_retryable is False
     assert raised.value.type == "RuntimeError"
     assert raised.value.__cause__ is original
-    activity_boundary.errors.assert_awaited_once()
-    assert activity_boundary.errors.call_args.kwargs["error"] is original
-    assert activity_boundary.errors.call_args.kwargs["provider_type"] == "openai"
     provider.ainvoke_stream.assert_called_once()
     provider.complete.assert_not_awaited()
 
 
-async def test_activity_context_failure_publishes_once_without_calling_provider(
-    provider, activity_boundary
-):
+async def test_activity_context_failure_never_calls_the_provider(provider, activity_boundary):
     with pytest.raises(ApplicationError) as raised:
         await ActivityEnvironment().run(
             activity_boundary.call, _activity_request(user_context_data=None)
         )
 
     assert raised.value.type == "ValueError"
-    activity_boundary.errors.assert_awaited_once()
-    assert activity_boundary.errors.call_args.kwargs["error"] is raised.value.__cause__
-    assert activity_boundary.errors.call_args.kwargs["provider_type"] is None
     provider.ainvoke_stream.assert_not_called()
     provider.complete.assert_not_awaited()
 
@@ -703,8 +680,22 @@ async def test_compaction_cost_is_priced_like_the_loop_calls(
     """Compaction spends the same run budget, so it must be in the same currency."""
     from agentarea_execution.activities import agent_execution_activities as activities
     from agentarea_execution.activities.agent import llm as llm_activities
-    from agentarea_execution.models import CompactMessagesRequest
+    from agentarea_execution.models import CompactMessagesRequest, ConversationWindow
+    from agentarea_tasks.domain.models import ConversationEntry
 
+    log = [ConversationEntry(seq=0, role="system", content="system")] + [
+        ConversationEntry(seq=seq, role="user", content=f"turn {seq}") for seq in range(1, 7)
+    ]
+    written: list = []
+
+    async def sync_window(container, user_context, window, pending):
+        return log[:1], log[1:], len(log)
+
+    async def write_entries(container, user_context, task_id, entries):
+        written.extend(entries)
+
+    monkeypatch.setattr(llm_activities.conversation_log, "sync_window", sync_window)
+    monkeypatch.setattr(llm_activities.conversation_log, "write_entries", write_entries)
     monkeypatch.setattr(llm_activities, "LLMModel", provider.constructor)
     functions = {
         fn.__name__: fn for fn in activities.make_agent_activities(activity_boundary.dependencies)
@@ -715,7 +706,10 @@ async def test_compaction_cost_is_priced_like_the_loop_calls(
     result = await ActivityEnvironment().run(
         functions["compact_messages_activity"],
         CompactMessagesRequest(
-            messages_to_compact=[{"role": "user", "content": "old turn"}],
+            conversation=ConversationWindow(
+                task_id=str(uuid4()), head_seqs=[0], tail_start=1, next_seq=7
+            ),
+            keep_recent=2,
             model_id=MODEL_ID,
             workspace_id="test-workspace",
             user_context_data=request.user_context_data,
@@ -725,5 +719,9 @@ async def test_compaction_cost_is_priced_like_the_loop_calls(
     )
 
     assert result.cost == to_money("1.90")
+    assert result.original_message_count == 4
+    assert result.conversation.head_seqs == [0, 7]
+    assert result.conversation.tail_start == 5
+    assert [entry.kind for entry in written] == ["summary"]
     assert registered_pricing.calls[0]["platform_funded"] is True
     assert registered_pricing.calls[0]["model_instance_id"] == MODEL_ID

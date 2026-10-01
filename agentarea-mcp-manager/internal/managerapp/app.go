@@ -29,6 +29,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/environment"
 	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/mcpgateway"
+	"github.com/agentarea/mcp-manager/internal/packageimage"
 	"github.com/agentarea/mcp-manager/internal/providers"
 	"github.com/agentarea/mcp-manager/internal/publishedsecrets"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
@@ -40,7 +41,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/workspace"
 )
 
-const Version = "0.0.15"
+const Version = "0.1.0"
 
 // Options holds the optional extension factories of a distribution. The zero
 // value runs the manager without extensions.
@@ -197,6 +198,24 @@ func runControlPlane(
 	}
 
 	router := setupRouter(cfg, logger)
+	packageImporter, err := packageimage.NewService(packageimage.Options{
+		Repository:        gatewayRepository,
+		Backend:           backend,
+		Remote:            runtime.remoteUpstream,
+		Secrets:           secretResolver,
+		PackageRepository: cfg.PackageImages.Repository,
+		BackendType:       runtime.envType,
+		DockerRuntime:     cfg.Container.Runtime,
+		ImportTimeout:     cfg.PackageImages.ImportTimeout,
+		NPMRegistryURL:    cfg.PackageImages.NPMRegistryURL,
+		PyPIURL:           cfg.PackageImages.PyPIURL,
+		AuthSecret:        os.Getenv("MCP_GATEWAY_AUTH_SECRET"),
+		Logger:            logger,
+	})
+	if err != nil {
+		return failed(logger, "Failed to initialize MCP package importer", err)
+	}
+	router.POST("/packages/import", gin.WrapH(packageImporter))
 	handler, err := api.NewHandler(backend, containerManager, logger, Version, api.SandboxPolicy{
 		TaskIdleTTL:      sandboxPolicy.TaskIdleTTL,
 		MaxFileBytes:     workspaceConfig.MaxFileBytes,

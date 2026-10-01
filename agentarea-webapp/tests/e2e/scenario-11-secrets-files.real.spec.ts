@@ -1,34 +1,44 @@
 import { expect, test } from "@playwright/test";
 import {
+  authedRequest,
   createKratosUser,
   deleteKratosUser,
   installBrowserSession,
+  responseBody,
   type AuthedUser,
 } from "./helpers/real-stack";
-import {
-  deleteMcpServer,
-  gotoCommitted,
-  runRealStack,
-  seedMcpServer,
-} from "./helpers/scenarios";
+import { gotoCommitted, runRealStack } from "./helpers/scenarios";
 
 test.describe("Scenario 11 MP - manage secrets and view workspace files", () => {
   test.skip(!runRealStack, "Set PLAYWRIGHT_REAL_STACK=1");
 
   let user: AuthedUser;
-  let mcp: { id: string; name: string } | undefined;
+  let secretId: string | undefined;
+  const secretName = `scenario-11-${Date.now()}`;
+  const secretValue = `pw-secret-value-${Date.now()}`;
 
   test.beforeAll(async ({ request }) => {
     user = await createKratosUser("scenario-11");
-    mcp = await seedMcpServer(request, user, "scenario-11-mcp");
+    const created = await authedRequest(request, user, "post", "/v1/secrets", {
+      data: { name: secretName, value: secretValue },
+    });
+    expect(
+      created.ok(),
+      `POST /v1/secrets: ${created.status()} ${JSON.stringify(await responseBody(created))}`
+    ).toBeTruthy();
+    secretId = (await created.json()).id;
   });
 
   test.afterAll(async ({ request }) => {
-    await deleteMcpServer(request, user, mcp?.id);
+    if (secretId) {
+      await authedRequest(request, user, "delete", `/v1/secrets/${secretId}`).catch(
+        () => undefined
+      );
+    }
     if (user) await deleteKratosUser(user.identityId);
   });
 
-  test("shows connection credentials without exposing raw secret values and opens workspace files", async ({
+  test("lists a workspace secret without exposing its raw value and opens workspace files", async ({
     context,
     page,
   }) => {
@@ -36,15 +46,15 @@ test.describe("Scenario 11 MP - manage secrets and view workspace files", () => 
     await installBrowserSession(context, user);
 
     await gotoCommitted(page, "/secrets");
-    await expect(page.getByText("Connection name")).toBeVisible();
-    await expect(page.getByText(mcp?.name ?? "", { exact: false })).toBeVisible();
-    await expect(page.getByText("pw-secret-value", { exact: false })).toHaveCount(
-      0
-    );
+    await expect(page.getByText(secretName, { exact: false })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(secretValue, { exact: false })).toHaveCount(0);
+    expect(await page.content()).not.toContain(secretValue);
 
     await gotoCommitted(page, "/files");
     await expect(
-      page.getByText(/no files in this workspace yet|files/i)
+      page.getByText(/no files in this workspace yet|files/i).first()
     ).toBeVisible({ timeout: 15_000 });
   });
 });

@@ -50,7 +50,7 @@ agentarea-webapp/
 - **Entity logos**: a *specific* connection is drawn by `<EntityMark identity={...} />` (`@/components/EntityMark`) over an identity from `@/lib/entity-identity` — registry logo → favicon of the host it points at → domain initials → the kind's glyph. Do NOT hand-roll an `<img onError>` fallback chain or a local initials mark; add the case to `entity-identity` instead.
 - **Tests**: a frontend change gets **no test** by default. The rule and the two exceptions are in "TESTS (THIS DIR)" below.
 - **Shared components first**: before writing UI, look for the existing component in `src/components/` (and `src/components/ui/` for shadcn atoms). A visual pattern that appears twice lives in one component used twice — never a second local copy. Extract into `src/components/` in the same change that creates the second usage.
-- **Status rendering**: task status on *any* surface (list, table cell, page header, inbox, filter, sheet, card) goes through `@/components/TaskStatus` — `<TaskStatus status={...} />`, `caption="auto" | "never"` for dense rows, `useTaskStatusLabel(status)` for prose. Every other entity status (agent, trigger, MCP, API key, payment, policy, invitation, sandbox) uses a `get<Entity>StatusPresentation()` from `@/lib/status` fed into `<StatusIndicator>`. New status values get a case in `@/lib/status`, not a call-site map. Details in `Design.md` §"Status / banners".
+- **Status rendering**: every status is a lucide glyph from `<StatusIndicator kind>` (`@/components/ui/status-indicator`) — never a coloured dot, a coloured `<Badge>`, or a glyph/colour picked locally. `kind` is a closed `StatusKind` set in `@/lib/status` (`draft | queued | scheduled | running | attention | paused | active | off | done | failed | cancelled`); the kind fixes glyph + colour, the label stays neutral. Task status on *any* surface goes through `@/components/TaskStatus` (`<TaskStatus status={...} />`, `caption="auto" | "never"` for dense rows, `useTaskStatusLabel(status)` for prose). Every other entity uses a `get<Entity>StatusPresentation()` from `@/lib/status` returning `{ label, kind }`; a local vocabulary maps to `StatusKind`, never to colours. New status values get a case in `@/lib/status`. Details and the kind table: `Design.md` §"Status / banners".
 
 ## TESTS (THIS DIR)
 
@@ -146,7 +146,7 @@ inbox, workplace, admin, settings, ...).
 - Never `as any` a backend response — use the generated types/zod.
 - Never skip loading states during SSE
 - Never store sensitive data in localStorage
-- Never hand-roll a status badge/dot (`bg-green-500`, a bare `<Badge>`, a local tone map) or re-derive a task's label/tone next to `<StatusIndicator>` — render `<TaskStatus>`; the divergence only shows up on the one page nobody re-checked.
+- Never hand-roll a status marker — a coloured dot (`bg-green-500`), a coloured `<Badge>`, a locally chosen `CheckCircle`/`XCircle`, or a state→colour map — render `<StatusIndicator kind>` / `<TaskStatus>`; the divergence only shows up on the one page nobody re-checked.
 - Never add a `*.test.tsx` that asserts rendered markup, and never answer "is this change proved?" with a jsdom test — a UI change is proved by running the surface or by an e2e spec. See "TESTS (THIS DIR)".
 
 ## COMMANDS

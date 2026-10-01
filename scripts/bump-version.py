@@ -110,7 +110,7 @@ def main():
 
     # Update Go version constants
     go_version_files = [
-        root_dir / 'agentarea-mcp-manager' / 'cmd' / 'mcp-manager' / 'main.go',
+        root_dir / 'agentarea-mcp-manager' / 'internal' / 'managerapp' / 'app.go',
         root_dir / 'agentarea-event-service' / 'cmd' / 'server' / 'main.go',
     ]
 
@@ -118,8 +118,8 @@ def main():
         if go_file.exists():
             content = go_file.read_text()
             updated = re.sub(
-                r'const version = "[^"]*"',
-                f'const version = "{new_version}"',
+                r'const ([vV])ersion = "[^"]*"',
+                rf'const \1ersion = "{new_version}"',
                 content
             )
 

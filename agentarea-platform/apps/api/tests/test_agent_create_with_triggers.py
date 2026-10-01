@@ -47,6 +47,9 @@ _TELEGRAM = {
 async def _real_validation(trigger_data):
     # The route's pre-check runs the service's real configuration rules.
     service = object.__new__(TriggerService)
+    service.trigger_repository = SimpleNamespace(
+        webhook_id_in_use=AsyncMock(return_value=False)
+    )
     await TriggerService._validate_trigger_configuration(service, trigger_data)
 
 

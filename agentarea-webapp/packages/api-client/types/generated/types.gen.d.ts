@@ -1199,6 +1199,40 @@ export type CatalogBrowseResponse = {
     total: number;
 };
 /**
+ * CatalogConnectionPreflight
+ *
+ * What the connect form needs to know before it offers Connect.
+ *
+ * ``ready`` — this installation holds an OAuth app for the provider.
+ * ``oauth_app_required`` — the user must register their own app first.
+ */
+export type CatalogConnectionPreflight = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Item Id
+     */
+    item_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Redirect Uri
+     */
+    redirect_uri: string;
+    /**
+     * Status
+     */
+    status: 'ready' | 'oauth_app_required';
+};
+/**
  * CatalogConnectionRequest
  *
  * Connect with AgentArea credentials, or override them from Advanced.
@@ -1575,6 +1609,14 @@ export type ContinueTaskPayload = {
      * Additional Iterations
      */
     additional_iterations?: number;
+    /**
+     * Additional Tokens
+     */
+    additional_tokens?: number;
+    /**
+     * Additional Tool Calls
+     */
+    additional_tool_calls?: number;
 };
 /**
  * CreateInvitationBody
@@ -3449,6 +3491,10 @@ export type ModelInstanceResponse = {
      */
     is_public: boolean;
     /**
+     * Managed By
+     */
+    managed_by?: string | null;
+    /**
      * Model Display Name
      */
     model_display_name?: string | null;
@@ -3480,6 +3526,10 @@ export type ModelInstanceResponse = {
      * Provider Name
      */
     provider_name?: string | null;
+    /**
+     * Tags
+     */
+    tags?: Array<string>;
     /**
      * Updated At
      */
@@ -10043,6 +10093,31 @@ export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses = {
     200: CatalogConnectionResponse;
 };
 export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponse = ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses[keyof ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses];
+export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetData = {
+    body?: never;
+    path: {
+        /**
+         * Item Id
+         */
+        item_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/connections/catalog/{item_id}/preflight';
+};
+export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetError = PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors[keyof PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors];
+export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogConnectionPreflight;
+};
+export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponse = PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses[keyof PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses];
 export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutData = {
     body: ManagedOAuthAppRequest;
     path: {
@@ -13758,6 +13833,12 @@ export type ListSkillsV1SkillsGetData = {
          * Filter registry-created skills
          */
         from_registry?: boolean | null;
+        /**
+         * Include Catalog
+         *
+         * Merge in catalog skills not installed in the workspace
+         */
+        include_catalog?: boolean;
         /**
          * Page
          */

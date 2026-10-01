@@ -31,7 +31,7 @@ def written(monkeypatch) -> list[RelationTuple]:
     client = AsyncMock()
     client.write_tuple.side_effect = lambda tuple_: recorded.append(tuple_)
     # The module binds the resolver at import, so patch it where it is used.
-    monkeypatch.setattr(grants, "resolve_graph_client", lambda: (client, "OpenFGA"))
+    monkeypatch.setattr(grants, "resolve_graph_client", lambda: client)
     return recorded
 
 

@@ -6,7 +6,6 @@ import Link from "@/components/WorkspaceLink";
 import { useSearchParams } from "next/navigation";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import {
-  AlertTriangle,
   Check,
   Clock,
   Container,
@@ -19,7 +18,6 @@ import {
   Pencil,
   RefreshCw,
   Server,
-  XCircle,
 } from "lucide-react";
 import EntityMark from "@/components/EntityMark";
 import FormError from "@/components/FormError";
@@ -463,8 +461,7 @@ export default function MCPInstanceDetail({
                 </div>
                 <StatusIndicator
                   size="sm"
-                  tone={verificationPresentation.tone}
-                  pulse={verificationPresentation.pulse}
+                  kind={verificationPresentation.kind}
                 >
                   {verificationPresentation.label}
                 </StatusIndicator>
@@ -515,12 +512,9 @@ export default function MCPInstanceDetail({
                 role="alert"
                 className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30"
               >
-                <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span>
-                    Verification may be stuck. You can retry manually.
-                  </span>
-                </div>
+                <StatusIndicator kind="attention" size="sm">
+                  Verification may be stuck. You can retry manually.
+                </StatusIndicator>
                 <Button
                   size="xs"
                   variant="outline"
@@ -541,10 +535,13 @@ export default function MCPInstanceDetail({
                 role="alert"
                 className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 space-y-2"
               >
-                <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-                  <XCircle className="h-4 w-4 shrink-0" />
-                  <span>Verification failed</span>
-                </div>
+                <StatusIndicator
+                  kind="failed"
+                  size="sm"
+                  iconClassName="h-4 w-4"
+                >
+                  Verification failed
+                </StatusIndicator>
                 <p className="text-sm text-destructive/80">
                   {verification.error.message}
                 </p>

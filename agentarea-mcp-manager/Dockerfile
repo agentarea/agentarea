@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build stage ----
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 
@@ -25,13 +25,12 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags
 # `--target dev` (docker-compose.dev.yaml does this). It is deliberately NOT the
 # last stage so a plain `docker build` / CI build without --target never ships
 # this image (it has no compiled binary and crash-loops in a pod).
-FROM golang:1.25-alpine AS dev
+FROM golang:1.26-alpine AS dev
 
 RUN apk add --no-cache git ca-certificates docker-cli dumb-init \
     && rm -rf /var/cache/apk/*
 
-# Pinned: air >= v1.67.2 requires Go 1.26, which this base image does not ship.
-RUN go install github.com/air-verse/air@v1.67.1
+RUN go install github.com/air-verse/air@v1.67.4
 
 WORKDIR /app
 

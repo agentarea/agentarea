@@ -107,7 +107,7 @@ export default function APIKeysClient({
         const status = value as APIKeyStatusType;
         const presentation = getApiKeyStatusPresentation(status);
         return (
-          <StatusIndicator tone={presentation.tone} pulse={presentation.pulse}>
+          <StatusIndicator kind={presentation.kind}>
             {t(`status.${status}`)}
           </StatusIndicator>
         );

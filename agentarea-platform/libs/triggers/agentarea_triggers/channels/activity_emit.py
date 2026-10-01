@@ -38,9 +38,11 @@ async def emit_channel_delivery(
     """Run the channel-routing decision and submit to the outbound stream.
 
     Returns True if the message was submitted, False if the event was
-    skipped (no channel_origin, not visible, no adapter, missing
-    event_id, etc.). Never raises — failures log and return False so
-    the surrounding activity isn't poisoned by an unrelated event.
+    skipped (no channel_origin, not visible, no adapter, a payload the
+    adapter cannot format). A routing problem is specific to one event and
+    retrying cannot fix it, so it logs and skips rather than poisoning the
+    batch. A failed submit to the stream raises: the activity retries the
+    batch, and the consumer dedups the repeat by ``dedup_key``.
     """
     try:
         if not channel_origin:
@@ -80,22 +82,19 @@ async def emit_channel_delivery(
         dedup_key = f"{task_id}:{event_type}:{event_id}"
         if dedup_suffix:
             dedup_key = f"{dedup_key}:{dedup_suffix}"
-
-        await broker.submit(
-            stream,
-            {
-                "channel_type": channel_type,
-                # task_id + event_type ride along so streaming adapters (Telegram)
-                # accumulate one live message per task and know when it's terminal.
-                "channel_config": json.dumps(
-                    {**channel_origin, "task_id": str(task_id), "event_type": event_type}
-                ),
-                "message": message,
-                "dedup_key": dedup_key,
-            },
-        )
-        return True
+        fields = {
+            "channel_type": channel_type,
+            # task_id + event_type ride along so streaming adapters (Telegram)
+            # accumulate one live message per task and know when it's terminal.
+            "channel_config": json.dumps(
+                {**channel_origin, "task_id": str(task_id), "event_type": event_type}
+            ),
+            "message": message,
+            "dedup_key": dedup_key,
+        }
     except Exception:
-        # Channel emit failures must not break the whole activity batch.
-        logger.exception("channel emit failed for event %s", event.get("event_type"))
+        logger.exception("channel emit skipped for event %s", event.get("event_type"))
         return False
+
+    await broker.submit(stream, fields)
+    return True

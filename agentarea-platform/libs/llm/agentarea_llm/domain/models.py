@@ -16,6 +16,7 @@ from sqlalchemy import (
     select,
     true,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -212,6 +213,11 @@ class ModelInstance(BaseModel, WorkspaceScopedMixin):
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Labels on a platform model, written by the operator from the LLMProviderConfig
+    # resource (``default``, ``fast``, ...). ``default`` is the model a new agent
+    # starts on, so moving it is an edit in git rather than a redeploy. Nothing in
+    # the API writes them; a tenant's own instances stay ``[]``.
+    tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
 
     @classmethod
     def workspace_visibility(cls, workspace_id: str) -> ColumnElement[bool]:

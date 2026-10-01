@@ -41,5 +41,5 @@ class FeatureService:
 
     @property
     def enable_network_rebac(self) -> bool:
-        """Network view: filter nodes via Keto ReBAC."""
+        """Network view: filter nodes via the ReBAC graph."""
         return self.mode == DeploymentMode.ENTERPRISE

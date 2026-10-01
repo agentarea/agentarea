@@ -1,17 +1,16 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { Bot, Check, Clock, Pause, Play, Square } from "lucide-react";
+import { Bot, Clock, Pause, Play, Square } from "lucide-react";
 import type { ModelInstanceResponse } from "@/api/client/types.gen";
 import AgentChat from "@/components/Chat/AgentChat";
 import { TaskStatus } from "@/components/TaskStatus";
 import { Button } from "@/components/ui/button";
 import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
-import { useCurrency } from "@/hooks/useCurrency";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import {
   cancelTask,
   changeTaskModel,
-  continueTask,
   getTaskStatus,
   listTaskModelOptions,
   pauseTask,
@@ -52,7 +51,6 @@ interface Props {
 }
 
 export default function AgentTaskClient({ agent, taskId, task }: Props) {
-  const { currency } = useCurrency();
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [modelInstances, setModelInstances] = useState<ModelInstanceResponse[]>(
@@ -64,12 +62,6 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
   const [changingModel, setChangingModel] = useState(false);
   const [modelApplied, setModelApplied] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
-  const [continuationIterations, setContinuationIterations] = useState("10");
-  const [continuationBudget, setContinuationBudget] = useState("");
-  const [continuing, setContinuing] = useState(false);
-  const [continuationError, setContinuationError] = useState<string | null>(
-    null
-  );
 
   const loadTaskData = useCallback(async () => {
     setLoading(true);
@@ -150,41 +142,6 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
       }
     } catch (error) {
       console.error(`Failed to ${action} task:`, error);
-    }
-  };
-
-  const handleContinue = async () => {
-    const iterations = Number.parseInt(continuationIterations, 10);
-    const budget = continuationBudget.trim();
-    if (
-      !Number.isInteger(iterations) ||
-      iterations < 0 ||
-      (iterations === 0 && !budget)
-    ) {
-      setContinuationError("Grant at least one iteration or a budget top-up.");
-      return;
-    }
-
-    setContinuing(true);
-    setContinuationError(null);
-    try {
-      const result = await continueTask(
-        taskId,
-        iterations,
-        budget || undefined
-      );
-      if (result.error) {
-        setContinuationError(
-          "The task is no longer waiting, or the grant does not lift its limit."
-        );
-        return;
-      }
-      await loadTaskData();
-    } catch (error) {
-      console.error("Failed to continue task:", error);
-      setContinuationError("Couldn't continue the task. Please try again.");
-    } finally {
-      setContinuing(false);
     }
   };
 
@@ -273,57 +230,6 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
           </div>
         </div>
 
-        {currentStatus === "waiting_for_continuation" && (
-          <div className="mb-4 space-y-3 rounded-md border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
-            <div>
-              <p className="text-sm font-medium text-amber-950 dark:text-amber-100">
-                This task reached its iteration or budget limit.
-              </p>
-              <p className="text-xs text-amber-800 dark:text-amber-300">
-                Grant only the resources you want it to use. The workflow waits
-                for up to 24 hours.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="space-y-1 text-xs font-medium text-gray-700 dark:text-gray-200">
-                Additional iterations
-                <input
-                  className="block h-9 w-32 rounded-md border border-gray-300 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
-                  min="0"
-                  max="1000"
-                  type="number"
-                  value={continuationIterations}
-                  onChange={(event) =>
-                    setContinuationIterations(event.target.value)
-                  }
-                />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-gray-700 dark:text-gray-200">
-                Budget top-up ({currency ?? "¤"}, optional)
-                <input
-                  className="block h-9 w-44 rounded-md border border-gray-300 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
-                  min="0.01"
-                  step="0.01"
-                  type="number"
-                  value={continuationBudget}
-                  onChange={(event) =>
-                    setContinuationBudget(event.target.value)
-                  }
-                />
-              </label>
-              <Button size="sm" onClick={handleContinue} disabled={continuing}>
-                <Play className="mr-2" />
-                {continuing ? "Continuing…" : "Continue task"}
-              </Button>
-            </div>
-            {continuationError && (
-              <p className="text-xs text-red-700 dark:text-red-300">
-                {continuationError}
-              </p>
-            )}
-          </div>
-        )}
-
         {/* On-the-fly model switch — only while the workflow is actually live
             (running, incl. the follow-up window), so the signal can land. */}
         {isWorkflowLive && modelInstances.length > 0 && (
@@ -346,15 +252,14 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
               </span>
             )}
             {!changingModel && modelApplied && !modelError && (
-              <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                <Check className="h-3.5 w-3.5" />
+              <StatusIndicator kind="done" size="sm">
                 Applied — takes effect on the next step
-              </span>
+              </StatusIndicator>
             )}
             {!changingModel && modelError && (
-              <span className="text-xs text-red-600 dark:text-red-400">
+              <StatusIndicator kind="failed" size="sm">
                 {modelError}
-              </span>
+              </StatusIndicator>
             )}
           </div>
         )}
@@ -411,6 +316,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
           agent={agent}
           taskId={taskId}
           status={taskStatus?.status || task?.status}
+          onContinued={loadTaskData}
           className="w-full border-0"
           height="600px"
         />

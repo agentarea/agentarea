@@ -1,7 +1,7 @@
 """Async HTTP client for OpenFGA's tuple graph APIs.
 
-This adapter intentionally accepts AgentArea's existing RelationTuple shape so
-the rest of the code can migrate from Keto without learning OpenFGA wire JSON.
+This adapter accepts AgentArea's RelationTuple shape so the rest of the code
+does not need to know OpenFGA wire JSON.
 """
 
 from __future__ import annotations

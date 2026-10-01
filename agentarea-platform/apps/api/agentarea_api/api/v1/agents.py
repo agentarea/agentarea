@@ -147,19 +147,28 @@ async def _resolve_agent_id(agent_service: AgentService, identifier: str) -> UUI
 async def _grant_agent_owner(agent_id: UUID | str, user_id: str, workspace_id: str) -> None:
     """Assert that ``user_id`` owns ``agent_id`` in the resource graph.
 
-    Called on every path that materializes an agent the caller now owns —
-    create, catalog install (copy-on-write fork), and edit (which forks an
-    un-owned catalog agent) — so a freshly-minted agent never ends up without
-    its ownership relationships (which would 403 the creator on their own row).
     Attaches the agent artifact to the workspace root project and grants the
-    creator read/write/manage. Writes are idempotent, so re-asserting on update
-    is harmless.
+    creator read/write/manage. Writes are idempotent.
     """
     await grant_resource_owner(
         resource_id=agent_id,
         workspace_id=workspace_id,
         user_id=user_id,
     )
+
+
+async def _reassert_creator_ownership(agent: Agent, user_context: UserContext) -> None:
+    """Re-grant ownership of ``agent`` only when the caller created it.
+
+    Install and edit may hand back a row that already existed -- another
+    member's agent, or this workspace's earlier fork of a catalog item. Granting
+    on those would make anyone who can reach the route its owner. A row the
+    caller just forked was granted by the repository; re-asserting here repairs
+    a grant that failed after the fork committed, when the caller retries.
+    """
+    if str(agent.created_by) != str(user_context.user_id):
+        return
+    await _grant_agent_owner(agent.id, user_context.user_id, user_context.workspace_id)
 
 
 async def _overlay_approval_flags(
@@ -535,9 +544,7 @@ async def install_agent(
     agent = await agent_service.install_catalog_agent(resolved_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    # The fork created a real tenant row; assert ownership so it is not orphaned
-    # in Keto (matching create). Idempotent if the workspace already installed it.
-    await _grant_agent_owner(agent.id, user_context.user_id, user_context.workspace_id)
+    await _reassert_creator_ownership(agent, user_context)
     agent = await agent_service.get_with_skills(agent.id) or agent
     return AgentResponse.from_domain(agent, include_skills=True)
 
@@ -605,9 +612,7 @@ async def update_agent(
     agent = await agent_service.update_agent(id=resolved_id, payload=data)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    # Editing an un-installed catalog agent forks a tenant copy (copy-on-write);
-    # assert ownership of the resulting row. Idempotent for plain edits.
-    await _grant_agent_owner(agent.id, user_context.user_id, user_context.workspace_id)
+    await _reassert_creator_ownership(agent, user_context)
     agent = await agent_service.get_with_skills(agent.id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")

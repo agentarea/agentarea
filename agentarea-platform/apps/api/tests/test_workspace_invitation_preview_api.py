@@ -26,7 +26,9 @@ from httpx import ASGITransport, AsyncClient
 INVITER = "bb206374-f612-420d-acd0-b62051061c63"
 INVITEE = "5b1edbaf-8480-4885-a003-78adc92ab513"
 WORKSPACE_ID = "0d5c2f7e-8d6b-4b53-9a4e-1f7f3c2d9a10"
-EXPIRES_AT = datetime(2026, 10, 1, 12, 0)
+# Far enough ahead that the invitation is never expired when the suite runs: a
+# date near the present turned this file red the day it passed.
+EXPIRES_AT = datetime(2099, 1, 1, 12, 0)
 
 
 class FakeInvitationRepository:
@@ -146,7 +148,7 @@ async def test_preview_names_the_inviter_and_the_workspace_and_nothing_else(
         "workspace_name": "AgentArea",
         "inviter_display_name": "Artem Astapenko",
         "inviter_email": "artem@agentarea.ai",
-        "expires_at": "2026-10-01T12:00:00Z",
+        "expires_at": "2099-01-01T12:00:00Z",
     }
 
 

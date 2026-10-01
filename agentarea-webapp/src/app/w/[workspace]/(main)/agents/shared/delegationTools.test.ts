@@ -1,6 +1,6 @@
-import type { AgentResponse } from "@/api/client/types.gen";
+import type { AgentUpdate } from "@/api/client/types.gen";
 import { describe, expect, it } from "vitest";
-import { withDelegates } from "./delegationTools";
+import { delegatesOf, withDelegates } from "./delegationTools";
 
 const research = {
   type: "agent" as const,
@@ -23,7 +23,7 @@ const shell = {
   settings: { requires_user_confirmation: true },
 };
 
-const tools: NonNullable<AgentResponse["tools"]> = [shell, research, outreach];
+const tools: NonNullable<AgentUpdate["tools"]> = [shell, research, outreach];
 
 describe("withDelegates", () => {
   it("toggling one delegate off keeps the other delegate unchanged", () => {
@@ -44,5 +44,11 @@ describe("withDelegates", () => {
       outreach,
       { type: "agent", name: "bizdev-review" },
     ]);
+  });
+});
+
+describe("delegatesOf", () => {
+  it("lists only agent tools, in order", () => {
+    expect(delegatesOf(tools)).toEqual(["bizdev-research", "bizdev-outreach"]);
   });
 });
