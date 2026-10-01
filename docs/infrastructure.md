@@ -331,7 +331,7 @@ graph TB
     
     ```yaml
     mcp_manager:
-      language: Go 1.21+
+      language: Go 1.26+
       features:
         - Container orchestration
         - Dynamic service provisioning

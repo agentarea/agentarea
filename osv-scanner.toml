@@ -5,20 +5,11 @@
 #
 # Findings with an in-line fix were bumped directly instead of
 # being listed here (click, google.golang.org/grpc, brace-expansion,
-# @ai-sdk/provider-utils, protobufjs, qs). Everything below needs a toolchain
-# bump or has no fix yet, so it is deferred rather than done as a drive-by.
+# @ai-sdk/provider-utils, protobufjs, qs, golang.org/x/crypto). Everything
+# below has no fix yet, so it is deferred rather than done as a drive-by.
 
 [[IgnoredVulns]]
 id = "GO-2026-5932"
 ignoreUntil = 2026-12-24
 reason = "golang.org/x/crypto/openpgp is flagged unmaintained and unsafe-by-design with no version fix. Indirect dependency of agentarea-mcp-manager (pulled in transitively; openpgp is not imported directly). Re-check at review for an upstream fix or for whatever pulls it in dropping the dependency."
 
-[[IgnoredVulns]]
-id = "GO-2026-6354"
-ignoreUntil = 2026-12-24
-reason = "Fixed in golang.org/x/crypto 0.56.0; agentarea-mcp-manager is on 0.55.0. x/crypto 0.56.0 requires Go >= 1.26, while the module, its Dockerfiles and CI build on Go 1.25, so taking the fix means a toolchain bump, deferred to its own change."
-
-[[IgnoredVulns]]
-id = "GO-2026-6355"
-ignoreUntil = 2026-12-24
-reason = "Same as GO-2026-6354: fixed in golang.org/x/crypto 0.56.0, which requires the Go 1.26 toolchain bump deferred there."

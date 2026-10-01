@@ -724,7 +724,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26'
 
       # Must match GOLANGCI_LINT_VERSION in agentarea-mcp-manager/Makefile.
       - name: Install golangci-lint
@@ -752,7 +752,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26'
 
       # Must match GOLANGCI_LINT_VERSION in agentarea-event-service/Makefile.
       - name: Install golangci-lint
@@ -910,7 +910,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26'
 
       # Migrations heads/upgrade/roundtrip, then every schema-backed suite
       # (Python, MCP manager Go SQL, operator SQL). The list lives in

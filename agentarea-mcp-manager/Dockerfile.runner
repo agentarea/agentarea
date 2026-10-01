@@ -4,7 +4,7 @@
 #   - dev:  the compose sandbox-executor container
 # Debian base (not Alpine): agent workloads need manylinux wheels
 # (pandas, lxml, pillow) that do not install on musl.
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 
