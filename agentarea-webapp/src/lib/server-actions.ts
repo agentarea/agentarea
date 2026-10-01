@@ -30,6 +30,7 @@ import {
   addAgentToProject,
   addMcpInstanceToClient,
   addMcpInstanceToProject,
+  addPlatformToolsetToClient,
   addSkillMember,
   addSkillToClient,
   addSkillToProject,
@@ -84,6 +85,8 @@ import {
   installSkill,
   listAgents,
   listAgentTasks,
+  listAllTools,
+  listClientPlatformToolsets,
   listClients,
   listMCPAuthConfigs,
   listMCPServerInstances,
@@ -110,6 +113,7 @@ import {
   removeAgentFromProject,
   removeMcpInstanceFromClient,
   removeMcpInstanceFromProject,
+  removePlatformToolsetFromClient,
   removeSkillFromClient,
   removeSkillFromProject,
   removeSkillMember,
@@ -766,9 +770,15 @@ export async function removeSkillFromClientAction(
 export async function addMcpInstanceToClientAction(
   clientId: string,
   mcpInstanceId: string,
-  namespacePrefix?: string | null
+  namespacePrefix?: string | null,
+  allowedTools?: string[] | null
 ) {
-  return await addMcpInstanceToClient(clientId, mcpInstanceId, namespacePrefix);
+  return await addMcpInstanceToClient(
+    clientId,
+    mcpInstanceId,
+    namespacePrefix,
+    allowedTools
+  );
 }
 
 export async function removeMcpInstanceFromClientAction(
@@ -776,6 +786,30 @@ export async function removeMcpInstanceFromClientAction(
   mcpInstanceId: string
 ) {
   return await removeMcpInstanceFromClient(clientId, mcpInstanceId);
+}
+
+/** Tools an MCP instance last reported, without dialing it again. */
+export async function listMcpInstanceToolsAction(mcpInstanceId: string) {
+  return await listAllTools({ include: "mcp", mcpInstanceId });
+}
+
+export async function listClientPlatformToolsetsAction() {
+  return await listClientPlatformToolsets();
+}
+
+export async function addPlatformToolsetToClientAction(
+  clientId: string,
+  toolset: string,
+  disabledMethods: string[] | null
+) {
+  return await addPlatformToolsetToClient(clientId, toolset, disabledMethods);
+}
+
+export async function removePlatformToolsetFromClientAction(
+  clientId: string,
+  toolset: string
+) {
+  return await removePlatformToolsetFromClient(clientId, toolset);
 }
 
 // Project Actions

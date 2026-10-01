@@ -19,6 +19,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.permission import PermissionService
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.di.container import get_container
+from agentarea_mcp.domain.client_models import ClientMcpInstanceLink, ClientPlatformToolset
 from pydantic import ValidationError
 
 CLIENT_ID = uuid4()
@@ -49,6 +50,9 @@ class FakeClientService:
         self.updated: list = []
         self.associations: list = []
         self.deleted: list = []
+        self.instance_id = uuid4()
+        self.links: dict = {}
+        self.toolsets: dict = {}
 
     async def create_client(self, payload):
         self.created.append(payload)
@@ -61,11 +65,13 @@ class FakeClientService:
     async def get(self, client_id):
         return SimpleNamespace(
             id=client_id,
+            workspace_id="ws-1",
+            created_by="user-1",
             name="codex",
             description=None,
             kind="harness",
             skills=[SimpleNamespace(id=uuid4(), name="research")],
-            mcp_instances=[],
+            mcp_instances=[SimpleNamespace(id=self.instance_id, name="github")],
         )
 
     async def list(self, limit=None, offset=None):
@@ -81,11 +87,17 @@ class FakeClientService:
     async def remove_skill(self, client_id, skill_id):
         self.associations.append(("remove_skill", client_id, skill_id))
 
-    async def add_mcp_instance(self, client_id, mcp_instance_id, namespace_prefix=None):
-        self.associations.append(("add_mcp", client_id, mcp_instance_id, namespace_prefix))
-
     async def remove_mcp_instance(self, client_id, mcp_instance_id):
         self.associations.append(("remove_mcp", client_id, mcp_instance_id))
+
+    async def set_platform_toolset(self, client_id, toolset, disabled_methods):
+        self.associations.append(("add_toolset", client_id, toolset, disabled_methods))
+
+    async def instance_links(self, client_ids):
+        return self.links
+
+    async def platform_toolsets(self, client_ids):
+        return self.toolsets
 
 
 @pytest.fixture
@@ -131,19 +143,51 @@ async def test_update_only_sends_provided_fields(service):
     assert payload.model_dump(exclude_unset=True) == {"description": "my laptop"}
 
 
-async def test_add_mcp_instance_passes_namespace_prefix(service):
-    instance_id = uuid4()
-    await ClientsToolset().add_mcp_instance(
-        client_id=str(CLIENT_ID),
-        mcp_instance_id=str(instance_id),
-        namespace_prefix="gh",
-    )
+async def test_get_reports_how_the_client_serves_its_attachments(service):
+    service.links = {
+        str(CLIENT_ID): {
+            str(service.instance_id): ClientMcpInstanceLink(
+                namespace_prefix="gh", allowed_tools=["create_issue"]
+            )
+        }
+    }
+    service.toolsets = {
+        str(CLIENT_ID): [
+            ClientPlatformToolset(toolset="agentarea/runs", disabled_methods=["cancel"])
+        ]
+    }
 
-    assert service.associations == [("add_mcp", CLIENT_ID, instance_id, "gh")]
-
-
-async def test_get_lists_attached_skills(service):
     result = json.loads(await ClientsToolset().get(client_id=str(CLIENT_ID)))
 
     assert result["skills"][0]["name"] == "research"
     assert result["mcp_endpoint_url"].endswith(f"/mcp/clients/{CLIENT_ID}")
+    (instance,) = result["mcp_instances"]
+    assert (instance["namespace_prefix"], instance["allowed_tools"]) == ("gh", ["create_issue"])
+    assert result["platform_toolsets"] == [
+        {"name": "agentarea/runs", "disabled_methods": ["cancel"]}
+    ]
+
+
+async def test_add_platform_toolset_stores_the_namespace_a_name_resolves_to(service):
+    await ClientsToolset().add_platform_toolset(
+        client_id=str(CLIENT_ID), toolset="runs", disabled_methods=["cancel"]
+    )
+
+    assert service.associations == [("add_toolset", CLIENT_ID, "agentarea/runs", ["cancel"])]
+
+
+@pytest.mark.parametrize(
+    ("toolset", "disabled_methods"),
+    [("nonexistent", None), ("agentarea/runs", ["no_such_method"]), ("workspaces", None)],
+)
+async def test_add_platform_toolset_refuses_what_a_client_cannot_carry(
+    service, toolset, disabled_methods
+):
+    result = json.loads(
+        await ClientsToolset().add_platform_toolset(
+            client_id=str(CLIENT_ID), toolset=toolset, disabled_methods=disabled_methods
+        )
+    )
+
+    assert "error" in result
+    assert service.associations == []

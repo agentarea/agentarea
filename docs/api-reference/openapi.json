@@ -2655,6 +2655,77 @@
         "title": "ClientCreate",
         "type": "object"
       },
+      "ClientMcpInstanceRef": {
+        "properties": {
+          "allowed_tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Tools"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "namespace_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Namespace Prefix"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ClientMcpInstanceRef",
+        "type": "object"
+      },
+      "ClientPlatformToolsetRef": {
+        "properties": {
+          "disabled_methods": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled Methods"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ClientPlatformToolsetRef",
+        "type": "object"
+      },
       "ClientRef": {
         "properties": {
           "id": {
@@ -2714,7 +2785,7 @@
           "mcp_instances": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/ClientRef"
+              "$ref": "#/components/schemas/ClientMcpInstanceRef"
             },
             "title": "Mcp Instances",
             "type": "array"
@@ -2722,6 +2793,14 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "platform_toolsets": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ClientPlatformToolsetRef"
+            },
+            "title": "Platform Toolsets",
+            "type": "array"
           },
           "skills": {
             "default": [],
@@ -5934,7 +6013,22 @@
         "type": "object"
       },
       "McpInstanceAssociationBody": {
+        "description": "Attach an instance, or replace how an attached one is served.",
         "properties": {
+          "allowed_tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Tools"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -7897,6 +7991,106 @@
           "status"
         ],
         "title": "PlannedUpload",
+        "type": "object"
+      },
+      "PlatformToolsetAssociationBody": {
+        "description": "Attach a platform toolset, or replace the methods an attached one leaves out.",
+        "properties": {
+          "disabled_methods": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled Methods"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PlatformToolsetAssociationBody",
+        "type": "object"
+      },
+      "PlatformToolsetMethod": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "effect": {
+            "anyOf": [
+              {
+                "enum": [
+                  "read",
+                  "write",
+                  "destructive",
+                  "privileged"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effect"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "description"
+        ],
+        "title": "PlatformToolsetMethod",
+        "type": "object"
+      },
+      "PlatformToolsetResponse": {
+        "description": "A platform toolset a client can carry.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "methods": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformToolsetMethod"
+            },
+            "title": "Methods",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "description",
+          "methods"
+        ],
+        "title": "PlatformToolsetResponse",
         "type": "object"
       },
       "PolicyDocument": {
@@ -19398,6 +19592,64 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/clients/platform-toolsets": {
+      "get": {
+        "description": "Platform toolsets a client can carry, with the methods each can leave out.",
+        "operationId": "list_platform_toolsets_v1_clients_platform_toolsets_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlatformToolsetResponse"
+                  },
+                  "title": "Response List Platform Toolsets V1 Clients Platform Toolsets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Platform Toolsets",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/clients/{client_id}": {
       "delete": {
         "operationId": "delete_client_v1_clients__client_id__delete",
@@ -19711,6 +19963,138 @@
           }
         ],
         "summary": "Remove Mcp Instance From Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets": {
+      "post": {
+        "operationId": "add_platform_toolset_to_client_v1_clients__client_id__platform_toolsets_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformToolsetAssociationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Platform Toolset To Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets/{toolset}": {
+      "delete": {
+        "description": "Detach a toolset by the namespace the client lists it under.",
+        "operationId": "remove_platform_toolset_from_client_v1_clients__client_id__platform_toolsets__toolset__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "toolset",
+            "required": true,
+            "schema": {
+              "title": "Toolset",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Platform Toolset From Client",
         "tags": [
           "v1",
           "protected",

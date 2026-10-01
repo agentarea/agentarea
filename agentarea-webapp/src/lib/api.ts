@@ -1685,13 +1685,18 @@ export const removeSkillFromClient = async (
 export const addMcpInstanceToClient = async (
   clientId: string,
   mcpInstanceId: string,
-  namespacePrefix?: string | null
+  namespacePrefix?: string | null,
+  allowedTools?: string[] | null
 ) => {
   const { data, error } =
     await sdk.addMcpInstanceToClientV1ClientsClientIdMcpInstancesPost({
       client: serverClient,
       path: { client_id: clientId },
-      body: { id: mcpInstanceId, namespace_prefix: namespacePrefix ?? null },
+      body: {
+        id: mcpInstanceId,
+        namespace_prefix: namespacePrefix ?? null,
+        allowed_tools: allowedTools ?? null,
+      },
     });
   return { data, error };
 };
@@ -1705,6 +1710,42 @@ export const removeMcpInstanceFromClient = async (
       {
         client: serverClient,
         path: { client_id: clientId, mcp_instance_id: mcpInstanceId },
+      }
+    );
+  return { data, error };
+};
+
+export const listClientPlatformToolsets = async () => {
+  const { data, error } =
+    await sdk.listPlatformToolsetsV1ClientsPlatformToolsetsGet({
+      client: serverClient,
+    });
+  return { data, error };
+};
+
+export const addPlatformToolsetToClient = async (
+  clientId: string,
+  toolset: string,
+  disabledMethods: string[] | null
+) => {
+  const { data, error } =
+    await sdk.addPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPost({
+      client: serverClient,
+      path: { client_id: clientId },
+      body: { name: toolset, disabled_methods: disabledMethods },
+    });
+  return { data, error };
+};
+
+export const removePlatformToolsetFromClient = async (
+  clientId: string,
+  toolset: string
+) => {
+  const { data, error } =
+    await sdk.removePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDelete(
+      {
+        client: serverClient,
+        path: { client_id: clientId, toolset },
       }
     );
   return { data, error };

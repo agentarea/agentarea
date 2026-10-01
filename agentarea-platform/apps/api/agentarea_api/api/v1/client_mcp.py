@@ -24,6 +24,7 @@ from agentarea_agents_sdk.mcp_server.auth import (
     PROTECTED_RESOURCE_SCOPE_KEY,
     use_mcp_user_context,
 )
+from agentarea_api.platform_mcp import client_platform_server
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
 from agentarea_mcp.application.tool_list_cache import RedisToolListCache
 from agentarea_mcp.domain.client_models import ClientPlatformToolset
@@ -37,8 +38,6 @@ from mcp.types import (
     Tool,
 )
 from starlette.types import ASGIApp, Receive, Scope, Send
-
-from agentarea_api.platform_mcp import client_platform_server
 
 if TYPE_CHECKING:
     from agentarea_common.auth.context import UserContext

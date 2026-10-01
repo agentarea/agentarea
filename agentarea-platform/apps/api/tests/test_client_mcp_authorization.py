@@ -6,12 +6,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import agentarea_common.di.container as di
 import pytest
-from agentarea_common.auth.context import UserPrincipal
 from agentarea_api.api.v1.client_mcp import (
     ClientAccessDeniedError,
     _authorize_client_access,
     _resolve_client_scope,
 )
+from agentarea_common.auth.context import UserPrincipal
 
 CLIENT_ID = "11111111-1111-1111-1111-111111111111"
 
@@ -70,7 +70,8 @@ async def test_client_endpoint_binds_context_to_clients_workspace():
     )
     client_repository = MagicMock()
     client_repository.get_by_id = AsyncMock(return_value=client)
-    client_repository.get_instance_namespaces = AsyncMock(return_value={})
+    client_repository.get_instance_links = AsyncMock(return_value={})
+    client_repository.get_platform_toolsets = AsyncMock(return_value={})
     repository_class = MagicMock(return_value=client_repository)
     repository_class.locate_workspace = AsyncMock(return_value="client-workspace")
 
@@ -121,10 +122,11 @@ async def test_client_endpoint_binds_context_to_clients_workspace():
             new=AsyncMock(),
         ),
     ):
-        proxy, skills = await _resolve_client_scope(CLIENT_ID)
+        scope = await _resolve_client_scope(CLIENT_ID)
 
-    assert proxy is not None
-    assert skills == {}
+    assert scope is not None
+    assert scope.skill_registry == {}
+    assert scope.user_context.workspace_id == "client-workspace"
     repository_class.locate_workspace.assert_awaited_once_with(
         session, CLIENT_ID, ["personal-workspace", "client-workspace"]
     )

@@ -1576,6 +1576,42 @@ export type ClientCreate = {
 };
 
 /**
+ * ClientMcpInstanceRef
+ */
+export type ClientMcpInstanceRef = {
+  /**
+   * Allowed Tools
+   */
+  allowed_tools?: Array<string> | null;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Namespace Prefix
+   */
+  namespace_prefix?: string | null;
+};
+
+/**
+ * ClientPlatformToolsetRef
+ */
+export type ClientPlatformToolsetRef = {
+  /**
+   * Disabled Methods
+   */
+  disabled_methods?: Array<string> | null;
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
  * ClientRef
  */
 export type ClientRef = {
@@ -1616,11 +1652,15 @@ export type ClientResponse = {
   /**
    * Mcp Instances
    */
-  mcp_instances?: Array<ClientRef>;
+  mcp_instances?: Array<ClientMcpInstanceRef>;
   /**
    * Name
    */
   name: string;
+  /**
+   * Platform Toolsets
+   */
+  platform_toolsets?: Array<ClientPlatformToolsetRef>;
   /**
    * Skills
    */
@@ -3541,8 +3581,14 @@ export type ManagedOAuthAppResponse = {
 
 /**
  * McpInstanceAssociationBody
+ *
+ * Attach an instance, or replace how an attached one is served.
  */
 export type McpInstanceAssociationBody = {
+  /**
+   * Allowed Tools
+   */
+  allowed_tools?: Array<string> | null;
   /**
    * Id
    */
@@ -4631,6 +4677,68 @@ export type PlannedUpload = {
    * Upload Url
    */
   upload_url?: string | null;
+};
+
+/**
+ * PlatformToolsetAssociationBody
+ *
+ * Attach a platform toolset, or replace the methods an attached one leaves out.
+ */
+export type PlatformToolsetAssociationBody = {
+  /**
+   * Disabled Methods
+   */
+  disabled_methods?: Array<string> | null;
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * PlatformToolsetMethod
+ */
+export type PlatformToolsetMethod = {
+  /**
+   * Description
+   */
+  description: string;
+  /**
+   * Display Name
+   */
+  display_name: string;
+  /**
+   * Effect
+   */
+  effect?: "read" | "write" | "destructive" | "privileged" | null;
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * PlatformToolsetResponse
+ *
+ * A platform toolset a client can carry.
+ */
+export type PlatformToolsetResponse = {
+  /**
+   * Description
+   */
+  description: string;
+  /**
+   * Display Name
+   */
+  display_name: string;
+  /**
+   * Methods
+   */
+  methods: Array<PlatformToolsetMethod>;
+  /**
+   * Name
+   */
+  name: string;
 };
 
 /**
@@ -10914,6 +11022,35 @@ export type CreateClientV1ClientsPostResponses = {
 export type CreateClientV1ClientsPostResponse =
   CreateClientV1ClientsPostResponses[keyof CreateClientV1ClientsPostResponses];
 
+export type ListPlatformToolsetsV1ClientsPlatformToolsetsGetData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/v1/workspaces/{workspace}/clients/platform-toolsets";
+};
+
+export type ListPlatformToolsetsV1ClientsPlatformToolsetsGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListPlatformToolsetsV1ClientsPlatformToolsetsGetError =
+  ListPlatformToolsetsV1ClientsPlatformToolsetsGetErrors[keyof ListPlatformToolsetsV1ClientsPlatformToolsetsGetErrors];
+
+export type ListPlatformToolsetsV1ClientsPlatformToolsetsGetResponses = {
+  /**
+   * Response List Platform Toolsets V1 Clients Platform Toolsets Get
+   *
+   * Successful Response
+   */
+  200: Array<PlatformToolsetResponse>;
+};
+
+export type ListPlatformToolsetsV1ClientsPlatformToolsetsGetResponse =
+  ListPlatformToolsetsV1ClientsPlatformToolsetsGetResponses[keyof ListPlatformToolsetsV1ClientsPlatformToolsetsGetResponses];
+
 export type DeleteClientV1ClientsClientIdDeleteData = {
   body?: never;
   path: {
@@ -11080,6 +11217,80 @@ export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceI
 
 export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponse =
   RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses[keyof RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses];
+
+export type AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostData =
+  {
+    body: PlatformToolsetAssociationBody;
+    path: {
+      /**
+       * Client Id
+       */
+      client_id: string;
+    };
+    query?: never;
+    url: "/v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets";
+  };
+
+export type AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostError =
+  AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostErrors[keyof AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostErrors];
+
+export type AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostResponses =
+  {
+    /**
+     * Successful Response
+     */
+    204: void;
+  };
+
+export type AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostResponse =
+  AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostResponses[keyof AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostResponses];
+
+export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteData =
+  {
+    body?: never;
+    path: {
+      /**
+       * Client Id
+       */
+      client_id: string;
+      /**
+       * Toolset
+       */
+      toolset: string;
+    };
+    query?: never;
+    url: "/v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets/{toolset}";
+  };
+
+export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteError =
+  RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteErrors[keyof RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteErrors];
+
+export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses =
+  {
+    /**
+     * Successful Response
+     */
+    204: void;
+  };
+
+export type RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponse =
+  RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses[keyof RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses];
 
 export type AddSkillToClientV1ClientsClientIdSkillsPostData = {
   body: AssociationBody;

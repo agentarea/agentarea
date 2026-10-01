@@ -509,6 +509,24 @@ export const zClientCreate = z.object({
 });
 
 /**
+ * ClientMcpInstanceRef
+ */
+export const zClientMcpInstanceRef = z.object({
+  allowed_tools: z.array(z.string()).nullish(),
+  id: z.string().uuid(),
+  name: z.string(),
+  namespace_prefix: z.string().nullish(),
+});
+
+/**
+ * ClientPlatformToolsetRef
+ */
+export const zClientPlatformToolsetRef = z.object({
+  disabled_methods: z.array(z.string()).nullish(),
+  name: z.string(),
+});
+
+/**
  * ClientRef
  */
 export const zClientRef = z.object({
@@ -525,8 +543,9 @@ export const zClientResponse = z.object({
   id: z.string().uuid(),
   kind: z.string(),
   mcp_endpoint_url: z.string().nullish(),
-  mcp_instances: z.array(zClientRef).optional().default([]),
+  mcp_instances: z.array(zClientMcpInstanceRef).optional().default([]),
   name: z.string(),
+  platform_toolsets: z.array(zClientPlatformToolsetRef).optional().default([]),
   skills: z.array(zClientRef).optional().default([]),
   workspace_id: z.string(),
 });
@@ -1258,8 +1277,11 @@ export const zManagedOAuthAppResponse = z.object({
 
 /**
  * McpInstanceAssociationBody
+ *
+ * Attach an instance, or replace how an attached one is served.
  */
 export const zMcpInstanceAssociationBody = z.object({
+  allowed_tools: z.array(z.string()).nullish(),
   id: z.string(),
   namespace_prefix: z.string().nullish(),
 });
@@ -1833,6 +1855,38 @@ export const zPlannedUpload = z.object({
   path: z.string(),
   status: z.enum(["unchanged", "upload", "error"]),
   upload_url: z.string().nullish(),
+});
+
+/**
+ * PlatformToolsetAssociationBody
+ *
+ * Attach a platform toolset, or replace the methods an attached one leaves out.
+ */
+export const zPlatformToolsetAssociationBody = z.object({
+  disabled_methods: z.array(z.string()).nullish(),
+  name: z.string(),
+});
+
+/**
+ * PlatformToolsetMethod
+ */
+export const zPlatformToolsetMethod = z.object({
+  description: z.string(),
+  display_name: z.string(),
+  effect: z.enum(["read", "write", "destructive", "privileged"]).nullish(),
+  name: z.string(),
+});
+
+/**
+ * PlatformToolsetResponse
+ *
+ * A platform toolset a client can carry.
+ */
+export const zPlatformToolsetResponse = z.object({
+  description: z.string(),
+  display_name: z.string(),
+  methods: z.array(zPlatformToolsetMethod),
+  name: z.string(),
 });
 
 /**
@@ -4289,6 +4343,14 @@ export const zCreateClientV1ClientsPostBody = zClientCreate;
  */
 export const zCreateClientV1ClientsPostResponse = zClientResponse;
 
+/**
+ * Response List Platform Toolsets V1 Clients Platform Toolsets Get
+ *
+ * Successful Response
+ */
+export const zListPlatformToolsetsV1ClientsPlatformToolsetsGetResponse =
+  z.array(zPlatformToolsetResponse);
+
 export const zDeleteClientV1ClientsClientIdDeletePath = z.object({
   client_id: z.string().uuid(),
 });
@@ -4342,6 +4404,32 @@ export const zRemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanc
  * Successful Response
  */
 export const zRemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponse =
+  z.void();
+
+export const zAddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostBody =
+  zPlatformToolsetAssociationBody;
+
+export const zAddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostPath =
+  z.object({
+    client_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zAddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostResponse =
+  z.void();
+
+export const zRemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeletePath =
+  z.object({
+    client_id: z.string().uuid(),
+    toolset: z.string(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zRemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponse =
   z.void();
 
 export const zAddSkillToClientV1ClientsClientIdSkillsPostBody =

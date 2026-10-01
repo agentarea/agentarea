@@ -1,5 +1,7 @@
 """Client (agent-proxy) application service."""
 
+from __future__ import annotations
+
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -124,5 +126,7 @@ class ClientService:
     async def remove_platform_toolset(self, client_id: UUID | str, toolset: str) -> None:
         await self.repository.remove_platform_toolset(await self._client_id(client_id), toolset)
 
-    async def platform_toolsets(self, client_ids: list[UUID]) -> dict[str, list[ClientPlatformToolset]]:
+    async def platform_toolsets(
+        self, client_ids: list[UUID]
+    ) -> dict[str, list[ClientPlatformToolset]]:
         return await self.repository.get_platform_toolsets(client_ids)

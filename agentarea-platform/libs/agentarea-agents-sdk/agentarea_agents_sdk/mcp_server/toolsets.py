@@ -159,7 +159,7 @@ class ToolsetSelectionMiddleware:
                     f"'{TOOLSETS_QUERY_PARAM}' names no toolset. "
                     f"Available: {', '.join(self._server.toolsets)}"
                 )
-            selection = self._server.select({name: () for name in names})
+            selection = self._server.select(dict.fromkeys(names, ()))
         except UnknownToolsetError as exc:
             await _send_bad_request(send, str(exc))
             return

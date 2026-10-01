@@ -22,6 +22,9 @@ import type {
   AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostData,
   AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostErrors,
   AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponses,
+  AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostData,
+  AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostErrors,
+  AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostResponses,
   AddSkillMemberV1SkillsSkillIdMembersPostData,
   AddSkillMemberV1SkillsSkillIdMembersPostErrors,
   AddSkillMemberV1SkillsSkillIdMembersPostResponses,
@@ -542,6 +545,9 @@ import type {
   ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetData,
   ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetErrors,
   ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetResponses,
+  ListPlatformToolsetsV1ClientsPlatformToolsetsGetData,
+  ListPlatformToolsetsV1ClientsPlatformToolsetsGetErrors,
+  ListPlatformToolsetsV1ClientsPlatformToolsetsGetResponses,
   ListPolicyRulesV1PoliciesGetData,
   ListPolicyRulesV1PoliciesGetErrors,
   ListPolicyRulesV1PoliciesGetResponses,
@@ -677,6 +683,9 @@ import type {
   RemoveMemberV1MembersUserIdDeleteData,
   RemoveMemberV1MembersUserIdDeleteErrors,
   RemoveMemberV1MembersUserIdDeleteResponses,
+  RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteData,
+  RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteErrors,
+  RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses,
   RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteData,
   RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteErrors,
   RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses,
@@ -3611,6 +3620,39 @@ export const createClientV1ClientsPost = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * List Platform Toolsets
+ *
+ * Platform toolsets a client can carry, with the methods each can leave out.
+ */
+export const listPlatformToolsetsV1ClientsPlatformToolsetsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    ListPlatformToolsetsV1ClientsPlatformToolsetsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListPlatformToolsetsV1ClientsPlatformToolsetsGetResponses,
+  ListPlatformToolsetsV1ClientsPlatformToolsetsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListPlatformToolsetsV1ClientsPlatformToolsetsGetResponses,
+    ListPlatformToolsetsV1ClientsPlatformToolsetsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/clients/platform-toolsets",
+    ...options,
+  });
+
+/**
  * Delete Client
  */
 export const deleteClientV1ClientsClientIdDelete = <
@@ -3760,6 +3802,73 @@ export const removeMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstance
         },
       ],
       url: "/v1/workspaces/{workspace}/clients/{client_id}/mcp-instances/{mcp_instance_id}",
+      ...options,
+    });
+
+/**
+ * Add Platform Toolset To Client
+ */
+export const addPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostResponses,
+  AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostResponses,
+    AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Platform Toolset From Client
+ *
+ * Detach a toolset by the namespace the client lists it under.
+ */
+export const removePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDelete =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses,
+    RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).delete<
+      RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses,
+      RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets/{toolset}",
       ...options,
     });
 

@@ -7,6 +7,7 @@ from uuid import UUID
 from agentarea_agents_sdk.mcp_server import UnknownToolsetError
 from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
 from agentarea_agents_sdk.tools.tool_definition import ToolEffect
+from agentarea_api.platform_mcp import attachable_toolset, client_platform_server
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.auth.route_authz import (
@@ -23,8 +24,6 @@ from agentarea_mcp.infrastructure.client_repository import ClientRepository
 from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
-
-from agentarea_api.platform_mcp import attachable_toolset, client_platform_server
 
 from ._access_control_grants import grant_resource_owner
 
@@ -317,9 +316,7 @@ async def add_mcp_instance_to_client(
     user_context: UserContextDep,
     service: ClientServiceDep,
 ):
-    await service.add_mcp_instance(
-        client_id, body.id, body.namespace_prefix, body.allowed_tools
-    )
+    await service.add_mcp_instance(client_id, body.id, body.namespace_prefix, body.allowed_tools)
 
 
 @router.delete(
