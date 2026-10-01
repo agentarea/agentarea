@@ -30,6 +30,7 @@ from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_mcp.application.service import MCPServerInstanceService
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
@@ -78,6 +79,9 @@ class AgentResponse(BaseModel):
     is_catalog: bool = False
     registry_item_id: str | None = None
     update_available: bool = False
+    # Where peers reach this agent over A2A; its card is at /.well-known/agent-card.json.
+    # None for a catalog agent until it is installed.
+    a2a_url: str | None = None
 
     @classmethod
     def from_domain(cls, agent: Agent, include_skills: bool = False) -> "AgentResponse":
@@ -126,6 +130,11 @@ class AgentResponse(BaseModel):
             is_catalog=bool(getattr(agent, "is_catalog", False)),
             registry_item_id=str(registry_item_id) if registry_item_id else None,
             update_available=bool(getattr(agent, "update_available", False)),
+            a2a_url=(
+                None
+                if getattr(agent, "is_catalog", False)
+                else get_settings().app.a2a_agent_url(agent.id)
+            ),
         )
 
 

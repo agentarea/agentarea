@@ -1,6 +1,7 @@
-import type { SecretResponse } from "@/api/client/types.gen";
+import type { ApiKeyResponse, SecretResponse } from "@/api/client/types.gen";
 import {
   getAgent,
+  listAPIKeys,
   listAgents,
   listAllTools,
   listMCPServerInstances,
@@ -107,4 +108,16 @@ export async function loadDelegationData(): Promise<DelegationData> {
     agents: agents.error ? null : (agents.data ?? []),
     secrets: secrets.error ? null : (secrets.data ?? []),
   };
+}
+
+/** The keys that reach this one agent over A2A; null when they failed to load. */
+export async function loadAgentKeys(
+  agentId: string
+): Promise<ApiKeyResponse[] | null> {
+  const result = await listAPIKeys(agentId);
+  if (result.error) {
+    console.error("Failed to load the agent's keys:", result.error);
+    return null;
+  }
+  return result.data ?? [];
 }

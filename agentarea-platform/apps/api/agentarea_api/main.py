@@ -425,6 +425,12 @@ def create_app() -> FastAPI:
 
     app.include_router(webhooks_module.router, tags=["webhooks"])
 
+    # Each agent's own A2A host, matched before any path so that host serves
+    # nothing but the agent.
+    from agentarea_api.api.v1.agents_a2a import agent_host_route
+
+    app.router.routes.insert(0, agent_host_route(_get_settings().app.a2a_agent_host, app))
+
     app.include_router(public_v1_router, tags=["v1"])
     app.include_router(principal_v1_router, tags=["v1"])
     app.include_router(workspace_v1_router, tags=["v1"])

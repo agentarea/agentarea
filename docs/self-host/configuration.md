@@ -124,6 +124,7 @@ Rendered only when `rustfs.enabled` is true.
 | `KRATOS_JWKS_B64` | Secret `<release>-kratos-jwks` or `kratos.secretName`, key `jwks_b64` | generated |
 | `KRATOS_ADMIN_URL` | `kratos.urls.admin` | in-cluster `<release>-kratos-admin:4434` |
 | `FRONTEND_BASE_URL` | derived from the frontend ingress | `http://localhost:3000` |
+| `A2A_AGENT_URL` | `global.envVars.A2A_AGENT_URL` | `http://{agent_id}.a2a.localhost:8000` |
 | `SMTP_CONNECTION_URI` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME` | `kratos.smtp.*` | empty (invitations are link-only) |
 
 `METRICS_ENABLED` serves Prometheus metrics on `METRICS_PORT`, never on the API
@@ -134,6 +135,15 @@ port unconditionally. See [observability](/self-host/observability).
 `API_BASE_URL` is the URL the backend advertises for itself — provider icon URLs,
 OAuth protected-resource metadata, and the MCP `WWW-Authenticate` header. It must
 be reachable by the client, not by the pod.
+
+`A2A_AGENT_URL` is where each agent is served over A2A: one host per agent, with
+the agent id as the host's first label, so the agent card sits at
+`/.well-known/agent-card.json` on its own origin. The API answers that host
+itself; the deployment provides a wildcard DNS record and a wildcard
+certificate for the zone, and routes it to the backend. The value must be an
+http(s) origin whose host starts with `{agent_id}.`, such as
+`https://{agent_id}.a2a.example.com`; anything else stops the API at startup.
+See [agent-to-agent communication](/concepts/agents/a2a#addresses).
 
 ### Worker (group `worker`)
 

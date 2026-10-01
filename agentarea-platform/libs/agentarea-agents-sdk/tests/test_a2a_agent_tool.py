@@ -4,7 +4,17 @@ import json
 
 import httpx
 import pytest
-from a2a.types import Artifact, Message, Part, Role, Task, TaskState, TaskStatus
+from a2a.types import (
+    AgentCard,
+    AgentInterface,
+    Artifact,
+    Message,
+    Part,
+    Role,
+    Task,
+    TaskState,
+    TaskStatus,
+)
 from google.protobuf.json_format import MessageToDict
 
 from agentarea_agents_sdk.tools import a2a_agent_tool
@@ -14,7 +24,21 @@ from agentarea_agents_sdk.tools.a2a_agent_tool import (
 )
 from agentarea_agents_sdk.tools.base_tool import ToolExecutionError
 
-A2A_URL = "http://localhost:9000/a2a/rpc"
+A2A_URL = "http://localhost:9000"
+RPC_URL = "http://localhost:9000/"
+CARD_PATH = "/.well-known/agent-card.json"
+
+
+def _card(*endpoints: str) -> dict:
+    return MessageToDict(
+        AgentCard(
+            name="researcher",
+            supported_interfaces=[
+                AgentInterface(url=url, protocol_binding="JSONRPC", protocol_version="1.0")
+                for url in endpoints or (RPC_URL,)
+            ],
+        )
+    )
 
 
 def _task(state: TaskState.ValueType, *texts: str, task_id: str = "task-1") -> dict:
@@ -30,16 +54,19 @@ def _result(request: httpx.Request, result: dict) -> httpx.Response:
     )
 
 
-def _transport(*replies):
-    """A mock A2A endpoint answering each JSON-RPC call with the next reply.
+def _transport(*replies, card: dict | None = None):
+    """A mock A2A agent: its card at the well-known path, and an endpoint
+    answering each JSON-RPC call with the next reply.
 
     A reply is a callable ``(request) -> httpx.Response``; ``seen`` records the
-    requests in order.
+    JSON-RPC requests in order.
     """
     seen: list[httpx.Request] = []
     queue = list(replies)
 
     def handle(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path == CARD_PATH:
+            return httpx.Response(200, json=card or _card())
         seen.append(request)
         return queue.pop(0)(request)
 
@@ -125,6 +152,31 @@ class TestA2AAgentToolExecute:
     """Tests for A2AAgentTool.execute()."""
 
     @pytest.mark.asyncio
+    async def test_the_endpoint_comes_from_the_agents_card(self):
+        transport, seen = _transport(_send_result(), card=_card(f"{A2A_URL}/v1/agents/x/a2a/rpc"))
+
+        await _tool(transport).execute(message="hello")
+
+        [request] = seen
+        assert str(request.url) == f"{A2A_URL}/v1/agents/x/a2a/rpc"
+
+    @pytest.mark.asyncio
+    async def test_a_card_naming_another_host_gets_no_message_and_no_token(self):
+        transport, seen = _transport(card=_card("https://elsewhere.example/rpc"))
+
+        with pytest.raises(ToolExecutionError, match="elsewhere.example"):
+            await _tool(transport, auth_token="test-token").execute(message="hello")
+
+        assert seen == []
+
+    @pytest.mark.asyncio
+    async def test_an_address_without_a_card_fails_naming_the_card(self):
+        transport = httpx.MockTransport(lambda request: httpx.Response(404))
+
+        with pytest.raises(ToolExecutionError, match="agent card of 'researcher'"):
+            await _tool(transport).execute(message="hello")
+
+    @pytest.mark.asyncio
     async def test_execute_success(self):
         transport, _ = _transport(_send_result(TaskState.TASK_STATE_COMPLETED, "The answer is 42."))
 
@@ -143,7 +195,7 @@ class TestA2AAgentToolExecute:
         await _tool(transport, auth_token="test-token").execute(message="hello")
 
         [request] = seen
-        assert str(request.url) == A2A_URL
+        assert str(request.url) == RPC_URL
         assert request.headers["Authorization"] == "Bearer test-token"
         assert request.headers["A2A-Version"] == "1.0"
         body = json.loads(request.content)

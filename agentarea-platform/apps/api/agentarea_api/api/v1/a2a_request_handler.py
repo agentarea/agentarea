@@ -56,6 +56,7 @@ from agentarea_api.api.v1._task_authority import assert_may_act_on_task
 from agentarea_api.api.v1.a2a_auth import A2AAuthContext
 from agentarea_api.api.v1.a2a_card import build_agent_card
 from agentarea_api.api.v1.a2a_mapping import (
+    AGENT_KEY_METADATA,
     TERMINAL_EVENT_TYPES,
     TERMINAL_STATES,
     build_agent_task,
@@ -98,7 +99,7 @@ class A2ACallScope:
 
     agent_id: UUID
     auth: A2AAuthContext
-    base_url: str
+    rpc_url: str
 
 
 class _A2AUser(User):
@@ -233,6 +234,7 @@ def _user_context(scope: A2ACallScope) -> UserContext:
         user_id=auth.user_id,
         workspace_id=auth.workspace_id,
         workspace_slug=auth.workspace_slug,
+        admin_workspaces=[] if auth.agent_key_id else None,
     )
     ContextManager.set_context(user_context)
     bind_workspace_scope(user_context.workspace_id)
@@ -273,6 +275,9 @@ class AgentAreaRequestHandler(RequestHandler):
             else await self._tasks.get_task(task_id)
         )
         if task is None or str(task.agent_id) != str(scope.agent_id):
+            raise TaskNotFoundError(message=f"Task not found: {raw_id}")
+        key = scope.auth.agent_key_id
+        if key and (task.metadata or {}).get(AGENT_KEY_METADATA) != key:
             raise TaskNotFoundError(message=f"Task not found: {raw_id}")
         return task
 
@@ -435,6 +440,11 @@ class AgentAreaRequestHandler(RequestHandler):
         scope = _scope(context)
         with _Operation("task_list", scope, context):
             _user_context(scope)
+            if scope.auth.agent_key_id:
+                raise UnsupportedOperationError(
+                    message="ListTasks is not available to an agent's key; "
+                    "read the tasks it started with GetTask"
+                )
             if params.context_id or params.status or params.HasField("status_timestamp_after"):
                 raise UnsupportedOperationError(
                     message="ListTasks filters (contextId, status, statusTimestampAfter) "
@@ -575,6 +585,4 @@ class AgentAreaRequestHandler(RequestHandler):
         with _Operation("agent_card", scope, context):
             _user_context(scope)
             agent = await self._require_available_agent(scope.agent_id)
-            return build_agent_card(
-                agent, base_url=scope.base_url, agent_id=scope.agent_id, extended=True
-            )
+            return build_agent_card(agent, rpc_url=scope.rpc_url, extended=True)

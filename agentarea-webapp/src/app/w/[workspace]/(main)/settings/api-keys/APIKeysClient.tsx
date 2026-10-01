@@ -28,11 +28,11 @@ interface APIKey {
   last_used_at?: string | null;
 }
 
-function RevokeKeyAction({
+export function RevokeKeyAction({
   apiKey,
   onError,
 }: {
-  apiKey: APIKey;
+  apiKey: Pick<APIKey, "id" | "name">;
   onError: (message: string | null) => void;
 }) {
   const t = useTranslations("APIKeysPage");

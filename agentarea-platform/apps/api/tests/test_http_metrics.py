@@ -46,3 +46,16 @@ def test_an_unknown_method_is_recorded_as_other():
     assert response.status_code == 405
     assert _count(method="OTHER", route="/health", status="4xx") == before + 1
     assert _count(method="FOO", route="/health", status="4xx") == 0
+
+
+def test_a_request_to_an_agent_host_is_recorded_under_the_host_template():
+    host = "00000000-0000-0000-0000-00000000a2a0.a2a.localhost"
+    template = "{agent_id:uuid}.a2a.localhost"
+    before = _count(method="GET", route=template, status="4xx")
+
+    response = TestClient(app, base_url=f"http://{host}", raise_server_exceptions=False).get(
+        "/no-such-path"
+    )
+
+    assert response.status_code == 404
+    assert _count(method="GET", route=template, status="4xx") == before + 1

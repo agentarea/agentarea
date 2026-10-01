@@ -23,7 +23,7 @@ from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig
 from agentarea_secrets.models import EncryptedSecret
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-URL = "https://agentarea.ru/v1/agents/x/a2a/rpc"
+URL = "https://x.a2a.agentarea.ru"
 
 
 @pytest.fixture(autouse=True)
@@ -170,6 +170,17 @@ async def test_a_remote_delegate_needs_an_http_url(session, url):
 async def test_a_pasted_url_is_stored_without_surrounding_spaces(session):
     agent = await _service(session, admin=True).create_agent(
         _create([_remote(url=f"  {URL} ", secret=None)])
+    )
+
+    assert agent.tools[0]["settings"]["a2a_url"] == URL
+
+
+@pytest.mark.parametrize(
+    "pasted", [f"{URL}/", f"{URL}/.well-known/agent-card.json", f" {URL}/.well-known/agent-card.json "]
+)
+async def test_a_pasted_card_url_is_stored_as_the_agents_address(session, pasted):
+    agent = await _service(session, admin=True).create_agent(
+        _create([_remote(url=pasted, secret=None)])
     )
 
     assert agent.tools[0]["settings"]["a2a_url"] == URL

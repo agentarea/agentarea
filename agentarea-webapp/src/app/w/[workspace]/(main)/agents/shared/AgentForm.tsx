@@ -2,6 +2,7 @@
 
 import type {
   AgentPresetResponse,
+  ApiKeyResponse,
   McpServerInstanceResponse,
   McpServerResponse,
   ModelInstanceResponse,
@@ -45,13 +46,20 @@ import {
 } from "../create/components/TriggersConfig";
 import type { AddAgentFormState } from "../create/actions";
 import type { AgentFormValues, AgentSkill } from "../create/types";
-import { preferredModelId, presetFormValues } from "../create/utils/agentPreset";
+import {
+  preferredModelId,
+  presetFormValues,
+} from "../create/utils/agentPreset";
+import A2AAccessConfig from "./A2AAccessConfig";
 import { useChat } from "./ChatContext";
 import { delegatesOf, withDelegates } from "./delegationTools";
 import type { DelegationData } from "./useAgentData";
 
 type MCPServer = McpServerResponse;
 type LLMModelInstance = ModelInstanceResponse;
+
+/** Edit only: where peers reach the agent over A2A, and its keys (null if unloaded). */
+export type A2AAccess = { address: string; keys: ApiKeyResponse[] | null };
 
 interface AgentFormProps {
   mcpServers: MCPServer[];
@@ -61,6 +69,7 @@ interface AgentFormProps {
   initialData?: Partial<AgentFormValues>;
   agentId?: string;
   delegation: DelegationData;
+  a2aAccess?: A2AAccess | null;
   /** Create only: presets and trigger types, each `null` when it failed to load. */
   create?: {
     presets: AgentPresetResponse[] | null;
@@ -88,6 +97,7 @@ export default function AgentForm({
   initialData,
   agentId,
   delegation,
+  a2aAccess,
   create,
   triggersHref,
   onSubmit,
@@ -425,6 +435,16 @@ export default function AgentForm({
                 )
               }
             />
+            {agentId && a2aAccess && (
+              <>
+                <Divider />
+                <A2AAccessConfig
+                  agentId={agentId}
+                  address={a2aAccess.address}
+                  keys={a2aAccess.keys}
+                />
+              </>
+            )}
             {/* Submit button moved to header controls */}
           </form>
         </ResizablePanel>

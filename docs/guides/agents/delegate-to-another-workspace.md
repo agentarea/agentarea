@@ -1,7 +1,7 @@
 ---
 title: Delegate to an agent in another workspace
 type: guide
-description: "Let an agent hand tasks to an agent in a different workspace, or on another A2A server, through an A2A delegate."
+description: "Let an agent hand tasks to an agent in a different workspace, owned by anyone, or on another A2A server, through an A2A delegate and a key bound to that agent."
 prerequisites:
   - /concepts/agents/a2a
   - /guides/agents/create-and-configure
@@ -9,13 +9,13 @@ related:
   - /concepts/agents/a2a
   - /guides/mcp/issue-access-tokens
   - /guides/agents/create-and-configure
-last_updated: 2026-09-30
+last_updated: 2026-10-01
 ---
 
-An agent delegates to an agent in another workspace over A2A: the target's A2A
-endpoint, and an API key from the target's workspace kept as a secret in the
-caller's workspace. The same steps reach any A2A v1.0 server, not only
-AgentArea.
+An agent delegates to an agent in another workspace over A2A: the target's
+address, and a key bound to the target agent kept as a secret in the caller's
+workspace. The two workspaces may belong to different people. The same steps
+reach any A2A v1.0 agent, not only one on AgentArea.
 
 The example below lets `personal-assistant` in the `personal` workspace hand
 documentation work to `docs-writer` in the `aadocs` workspace.
@@ -23,30 +23,30 @@ documentation work to `docs-writer` in the `aadocs` workspace.
 ## Prerequisites
 
 <Info>
-- Both agents exist, and you are a member of both workspaces.
-- You administer the calling workspace. Pointing a secret at a URL sends the
-  secret there, so only an admin may add or change that binding.
-- The id of the target agent (`docs-writer`). It is the last segment of the
-  agent's URL in the web app.
-- The public API host of your deployment, the one that serves `/v1/...`.
+- Someone who is a member of `aadocs` issues the key. It acts as them, so a
+  delegated task in `aadocs` is started by them.
+- You administer the calling workspace. Pointing a secret at an address sends
+  the secret there, so only an admin may add or change that binding.
 </Info>
 
 ## Steps
 
 <Steps titleSize="h3">
-  <Step title="Create an API key in the target workspace">
-    In `aadocs`, open **Settings → API keys** and create a key, or:
+  <Step title="Issue a key for the target agent">
+    In `aadocs`, open `docs-writer` → **Settings** → **A2A access**. Copy the
+    agent's **Address**, then select **Issue key**, name it after the caller,
+    for example `personal`, and copy the key; it is shown once. Or:
 
     ```bash
     curl -X POST https://$API_HOST/v1/workspaces/aadocs/api-keys/ \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
-      -d '{"name": "personal-delegation"}'
+      -d '{"name": "personal", "agent_id": "<docs-writer-id>"}'
     ```
 
-    Copy `token` from the response into `AADOCS_KEY`; it is shown once. The key
-    acts as you, so a delegated task in `aadocs` is started by you and is allowed
-    because you are a member of `aadocs`.
+    The key reaches `docs-writer` over A2A and nothing else: no other agent, no
+    data in `aadocs`, no REST route. Revoke it in the same section to cut the
+    caller off.
   </Step>
 
   <Step title="Store the key as a secret in the calling workspace">
@@ -70,8 +70,8 @@ documentation work to `docs-writer` in the `aadocs` workspace.
 
     | Field | Value |
     |---|---|
+    | Agent address | The address copied in the first step. Reading the card fills in the name and description. |
     | Name | `docs-writer` — the model sees the tool `delegate_to_docs_writer` |
-    | A2A endpoint URL | `https://$API_HOST/v1/agents/<docs-writer-id>/a2a/rpc` |
     | Token | `aadocs-key` |
     | When to delegate | What this agent should hand over, and when |
 
@@ -84,7 +84,7 @@ documentation work to `docs-writer` in the `aadocs` workspace.
       "type": "agent",
       "name": "docs-writer",
       "settings": {
-        "a2a_url": "https://api.example.com/v1/agents/78c3874a-e9b9-42dd-ad07-574086ca7034/a2a/rpc",
+        "a2a_url": "https://78c3874a-e9b9-42dd-ad07-574086ca7034.a2a.example.com",
         "auth_secret_name": "aadocs-key",
         "description_override": "Hand over any request to write documentation."
       }
@@ -98,36 +98,48 @@ documentation work to `docs-writer` in the `aadocs` workspace.
 Start a task on `personal-assistant` that needs the delegate, for example "Write
 a one-sentence doc for add(a, b) and delegate it to docs-writer". The task's
 activity shows a `delegate_to_docs_writer` call, and a new task for
-`docs-writer` appears in the `aadocs` workspace, started by you.
+`docs-writer` appears in the `aadocs` workspace, started by whoever issued the
+key.
 
 ## Troubleshooting
 
 <AccordionGroup>
+  <Accordion title="Reading the card fails, or the call fails naming the agent card">
+    Nothing at the address serves `/.well-known/agent-card.json`. Use the
+    address from **A2A access**, not the JSON-RPC URL. For another A2A server,
+    use the origin or base URL its card is published under.
+  </Accordion>
   <Accordion title="The call fails with HTTP 401">
-    No token reached the target. Check that **Token** names a secret, and that
-    the secret holds a key from the target workspace that has not been revoked.
+    No valid key reached the target. Check that **Token** names a secret, and
+    that the secret holds a key that has not been revoked and whose issuer is
+    still a member of the target workspace.
   </Accordion>
   <Accordion title="The call fails with HTTP 403">
-    The key's owner is not a member of the target agent's workspace. The key
-    must come from a user who can run tasks there.
+    The key is bound to a different agent, or it is a key for another
+    workspace. Issue one from the target agent's **A2A access**.
+  </Accordion>
+  <Accordion title="The call fails: the card names no endpoint on the address">
+    The remote card points its endpoint at another host. The token is sent only
+    to the address you configured, so the delegate refuses. Configure the host
+    the card names as the address instead.
   </Accordion>
   <Accordion title="Saving fails: only a workspace admin may send a workspace secret">
-    Adding a delegate with a **Token**, or changing its URL or token, needs a
-    workspace admin in the calling workspace. Ask one to add the delegate.
+    Adding a delegate with a **Token**, or changing its address or token, needs
+    a workspace admin in the calling workspace. Ask one to add the delegate.
   </Accordion>
   <Accordion title="Saving fails with invalid_delegate">
     The detail names the delegate and the problem: a secret that does not exist
-    or is managed by a connection, a URL that is not http(s), or two delegates
-    whose names become the same tool name.
+    or is managed by a connection, an address that is not http(s), or two
+    delegates whose names become the same tool name.
   </Accordion>
   <Accordion title="The call fails naming a secret that was not found">
     The secret was renamed or deleted after the delegate was added. Recreate it
     under the same name, or pick another one on the delegate.
   </Accordion>
   <Accordion title="The error says the host resolves to a non-public address">
-    The outbound guard refused the URL. Use the public API host. A self-hosted
+    The outbound guard refused the address. Use the public one. A self-hosted
     deployment that must reach an internal host names it in
-    `OUTBOUND_PRIVATE_ALLOWLIST` on the worker.
+    `OUTBOUND_PRIVATE_ALLOWLIST` on the worker and the API.
   </Accordion>
   <Accordion title="The delegate reports it is still working">
     The target did not finish within the 110-second A2A delegation budget. The

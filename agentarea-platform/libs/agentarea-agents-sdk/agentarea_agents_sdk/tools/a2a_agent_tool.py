@@ -6,14 +6,20 @@ import logging
 import re
 from collections.abc import Awaitable, Callable
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import httpx
-from a2a.client import A2AClientError, A2AClientTimeoutError, Client, ClientConfig, ClientFactory
+from a2a.client import (
+    A2ACardResolver,
+    A2AClientError,
+    A2AClientTimeoutError,
+    AgentCardResolutionError,
+    Client,
+    ClientConfig,
+    ClientFactory,
+)
 from a2a.types import (
-    AgentCapabilities,
-    AgentCard,
-    AgentInterface,
     GetTaskRequest,
     Message,
     Part,
@@ -22,7 +28,7 @@ from a2a.types import (
     Task,
     TaskState,
 )
-from a2a.utils.constants import PROTOCOL_VERSION_CURRENT, TransportProtocol
+from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH
 from a2a.utils.errors import A2AError
 from google.protobuf.json_format import MessageToDict
 
@@ -56,6 +62,22 @@ _NON_REPLAYABLE_HEADERS = frozenset(
 )
 
 
+def _origin(url: str) -> str:
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}".lower()
+
+
+def agent_address(url: str) -> str:
+    """The address an A2A agent is known by, whichever form of it was pasted.
+
+    The agent's origin and its card URL name the same agent; the address is the
+    form the card is discovered from.
+    """
+    url = url.strip()
+    url = url.removesuffix(AGENT_CARD_WELL_KNOWN_PATH)
+    return url.rstrip("/")
+
+
 def delegate_tool_name(agent_name: str) -> str:
     """Convert agent name to a valid tool function name."""
     sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", agent_name)
@@ -83,7 +105,8 @@ class _PaymentTransport(httpx.AsyncBaseTransport):
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         response = await self._inner.handle_async_request(request)
-        if response.status_code != 402:
+        # Only a call is paid for; reading the agent card never is.
+        if response.status_code != 402 or request.method != "POST":
             return response
 
         response_body = (await response.aread()).decode("utf-8", errors="replace")
@@ -124,8 +147,10 @@ class _PaymentTransport(httpx.AsyncBaseTransport):
 class A2AAgentTool(BaseTool):
     """Tool that delegates a task to another agent via the A2A protocol.
 
-    Sends ``SendMessage`` through the official A2A SDK client to the target's
-    JSON-RPC endpoint, then polls ``GetTask`` until the task is terminal.
+    ``a2a_url`` is the agent's address: its card is read from
+    ``/.well-known/agent-card.json`` there, then ``SendMessage`` goes through
+    the official A2A SDK client to the endpoint the card names, and ``GetTask``
+    is polled until the task is terminal.
     """
 
     def __init__(
@@ -172,26 +197,36 @@ class A2AAgentTool(BaseTool):
             }
         }
 
-    def _client(self, transport: httpx.AsyncBaseTransport, auth_token: str | None) -> Client:
+    async def _client(self, transport: httpx.AsyncBaseTransport, auth_token: str | None) -> Client:
+        """A client for the agent at ``a2a_url``, built from the card it publishes there.
+
+        The card names the endpoint and transport. An endpoint on another origin
+        is refused: the credential was bound to ``a2a_url``, and a card must not
+        be able to send it elsewhere.
+        """
         headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
         httpx_client = httpx.AsyncClient(
             transport=transport, timeout=A2A_CALL_TIMEOUT, headers=headers
         )
-        # The endpoint is configured, not discovered: describe it as the card
-        # would, so the client speaks JSON-RPC v1.0 to exactly that URL.
-        card = AgentCard(
-            name=self._agent_name,
-            supported_interfaces=[
-                AgentInterface(
-                    url=self._a2a_url,
-                    protocol_binding=TransportProtocol.JSONRPC.value,
-                    protocol_version=PROTOCOL_VERSION_CURRENT,
+        try:
+            card = await A2ACardResolver(httpx_client, self._a2a_url).get_agent_card()
+            origin = _origin(self._a2a_url)
+            foreign = [
+                interface.url
+                for interface in card.supported_interfaces
+                if _origin(interface.url) != origin
+            ]
+            if foreign or not card.supported_interfaces:
+                raise ToolExecutionError(
+                    self.name,
+                    f"The card of '{self._agent_name}' names no endpoint on {origin}: "
+                    f"{', '.join(foreign) or 'none'}",
                 )
-            ],
-            capabilities=AgentCapabilities(streaming=False),
-        )
-        config = ClientConfig(streaming=False, polling=True, httpx_client=httpx_client)
-        return ClientFactory(config).create(card)
+            config = ClientConfig(streaming=False, polling=True, httpx_client=httpx_client)
+            return ClientFactory(config).create(card)
+        except BaseException:
+            await httpx_client.aclose()
+            raise
 
     async def execute(self, **kwargs) -> dict[str, Any]:
         """Send SendMessage to the target agent and return the result."""
@@ -220,7 +255,7 @@ class A2AAgentTool(BaseTool):
             )
         )
         try:
-            async with self._client(transport, auth_token) as client:
+            async with await self._client(transport, auth_token) as client:
                 task: Task | None = None
                 async for response in client.send_message(request):
                     if response.HasField("message"):
@@ -262,6 +297,10 @@ class A2AAgentTool(BaseTool):
                 }
         except ToolExecutionError:
             raise
+        except AgentCardResolutionError as e:
+            raise ToolExecutionError(
+                self.name, f"Could not read the agent card of '{self._agent_name}': {e}"
+            ) from e
         except A2AClientTimeoutError as e:
             raise ToolExecutionError(
                 self.name, f"A2A call to '{self._agent_name}' timed out"

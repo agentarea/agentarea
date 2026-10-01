@@ -1,6 +1,7 @@
 import type { AgentToolConfig, AgentUpdate } from "@/api/client/types.gen";
 import { describe, expect, it } from "vitest";
 import {
+  agentAddress,
   delegateToolName,
   delegatesOf,
   isRemoteDelegate,
@@ -22,7 +23,7 @@ const docs: AgentToolConfig = {
   type: "agent",
   name: "aadocs-writer",
   settings: {
-    a2a_url: "https://agentarea.ru/v1/agents/x/a2a/rpc",
+    a2a_url: "https://x.a2a.agentarea.ru",
     auth_secret_name: "aadocs-key",
   },
 };
@@ -149,5 +150,33 @@ describe("delegateToolName", () => {
     ["---", "delegate_to_agent_"],
   ])("names %j like the runtime does", (name, expected) => {
     expect(delegateToolName(name)).toBe(expected);
+  });
+});
+
+describe("agentAddress", () => {
+  it("keeps an agent's origin as it is", () => {
+    expect(agentAddress("https://agent.example.com")).toBe(
+      "https://agent.example.com"
+    );
+  });
+
+  it("drops surrounding spaces and trailing slashes", () => {
+    expect(agentAddress("  https://agent.example.com//  ")).toBe(
+      "https://agent.example.com"
+    );
+  });
+
+  it("turns a pasted card URL into the agent's address", () => {
+    expect(
+      agentAddress("https://agent.example.com/.well-known/agent-card.json")
+    ).toBe("https://agent.example.com");
+  });
+
+  it("keeps a path the agent is served under", () => {
+    expect(
+      agentAddress(
+        "https://api.example.com/v1/agents/x/.well-known/agent-card.json"
+      )
+    ).toBe("https://api.example.com/v1/agents/x");
   });
 });

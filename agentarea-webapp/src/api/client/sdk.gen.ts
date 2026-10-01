@@ -656,6 +656,9 @@ import type {
   ProxyInstanceV1McpInstanceIdMcpPostData,
   ProxyInstanceV1McpInstanceIdMcpPostErrors,
   ProxyInstanceV1McpInstanceIdMcpPostResponses,
+  ReadAgentCardV1A2aAgentCardsPostData,
+  ReadAgentCardV1A2aAgentCardsPostErrors,
+  ReadAgentCardV1A2aAgentCardsPostResponses,
   ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetData,
   ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetErrors,
   ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetResponses,
@@ -1311,14 +1314,7 @@ export const getAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGet = <
 /**
  * Get Agent Well Known Card
  *
- * Agent-specific well-known discovery endpoint.
- *
- * Returns the agent card for this specific agent, at
- * /v1/agents/{agent_id}/.well-known/agent-card.json
- *
- * This allows each agent to have its own well-known endpoint, which is A2A compliant.
- * Later, this can be proxied to subdomains:
- * - agent1.domain.com/.well-known/agent-card.json -> /v1/agents/{id}/.well-known/agent-card.json
+ * The agent card under the API host; its endpoint is on the API host too.
  */
 export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGet = <
   ThrowOnError extends boolean = false,
@@ -1744,6 +1740,40 @@ export const createWorkspaceV1WorkspacesPost = <
       },
     ],
     url: "/v1/workspaces",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Read Agent Card
+ *
+ * The card published at an A2A agent's address.
+ */
+export const readAgentCardV1A2aAgentCardsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<ReadAgentCardV1A2aAgentCardsPostData, ThrowOnError>
+): RequestResult<
+  ReadAgentCardV1A2aAgentCardsPostResponses,
+  ReadAgentCardV1A2aAgentCardsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ReadAgentCardV1A2aAgentCardsPostResponses,
+    ReadAgentCardV1A2aAgentCardsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/a2a/agent-cards",
     ...options,
     headers: {
       "Content-Type": "application/json",

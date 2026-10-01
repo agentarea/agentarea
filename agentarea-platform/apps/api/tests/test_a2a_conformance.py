@@ -8,6 +8,7 @@ follow a stream, a real A2A peer cannot either.
 
 from __future__ import annotations
 
+import contextvars
 from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any
@@ -40,10 +41,9 @@ from agentarea_api.api.deps.services import (
     get_task_service,
 )
 from agentarea_api.api.v1 import a2a_auth, a2a_request_handler, agents_a2a, agents_well_known
-from agentarea_common.auth import access
-from agentarea_common.auth.access import EdgeDecision
 from agentarea_common.auth.context import UserPrincipal
 from agentarea_common.auth.dependencies import get_optional_principal
+from agentarea_common.config import get_settings
 from agentarea_common.events.contract import LLM_CHUNK, TASK_COMPLETED, TASK_STARTED
 from agentarea_common.events.task_stream import TaskEventEnvelope
 from agentarea_tasks.domain.models import AgentTask
@@ -56,9 +56,12 @@ OUTSIDER = "user-outsider"
 AGENT_ID = uuid4()
 MEMBER_BEARER = "member-key"
 OUTSIDER_BEARER = "outsider-key"
+AGENT_KEY_BEARER = "agent-key"
 PUSH_CALLBACK_KEY = "push-callback-key"
 BASE = "http://agentarea.test"
 AGENT_BASE = f"{BASE}/v1/agents/{AGENT_ID}"
+AGENT_HOST_PATTERN = "{agent_id}.a2a.agentarea.test"
+AGENT_HOST = f"http://{AGENT_ID}.a2a.agentarea.test"
 
 AGENT = SimpleNamespace(
     id=AGENT_ID,
@@ -70,6 +73,8 @@ AGENT = SimpleNamespace(
     planning=False,
     a2ui_enabled=False,
 )
+NEIGHBOUR = SimpleNamespace(**{**vars(AGENT), "id": uuid4(), "name": "neighbour"})
+AGENTS = {AGENT.id: AGENT, NEIGHBOUR.id: NEIGHBOUR}
 
 
 class FakeTaskRepository:
@@ -122,7 +127,7 @@ class FakeSecretManager:
 
 class FakeAgentService:
     async def get(self, agent_id: UUID) -> Any:
-        return AGENT if agent_id == AGENT_ID else None
+        return AGENTS.get(agent_id)
 
 
 def _events(*items: tuple[str, dict[str, Any]]) -> list[TaskEventEnvelope]:
@@ -138,16 +143,15 @@ def _subject(request: Request) -> UserPrincipal | None:
         return UserPrincipal(user_id=MEMBER, accessible_workspaces=[WORKSPACE])
     if bearer == OUTSIDER_BEARER:
         return UserPrincipal(user_id=OUTSIDER, accessible_workspaces=["ws-elsewhere"])
+    if bearer == AGENT_KEY_BEARER:
+        return UserPrincipal(
+            user_id=MEMBER,
+            bound_workspace_id=WORKSPACE,
+            bound_agent_id=str(AGENT_ID),
+            api_key_id="key-1",
+            accessible_workspaces=[],
+        )
     return None
-
-
-async def _authorize(subject, action, *, agent_workspace_id, agent_id) -> EdgeDecision:
-    if subject is None:
-        return EdgeDecision(allowed=False, reason="anonymous")
-    return EdgeDecision(
-        allowed=agent_workspace_id in (subject.accessible_workspaces or []),
-        reason="workspace scope",
-    )
 
 
 @pytest.fixture
@@ -163,11 +167,13 @@ def services(monkeypatch):
             yield env
 
     async def public_agent(agent_id, session):
-        return AGENT if agent_id == AGENT_ID else None
+        return AGENTS.get(agent_id)
 
-    monkeypatch.setattr(access, "authorize_agent_action", _authorize)
     monkeypatch.setattr(agents_a2a, "open_task_event_feed", feed)
     monkeypatch.setattr(agents_well_known, "get_public_agent", public_agent)
+    settings = get_settings().app
+    monkeypatch.setattr(settings, "API_BASE_URL", BASE)
+    monkeypatch.setattr(settings, "A2A_AGENT_URL", f"http://{AGENT_HOST_PATTERN}")
     monkeypatch.setattr(a2a_request_handler, "validate_outbound_url", lambda url: None)
     monkeypatch.setattr(a2a_auth, "workspace_slug_for", AsyncMock(return_value="acme"))
     return SimpleNamespace(tasks=tasks, secrets=secrets, feed=feed_script, feed_calls=feed_calls)
@@ -183,6 +189,7 @@ def app(services) -> FastAPI:
     app.dependency_overrides[get_agent_service] = FakeAgentService
     app.dependency_overrides[get_secret_manager] = lambda: services.secrets
     app.dependency_overrides[agents_well_known.get_read_db_session] = lambda: None
+    app.router.routes.insert(0, agents_a2a.agent_host_route(AGENT_HOST_PATTERN, app))
     return app
 
 
@@ -250,6 +257,118 @@ async def test_card_resolves_to_our_rpc_endpoint(app):
     assert (interface.protocol_binding, interface.protocol_version) == ("JSONRPC", "1.0")
     assert card.security_schemes["bearer"].http_auth_security_scheme.scheme == "bearer"
     assert list(card.security_requirements[0].schemes) == ["bearer"]
+
+
+@pytest.mark.asyncio
+async def test_an_agent_host_carries_its_card_at_the_root(app):
+    card = await A2ACardResolver(_http(app), AGENT_HOST).get_agent_card()
+
+    assert card.name == "researcher"
+    assert card.supported_interfaces[0].url == f"{AGENT_HOST}/"
+    assert card.provider.url == AGENT_HOST
+
+
+@pytest.mark.asyncio
+async def test_a_client_given_only_the_agent_host_creates_a_task(app, services):
+    http = _http(app, MEMBER_BEARER)
+    card = await A2ACardResolver(http, AGENT_HOST).get_agent_card()
+    async with ClientFactory(ClientConfig(httpx_client=http, streaming=False)).create(
+        card
+    ) as sdk_client:
+        task = await _send_one(sdk_client, _send("hello from the agent host"))
+
+    assert services.tasks.tasks[UUID(task.id)].agent_id == AGENT_ID
+
+
+@pytest.mark.asyncio
+async def test_an_agents_key_creates_a_task_as_the_member_who_issued_it(app, services):
+    http = _http(app, AGENT_KEY_BEARER)
+    card = await A2ACardResolver(http, AGENT_HOST).get_agent_card()
+    async with ClientFactory(ClientConfig(httpx_client=http, streaming=False)).create(
+        card
+    ) as sdk_client:
+        task = await _send_one(sdk_client, _send("hello from another workspace"))
+
+    stored = services.tasks.tasks[UUID(task.id)]
+    assert (stored.agent_id, stored.user_id, stored.workspace_id) == (AGENT_ID, MEMBER, WORKSPACE)
+
+
+async def _agent_key_client(app):
+    http = _http(app, AGENT_KEY_BEARER)
+    card = await A2ACardResolver(http, AGENT_HOST).get_agent_card()
+    return ClientFactory(ClientConfig(httpx_client=http, streaming=False)).create(card)
+
+
+@pytest.mark.asyncio
+async def test_an_agents_key_reads_the_tasks_it_started(app):
+    async with await _agent_key_client(app) as sdk_client:
+        task = await _send_one(sdk_client, _send("mine"))
+        got = await sdk_client.get_task(GetTaskRequest(id=task.id))
+
+    assert got.id == task.id
+
+
+@pytest.mark.asyncio
+async def test_an_agents_key_does_not_see_the_workspaces_own_tasks(app, services):
+    members = _stored_task(services)
+
+    async with await _agent_key_client(app) as sdk_client:
+        with pytest.raises(TaskNotFoundError):
+            await sdk_client.get_task(GetTaskRequest(id=str(members.id)))
+        with pytest.raises(TaskNotFoundError):
+            await sdk_client.cancel_task(CancelTaskRequest(id=str(members.id)))
+
+
+@pytest.mark.asyncio
+async def test_an_agents_key_cannot_list_the_agents_tasks(app):
+    async with await _agent_key_client(app) as sdk_client:
+        with pytest.raises(UnsupportedOperationError):
+            await sdk_client.list_tasks(ListTasksRequest())
+
+
+def test_an_agents_key_administers_nothing():
+    auth = a2a_auth.A2AAuthContext(
+        authenticated=True, user_id=MEMBER, workspace_id=WORKSPACE, agent_key_id="key-1"
+    )
+    scope = a2a_request_handler.A2ACallScope(agent_id=AGENT_ID, auth=auth, rpc_url="http://t/")
+
+    # In a copy of the context: building it binds the workspace scope.
+    context = contextvars.copy_context().run(a2a_request_handler._user_context, scope)
+
+    assert context.admin_workspaces == []
+
+
+@pytest.mark.asyncio
+async def test_an_agents_key_does_not_reach_its_neighbour(app):
+    response = await _http(app, AGENT_KEY_BEARER).post(
+        f"http://{NEIGHBOUR.id}.a2a.agentarea.test/", json={}
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_an_agent_host_refuses_an_anonymous_call(app):
+    response = await _http(app).post(f"{AGENT_HOST}/", json={})
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/v1/agents", "/health", "/a2a/rpc"])
+async def test_an_agent_host_serves_nothing_but_the_agent(app, path):
+    response = await _http(app, MEMBER_BEARER).get(f"{AGENT_HOST}{path}")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_agent_host_is_not_found(app):
+    response = await _http(app).get(
+        f"http://{uuid4()}.a2a.agentarea.test/.well-known/agent-card.json"
+    )
+
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio

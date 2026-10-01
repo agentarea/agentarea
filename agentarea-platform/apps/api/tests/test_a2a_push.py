@@ -167,7 +167,7 @@ def _context(task):
     auth = A2AAuthContext(authenticated=True, user_id="user-1", workspace_id="ws-1")
     return ServerCallContext(
         state={
-            A2A_SCOPE_KEY: A2ACallScope(agent_id=task.agent_id, auth=auth, base_url="http://t"),
+            A2A_SCOPE_KEY: A2ACallScope(agent_id=task.agent_id, auth=auth, rpc_url="http://t/"),
             "method": "CreateTaskPushNotificationConfig",
         }
     )

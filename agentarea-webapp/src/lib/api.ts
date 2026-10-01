@@ -1066,9 +1066,10 @@ export const createMCPAuthConfig = async (body: {
   return withStatus(result);
 };
 
-export const listAPIKeys = async () => {
+export const listAPIKeys = async (agentId?: string) => {
   const result = await sdk.listApiKeysV1ApiKeysGet({
     client: serverClient,
+    ...(agentId ? { query: { agent_id: agentId } } : {}),
   });
   return withStatus(result);
 };
@@ -1088,6 +1089,14 @@ export const getAPIKey = async (tokenId: string) => {
   const { data, error } = await sdk.getApiKeyV1ApiKeysTokenIdGet({
     client: serverClient,
     path: { token_id: tokenId },
+  });
+  return { data, error };
+};
+
+export const readAgentCard = async (url: string) => {
+  const { data, error } = await sdk.readAgentCardV1A2aAgentCardsPost({
+    client: serverClient,
+    body: { url },
   });
   return { data, error };
 };

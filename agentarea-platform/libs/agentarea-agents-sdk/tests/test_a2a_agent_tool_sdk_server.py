@@ -1,7 +1,7 @@
 """A2AAgentTool delegates to an agent served by the official A2A SDK.
 
 The remote side is the SDK's own reference server (``DefaultRequestHandler``,
-in-memory task store, JSON-RPC routes) with a trivial echo executor, reached
+in-memory task store, agent card and JSON-RPC routes) with a trivial echo executor, reached
 in-process through ``httpx.ASGITransport``. If the tool can read the answer
 from that server, it can read it from any conforming A2A agent.
 """
@@ -14,7 +14,7 @@ from a2a.helpers.proto_helpers import new_text_part
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.routes import create_jsonrpc_routes
+from a2a.server.routes import create_agent_card_routes, create_jsonrpc_routes
 from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
 from a2a.types import (
     AgentCapabilities,
@@ -29,7 +29,8 @@ from starlette.applications import Starlette
 from agentarea_agents_sdk.tools import a2a_agent_tool
 from agentarea_agents_sdk.tools.a2a_agent_tool import A2AAgentTool
 
-RPC_URL = "http://specialist.test/a2a"
+AGENT_URL = "http://specialist.test"
+RPC_URL = f"{AGENT_URL}/a2a"
 
 
 class EchoExecutor(AgentExecutor):
@@ -79,7 +80,9 @@ def sdk_server(executor) -> httpx.ASGITransport:
     handler = DefaultRequestHandler(
         agent_executor=executor, task_store=InMemoryTaskStore(), agent_card=card
     )
-    app = Starlette(routes=create_jsonrpc_routes(handler, rpc_url="/a2a"))
+    app = Starlette(
+        routes=[*create_agent_card_routes(card), *create_jsonrpc_routes(handler, rpc_url="/a2a")]
+    )
     return httpx.ASGITransport(app=app)
 
 
@@ -89,7 +92,7 @@ async def test_tool_reads_the_answer_from_an_sdk_served_agent(sdk_server, execut
     tool = A2AAgentTool(
         agent_name="specialist",
         agent_description="Echoes.",
-        a2a_url=RPC_URL,
+        a2a_url=AGENT_URL,
         auth_token="coordinator-key",
         http_transport=sdk_server,
     )

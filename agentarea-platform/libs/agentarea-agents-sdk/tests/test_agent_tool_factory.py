@@ -50,7 +50,7 @@ class TestAgentToolFactoryCreateTool:
         )
 
         assert tool is not None
-        assert tool.binding._a2a_url == "http://localhost:8000/agents/agent-123/a2a/rpc"
+        assert tool.binding._a2a_url == "http://localhost:8000/agents/agent-123"
 
     @pytest.mark.asyncio
     async def test_create_tool_with_url_override(self):
@@ -133,14 +133,14 @@ class TestAgentToolFactoryCreateTool:
             agent_name="aadocs-writer",
             agent_service=agent_service,
             base_url="http://localhost:8000",
-            a2a_url_override="https://example.com/v1/agents/x/a2a/rpc",
+            a2a_url_override="https://x.a2a.example.com",
             description_override="Writes the docs",
         )
 
         assert tool is not None
         assert tool.binding_kind == "a2a"
         assert tool.name == "delegate_to_aadocs_writer"
-        assert tool.binding._a2a_url == "https://example.com/v1/agents/x/a2a/rpc"
+        assert tool.binding._a2a_url == "https://x.a2a.example.com"
         assert "Writes the docs" in tool.description
         agent_service.get_by_name.assert_not_awaited()
 

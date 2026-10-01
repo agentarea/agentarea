@@ -24,6 +24,7 @@ from fastapi.routing import APIRoute
 
 # Import core API modules
 from . import (
+    a2a_agent_cards,
     access_control,
     agent_overview,
     agents,
@@ -189,6 +190,7 @@ workspace_v1_router.include_router(connection_oauth.router)
 
 # MCP API Keys management
 workspace_v1_router.include_router(api_keys.router)
+workspace_v1_router.include_router(a2a_agent_cards.router)
 
 # Workspace secrets. User-owned rows only; the secrets the platform mints for
 # a connection are managed through that connection.
