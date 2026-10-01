@@ -1,8 +1,8 @@
-"""Installing/forking a catalog agent must grant the caller the Keto ``owners``
-tuple, exactly like creating an agent does.
+"""Installing/forking a catalog agent must grant the caller ownership in the graph,
+exactly like creating an agent does.
 
 Without the grant a catalog-installed agent has no access-control owner, so the user who
-installed it would be 403'd on (or not see) their own row once Keto is enabled.
+installed it would be 403'd on (or not see) their own row.
 The grant lives at the API composition layer (the OSS ``AuthorizationService`` is
 deliberately infrastructure-free), so these tests assert the endpoint performs it.
 """

@@ -12,7 +12,7 @@ import pytest
 from agentarea_api.cli import _register_graph_client
 from agentarea_common.config import get_settings
 from agentarea_common.di.container import get_container
-from agentarea_common.rebac.keto_client import KetoClient
+from agentarea_common.rebac.openfga_client import OpenFGAClient
 from agentarea_common.rebac.ownership import resolve_graph_client
 
 
@@ -25,7 +25,9 @@ def reconcile_job_env(monkeypatch):
         "WORKFLOW__TEMPORAL_TASK_QUEUE",
     ):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "keto")
+    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
+    monkeypatch.setenv("ACCESS_CONTROL_OPENFGA_STORE_ID", "store-1")
+    monkeypatch.setenv("ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP", "false")
     monkeypatch.setattr(get_container(), "_singletons", {})
     get_settings.cache_clear()
     yield
@@ -37,9 +39,4 @@ async def test_reconcile_resolves_the_graph_client_without_temporal_settings(
 ) -> None:
     await _register_graph_client()
 
-    resolved = resolve_graph_client()
-
-    assert resolved is not None
-    client, backend = resolved
-    assert isinstance(client, KetoClient)
-    assert backend == "Keto"
+    assert isinstance(resolve_graph_client(), OpenFGAClient)

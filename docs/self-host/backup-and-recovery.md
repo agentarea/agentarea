@@ -37,7 +37,6 @@ one item whose loss cannot be recovered from — the secret encryption key.
     | PostgreSQL `temporal` | Workflow history for in-flight and completed tasks | Running tasks cannot resume |
     | PostgreSQL `kratos` | Identities and credentials | Every user must re-register |
     | PostgreSQL `openfga` | Authorization tuples | All access grants; the platform fails closed |
-    | PostgreSQL `keto` | Authorization tuples, when `keto.enabled=true` | As above |
     | Object store: documents bucket | Uploaded files | User content |
     | Object store: artifacts bucket | Task artifacts, content-addressed | Task outputs |
     | `SECRET_MANAGER_ENCRYPTION_KEY` | The Fernet key for `encrypted_secrets` | Every stored credential, unrecoverably |

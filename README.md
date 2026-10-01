@@ -103,7 +103,7 @@ If you run one agent for yourself, you do not need this. Use Claude Code.
 | A runaway loop spends the month's budget before anyone looks. | Spend and token caps are checked before each model call. The workspace has a monthly cap; each task has its own. |
 | A deploy kills every agent that was mid-task. | Temporal replays the workflow history on another worker. Finished model and tool calls are not repeated. |
 | Everyone wires MCP servers into their own editor, with their own tokens. | Register a server once, grant it to a client, and that client gets one MCP endpoint with the workspace's policy applied. |
-| Access control is "whoever has the admin password". | Access is a relationship graph (OpenFGA or Ory Keto): this user manages this project, this project contains this agent. Checks fail closed. |
+| Access control is "whoever has the admin password". | Access is a relationship graph (OpenFGA): this user manages this project, this project contains this agent. Checks fail closed. |
 
 ## What happens when an agent runs
 
@@ -163,7 +163,7 @@ every effect and says which combinations are enforced today.
 ┌────────────────── CONTROL PLANE  ·  decides and records ───────────────────┐
 │                                                                            │
 │ Identity          Authorization     Policy              Durable runs       │
-│ Kratos · Hydra    OpenFGA or Keto   allow · deny · ask  Temporal           │
+│ Kratos · Hydra    OpenFGA           allow · deny · ask  Temporal           │
 │ API keys          (ReBAC graph)     spend + token caps  workflows          │
 │                                                                            │
 │ Approvals         Audit & events    Catalog             Secrets            │
@@ -193,7 +193,7 @@ OpenAI-compatible endpoint, with your keys.
 | **MCP manager** (Go) | Starts and stops sandboxes and hosted MCP servers on Docker or Kubernetes, or hands sandboxes to an external provider. |
 | **Event service** (Go) | Runs schedules, polling triggers and chat channels such as Telegram, and submits what they produce as tasks. Webhooks are received by the API. |
 | **Dashboard** (Next.js) | The web UI: agents, runs, inbox, policies, budgets, catalog, audit. |
-| **Backing services** | PostgreSQL, Valkey, S3-compatible storage, Temporal, OpenFGA or Keto, Ory Kratos and Hydra. |
+| **Backing services** | PostgreSQL, Valkey, S3-compatible storage, Temporal, OpenFGA, Ory Kratos and Hydra. |
 
 [How it works](https://docs.agentarea.ai/how-it-works) follows one request
 through all of them.
@@ -247,7 +247,7 @@ package that plugs into named extension points. It is not a fork.
 |---|---|
 | Agent execution, tasks, Temporal workflows | Plan entitlements |
 | Sandboxes and MCP hosting | Usage metering and billing |
-| ReBAC authorization (OpenFGA or Keto) | Forwarding audit to a SIEM |
+| ReBAC authorization (OpenFGA) | Forwarding audit to a SIEM |
 | Policies, budgets, approvals, audit in the database | Container egress enforcement |
 
 [Open core](https://docs.agentarea.ai/concepts/open-core) explains where the line

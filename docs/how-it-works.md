@@ -43,7 +43,7 @@ costs something.
 | Dashboard | Next.js | The web interface |
 
 Backed by PostgreSQL (state), Valkey (streams and cache), object storage
-(artifacts and logs), Temporal (workflow history), and OpenFGA or Ory Keto
+(artifacts and logs), Temporal (workflow history), and OpenFGA
 (authorization).
 
 The API and worker are the control plane. The MCP manager and everything it

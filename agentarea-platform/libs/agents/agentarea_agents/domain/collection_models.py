@@ -1,8 +1,8 @@
 """Skill collection domain model.
 
 A skill collection groups skills together so that a single ReBAC grant on the
-collection fans out to every skill it contains (see the Keto ``SkillCollection``
-namespace). Collections are workspace-scoped, mirroring the skills they hold.
+collection fans out to every skill it contains. Collections are
+workspace-scoped, mirroring the skills they hold.
 """
 
 from datetime import datetime
@@ -25,8 +25,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 class SkillCollection(BaseModel, WorkspaceScopedMixin):
     """A workspace-scoped grouping of skills.
 
-    The collection's UUID is used directly as the Keto ``SkillCollection``
-    object id; grants on it fan out to every contained skill.
+    The collection's UUID is used directly as its graph object id; grants on it
+    fan out to every contained skill.
     """
 
     __tablename__ = "skill_collections"

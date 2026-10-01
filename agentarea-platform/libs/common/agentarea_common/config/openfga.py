@@ -4,11 +4,7 @@ from .base import BaseAppSettings
 
 
 class OpenFGASettings(BaseAppSettings):
-    """OpenFGA connection settings.
-
-    OpenFGA is the preferred Zanzibar-style graph backend for new capability
-    authorization work. Keto remains supported as a fallback during migration.
-    """
+    """OpenFGA connection settings."""
 
     ACCESS_CONTROL_OPENFGA_API_URL: str = "http://openfga:8080"
     ACCESS_CONTROL_OPENFGA_STORE_ID: str = ""

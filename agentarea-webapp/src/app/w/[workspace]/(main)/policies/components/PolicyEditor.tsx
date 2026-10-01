@@ -177,7 +177,7 @@ function newDraft(id: string, effect: PolicyEffect = "cap"): PolicyDraft {
   };
 }
 
-// Loosely validate Keto subject refs (user:<id> | group:<id>#member, etc.).
+// Loosely validate ReBAC subject refs (user:<id> | group:<id>#member, etc.).
 const SUBJECT_REF_RE = /^[a-zA-Z]+:[^\s]+/;
 
 function parseMoney(value: string): string | null {

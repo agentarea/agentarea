@@ -12,9 +12,7 @@ DB-backed node it represents. The retired per-type namespaces (``Skill``,
 ``SkillCollection``, ``MCPServer``, and ``Agent`` ownership) are no longer part
 of the graph.
 
-When no graph backend is enabled, read endpoints respond with ``enabled: false``
-and still list the DB-backed nodes; write endpoints return HTTP 503. OpenFGA is
-preferred when enabled; Keto remains supported as a migration fallback.
+The graph backend is OpenFGA.
 """
 
 import logging
@@ -40,12 +38,8 @@ from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.di.container import get_container
 from agentarea_common.rebac import (
-    KetoClient,
-    KetoError,
-    KetoUnavailableError,
     OpenFGAClient,
     OpenFGAError,
-    OpenFGAUnavailableError,
     RelationQuery,
     RelationTuple,
     write_tuple_idempotent,
@@ -113,35 +107,18 @@ _LEGACY_RELATION_TO_GRANT = {
 }
 
 
-GraphClient = KetoClient | OpenFGAClient
-
-
-def get_graph_client() -> GraphClient | None:
-    """Resolve the shared graph client, or None when graph auth is disabled.
-
-    OpenFGA is preferred over Keto during the migration.
-    """
-    settings = get_settings()
-    if settings.access_control.ACCESS_CONTROL_BACKEND == "openfga":
-        try:
-            return get_container().get(OpenFGAClient)
-        except ValueError:
-            return OpenFGAClient(
-                api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-                store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-                authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-                timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
-                api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
-            )
-    if settings.access_control.ACCESS_CONTROL_BACKEND != "keto":
-        return None
+def get_graph_client() -> OpenFGAClient:
+    """Resolve the shared OpenFGA client."""
     try:
-        return get_container().get(KetoClient)
+        return get_container().get(OpenFGAClient)
     except ValueError:
-        return KetoClient(
-            read_url=settings.keto.ACCESS_CONTROL_KETO_READ_URL,
-            write_url=settings.keto.ACCESS_CONTROL_KETO_WRITE_URL,
-            timeout_seconds=settings.keto.ACCESS_CONTROL_KETO_TIMEOUT_SECONDS,
+        settings = get_settings()
+        return OpenFGAClient(
+            api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
+            store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
+            authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
+            timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
+            api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
         )
 
 
@@ -266,11 +243,11 @@ class SyncResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def _resource_tuples(client: GraphClient) -> list[RelationTuple]:
+async def _resource_tuples(client: OpenFGAClient) -> list[RelationTuple]:
     """Query all ``resource`` tuples, tolerating graph backend outages."""
     try:
         return await client.query_all_tuples(RelationQuery(namespace="resource"))
-    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
+    except OpenFGAError:
         logger.exception("Failed to query resource relationships from graph backend")
         return []
 
@@ -472,31 +449,30 @@ async def get_graph(
     rule_count = 0
     direct_exception_count = 0
 
-    if graph_client is not None:
-        for t in await _resource_tuples(graph_client):
-            if t.relation not in _GRANT_LABEL:
-                continue
-            obj = str(t.object)
-            subject_agent = (
-                t.subject_id.split(":", 1)[1]
-                if t.subject_id and t.subject_id.startswith("Agent:")
-                else None
+    for t in await _resource_tuples(graph_client):
+        if t.relation not in _GRANT_LABEL:
+            continue
+        obj = str(t.object)
+        subject_agent = (
+            t.subject_id.split(":", 1)[1]
+            if t.subject_id and t.subject_id.startswith("Agent:")
+            else None
+        )
+        # Direct agent-to-skill grants are exceptions to collection defaults.
+        if obj in skill_ids and subject_agent in agent_ids:
+            direct_exception_count += 1
+        target = node_id_by_uuid.get(obj)
+        if target is None:
+            continue
+        rule_count += 1
+        if subject_agent in agent_ids and f"Agent:{subject_agent}" != target:
+            edges.append(
+                GraphEdge(
+                    from_=f"Agent:{subject_agent}",
+                    to=target,
+                    relation=_GRANT_LABEL[t.relation],
+                ).model_dump()
             )
-            # Direct agent-to-skill grants are exceptions to collection defaults.
-            if obj in skill_ids and subject_agent in agent_ids:
-                direct_exception_count += 1
-            target = node_id_by_uuid.get(obj)
-            if target is None:
-                continue
-            rule_count += 1
-            if subject_agent in agent_ids and f"Agent:{subject_agent}" != target:
-                edges.append(
-                    GraphEdge(
-                        from_=f"Agent:{subject_agent}",
-                        to=target,
-                        relation=_GRANT_LABEL[t.relation],
-                    ).model_dump()
-                )
 
     stats = GraphStats(
         governed_skill_count=governed_skill_count,
@@ -504,7 +480,7 @@ async def get_graph(
         direct_exception_count=direct_exception_count,
     )
     return GraphResponse(
-        enabled=graph_client is not None,
+        enabled=True,
         nodes=nodes,
         edges=edges,
         stats=stats,
@@ -529,8 +505,6 @@ async def list_relationships(
     """
     await _assert_workspace_admin(user_context)
     graph_client = get_graph_client()
-    if graph_client is None:
-        return RelationshipsResponse(relationships=[], count=0)
     if namespace is not None and namespace not in _READABLE_NAMESPACES:
         raise HTTPException(status_code=422, detail=f"Unsupported namespace: {namespace!r}")
 
@@ -630,15 +604,13 @@ async def create_relationship(
 ) -> dict:
     """Grant a resource-ownership relation via the configured graph backend."""
     graph_client = get_graph_client()
-    if graph_client is None:
-        raise HTTPException(status_code=503, detail="Graph authorization is disabled")
     await _assert_workspace_admin(user_context)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     await _assert_subject_in_workspace(payload.subject_id or "", user_context, db_session)
     relationship = _to_resource_grant(payload)
     try:
         await graph_client.write_tuple(relationship)
-    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+    except OpenFGAError as exc:
         logger.exception("Failed to write graph relationship %s", relationship)
         raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
     return {"ok": True}
@@ -658,14 +630,12 @@ async def delete_relationship(
 ) -> None:
     """Revoke a resource-ownership relation from the configured graph backend."""
     graph_client = get_graph_client()
-    if graph_client is None:
-        raise HTTPException(status_code=503, detail="Graph authorization is disabled")
     await _assert_workspace_admin(user_context)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     relationship = _to_resource_grant(payload)
     try:
         await graph_client.delete_tuple(relationship)
-    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+    except OpenFGAError as exc:
         logger.exception("Failed to delete graph relationship %s", relationship)
         raise HTTPException(status_code=503, detail="Graph authorization delete failed") from exc
 
@@ -685,8 +655,6 @@ async def check_permission(
     """Check whether a subject has a permission on a resource."""
     await _assert_workspace_admin(user_context)
     graph_client = get_graph_client()
-    if graph_client is None:
-        return CheckResponse(allowed=False)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     await _assert_subject_in_workspace(payload.subject_id, user_context, db_session)
     bit = _VERB_TO_BIT.get(payload.relation, payload.relation)
@@ -699,7 +667,7 @@ async def check_permission(
             relation=bit,
             subject_id=payload.subject_id,
         )
-    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+    except OpenFGAError as exc:
         logger.exception(
             "Graph authorization check failed (subject=%s resource:%s#%s)",
             payload.subject_id,
@@ -743,22 +711,21 @@ async def resolve_access(
     bit = _VERB_TO_BIT[verb]
     graph_client = get_graph_client()
     allowed = False
-    if graph_client is not None:
-        try:
-            result = await graph_client.check(
-                namespace="resource",
-                object=payload.resource_id,
-                relation=bit,
-                subject_id=payload.subject_id,
-            )
-            allowed = result.allowed
-        except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
-            logger.exception(
-                "Graph authorization check failed during resolve (subject=%s resource:%s#%s)",
-                payload.subject_id,
-                payload.resource_id,
-                bit,
-            )
+    try:
+        result = await graph_client.check(
+            namespace="resource",
+            object=payload.resource_id,
+            relation=bit,
+            subject_id=payload.subject_id,
+        )
+        allowed = result.allowed
+    except OpenFGAError:
+        logger.exception(
+            "Graph authorization check failed during resolve (subject=%s resource:%s#%s)",
+            payload.subject_id,
+            payload.resource_id,
+            bit,
+        )
 
     factory = RepositoryFactory(db_session, user_context)
     agent_repo = factory.create_repository(AgentRepository)
@@ -782,34 +749,33 @@ async def resolve_access(
     best_rank = 0
     effective_relation: str | None = None
 
-    if graph_client is not None:
-        for t in await _resource_tuples(graph_client):
-            if str(t.object) != payload.resource_id:
-                continue
-            if t.relation not in _GRANT_LABEL:
-                continue
-            if not (t.subject_id and t.subject_id == payload.subject_id):
-                continue
-            label = _GRANT_LABEL[t.relation]
-            paths.append(
-                ResolvePath(
-                    relation=label,
-                    hops=[
-                        subject_hop,
-                        ResolveHop(
-                            id=f"resource:{payload.resource_id}",
-                            name=payload.resource_kind,
-                            kind=payload.resource_kind,
-                            color=_color("collection", 0),
-                        ),
-                    ],
-                    rels=[label],
-                )
+    for t in await _resource_tuples(graph_client):
+        if str(t.object) != payload.resource_id:
+            continue
+        if t.relation not in _GRANT_LABEL:
+            continue
+        if not (t.subject_id and t.subject_id == payload.subject_id):
+            continue
+        label = _GRANT_LABEL[t.relation]
+        paths.append(
+            ResolvePath(
+                relation=label,
+                hops=[
+                    subject_hop,
+                    ResolveHop(
+                        id=f"resource:{payload.resource_id}",
+                        name=payload.resource_kind,
+                        kind=payload.resource_kind,
+                        color=_color("collection", 0),
+                    ),
+                ],
+                rels=[label],
             )
-            rank = _GRANT_RANK[t.relation]
-            if rank > best_rank:
-                best_rank = rank
-                effective_relation = label
+        )
+        rank = _GRANT_RANK[t.relation]
+        if rank > best_rank:
+            best_rank = rank
+            effective_relation = label
 
     return ResolveResponse(
         allowed=allowed,
@@ -837,8 +803,6 @@ async def sync_grants(
     workspace-member tuples that gate group defaults are present.
     """
     graph_client = get_graph_client()
-    if graph_client is None:
-        raise HTTPException(status_code=503, detail="Graph authorization is disabled")
     await _assert_workspace_admin(user_context)
 
     written = 0
@@ -851,11 +815,9 @@ async def sync_grants(
     member_ids = {str(row.user_id) for row in (await db_session.execute(member_query)).all()}
     if owner_user_id:
         member_ids.add(str(owner_user_id))
-    backend = "OpenFGA" if isinstance(graph_client, OpenFGAClient) else "Keto"
     for member_id in sorted(member_ids):
         await write_tuple_idempotent(
             graph_client,
-            backend,
             RelationTuple(
                 namespace="Workspace",
                 object=user_context.workspace_id,

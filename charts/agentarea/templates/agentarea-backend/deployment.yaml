@@ -115,14 +115,6 @@ spec:
             {{- include "agentarea.temporal.envs" . | nindent 12 }}
             {{- include "agentarea.backend.envs" . | nindent 12 }}
             {{- include "agentarea.backend.secrets.envs" . | nindent 12 }}
-            {{- if .Values.keto.enabled }}
-            - name: ACCESS_CONTROL_BACKEND
-              value: "keto"
-            - name: ACCESS_CONTROL_KETO_READ_URL
-              value: "http://{{ include "agentarea.fullname" . }}-keto-read:4466"
-            - name: ACCESS_CONTROL_KETO_WRITE_URL
-              value: "http://{{ include "agentarea.fullname" . }}-keto-write:4467"
-            {{- end }}
             {{- if .Values.openfga.enabled }}
             - name: ACCESS_CONTROL_BACKEND
               value: "openfga"

@@ -331,7 +331,7 @@ class TestTriggerRepository:
         client.write_tuple.side_effect = lambda tuple_: recorded.append(tuple_)
         monkeypatch.setattr(
             "agentarea_common.rebac.ownership.resolve_graph_client",
-            lambda: (client, "OpenFGA"),
+            lambda: client,
         )
 
         created_id = uuid4()

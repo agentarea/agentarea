@@ -244,17 +244,14 @@ kind resolved from the database.
 
 ## Defaults and overrides
 
-`ACCESS_CONTROL_BACKEND` accepts `disabled`, `keto` or `openfga`.
+`ACCESS_CONTROL_BACKEND` accepts only `openfga`; any other value fails startup.
 
 | Source | Value |
 |---|---|
-| Code default | `disabled` |
+| Code default | `openfga` |
 | `docker-compose.dev.yaml` (`make up-dev`) | `openfga` |
-| `docker-compose.yaml` (`make up`) | **Absent.** Names neither the setting nor OpenFGA, so the code default applies. |
+| `docker-compose.yaml` (`make up`) | `openfga` |
 | Helm chart | `openfga` when `openfga.enabled=true`, which is the chart default |
-
-`keto.enabled` and `openfga.enabled` are mutually exclusive; the chart fails
-rendering if both are set.
 
 | Setting | Code default |
 |---|---|

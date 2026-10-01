@@ -9,12 +9,7 @@ from agentarea_common.auth.access import AGENT_EXECUTE, authorize_agent_action
 from agentarea_common.auth.route_authz import enforced_in_handler
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
-from agentarea_common.rebac import (
-    KetoError,
-    KetoUnavailableError,
-    OpenFGAError,
-    OpenFGAUnavailableError,
-)
+from agentarea_common.rebac import OpenFGAError
 from agentarea_common.workspaces.memberships import (
     get_workspace_membership_graph,
     list_workspace_member_ids,
@@ -84,7 +79,7 @@ async def get_network_people_access(
         member_ids: set[str] = set()
         if graph is not None:
             member_ids.update(await list_workspace_member_ids(graph, workspace_id))
-    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+    except OpenFGAError as exc:
         logger.exception("Failed to inspect network workspace memberships")
         raise HTTPException(
             status_code=503, detail="Workspace membership graph unavailable"

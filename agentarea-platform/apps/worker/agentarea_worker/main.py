@@ -198,22 +198,10 @@ class AgentAreaWorker:
             )
             register_singleton(OpenFGAClient, openfga_client)
 
-        keto_client = None
-        if openfga_client is None and settings.access_control.ACCESS_CONTROL_BACKEND == "keto":
-            from agentarea_common.rebac.keto_client import KetoClient
-
-            keto_client = KetoClient(
-                read_url=settings.keto.ACCESS_CONTROL_KETO_READ_URL,
-                write_url=settings.keto.ACCESS_CONTROL_KETO_WRITE_URL,
-                timeout_seconds=settings.keto.ACCESS_CONTROL_KETO_TIMEOUT_SECONDS,
-            )
-            register_singleton(KetoClient, keto_client)
-
         # PermissionService is a SELECTOR extension point: exactly one impl is
         # active, and an EXPLICIT ACCESS_CONTROL_BACKEND must win over a merely
         # installed "permissions" extension. (Previously the extension was checked
-        # first and silently overrode the configured backend -- e.g. an installed
-        # keto extension shadowed ACCESS_CONTROL_BACKEND=openfga so OpenFGA never
+        # first and silently overrode the configured backend, so OpenFGA never
         # enforced.) The extension is a FALLBACK, used only when the operator did
         # not select a concrete backend. See AGENTS.md "Extension points".
         backend = settings.access_control.ACCESS_CONTROL_BACKEND
@@ -223,11 +211,6 @@ class AgentAreaWorker:
 
             register_singleton(PermissionService, OpenFGAPermissionService(openfga_client))
             perm_impl = "OpenFGAPermissionService"
-        elif keto_client is not None:
-            from agentarea_common.auth.keto_permission import KetoPermissionService
-
-            register_singleton(PermissionService, KetoPermissionService(keto_client))
-            perm_impl = "KetoPermissionService"
         elif perm_factory:
             register_factory(PermissionService, perm_factory)
             perm_impl = "extension:permissions"
@@ -238,8 +221,7 @@ class AgentAreaWorker:
                 "is installed. Refusing to start rather than falling back to an "
                 "implementation that allows every check -- an authorization backend "
                 "that is merely absent must not read as permission granted. Set "
-                "ACCESS_CONTROL_BACKEND=openfga (or keto) and point it at a running "
-                "instance."
+                "ACCESS_CONTROL_BACKEND=openfga and point it at a running instance."
             )
 
         if perm_factory and perm_impl != "extension:permissions":

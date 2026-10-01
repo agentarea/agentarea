@@ -5,10 +5,8 @@ explorer. Higher-level orchestration (graph assembly, tuple sync) lives in the
 API app.
 """
 
-from .keto_client import KetoClient, KetoError, KetoUnavailableError
 from .models import (
     CheckResult,
-    ExpandNode,
     RelationQuery,
     RelationTuple,
     SubjectSet,
@@ -27,10 +25,6 @@ from .ownership import (
 __all__ = [
     "OWNER_RELATIONS",
     "CheckResult",
-    "ExpandNode",
-    "KetoClient",
-    "KetoError",
-    "KetoUnavailableError",
     "OpenFGAClient",
     "OpenFGAError",
     "OpenFGAUnavailableError",

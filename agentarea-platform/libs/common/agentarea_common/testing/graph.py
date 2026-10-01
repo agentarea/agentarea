@@ -37,7 +37,7 @@ def install_graph_ownership_stub(monkeypatch) -> RecordingGraph:
     graph = RecordingGraph()
     monkeypatch.setattr(
         "agentarea_common.rebac.ownership.resolve_graph_client",
-        lambda: (graph, "RecordingGraph"),
+        lambda: graph,
     )
     return graph
 

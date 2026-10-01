@@ -197,7 +197,7 @@ async def require_platform_catalog_write(user_context: UserContextDep) -> None:
     Registries/registry_items are global, platform-owned catalog infrastructure
     (ADR-003) — they have no per-workspace owner. Writing them therefore requires
     write access to the platform scope, decided by the AuthorizationService (the
-    access-control abstraction: own-workspace rule in OSS, Keto relations in enterprise).
+    access-control abstraction: own-workspace rule in OSS, graph relations in enterprise).
     No RBAC roles are involved. Reads stay open so every workspace sees built-ins.
     """
     from agentarea_common.auth.authorization import AuthorizationService
