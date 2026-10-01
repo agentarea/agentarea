@@ -36,6 +36,19 @@
       },
       "APIKeyCreateRequest": {
         "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bind the key to one agent of this workspace: it then reaches only that agent over A2A, nothing else. The key to hand to a caller outside the workspace.",
+            "title": "Agent Id"
+          },
           "expires_in_days": {
             "anyOf": [
               {
@@ -68,6 +81,19 @@
           "access_count": {
             "title": "Access Count",
             "type": "integer"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one agent the key reaches over A2A; None for a workspace key",
+            "title": "Agent Id"
           },
           "created_at": {
             "title": "Created At",
@@ -137,6 +163,19 @@
           "access_count": {
             "title": "Access Count",
             "type": "integer"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one agent the key reaches over A2A; None for a workspace key",
+            "title": "Agent Id"
           },
           "created_at": {
             "title": "Created At",
@@ -244,6 +283,70 @@
           "skill_id"
         ],
         "title": "AddSkillRequest",
+        "type": "object"
+      },
+      "AgentCardLookup": {
+        "properties": {
+          "url": {
+            "description": "The agent's address, or the URL of its agent card",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "AgentCardLookup",
+        "type": "object"
+      },
+      "AgentCardSkill": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description"
+        ],
+        "title": "AgentCardSkill",
+        "type": "object"
+      },
+      "AgentCardSummary": {
+        "properties": {
+          "address": {
+            "description": "The agent's address, the form a delegate stores",
+            "title": "Address",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/AgentCardSkill"
+            },
+            "title": "Skills",
+            "type": "array"
+          }
+        },
+        "required": [
+          "address",
+          "name",
+          "description",
+          "skills"
+        ],
+        "title": "AgentCardSummary",
         "type": "object"
       },
       "AgentCreateRequest": {
@@ -541,6 +644,17 @@
       },
       "AgentResponse": {
         "properties": {
+          "a2a_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "A2A Url"
+          },
           "a2ui_enabled": {
             "anyOf": [
               {
@@ -14308,7 +14422,7 @@
     },
     "/v1/agents/{agent_id}/.well-known/agent-card.json": {
       "get": {
-        "description": "Agent-specific well-known discovery endpoint.\n\nReturns the agent card for this specific agent, at\n/v1/agents/{agent_id}/.well-known/agent-card.json\n\nThis allows each agent to have its own well-known endpoint, which is A2A compliant.\nLater, this can be proxied to subdomains:\n- agent1.domain.com/.well-known/agent-card.json -> /v1/agents/{id}/.well-known/agent-card.json",
+        "description": "The agent card under the API host; its endpoint is on the API host too.",
         "operationId": "get_agent_well_known_card_v1_agents__agent_id___well_known_agent_card_json_get",
         "parameters": [
           {
@@ -14971,6 +15085,70 @@
           "v1",
           "protected",
           "workspaces"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/a2a/agent-cards": {
+      "post": {
+        "description": "The card published at an A2A agent's address.",
+        "operationId": "read_agent_card_v1_a2a_agent_cards_post",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentCardLookup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCardSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Agent Card",
+        "tags": [
+          "v1",
+          "protected",
+          "a2a"
         ]
       }
     },
@@ -18335,6 +18513,25 @@
               "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
               "title": "Workspace",
               "type": "string"
+            }
+          },
+          {
+            "description": "Only the keys bound to this agent",
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the keys bound to this agent",
+              "title": "Agent Id"
             }
           }
         ],

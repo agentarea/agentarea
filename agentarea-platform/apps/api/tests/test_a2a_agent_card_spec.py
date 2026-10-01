@@ -19,7 +19,7 @@ def _agent():
 def test_agent_card_json_parses_strictly_as_a_v1_card():
     agent_id = uuid4()
     card = build_agent_card(
-        _agent(), base_url="https://api.example.com", agent_id=agent_id, extended=False
+        _agent(), rpc_url=f"https://api.example.com/v1/agents/{agent_id}/a2a/rpc", extended=False
     )
     payload = agent_card_json(card)
 
@@ -48,13 +48,13 @@ def test_agent_card_json_parses_strictly_as_a_v1_card():
 
 
 def test_public_card_lists_only_the_generic_skill():
-    card = build_agent_card(_agent(), base_url="https://a", agent_id=uuid4(), extended=False)
+    card = build_agent_card(_agent(), rpc_url="https://a/", extended=False)
 
     assert [skill.id for skill in card.skills] == ["text-processing"]
 
 
 def test_extended_card_adds_tool_and_planning_skills():
-    card = build_agent_card(_agent(), base_url="https://a", agent_id=uuid4(), extended=True)
+    card = build_agent_card(_agent(), rpc_url="https://a/", extended=True)
 
     assert [skill.id for skill in card.skills] == [
         "text-processing",
@@ -66,8 +66,7 @@ def test_extended_card_adds_tool_and_planning_skills():
 def test_a2ui_agent_advertises_the_extension():
     card = build_agent_card(
         SimpleNamespace(name="ui", description=None, tools=None, planning=None, a2ui_enabled=True),
-        base_url="https://a",
-        agent_id=uuid4(),
+        rpc_url="https://a/",
         extended=False,
     )
     payload = agent_card_json(card)

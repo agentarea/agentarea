@@ -1,9 +1,13 @@
 "use client";
 
-import type { AgentToolConfig, SecretResponse } from "@/api/client/types.gen";
+import type {
+  AgentCardSummary,
+  AgentToolConfig,
+  SecretResponse,
+} from "@/api/client/types.gen";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Globe, Trash2 } from "lucide-react";
+import { Globe, Loader2, Trash2 } from "lucide-react";
 import Link from "@/components/WorkspaceLink";
 import AccordionControl from "@/components/AccordionControl";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
@@ -26,7 +30,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import { readAgentCardAction } from "../../shared/actions";
 import {
+  agentAddress,
   isRemoteDelegate,
   patchDelegate,
   remoteDelegateProblem,
@@ -106,16 +112,44 @@ function RemoteAgentForm({
   const [secret, setSecret] = useState("");
   const [instructions, setInstructions] = useState("");
   const [problem, setProblem] = useState<RemoteDelegateProblem | null>(null);
+  const [card, setCard] = useState<AgentCardSummary | null>(null);
+  const [cardError, setCardError] = useState<string | null>(null);
+  const [isReading, setIsReading] = useState(false);
+
+  const readCard = async () => {
+    setIsReading(true);
+    setCardError(null);
+    try {
+      const result = await readAgentCardAction(agentAddress(url));
+      if (result.error || !result.data) {
+        setCard(null);
+        setCardError(result.error ?? t("cardFailed"));
+        return;
+      }
+      const read = result.data;
+      setCard(read);
+      setUrl(read.address);
+      if (!name.trim()) setName(read.name);
+      if (!instructions.trim()) setInstructions(read.description);
+    } catch (error) {
+      console.error("Failed to read the agent card", error);
+      setCard(null);
+      setCardError(t("cardFailed"));
+    } finally {
+      setIsReading(false);
+    }
+  };
 
   const add = () => {
-    const found = remoteDelegateProblem({ name, url }, delegates);
+    const address = agentAddress(url);
+    const found = remoteDelegateProblem({ name, url: address }, delegates);
     setProblem(found);
     if (found) return;
     onAdd(
       patchDelegate(
         { type: "agent", name: name.trim() },
         {
-          a2a_url: url.trim(),
+          a2a_url: address,
           auth_secret_name: secret,
           description_override: instructions,
         }
@@ -126,11 +160,53 @@ function RemoteAgentForm({
     setSecret("");
     setInstructions("");
     setProblem(null);
+    setCard(null);
+    setCardError(null);
   };
 
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">{t("externalHint")}</p>
+      <div className="space-y-1.5">
+        <Label htmlFor="remote-delegate-url">{t("url")}</Label>
+        <div className="flex gap-2">
+          <Input
+            id="remote-delegate-url"
+            value={url}
+            placeholder={t("urlPlaceholder")}
+            onChange={(event) => {
+              setUrl(event.target.value);
+              setCard(null);
+              setCardError(null);
+            }}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={!url.trim() || isReading}
+            onClick={readCard}
+          >
+            {isReading && <Loader2 className="animate-spin" />}
+            {t("readCard")}
+          </Button>
+        </div>
+        {card ? (
+          <div className="rounded-md border p-2 text-xs">
+            <p className="font-medium">{card.name}</p>
+            {card.description && (
+              <p className="text-muted-foreground">{card.description}</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">{t("urlHint")}</p>
+        )}
+        {cardError && (
+          <p role="alert" className="text-xs text-destructive">
+            {cardError}
+          </p>
+        )}
+      </div>
       <div className="space-y-1.5">
         <Label htmlFor="remote-delegate-name">{t("name")}</Label>
         <Input
@@ -138,15 +214,6 @@ function RemoteAgentForm({
           value={name}
           placeholder={t("namePlaceholder")}
           onChange={(event) => setName(event.target.value)}
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="remote-delegate-url">{t("url")}</Label>
-        <Input
-          id="remote-delegate-url"
-          value={url}
-          placeholder={t("urlPlaceholder")}
-          onChange={(event) => setUrl(event.target.value)}
         />
       </div>
       <div className="space-y-1.5">
@@ -365,6 +432,14 @@ export default function DelegationConfig({
                               delegate.name,
                               patchDelegate(delegate, {
                                 a2a_url: event.target.value,
+                              })
+                            )
+                          }
+                          onBlur={(event) =>
+                            update(
+                              delegate.name,
+                              patchDelegate(delegate, {
+                                a2a_url: agentAddress(event.target.value),
                               })
                             )
                           }

@@ -70,6 +70,32 @@ async def test_mcp_auth_accepts_agentarea_pat_prefix():
         _mcp_user_context_var.reset(token)
 
 
+@pytest.mark.asyncio
+async def test_mcp_auth_refuses_a_key_bound_to_an_agent():
+    """An agent's key reaches that agent over A2A, never the MCP surface."""
+    middleware = MCPAuthMiddleware(MagicMock())
+    request = MagicMock()
+    request.headers = {}
+    principal = UserPrincipal(
+        user_id="user-1", bound_workspace_id="workspace-1", bound_agent_id="agent-1"
+    )
+    token = _mcp_user_context_var.set(None)
+
+    try:
+        with (
+            patch(
+                "agentarea_common.auth.dependencies._validate_api_key",
+                new=AsyncMock(return_value=principal),
+            ),
+            patch("agentarea_common.auth.dependencies._resolve_access", new=_grant()),
+        ):
+            await middleware._try_authenticate("aat_agent-key", request)
+
+        assert _mcp_user_context_var.get(None) is None
+    finally:
+        _mcp_user_context_var.reset(token)
+
+
 def _jwt_auth_result(user_id: str) -> MagicMock:
     auth_result = MagicMock()
     auth_result.is_authenticated = True

@@ -66,6 +66,8 @@ class WorkspaceNotSelectedError(RuntimeError):
 class _WorkspaceBinding:
     workspace_id: str
     workspace_slug: str
+    # The agent an A2A route bound the workspace for; an agent's key acts only there.
+    agent_id: str | None = None
 
 
 def binds_workspace[F: Callable[..., Any]](dependency: F) -> F:
@@ -78,12 +80,20 @@ def binds_workspace[F: Callable[..., Any]](dependency: F) -> F:
     return dependency
 
 
-def bind_request_workspace(request: Request, workspace_id: str, workspace_slug: str) -> None:
-    """Select the workspace ``get_user_context`` resolves for this request."""
+def bind_request_workspace(
+    request: Request, workspace_id: str, workspace_slug: str, *, agent_id: str | None = None
+) -> None:
+    """Select the workspace ``get_user_context`` resolves for this request.
+
+    ``agent_id`` names the agent the request was authorized on, which is the
+    only place a key bound to that agent may act.
+    """
     setattr(
         request.state,
         _WORKSPACE_BINDING_STATE,
-        _WorkspaceBinding(workspace_id=workspace_id, workspace_slug=workspace_slug),
+        _WorkspaceBinding(
+            workspace_id=workspace_id, workspace_slug=workspace_slug, agent_id=agent_id
+        ),
     )
 
 
@@ -193,6 +203,8 @@ async def _resolve_access_unobserved(
     if principal.bound_workspace_id is not None:
         accessible = [w for w in accessible if w == principal.bound_workspace_id]
         administered = [w for w in administered if w == principal.bound_workspace_id]
+    if principal.bound_agent_id is not None:
+        accessible, administered = [], []
 
     principal.accessible_workspaces = accessible
     principal.admin_workspaces = administered
@@ -341,6 +353,7 @@ async def _validate_api_key(token: str, request: Request) -> UserPrincipal | Non
         last_written = record.last_accessed_at
         user_id = str(record.created_by)
         workspace_id = str(record.workspace_id)
+        agent_id = str(record.agent_id) if record.agent_id else None
         owned = await _owns_workspace(session, user_id, workspace_id)
 
     if not owned and not await _has_graph_membership(user_id, workspace_id):
@@ -356,8 +369,14 @@ async def _validate_api_key(token: str, request: Request) -> UserPrincipal | Non
         await _record_api_key_use(key_id, last_written)
 
     # The key acts for its creator, and only in the workspace it was issued
-    # for: _resolve_access narrows the principal's reach to that one.
-    return UserPrincipal(user_id=user_id, bound_workspace_id=workspace_id)
+    # for: _resolve_access narrows the principal's reach to that one, or to no
+    # workspace at all for an agent's key, which only the A2A edge admits.
+    return UserPrincipal(
+        user_id=user_id,
+        bound_workspace_id=workspace_id,
+        bound_agent_id=agent_id,
+        api_key_id=str(key_id),
+    )
 
 
 def get_auth_provider():
@@ -537,6 +556,14 @@ async def authenticate_principal(
     return await _authenticate_token(credentials.credentials, request)
 
 
+def _refuse_agent_key(principal: UserPrincipal) -> None:
+    if principal.bound_agent_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This key reaches only its agent, over A2A",
+        )
+
+
 async def get_principal(
     principal: UserPrincipal = Depends(authenticate_principal),
 ) -> UserPrincipal:
@@ -545,6 +572,7 @@ async def get_principal(
     For routes that act on no single workspace: listing and creating
     workspaces, accepting an invitation, and the binders of id-addressed routes.
     """
+    _refuse_agent_key(principal)
     await _resolve_access(principal)
     return principal
 
@@ -588,6 +616,9 @@ async def get_user_context(
     from agentarea_common.workspaces.slug import is_uuid_shaped, is_valid_workspace_slug
 
     reference = request.path_params.get(WORKSPACE_PATH_PARAM)
+    binding = getattr(request.state, _WORKSPACE_BINDING_STATE, None)
+    if principal.bound_agent_id is not None:
+        _admit_agent_key(principal, None if reference is not None else binding)
     if reference is not None:
         # Checked here, before any lookup: the route's Path declaration only
         # reports its error after every dependency has run.
@@ -604,7 +635,6 @@ async def get_user_context(
             raise _forbidden_workspace(principal, reference)
         workspace_id, workspace_slug = workspace.id, workspace.slug
     else:
-        binding = getattr(request.state, _WORKSPACE_BINDING_STATE, None)
         if binding is None:
             raise WorkspaceNotSelectedError(
                 f"{request.method} {request.url.path} needs a workspace context but "
@@ -625,6 +655,24 @@ async def get_user_context(
         f"Authenticated user: {user_context.user_id} in workspace: {user_context.workspace_id}"
     )
     return user_context
+
+
+def _admit_agent_key(principal: UserPrincipal, binding: _WorkspaceBinding | None) -> None:
+    """Let an agent's key act in its workspace only on a request bound to its agent.
+
+    Its reach is otherwise no workspace at all; see :func:`_resolve_access`.
+    """
+    if (
+        binding is None
+        or binding.agent_id != principal.bound_agent_id
+        or binding.workspace_id != principal.bound_workspace_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This key reaches only its agent, over A2A",
+        )
+    principal.accessible_workspaces = [binding.workspace_id]
+    principal.admin_workspaces = []
 
 
 async def resolve_principal_from_token(token: str | None, request: Request) -> UserPrincipal | None:

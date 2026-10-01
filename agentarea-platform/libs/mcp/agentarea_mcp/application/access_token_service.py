@@ -4,6 +4,7 @@ import hashlib
 import logging
 import secrets
 from datetime import datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from agentarea_mcp.domain.auth_models import APIKey
@@ -37,8 +38,9 @@ class APIKeyService:
         self,
         name: str,
         expires_in_days: int | None = None,
+        agent_id: UUID | None = None,
     ) -> tuple[APIKey, str]:
-        """Create a new PAT.
+        """Create a new PAT; with ``agent_id``, one that reaches only that agent over A2A.
 
         Returns ``(token_record, raw_token)``.  The raw token is shown once
         to the user and MUST NOT be stored — only the hash is persisted.
@@ -56,6 +58,7 @@ class APIKeyService:
             token_hash=token_hash,
             token_prefix=token_prefix,
             expires_at=expires_at,
+            agent_id=agent_id,
         )
         logger.info("Created MCP access token '%s' (id=%s)", name, created.id)
         return created, raw_token
@@ -81,10 +84,15 @@ class APIKeyService:
     async def get_token(self, token_id: UUID) -> APIKey | None:
         return await self._repo.get_by_id(token_id)
 
-    async def list_tokens(self, created_by: str | None = None) -> list[APIKey]:
-        if created_by is None:
-            return await self._repo.list_all()
-        return await self._repo.list_all(created_by=created_by)
+    async def list_tokens(
+        self, created_by: str | None = None, agent_id: UUID | None = None
+    ) -> list[APIKey]:
+        filters: dict[str, Any] = {}
+        if created_by is not None:
+            filters["created_by"] = created_by
+        if agent_id is not None:
+            filters["agent_id"] = agent_id
+        return await self._repo.list_all(**filters)
 
     async def revoke_token(self, token_id: UUID) -> bool:
         """Immediately deactivate a PAT. Returns False if not found."""

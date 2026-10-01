@@ -10,7 +10,7 @@ related:
   - /concepts/execution/durable-execution
   - /concepts/governance/tool-authorization
   - /concepts/agents/skills
-last_updated: 2026-09-30
+last_updated: 2026-10-01
 ---
 
 When one agent hands work to another, the concept is delegation. A2A — the
@@ -101,11 +101,42 @@ serves REST and messaging channels. `SendMessage` converts the A2A message to an
 Temporal workflow, the same policy resolution, the same event stream and the
 same artifacts as a task started from the UI.
 
-The endpoint is a single JSON-RPC 2.0 route per agent:
+### Addresses
+
+Every agent has an address of its own: a host, built from `A2A_AGENT_URL` with
+the agent id as the first label, such as
+`https://4f1c….a2a.agentarea.ru`. The agent API returns it as `a2a_url`. On
+that host the agent card is at the well-known path, and the JSON-RPC endpoint
+is the root:
 
 ```http
+GET  https://{agent_id}.a2a.example.com/.well-known/agent-card.json
+POST https://{agent_id}.a2a.example.com/
+```
+
+Anything else on that host is `404`: the host serves the agent and nothing of
+the rest of the API.
+
+One host per agent is what the spec implies rather than a choice of style. The
+spec places the card at `/.well-known/agent-card.json` on the agent's origin
+(RFC 8615) and leaves the endpoint to the card, so an origin can describe one
+agent. A client is handed only the address, reads the card, and takes the
+endpoint, transport and auth scheme from there.
+
+The same agent also answers under the API host, for clients configured before
+agents had their own host:
+
+```http
+GET  /v1/agents/{agent_id}/.well-known/agent-card.json
 POST /v1/agents/{agent_id}/a2a/rpc
 ```
+
+Each card names the endpoint on the host it is served from, built from
+configuration rather than from the request: `A2A_AGENT_URL` for the agent's
+own host, `API_BASE_URL` for the API host. A client is never sent to a host
+other than the one it was given.
+
+### The endpoint
 
 The protocol itself is not ours. The route authenticates the caller, then hands
 the request to the official `a2a-sdk` JSON-RPC dispatcher, which owns the wire
@@ -214,22 +245,24 @@ card that the official SDK could not parse.
 
 ### Discovery
 
-Four unauthenticated endpoints describe an agent:
+Five unauthenticated endpoints describe an agent:
 
 | Endpoint | Returns |
 |---|---|
+| `GET https://{agent_id}.<zone>/.well-known/agent-card.json` | The A2A agent card, on the agent's own host |
 | `GET /v1/agents/{agent_id}/.well-known/agent-card.json` | The A2A agent card |
 | `GET /v1/agents/{agent_id}/.well-known/a2a-info.json` | Protocol and endpoint metadata |
 | `GET /v1/agents/{agent_id}/.well-known/` | An index of the two above |
 | `GET /v1/agents/{agent_id}/a2a/well-known` | The same agent card, on an older path |
 
 The card advertises `streaming`, `pushNotifications` and `extendedAgentCard` as
-true, and adds an A2UI extension entry when the agent has `a2ui_enabled`. The
-path layout anticipates proxying each agent to its own subdomain later.
+true, and adds an A2UI extension entry when the agent has `a2ui_enabled`.
+`a2a-info.json` and the index report the agent's address as `a2a_url`.
 
 One builder produces the card for every surface: the well-known routes and
-`GetExtendedAgentCard` advertise the same interface URL, version and security
-scheme. The extended card differs only in listing more skills.
+`GetExtendedAgentCard` advertise the same version and security scheme, and the
+interface URL of the host they are served on. The extended card differs
+only in listing more skills.
 
 ### Authentication
 
@@ -237,7 +270,22 @@ A2A carries no authentication or permission model of its own. The subject is
 resolved by the same dependency every optional-auth REST endpoint uses, handling
 Kratos JWT, `aat_` API keys and Hydra OAuth alike, and the allow/deny decision
 is made by the single edge authorizer. An API key that works over REST works
-here unchanged, and the `/rpc` route requires the `agent:execute` permission.
+here unchanged, and the JSON-RPC route requires the `agent:execute` permission.
+
+A member of the agent's workspace may call it. A caller outside the workspace
+uses a key bound to the agent: an API key created with `agent_id`, from the
+agent's **Settings → A2A access**. Such a key acts as the member who issued it,
+for that one agent only. The edge authorizer admits it on that agent and
+refuses it on every other one, and every authenticated REST route and the MCP
+surface refuse it with `403`, so handing it out opens no workspace data.
+
+Inside A2A the key is a guest, not a member. It sees only the tasks it started:
+`GetTask`, `CancelTask`, `SubscribeToTask` and the push-config methods answer
+`TaskNotFoundError` for any other task of the agent, and `ListTasks` is refused
+with `UnsupportedOperationError`. It never acts as a workspace admin, even when
+its issuer owns the workspace. The run it starts executes as its issuer, the
+way a trigger's run executes as the trigger's creator. The key stops working
+when it is revoked or when its issuer leaves the workspace.
 
 ### Delegating over A2A
 
@@ -245,9 +293,17 @@ When the binding is `a2a`, `A2AAgentTool` uses the official SDK client: it
 sends `SendMessage` with `returnImmediately: true`, then polls `GetTask` on the
 same endpoint every 2 seconds until terminal or until its budget runs out — 110
 seconds, kept under the 120-second HTTP timeout. Each request stays short;
-waiting is a series of polls rather than one long-held connection. The
-configured `a2a_url` is the RPC endpoint itself; the tool does not fetch the
-remote card.
+waiting is a series of polls rather than one long-held connection.
+
+The configured `a2a_url` is the agent's address. Each call reads the card at
+`/.well-known/agent-card.json` there and sends the message to the endpoint the
+card names. A card that names an endpoint on another origin is refused before
+anything is sent, because the credential was bound to the address an admin
+approved, not to wherever a card points. Saving stores the address however it
+was pasted: a card URL or a trailing slash is reduced to the origin or base
+path the card is found under. The agent form reads the card while a remote
+delegate is being added, through `POST /v1/workspaces/{workspace}/a2a/agent-cards`,
+so a wrong address is caught before it is saved.
 
 The credential is a reference, not a value. `settings.auth_secret_name` names a
 secret in the calling agent's workspace; the worker reads it when the delegate
@@ -309,10 +365,6 @@ mapping in one case and the task row in the other.
 
 ## Limits
 
-- **`a2a-info.json` advertises endpoints that do not exist.** Its `endpoints`
-  block names `rpc` at `/v1/agents/{id}/rpc` and `stream` at
-  `/v1/agents/{id}/stream`. The real RPC route is `/v1/agents/{id}/a2a/rpc`, and
-  there is no `/stream` route.
 - **The card's skills are generic, not the agent's.** `text-processing` is
   always listed; `tool-execution` and `task-planning` appear based on whether
   the agent has tools or planning enabled. Attached
@@ -331,7 +383,7 @@ mapping in one case and the task row in the other.
   then is reported as a failure carrying its `task_id`; the remote task keeps
   running, and its result never reaches the caller.
 - **A delegated A2A task is not linked to the task that delegated it.** On the
-  receiving side it is an ordinary task started by whoever owns the API key, so
+  receiving side it is an ordinary task started by whoever issued the key, so
   the caller's task view does not show it as a child.
 - **An agent in another workspace of the same deployment is reached over A2A.**
   The local binding resolves names only in the caller's workspace, so crossing

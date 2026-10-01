@@ -8,6 +8,7 @@ the protocol's JSON form.
 """
 
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from a2a.types import (
@@ -23,7 +24,7 @@ from a2a.types import (
     StringList,
 )
 from a2a.utils.constants import PROTOCOL_VERSION_CURRENT, TransportProtocol
-from fastapi import Request
+from agentarea_common.config import get_settings
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.struct_pb2 import Struct
 
@@ -33,12 +34,19 @@ BEARER_SCHEME = "bearer"
 _MODES = ["text/plain", "application/json"]
 
 
-def get_base_url(request: Request) -> str:
-    return f"{request.url.scheme}://{request.url.netloc}"
+def agent_rpc_url(agent_id: UUID) -> str:
+    """The JSON-RPC endpoint of an agent under the API host."""
+    return f"{get_settings().app.API_BASE_URL.rstrip('/')}/v1/agents/{agent_id}/a2a/rpc"
 
 
-def agent_rpc_url(base_url: str, agent_id: UUID) -> str:
-    return f"{base_url}/v1/agents/{agent_id}/a2a/rpc"
+def agent_host_rpc_url(agent_id: UUID) -> str:
+    """The JSON-RPC endpoint of an agent on its own host: the host's root."""
+    return f"{get_settings().app.a2a_agent_url(agent_id)}/"
+
+
+def _origin(url: str) -> str:
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}"
 
 
 def _skills(agent: Any, *, extended: bool) -> list[AgentSkill]:
@@ -79,8 +87,12 @@ def _skills(agent: Any, *, extended: bool) -> list[AgentSkill]:
     return skills
 
 
-def build_agent_card(agent: Any, *, base_url: str, agent_id: UUID, extended: bool) -> AgentCard:
-    """Build the card for ``agent``; ``extended`` adds the skills only members see."""
+def build_agent_card(agent: Any, *, rpc_url: str, extended: bool) -> AgentCard:
+    """Build the card for ``agent``; ``extended`` adds the skills only members see.
+
+    ``rpc_url`` is the endpoint on the origin the card was fetched from, so a
+    client never follows a card to a host other than the one it was given.
+    """
     capabilities = AgentCapabilities(
         streaming=True, push_notifications=True, extended_agent_card=True
     )
@@ -94,14 +106,13 @@ def build_agent_card(agent: Any, *, base_url: str, agent_id: UUID, extended: boo
         description=agent.description or f"AI agent {agent.name}",
         supported_interfaces=[
             AgentInterface(
-                url=agent_rpc_url(base_url, agent_id),
+                url=rpc_url,
                 protocol_binding=TransportProtocol.JSONRPC.value,
                 protocol_version=PROTOCOL_VERSION_CURRENT,
             )
         ],
-        provider=AgentProvider(organization="AgentArea", url=base_url),
+        provider=AgentProvider(organization="AgentArea", url=_origin(rpc_url)),
         version="1.0.0",
-        documentation_url=f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json",
         capabilities=capabilities,
         security_schemes={
             BEARER_SCHEME: SecurityScheme(

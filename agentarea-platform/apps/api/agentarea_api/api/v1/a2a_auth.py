@@ -39,6 +39,9 @@ class A2AAuthContext(BaseModel):
     agent_id: UUID | None = None
     permissions: list[str] = []
     auth_method: str | None = None
+    # Set when an agent's key authenticated the call: the caller is outside the
+    # workspace, sees only the tasks that key started, and administers nothing.
+    agent_key_id: str | None = None
     metadata: dict[str, Any] = {}
 
 
@@ -144,7 +147,7 @@ async def require_a2a_auth(
         )
 
     workspace_slug = await workspace_slug_for(agent_workspace_id)
-    bind_request_workspace(request, agent_workspace_id, workspace_slug)
+    bind_request_workspace(request, agent_workspace_id, workspace_slug, agent_id=str(agent_id))
     return A2AAuthContext(
         authenticated=subject is not None,
         user_id=subject.user_id if subject else None,
@@ -153,6 +156,7 @@ async def require_a2a_auth(
         agent_id=agent_id,
         permissions=[permission],
         auth_method="bearer" if subject else "anonymous",
+        agent_key_id=subject.api_key_id if subject and subject.bound_agent_id else None,
         metadata=_a2a_metadata(request, agent_name=agent.name, agent_status=agent.status),
     )
 

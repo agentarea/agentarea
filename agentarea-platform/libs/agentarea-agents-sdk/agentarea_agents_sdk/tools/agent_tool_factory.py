@@ -115,7 +115,7 @@ class AgentToolFactory:
                 f"Delegation '{agent_name}': A2A binding fallback (no task_service). "
                 "Pass task_service for same-platform agents to use the local binding."
             )
-            a2a_url = f"{base_url}/agents/{agent.id}/a2a/rpc"
+            a2a_url = f"{base_url}/agents/{agent.id}"
             binding = A2AAgentTool(
                 agent_name=agent_name,
                 agent_description=description,

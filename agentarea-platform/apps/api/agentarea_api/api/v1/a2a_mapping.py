@@ -155,6 +155,10 @@ def message_text(message: Message) -> str:
     return "".join(part.text for part in message.parts if part.WhichOneof("content") == "text")
 
 
+# The agent key a task was started with; only that key may read or act on it.
+AGENT_KEY_METADATA = "a2a_agent_key_id"
+
+
 def build_agent_task(
     *,
     message: Message,
@@ -199,6 +203,9 @@ def build_agent_task(
             "agent_target": str(agent_id),
         },
     }
+    a2a_metadata.pop(AGENT_KEY_METADATA, None)
+    if auth.agent_key_id:
+        a2a_metadata[AGENT_KEY_METADATA] = auth.agent_key_id
     if message.context_id:
         a2a_metadata["a2a_context_id"] = message.context_id
     if "agent_name" in auth.metadata:

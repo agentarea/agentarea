@@ -2,10 +2,13 @@
 
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic import model_validator
 
 from .base import BaseAppSettings
+
+A2A_AGENT_ID_PLACEHOLDER = "{agent_id}"
 
 
 class AppSettings(BaseAppSettings):
@@ -37,6 +40,11 @@ class AppSettings(BaseAppSettings):
     TELEGRAM_WEBHOOK_BASE_URL: str = ""
     # AgentArea frontend URL (users are redirected here to log in if no session)
     FRONTEND_BASE_URL: str = "http://localhost:3000"
+    # Where each agent is served over A2A. One host per agent, so its card sits
+    # at /.well-known/agent-card.json on its own origin (RFC 8615); the first
+    # label of the host is the agent id. Needs a wildcard DNS record and
+    # certificate for the zone, e.g. https://{agent_id}.a2a.example.com.
+    A2A_AGENT_URL: str = "http://{agent_id}.a2a.localhost:8000"
 
     # Optional SearXNG-compatible endpoint used by agentarea/web.search_web.
     # When unset, search attempts fail explicitly; URL fetching remains usable.
@@ -101,6 +109,35 @@ class AppSettings(BaseAppSettings):
                 "CORS_ALLOW_CREDENTIALS=false."
             )
         return self
+
+    @model_validator(mode="after")
+    def _check_a2a_agent_url(self) -> "AppSettings":
+        """Refuse an A2A address the agent cannot be found by."""
+        parsed = urlsplit(self.A2A_AGENT_URL)
+        hostname = parsed.hostname or ""
+        if (
+            parsed.scheme not in ("http", "https")
+            or parsed.path not in ("", "/")
+            or parsed.query
+            or parsed.fragment
+            or not hostname.startswith(f"{A2A_AGENT_ID_PLACEHOLDER}.")
+            or self.A2A_AGENT_URL.count(A2A_AGENT_ID_PLACEHOLDER) != 1
+        ):
+            raise ValueError(
+                f"A2A_AGENT_URL must be an http(s) origin whose host starts with "
+                f"'{A2A_AGENT_ID_PLACEHOLDER}.', e.g. https://{A2A_AGENT_ID_PLACEHOLDER}"
+                f".a2a.example.com; got {self.A2A_AGENT_URL!r}"
+            )
+        return self
+
+    @property
+    def a2a_agent_host(self) -> str:
+        """The host pattern agents are served on, e.g. ``{agent_id}.a2a.example.com``."""
+        return urlsplit(self.A2A_AGENT_URL).hostname or ""
+
+    def a2a_agent_url(self, agent_id: object) -> str:
+        """The A2A address of one agent: its origin, where its card is discovered."""
+        return self.A2A_AGENT_URL.rstrip("/").replace(A2A_AGENT_ID_PLACEHOLDER, str(agent_id))
 
     # Kratos public API URL (used to validate browser session cookies in OAuth AS)
     KRATOS_PUBLIC_URL: str = "http://kratos:4433"

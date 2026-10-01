@@ -55,14 +55,20 @@ async def authorize_agent_action(
     The one place edge policy is evaluated. Order:
       1. Public grant (data) → allow anyone, keyless included.
       2. Anonymous with no public grant → deny.
-      3. Authenticated subject within the agent's workspace (scope) → allow.
-      4. Otherwise deny (per-principal ReBAC grants plug in here later).
+      3. An agent's key → allow on that agent only, deny everywhere else.
+      4. Authenticated subject within the agent's workspace (scope) → allow.
+      5. Otherwise deny (per-principal ReBAC grants plug in here later).
     """
     if await _has_public_grant(agent_id, action):
         return EdgeDecision(True, "public grant")
 
     if subject is None:
         return EdgeDecision(False, "anonymous subject and no public grant")
+
+    if isinstance(subject, UserPrincipal) and subject.bound_agent_id is not None:
+        if (subject.bound_agent_id, subject.bound_workspace_id) == (agent_id, agent_workspace_id):
+            return EdgeDecision(True, "agent key")
+        return EdgeDecision(False, f"key bound to agent {subject.bound_agent_id}")
 
     if agent_workspace_id in (subject.accessible_workspaces or []):
         return EdgeDecision(True, "workspace scope")
