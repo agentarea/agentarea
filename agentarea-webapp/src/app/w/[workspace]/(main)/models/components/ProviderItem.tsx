@@ -3,7 +3,8 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import ModelsList from "./ModelsList";
-import { ProviderConfig, ProviderSpec } from "./types";
+import type { ProviderSpecWithModelsResponse } from "@/api/client/types.gen";
+import { ProviderConfig } from "./types";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 
 interface ProviderConfigCardProps {
@@ -93,17 +94,32 @@ export function PlatformProviderConfigCard({
 }
 
 interface ProviderSpecCardProps {
-  spec: ProviderSpec;
+  spec: ProviderSpecWithModelsResponse;
 }
 
+// Catalog entry on the Available tab, laid out like ProviderConfigCard: the
+// provider key under the name and the first models it offers.
 export function ProviderSpecCard({ spec }: ProviderSpecCardProps) {
+  const models = spec.models.map((model) => ({
+    model_display_name: model.display_name,
+    model_name: model.model_name,
+    provider_name: spec.name,
+    provider_icon_url: spec.icon_url,
+  }));
+
   return (
     <LinkedCard
-      className="py-3"
       href={`/models/create/${spec.id}`}
       title={spec.name}
-      icon={spec.icon_url}
+      icon={spec.icon_url ?? undefined}
       type="config"
-    />
+      subtitle={
+        <p className="truncate text-xs text-gray-500 w-full">
+          {spec.provider_key}
+        </p>
+      }
+    >
+      {models.length > 0 ? <ModelsList models={models} /> : null}
+    </LinkedCard>
   );
 }

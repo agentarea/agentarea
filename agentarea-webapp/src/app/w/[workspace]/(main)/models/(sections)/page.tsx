@@ -44,7 +44,7 @@ export default async function ProviderConfigsPage({
       fallback={
         <ProvidersSkeleton
           viewMode={tab}
-          configColumns={configColumns}
+          columns={configColumns}
         />
       }
     >

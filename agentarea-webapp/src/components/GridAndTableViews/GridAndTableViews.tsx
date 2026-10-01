@@ -4,7 +4,6 @@ import Link from "@/components/WorkspaceLink";
 import HeaderTabs from "@/components/HeaderTabs";
 import Table from "@/components/Table/Table";
 import { TabsContent } from "@/components/ui/tabs";
-import { CARD_GRID_GALLERY } from "@/lib/collectionGrids";
 import { cn } from "@/lib/utils";
 import { TabsWithNavigation } from "./components/TabsWithNavigation";
 
@@ -25,13 +24,11 @@ const TabsView = ({
   searchParams,
   leftComponent,
   routeChange,
-  toolbar = true,
   children,
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
   leftComponent?: React.ReactNode;
   routeChange: string;
-  toolbar?: boolean;
   children: React.ReactNode;
 }) => {
   const t = useTranslations("Common");
@@ -44,25 +41,23 @@ const TabsView = ({
 
   return (
     <TabsWithNavigation activeTab={activeTab} routeChange={routeChange}>
-      {toolbar && (
-        <div className="mb-3 flex flex-row items-center justify-between gap-[10px]">
-          <div className="flex flex-1 flex-row items-center gap-[10px]">
-            {leftComponent}
-          </div>
-
-          <div>
-            <HeaderTabs
-              paramName="tab"
-              defaultTab="grid"
-              currentTab={activeTab}
-              tabs={[
-                { value: "table", label: t("table") },
-                { value: "grid", label: t("grid") },
-              ]}
-            />
-          </div>
+      <div className="mb-3 flex flex-row items-center justify-between gap-[10px]">
+        <div className="flex flex-1 flex-row items-center gap-[10px]">
+          {leftComponent}
         </div>
-      )}
+
+        <div>
+          <HeaderTabs
+            paramName="tab"
+            defaultTab="grid"
+            currentTab={activeTab}
+            tabs={[
+              { value: "table", label: t("table") },
+              { value: "grid", label: t("grid") },
+            ]}
+          />
+        </div>
+      </div>
 
       {children}
     </TabsWithNavigation>
@@ -81,7 +76,6 @@ export default function GridAndTableViews<T extends GridItem>({
   cardClassName,
   gridClassName,
   rowProps,
-  toolbar,
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
   isEmpty?: boolean;
@@ -89,11 +83,6 @@ export default function GridAndTableViews<T extends GridItem>({
   emptyState: React.ReactNode;
   leftComponent?: React.ReactNode;
   routeChange: string;
-  /**
-   * false drops the search + view-toggle row, for a page that already puts
-   * both in its ContentBlock subheader. The view still follows `?tab=`.
-   */
-  toolbar?: boolean;
   data: T[];
   columns: Column<T>[];
   cardContent: (item: T) => React.ReactNode;
@@ -103,24 +92,22 @@ export default function GridAndTableViews<T extends GridItem>({
   /** Extra attributes for each row and card, e.g. drag source or drop target. */
   rowProps?: (item: T) => React.HTMLAttributes<HTMLElement>;
 }) {
-  // TabsContent's top margin spaces the content off the toolbar; without the
-  // toolbar it would only push the content below the page's own padding.
-  const contentClassName = toolbar === false ? "mt-0" : undefined;
-
   return (
     <TabsView
       routeChange={routeChange}
       searchParams={searchParams}
       leftComponent={leftComponent}
-      toolbar={toolbar}
     >
       {!data.length ? (
         emptyState
       ) : (
         <>
-          <TabsContent value="grid" className={contentClassName}>
+          <TabsContent value="grid">
             <div
-              className={cn(CARD_GRID_GALLERY, gridClassName)}
+              className={cn(
+                "grid grid-cols-1 gap-[12px] md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
+                gridClassName
+              )}
             >
               {data.map((item) => {
                 const linkFunction = item.itemLink || itemLink;
@@ -155,7 +142,7 @@ export default function GridAndTableViews<T extends GridItem>({
               })}
             </div>
           </TabsContent>
-          <TabsContent value="table" className={contentClassName}>
+          <TabsContent value="table">
             <Table
               data={data}
               columns={columns}
@@ -229,7 +216,10 @@ export function GridAndTableSectionsViews<T extends GridItem>({
                 <>
                   <TabsContent value="grid">
                     <div
-                      className={cn(CARD_GRID_GALLERY, gridClassName)}
+                      className={cn(
+                        "grid grid-cols-1 gap-[12px] md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
+                        gridClassName
+                      )}
                     >
                       {sectionData.data.map((item) => {
                         const linkFunction = sectionData.itemLink || itemLink;
