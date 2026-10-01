@@ -1,12 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { Play } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import Link from "@/components/WorkspaceLink";
 import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
-import { MessageSquare, Play } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useChat } from "../../shared/ChatContext";
+import TestAgentToggle from "../../shared/TestAgentToggle";
 import { useFormSubmittingState } from "../../shared/useFormSubmittingState";
 
 /**
@@ -30,23 +29,12 @@ export default function AgentHeaderControls({
   const isSubmitting = useFormSubmittingState(
     onWallet ? "wallet-form" : "agent-form"
   );
-  const isMobile = useIsMobile();
-  const { setIsChatSheetOpen } = useChat();
 
   if (onSettings || onWallet) {
     const formId = onWallet ? "wallet-form" : "agent-form";
     return (
       <div className="flex items-center gap-2 py-1">
-        {isMobile && onSettings && (
-          <Button
-            variant="outline"
-            size="xs"
-            type="button"
-            onClick={() => setIsChatSheetOpen(true)}
-          >
-            <MessageSquare />
-          </Button>
-        )}
+        {onSettings && <TestAgentToggle />}
         <Button size="xs" type="submit" form={formId} isLoading={isSubmitting}>
           {tCommon("saveChanges")}
         </Button>

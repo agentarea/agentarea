@@ -502,6 +502,14 @@ worker:
   # pod that passes readiness and then crashes cannot retire an old replica.
   minReadySeconds: 10
 
+  # -- Seconds a stopping worker lets in-flight activities (model calls, tools,
+  # event writes) finish before it cancels them. A cancelled model call is paid
+  # for twice when it reruns on another replica.
+  shutdownTimeout: 120
+  # -- Total budget the kubelet allows the worker before SIGKILL. Keep it above
+  # shutdownTimeout, or the drain is cut short.
+  terminationGracePeriodSeconds: 150
+
   # -- Rollout strategy. maxUnavailable 0 keeps every old replica until its
   # replacement is available: a new ReplicaSet that never becomes ready stalls
   # the rollout instead of taking the running workers down.
@@ -655,6 +663,15 @@ mcpManager:
     # Maximum time the gateway waits for a cold workload to become Ready.
     startupTimeout: "5m"
 
+  # Image that runs `command` connections (`npx -y <pkg>`, `uvx <pkg>`): its
+  # bridge starts the stdio server and serves it as Streamable HTTP on port
+  # 8080 once the server has initialized. Pin the tag to the release in
+  # production; the manager passes it as MCP_BASE_IMAGE.
+  mcpBase:
+    image:
+      repository: agentarea/agentarea-mcp-base
+      tag: "latest"
+
   # Run MCP containers on a remote host instead of in this cluster.
   #
   # That host runs this same image with MCP_MANAGER_MODE=dataplane, which builds
@@ -747,20 +764,20 @@ mcpManager:
   # Container runtime class for MCP server instance pods. Sandbox pods have
   # their own setting (sandboxRuntime.runtimeClass) and a stricter rule — the
   # two workloads carry different code and cannot share one answer. A sandbox
-  # runs code the agent wrote; an MCP server runs an image the workspace owner
-  # picked from a catalog.
+  # runs code the agent wrote; an MCP server runs a package or image a workspace
+  # member picked, from the catalog or their own.
   #
   #   "gvisor"    — gVisor/runsc. Needs no KVM or nested virtualization, so it
   #                 works on ordinary cloud VMs. Requires runsc + the containerd
   #                 shim installed on the nodes and a matching RuntimeClass.
   #   "kata-qemu" — Kata Containers. A real kernel per pod, but requires KVM,
   #                 which managed clusters on virtualized nodes rarely expose.
-  #   ""          — the node's default runtime (runc). No kernel isolation.
-  #                 Permitted here because MCP instances are additionally
-  #                 confined by the standard isolation tier (all capabilities
-  #                 dropped, no privilege escalation, bounded scratch) and
-  #                 restricted to catalog images. Do NOT open user-supplied
-  #                 images on an empty runtime class.
+  #   ""          — the node's default runtime (runc). No kernel isolation:
+  #                 any npm or PyPI package and any image a member connects
+  #                 runs on the node's kernel, confined only by the isolation
+  #                 tier below and the instance NetworkPolicy. Choose a sandbox
+  #                 runtime, or run MCP on a separate data plane, wherever
+  #                 members are not trusted with the node.
   #
   # The name must match a RuntimeClass that exists in the cluster; Kubernetes
   # refuses to schedule the pod otherwise, which is the correct failure.
@@ -774,35 +791,6 @@ mcpManager:
   #               actually provide one or the pod never schedules
   isolationTier: "standard"
 
-  # What an MCP instance is allowed to run. This is admission, not confinement:
-  # the isolation tier decides how tightly a workload is boxed, this decides
-  # whether it may exist. On nodes offering only the default container runtime
-  # there is no kernel boundary behind it, so the set has to be closed by name.
-  #
-  # At least one list must be non-empty or no instance could ever start.
-  # Both lists below ship a small trusted starter set rather than an empty one,
-  # so a default install has something runnable. Narrow or replace them to match
-  # what your catalog actually offers.
-  admission:
-    # Image repositories, without tag or digest, e.g.
-    # "ghcr.io/vendor/notion-mcp". Any tag in an admitted repository is allowed;
-    # pin digests in the catalog when you need immutability.
-    allowedImageRepositories:
-      - ghcr.io/github/github-mcp-server
-      - mcp/fetch
-    # Whole stdio invocations a command-type instance may run, executable and
-    # arguments together, exactly as the catalog spells them: npm packages come
-    # through as "npx -y <package>" and PyPI ones as "uvx <package>". The
-    # arguments are part of the entry because the executable alone is not a
-    # gate — npx and uvx will fetch and run whatever package they are pointed
-    # at, so admitting "npx" would admit all of npm through our bridge image.
-    allowedCommandPackages:
-      - npx -y @modelcontextprotocol/server-everything
-      - npx -y @modelcontextprotocol/server-sequential-thinking
-      - npx -y @modelcontextprotocol/server-customer-segmentation --stdio
-      - npx -y @modelcontextprotocol/server-map --stdio
-      - uvx mcp-server-fetch
-      - uvx mcp-server-time
   # The cluster MCP instances and agent sandboxes are created in, when that is
   # not the cluster the control plane itself runs in. Runtime class confines
   # untrusted code to its own kernel; this moves it onto other machines

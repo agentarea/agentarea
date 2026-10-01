@@ -256,13 +256,16 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 		// Scale-to-zero means every call may pay this. A fixed initial delay is
 		// dead time the fastest image cannot avoid, so slow starts are absorbed by
 		// startupProbe's budget instead and readiness polls at one second.
+		// The budget matches MCP_GATEWAY_STARTUP_TIMEOUT's 5m default: mcp-base
+		// opens its port only after the stdio server initialized, and for a
+		// `command` connection that includes `npx`/`uvx` installing the package.
 		StartupProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(spec.Port)},
 			},
 			PeriodSeconds:    1,
 			TimeoutSeconds:   2,
-			FailureThreshold: 120,
+			FailureThreshold: 300,
 		},
 		ReadinessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{

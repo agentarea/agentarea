@@ -9,6 +9,7 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from sqlalchemy import Numeric, cast, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -415,23 +416,38 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
         super().__init__(session, TaskEventORM, user_context)
 
     async def create_event(self, event: TaskEvent) -> TaskEvent:
-        """Create a new task event."""
-        event_orm = TaskEventORM(
-            id=event.id,
-            task_id=event.task_id,
-            event_type=event.event_type,
-            timestamp=event.timestamp,
-            data=event.data,
-            event_metadata=event.metadata,
-            workspace_id=event.workspace_id,
-            created_by=event.created_by,
+        """Store a task event once per id and return the stored row.
+
+        Storing an id that already exists is a no-op that returns the first
+        write, so a retried publish cannot duplicate history.
+        """
+        if event.workspace_id != self.user_context.workspace_id:
+            raise ValueError(
+                f"Task event {event.id} belongs to workspace {event.workspace_id}, "
+                f"not {self.user_context.workspace_id}"
+            )
+        await self.session.execute(
+            pg_insert(TaskEventORM)
+            .values(
+                id=event.id,
+                task_id=event.task_id,
+                event_type=event.event_type,
+                timestamp=event.timestamp,
+                data=event.data,
+                event_metadata=event.metadata,
+                workspace_id=event.workspace_id,
+                created_by=event.created_by,
+            )
+            .on_conflict_do_nothing(index_elements=[TaskEventORM.id])
         )
-
-        self.session.add(event_orm)
-        await self.session.flush()
-        await self.session.refresh(event_orm)
-
-        return self._orm_to_domain(event_orm)
+        stored = await self.session.scalar(
+            select(TaskEventORM)
+            .where(TaskEventORM.id == event.id, self._get_workspace_filter())
+            .execution_options(populate_existing=True)
+        )
+        if stored is None or stored.task_id != event.task_id:
+            raise ValueError(f"Task event id {event.id} is already stored for another task")
+        return self._orm_to_domain(stored)
 
     async def get_events_for_task(
         self, task_id: UUID, limit: int = 100, offset: int = 0

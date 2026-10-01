@@ -156,7 +156,7 @@ AgentArea supports two MCP server deployment types, both subject to the same con
     The `ContainerValidator` checks that the image exists locally or can be pulled before the container is created. Images that are neither local nor pullable are rejected at validation time, before any runtime resources are allocated.
   </Tab>
   <Tab title="Command type">
-    A stdio-based MCP command (e.g. an `npx` or `uvx` package) is automatically wrapped in the **mcp-bridge** sandbox image (`agentarea/mcp-bridge:latest`). This converts the stdio transport to HTTP without requiring a custom image.
+    A stdio-based MCP command (e.g. an `npx` or `uvx` package) runs through the image selected by `MCP_BASE_IMAGE` (default `agentarea/agentarea-mcp-base:latest`). The bridge converts the stdio transport to HTTP without requiring a custom image.
 
     ```json
     {
@@ -166,20 +166,15 @@ AgentArea supports two MCP server deployment types, both subject to the same con
     }
     ```
 
-    The manager resolves this to:
+    The manager runs the command through the image selected by `MCP_BASE_IMAGE`:
 
-    ```go
-    // internal/container/manager.go — ResolveContainerSpec()
-    const sandboxImage = "docker.io/agentarea/mcp-bridge:latest"
-
-    command = []string{
-        "--stdio", "npx -y @modelcontextprotocol/server-filesystem /tmp",
-        "--port",  "8811",
-        "--host",  "0.0.0.0",
-    }
+    ```sh
+    MCP_BASE_IMAGE=agentarea/agentarea-mcp-base:latest
+    python -m mcp_base <command> [args...]
     ```
 
-    The mcp-bridge image includes Node.js and `npx`, so npm-based MCP servers work out of the box. No image validation is performed for command-type specs since the sandbox image is fixed.
+    The bridge serves `/mcp` and `/health` on port `8080`, and opens that port only after the child answers `initialize`. It supports MCP protocol version `2026-07-28` and 2025-era clients from the same endpoint.
+    The base image includes Node.js, Python, `uv`/`uvx`, and git. Command-type specs do not provide a package image to validate; the manager uses `MCP_BASE_IMAGE`.
   </Tab>
 </Tabs>
 

@@ -73,7 +73,12 @@ class CommandsMixin(BudgetMixin):
         info = ContinueExecutionPayload(**payload)
         if not self._waiting_for_continuation:
             return None, {"accepted": False, "reason": "not_waiting_for_continuation"}
-        if info.additional_iterations == 0 and info.additional_budget_usd is None:
+        if (
+            info.additional_iterations == 0
+            and info.additional_budget_usd is None
+            and info.additional_tokens == 0
+            and info.additional_tool_calls == 0
+        ):
             return None, {"accepted": False, "reason": "no_resources_granted"}
         if (
             self._continuation_failure_reason == "iteration_limit"
@@ -88,6 +93,13 @@ class CommandsMixin(BudgetMixin):
             and info.additional_budget_usd is None
         ):
             return None, {"accepted": False, "reason": "additional_budget_required"}
+        if self._continuation_failure_reason == "token_limit" and info.additional_tokens == 0:
+            return None, {"accepted": False, "reason": "additional_tokens_required"}
+        if (
+            self._continuation_failure_reason == "tool_call_limit"
+            and info.additional_tool_calls == 0
+        ):
+            return None, {"accepted": False, "reason": "additional_tool_calls_required"}
         if self.state.goal is None:
             return None, {"accepted": False, "reason": "goal_not_initialized"}
         if info.effective_policy is None or info.governance_snapshot is None:
@@ -99,7 +111,7 @@ class CommandsMixin(BudgetMixin):
         try:
             current_policy = effective_policy_from_json(self.state.effective_policy)
             next_policy = effective_policy_from_json(info.effective_policy)
-            current_policy.runtime_contract()
+            current_runtime = current_policy.runtime_contract()
             next_runtime = next_policy.runtime_contract()
         except (TypeError, ValueError):
             return None, {"accepted": False, "reason": "invalid_governance_snapshot"}
@@ -116,6 +128,13 @@ class CommandsMixin(BudgetMixin):
         expected_budget = self._budget.budget_limit + (info.additional_budget_usd or ZERO)
         if next_runtime.run_budget_usd != expected_budget:
             return None, {"accepted": False, "reason": "policy_revision_mismatch"}
+        if next_runtime.max_tokens != current_runtime.max_tokens + info.additional_tokens:
+            return None, {"accepted": False, "reason": "policy_revision_mismatch"}
+        if (
+            next_runtime.max_tool_calls_total
+            != current_runtime.max_tool_calls_total + info.additional_tool_calls
+        ):
+            return None, {"accepted": False, "reason": "policy_revision_mismatch"}
 
         current_contract = current_policy.to_json_dict()
         next_contract = next_policy.to_json_dict()
@@ -124,6 +143,8 @@ class CommandsMixin(BudgetMixin):
             contract.pop("resolver_version", None)
             contract["budget"].pop("run_budget_usd", None)
             contract["execution"].pop("max_model_turns", None)
+            contract["execution"].pop("max_tool_calls_total", None)
+            contract["tokens"].pop("max_tokens", None)
         if next_contract != current_contract:
             return None, {
                 "accepted": False,

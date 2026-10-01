@@ -310,24 +310,23 @@ class TaskEvent(BaseModel):
     def create_workflow_event(
         cls,
         task_id: UUID,
+        event_id: UUID,
         event_type: str,
         data: dict[str, Any],
+        timestamp: datetime,
         workspace_id: str,  # Required - no default
         created_by: str,  # Required - no default
     ) -> "TaskEvent":
-        """Create a workflow event with proper formatting.
+        """Create a workflow event with the identity the workflow minted.
 
-        Args:
-            task_id: Task ID for the event
-            event_type: Type of event
-            data: Event data dictionary
-            workspace_id: Workspace ID (required)
-            created_by: User/entity that created the event (required)
+        ``event_id`` and ``timestamp`` come from the workflow, so a retried
+        publish of the same event maps to the same row.
         """
         return cls(
+            id=event_id,
             task_id=task_id,
             event_type=event_type,
-            timestamp=datetime.now(UTC),
+            timestamp=timestamp,
             data=data,
             metadata={"source": "workflow", "created_at": datetime.now(UTC).isoformat()},
             workspace_id=workspace_id,

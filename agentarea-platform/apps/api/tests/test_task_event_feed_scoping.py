@@ -19,6 +19,10 @@ class _CapturingResult:
     def fetchall() -> list:
         return []
 
+    @staticmethod
+    def first() -> None:
+        return None
+
 
 class _CapturingSession:
     def __init__(self) -> None:
@@ -47,16 +51,20 @@ async def test_snapshot_query_filters_on_workspace(monkeypatch):
         lambda: _SessionContext(session),
     )
 
-    await task_event_feed._load_snapshot("task-1", "ws-1")
+    [event async for event in task_event_feed._iter_snapshot("task-1", "ws-1")]
+    await task_event_feed._load_cursor("task-1", "ws-1", "00000000-0000-0000-0000-000000000001")
 
-    sql, params = session.statements[0]
-    assert "workspace_id = :workspace_id" in sql
-    assert params == {"task_id": "task-1", "workspace_id": "ws-1"}
+    for sql, params in session.statements:
+        assert "workspace_id = :workspace_id" in sql
+        assert params["task_id"] == "task-1"
+        assert params["workspace_id"] == "ws-1"
+    assert len(session.statements) == 2
 
 
-async def test_snapshot_requires_a_workspace_at_the_call_site():
+@pytest.mark.parametrize("reader", ["_iter_snapshot", "_load_cursor"])
+async def test_snapshot_requires_a_workspace_at_the_call_site(reader):
     """``workspace_id`` is positional, so it cannot be forgotten by omission."""
-    signature = inspect.signature(task_event_feed._load_snapshot)
+    signature = inspect.signature(getattr(task_event_feed, reader))
     workspace_param = signature.parameters["workspace_id"]
     assert workspace_param.default is inspect.Parameter.empty
 

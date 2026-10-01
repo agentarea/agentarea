@@ -16,7 +16,11 @@ from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config import get_database
 from agentarea_common.di.container import resolve
 from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_llm.application.model_service import ModelService, build_model_service
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+from agentarea_llm.infrastructure.video_generation_job_repository import (
+    VideoGenerationJobRepository,
+)
 from agentarea_mcp.application.service import MCPServerInstanceService
 from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_tasks.application.task_event_service import TaskEventService
@@ -67,6 +71,23 @@ class ActivityServiceContainer:
             secret_manager=secret_manager,
         )
         return service, session
+
+    async def get_model_service(self, user_context: UserContext) -> tuple[ModelService, Any]:
+        """Get ModelService (typed clients for image, video and decision models)."""
+        session = self._database.async_session_factory()
+        service = build_model_service(
+            session=session,
+            user_context=user_context,
+            secret_manager_factory=self.dependencies.secret_manager_factory,
+        )
+        return service, session
+
+    async def get_video_generation_jobs(
+        self, user_context: UserContext
+    ) -> tuple[VideoGenerationJobRepository, Any]:
+        """Get the workspace's video generation job repository."""
+        session = self._database.async_session_factory()
+        return VideoGenerationJobRepository(session, user_context), session
 
     async def get_mcp_server_instance_service(
         self, user_context: UserContext
@@ -235,17 +256,22 @@ class ActivityContext:
             self._scope.__exit__(exc_type, exc_val, exc_tb)
 
     async def _finish(self, exc_type) -> None:
-        # Handle commits/rollbacks first
+        # A failed commit means the activity's writes are lost, so it must fail
+        # the activity; a failed rollback only accompanies an error already raised.
+        commit_error: Exception | None = None
         for session in self._sessions:
+            committing = exc_type is None and self.auto_commit and commit_error is None
             try:
-                if exc_type is None and self.auto_commit:
-                    # No exception occurred, commit the transaction
+                if committing:
                     await session.commit()
                 else:
-                    # Exception occurred or auto_commit disabled, rollback
                     await session.rollback()
             except Exception as e:
-                logger.warning(f"Failed to commit/rollback session: {e}", exc_info=True)
+                if committing:
+                    logger.error(f"Failed to commit session: {e}", exc_info=True)
+                    commit_error = e
+                else:
+                    logger.warning(f"Failed to roll back session: {e}", exc_info=True)
 
         # Clean up sessions
         for session in self._sessions:
@@ -253,6 +279,9 @@ class ActivityContext:
                 await session.close()
             except Exception as e:
                 logger.warning(f"Failed to close session: {e}", exc_info=True)
+
+        if commit_error is not None:
+            raise commit_error
 
     async def get_agent_service(self) -> AgentService:
         """Get AgentService for this context."""
@@ -265,6 +294,18 @@ class ActivityContext:
         service, session = await self.container.get_model_instance_service(self.user_context)
         self._sessions.append(session)
         return service
+
+    async def get_model_service(self) -> ModelService:
+        """Get ModelService for this context."""
+        service, session = await self.container.get_model_service(self.user_context)
+        self._sessions.append(session)
+        return service
+
+    async def get_video_generation_jobs(self) -> VideoGenerationJobRepository:
+        """Get VideoGenerationJobRepository for this context."""
+        repository, session = await self.container.get_video_generation_jobs(self.user_context)
+        self._sessions.append(session)
+        return repository
 
     async def get_mcp_server_instance_service(self) -> MCPServerInstanceService:
         """Get MCPServerInstanceService for this context."""

@@ -1,11 +1,10 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { CheckCircle2, XCircle } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import Table, { type Column } from "@/components/Table/Table";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { getTriggerStatusPresentation } from "@/lib/status";
 import {
   describeTriggerSchedule,
@@ -114,16 +113,19 @@ export default function TriggersTable({
       cellClassName: "hidden lg:table-cell",
       render: (_value, trigger) => {
         if (!trigger?.last_execution_at) {
-          return <span className="text-[13px] text-muted-foreground/60">—</span>;
+          return (
+            <span className="text-[13px] text-muted-foreground/60">—</span>
+          );
         }
         const failing = Number(trigger.consecutive_failures ?? 0) > 0;
         return (
           <span className="flex items-center gap-1 text-[13px] text-muted-foreground">
-            {failing ? (
-              <XCircle className="h-3.5 w-3.5 text-red-500" />
-            ) : (
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-            )}
+            <StatusIndicator
+              kind={failing ? "failed" : "done"}
+              size="sm"
+              aria-label={t("lastRun")}
+              title={t("lastRun")}
+            />
             {formatCompactDistance(trigger.last_execution_at)}
           </span>
         );
@@ -152,7 +154,7 @@ export default function TriggersTable({
         const health = getTriggerHealth(trigger);
         const status = getTriggerStatusPresentation(health);
         return (
-          <StatusIndicator size="sm" tone={status.tone} pulse={status.pulse}>
+          <StatusIndicator size="sm" kind={status.kind}>
             {tStatus(health)}
           </StatusIndicator>
         );

@@ -356,6 +356,13 @@ def _parse_llm_providers(data: dict[str, Any]) -> list[dict[str, Any]]:
     return items
 
 
+# Mirrors agentarea_llm.domain.model_kind.ModelKind; the operator does not
+# import the platform.
+MODEL_KINDS = ("chat", "embedding", "image", "video", "decision")
+# The kind a catalog model has when its entry names none.
+DEFAULT_MODEL_KIND = MODEL_KINDS[0]
+
+
 def _parse_llm_models(data: dict[str, Any]) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     for entry in data.get("models", []):
@@ -363,6 +370,12 @@ def _parse_llm_models(data: dict[str, Any]) -> list[dict[str, Any]]:
         model_name = entry.get("model_name")
         if not provider_key or not model_name:
             continue
+        kind = entry.get("kind", DEFAULT_MODEL_KIND)
+        if kind not in MODEL_KINDS:
+            raise ValueError(
+                f"Model '{provider_key}/{model_name}' has unknown kind {kind!r}; "
+                f"expected one of {', '.join(MODEL_KINDS)}"
+            )
         items.append(
             {
                 "external_id": f"{provider_key}/{model_name}",
@@ -372,6 +385,7 @@ def _parse_llm_models(data: dict[str, Any]) -> list[dict[str, Any]]:
                 "spec": {
                     "provider_key": provider_key,
                     "model_name": model_name,
+                    "kind": kind,
                     "context_window": entry.get("context_window", 4096),
                     "max_output_tokens": entry.get("max_output_tokens"),
                     "input_cost_per_token": entry.get("input_cost_per_token"),
@@ -859,7 +873,7 @@ def _upsert_mcp_server(
     if conn_type == "docker":
         docker_image_url = spec.get("image", "")
     elif conn_type == "command":
-        docker_image_url = "agentarea/mcp-bridge:latest"
+        docker_image_url = "agentarea/agentarea-mcp-base"
         command_str = spec.get("command", "")
         args = spec.get("args", []) or []
         if command_str:

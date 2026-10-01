@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Check, ChevronRight, Copy, Loader2 } from "lucide-react";
+import { Check, ChevronRight, Copy } from "lucide-react";
 import { MessageMarkdown } from "@/components/Chat/MessageMarkdown";
 import {
   describeToolCall,
@@ -20,7 +20,10 @@ import {
   stripUnavailableToolValues,
   TOOL_DETAILS_UNAVAILABLE,
 } from "@/components/Chat/utils/toolDetails";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import type { StatusKind } from "@/lib/status";
 import type { Part } from "../contract";
+import { ArtifactMedia } from "./ArtifactMedia";
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object"
@@ -249,6 +252,11 @@ export const ToolPart: React.FC<{
       : succeeded
         ? "Success"
         : "Completed";
+  const statusKind: StatusKind = inFlight
+    ? "running"
+    : failed
+      ? "failed"
+      : "done";
   const statusLabel = inFlight
     ? `${text} · running`
     : failed
@@ -307,7 +315,14 @@ export const ToolPart: React.FC<{
                 {serviceName}
               </span>
             ) : null}
-            {inFlight && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />}
+            {(inFlight || failed) && (
+              <StatusIndicator
+                kind={statusKind}
+                size="sm"
+                aria-label={statusLabel}
+                title={statusLabel}
+              />
+            )}
             <ChevronRight
               aria-hidden
               className="ml-auto h-3 w-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none group-open/tool:rotate-90"
@@ -371,9 +386,9 @@ export const ToolPart: React.FC<{
               </pre>
             )}
             <div className="flex items-center justify-end gap-2 border-t border-border/70 px-3 py-1.5 text-[12px] text-muted-foreground">
-              <span className={failed ? "text-red-600 dark:text-red-400" : ""}>
+              <StatusIndicator kind={statusKind} size="sm">
                 {completionLabel}
-              </span>
+              </StatusIndicator>
               {statusMetadata && <span>{statusMetadata}</span>}
             </div>
           </div>
@@ -425,10 +440,16 @@ export const ToolPart: React.FC<{
                 {statusMetadata}
               </span>
             )}
-            {failed && (
-              <span className="text-red-600 dark:text-red-400">Failed</span>
+            {!inFlight && failed && (
+              <StatusIndicator kind="failed" size="sm">
+                Failed
+              </StatusIndicator>
             )}
-            {inFlight && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />}
+            {inFlight && (
+              <StatusIndicator kind="running" size="sm">
+                Running
+              </StatusIndicator>
+            )}
           </div>
           {showUnavailableDetails ? (
             <p className="px-1 text-[11px] text-muted-foreground">
@@ -445,7 +466,7 @@ export const ToolPart: React.FC<{
           </span>
           <div className="flex flex-wrap gap-2">
             {artifactPaths.map((path) => (
-              <FileChip key={path} name={path} />
+              <ArtifactMedia key={path} path={path} name={fileBasename(path)} />
             ))}
           </div>
         </div>

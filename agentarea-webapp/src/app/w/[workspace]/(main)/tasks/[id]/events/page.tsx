@@ -2,13 +2,12 @@
 
 import { useMemo, useState } from "react";
 import {
-  Activity,
   ChevronDown,
   ChevronRight,
   Search,
   RefreshCw,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,13 +15,11 @@ import { useTaskEvents } from "@/lib/events/useTaskEvents";
 import type { DisplayEvent, EventLevel } from "@/types/events";
 import { useTaskContext } from "../TaskContext";
 
-const levelColors: Record<EventLevel, string> = {
-  info: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  success:
-    "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-  warning:
-    "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300",
-  error: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+const eventLevelKinds: Record<EventLevel, "active" | "attention" | "done" | "failed"> = {
+  info: "active",
+  success: "done",
+  warning: "attention",
+  error: "failed",
 };
 
 function EventRow({ event, index }: { event: DisplayEvent; index: number }) {
@@ -48,11 +45,9 @@ function EventRow({ event, index }: { event: DisplayEvent; index: number }) {
           <code className="text-xs">{event.type}</code>
         </td>
         <td className="px-2 py-1.5 w-16">
-          <Badge
-            className={`text-[10px] px-1.5 py-0 font-normal ${levelColors[event.level]}`}
-          >
+          <StatusIndicator kind={eventLevelKinds[event.level]} size="sm">
             {event.level}
-          </Badge>
+          </StatusIndicator>
         </td>
         <td className="px-2 py-1.5 truncate max-w-md">
           {event.description}
@@ -157,14 +152,14 @@ export default function TaskEventsPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <div
-              className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-green-500" : "bg-red-400"}`}
-            />
-            <span className="text-[10px] text-muted-foreground">
-              {connected ? "Live" : "Offline"}
-            </span>
-          </div>
+          <StatusIndicator
+            kind={connected ? "active" : "failed"}
+            size="sm"
+            aria-label={connected ? "Live" : "Offline"}
+            title={connected ? "Live" : "Offline"}
+          >
+            {connected ? "Live" : "Offline"}
+          </StatusIndicator>
           <Button
             variant="outline"
             size="sm"
@@ -188,8 +183,10 @@ export default function TaskEventsPage() {
 
       {/* Error */}
       {eventsError && (
-        <div className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 rounded p-2">
-          {eventsError}
+        <div className="rounded bg-red-50 p-2 text-xs dark:bg-red-900/20">
+          <StatusIndicator kind="failed" size="sm">
+            {eventsError}
+          </StatusIndicator>
         </div>
       )}
 
@@ -211,9 +208,10 @@ export default function TaskEventsPage() {
               {eventsLoading && filtered.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-8">
-                    <div className="flex items-center justify-center gap-2 text-muted-foreground text-xs">
-                      <Activity className="h-4 w-4 animate-spin" />
-                      Loading events...
+                    <div className="flex items-center justify-center text-xs text-muted-foreground">
+                      <StatusIndicator kind="running" size="sm">
+                        Loading events...
+                      </StatusIndicator>
                     </div>
                   </td>
                 </tr>

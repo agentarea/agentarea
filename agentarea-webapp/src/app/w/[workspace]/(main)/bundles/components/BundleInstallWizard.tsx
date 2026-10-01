@@ -16,13 +16,10 @@ import Image from "next/image";
 import { useTranslations } from "next-intl";
 import Link from "@/components/WorkspaceLink";
 import {
-  AlertTriangle,
   Check,
-  CheckCircle2,
   ChevronLeft,
   ChevronsUpDown,
   Clock,
-  Loader2,
   Plug,
   Plus,
   Puzzle,
@@ -64,6 +61,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Switch } from "@/components/ui/switch";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
@@ -506,15 +504,22 @@ export function BundleInstallWizard({
 
       {phase.kind === "analyzing" && (
         <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Analyzing bundle…
+          <StatusIndicator kind="running" size="sm">
+            Analyzing bundle…
+          </StatusIndicator>
         </div>
       )}
 
       {phase.kind === "error" && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          {phase.message}
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
+          <StatusIndicator
+            kind="failed"
+            size="sm"
+            iconClassName="mt-0.5 h-4 w-4"
+            className="text-sm"
+          >
+            {phase.message}
+          </StatusIndicator>
         </div>
       )}
 
@@ -525,19 +530,31 @@ export function BundleInstallWizard({
       {(phase.kind === "form" || phase.kind === "installing") && preview && (
         <div className="space-y-7">
           {blockIssues.length > 0 && (
-            <div className="space-y-1 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
+            <div className="space-y-1 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
               {blockIssues.map((i, idx) => (
-                <p key={idx} className="flex items-start gap-2">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <StatusIndicator
+                  key={idx}
+                  kind="failed"
+                  size="sm"
+                  iconClassName="mt-0.5 h-4 w-4"
+                  className="text-sm"
+                >
                   {i.message}
-                </p>
+                </StatusIndicator>
               ))}
             </div>
           )}
           {warnIssues.length > 0 && (
-            <div className="space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30">
+            <div className="space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/30">
               {warnIssues.map((i, idx) => (
-                <p key={idx}>{i.message}</p>
+                <StatusIndicator
+                  key={idx}
+                  kind="attention"
+                  size="sm"
+                  className="text-xs"
+                >
+                  {i.message}
+                </StatusIndicator>
               ))}
             </div>
           )}
@@ -655,23 +672,29 @@ export function BundleInstallWizard({
                             return null;
                           return (
                             <div className="mt-3 flex flex-wrap items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 dark:border-amber-900/40 dark:bg-amber-950/20">
-                              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                              {allowed.length > 0 ? (
-                                <span className="text-[11px] text-amber-700 dark:text-amber-300">
-                                  Tools locked to:{" "}
-                                  <span className="font-medium">
-                                    {allowed.join(", ")}
-                                  </span>{" "}
-                                  — all others blocked
-                                </span>
-                              ) : (
-                                <span className="text-[11px] text-amber-700 dark:text-amber-300">
-                                  Blocked tools:{" "}
-                                  <span className="font-medium">
-                                    {denied.join(", ")}
-                                  </span>
-                                </span>
-                              )}
+                              <StatusIndicator
+                                kind="attention"
+                                size="sm"
+                                iconClassName="h-3.5 w-3.5"
+                                className="text-[11px]"
+                              >
+                                {allowed.length > 0 ? (
+                                  <>
+                                    Tools locked to:{" "}
+                                    <span className="font-medium">
+                                      {allowed.join(", ")}
+                                    </span>{" "}
+                                    — all others blocked
+                                  </>
+                                ) : (
+                                  <>
+                                    Blocked tools:{" "}
+                                    <span className="font-medium">
+                                      {denied.join(", ")}
+                                    </span>
+                                  </>
+                                )}
+                              </StatusIndicator>
                             </div>
                           );
                         })()}
@@ -850,10 +873,10 @@ export function BundleInstallWizard({
           {/* Footer / commit */}
           <div className="flex flex-col gap-2 border-t border-border/60 pt-5">
             {missingRequired.length > 0 && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
+              <StatusIndicator kind="attention" size="sm" className="text-xs">
                 Fill required fields:{" "}
                 {missingRequired.map((f) => f.label).join(", ")}
-              </p>
+              </StatusIndicator>
             )}
             <div className="flex items-center gap-2">
               <StartAgentButton
@@ -1144,11 +1167,12 @@ function InstallSummary({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-        <CheckCircle2 className="h-4 w-4 shrink-0" />
-        Installed {result.bundle_name} — {created.length} created
-        {reused.length > 0 ? `, ${reused.length} reused` : ""}
-        {skipped.length > 0 ? `, ${skipped.length} skipped` : ""}.
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm dark:border-emerald-900/50 dark:bg-emerald-950/30">
+        <StatusIndicator kind="done" iconClassName="h-4 w-4">
+          Installed {result.bundle_name} — {created.length} created
+          {reused.length > 0 ? `, ${reused.length} reused` : ""}
+          {skipped.length > 0 ? `, ${skipped.length} skipped` : ""}.
+        </StatusIndicator>
       </div>
 
       <ul className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border/60 text-sm">

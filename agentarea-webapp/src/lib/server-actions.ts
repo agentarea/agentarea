@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type {
+  ContinueTaskPayload,
   CreateWalletRequest,
   CreateWorkspaceDirectoryRequest,
   FundWalletRequest,
@@ -10,6 +11,7 @@ import type {
   McpServerInstanceUpdate,
   ModelInstanceBulkCreateRequest,
   ModelInstanceCreate,
+  ModelKind,
   PaginatedResponseSkillResponse,
   ProviderConfigCreate,
   ProviderConfigUpdate,
@@ -159,6 +161,7 @@ export async function listModelInstancesAction(params?: {
   provider_config_id?: string;
   model_spec_id?: string;
   is_active?: boolean;
+  kind?: ModelKind;
 }) {
   return await listModelInstances(params);
 }
@@ -170,6 +173,7 @@ export async function getModelSpecAction(modelSpecId: string) {
 export async function listModelSpecsAction(params?: {
   provider_spec_id?: string;
   is_active?: boolean;
+  kind?: ModelKind;
 }) {
   return await listModelSpecs(params);
 }
@@ -192,14 +196,9 @@ export async function resumeAgentTaskAction(agentId: string, taskId: string) {
 
 export async function continueAgentTaskAction(
   taskId: string,
-  additionalIterations: number,
-  additionalBudgetUsd?: string
+  body: ContinueTaskPayload
 ) {
-  return await continueAgentTask(
-    taskId,
-    additionalIterations,
-    additionalBudgetUsd
-  );
+  return await continueAgentTask(taskId, body);
 }
 
 export async function sendTaskCommandAction(

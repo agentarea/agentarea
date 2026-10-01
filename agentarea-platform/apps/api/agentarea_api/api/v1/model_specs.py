@@ -7,10 +7,10 @@ from agentarea_common.auth.route_authz import requires_workspace_admin, unrestri
 from agentarea_common.money import ZERO, Money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.model_spec_service import ModelSpecService
-from agentarea_llm.domain.models import ModelSpec
+from agentarea_llm.domain.models import ModelKind, ModelSpec
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.exc import IntegrityError
 
 router = APIRouter(prefix="/model-specs", tags=["model-specs"])
@@ -27,12 +27,27 @@ class ModelSpecCreate(BaseModel):
     model_name: str
     display_name: str
     description: str | None = None
-    context_window: int = Field(gt=0, le=_INT32_MAX)
+    kind: ModelKind = ModelKind.CHAT
+    context_window: int | None = Field(default=None, gt=0, le=_INT32_MAX)
     max_output_tokens: int | None = Field(default=None, gt=0, le=_INT32_MAX)
-    input_cost_per_token: Money = Field(ge=ZERO, lt=_COST_CEILING)
-    output_cost_per_token: Money = Field(ge=ZERO, lt=_COST_CEILING)
+    input_cost_per_token: Money | None = Field(default=None, ge=ZERO, lt=_COST_CEILING)
+    output_cost_per_token: Money | None = Field(default=None, ge=ZERO, lt=_COST_CEILING)
     default_context_strategy: str | None = None  # Auto-inferred from model_name if None
     is_active: bool = True
+
+    @model_validator(mode="after")
+    def _billable(self) -> "ModelSpecCreate":
+        # A chat or embedding run is billed from these; the other kinds at the cost
+        # the provider reports per call.
+        if self.kind.priced_per_token:
+            missing = [
+                name
+                for name in ("context_window", "input_cost_per_token", "output_cost_per_token")
+                if getattr(self, name) is None
+            ]
+            if missing:
+                raise ValueError(f"a {self.kind.value} model requires {', '.join(missing)}")
+        return self
 
 
 class ModelSpecUpdate(BaseModel):
@@ -52,7 +67,8 @@ class ModelSpecResponse(BaseModel):
     model_name: str
     display_name: str
     description: str | None
-    context_window: int
+    kind: ModelKind = ModelKind.CHAT
+    context_window: int | None
     max_output_tokens: int | None = None
     input_cost_per_token: Money | None = None
     output_cost_per_token: Money | None = None
@@ -76,6 +92,7 @@ class ModelSpecResponse(BaseModel):
             model_name=model_spec.model_name,
             display_name=model_spec.display_name,
             description=model_spec.description,
+            kind=ModelKind(model_spec.kind),
             context_window=model_spec.context_window,
             max_output_tokens=model_spec.max_output_tokens,
             input_cost_per_token=model_spec.input_cost_per_token,
@@ -104,12 +121,14 @@ async def list_model_specs(
     user_context: UserContextDep,
     provider_spec_id: UUID | None = None,
     is_active: bool | None = None,
+    kind: ModelKind | None = None,
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
 ):
     """List model specifications with optional filtering."""
     model_specs = await model_spec_repo.list_specs(
         provider_spec_id=provider_spec_id,
         is_active=is_active,
+        kind=kind.value if kind is not None else None,
     )
     return [ModelSpecResponse.from_domain(spec) for spec in model_specs]
 
@@ -197,6 +216,7 @@ async def create_model_spec(
             model_name=data.model_name,
             display_name=data.display_name,
             description=data.description,
+            kind=data.kind.value,
             context_window=data.context_window,
             max_output_tokens=data.max_output_tokens,
             input_cost_per_token=data.input_cost_per_token,
@@ -276,6 +296,7 @@ async def upsert_model_spec(
         model_name=data.model_name,
         display_name=data.display_name,
         description=data.description,
+        kind=data.kind.value,
         context_window=data.context_window,
         max_output_tokens=data.max_output_tokens,
         input_cost_per_token=data.input_cost_per_token,

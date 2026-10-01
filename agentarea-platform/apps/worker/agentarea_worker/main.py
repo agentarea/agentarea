@@ -9,6 +9,7 @@ import asyncio
 import logging
 import signal
 import sys
+from datetime import timedelta
 from typing import Any
 
 import dotenv
@@ -278,6 +279,10 @@ class AgentAreaWorker:
             workflow_runner=create_workflow_runner(),
             max_concurrent_workflow_tasks=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,
             max_concurrent_activities=settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,
+            max_cached_workflows=settings.workflow.TEMPORAL_MAX_CACHED_WORKFLOWS,
+            graceful_shutdown_timeout=timedelta(
+                seconds=settings.workflow.TEMPORAL_GRACEFUL_SHUTDOWN_SECONDS
+            ),
         )
 
         # Create trigger execution worker on the trigger-schedules queue
@@ -470,8 +475,11 @@ class AgentAreaWorker:
             logger.info("Shutdown signal received, stopping worker...")
 
         shutdown.cancel()
-        for task in worker_tasks.values():
-            task.cancel()
+        # shutdown() stops polling and lets in-flight activities finish within the
+        # graceful timeout; cancelling run() would cut them off at once.
+        await asyncio.gather(
+            *(worker.shutdown() for queue, worker in pollers.items() if queue not in stopped)
+        )
         failure: Exception | None = None
         for queue, task in worker_tasks.items():
             try:

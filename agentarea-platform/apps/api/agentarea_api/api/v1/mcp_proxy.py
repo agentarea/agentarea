@@ -17,6 +17,7 @@ Dispatch by instance type:
 * ``compound``-> not yet implemented here; see compound proxy
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -48,6 +49,10 @@ from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_common.workspaces.lookup import workspace_slug_for
 from agentarea_governance.application import GovernancePolicyResolver
 from agentarea_mcp.application.auth_service import MCPAuthService
+from agentarea_mcp.application.mcp_client import (
+    GATEWAY_START_WAIT_SECONDS,
+    gateway_start_retry_delay,
+)
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
@@ -510,6 +515,10 @@ async def proxy_instance(
             extensions=extensions or {},
         )
         upstream_resp = await client.send(upstream_req, stream=True)
+        if instance_type in ("docker", "command"):
+            upstream_resp = await _wait_out_gateway_start(
+                client, upstream_req, upstream_resp, request
+            )
     except httpx.HTTPError as exc:
         await client.aclose()
         logger.warning("Upstream MCP error for %s: %s", instance_id, exc, exc_info=True)
@@ -529,3 +538,27 @@ async def proxy_instance(
         headers=_filter_outbound_headers(upstream_resp.headers),
         media_type=upstream_resp.headers.get("content-type"),
     )
+
+
+async def _wait_out_gateway_start(
+    client: httpx.AsyncClient,
+    upstream_req: httpx.Request,
+    upstream_resp: httpx.Response,
+    request: Request,
+) -> httpx.Response:
+    """Repeat a request the gateway answered "workload is starting".
+
+    The gateway brings a reclaimed workload up for the request that asked first
+    and turns concurrent ones away without forwarding them. Waiting here gives
+    every client the workload that start produces, not only clients that know
+    the gateway's header. Stops when the client has gone.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + GATEWAY_START_WAIT_SECONDS
+    while True:
+        delay = gateway_start_retry_delay(upstream_resp.status_code, upstream_resp.headers)
+        if delay is None or loop.time() + delay > deadline or await request.is_disconnected():
+            return upstream_resp
+        await upstream_resp.aclose()
+        await asyncio.sleep(delay)
+        upstream_resp = await client.send(upstream_req, stream=True)

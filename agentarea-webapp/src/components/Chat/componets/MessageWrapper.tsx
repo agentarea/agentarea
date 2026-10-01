@@ -1,7 +1,8 @@
 import React from "react";
 import Image from "next/image";
-import { Bot, User, Wrench } from "lucide-react";
+import { Bot, User } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { cn } from "@/lib/utils";
 
 interface MessageWrapperProps {
@@ -56,13 +57,28 @@ export const MessageWrapper: React.FC<MessageWrapperProps> = ({
           ) : icon ? (
             icon
           ) : type === "error" ? (
-            <span className="inline-block h-3 w-3 rounded-full bg-red-700" />
+            <StatusIndicator
+              kind="failed"
+              size="sm"
+              aria-label="Error"
+              title="Error"
+            />
           ) : type === "user" ? (
             <User className="h-3.5 w-3.5" />
           ) : type === "tool-call" ? (
-            <Wrench className="h-3.5 w-3.5 animate-pulse motion-reduce:animate-none" />
+            <StatusIndicator
+              kind="running"
+              size="sm"
+              aria-label="Running"
+              title="Running"
+            />
           ) : type === "tool-result" ? (
-            <Wrench className="h-4 w-4 text-green-500" />
+            <StatusIndicator
+              kind="done"
+              size="sm"
+              aria-label="Completed"
+              title="Completed"
+            />
           ) : (
             <Bot className="h-3.5 w-3.5" />
           )}

@@ -3,6 +3,7 @@ import { useTranslations } from "next-intl";
 import { Brain, Check, Eye, RefreshCw, Wrench } from "lucide-react";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Badge } from "@/components/ui/badge";
+import { ModelKindBadge } from "@/components/ui/model-kind-badge";
 import { ProviderIcon } from "@/components/ui/provider-icon";
 import { Button } from "@/components/ui/button";
 import {
@@ -329,9 +330,11 @@ export default function ModelInstances({
                       />
                     )}
                     <span className="truncate">{model.display_name}</span>
+                    <ModelKindBadge kind={model.kind} />
                   </div>
                   <div className="text-right text-xs text-muted-foreground">
-                    {formatTokens(model.context_window)}
+                    {model.context_window != null &&
+                      formatTokens(model.context_window)}
                   </div>
                   <div className="text-right text-xs text-muted-foreground">
                     {formatTokens(model.max_output_tokens)}

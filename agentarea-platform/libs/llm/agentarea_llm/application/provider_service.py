@@ -458,6 +458,7 @@ class ProviderService:
         provider_config_id: UUID | None = None,
         model_spec_id: UUID | None = None,
         is_active: bool | None = None,
+        kind: str | None = None,
     ) -> list[ModelInstance]:
         """List model instances with optional filtering.
 
@@ -465,6 +466,7 @@ class ProviderService:
             provider_config_id (Optional[UUID]): Filter by provider configuration ID.
             model_spec_id (Optional[UUID]): Filter by model specification ID.
             is_active (Optional[bool]): Filter by active status.
+            kind (Optional[str]): Filter by the model spec's kind.
 
         Returns:
             List[ModelInstance]: List of model instances.
@@ -473,6 +475,7 @@ class ProviderService:
             provider_config_id=provider_config_id,
             model_spec_id=model_spec_id,
             is_active=is_active,
+            kind=kind,
         )
 
     async def get_model_instance(self, instance_id: UUID) -> ModelInstance | None:

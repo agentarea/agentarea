@@ -14,7 +14,7 @@ from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.money import Money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
-from agentarea_llm.domain.models import ModelInstance
+from agentarea_llm.domain.models import ModelInstance, ModelKind
 from agentarea_llm.domain.provider_profiles import profile_for
 from agentarea_llm.infrastructure.model_spec_repository import ModelPricingNotConfiguredError
 from fastapi import APIRouter, Depends, HTTPException
@@ -79,6 +79,7 @@ class ModelInstanceResponse(BaseModel):
     provider_icon_url: str | None = None
     model_name: str | None = None
     model_display_name: str | None = None
+    model_kind: ModelKind | None = None
     config_name: str | None = None
 
     @classmethod
@@ -103,6 +104,9 @@ class ModelInstanceResponse(BaseModel):
             else None,
             model_name=model_instance.model_spec.model_name if model_instance.model_spec else None,
             model_display_name=model_instance.model_spec.display_name
+            if model_instance.model_spec
+            else None,
+            model_kind=ModelKind(model_instance.model_spec.kind)
             if model_instance.model_spec
             else None,
             config_name=model_instance.provider_config.name
@@ -223,13 +227,15 @@ async def list_model_instances(
     provider_config_id: UUID | None = None,
     model_spec_id: UUID | None = None,
     is_active: bool | None = None,
+    kind: ModelKind | None = None,
     provider_service: ProviderService = Depends(get_provider_service),
 ):
-    """List model instances."""
+    """List model instances, optionally only those whose model is of ``kind``."""
     instances = await provider_service.list_model_instances(
         provider_config_id=provider_config_id,
         model_spec_id=model_spec_id,
         is_active=is_active,
+        kind=kind.value if kind is not None else None,
     )
     return [ModelInstanceResponse.from_domain(instance) for instance in instances]
 
@@ -297,6 +303,13 @@ async def validate_model_instance(
         model_spec = await provider_service.get_model_spec(data.model_spec_id)
         if not model_spec:
             raise HTTPException(status_code=404, detail="Model spec not found")
+        if model_spec.kind != ModelKind.CHAT:
+            return ModelInstanceTestResponse(
+                success=False,
+                message=f"A {model_spec.kind} model cannot be tested with a chat message",
+                error_type="UnsupportedModelKind",
+                model_name=model_spec.model_name,
+            )
 
         # Extract configuration details
         provider_type = provider_config.provider_spec.provider_type

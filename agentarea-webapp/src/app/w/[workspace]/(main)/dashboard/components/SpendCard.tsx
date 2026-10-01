@@ -3,7 +3,6 @@ import { Wallet } from "lucide-react";
 import { BoardSectionHeader } from "@/components/board";
 import { computeDelta, DeltaBadge } from "@/components/charts/Sparkline";
 import { SpendTrendChart } from "@/components/charts/SpendTrendChart";
-import { useCurrency } from "@/hooks/useCurrency";
 import type { DailySpendPoint, DashboardSpend } from "@/lib/api-dashboard";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -23,15 +22,16 @@ function pctTone(pct: number) {
 export function SpendCard({
   spend,
   trend,
+  currency,
   compact = false,
 }: {
   spend: DashboardSpend;
   trend: DailySpendPoint[];
+  currency: string | null;
   compact?: boolean;
 }) {
   const t = useTranslations("DashboardPage");
   const locale = useLocale();
-  const { currency } = useCurrency();
   const fmt = (v: number) => formatMoney(v, currency, locale);
   const hasCap = spend.cap_usd !== null;
   const pct = spend.pct_of_cap ?? 0;

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { PendingEscalationResponse } from "@/api/client/types.gen";
 import { apiErrorMessage } from "@/lib/api-errors";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { listPendingEscalationsAction } from "@/lib/server-actions";
 
 interface EscalationArgumentsProps {
@@ -57,7 +58,11 @@ export function EscalationArguments({
 
   if (loaded.state === "loading") return null;
   if (loaded.state === "error") {
-    return <p className="mt-1.5 text-xs text-red-600">{loaded.message}</p>;
+    return (
+      <StatusIndicator kind="failed" size="sm" className="mt-1.5 text-xs">
+        {loaded.message}
+      </StatusIndicator>
+    );
   }
   if (!loaded.escalation) {
     return (

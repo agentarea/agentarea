@@ -45,6 +45,7 @@ interface TriggerControlProps {
   allowedToolsFieldName?: string;
   onToolStateChange?: (toolName: string, state: ToolState) => void;
   onAllToolsChange?: (all: boolean) => void;
+  children?: React.ReactNode;
 }
 
 export const TriggerControl = ({
@@ -60,6 +61,7 @@ export const TriggerControl = ({
   allowedToolsFieldName,
   onToolStateChange,
   onAllToolsChange,
+  children,
 }: TriggerControlProps) => {
   const t = useTranslations("AgentsPage");
   // Reactively watch allowed_tools so checkboxes update on change
@@ -222,6 +224,8 @@ export const TriggerControl = ({
         <p className="text-xs text-muted-foreground">
           {trigger.description || trigger.label || trigger.name}
         </p>
+
+        {children}
 
         {/* Builtin tool methods */}
         {hasMethods && (

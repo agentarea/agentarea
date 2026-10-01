@@ -88,11 +88,21 @@ def validate_tool_pairs(messages: list[dict[str, Any]]) -> bool:
     return True
 
 
-def find_compaction_boundary(messages: list[dict[str, Any]], keep_recent: int) -> int:
+def messages_payload_bytes(messages: list[dict[str, Any]]) -> int:
+    """Size of the conversation as it travels in activity and continue-as-new payloads."""
+    return len(json.dumps(messages, ensure_ascii=False).encode("utf-8"))
+
+
+def find_compaction_boundary(
+    messages: list[dict[str, Any]], keep_recent: int, *, carry_skills: bool = False
+) -> int:
     """Find a safe index to split messages for compaction.
 
     Always keeps the first message (system prompt) and the last `keep_recent` messages.
-    Does not split in the middle of a tool call / tool result pair.
+    Does not split in the middle of a tool call / tool result pair. Activated
+    skill content never gets summarized: without ``carry_skills`` a range that
+    holds it is not compacted at all; with it the caller carries that content
+    over verbatim, so the range can be.
 
     Returns the index of the first message to remove (exclusive end of kept prefix),
     or 0 if nothing safe to compact.
@@ -127,8 +137,7 @@ def find_compaction_boundary(messages: list[dict[str, Any]], keep_recent: int) -
         kept_suffix = messages[boundary:]
         removed_section = messages[1:boundary]
 
-        # Never compact messages containing activated skill content
-        if any(SkillContextGuard.is_protected(msg) for msg in removed_section):
+        if not carry_skills and any(SkillContextGuard.is_protected(msg) for msg in removed_section):
             continue
 
         # tool call ids in removed section
@@ -206,6 +215,15 @@ class ContextWindowManager:
         """Record that a compaction was performed."""
         self._compaction_count += 1
         self._warning_sent = False  # Reset so warning can fire again after compaction
+
+    def restore(self, *, warning_sent: bool, compaction_count: int) -> None:
+        """Resume the warning and compaction bookkeeping of a previous run."""
+        self._warning_sent = warning_sent
+        self._compaction_count = compaction_count
+
+    @property
+    def warning_sent(self) -> bool:
+        return self._warning_sent
 
     @property
     def compaction_count(self) -> int:

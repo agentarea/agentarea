@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { AlertTriangle, Loader2, XCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import FormError from "@/components/FormError";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Button } from "@/components/ui/button";
 import { getMCPServerInstance, deleteMCPServerInstance } from "@/lib/api";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
@@ -123,24 +123,25 @@ export function VerifyingModal({
         <div className="space-y-4">
           {phase === "verifying" && (
             <div aria-live="polite" className="flex items-center gap-3 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-              <span>Connecting to {instanceName}…</span>
+              <StatusIndicator kind="running" size="sm">
+                Connecting to {instanceName}…
+              </StatusIndicator>
             </div>
           )}
 
           {phase === "timeout" && (
-            <div aria-live="polite" className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>Verification is still running in the background.</span>
+            <div aria-live="polite" className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
+              <StatusIndicator kind="attention" size="sm">
+                Verification is still running in the background.
+              </StatusIndicator>
             </div>
           )}
 
           {phase === "failed" && (
             <div role="alert" className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-                <XCircle className="h-4 w-4 shrink-0" />
-                <span>{errorMessage}</span>
-              </div>
+              <StatusIndicator kind="failed" size="sm" iconClassName="h-4 w-4">
+                {errorMessage}
+              </StatusIndicator>
               {errorCode && (
                 <p className="font-mono text-xs text-destructive/60">Code: {errorCode}</p>
               )}

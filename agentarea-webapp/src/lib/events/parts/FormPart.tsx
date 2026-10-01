@@ -50,10 +50,7 @@ export const FormPart: React.FC<FormPartProps> = ({
 
   if (!isApproval && typeof part.data.surface_id === "string") {
     return (
-      <StatusIndicator
-        tone={resolved ? "success" : "warning"}
-        pulse={!resolved}
-      >
+      <StatusIndicator kind={resolved ? "done" : "attention"}>
         {resolved ? "Form response received" : "Waiting for form response"}
       </StatusIndicator>
     );
@@ -73,7 +70,7 @@ export const FormPart: React.FC<FormPartProps> = ({
       return (
         <details className="group text-[13px] leading-5">
           <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-1 py-0.5 text-foreground/80 outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-            <StatusIndicator tone={approved === false ? "warning" : "success"}>
+            <StatusIndicator kind={approved === false ? "cancelled" : "done"}>
               {decision}
             </StatusIndicator>
             <span className="min-w-0 truncate text-muted-foreground">
@@ -94,9 +91,7 @@ export const FormPart: React.FC<FormPartProps> = ({
           <span className="text-sm font-medium text-foreground">
             {asString(part.data.message, "Approval required")}
           </span>
-          <StatusIndicator tone="warning" pulse>
-            Approval required
-          </StatusIndicator>
+          <StatusIndicator kind="attention">Approval required</StatusIndicator>
         </div>
       </div>
     );

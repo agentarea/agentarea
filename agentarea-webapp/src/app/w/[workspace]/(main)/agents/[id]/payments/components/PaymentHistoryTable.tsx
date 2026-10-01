@@ -203,8 +203,7 @@ export function PaymentHistoryTable({ agentId }: PaymentHistoryTableProps) {
         return (
           <StatusIndicator
             size="sm"
-            tone={status.tone}
-            pulse={status.pulse}
+            kind={status.kind}
             className="whitespace-nowrap"
           >
             {status.label}

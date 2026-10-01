@@ -32,6 +32,13 @@ export async function GET(
       headers["Authorization"] = `Bearer ${token}`;
     }
 
+    // EventSource reconnects with the last `id:` it saw; forwarding it lets
+    // the backend resume after that event instead of replaying the history.
+    const lastEventId = request.headers.get("last-event-id");
+    if (lastEventId) {
+      headers["Last-Event-ID"] = lastEventId;
+    }
+
     const response = await fetch(eventsUrl, {
       method: "GET",
       headers,

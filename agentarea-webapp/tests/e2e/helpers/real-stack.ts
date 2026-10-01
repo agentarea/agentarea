@@ -1,5 +1,6 @@
 import type { BrowserContext, APIRequestContext } from "@playwright/test";
 import { expect } from "@playwright/test";
+import { personalWorkspace, type Workspace } from "../../../src/lib/workspaces";
 
 export const apiBaseURL =
   process.env.PLAYWRIGHT_API_BASE_URL ?? process.env.API_URL ?? "http://localhost:8000";
@@ -145,6 +146,22 @@ export async function deleteKratosUser(identityId: string) {
   await fetch(`${kratosAdminURL}/admin/identities/${identityId}`, {
     method: "DELETE",
   }).catch(() => undefined);
+}
+
+/**
+ * Slug of the user's personal workspace — the one `/` lands in. Listing
+ * provisions it on first call, exactly as the webapp does on sign-in.
+ */
+export async function personalWorkspaceSlug(user: AuthedUser): Promise<string> {
+  const { response, json } = await fetchJson(`${apiBaseURL}/v1/workspaces`, {
+    headers: { accept: "application/json", Authorization: `Bearer ${user.jwt}` },
+  });
+  expect(response.status).toBe(200);
+  const personal = personalWorkspace(json as Workspace[]);
+  if (!personal) {
+    throw new Error(`${user.email} has no personal workspace`);
+  }
+  return personal.slug;
 }
 
 export async function installBrowserSession(

@@ -407,6 +407,23 @@ export const zBundleSkill = z.object({
 });
 
 /**
+ * CatalogConnectionPreflight
+ *
+ * What the connect form needs to know before it offers Connect.
+ *
+ * ``ready`` — this installation holds an OAuth app for the provider.
+ * ``oauth_app_required`` — the user must register their own app first.
+ */
+export const zCatalogConnectionPreflight = z.object({
+  description: z.string().nullish(),
+  detail: z.string(),
+  item_id: z.string().uuid(),
+  name: z.string(),
+  redirect_uri: z.string(),
+  status: z.enum(["ready", "oauth_app_required"]),
+});
+
+/**
  * CatalogConnectionRequest
  *
  * Connect with AgentArea credentials, or override them from Advanced.
@@ -529,10 +546,17 @@ export const zClientUpdate = z.object({
  * CodeToolSettings
  *
  * Settings for a built-in code toolset.
+ *
+ * The model ids are model instances of the workspace, each of the kind its
+ * toolset needs: ``agentarea/media`` takes an image and/or a video model,
+ * ``agentarea/decide`` a decision model. No other toolset takes one.
  */
 export const zCodeToolSettings = z.object({
   disabled_methods: z.array(z.string()).nullish(),
+  image_model_id: z.string().nullish(),
+  model_id: z.string().nullish(),
   requires_user_confirmation: z.boolean().nullish(),
+  video_model_id: z.string().nullish(),
 });
 
 /**
@@ -594,6 +618,20 @@ export const zContinueTaskPayload = z.object({
     .lte(1000)
     .optional()
     .default(0),
+  additional_tokens: z
+    .number()
+    .int()
+    .gte(0)
+    .lte(10000000)
+    .optional()
+    .default(0),
+  additional_tool_calls: z
+    .number()
+    .int()
+    .gte(0)
+    .lte(10000)
+    .optional()
+    .default(0),
 });
 
 /**
@@ -637,47 +675,12 @@ export const zDailyTaskCounts = z.object({
 });
 
 /**
- * DiscoverPreviewModelResponse
- */
-export const zDiscoverPreviewModelResponse = z.object({
-  context_window: z.number().int(),
-  description: z.string().nullish(),
-  display_name: z.string(),
-  id: z.string(),
-  input_cost_per_token: z.string().nullish(),
-  is_new: z.boolean().optional().default(false),
-  max_output_tokens: z.number().int().nullish(),
-  model_name: z.string(),
-  output_cost_per_token: z.string().nullish(),
-  supports_function_calling: z.boolean().optional().default(false),
-  supports_reasoning: z.boolean().optional().default(false),
-  supports_vision: z.boolean().optional().default(false),
-});
-
-/**
  * DiscoverPreviewRequest
  */
 export const zDiscoverPreviewRequest = z.object({
   api_key: z.string().nullish(),
   endpoint_url: z.string().nullish(),
   provider_key: z.string(),
-});
-
-/**
- * DiscoveredModelResponse
- */
-export const zDiscoveredModelResponse = z.object({
-  context_window: z.number().int(),
-  description: z.string().nullish(),
-  display_name: z.string(),
-  input_cost_per_token: z.string().nullish(),
-  is_new: z.boolean().optional().default(false),
-  max_output_tokens: z.number().int().nullish(),
-  model_name: z.string(),
-  output_cost_per_token: z.string().nullish(),
-  supports_function_calling: z.boolean().optional().default(false),
-  supports_reasoning: z.boolean().optional().default(false),
-  supports_vision: z.boolean().optional().default(false),
 });
 
 /**
@@ -1358,37 +1361,6 @@ export const zModelInstanceBulkCreateRequest = z.object({
 });
 
 /**
- * ModelInstanceResponse
- */
-export const zModelInstanceResponse = z.object({
-  config_name: z.string().nullish(),
-  created_at: z.string(),
-  description: z.string().nullable(),
-  id: z.string(),
-  is_active: z.boolean(),
-  is_public: z.boolean(),
-  model_display_name: z.string().nullish(),
-  model_name: z.string().nullish(),
-  model_spec_id: z.string(),
-  name: z.string(),
-  provider_config_id: z.string(),
-  provider_icon_url: z.string().nullish(),
-  provider_key: z.string().nullish(),
-  provider_name: z.string().nullish(),
-  updated_at: z.string(),
-});
-
-/**
- * ModelInstanceBulkCreateResponse
- */
-export const zModelInstanceBulkCreateResponse = z.object({
-  failed: z.array(zModelInstanceBulkFailure),
-  failed_count: z.number().int(),
-  succeeded: z.array(zModelInstanceResponse),
-  succeeded_count: z.number().int(),
-});
-
-/**
  * ModelInstanceTestRequest
  */
 export const zModelInstanceTestRequest = z.object({
@@ -1413,24 +1385,109 @@ export const zModelInstanceTestResponse = z.object({
 });
 
 /**
+ * ModelKind
+ *
+ * What a model produces, which decides every surface it may be bound to.
+ *
+ * An agent's main model is ``chat``; the media toolset takes ``image`` and
+ * ``video``; the decide toolset and decision-backed trigger conditions take
+ * ``decision``. A model has exactly one kind.
+ */
+export const zModelKind = z.enum([
+  "chat",
+  "embedding",
+  "image",
+  "video",
+  "decision",
+]);
+
+/**
+ * DiscoverPreviewModelResponse
+ */
+export const zDiscoverPreviewModelResponse = z.object({
+  context_window: z.number().int().nullable(),
+  description: z.string().nullish(),
+  display_name: z.string(),
+  id: z.string(),
+  input_cost_per_token: z.string().nullish(),
+  is_new: z.boolean().optional().default(false),
+  kind: zModelKind.optional().default("chat"),
+  max_output_tokens: z.number().int().nullish(),
+  model_name: z.string(),
+  output_cost_per_token: z.string().nullish(),
+  supports_function_calling: z.boolean().optional().default(false),
+  supports_reasoning: z.boolean().optional().default(false),
+  supports_vision: z.boolean().optional().default(false),
+});
+
+/**
+ * DiscoveredModelResponse
+ */
+export const zDiscoveredModelResponse = z.object({
+  context_window: z.number().int().nullable(),
+  description: z.string().nullish(),
+  display_name: z.string(),
+  input_cost_per_token: z.string().nullish(),
+  is_new: z.boolean().optional().default(false),
+  kind: zModelKind.optional().default("chat"),
+  max_output_tokens: z.number().int().nullish(),
+  model_name: z.string(),
+  output_cost_per_token: z.string().nullish(),
+  supports_function_calling: z.boolean().optional().default(false),
+  supports_reasoning: z.boolean().optional().default(false),
+  supports_vision: z.boolean().optional().default(false),
+});
+
+/**
+ * ModelInstanceResponse
+ */
+export const zModelInstanceResponse = z.object({
+  config_name: z.string().nullish(),
+  created_at: z.string(),
+  description: z.string().nullable(),
+  id: z.string(),
+  is_active: z.boolean(),
+  is_public: z.boolean(),
+  model_display_name: z.string().nullish(),
+  model_kind: zModelKind.nullish(),
+  model_name: z.string().nullish(),
+  model_spec_id: z.string(),
+  name: z.string(),
+  provider_config_id: z.string(),
+  provider_icon_url: z.string().nullish(),
+  provider_key: z.string().nullish(),
+  provider_name: z.string().nullish(),
+  updated_at: z.string(),
+});
+
+/**
+ * ModelInstanceBulkCreateResponse
+ */
+export const zModelInstanceBulkCreateResponse = z.object({
+  failed: z.array(zModelInstanceBulkFailure),
+  failed_count: z.number().int(),
+  succeeded: z.array(zModelInstanceResponse),
+  succeeded_count: z.number().int(),
+});
+
+/**
  * ModelSpecCreate
  */
 export const zModelSpecCreate = z.object({
-  context_window: z.number().int().gt(0).lte(2147483647),
+  context_window: z.number().int().gt(0).lte(2147483647).nullish(),
   default_context_strategy: z.string().nullish(),
   description: z.string().nullish(),
   display_name: z.string(),
-  input_cost_per_token: z.union([
-    z.number().gte(0).lt(100000000),
-    z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
-  ]),
+  input_cost_per_token: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
   is_active: z.boolean().optional().default(true),
+  kind: zModelKind.optional().default("chat"),
   max_output_tokens: z.number().int().gt(0).lte(2147483647).nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.union([
-    z.number().gte(0).lt(100000000),
-    z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
-  ]),
+  output_cost_per_token: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
   provider_spec_id: z.string().uuid(),
 });
 
@@ -3489,7 +3546,7 @@ export const zAgentareaApiApiV1AccessControlSyncResponse = z.object({
  * ModelSpecResponse
  */
 export const zAgentareaApiApiV1ModelSpecsModelSpecResponse = z.object({
-  context_window: z.number().int(),
+  context_window: z.number().int().nullable(),
   created_at: z.string(),
   default_context_strategy: z.string().nullable(),
   description: z.string().nullable(),
@@ -3497,6 +3554,7 @@ export const zAgentareaApiApiV1ModelSpecsModelSpecResponse = z.object({
   id: z.string(),
   input_cost_per_token: z.string().nullish(),
   is_active: z.boolean(),
+  kind: zModelKind.optional().default("chat"),
   max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
   output_cost_per_token: z.string().nullish(),
@@ -3513,13 +3571,14 @@ export const zAgentareaApiApiV1ModelSpecsModelSpecResponse = z.object({
  * ModelSpecResponse
  */
 export const zAgentareaApiApiV1ProviderSpecsModelSpecResponse = z.object({
-  context_window: z.number().int(),
+  context_window: z.number().int().nullable(),
   created_at: z.string(),
   description: z.string().nullable(),
   display_name: z.string(),
   id: z.string(),
   input_cost_per_token: z.string().nullish(),
   is_active: z.boolean(),
+  kind: zModelKind.optional().default("chat"),
   max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
   output_cost_per_token: z.string().nullish(),
@@ -4323,6 +4382,17 @@ export const zConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostPath =
 export const zConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponse =
   zCatalogConnectionResponse;
 
+export const zPreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetPath =
+  z.object({
+    item_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zPreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponse =
+  zCatalogConnectionPreflight;
+
 export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutBody =
   zManagedOAuthAppRequest;
 
@@ -4808,6 +4878,7 @@ export const zListModelInstancesV1ModelInstancesGetQuery = z.object({
   provider_config_id: z.string().uuid().nullish(),
   model_spec_id: z.string().uuid().nullish(),
   is_active: z.boolean().nullish(),
+  kind: zModelKind.nullish(),
 });
 
 /**
@@ -4864,6 +4935,7 @@ export const zGetModelInstanceV1ModelInstancesInstanceIdGetResponse =
 export const zListModelSpecsV1ModelSpecsGetQuery = z.object({
   provider_spec_id: z.string().uuid().nullish(),
   is_active: z.boolean().nullish(),
+  kind: zModelKind.nullish(),
 });
 
 /**

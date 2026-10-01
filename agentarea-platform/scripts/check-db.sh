@@ -41,6 +41,8 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #   catalog model instances: a built-in model is added by copying it into the
 #     workspace's model_specs, the table the instance's foreign key references,
 #     and the catalog query is jsonb.
+#   video jobs: a job is read only by its own workspace and task, a finished one
+#     is recorded saved (and billed) once by a conditional update.
 #   usage events: raw facts are append-only (a trigger) and paging never crosses
 #     workspaces.
 #   membership backfill: the migration and the reconcile script insert rows with
@@ -54,7 +56,10 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #     looked up by id in SQL; the catalog is never materialized per request.
 #   tenant scope: every workspace-scoped model stays in its workspace through
 #     the ORM hook, against the migrated schema rather than create_all.
-PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL USAGE_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL)
+#   task events: a retried publish batch stores each event once under the
+#     workflow's id (the primary key decides), and the SSE catch-up reads keyset
+#     batches ordered by (timestamp, id) and resumes after a given event.
+PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL USAGE_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
   libs/llm/tests/test_provider_secret_lifecycle_db.py
@@ -64,12 +69,16 @@ PY_SUITES=(
   libs/llm/tests/test_model_spec_price_precision_db.py
   libs/llm/tests/test_platform_managed_providers_db.py
   libs/llm/tests/test_catalog_model_instance_db.py
+  libs/llm/tests/test_video_generation_jobs_db.py
   libs/common/tests/test_usage_events_db.py
   apps/api/tests/test_membership_backfill_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
   libs/agents/tests/test_catalog_presets_db.py
   libs/mcp/tests/test_mcp_spec_list_db.py
   tests/unit/test_tenant_scope_isolation.py
+  libs/tasks/tests/test_task_event_idempotency_db.py
+  libs/execution/tests/unit/test_publish_workflow_events_db.py
+  apps/api/tests/test_task_event_feed_db.py
 )
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, the secret

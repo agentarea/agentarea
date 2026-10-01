@@ -52,7 +52,7 @@ one workspace. It points at a spec via `server_spec_id`, carries its own
 |---|---|---|
 | `url` | Nothing. The server is somebody else's. | The declared remote URL |
 | `docker` | An image, provisioned by the Go MCP manager | `http://mcp-{instance_id}:{port}`, default port 8000, or the manager-reported `internal_url` |
-| `command` | An npm/PyPI package wrapped in `agentarea/mcp-bridge:latest` | `http://mcp-{instance_id}:8080` |
+| `command` | An npm/PyPI package run through the image selected by `MCP_BASE_IMAGE` (default `agentarea/agentarea-mcp-base:latest`) | `http://mcp-{instance_id}:8080` |
 
 Managed means `docker` or `command`: AgentArea runs the workload. Remote means
 `url`: AgentArea holds the credential and governs the call, but the server is

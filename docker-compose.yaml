@@ -299,12 +299,6 @@ services:
       MCP_GATEWAY_STARTUP_TIMEOUT: "5m"
       MCP_IDLE_TIMEOUT: "10m"
       MCP_IDLE_SWEEP_INTERVAL: "60s"
-      # Admission lists for MCP instances, mirroring the chart defaults in
-      # charts/agentarea/values.yaml (mcpManager.admission). Both are required
-      # and an absent list is refused: "not decided yet" must not read as
-      # "allow everything". Declare one empty to disable that instance type.
-      MCP_ALLOWED_IMAGE_REPOSITORIES: "ghcr.io/github/github-mcp-server,mcp/fetch"
-      MCP_ALLOWED_COMMAND_PACKAGES: "npx -y @modelcontextprotocol/server-everything,npx -y @modelcontextprotocol/server-sequential-thinking,npx -y @modelcontextprotocol/server-customer-segmentation --stdio,npx -y @modelcontextprotocol/server-map --stdio,uvx mcp-server-fetch,uvx mcp-server-time"
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
       SANDBOX_EMBEDDED_RUNNER: "true"

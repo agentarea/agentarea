@@ -11,22 +11,30 @@ BUDGET_WARNING_THRESHOLD: Final[float] = 0.8  # 80% of budget
 ACTIVITY_TIMEOUT: Final[timedelta] = timedelta(minutes=5)
 LLM_CALL_TIMEOUT: Final[timedelta] = timedelta(minutes=10)
 TOOL_EXECUTION_TIMEOUT: Final[timedelta] = timedelta(minutes=35)
-EVENT_PUBLISH_TIMEOUT: Final[timedelta] = timedelta(seconds=5)
+EVENT_PUBLISH_TIMEOUT: Final[timedelta] = timedelta(seconds=30)
+# How long a run waits for its event store to come back before it gives up.
+EVENT_PUBLISH_WINDOW: Final[timedelta] = timedelta(hours=1)
 CONTINUATION_TIMEOUT: Final[timedelta] = timedelta(hours=24)
 
 # Heartbeat configuration
 HEARTBEAT_TIMEOUT: Final[timedelta] = timedelta(seconds=30)
 
-# Agent delegation
-DELEGATION_TIMEOUT: Final[timedelta] = timedelta(minutes=10)  # Max time for child agent
+# Agent delegation: the child's own turn, token and budget limits bound its work;
+# this only stops a child that is stuck.
+DELEGATION_TIMEOUT: Final[timedelta] = timedelta(hours=6)
 
 # Retry policies
 DEFAULT_RETRY_ATTEMPTS: Final[int] = 3
-EVENT_PUBLISH_RETRY_ATTEMPTS: Final[int] = 1
-# LLM calls retry transient failures (rate limit, network, 5xx) with backoff.
-# Genuinely permanent failures (auth, quota/billing, bad model) still fail fast
-# via the ApplicationError non_retryable flag (_is_non_retryable_error).
-LLM_RETRY_ATTEMPTS: Final[int] = 3
+# Idempotent bookkeeping (task status, spend reads) rides out a few minutes of
+# database or network trouble instead of ending the run.
+BOOKKEEPING_RETRY_ATTEMPTS: Final[int] = 10
+BOOKKEEPING_RETRY_MAX_INTERVAL: Final[timedelta] = timedelta(seconds=30)
+# LLM calls retry transient failures (rate limit, network, 5xx) with backoff for
+# about three minutes. Permanent failures (auth, quota/billing, bad model) still
+# fail fast via the ApplicationError non_retryable flag (_is_non_retryable_error).
+LLM_RETRY_ATTEMPTS: Final[int] = 8
+LLM_RETRY_INITIAL_INTERVAL: Final[timedelta] = timedelta(seconds=2)
+LLM_RETRY_MAX_INTERVAL: Final[timedelta] = timedelta(seconds=60)
 
 
 # Context window management
@@ -34,6 +42,10 @@ CONTEXT_COMPACT_THRESHOLD: Final[float] = 0.75  # Compact at 75% of context wind
 CONTEXT_WARNING_THRESHOLD: Final[float] = 0.60  # Warn at 60%
 CONTEXT_RESERVE_FOR_OUTPUT: Final[float] = 0.15  # Reserve 15% for model output
 MIN_RECENT_MESSAGES_TO_KEEP: Final[int] = 6  # Always keep last 6 messages (3 turns)
+# The conversation travels in every model-call and continue-as-new payload, and
+# Temporal rejects payloads over 2 MiB, so it is compacted well before that
+# whatever the model's context window allows.
+CONTEXT_MAX_PAYLOAD_BYTES: Final[int] = 1_500_000
 TOKENS_PER_MESSAGE_OVERHEAD: Final[int] = 4  # ~4 tokens overhead per message
 
 # Dynamic context discovery — output offloading

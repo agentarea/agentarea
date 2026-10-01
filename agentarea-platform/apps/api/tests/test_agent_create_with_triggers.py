@@ -24,7 +24,8 @@ from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.config.database import get_db_session
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_secrets.catalog_service import SecretCatalogService
-from agentarea_triggers.trigger_service import TriggerService, TriggerValidationError
+from agentarea_triggers.trigger_service import TriggerValidationError
+from agentarea_triggers.trigger_validation import validate_trigger_configuration
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -44,10 +45,26 @@ _TELEGRAM = {
 }
 
 
+_CHAT_MODEL, _DECISION_MODEL, _IMAGE_MODEL = str(uuid4()), str(uuid4()), str(uuid4())
+
+
+class _ModelInstances:
+    """The workspace's model instances an LLM condition may name."""
+
+    _KINDS = {_CHAT_MODEL: "chat", _DECISION_MODEL: "decision", _IMAGE_MODEL: "image"}
+
+    async def get_by_id(self, instance_id):
+        kind = self._KINDS.get(str(instance_id))
+        return SimpleNamespace(model_spec=SimpleNamespace(kind=kind)) if kind else None
+
+
 async def _real_validation(trigger_data):
     # The route's pre-check runs the service's real configuration rules.
-    service = object.__new__(TriggerService)
-    await TriggerService._validate_trigger_configuration(service, trigger_data)
+    await validate_trigger_configuration(trigger_data, _ModelInstances())
+
+
+def _with_condition(**condition) -> dict:
+    return {**_HEARTBEAT, "conditions": {"type": "llm", "description": "a refund", **condition}}
 
 
 @pytest.fixture
@@ -173,3 +190,33 @@ async def test_a_disabled_trigger_is_created_switched_off(harness):
     assert response.status_code == 200, response.text
     (trigger,) = harness.created
     harness.trigger_service.disable_trigger.assert_awaited_once_with(trigger.id)
+
+
+@pytest.mark.parametrize("model_id", [_CHAT_MODEL, _DECISION_MODEL])
+async def test_a_trigger_whose_condition_names_a_chat_or_decision_model_is_created(
+    harness, model_id
+):
+    response = await _post(
+        harness,
+        {"name": "Claw", "tools": [], "triggers": [_with_condition(model_id=model_id)]},
+    )
+
+    assert response.status_code == 200, response.text
+    assert len(harness.created) == 1
+
+
+@pytest.mark.parametrize(
+    "condition, reason",
+    [({"model_id": _IMAGE_MODEL}, "image model"), ({}, "needs a model_id")],
+)
+async def test_a_condition_without_a_usable_model_is_refused_before_the_agent_exists(
+    harness, condition, reason
+):
+    response = await _post(
+        harness, {"name": "Claw", "tools": [], "triggers": [_with_condition(**condition)]}
+    )
+
+    assert response.status_code == 400
+    assert reason in response.json()["detail"]
+    harness.agent_service.create_agent.assert_not_awaited()
+    harness.trigger_service.create_trigger.assert_not_awaited()

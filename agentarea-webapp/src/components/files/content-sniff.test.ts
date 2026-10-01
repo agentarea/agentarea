@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { looksTextual, mediaKind } from "./content-sniff";
+import { looksTextual, mediaKind, sniffMedia } from "./content-sniff";
 
 const bytes = (...values: number[]) => new Uint8Array(values);
 const utf8 = (text: string) => new TextEncoder().encode(text);
@@ -56,5 +56,17 @@ describe("mediaKind", () => {
     expect(mediaKind("text/plain")).toBe(null);
     expect(mediaKind(null)).toBe(null);
     expect(mediaKind(undefined)).toBe(null);
+  });
+});
+
+describe("sniffMedia", () => {
+  it("does not take text for a video because mimetypes calls .ts one", async () => {
+    const response = new Response("export const a = 1;\n");
+    expect(await sniffMedia(response, "video/mp2t")).toBe(null);
+  });
+
+  it("takes binary bytes as the declared family", async () => {
+    const response = new Response(bytes(0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70));
+    expect(await sniffMedia(response, "video/mp4")).toBe("video");
   });
 });

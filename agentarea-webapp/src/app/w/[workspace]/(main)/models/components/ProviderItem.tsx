@@ -94,16 +94,46 @@ export function PlatformProviderConfigCard({
 
 interface ProviderSpecCardProps {
   spec: ProviderSpec;
+  /** Badge for a workspace-defined spec; built-in is the default and goes unlabelled. */
+  customLabel: string;
+  /** "12 models", or null when the spec lists none — a zero count says nothing. */
+  modelCountLabel: string | null;
+  noDescriptionLabel: string;
 }
 
-export function ProviderSpecCard({ spec }: ProviderSpecCardProps) {
+export function ProviderSpecCard({
+  spec,
+  customLabel,
+  modelCountLabel,
+  noDescriptionLabel,
+}: ProviderSpecCardProps) {
   return (
     <LinkedCard
-      className="py-3"
       href={`/models/create/${spec.id}`}
       title={spec.name}
       icon={spec.icon_url}
       type="config"
-    />
+      subtitle={
+        <p className="w-full truncate text-xs text-gray-500">
+          {spec.provider_key}
+        </p>
+      }
+      topRight={
+        spec.is_builtin ? null : (
+          <Badge variant="secondary" size="sm">
+            {customLabel}
+          </Badge>
+        )
+      }
+    >
+      <p className="line-clamp-2 text-xs text-muted-foreground">
+        {spec.description || noDescriptionLabel}
+      </p>
+      {modelCountLabel && (
+        <p className="mt-2 text-xs tabular-nums text-muted-foreground">
+          {modelCountLabel}
+        </p>
+      )}
+    </LinkedCard>
   );
 }

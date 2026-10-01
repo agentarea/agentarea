@@ -1,11 +1,14 @@
 """Tests for the task-event read side (catch-up + live), ADR-0018."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from agentarea_common.events.adapters.redis_streams import topic_for
 from agentarea_common.events.contract import ensure_terminal_message
 from agentarea_common.events.ports import IntegrationEvent
 from agentarea_common.events.task_stream import (
     TASK_STREAM_MAXLEN,
+    TASK_STREAM_TTL_SECONDS,
     TaskEventEnvelope,
     iter_task_event_feed,
     publish_task_event,
@@ -47,7 +50,8 @@ async def _collect(agen) -> list[TaskEventEnvelope]:
 
 async def _snapshot_of(*envs):
     async def _loader():
-        return list(envs)
+        for env in envs:
+            yield env
 
     return _loader
 
@@ -190,9 +194,10 @@ async def test_publish_task_event_uses_bounded_stream():
     captured = {}
 
     class _Broker:
-        async def submit(self, stream, fields, *, maxlen=None):
+        async def submit(self, stream, fields, *, maxlen=None, ttl_seconds=None):
             captured["stream"] = stream
             captured["maxlen"] = maxlen
+            captured["ttl_seconds"] = ttl_seconds
             captured["fields"] = fields
             return "1-0"
 
@@ -205,6 +210,8 @@ async def test_publish_task_event_uses_bounded_stream():
     )
     assert captured["stream"] == topic_for(task_stream_name(_TASK))
     assert captured["maxlen"] == TASK_STREAM_MAXLEN
+    # A finished task's stream must not outlive its readers.
+    assert captured["ttl_seconds"] == TASK_STREAM_TTL_SECONDS
     # Round-trips back through the same codec the reader uses.
     from agentarea_common.events.adapters.redis_streams import decode
 
@@ -370,10 +377,90 @@ def test_terminal_message_accepts_prefixed_and_canonical():
 
 
 @pytest.mark.asyncio
-async def test_publish_task_event_swallows_broker_errors():
+async def test_publish_task_event_raises_broker_errors():
     class _BadBroker:
-        async def submit(self, stream, fields, *, maxlen=None):
+        async def submit(self, stream, fields, *, maxlen=None, ttl_seconds=None):
             raise RuntimeError("redis down")
 
-    # Best-effort: must not raise (durable record is the DB).
-    await publish_task_event(_BadBroker(), task_id=_TASK, event_type="Step", data={})
+    # The caller decides: the workflow-event activity retries the whole batch,
+    # the chunk publisher drops a best-effort snapshot.
+    with pytest.raises(RuntimeError, match="redis down"):
+        await publish_task_event(_BadBroker(), task_id=_TASK, event_type="Step", data={})
+
+
+_T0 = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
+
+
+def _at(n: int, seconds: int, event_type: str = "Step", data: dict | None = None):
+    return TaskEventEnvelope(
+        event_type=event_type,
+        event_id=_uid(n),
+        timestamp=(_T0 + timedelta(seconds=seconds)).isoformat(),
+        data=data or {},
+    )
+
+
+def _live_at(n: int, seconds: int, event_type: str = "Step") -> IntegrationEvent:
+    return IntegrationEvent(
+        id=_uid(n),
+        type=event_type,
+        source="w",
+        subject=_TASK,
+        time=_T0 + timedelta(seconds=seconds),
+        data={},
+    )
+
+
+@pytest.mark.asyncio
+async def test_resumed_feed_skips_retained_stream_entries_the_client_already_saw():
+    # The client saw event 2; the snapshot loader returns only what came after
+    # it, and the retained stream still replays 1 and 2 from offset 0.
+    cursor = _at(2, 2)
+    snapshot = await _snapshot_of(_at(3, 3))
+    stream = _FakeStream([_live_at(1, 1), _live_at(2, 2), _live_at(3, 3), _live_at(4, 4)])
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream,
+            task_id=_TASK,
+            snapshot=snapshot,
+            terminal_types=_TERMINAL,
+            resume_after=cursor,
+        )
+    )
+    assert [e.event_id for e in out] == [_uid(3), _uid(4)]
+
+
+@pytest.mark.asyncio
+async def test_resume_after_a_terminal_event_ends_the_feed_without_tailing():
+    cursor = _at(5, 5, "TaskCompleted")
+    snapshot = await _snapshot_of()
+    stream = _FakeStream([_live_at(6, 6)])
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream,
+            task_id=_TASK,
+            snapshot=snapshot,
+            terminal_types=_TERMINAL,
+            resume_after=cursor,
+        )
+    )
+    assert out == []
+    assert stream.read_args == {}
+
+
+@pytest.mark.asyncio
+async def test_resume_after_a_waiting_turn_keeps_following_the_execution():
+    cursor = _at(1, 1, "task.completed", {"execution_status": "waiting"})
+    snapshot = await _snapshot_of()
+    stream = _FakeStream([_live_at(1, 1, "task.completed"), _live_at(2, 2, "execution.finished")])
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream,
+            task_id=_TASK,
+            snapshot=snapshot,
+            terminal_types=frozenset({"task.completed", "execution.finished"}),
+            follow_execution=True,
+            resume_after=cursor,
+        )
+    )
+    assert [e.event_id for e in out] == [_uid(2)]

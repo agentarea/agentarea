@@ -37,7 +37,7 @@ def test_namespace_falls_back_to_id_prefix():
     "url,expected",
     [
         # Bare URL: honor as-given first (root-streamable remotes like Vercel),
-        # then fall back to the /mcp sibling (internal mcp-bridge containers).
+        # then fall back to the /mcp sibling (internal MCP base-image containers).
         ("http://mcp-x:8000", ["http://mcp-x:8000", "http://mcp-x:8000/mcp"]),
         ("http://mcp-x:8000/", ["http://mcp-x:8000", "http://mcp-x:8000/mcp"]),
         # Explicit /mcp: use exactly that.

@@ -7,20 +7,27 @@ from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from agentarea_common.money import ZERO
-    from agentarea_governance.domain.tool_calls import metered_tool_call_count
+    from agentarea_governance.domain.tool_calls import WAIT_TOOL_NAME, metered_tool_call_count
 
     from ..models import Message, ToolCall
 
 
+from ..constants import EventTypes
 from .completion import CompletionMixin
 from .delegation import DelegationMixin
 from .disclosure import ToolDisclosureMixin
 from .tools import ToolExecutionMixin
 from .user_input import UserInputMixin
+from .wait import WaitMixin
 
 
 class ToolDispatchMixin(
-    ToolExecutionMixin, ToolDisclosureMixin, DelegationMixin, CompletionMixin, UserInputMixin
+    ToolExecutionMixin,
+    ToolDisclosureMixin,
+    DelegationMixin,
+    CompletionMixin,
+    UserInputMixin,
+    WaitMixin,
 ):
     """Routing the tool calls of one model turn to their handlers."""
 
@@ -50,12 +57,34 @@ class ToolDispatchMixin(
             tool_call.function["name"] for tool_call in tool_calls
         )
         if metered_calls_this_turn > max_per_turn:
-            raise ApplicationError(
-                f"model requested {metered_calls_this_turn} metered tool calls; "
-                f"policy allows {max_per_turn} per turn",
-                type="ToolCallLimitExceeded",
-                non_retryable=True,
+            # An oversized turn is the model's mistake to repair, like a malformed
+            # completion: none of its calls run, and it hears why.
+            refusal = (
+                f"Not executed: this turn requested {metered_calls_this_turn} tool calls "
+                f"and the policy allows {max_per_turn} per turn. Request at most "
+                f"{max_per_turn} at once."
             )
+            for tool_call in tool_calls:
+                self.state.messages.append(
+                    Message(
+                        role="tool",
+                        content=refusal,
+                        tool_call_id=tool_call.id,
+                        name=tool_call.function["name"],
+                    )
+                )
+                self._events.add_event(
+                    EventTypes.TOOL_CALL_FAILED,
+                    {
+                        "tool_name": tool_call.function["name"],
+                        "tool_call_id": tool_call.id,
+                        "success": False,
+                        "error": refusal,
+                        "iteration": self.state.current_iteration,
+                    },
+                )
+            await self._publish_events_immediately()
+            return
         attempted_total = self.state.tool_calls_used + metered_calls_this_turn
         if attempted_total > max_total:
             raise ApplicationError(
@@ -181,9 +210,12 @@ class ToolDispatchMixin(
                 tasks = [self._execute_agent_delegation(tc, child_budget) for tc in agent_calls]
                 await asyncio.gather(*tasks)
 
-        # Run regular tools sequentially
+        # Run regular tools sequentially; a wait holds its place among them
         for tool_call in regular_calls:
-            await self._execute_mcp_tool(tool_call)
+            if tool_call.function["name"] == WAIT_TOOL_NAME and self._wait_tool_enabled:
+                await self._execute_wait(tool_call)
+            else:
+                await self._execute_mcp_tool(tool_call)
 
         # Handle completion last
         if completion_call:

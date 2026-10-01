@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
 import EmptyState from "@/components/EmptyState/EmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
-import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { listMCPServerInstances } from "@/lib/api";
 import { mcpAppEntries, type McpAppEntry } from "@/lib/apps/mcp/tools";
 import { EntityIcon } from "@/lib/entity-icons";
@@ -63,9 +63,9 @@ export default async function AppsPage({
       accessor: "requiresInput",
       render: (value: unknown) =>
         value ? (
-          <Badge variant="outline" className="text-xs">
+          <StatusIndicator kind="attention" size="sm">
             {t("needsInput")}
-          </Badge>
+          </StatusIndicator>
         ) : null,
     },
   ];
@@ -83,12 +83,6 @@ export default async function AppsPage({
         columns={columns}
         routeChange="/apps"
         itemLink={appLink}
-        leftComponent={
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <EntityIcon kind="app" className="text-primary" />
-            <span>{items.length}</span>
-          </div>
-        }
         emptyState={
           <EmptyState
             title={t("emptyTitle")}
@@ -114,9 +108,9 @@ export default async function AppsPage({
               {app.description}
             </p>
             {app.requiresInput && (
-              <Badge variant="outline" className="mt-auto w-fit text-xs">
+              <StatusIndicator kind="attention" size="sm" className="mt-auto">
                 {t("needsInput")}
-              </Badge>
+              </StatusIndicator>
             )}
           </div>
         )}

@@ -86,7 +86,7 @@ class TestDetectType:
 class TestParseMCPServers:
     def _telegram_entry(self):
         # Mirrors data/catalog/mcp-servers.json (standard MCP registry format,
-        # pypi package → stdio command wrapped by mcp-bridge).
+        # pypi package → stdio command wrapped by the MCP base image).
         return {
             "servers": [
                 {
@@ -342,6 +342,20 @@ class TestParseLLMModels:
         items = RegistryService._parse_llm_models(data)
         assert items[0]["name"] == "m"
         assert items[0]["spec"]["context_window"] is None
+
+    def test_carries_the_model_kind(self):
+        data = {"models": [{"provider_key": "openrouter", "model_name": "veo", "kind": "video"}]}
+        items = RegistryService._parse_llm_models(data)
+        assert items[0]["spec"]["kind"] == "video"
+
+    def test_an_entry_without_kind_is_chat(self):
+        data = {"models": [{"provider_key": "p", "model_name": "m"}]}
+        assert RegistryService._parse_llm_models(data)[0]["spec"]["kind"] == "chat"
+
+    def test_an_unknown_kind_is_refused(self):
+        data = {"models": [{"provider_key": "p", "model_name": "m", "kind": "audio"}]}
+        with pytest.raises(ValueError, match="kind"):
+            RegistryService._parse_llm_models(data)
 
 
 class TestParseDefaultAgents:

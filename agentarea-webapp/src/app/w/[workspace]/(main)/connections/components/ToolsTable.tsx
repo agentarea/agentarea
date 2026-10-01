@@ -7,6 +7,7 @@ import { ChevronRight, Info, Search, Users } from "lucide-react";
 import { Streamdown } from "streamdown";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Input } from "@/components/ui/input";
 import {
   Tooltip,
@@ -150,9 +151,9 @@ function PrincipalList({ principals }: { principals: ToolPrincipal[] }) {
                 </Badge>
               )}
               {p.needsConfirm && (
-                <Badge variant="amber" size="sm">
+                <StatusIndicator kind="attention" size="sm">
                   {t("approval")}
-                </Badge>
+                </StatusIndicator>
               )}
             </Link>
           ))}

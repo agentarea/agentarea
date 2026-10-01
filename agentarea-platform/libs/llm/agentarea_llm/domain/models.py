@@ -6,11 +6,14 @@ from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from agentarea_common.constants import MANAGED_BY_PLATFORM, PLATFORM_WORKSPACE_ID
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     ColumnElement,
+    Enum,
     ForeignKey,
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
     or_,
     select,
@@ -18,6 +21,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from agentarea_llm.domain.media import VideoJobStatus
+from agentarea_llm.domain.model_kind import ModelKind
 
 # Register encrypted_secrets on the shared metadata before SQLAlchemy resolves
 # the api_key_secret_id foreign key below. Importing this module alone would
@@ -36,10 +42,24 @@ import_module("agentarea_secrets.models")
 __all__ = [
     "MANAGED_BY_PLATFORM",
     "ModelInstance",
+    "ModelKind",
     "ModelSpec",
     "ProviderConfig",
     "ProviderSpec",
+    "VideoGenerationJob",
 ]
+
+
+def _string_enum(enum_class: type, length: int) -> Enum:
+    """A VARCHAR holding the enum's values; the CHECK constraint is declared beside it."""
+    return Enum(
+        enum_class,
+        native_enum=False,
+        create_constraint=False,
+        length=length,
+        values_callable=lambda members: [member.value for member in members],
+        validate_strings=True,
+    )
 
 
 class ProviderSpec(BaseModel, WorkspaceScopedMixin):
@@ -159,6 +179,10 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
             "model_name",
             name="uq_model_specs_workspace_provider_model",
         ),
+        CheckConstraint(
+            "kind IN (" + ", ".join(f"'{kind}'" for kind in ModelKind) + ")",
+            name="ck_model_specs_kind",
+        ),
     )
 
     provider_spec_id: Mapped[str] = mapped_column(
@@ -167,7 +191,8 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     model_name: Mapped[str] = mapped_column(String, nullable=False)  # gpt-4, claude-3-opus
     display_name: Mapped[str] = mapped_column(String, nullable=False)  # GPT-4, Claude 3 Opus
     description: Mapped[str | None] = mapped_column(String, nullable=True)
-    context_window: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Null only for kinds that take no conversation (see ModelKind.priced_per_token).
+    context_window: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     input_cost_per_token: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
     output_cost_per_token: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
@@ -179,6 +204,12 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     default_context_strategy: Mapped[str | None] = mapped_column(
         String, nullable=True, default=None
     )  # "static", "hybrid", "dynamic" — resolved per agent execution
+    kind: Mapped[ModelKind] = mapped_column(
+        _string_enum(ModelKind, 16),
+        nullable=False,
+        default=ModelKind.CHAT,
+        server_default=ModelKind.CHAT.value,
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     @classmethod
@@ -250,3 +281,39 @@ class ModelInstance(BaseModel, WorkspaceScopedMixin):
     def __repr__(self):
         """Return a concise string representation for debugging."""
         return f"<ModelInstance {self.name} ({self.id})>"
+
+
+class VideoGenerationJob(BaseModel, WorkspaceScopedMixin):
+    """A video generation submitted to a provider on behalf of a task.
+
+    The provider's job id never leaves this row: the agent holds ``id``, and the
+    provider id is only valid under the credential that submitted it, which may
+    be the platform's shared key.
+    """
+
+    __tablename__ = "video_generation_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN (" + ", ".join(f"'{status}'" for status in VideoJobStatus) + ")",
+            name="ck_video_generation_jobs_status",
+        ),
+    )
+
+    model_instance_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("model_instances.id", ondelete="CASCADE"), nullable=False
+    )
+    task_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    provider_job_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[VideoJobStatus] = mapped_column(_string_enum(VideoJobStatus, 32), nullable=False)
+    cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
+    # What the customer is charged, in the billing currency, and the one tool call
+    # that reports it: every retry of that call reports it again, no other call does.
+    billed_cost: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
+    billed_call_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    file_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    def __repr__(self):
+        """Return a concise string representation for debugging."""
+        return f"<VideoGenerationJob {self.id} ({self.status})>"

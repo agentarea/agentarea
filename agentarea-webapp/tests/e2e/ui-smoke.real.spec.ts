@@ -1,8 +1,10 @@
 import { test } from "@playwright/test";
+import { workspacePath } from "../../src/lib/workspace-routes";
 import {
   createKratosUser,
   deleteKratosUser,
   installBrowserSession,
+  personalWorkspaceSlug,
   type AuthedUser,
 } from "./helpers/real-stack";
 import { assertRenders } from "./helpers/smoke";
@@ -23,16 +25,19 @@ import { assertRenders } from "./helpers/smoke";
  * (Tier 2, Stagehand) which is slower and costs LLM tokens.
  */
 
-// Every STATIC route under app/(main) - i.e. routes that render without a
-// seeded `[id]`. Dynamic detail routes (/agents/[id], /tasks/[id], ...) need a
-// real entity and are covered separately (seeded smoke / AI tier), not here.
-const ROUTES = [
+// Every STATIC route under app/w/[workspace]/(main) - i.e. routes that render
+// without a seeded `[id]`. Visited inside the user's personal workspace
+// (`/w/{slug}/...`); unprefixed paths 404. Dynamic detail routes
+// (/agents/[id], /tasks/[id], ...) need a real entity and are covered
+// separately (seeded smoke / AI tier), not here.
+const WORKSPACE_ROUTES = [
   // Primary surfaces
   "/dashboard",
   "/agents",
+  "/apps",
   "/models",
-  "/mcp-servers",
   "/connections",
+  "/clients",
   "/tasks",
   "/triggers",
   "/projects",
@@ -50,28 +55,30 @@ const ROUTES = [
   // Create / add forms
   "/agents/create",
   "/skills/create",
-  "/projects/create",
+  "/models/create",
   "/policies/new",
   "/triggers/create",
   "/triggers/new",
-  "/mcp-servers/add",
-  "/mcp-servers/add-openapi",
+  "/connections/add",
+  "/connections/add-openapi",
+  // Secondary views
+  "/models/specs",
+  "/tasks/showcase",
+  "/tasks/concept",
   // Bundles
   "/bundles/catalog",
   "/bundles/import",
   // Admin
-  "/admin/api-keys",
   "/admin/provider-configs",
-  "/admin/provider-configs/create",
-  "/admin/providers",
-  "/admin/workspace",
   // Settings sub-pages
+  "/settings/api-keys",
   "/settings/audit",
-  "/settings/billing",
   "/settings/ory",
-  // Misc
-  "/invite",
 ] as const;
+
+// Authenticated routes outside any workspace: the Kratos settings flow, the
+// post-sign-in landing (redirects into the personal workspace) and invitations.
+const GLOBAL_ROUTES = ["/settings", "/workplace", "/invite"] as const;
 
 const runRealStack = process.env.PLAYWRIGHT_REAL_STACK === "1";
 
@@ -82,9 +89,11 @@ test.describe("UI smoke (deterministic, no AI)", () => {
   );
 
   let user: AuthedUser;
+  let slug: string;
 
   test.beforeAll(async () => {
     user = await createKratosUser("smoke");
+    slug = await personalWorkspaceSlug(user);
   });
 
   test.afterAll(async () => {
@@ -93,15 +102,23 @@ test.describe("UI smoke (deterministic, no AI)", () => {
     }
   });
 
-  for (const route of ROUTES) {
-    test(`renders ${route}`, async ({ context, page }) => {
+  const cases = [
+    ...WORKSPACE_ROUTES.map((route) => ({
+      name: `/w/[workspace]${route}`,
+      url: () => workspacePath(slug, route),
+    })),
+    ...GLOBAL_ROUTES.map((route) => ({ name: route, url: () => route })),
+  ];
+
+  for (const { name, url } of cases) {
+    test(`renders ${name}`, async ({ context, page }) => {
       // Next.js dev compiles routes on first visit, which can take well over the
       // default 30s for heavy pages. Give first-compile room (a no-op on a warm
       // dev server or a production build).
       test.setTimeout(60_000);
 
       await installBrowserSession(context, user);
-      await assertRenders(page, route);
+      await assertRenders(page, url());
     });
   }
 });

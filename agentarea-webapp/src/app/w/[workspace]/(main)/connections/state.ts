@@ -1,4 +1,4 @@
-import type { StatusTone } from "@/lib/status";
+import type { StatusKind } from "@/lib/status";
 import { readLastDispatch } from "./usage";
 
 /**
@@ -25,23 +25,22 @@ export type ConnectionStateKey =
 
 export interface ConnectionState {
   key: ConnectionStateKey;
-  tone: StatusTone;
-  pulse?: boolean;
+  kind: StatusKind;
   /** Timestamp of the signal this verdict came from, when known. */
   at: string | null;
 }
 
-const TONES: Record<ConnectionStateKey, { tone: StatusTone; pulse?: boolean }> = {
-  verifying: { tone: "info", pulse: true },
-  broken: { tone: "danger" },
-  failing: { tone: "danger" },
-  working: { tone: "success" },
-  ready: { tone: "neutral" },
-  unconfigured: { tone: "warning" },
+const KINDS: Record<ConnectionStateKey, StatusKind> = {
+  verifying: "running",
+  broken: "failed",
+  failing: "failed",
+  working: "active",
+  ready: "queued",
+  unconfigured: "attention",
 };
 
 function state(key: ConnectionStateKey, at: string | null): ConnectionState {
-  return { key, at, ...TONES[key] };
+  return { key, at, kind: KINDS[key] };
 }
 
 interface VerificationLike {

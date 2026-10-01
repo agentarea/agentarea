@@ -75,8 +75,7 @@ declaring the inputs it needs. The instance is *one configured copy* of it.
   </Step>
 
   <Step title="Option B — published package">
-    Use `type: "command"`. The package is wrapped in the `agentarea/mcp-bridge`
-    container, which listens on port 8080; you do not set a port.
+    Use `type: "command"`. The manager runs it through `MCP_BASE_IMAGE` (default `agentarea/agentarea-mcp-base:latest`) on port 8080. The endpoint opens after the child answers `initialize`; you do not set a port.
 
     ```bash
     curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/with-spec" \

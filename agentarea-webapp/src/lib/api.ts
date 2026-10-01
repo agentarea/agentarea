@@ -34,6 +34,7 @@ import type {
   ModelInstanceBulkCreateRequest,
   ModelInstanceCreate,
   ModelInstanceResponse,
+  ModelKind,
   ModelSpecCreate,
   ModelSpecUpdate,
   OpenApiConnectionCreate,
@@ -178,6 +179,15 @@ export const connectCatalogItem = async (
   return withStatus(result);
 };
 
+export const preflightCatalogConnection = async (itemId: string) => {
+  const result =
+    await sdk.preflightCatalogItemV1ConnectionsCatalogItemIdPreflightGet({
+      client: serverClient,
+      path: { item_id: itemId },
+    });
+  return withStatus(result);
+};
+
 export const analyzeBundle = async (body: AnalyzeRequest) => {
   const result = await sdk.analyzeBundleV1BundlesAnalyzePost({
     client: serverClient,
@@ -314,15 +324,8 @@ export const resumeAgentTask = async (agentId: string, taskId: string) => {
 
 export const continueAgentTask = async (
   taskId: string,
-  additionalIterations: number,
-  additionalBudgetUsd?: string
+  body: ContinueTaskPayload
 ) => {
-  const body: ContinueTaskPayload = {
-    additional_iterations: additionalIterations,
-  };
-  if (additionalBudgetUsd) {
-    body.additional_budget_usd = additionalBudgetUsd;
-  }
   const { data, error } =
     await sdk.continueTaskExecutionV1TasksTaskIdContinuePost({
       client: serverClient,
@@ -712,6 +715,7 @@ export const discoverModelsPreview = async (body: {
 export const listModelSpecs = async (params?: {
   provider_spec_id?: string;
   is_active?: boolean;
+  kind?: ModelKind;
 }) => {
   const { data, error } = await sdk.listModelSpecsV1ModelSpecsGet({
     client: serverClient,
@@ -794,6 +798,7 @@ export const listModelInstances = async (params?: {
   provider_config_id?: string;
   model_spec_id?: string;
   is_active?: boolean;
+  kind?: ModelKind;
 }) => {
   const result = await sdk.listModelInstancesV1ModelInstancesGet({
     client: serverClient,
@@ -1077,6 +1082,7 @@ export const listAPIKeys = async (agentId?: string) => {
 export const createAPIKey = async (body: {
   name: string;
   expires_in_days?: number;
+  agent_id?: string;
 }) => {
   const { data, error } = await sdk.createApiKeyV1ApiKeysPost({
     client: serverClient,

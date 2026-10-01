@@ -19,13 +19,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Badge, badgeVariants } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { BlueprintBadge } from "@/components/ui/blueprint-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import Divider from "@/components/ui/divider";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import FormError from "@/components/FormError";
-import { cn } from "@/lib/utils";
 import { ToolsTable } from "../../components/ToolsTable";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import {
@@ -133,19 +133,13 @@ function getToolCount(server: MCPServer): number {
   return Array.isArray(tools) ? tools.length : 0;
 }
 
-// --- small identity building blocks (reuse our Badge) -----------------------
+// --- small identity building blocks -----------------------------------------
 
-function StatusBadge({ verified }: { verified: boolean }) {
+function VerificationStatus({ verified }: { verified: boolean }) {
   return (
-    <Badge variant="outline">
-      <span
-        className={cn(
-          "h-[7px] w-[7px] rounded-full",
-          verified ? "bg-green-500" : "bg-amber-500"
-        )}
-      />
+    <StatusIndicator kind={verified ? "active" : "attention"} size="sm">
       {verified ? "Verified" : "Needs verification"}
-    </Badge>
+    </StatusIndicator>
   );
 }
 
@@ -221,7 +215,7 @@ function SpecHeader({
         )}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <StatusBadge verified={verified} />
+          <VerificationStatus verified={verified} />
           {repoUrl && (
             <LinkPill
               href={repoUrl}

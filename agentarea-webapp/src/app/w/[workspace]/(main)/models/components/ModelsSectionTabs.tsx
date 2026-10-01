@@ -9,11 +9,7 @@ const TAB =
  * pages, not one list with a footnote under it — the catalog is long enough
  * that it drowned the handful of providers actually in use.
  */
-export default function ModelsSectionTabs({
-  availableCount,
-}: {
-  availableCount?: number;
-}) {
+export default function ModelsSectionTabs() {
   return (
     <nav
       aria-label="Model sections"
@@ -26,11 +22,6 @@ export default function ModelsSectionTabs({
       <ActiveLink href="/models/specs" className={TAB}>
         <Store className="h-4 w-4" />
         Available
-        {availableCount != null && availableCount > 0 && (
-          <span className="ml-1 tabular-nums text-muted-foreground">
-            {availableCount}
-          </span>
-        )}
       </ActiveLink>
     </nav>
   );

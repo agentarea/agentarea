@@ -373,8 +373,6 @@
     }
   },
   "ProvidersPage": {
-    "title": "Providers",
-    "description": "Manage AI provider specifications and their available models",
     "noProviders": "No providers found",
     "addProvider": "Add Provider",
     "emptyDescription": "Provider specs are supplied by the platform registry — this deployment has none synced yet. Connect a provider with your own key instead.",
@@ -384,9 +382,7 @@
       "noDescription": "No description",
       "type": "Type",
       "models": "Models",
-      "modelsCount": "models",
-      "status": "Status",
-      "builtIn": "Built-in",
+      "modelsCount": "{count, plural, one {# model} other {# models}}",
       "custom": "Custom"
     }
   },
@@ -539,6 +535,26 @@
       "tool": "Tool",
       "activeMcpServers": "Active MCP Servers",
       "builtinTools": "Built-in Tools",
+      "codeToolModels": {
+        "placeholder": "Select a model",
+        "addModel": "Add a model",
+        "clear": "Clear {label}",
+        "loadFailed": "Could not load models",
+        "pickAtLeastOne": "Pick an image or a video model: the toolset needs at least one.",
+        "pickOne": "Pick a decision model: the toolset needs one.",
+        "image": {
+          "label": "Image model",
+          "empty": "No image models in this workspace."
+        },
+        "video": {
+          "label": "Video model",
+          "empty": "No video models in this workspace."
+        },
+        "decision": {
+          "label": "Decision model",
+          "empty": "No decision models in this workspace."
+        }
+      },
       "availableMcpServers": "Available MCP Servers",
       "availableOpenAPIConnections": "Available OpenAPI Connections",
       "openAPIConnections": "OpenAPI Connections",
@@ -597,7 +613,9 @@
     "form": {
       "saveFailed": "Couldn't save the agent",
       "validationFailed": "Some fields are invalid.",
-      "createFailed": "Couldn't create the agent"
+      "createFailed": "Couldn't create the agent",
+      "testAgent": "Test agent",
+      "closeTest": "Close test chat"
     },
     "delegationConfig": {
       "title": "Delegation",
@@ -689,6 +707,12 @@
     "filters": {
       "type": "Type",
       "category": "Category"
+    },
+    "catalogConnect": {
+      "breadcrumb": "Connect",
+      "breadcrumbWithName": "Connect {name}",
+      "back": "Back to catalog",
+      "loadFailed": "Could not load this catalog connection"
     },
     "createInstance": {
       "breadcrumb": "Create instance",
@@ -793,6 +817,7 @@
         "needsAppTitle": "Needs an OAuth app",
         "needsAppTitleConnected": "Re-authorizing needs your OAuth app",
         "needsAppHint": "Enter a client ID and secret, or pick them from workspace secrets.",
+        "redirectUriLabel": "Redirect URI to register with the provider",
         "unauthorizedNote": "This server lists its tools without a token, so verification succeeds while nobody is authorized — tool calls stay unauthorized until you connect."
       },
       "status": {
@@ -1014,7 +1039,6 @@
     "configureProvider": "Configure",
     "availableProviders": "Available Providers",
     "providerConfigsSection": "Provider Configs",
-    "providerSpecsSection": "Provider Specs",
     "browseProviders": "{count, plural, one {# more provider you can add} other {# more providers you can add}}",
     "platformProviderConfigsSection": "Provided by the platform",
     "platformManagedBadge": "No setup needed",
@@ -1041,6 +1065,13 @@
       "unknownError": "Unknown error",
       "unexpectedErrorWhileDeleting": "An unexpected error occurred while deleting the configuration"
     }
+  },
+  "ModelKind": {
+    "chat": "Chat",
+    "embedding": "Embedding",
+    "image": "Image",
+    "video": "Video",
+    "decision": "Decision"
   },
   "ProviderConfigForm": {
     "title": "Provider Configuration",
@@ -1126,10 +1157,35 @@
       "createTaskFailed": "Couldn't start a new task",
       "sendFailed": "Couldn't send the message",
       "actionRejected": "The task did not accept the action",
-      "continueFailed": "Couldn't continue the task",
-      "continueGrantRequired": "Grant at least one iteration or a budget top-up.",
       "pauseFailed": "Couldn't pause the task",
       "resumeFailed": "Couldn't resume the task"
+    },
+    "continuation": {
+      "title": {
+        "iteration_limit": "The task reached its iteration limit.",
+        "budget_exceeded": "The task reached its budget limit.",
+        "token_limit": "The task reached its token limit.",
+        "tool_call_limit": "The task reached its tool-call limit.",
+        "unknown": "The task reached one of its limits."
+      },
+      "hint": "Grant only the resources you want it to use. It will wait for up to 24 hours.",
+      "fields": {
+        "iterations": "Additional iterations",
+        "budget": "Budget top-up ({currency})",
+        "tokens": "Additional tokens",
+        "toolCalls": "Additional tool calls"
+      },
+      "optionalField": "{label}, optional",
+      "submit": "Continue task",
+      "failed": "Couldn't continue the task",
+      "errors": {
+        "invalid": "Enter whole numbers within the allowed range and a positive budget.",
+        "grant_required": "Grant at least one resource to continue.",
+        "iterations_required": "Grant additional iterations to lift the iteration limit.",
+        "budget_required": "Add a budget top-up to lift the budget limit.",
+        "tokens_required": "Grant additional tokens to lift the token limit.",
+        "toolCalls_required": "Grant additional tool calls to lift the tool-call limit."
+      }
     }
   },
   "TasksPage": {
@@ -1171,12 +1227,9 @@
       "running": "Running",
       "completed": "Completed",
       "success": "Success",
-      "inputRequired": "Input Required",
-      "approvalRequired": "Approval Required",
-      "continuationRequired": "Continuation Required",
+      "needsAction": "Needs action",
       "failed": "Failed",
       "error": "Error",
-      "blocked": "Blocked",
       "cancelled": "Cancelled",
       "paused": "Paused",
       "pending": "Pending",
@@ -2152,7 +2205,7 @@
     "toolsEnabled": "{count, plural, =1 {# tool enabled} other {# tools enabled}}"
   },
   "ApprovalRequestMessage": {
-    "approvalRequired": "Approval Required:",
+    "approvalRequired": "Approval required",
     "approved": "Approved",
     "denied": "Denied",
     "waiting": "Waiting...",
@@ -2621,8 +2674,6 @@
     "skillFilesLoadFailed": "Couldn't load the skill files",
     "catalogLoadFailed": "Couldn't load the catalog",
     "itemLoadFailed": "Couldn't load the catalog item",
-    "connectFailed": "Couldn't connect this account",
-    "unsafeRedirect": "the provider returned an unsafe sign-in address",
     "analyzeFailed": "Couldn't analyze the bundle",
     "installFailed": "Couldn't install the bundle",
     "agentInstallFailed": "Couldn't add the agent",

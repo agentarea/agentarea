@@ -51,8 +51,24 @@ class FakeTaskService:
     async def get_task(self, task_id):
         return self.task
 
-    async def continue_execution(self, task_id, *, additional_iterations, additional_budget_usd):
-        self.continued.append((task_id, additional_iterations, additional_budget_usd))
+    async def continue_execution(
+        self,
+        task_id,
+        *,
+        additional_iterations,
+        additional_budget_usd,
+        additional_tokens,
+        additional_tool_calls,
+    ):
+        self.continued.append(
+            (
+                task_id,
+                additional_iterations,
+                additional_budget_usd,
+                additional_tokens,
+                additional_tool_calls,
+            )
+        )
         return {"accepted": True}
 
 
@@ -175,9 +191,22 @@ async def test_continue_run_parses_budget_through_the_rest_dto(harness):
         additional_budget_usd="2.50",
     )
 
-    _task_id, iterations, budget = harness.tasks.continued[0]
+    _task_id, iterations, budget, tokens, tool_calls = harness.tasks.continued[0]
     assert iterations == 5
     assert str(budget) == "2.50"
+    assert tokens == 0
+    assert tool_calls == 0
+
+
+async def test_continue_run_forwards_token_and_tool_call_grants(harness):
+    await RunsToolset().continue_run(
+        run_id=str(RUN_ID),
+        additional_tokens=40_000,
+        additional_tool_calls=30,
+    )
+
+    _task_id, iterations, budget, tokens, tool_calls = harness.tasks.continued[0]
+    assert (iterations, budget, tokens, tool_calls) == (0, None, 40_000, 30)
 
 
 async def test_undelivered_command_is_reported_as_a_failure(harness, monkeypatch):

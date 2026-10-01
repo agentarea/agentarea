@@ -1,6 +1,6 @@
 import React from "react";
 import type { Part } from "../contract";
-import { FileChip } from "@/components/Chat/utils/fileIcon";
+import { ArtifactMedia } from "./ArtifactMedia";
 
 function asString(value: unknown): string | undefined {
   return typeof value === "string" && value ? value : undefined;
@@ -11,7 +11,8 @@ function asReachableHref(value: unknown): string | undefined {
   return href && /^(https?:\/\/|\/)/i.test(href) ? href : undefined;
 }
 
-/** Compact artifact row with a truthful file identity and optional real link. */
+/** Artifact row with a truthful file identity and optional real link; an
+ * image or a video is shown inline. */
 export const ArtifactPart: React.FC<{ part: Part }> = ({ part }) => {
   const name =
     asString(part.data.name) ??
@@ -27,15 +28,13 @@ export const ArtifactPart: React.FC<{ part: Part }> = ({ part }) => {
     asString(part.data.mime_type) ?? asString(part.data.content_type);
 
   return (
-    <div className="flex min-w-0 items-center gap-2 px-1 py-0.5 text-[13px] leading-5">
-      <FileChip
-        name={name}
-        iconName={path ?? name}
-        mimeType={mimeType}
-        href={href}
-        className="min-w-0"
-      />
-    </div>
+    <ArtifactMedia
+      path={path}
+      name={name}
+      href={href}
+      mimeType={mimeType}
+      className="px-1 py-0.5 text-[13px] leading-5"
+    />
   );
 };
 

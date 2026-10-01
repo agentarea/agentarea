@@ -8,7 +8,6 @@ import {
   ExternalLink,
   Wallet,
   X,
-  Zap,
 } from "lucide-react";
 import {
   fmtCost,
@@ -19,6 +18,7 @@ import {
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { TaskConversation } from "@/components/Chat/TaskConversation";
 import { TaskStatus } from "@/components/TaskStatus";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Button } from "@/components/ui/button";
 import Link from "@/components/WorkspaceLink";
 import { useCurrency } from "@/hooks/useCurrency";
@@ -68,9 +68,13 @@ export function InboxClientPanel({
         timestamp={task.created_at}
       />
       {!hasResult && failureText && (
-        <p className="max-w-3xl whitespace-pre-wrap break-words text-sm leading-relaxed text-red-600 dark:text-red-400 [overflow-wrap:anywhere]">
+        <StatusIndicator
+          kind="failed"
+          size="sm"
+          className="max-w-3xl whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]"
+        >
           {failureText}
-        </p>
+        </StatusIndicator>
       )}
       {!hasResult && !failureText && (
         <p className="text-sm text-muted-foreground">
@@ -78,9 +82,13 @@ export function InboxClientPanel({
         </p>
       )}
       {hasResult && failureText && (
-        <p className="mt-4 break-words text-sm leading-relaxed text-red-600 dark:text-red-400 [overflow-wrap:anywhere]">
+        <StatusIndicator
+          kind="failed"
+          size="sm"
+          className="mt-4 break-words text-sm leading-relaxed [overflow-wrap:anywhere]"
+        >
           {failureText}
-        </p>
+        </StatusIndicator>
       )}
     </>
   );
@@ -143,12 +151,14 @@ export function InboxClientPanel({
       </header>
 
       {pend && (
-        <div className="shrink-0 border-b border-amber-500/25 bg-amber-500/10 px-5 py-2.5 text-sm leading-relaxed text-foreground/85 sm:px-6">
+        <div className="shrink-0 border-b border-orange-500/25 bg-orange-500/10 px-5 py-2.5 text-sm leading-relaxed text-foreground/85 sm:px-6">
           <div className="flex items-start gap-2.5">
-            <Zap
-              size={17}
-              className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400"
-              aria-hidden
+            <StatusIndicator
+              kind="attention"
+              size="sm"
+              className="mt-0.5"
+              aria-label={t("detail.outputPending")}
+              title={t("detail.outputPending")}
             />
             <div className="min-w-0 flex-1">
               <p>

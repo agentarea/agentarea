@@ -2,6 +2,13 @@
 
 from typing import Any
 
+from temporalio import workflow
+
+with workflow.unsafe.imports_passed_through():
+    from agentarea_governance.domain.tool_calls import WAIT_TOOL_NAME
+
+from .wait import WAIT_MAX_SECONDS, WAIT_MIN_SECONDS
+
 
 def completion_tool_schema() -> dict[str, Any]:
     return {
@@ -200,6 +207,41 @@ def read_tool_output_tool_schema() -> dict[str, Any]:
                     },
                 },
                 "required": ["output_id"],
+            },
+        },
+    }
+
+
+def wait_tool_schema() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": WAIT_TOOL_NAME,
+            "description": (
+                "Pause this task for a number of seconds without holding the sandbox. "
+                "Use it between polls of an asynchronous job (for example a video "
+                "generation) instead of sleep in a shell command. A user message or a "
+                "pause ends the wait early; the result says how long you waited and why "
+                "it ended."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "seconds": {
+                        "type": "integer",
+                        "minimum": WAIT_MIN_SECONDS,
+                        "maximum": WAIT_MAX_SECONDS,
+                        "description": (
+                            f"How long to wait, {WAIT_MIN_SECONDS} to {WAIT_MAX_SECONDS}. "
+                            "Call again to wait longer."
+                        ),
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "What you are waiting for; shown to the user.",
+                    },
+                },
+                "required": ["seconds", "reason"],
             },
         },
     }

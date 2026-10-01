@@ -10,7 +10,8 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/config"
-	"github.com/agentarea/mcp-manager/internal/mcpspec"
+	"github.com/agentarea/mcp-manager/internal/listener"
+	"github.com/agentarea/mcp-manager/internal/mcpbase"
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/providers"
 	"github.com/agentarea/mcp-manager/internal/usage"
@@ -45,13 +46,12 @@ type ProviderRuntime struct {
 	providers      ProviderSelector
 	backend        backends.Backend
 	config         *config.Config
-	imagePolicy    ImagePolicy
 	startupTimeout time.Duration
 	remote         *RemoteUpstream
 	usage          usage.Recorder
 }
 
-func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backend, cfg *config.Config, imagePolicy ImagePolicy, startupTimeout time.Duration, remote *RemoteUpstream) (*ProviderRuntime, error) {
+func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backend, cfg *config.Config, startupTimeout time.Duration, remote *RemoteUpstream) (*ProviderRuntime, error) {
 	if providerManager == nil || backend == nil || cfg == nil || startupTimeout <= 0 {
 		return nil, fmt.Errorf("MCP provider runtime requires providers, backend, config, and positive startup timeout")
 	}
@@ -62,7 +62,6 @@ func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backe
 		providers:      providerManager,
 		backend:        backend,
 		config:         cfg,
-		imagePolicy:    imagePolicy,
 		startupTimeout: startupTimeout,
 		remote:         remote,
 	}, nil
@@ -80,16 +79,18 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 	if instanceType != "docker" && instanceType != "command" && instanceType != "kubernetes" {
 		return "", fmt.Errorf("MCP demand gateway supports container-backed instances only, got %q", instanceType)
 	}
-	// Admission runs before the workload is inspected, not just before it is
-	// created: an instance whose spec was edited to something inadmissible must
-	// stop being served, not keep answering from the pod it already had.
-	if err := r.authorize(instanceType, instance); err != nil {
-		return "", err
-	}
-
 	status, statusErr := r.backend.GetInstanceStatus(ctx, instance.InstanceID)
 	if statusErr != nil && !errors.Is(statusErr, backends.ErrInstanceNotFound) {
 		return "", fmt.Errorf("inspect MCP runtime status: %w", statusErr)
+	}
+	if statusErr == nil && runtimeStatusStopped(status.Status) {
+		// A stopped workload never becomes ready again — mcp-base exits when
+		// its stdio server dies — so it is replaced, not waited on until the
+		// startup timeout gives up on it.
+		if err := r.delete(ctx, instance, "stopped_workload_replacement"); err != nil {
+			return "", fmt.Errorf("remove stopped MCP workload: %w", err)
+		}
+		statusErr = backends.ErrInstanceNotFound
 	}
 	operationID := ""
 	if errors.Is(statusErr, backends.ErrInstanceNotFound) {
@@ -106,43 +107,21 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 			return "", r.cleanupFailedStart(instance, err)
 		}
 	}
+	startDeadline := time.Now().Add(r.startupTimeout)
 	if statusErr != nil || !runtimeStatusReady(status.Status) {
 		if operationID == "" {
 			operationID = uuid.NewString()
 		}
-		deadline := time.NewTimer(r.startupTimeout)
-		defer deadline.Stop()
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			status, statusErr = r.backend.GetInstanceStatus(ctx, instance.InstanceID)
-			if statusErr == nil && runtimeStatusReady(status.Status) {
-				break
-			}
-			if statusErr != nil && !errors.Is(statusErr, backends.ErrInstanceNotFound) {
-				return "", r.cleanupFailedStart(instance, fmt.Errorf("inspect MCP runtime while starting: %w", statusErr))
-			}
-			select {
-			case <-ctx.Done():
-				// The gateway allows a start exactly StartupTimeout, which is
-				// also this loop's deadline, so this branch — not the timer
-				// below — is the one production takes. Report the same last
-				// state the timer would: without it the log says only that time
-				// ran out, and the workload has already been cleaned up by the
-				// time anyone could go and look at it.
-				if statusErr != nil {
-					return "", r.cleanupFailedStart(instance,
-						fmt.Errorf("MCP instance did not become ready: %w", errors.Join(ctx.Err(), statusErr)))
-				}
-				return "", r.cleanupFailedStart(instance,
-					fmt.Errorf("MCP instance did not become ready; last state %q: %w", status.Status, ctx.Err()))
-			case <-deadline.C:
-				if statusErr != nil {
-					return "", r.cleanupFailedStart(instance, fmt.Errorf("MCP instance did not become ready: %w", statusErr))
-				}
-				return "", r.cleanupFailedStart(instance, fmt.Errorf("MCP instance did not become ready; last state %q", status.Status))
-			case <-ticker.C:
-			}
+		if status, err = r.awaitRunning(ctx, instance); err != nil {
+			return "", err
+		}
+	}
+	// A started container reports running before its server listens; waiting
+	// here turns that window into a longer first request instead of a
+	// connection-refused 502. A remote data plane does the same wait itself.
+	if operationID != "" && r.remote == nil && status != nil && status.InternalURL != "" {
+		if err := r.awaitListening(ctx, instance, status.InternalURL, startDeadline); err != nil {
+			return "", r.cleanupFailedStart(instance, fmt.Errorf("MCP instance never listened: %w", err))
 		}
 	}
 	if operationID != "" {
@@ -152,6 +131,79 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 	}
 
 	return r.upstreamURL(instance, instanceType)
+}
+
+// awaitRunning polls the backend until the workload reports running, within
+// the startup timeout. A wait that fails tears the workload down.
+func (r *ProviderRuntime) awaitRunning(ctx context.Context, instance *models.MCPServerInstance) (*backends.InstanceStatus, error) {
+	deadline := time.NewTimer(r.startupTimeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		status, statusErr := r.backend.GetInstanceStatus(ctx, instance.InstanceID)
+		if statusErr == nil && runtimeStatusReady(status.Status) {
+			return status, nil
+		}
+		if statusErr != nil && !errors.Is(statusErr, backends.ErrInstanceNotFound) {
+			return nil, r.cleanupFailedStart(instance, fmt.Errorf("inspect MCP runtime while starting: %w", statusErr))
+		}
+		if statusErr == nil && runtimeStatusStopped(status.Status) {
+			return nil, r.cleanupFailedStart(instance, fmt.Errorf("MCP workload stopped while starting (state %q)", status.Status))
+		}
+		select {
+		case <-ctx.Done():
+			// The gateway allows a start exactly StartupTimeout, which is
+			// also this loop's deadline, so this branch — not the timer
+			// below — is the one production takes. Report the same last
+			// state the timer would: without it the log says only that time
+			// ran out, and the workload has already been cleaned up by the
+			// time anyone could go and look at it.
+			if statusErr != nil {
+				return nil, r.cleanupFailedStart(instance,
+					fmt.Errorf("MCP instance did not become ready: %w", errors.Join(ctx.Err(), statusErr)))
+			}
+			return nil, r.cleanupFailedStart(instance,
+				fmt.Errorf("MCP instance did not become ready; last state %q: %w", status.Status, ctx.Err()))
+		case <-deadline.C:
+			if statusErr != nil {
+				return nil, r.cleanupFailedStart(instance, fmt.Errorf("MCP instance did not become ready: %w", statusErr))
+			}
+			return nil, r.cleanupFailedStart(instance, fmt.Errorf("MCP instance did not become ready; last state %q", status.Status))
+		case <-ticker.C:
+		}
+	}
+}
+
+// awaitListening waits for the workload to accept connections and gives up as
+// soon as it stops: mcp-base exits when its package fails to install or its
+// stdio server fails to initialize, and that workload will never listen.
+func (r *ProviderRuntime) awaitListening(ctx context.Context, instance *models.MCPServerInstance, internalURL string, deadline time.Time) error {
+	waitCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-waitCtx.Done():
+				return
+			case <-ticker.C:
+			}
+			status, err := r.backend.GetInstanceStatus(waitCtx, instance.InstanceID)
+			if err == nil && runtimeStatusStopped(status.Status) {
+				cancel(fmt.Errorf("the workload stopped (state %q)", status.Status))
+				return
+			}
+		}
+	}()
+	err := listener.Wait(waitCtx, internalURL, deadline)
+	if err != nil && ctx.Err() == nil {
+		if cause := context.Cause(waitCtx); cause != nil && !errors.Is(cause, context.Canceled) {
+			return cause
+		}
+	}
+	return err
 }
 
 // upstreamURL is where the gateway proxies this instance's MCP traffic.
@@ -183,9 +235,9 @@ func (r *ProviderRuntime) upstreamURL(instance *models.MCPServerInstance, instan
 // be listening there. Only an absent port takes the documented default.
 func instancePort(instance *models.MCPServerInstance, instanceType string) (int, error) {
 	if instanceType == "command" {
-		// command instances are wrapped by mcp-bridge, which always listens here
-		// regardless of any port in the spec.
-		return 8080, nil
+		// command instances run behind mcp-base's bridge, which always listens
+		// here regardless of any port in the spec.
+		return mcpbase.Port, nil
 	}
 	rawPort, declared := instance.JSONSpec["port"]
 	if !declared || rawPort == nil {
@@ -207,63 +259,6 @@ func instancePort(instance *models.MCPServerInstance, instanceType string) (int,
 		return 0, fmt.Errorf("MCP instance port %d is outside 1-65535", parsed)
 	}
 	return parsed, nil
-}
-
-// authorize admits the instance against the operator's declared lists. The two
-// container-backed shapes name their code differently — an image reference or a
-// package to fetch — so each is checked against the list that describes it.
-func (r *ProviderRuntime) authorize(instanceType string, instance *models.MCPServerInstance) error {
-	if instanceType == "command" {
-		command, _ := instance.JSONSpec["command"].(string)
-		if err := r.imagePolicy.AuthorizeCommand(command, commandArgs(instance.JSONSpec)); err != nil {
-			return err
-		}
-		return r.imagePolicy.AuthorizeLauncherEnvironment(instanceEnvironment(instance.JSONSpec))
-	}
-	image, _ := instance.JSONSpec["image"].(string)
-	return r.imagePolicy.AuthorizeImage(image, containerCommandOverride(instance.JSONSpec))
-}
-
-// commandArgs reads the stdio arguments the same way the Kubernetes provider
-// does when it builds the container command, so admission judges the invocation
-// that will actually run.
-func commandArgs(jsonSpec map[string]any) []string {
-	raw, ok := jsonSpec["args"].([]any)
-	if !ok {
-		return nil
-	}
-	args := make([]string, 0, len(raw))
-	for _, entry := range raw {
-		if arg, ok := entry.(string); ok {
-			args = append(args, arg)
-		}
-	}
-	return args
-}
-
-// containerCommandOverride is the argv the container is actually started with,
-// read by the same function the provider uses. It read only a list-shaped
-// "command" once, while the provider also honoured a string command and args --
-// so a repository-only entry admitted an image with no override and the host then
-// ran whatever argv those other fields carried.
-func containerCommandOverride(jsonSpec map[string]any) []string {
-	return mcpspec.DockerArgv(jsonSpec)
-}
-
-// instanceEnvironment reads both spec keys the provider merges into the pod
-// environment, so nothing reaches the container by a key admission skipped.
-func instanceEnvironment(jsonSpec map[string]any) map[string]string {
-	environment := make(map[string]string)
-	for _, key := range []string{"environment", "env_vars"} {
-		raw, ok := jsonSpec[key].(map[string]any)
-		if !ok {
-			continue
-		}
-		for name, value := range raw {
-			environment[name] = fmt.Sprintf("%v", value)
-		}
-	}
-	return environment
 }
 
 func (r *ProviderRuntime) cleanupFailedStart(instance *models.MCPServerInstance, cause error) error {
@@ -390,6 +385,17 @@ func (r *ProviderRuntime) recordUsage(ctx context.Context, instance *models.MCPS
 func runtimeStatusReady(status string) bool {
 	switch strings.ToLower(status) {
 	case "running", "healthy", "ready":
+		return true
+	default:
+		return false
+	}
+}
+
+// runtimeStatusStopped reports a workload that has stopped for good: it
+// exited, or its backend marked it failed. Waiting will not make it ready.
+func runtimeStatusStopped(status string) bool {
+	switch strings.ToLower(status) {
+	case "stopped", "exited", "dead", "error", "failed":
 		return true
 	default:
 		return false

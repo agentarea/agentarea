@@ -40,14 +40,25 @@ class RedisStreamsBroker:
             self._client = None
 
     async def submit(
-        self, stream: str, fields: dict[str, str], *, maxlen: int | None = None
+        self,
+        stream: str,
+        fields: dict[str, str],
+        *,
+        maxlen: int | None = None,
+        ttl_seconds: int | None = None,
     ) -> str:
         client = await self._get_client()
         kwargs: dict[str, Any] = {}
         if maxlen is not None:
             kwargs["maxlen"] = maxlen
             kwargs["approximate"] = True
-        msg_id: str = await client.xadd(stream, fields=cast(Any, dict(fields)), **kwargs)
+        if ttl_seconds is None:
+            msg_id: str = await client.xadd(stream, fields=cast(Any, dict(fields)), **kwargs)
+            return msg_id
+        async with client.pipeline(transaction=True) as pipe:
+            pipe.xadd(stream, fields=cast(Any, dict(fields)), **kwargs)
+            pipe.expire(stream, ttl_seconds)
+            msg_id, _ = await pipe.execute()
         return msg_id
 
     async def ensure_group(self, stream: str, group: str, start: str = "$") -> None:

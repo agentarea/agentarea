@@ -16,6 +16,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/events"
+	"github.com/agentarea/mcp-manager/internal/mcpbase"
 	"github.com/agentarea/mcp-manager/internal/mcpspec"
 	"github.com/agentarea/mcp-manager/internal/models"
 )
@@ -1421,12 +1422,6 @@ func (m *Manager) HandleMCPInstanceDeleted(ctx context.Context, instanceID strin
 	return nil
 }
 
-// sandboxImage is the container image used to wrap stdio-based MCP servers over streamable-http.
-// agentarea/mcp-bridge includes Python, Node.js (npx), and uv (uvx) so most MCP servers work
-// out of the box. It proxies stdio-based MCP servers over streamable-http at /mcp.
-const sandboxImage = "agentarea/mcp-bridge:latest"
-const sandboxPort = 8080
-
 // ResolveContainerSpec derives the actual image, port, command, and environment that
 // should be used when launching a container for a given json_spec.
 //
@@ -1434,8 +1429,8 @@ const sandboxPort = 8080
 //   - "docker" (default): the spec must contain "image" and "port". The container is
 //     launched as-is and is expected to serve MCP over HTTP/SSE natively.
 //   - "command": the spec must contain "command" (e.g. "npx" or "uvx") plus optional
-//     "args". The command is wrapped with mcp-bridge so its stdio transport is
-//     exposed over HTTP/SSE on sandboxPort.
+//     "args". The command runs on the mcp-base image, whose bridge serves its stdio
+//     transport as Streamable HTTP on mcpbase.Port.
 func ResolveContainerSpec(jsonSpec map[string]interface{}) (image string, port int, command []string, environment map[string]string) {
 	environment = make(map[string]string)
 	if envMap, ok := jsonSpec["environment"].(map[string]interface{}); ok {
@@ -1449,7 +1444,7 @@ func ResolveContainerSpec(jsonSpec map[string]interface{}) (image string, port i
 	specType, _ := jsonSpec["type"].(string)
 
 	if specType == "command" {
-		// Wrap stdio command with mcp-bridge (stdio → streamable-http proxy)
+		// The stdio command runs behind mcp-base's bridge.
 		cmd, _ := jsonSpec["command"].(string)
 		var args []string
 		if rawArgs, ok := jsonSpec["args"].([]interface{}); ok {
@@ -1460,9 +1455,9 @@ func ResolveContainerSpec(jsonSpec map[string]interface{}) (image string, port i
 			}
 		}
 
-		image = sandboxImage
-		port = sandboxPort
-		// bridge.py <command> [args...] — the entrypoint is "python bridge.py"
+		image = mcpbase.Image()
+		port = mcpbase.Port
+		// mcp-base's ENTRYPOINT is the bridge; <command> [args...] are its arguments.
 		command = append([]string{cmd}, args...)
 		return
 	}
@@ -1697,8 +1692,17 @@ func (m *Manager) updateContainerHealth(container *models.Container, result *Hea
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	// Store health result
+	previous := m.containerHealth[container.Name]
 	m.containerHealth[container.Name] = result
+
+	// A workload may open its port only once its server is up: mcp-base binds
+	// 8080 after the stdio child initializes, which for an npx package includes
+	// the install. Until it has answered once, and within the startup window,
+	// an unreachable endpoint means starting. Reporting that as failed tells
+	// the platform a healthy start broke.
+	if stillStarting(container, previous, result, m.config.Container.StartupTimeout) {
+		return
+	}
 
 	// Update container status based on health
 	previousStatus := container.Status
@@ -1737,6 +1741,16 @@ func (m *Manager) updateContainerHealth(container *models.Container, result *Hea
 			}()
 		}
 	}
+}
+
+// stillStarting reports a running container that has never answered its health
+// probe and is still inside its startup window. Health is kept by container
+// name, so an answer recorded for an earlier container under the same name —
+// one the idle sweep reclaimed — says nothing about this one.
+func stillStarting(container *models.Container, previous, result *HealthCheckResult, window time.Duration) bool {
+	answeredBefore := previous != nil && previous.ContainerID == container.ID && previous.HTTPReachable
+	return result.Status == models.StatusRunning && !result.HTTPReachable && !answeredBefore &&
+		time.Since(container.CreatedAt) < window
 }
 
 // determineContainerStatus determines the container status based on health check result

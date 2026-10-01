@@ -74,10 +74,10 @@ def test_catalog_item_normalizes_missing_timestamps():
     assert item.updated_at == item.created_at
 
 
-def test_project_command_type_builds_cmd_and_bridge_image():
+def test_project_command_type_builds_cmd_and_base_image():
     item = _item(
         spec={"connection_type": "command", "command": "uvx", "args": ["pkg"], "env_schema": []}
     )
     server = _project_catalog_mcp_server(item)
     assert server.cmd == ["uvx", "pkg"]
-    assert server.docker_image_url == "agentarea/mcp-bridge:latest"
+    assert server.docker_image_url == "agentarea/agentarea-mcp-base"

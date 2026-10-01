@@ -8,13 +8,13 @@ import {
   DollarSign,
   Key,
   Network,
-  Shield,
   Wallet,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Badge } from "@/components/ui/badge";
 import Divider from "@/components/ui/divider";
@@ -296,7 +296,12 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
                     value={x402PrivateKey}
                     onChange={(e) => edit(setX402PrivateKey)(e.target.value)}
                   />
-                  <Shield className="h-4 w-4 text-green-500" />
+                  <StatusIndicator
+                    kind="active"
+                    size="sm"
+                    aria-label="Configured - enter new key to update"
+                    title="Configured - enter new key to update"
+                  />
                 </div>
               ) : (
                 <Input
@@ -365,7 +370,12 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
                     value={mppTempoKey}
                     onChange={(e) => edit(setMppTempoKey)(e.target.value)}
                   />
-                  <Shield className="h-4 w-4 text-green-500" />
+                  <StatusIndicator
+                    kind="active"
+                    size="sm"
+                    aria-label="Configured - enter new key to update"
+                    title="Configured - enter new key to update"
+                  />
                 </div>
               ) : (
                 <Input

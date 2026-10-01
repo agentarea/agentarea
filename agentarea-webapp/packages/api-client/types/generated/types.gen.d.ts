@@ -1300,6 +1300,40 @@ export type CatalogBrowseResponse = {
     total: number;
 };
 /**
+ * CatalogConnectionPreflight
+ *
+ * What the connect form needs to know before it offers Connect.
+ *
+ * ``ready`` — this installation holds an OAuth app for the provider.
+ * ``oauth_app_required`` — the user must register their own app first.
+ */
+export type CatalogConnectionPreflight = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Item Id
+     */
+    item_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Redirect Uri
+     */
+    redirect_uri: string;
+    /**
+     * Status
+     */
+    status: 'ready' | 'oauth_app_required';
+};
+/**
  * CatalogConnectionRequest
  *
  * Connect with AgentArea credentials, or override them from Advanced.
@@ -1570,6 +1604,10 @@ export type CodeToolConfig = {
  * CodeToolSettings
  *
  * Settings for a built-in code toolset.
+ *
+ * The model ids are model instances of the workspace, each of the kind its
+ * toolset needs: ``agentarea/media`` takes an image and/or a video model,
+ * ``agentarea/decide`` a decision model. No other toolset takes one.
  */
 export type CodeToolSettings = {
     /**
@@ -1577,9 +1615,27 @@ export type CodeToolSettings = {
      */
     disabled_methods?: Array<string> | null;
     /**
+     * Image Model Id
+     *
+     * agentarea/media: model instance generating images.
+     */
+    image_model_id?: string | null;
+    /**
+     * Model Id
+     *
+     * agentarea/decide: decision model instance.
+     */
+    model_id?: string | null;
+    /**
      * Requires User Confirmation
      */
     requires_user_confirmation?: boolean | null;
+    /**
+     * Video Model Id
+     *
+     * agentarea/media: model instance generating videos.
+     */
+    video_model_id?: string | null;
 };
 /**
  * CollectionCreateRequest
@@ -1676,6 +1732,14 @@ export type ContinueTaskPayload = {
      * Additional Iterations
      */
     additional_iterations?: number;
+    /**
+     * Additional Tokens
+     */
+    additional_tokens?: number;
+    /**
+     * Additional Tool Calls
+     */
+    additional_tool_calls?: number;
 };
 /**
  * CreateInvitationBody
@@ -1788,7 +1852,7 @@ export type DiscoverPreviewModelResponse = {
     /**
      * Context Window
      */
-    context_window: number;
+    context_window: number | null;
     /**
      * Description
      */
@@ -1809,6 +1873,7 @@ export type DiscoverPreviewModelResponse = {
      * Is New
      */
     is_new?: boolean;
+    kind?: ModelKind;
     /**
      * Max Output Tokens
      */
@@ -1879,7 +1944,7 @@ export type DiscoveredModelResponse = {
     /**
      * Context Window
      */
-    context_window: number;
+    context_window: number | null;
     /**
      * Description
      */
@@ -1896,6 +1961,7 @@ export type DiscoveredModelResponse = {
      * Is New
      */
     is_new?: boolean;
+    kind?: ModelKind;
     /**
      * Max Output Tokens
      */
@@ -3553,6 +3619,7 @@ export type ModelInstanceResponse = {
      * Model Display Name
      */
     model_display_name?: string | null;
+    model_kind?: ModelKind | null;
     /**
      * Model Name
      */
@@ -3645,13 +3712,23 @@ export type ModelInstanceTestResponse = {
     tokens_used?: number | null;
 };
 /**
+ * ModelKind
+ *
+ * What a model produces, which decides every surface it may be bound to.
+ *
+ * An agent's main model is ``chat``; the media toolset takes ``image`` and
+ * ``video``; the decide toolset and decision-backed trigger conditions take
+ * ``decision``. A model has exactly one kind.
+ */
+export type ModelKind = 'chat' | 'embedding' | 'image' | 'video' | 'decision';
+/**
  * ModelSpecCreate
  */
 export type ModelSpecCreate = {
     /**
      * Context Window
      */
-    context_window: number;
+    context_window?: number | null;
     /**
      * Default Context Strategy
      */
@@ -3667,11 +3744,12 @@ export type ModelSpecCreate = {
     /**
      * Input Cost Per Token
      */
-    input_cost_per_token: number | string;
+    input_cost_per_token?: number | string | null;
     /**
      * Is Active
      */
     is_active?: boolean;
+    kind?: ModelKind;
     /**
      * Max Output Tokens
      */
@@ -3683,7 +3761,7 @@ export type ModelSpecCreate = {
     /**
      * Output Cost Per Token
      */
-    output_cost_per_token: number | string;
+    output_cost_per_token?: number | string | null;
     /**
      * Provider Spec Id
      */
@@ -6671,7 +6749,7 @@ export type TriggerCreate = {
     /**
      * Conditions
      *
-     * Optional conditions evaluated against event data before firing.
+     * Optional conditions evaluated against event data before firing. An LLM condition ({"type": "llm", "description": ...}) must name the chat or decision model instance that evaluates it in "model_id"; each sub-condition of a combined condition names its own.
      */
     conditions?: {
         [key: string]: unknown;
@@ -7032,7 +7110,7 @@ export type TriggerSpec = {
     /**
      * Conditions
      *
-     * Optional conditions evaluated against event data before firing.
+     * Optional conditions evaluated against event data before firing. An LLM condition ({"type": "llm", "description": ...}) must name the chat or decision model instance that evaluates it in "model_id"; each sub-condition of a combined condition names its own.
      */
     conditions?: {
         [key: string]: unknown;
@@ -7723,7 +7801,7 @@ export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
     /**
      * Context Window
      */
-    context_window: number;
+    context_window: number | null;
     /**
      * Created At
      */
@@ -7752,6 +7830,7 @@ export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
      * Is Active
      */
     is_active: boolean;
+    kind?: ModelKind;
     /**
      * Max Output Tokens
      */
@@ -7800,7 +7879,7 @@ export type AgentareaApiApiV1ProviderSpecsModelSpecResponse = {
     /**
      * Context Window
      */
-    context_window: number;
+    context_window: number | null;
     /**
      * Created At
      */
@@ -7825,6 +7904,7 @@ export type AgentareaApiApiV1ProviderSpecsModelSpecResponse = {
      * Is Active
      */
     is_active: boolean;
+    kind?: ModelKind;
     /**
      * Max Output Tokens
      */
@@ -10204,6 +10284,31 @@ export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses = {
     200: CatalogConnectionResponse;
 };
 export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponse = ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses[keyof ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses];
+export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetData = {
+    body?: never;
+    path: {
+        /**
+         * Item Id
+         */
+        item_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/connections/catalog/{item_id}/preflight';
+};
+export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetError = PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors[keyof PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors];
+export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogConnectionPreflight;
+};
+export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponse = PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses[keyof PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses];
 export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutData = {
     body: ManagedOAuthAppRequest;
     path: {
@@ -11599,6 +11704,10 @@ export type ListModelInstancesV1ModelInstancesGetData = {
          * Is Active
          */
         is_active?: boolean | null;
+        /**
+         * Kind
+         */
+        kind?: ModelKind | null;
     };
     url: '/v1/workspaces/{workspace}/model-instances/';
 };
@@ -11739,6 +11848,10 @@ export type ListModelSpecsV1ModelSpecsGetData = {
          * Is Active
          */
         is_active?: boolean | null;
+        /**
+         * Kind
+         */
+        kind?: ModelKind | null;
     };
     url: '/v1/workspaces/{workspace}/model-specs/';
 };

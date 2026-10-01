@@ -18,11 +18,15 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
+import {
+  StatusIndicator,
+  type StatusKind,
+} from "@/components/ui/status-indicator";
 import { EntityIcon, type EntityKind } from "@/lib/entity-icons";
-import { cn } from "@/lib/utils";
-import type { NetworkFlowNodeData, NetworkNodeData } from "../../types";
 import { getNetworkScope } from "../../utils/networkConnections";
 import { NETWORK_RESOURCE_LIMIT } from "../../utils/networkMapLayout";
+import { cn } from "@/lib/utils";
+import type { NetworkFlowNodeData, NetworkNodeData } from "../../types";
 
 export interface NetworkAgentData extends NetworkFlowNodeData {
   resources: { node: NetworkNodeData; sharedBy: number }[];
@@ -60,6 +64,21 @@ export default function NetworkAgentNode({
     status &&
     ["active", "running", "enabled", "connected", "available"].includes(status);
   const failed = status && ["error", "failed", "unhealthy"].includes(status);
+  const statusKind: StatusKind | null =
+    status === "active" || status === "running"
+      ? "running"
+      : failed
+        ? "failed"
+        : status === "inactive" || status === "disabled"
+          ? "off"
+          : active
+            ? "active"
+            : null;
+  const statusLabel = status
+    ? common.has(`statuses.${status}`)
+      ? common(`statuses.${status}`)
+      : data.status
+    : null;
   const resources = data.expanded
     ? data.resources
     : data.resources.slice(0, NETWORK_RESOURCE_LIMIT);
@@ -127,18 +146,15 @@ export default function NetworkAgentNode({
           </button>
           {status && (
             <span className="flex min-w-0 shrink-0 items-center gap-1.5">
-              <span
-                className={cn(
-                  "h-1.5 w-1.5 rounded-full bg-zinc-400",
-                  active && "bg-emerald-500",
-                  failed && "bg-red-500"
-                )}
-              />
-              <span>
-                {common.has(`statuses.${status}`)
-                  ? common(`statuses.${status}`)
-                  : data.status}
-              </span>
+              {statusKind && (
+                <StatusIndicator
+                  kind={statusKind}
+                  size="sm"
+                  aria-label={statusLabel ?? status}
+                  title={statusLabel ?? status}
+                />
+              )}
+              <span>{statusLabel}</span>
             </span>
           )}
         </div>

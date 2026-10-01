@@ -193,7 +193,9 @@ async def test_config_activity_uses_selected_skills_and_mcp_in_run_hash(activity
     ctx.get_mcp_server_instance_service.return_value.get.return_value = instance
     ctx.get_skill_service.return_value.get_with_catalog.return_value = selected_skill
     ctx.get_model_instance_service.return_value.get.return_value = SimpleNamespace(
-        model_spec=SimpleNamespace(context_window=64000, default_context_strategy="static")
+        model_spec=SimpleNamespace(
+            kind="chat", context_window=64000, default_context_strategy="static"
+        )
     )
     request = AgentConfigRequest(
         agent_id=saved.id,
@@ -411,7 +413,9 @@ async def test_config_returns_trusted_attachment_descriptors(activity_context, f
     saved = agent()
     ctx.get_agent_service.return_value.get_with_skills.return_value = saved
     ctx.get_model_instance_service.return_value.get.return_value = SimpleNamespace(
-        model_spec=SimpleNamespace(context_window=64000, default_context_strategy="static")
+        model_spec=SimpleNamespace(
+            kind="chat", context_window=64000, default_context_strategy="static"
+        )
     )
     request = file_request(["notes.txt"])
     request.agent_id = saved.id

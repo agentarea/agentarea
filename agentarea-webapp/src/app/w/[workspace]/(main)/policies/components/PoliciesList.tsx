@@ -170,8 +170,7 @@ export default function PoliciesList({
         return (
           <StatusIndicator
             size="sm"
-            tone={status.tone}
-            pulse={status.pulse}
+            kind={status.kind}
             className="whitespace-nowrap"
           >
             {item.enabled ? "Enabled" : "Disabled"}

@@ -429,11 +429,6 @@ func initDemandGateway(ctx context.Context, cfg *config.Config, providerManager 
 		logger.Error("Failed to configure MCP demand gateway", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	imagePolicy, err := mcpgateway.LoadImagePolicyFromEnv()
-	if err != nil {
-		logger.Error("Failed to configure MCP instance admission", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
 	gatewayRepository, err := mcpgateway.OpenSQLRepository(ctx, database.BuildConnStr(logger))
 	if err != nil {
 		logger.Error("Failed to initialize MCP demand gateway state", slog.String("error", err.Error()))
@@ -444,7 +439,7 @@ func initDemandGateway(ctx context.Context, cfg *config.Config, providerManager 
 		logger.Error("Failed to initialize resource usage storage", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	gatewayRuntime, err := mcpgateway.NewProviderRuntime(providerManager, backend, cfg, imagePolicy, gatewayPolicy.StartupTimeout, remoteUpstream)
+	gatewayRuntime, err := mcpgateway.NewProviderRuntime(providerManager, backend, cfg, gatewayPolicy.StartupTimeout, remoteUpstream)
 	if err != nil {
 		logger.Error("Failed to initialize MCP demand runtime", slog.String("error", err.Error()))
 		os.Exit(1)

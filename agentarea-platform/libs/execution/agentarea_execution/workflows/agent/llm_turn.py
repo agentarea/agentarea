@@ -11,22 +11,24 @@ with workflow.unsafe.imports_passed_through():
     from agentarea_agents_sdk.tools.disclosure import DisclosureContext, ToolCandidate
     from agentarea_common.money import serialize_money
 
+    from ..context_manager import messages_payload_bytes
     from ..helpers import MessageBuilder, ToolCallExtractor
     from ..models import Message, ToolCall
 
 from ...models import LLMCallRequest, LLMCallResult
 from ..constants import (
+    CONTEXT_MAX_PAYLOAD_BYTES,
     HEARTBEAT_TIMEOUT,
     LLM_CALL_TIMEOUT,
-    LLM_RETRY_ATTEMPTS,
     Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import make_retry_policy
+from ..retry import model_call_retry_policy
 from .compaction import CompactionMixin
 from .errors import ErrorReportingMixin
-from .patches import THINKING_ONLY_REPLY_PATCH
+from .limits import run_limit_reason
+from .patches import COMPACTION_BOUNDS_PAYLOAD_PATCH, THINKING_ONLY_REPLY_PATCH
 from .tool_dispatch import ToolDispatchMixin
 
 
@@ -134,6 +136,8 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 self._completion_event_published = True
 
         except Exception as e:
+            if self._is_cancellation(e) or run_limit_reason(e):
+                raise
             error_details = self._extract_temporal_error_details(e)
             workflow.logger.error(
                 f"Iteration {iteration} failed: {error_details}",
@@ -257,14 +261,23 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
 
         # Check context window and compact if needed (skip first iteration)
         if self.context_manager and iteration > 1:
-            messages_dict_est = [
-                {"role": msg.role, "content": msg.content or ""} for msg in self.state.messages
-            ]
+            bounds_payload = workflow.patched(COMPACTION_BOUNDS_PAYLOAD_PATCH)
+            messages_dict_est = (
+                self._conversation_payload()
+                if bounds_payload
+                else [
+                    {"role": msg.role, "content": msg.content or ""} for msg in self.state.messages
+                ]
+            )
             estimated = self.context_manager.estimate_usage(messages_dict_est)
             self.context_manager.update_usage(estimated)
+            oversized = (
+                bounds_payload
+                and messages_payload_bytes(messages_dict_est) > CONTEXT_MAX_PAYLOAD_BYTES
+            )
 
-            if self.context_manager.needs_compaction():
-                await self._compact_context_if_needed()
+            if oversized or self.context_manager.needs_compaction():
+                await self._compact_context_if_needed(force=oversized)
             elif self.context_manager.should_warn():
                 self._events.add_event(
                     EventTypes.CONTEXT_WARNING,
@@ -383,7 +396,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 args=[llm_request],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=make_retry_policy(LLM_RETRY_ATTEMPTS),
+                retry_policy=model_call_retry_policy(),
             )
 
             # Normalize response fields to support both Pydantic model and plain dict
@@ -501,6 +514,10 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             }
 
         except Exception as e:
+            # A budget stop keeps its llm.call.failed event: runs recorded before
+            # this change publish it on their way to the continuation wait.
+            if self._is_cancellation(e) or run_limit_reason(e) == "token_limit":
+                raise
             # Simplified error handling - enriched error events are now published by the activity
             error_message = self._extract_temporal_error_details(e)
             error_lower = error_message.lower()

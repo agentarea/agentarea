@@ -2,16 +2,16 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import Table from "@/components/Table/Table";
-import { Badge } from "@/components/ui/badge";
 import ModelBadge from "@/components/ui/model-badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Agent, agentPath, type ModelInfo } from "@/types";
 import { AgentToolIcon } from "@/utils/agentToolIcons";
+import AgentCard from "./AgentCard";
 import { AGENT_COLUMNS, AGENTS_GRID_CLASS } from "./agentColumns";
 import { AgentToolIcons } from "./AgentToolIcons";
-import AgentCard from "./AgentCard";
 
 type AgentWithToolIcons = Agent & { tool_icons?: AgentToolIcon[] };
 
@@ -51,9 +51,14 @@ export default function AgentsList({
     ),
     active_task_count: (value: number) =>
       value > 0 ? (
-        <Badge variant="blue" className="text-xs">
+        <StatusIndicator
+          kind="running"
+          size="sm"
+          aria-label={`${value} ${t("activeTasks")}`}
+          title={`${value} ${t("activeTasks")}`}
+        >
           {value}
-        </Badge>
+        </StatusIndicator>
       ) : (
         <span className="text-xs text-muted-foreground">—</span>
       ),

@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 import httpx
 from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, safe_async_client
 
+from ..domain.model_kind import ModelKind
 from ..domain.provider_profiles import ModelListShape, profile_for
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,34 @@ def _nonnegative_money_or_none(value) -> Decimal | None:
     return parsed if parsed.is_finite() and parsed >= 0 else None
 
 
+# Checked in order: a model that outputs images and text is an image model.
+_KIND_BY_OUTPUT_MODALITY: tuple[tuple[str, ModelKind], ...] = (
+    ("decisions", ModelKind.DECISION),
+    ("embeddings", ModelKind.EMBEDDING),
+    ("video", ModelKind.VIDEO),
+    ("image", ModelKind.IMAGE),
+    ("text", ModelKind.CHAT),
+)
+
+
+def _kind_from_listing(entry: dict) -> ModelKind | None:
+    """The kind an OpenAI-style listing entry declares; None when no surface takes it.
+
+    A listing without ``architecture`` (OpenAI and most compatibles) lists chat
+    models, which is what this endpoint served before kinds existed.
+    """
+    architecture = entry.get("architecture")
+    if not isinstance(architecture, dict):
+        return ModelKind.CHAT
+    outputs = architecture.get("output_modalities")
+    if not isinstance(outputs, list):
+        return ModelKind.CHAT
+    for modality, kind in _KIND_BY_OUTPUT_MODALITY:
+        if modality in outputs:
+            return kind
+    return None
+
+
 @dataclass
 class DiscoveredModel:
     model_name: str
@@ -38,6 +67,7 @@ class DiscoveredModel:
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
+    kind: ModelKind | None = ModelKind.CHAT
 
 
 @dataclass
@@ -52,12 +82,20 @@ class DiscoveryResult:
 class ModelDiscoveryService:
     """Discovers available models from LLM provider APIs."""
 
-    def __init__(self, timeout: int = 30, allow_private_endpoints: bool = False):
+    def __init__(
+        self,
+        timeout: int = 30,
+        allow_private_endpoints: bool = False,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ):
         self._timeout = timeout
         # User-supplied endpoint_url is validated against non-public address
         # classes (SSRF guard). Self-host installs targeting private endpoints
         # can opt out via allow_private_endpoints=True.
         self._allow_private_endpoints = allow_private_endpoints
+        # Only for the built-in provider addresses; a user endpoint always goes
+        # through the SSRF-guarded client.
+        self._transport = transport
 
     def _build_url(self, provider_key: str, endpoint_url: str | None) -> str | None:
         return profile_for(provider_key).resolve_models_url(endpoint_url)
@@ -95,6 +133,7 @@ class ModelDiscoveryService:
                     input_cost_per_token=_nonnegative_money_or_none(pricing.get("prompt")),
                     output_cost_per_token=_nonnegative_money_or_none(pricing.get("completion")),
                     description=m.get("description", ""),
+                    kind=_kind_from_listing(m),
                 )
             )
         return models
@@ -120,7 +159,7 @@ class ModelDiscoveryService:
                 policy = replace(policy, allow_private=True)
             client = safe_async_client(policy=policy, timeout=self._timeout)
         else:
-            client = httpx.AsyncClient(timeout=self._timeout)
+            client = httpx.AsyncClient(timeout=self._timeout, transport=self._transport)
 
         try:
             async with client:

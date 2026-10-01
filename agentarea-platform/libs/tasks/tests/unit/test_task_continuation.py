@@ -12,18 +12,24 @@ from agentarea_tasks.domain.exceptions import BudgetCapExceededError
 from agentarea_tasks.task_service import TaskService
 
 
-def _policy(*, max_model_turns: int, run_budget_usd: str):
+def _policy(
+    *,
+    max_model_turns: int,
+    run_budget_usd: str,
+    max_tokens: int = 20_000,
+    max_tool_calls_total: int = 100,
+):
     return effective_policy_from_json(
         {
             "budget": {"run_budget_usd": run_budget_usd},
             "tokens": {
-                "max_tokens": 20_000,
+                "max_tokens": max_tokens,
                 "max_tokens_per_call": 2_000,
             },
             "execution": {
                 "max_model_turns": max_model_turns,
                 "max_tool_calls_per_turn": 10,
-                "max_tool_calls_total": 100,
+                "max_tool_calls_total": max_tool_calls_total,
             },
         }
     )
@@ -88,6 +94,58 @@ async def test_continue_execution_forwards_money_as_string():
         "budget": {"run_budget_usd": "2.25"},
         "execution": {"max_model_turns": 7},
     }
+
+
+@pytest.mark.asyncio
+async def test_continue_execution_raises_token_and_tool_call_ceilings():
+    task_id = uuid4()
+    current_policy = _policy(max_model_turns=3, run_budget_usd="1.00")
+    next_policy = _policy(
+        max_model_turns=3,
+        run_budget_usd="1.00",
+        max_tokens=50_000,
+        max_tool_calls_total=150,
+    )
+    task = _waiting_task(task_id, current_policy)
+    service = _service(task, next_policy=next_policy)
+
+    result = await service.continue_execution(
+        task_id,
+        additional_tokens=30_000,
+        additional_tool_calls=50,
+    )
+
+    assert result["accepted"] is True
+    requested = service._resolve_effective_policy.await_args.kwargs["task_policy"]
+    assert requested.tokens.max_tokens == 50_000
+    assert requested.execution.max_tool_calls_total == 150
+    assert requested.execution.max_model_turns is None
+    assert requested.budget is None
+    _execution_id, payload = service.workflow_service.continue_execution.await_args.args
+    assert payload["additional_tokens"] == 30_000
+    assert payload["additional_tool_calls"] == 50
+    assert payload["additional_iterations"] == 0
+    assert "additional_budget_usd" not in payload
+    assert payload["governance_snapshot"]["requested_policy"] == {
+        "tokens": {"max_tokens": 50_000},
+        "execution": {"max_tool_calls_total": 150},
+    }
+
+
+@pytest.mark.asyncio
+async def test_continue_execution_token_grant_above_ceiling_is_rejected():
+    task_id = uuid4()
+    current_policy = _policy(max_model_turns=3, run_budget_usd="1.00")
+    task = _waiting_task(task_id, current_policy)
+    service = _service(task)
+    service._resolve_effective_policy.side_effect = PolicyValidationError(
+        "task policy weakens workspace ceiling"
+    )
+
+    result = await service.continue_execution(task_id, additional_tokens=1_000_000)
+
+    assert result == {"accepted": False, "reason": "policy_ceiling"}
+    service.workflow_service.continue_execution.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -47,6 +47,12 @@ export const navData = {
           icon: Gauge,
         },
         {
+          title: "Apps",
+          titleKey: "apps",
+          url: "/apps",
+          icon: AppWindow,
+        },
+        {
           title: "Tasks",
           titleKey: "tasks",
           url: "/tasks",
@@ -105,12 +111,6 @@ export const navData = {
           titleKey: "connections",
           url: "/connections",
           icon: Plug,
-        },
-        {
-          title: "Apps",
-          titleKey: "apps",
-          url: "/apps",
-          icon: AppWindow,
         },
         {
           title: "Harnesses",

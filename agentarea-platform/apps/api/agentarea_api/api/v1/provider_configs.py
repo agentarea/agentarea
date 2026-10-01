@@ -18,7 +18,11 @@ from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.model_discovery_service import DiscoveredModel, ModelDiscoveryService
 from agentarea_llm.application.model_spec_service import ModelSpecService
 from agentarea_llm.application.provider_service import ProviderService  # type: ignore
-from agentarea_llm.domain.models import MANAGED_BY_PLATFORM, ProviderConfig  # type: ignore
+from agentarea_llm.domain.models import (  # type: ignore
+    MANAGED_BY_PLATFORM,
+    ModelKind,
+    ProviderConfig,
+)
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
 from fastapi import APIRouter, Depends, HTTPException
@@ -275,7 +279,8 @@ class DiscoverPreviewModelResponse(BaseModel):
     id: str
     model_name: str
     display_name: str
-    context_window: int
+    kind: ModelKind = ModelKind.CHAT
+    context_window: int | None
     max_output_tokens: int | None = None
     input_cost_per_token: Money | None = None
     output_cost_per_token: Money | None = None
@@ -299,7 +304,15 @@ class SkippedModelResponse(BaseModel):
 
 
 def _missing_runtime_metadata(model: DiscoveredModel) -> list[str]:
-    """Names of the runtime fields a model must carry before it can be run."""
+    """Names of the runtime fields a model must carry before it can be run.
+
+    Only chat and embedding runs are billed from per-token prices over a context
+    window; the other kinds are billed at the cost the provider reports per call.
+    """
+    if model.kind is None:
+        return ["kind"]
+    if not model.kind.priced_per_token:
+        return []
     missing = []
     if (
         isinstance(model.context_window, bool)
@@ -410,7 +423,7 @@ async def discover_models_preview(
     results = []
     new_count = 0
     for model in usable:
-        context_window = cast(int, model.context_window)
+        kind = cast(ModelKind, model.kind)
         existing = await model_spec_repo.get_by_provider_and_model(
             UUID(str(provider_spec_id)), model.model_name
         )
@@ -428,6 +441,7 @@ async def discover_models_preview(
             supports_function_calling=model.supports_function_calling,
             supports_vision=model.supports_vision,
             supports_reasoning=model.supports_reasoning,
+            kind=kind.value,
         )
 
         if is_new:
@@ -438,7 +452,8 @@ async def discover_models_preview(
                 id=str(spec.id),
                 model_name=model.model_name,
                 display_name=model.display_name or model.model_name,
-                context_window=context_window,
+                kind=kind,
+                context_window=model.context_window,
                 max_output_tokens=model.max_output_tokens,
                 input_cost_per_token=model.input_cost_per_token,
                 output_cost_per_token=model.output_cost_per_token,
@@ -539,7 +554,8 @@ async def delete_provider_config(
 class DiscoveredModelResponse(BaseModel):
     model_name: str
     display_name: str
-    context_window: int
+    kind: ModelKind = ModelKind.CHAT
+    context_window: int | None
     max_output_tokens: int | None = None
     input_cost_per_token: Money | None = None
     output_cost_per_token: Money | None = None
@@ -617,7 +633,7 @@ async def discover_models(
     results = []
     new_count = 0
     for model in usable:
-        context_window = cast(int, model.context_window)
+        kind = cast(ModelKind, model.kind)
         # Check if model already exists
         existing = await model_spec_repo.get_by_provider_and_model(
             UUID(str(provider_spec_id)), model.model_name
@@ -636,6 +652,7 @@ async def discover_models(
             supports_function_calling=model.supports_function_calling,
             supports_vision=model.supports_vision,
             supports_reasoning=model.supports_reasoning,
+            kind=kind.value,
         )
 
         if is_new:
@@ -645,7 +662,8 @@ async def discover_models(
             DiscoveredModelResponse(
                 model_name=model.model_name,
                 display_name=model.display_name or model.model_name,
-                context_window=context_window,
+                kind=kind,
+                context_window=model.context_window,
                 max_output_tokens=model.max_output_tokens,
                 input_cost_per_token=model.input_cost_per_token,
                 output_cost_per_token=model.output_cost_per_token,

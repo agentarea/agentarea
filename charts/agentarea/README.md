@@ -311,6 +311,8 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.serverless.sweepInterval | string | `"60s"` |  |
 | mcpManager.serverless.requestLeaseTTL | string | `"90s"` |  |
 | mcpManager.serverless.startupTimeout | string | `"5m"` |  |
+| mcpManager.mcpBase.image.repository | string | `"agentarea/agentarea-mcp-base"` |  |
+| mcpManager.mcpBase.image.tag | string | `"latest"` |  |
 | mcpManager.dataPlane.allowInsecure | bool | `false` |  |
 | mcpManager.dataPlane.url | string | `""` |  |
 | mcpManager.dataPlane.tokenSecret | string | `""` |  |
@@ -338,14 +340,6 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.gateway.namespace | string | `"envoy-gateway-system"` |  |
 | mcpManager.runtimeClass | string | `""` |  |
 | mcpManager.isolationTier | string | `"standard"` |  |
-| mcpManager.admission.allowedImageRepositories[0] | string | `"ghcr.io/github/github-mcp-server"` |  |
-| mcpManager.admission.allowedImageRepositories[1] | string | `"mcp/fetch"` |  |
-| mcpManager.admission.allowedCommandPackages[0] | string | `"npx -y @modelcontextprotocol/server-everything"` |  |
-| mcpManager.admission.allowedCommandPackages[1] | string | `"npx -y @modelcontextprotocol/server-sequential-thinking"` |  |
-| mcpManager.admission.allowedCommandPackages[2] | string | `"npx -y @modelcontextprotocol/server-customer-segmentation --stdio"` |  |
-| mcpManager.admission.allowedCommandPackages[3] | string | `"npx -y @modelcontextprotocol/server-map --stdio"` |  |
-| mcpManager.admission.allowedCommandPackages[4] | string | `"uvx mcp-server-fetch"` |  |
-| mcpManager.admission.allowedCommandPackages[5] | string | `"uvx mcp-server-time"` |  |
 | mcpManager.executionCluster.kubeconfigSecret | string | `""` |  |
 | mcpManager.executionCluster.kubeconfigKey | string | `""` |  |
 | mcpManager.runtime.serviceAccount.create | bool | `true` |  |

@@ -77,6 +77,19 @@ SURFACED_OWNER_TYPES: tuple[str, ...] = (
 )
 
 
+async def find_secret(
+    session: AsyncSession, workspace_id: str, name: str
+) -> EncryptedSecret | None:
+    """The secret named ``name`` in ``workspace_id``, or None."""
+    result = await session.execute(
+        select(EncryptedSecret).where(
+            EncryptedSecret.secret_name == name,
+            EncryptedSecret.workspace_id == workspace_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 class SecretCatalogService:
     def __init__(
         self,
@@ -159,13 +172,7 @@ class SecretCatalogService:
         return secret
 
     async def get_by_name(self, name: str) -> EncryptedSecret:
-        result = await self._session.execute(
-            select(EncryptedSecret).where(
-                EncryptedSecret.secret_name == name,
-                EncryptedSecret.workspace_id == self._workspace_id,
-            )
-        )
-        secret = result.scalar_one_or_none()
+        secret = await find_secret(self._session, self._workspace_id, name)
         if secret is None:
             raise SecretNotFoundError(f"No secret named '{name}' in this workspace")
         return secret

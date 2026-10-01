@@ -31,7 +31,7 @@ from ...models import (
     ResolvedModelInfo,
     ResolveModelRequest,
 )
-from ..event_publisher import create_event_publisher, publish_enriched_llm_error_event
+from ..event_publisher import create_event_publisher
 from ..heartbeat import auto_heartbeater
 
 if TYPE_CHECKING:
@@ -128,46 +128,24 @@ def make_llm_activities(
         request: LLMCallRequest,
     ) -> LLMCallResult:
         """Adapt one model call to Temporal and the task event transport."""
-
-        async def on_error(error: Exception, provider_type: str | None) -> None:
-            if request.task_id and request.agent_id and dependencies.event_broker:
-                await publish_enriched_llm_error_event(
-                    error=error,
-                    task_id=request.task_id,
-                    agent_id=request.agent_id,
-                    execution_id=request.execution_id or "",
-                    model_id=request.model_id,
-                    provider_type=provider_type,
-                    event_broker=dependencies.event_broker,
-                )
-
         try:
-            try:
-                if not request.workspace_id and not request.user_context_data:
-                    raise ValueError("Either workspace_id or user_context_data must be provided")
-                user_context = create_user_context(request.user_context_data)
-            except Exception as error:
-                try:
-                    await on_error(error, None)
-                except Exception:
-                    logger.exception("Failed to publish LLM context error")
-                raise
+            if not request.workspace_id and not request.user_context_data:
+                raise ValueError("Either workspace_id or user_context_data must be provided")
+            user_context = create_user_context(request.user_context_data)
 
             on_chunk = None
-            if request.task_id:
+            if request.task_id and dependencies.broker_client is not None:
                 on_chunk = create_event_publisher(
-                    dependencies.event_broker,
+                    dependencies.broker_client,
                     request.task_id,
                     execution_id=request.execution_id,
                     iteration=request.iteration,
-                    broker_client=dependencies.broker_client,
                 )
 
             return await llm_service.execute(
                 request,
                 user_context=user_context,
                 on_chunk=on_chunk,
-                on_error=on_error,
             )
         except Exception as error:
             from ..event_publisher import _is_non_retryable_error

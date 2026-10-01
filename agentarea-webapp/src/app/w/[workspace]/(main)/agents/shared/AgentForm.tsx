@@ -1,5 +1,9 @@
 "use client";
 
+import React, { useEffect, useRef, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
+import { X } from "lucide-react";
+import { useFieldArray, useForm } from "react-hook-form";
 import type {
   AgentPresetResponse,
   ApiKeyResponse,
@@ -7,13 +11,11 @@ import type {
   McpServerResponse,
   ModelInstanceResponse,
 } from "@/api/client/types.gen";
-import React, { useEffect, useRef, useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { useFieldArray, useForm } from "react-hook-form";
+import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/create/actions";
 import FullChat from "@/components/Chat/FullChat";
 import FormError from "@/components/FormError";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { Button } from "@/components/ui/button";
 import Divider from "@/components/ui/divider";
 import {
   ResizableHandle,
@@ -27,9 +29,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { formatApiError } from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
-import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/create/actions";
+import type { AddAgentFormState } from "../create/actions";
 import {
   AgentTriggersLink,
   BasicInformation,
@@ -44,7 +47,6 @@ import {
   toTriggerDrafts,
   type TriggerDraft,
 } from "../create/components/TriggersConfig";
-import type { AddAgentFormState } from "../create/actions";
 import type { AgentFormValues, AgentSkill } from "../create/types";
 import {
   preferredModelId,
@@ -111,7 +113,7 @@ export default function AgentForm({
   const router = useWorkspaceRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const isMobile = useIsMobile();
-  const { isChatSheetOpen, setIsChatSheetOpen } = useChat();
+  const { isChatOpen, setIsChatOpen } = useChat();
   const t = useTranslations("AgentsPage.form");
   const tCommon = useTranslations("Common");
   const [formError, setFormError] = useState<string | null>(null);
@@ -183,9 +185,7 @@ export default function AgentForm({
     toTriggerDrafts(initialData?.triggers ?? [])
   );
   const [showTriggerErrors, setShowTriggerErrors] = useState(false);
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
-    null
-  );
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
 
   useEffect(() => {
     setAgentName(watchedName || "New Agent");
@@ -217,9 +217,7 @@ export default function AgentForm({
     setSelectedSkills(values.skills);
     setTriggerDrafts(toTriggerDrafts(values.triggers));
     setShowTriggerErrors(false);
-    const modelId = preset
-      ? preferredModelId(preset, llmModelInstances)
-      : null;
+    const modelId = preset ? preferredModelId(preset, llmModelInstances) : null;
     if (modelId && !getValues("model_id")) setValue("model_id", modelId);
     setSelectedPresetId(preset?.id ?? null);
   };
@@ -325,6 +323,18 @@ export default function AgentForm({
         ) : (
           "New Agent"
         )}
+        {!isMobile && (
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            className="ml-auto h-6 w-6"
+            aria-label={t("closeTest")}
+            onClick={() => setIsChatOpen(false)}
+          >
+            <X />
+          </Button>
+        )}
       </div>
       <div className="relative h-full py-5 px-3 flex-1 overflow-auto">
         <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
@@ -346,7 +356,9 @@ export default function AgentForm({
         className={cn("h-full w-full", className)}
       >
         <ResizablePanel
-          defaultSize={isMobile ? 100 : 60}
+          id="agent-form-panel"
+          order={1}
+          defaultSize={isMobile || !isChatOpen ? 100 : 60}
           minSize={isMobile ? 100 : 30}
         >
           <form
@@ -448,10 +460,15 @@ export default function AgentForm({
             {/* Submit button moved to header controls */}
           </form>
         </ResizablePanel>
-        {!isMobile && (
+        {!isMobile && isChatOpen && (
           <>
             <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={40} minSize={20}>
+            <ResizablePanel
+              id="agent-test-chat-panel"
+              order={2}
+              defaultSize={40}
+              minSize={20}
+            >
               <div className="overflow-hidden h-full flex flex-col border-l border-zinc-200 dark:border-zinc-700">
                 {chatContent}
               </div>
@@ -461,10 +478,7 @@ export default function AgentForm({
       </ResizablePanelGroup>
 
       {/* Mobile chat sheet */}
-      <Sheet
-        open={isMobile ? isChatSheetOpen : false}
-        onOpenChange={setIsChatSheetOpen}
-      >
+      <Sheet open={isMobile ? isChatOpen : false} onOpenChange={setIsChatOpen}>
         <SheetContent
           side="right"
           className="w-full sm:max-w-lg flex flex-col p-0"

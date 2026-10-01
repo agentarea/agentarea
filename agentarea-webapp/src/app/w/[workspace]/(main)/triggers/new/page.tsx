@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { getMcpCatalogStatusPresentation } from "@/lib/status";
 
 type Source = "schedule" | "event" | "channel" | null;
 
@@ -424,6 +425,7 @@ function ChannelForm({ onBack }: { onBack: () => void }) {
           <div className="rounded-lg border border-border bg-card divide-y divide-border">
             {channels.map((c) => {
               const Icon = c.icon;
+              const p = getMcpCatalogStatusPresentation(c.status);
               const sel = selected === c.id;
               return (
                 <button
@@ -442,7 +444,7 @@ function ChannelForm({ onBack }: { onBack: () => void }) {
                     )}
                   />
                   <span className="flex-1 text-sm font-medium">{c.name}</span>
-                  <StatusIndicator size="sm" tone="success" className="whitespace-nowrap">
+                  <StatusIndicator size="sm" kind={p.kind} className="whitespace-nowrap">
                     {c.status}
                   </StatusIndicator>
                 </button>

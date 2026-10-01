@@ -251,6 +251,28 @@ func TestGatewayAnswersAConcurrentStartAsRetryable(t *testing.T) {
 	}
 }
 
+// The gateway buffers a request body before it waits for a workload, so a body
+// past the cap must be refused whole, before any start, rather than proxied
+// truncated to a server that would then run on half a request.
+func TestGatewayRefusesAnOversizedBodyBeforeStarting(t *testing.T) {
+	instanceID := "8ca9f331-9cc9-4a51-9933-27d7bb73860b"
+	repository := &gatewayRepositoryStub{instance: &models.MCPServerInstance{InstanceID: instanceID}}
+	runtime := &runtimeStub{}
+	recorder := httptest.NewRecorder()
+	body := strings.NewReader(strings.Repeat("x", maxRequestBodyBytes+1))
+	request := httptest.NewRequest(http.MethodPost, "/mcp/"+instanceID+"/mcp", body)
+	request.Header.Set("X-AgentArea-Manager-Authorization", "Bearer "+testGatewaySecret)
+
+	testGateway(t, repository, runtime).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("response = %d, want %d for a body past the cap", recorder.Code, http.StatusRequestEntityTooLarge)
+	}
+	if runtime.ensured != 0 {
+		t.Fatalf("ensured = %d; an oversized request started a workload", runtime.ensured)
+	}
+}
+
 // Retirement contends for the same lifecycle lock as a cold start, so it can now
 // be told to stand down. That is a conflict the caller should retry, not the
 // hard failure the default branch reports — and logging it as an error would

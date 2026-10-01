@@ -53,7 +53,10 @@ export default function ModelPicker({
     setLoading(true);
     setError(null);
     try {
-      const result = await listModelInstancesAction({ is_active: true });
+      const result = await listModelInstancesAction({
+        is_active: true,
+        kind: "chat",
+      });
       if (result.error || !Array.isArray(result.data)) {
         setError(apiErrorMessage(result, t("modelsLoadFailed")));
         return;

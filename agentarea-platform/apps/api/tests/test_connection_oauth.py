@@ -314,3 +314,119 @@ async def test_workspace_secret_source_allows_the_creator_or_an_admin(user_id, a
 
     assert resolved is secret
     assert value == "member-a-value"
+
+
+def _patch_catalog(monkeypatch, item, registry, managed_secret):
+    class _ItemRepository:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def get_by_id(self, _requested_id):
+            return item
+
+    class _RegistryRepository:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def get_by_id(self, _requested_id):
+            return registry
+
+    platform_manager = SimpleNamespace(get_secret=AsyncMock(return_value=managed_secret))
+    monkeypatch.setattr(connection_oauth, "RegistryItemRepository", _ItemRepository)
+    monkeypatch.setattr(connection_oauth, "RegistryRepository", _RegistryRepository)
+    monkeypatch.setattr(
+        connection_oauth, "_managed_secret_manager", lambda _session: platform_manager
+    )
+    monkeypatch.setattr(connection_oauth, "validate_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        connection_oauth,
+        "_callback_uri",
+        lambda: "https://api.agentarea.ru/v1/connections/oauth/callback",
+    )
+    return platform_manager
+
+
+def _metrica_item(**spec_over) -> SimpleNamespace:
+    return SimpleNamespace(
+        registry_id=uuid4(),
+        name="Yandex Metrica",
+        description="Read-only analytics",
+        spec={
+            "connection_type": "openapi",
+            "base_url": "https://api-metrika.yandex.net",
+            "oauth": _oauth_profile(),
+            **spec_over,
+        },
+    )
+
+
+_ACTIVE_MCP_REGISTRY = SimpleNamespace(registry_type="mcp_servers", is_active=True)
+
+
+def _user() -> UserContext:
+    return UserContext(user_id=str(uuid4()), workspace_id=str(uuid4()))
+
+
+@pytest.mark.asyncio
+async def test_preflight_is_ready_when_the_platform_holds_an_oauth_app(monkeypatch):
+    item_id = uuid4()
+    manager = _patch_catalog(
+        monkeypatch,
+        _metrica_item(),
+        _ACTIVE_MCP_REGISTRY,
+        json.dumps({"client_id": "cid", "client_secret": "shh"}),  # pragma: allowlist secret
+    )
+
+    result = await connection_oauth.preflight_catalog_item(item_id, _user(), AsyncMock())
+
+    assert result.status == "ready"
+    assert result.item_id == item_id
+    assert result.name == "Yandex Metrica"
+    assert result.redirect_uri == "https://api.agentarea.ru/v1/connections/oauth/callback"
+    assert "shh" not in result.model_dump_json()
+    manager.get_secret.assert_awaited_once_with("connection_oauth_client:yandex-metrica")
+
+
+@pytest.mark.asyncio
+async def test_preflight_asks_for_an_oauth_app_when_the_platform_has_none(monkeypatch):
+    _patch_catalog(monkeypatch, _metrica_item(), _ACTIVE_MCP_REGISTRY, None)
+
+    result = await connection_oauth.preflight_catalog_item(uuid4(), _user(), AsyncMock())
+
+    assert result.status == "oauth_app_required"
+    assert "redirect URI" in result.detail
+    assert result.redirect_uri == "https://api.agentarea.ru/v1/connections/oauth/callback"
+
+
+@pytest.mark.asyncio
+async def test_preflight_fails_loudly_on_a_malformed_platform_oauth_app(monkeypatch):
+    _patch_catalog(
+        monkeypatch, _metrica_item(), _ACTIVE_MCP_REGISTRY, json.dumps({"client_id": "cid"})
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await connection_oauth.preflight_catalog_item(uuid4(), _user(), AsyncMock())
+
+    assert exc_info.value.status_code == 500
+
+
+@pytest.mark.asyncio
+async def test_preflight_404s_for_an_unknown_item(monkeypatch):
+    _patch_catalog(monkeypatch, None, _ACTIVE_MCP_REGISTRY, None)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await connection_oauth.preflight_catalog_item(uuid4(), _user(), AsyncMock())
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_preflight_rejects_an_item_that_is_not_an_api_connection(monkeypatch):
+    _patch_catalog(
+        monkeypatch, _metrica_item(connection_type="mcp"), _ACTIVE_MCP_REGISTRY, None
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await connection_oauth.preflight_catalog_item(uuid4(), _user(), AsyncMock())
+
+    assert exc_info.value.status_code == 400

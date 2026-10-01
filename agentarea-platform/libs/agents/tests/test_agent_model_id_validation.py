@@ -86,10 +86,12 @@ def _service(session: AsyncSession, context: UserContext) -> AgentService:
     return AgentService(RepositoryFactory(session, context), _NullBroker(), _AllowAllAuthz())
 
 
-async def _seed_model_instance(session: AsyncSession, workspace_id: str = "ws-a") -> ModelInstance:
+async def _seed_model_instance(
+    session: AsyncSession, workspace_id: str = "ws-a", kind: str = "chat"
+) -> ModelInstance:
     provider_spec = ProviderSpec(
         id=uuid4(),
-        provider_key=f"openai-{workspace_id}",
+        provider_key=f"openai-{workspace_id}-{uuid4().hex[:6]}",
         name="OpenAI",
         provider_type="openai",
         workspace_id=workspace_id,
@@ -108,6 +110,7 @@ async def _seed_model_instance(session: AsyncSession, workspace_id: str = "ws-a"
         model_name="gpt-4o",
         display_name="GPT-4o",
         context_window=128000,
+        kind=kind,
         workspace_id=workspace_id,
         created_by="user-a",
     )
@@ -197,3 +200,82 @@ async def test_update_can_bind_a_model_later(session_factory):
 
         assert updated is not None
         assert updated.model_id == str(instance.id)
+
+
+async def test_the_main_model_must_be_a_chat_model(session_factory):
+    async with session_factory() as session:
+        instance = await _seed_model_instance(session, kind="image")
+
+        with pytest.raises(InvalidModelIdError, match="image model"):
+            await _service(session, _context()).create_agent(
+                AgentCreate(name="Painter", tools=[], model_id=str(instance.id))
+            )
+
+
+def _code_tool(name: str, **settings) -> dict:
+    return {"type": "code", "name": name, "settings": settings}
+
+
+async def test_media_and_decide_tools_accept_instances_of_their_kind(session_factory):
+    async with session_factory() as session:
+        image = await _seed_model_instance(session, kind="image")
+        video = await _seed_model_instance(session, kind="video")
+        decision = await _seed_model_instance(session, kind="decision")
+
+        agent = await _service(session, _context()).create_agent(
+            AgentCreate(
+                name="Studio",
+                tools=[
+                    _code_tool(
+                        "agentarea/media", image_model_id=str(image.id), video_model_id=str(video.id)
+                    ),
+                    _code_tool("agentarea/decide", model_id=str(decision.id)),
+                ],
+            )
+        )
+
+        settings = {tool["name"]: tool["settings"] for tool in agent.tools}
+        assert settings["agentarea/media"]["image_model_id"] == str(image.id)
+        assert settings["agentarea/decide"]["model_id"] == str(decision.id)
+
+
+@pytest.mark.parametrize(
+    "tool, message",
+    [
+        (_code_tool("agentarea/media"), "needs image_model_id or video_model_id"),
+        (_code_tool("agentarea/decide"), "needs model_id"),
+        (_code_tool("agentarea/media", image_model_id="not-a-uuid"), "expected the UUID"),
+        (_code_tool("agentarea/decide", model_id=str(uuid4())), "does not exist"),
+        (_code_tool("agentarea/web", model_id=str(uuid4())), "takes no model"),
+    ],
+)
+async def test_tool_model_settings_are_validated(session_factory, tool, message):
+    async with session_factory() as session:
+        with pytest.raises(InvalidModelIdError, match=message):
+            await _service(session, _context()).create_agent(AgentCreate(name="Bad", tools=[tool]))
+
+
+async def test_a_tool_model_of_the_wrong_kind_is_refused(session_factory):
+    async with session_factory() as session:
+        chat = await _seed_model_instance(session)
+
+        with pytest.raises(InvalidModelIdError, match="chat model; agentarea/media needs a video"):
+            await _service(session, _context()).create_agent(
+                AgentCreate(
+                    name="Wrong",
+                    tools=[_code_tool("agentarea/media", video_model_id=str(chat.id))],
+                )
+            )
+
+
+async def test_tool_model_settings_are_validated_on_update(session_factory):
+    async with session_factory() as session:
+        service = _service(session, _context())
+        agent = await service.create_agent(AgentCreate(name="Later", tools=[]))
+        chat = await _seed_model_instance(session)
+
+        with pytest.raises(InvalidModelIdError, match="decision"):
+            await service.update_agent(
+                agent.id,
+                AgentUpdate(tools=[_code_tool("agentarea/decide", model_id=str(chat.id))]),
+            )

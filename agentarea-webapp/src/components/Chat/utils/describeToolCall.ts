@@ -66,6 +66,12 @@ export function describeToolCall(
     return script ? { text: `Ran ${basename(script)}` } : { text: "Ran a script" };
   }
 
+  if (n === "wait") {
+    const span = typeof a.seconds === "number" ? `Waiting ${a.seconds} s` : "Waiting";
+    const reason = pick(a, ["reason"]);
+    return { text: reason ? `${span}: ${truncate(reason)}` : span };
+  }
+
   // Skills
   if (n === "activate_skill" || n.includes("skill")) {
     const skill =

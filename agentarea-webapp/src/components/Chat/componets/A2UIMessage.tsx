@@ -8,6 +8,7 @@
  */
 import React from "react";
 import Image from "next/image";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useA2UIDataModel } from "../hooks/useA2UIDataModel";
 import { A2UIAction, A2UIComponent, A2UISurfaceData } from "../types";
 import {
@@ -559,9 +560,10 @@ const A2UIMessage: React.FC<{
   if (!rootNode) {
     // Surface created but no components yet — show skeleton
     return (
-      <div className="a2ui-surface flex items-center gap-2 py-2 text-[13px] leading-5 text-muted-foreground">
-        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-muted-foreground/60" />
-        Rendering UI surface…
+      <div className="a2ui-surface py-2 text-[13px] leading-5 text-muted-foreground">
+        <StatusIndicator kind="running" size="sm">
+          Rendering UI surface…
+        </StatusIndicator>
       </div>
     );
   }

@@ -80,6 +80,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             secret_manager=dependencies.secret_manager_factory.create(
                 session=session, user_context=user_context
             ),
+            secret_manager_factory=dependencies.secret_manager_factory,
             event_broker=dependencies.event_broker,
         )
 

@@ -2,10 +2,11 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { AlertTriangle, CheckCircle2, DollarSign, Gauge } from "lucide-react";
+import { DollarSign, Gauge } from "lucide-react";
 import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Button } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { Input } from "@/components/ui/input";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
@@ -162,21 +163,16 @@ export function BudgetCapPanel({
 
         {!canAdminister && <AdminOnlyHint action="budgetCap" />}
 
-        {(canAdminister || message) && (
-          <p
-            className={cn(
-              "flex items-start gap-1.5 text-[11.5px]",
-              status === "success"
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-muted-foreground",
-              status === "error" && "text-destructive"
-            )}
-          >
-            {status === "success" ? (
-              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            ) : status === "error" ? (
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            ) : null}
+        {status === "success" ? (
+          <StatusIndicator kind="done" size="sm" className="text-[11.5px]">
+            {message ?? t("capNote")}
+          </StatusIndicator>
+        ) : status === "error" ? (
+          <StatusIndicator kind="failed" size="sm" className="text-[11.5px]">
+            {message ?? t("capNote")}
+          </StatusIndicator>
+        ) : (
+          <p className="flex items-start gap-1.5 text-[11.5px] text-muted-foreground">
             <span>{message ?? t("capNote")}</span>
           </p>
         )}

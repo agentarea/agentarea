@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Clock, Shield, TriangleAlert, Wallet } from "lucide-react";
+import { Shield } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { BoardSectionHeader } from "@/components/board";
 import EmptyState from "@/components/EmptyState";
 import { CollapsibleGroup } from "@/components/ui/group-header";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import Link from "@/components/WorkspaceLink";
-import { useCurrency } from "@/hooks/useCurrency";
 import type { DashboardData } from "@/lib/api-dashboard";
 import { formatMoney } from "@/lib/money";
 import { formatRelTime } from "./relTime";
@@ -23,27 +23,32 @@ type BlockerRow = {
 
 type Group = {
   label: string;
-  color: string;
   icon: ReactNode;
   rows: BlockerRow[];
 };
 
 export function BlockersPanel({
   blockers,
+  currency,
 }: {
   blockers: DashboardData["blockers"];
+  currency: string | null;
 }) {
   const t = useTranslations("DashboardPage");
   const locale = useLocale();
-  const { currency } = useCurrency();
   const ago = (iso: string | null) =>
     t("timeAgo", { time: formatRelTime(iso, t) });
 
   const groups: Group[] = [
     {
       label: t("awaitingInput"),
-      color: "var(--status-warning)",
-      icon: <Clock />,
+      icon: (
+        <StatusIndicator
+          kind="attention"
+          size="sm"
+          aria-label={t("awaitingInput")}
+        />
+      ),
       rows: blockers.hitl.map((b) => ({
         key: b.task_id,
         question: b.description,
@@ -55,8 +60,13 @@ export function BlockersPanel({
     },
     {
       label: t("walletExhausted"),
-      color: "var(--status-info)",
-      icon: <Wallet />,
+      icon: (
+        <StatusIndicator
+          kind="attention"
+          size="sm"
+          aria-label={t("walletExhausted")}
+        />
+      ),
       rows: blockers.wallet_exhausted.map((b) => ({
         key: b.agent_id,
         question: t("budgetExhausted", {
@@ -71,8 +81,9 @@ export function BlockersPanel({
     },
     {
       label: t("failed24h"),
-      color: "var(--status-danger)",
-      icon: <TriangleAlert />,
+      icon: (
+        <StatusIndicator kind="failed" size="sm" aria-label={t("failed24h")} />
+      ),
       rows: blockers.failed_24h.map((b) => ({
         key: b.task_id,
         question: b.error?.split("\n")[0] || t("taskFailed"),
@@ -114,7 +125,6 @@ export function BlockersPanel({
               key={g.label}
               label={g.label}
               count={g.rows.length}
-              color={g.color}
               icon={g.icon}
               sticky={false}
               headerClassName="px-6 lg:sticky lg:top-0 lg:z-10"

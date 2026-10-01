@@ -7,10 +7,8 @@ import EmptyState from "@/components/EmptyState";
 import Table, { type Column } from "@/components/Table/Table";
 import { TableRowAction } from "@/components/Table/TableRowAction";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
-import {
-  StatusIndicator,
-  type StatusIndicatorTone,
-} from "@/components/ui/status-indicator";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import type { StatusKind } from "@/lib/status";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import type { WorkspaceInvitation } from "@/lib/api";
 import { formatApiError } from "@/lib/api-errors";
@@ -24,11 +22,11 @@ interface InvitationsTableProps {
   onInvite: () => void;
 }
 
-const STATUS_TONE: Record<InvitationStatusKey, StatusIndicatorTone> = {
-  pending: "neutral",
-  soon: "warning",
-  today: "warning",
-  expired: "danger",
+const STATUS_KIND: Record<InvitationStatusKey, StatusKind> = {
+  pending: "queued",
+  soon: "attention",
+  today: "attention",
+  expired: "cancelled",
 };
 
 function RecipientCell({ invitation }: { invitation: WorkspaceInvitation }) {
@@ -73,7 +71,7 @@ function InvitationStatusCell({
           ? t("statusExpiresIn", { days: status.days })
           : t("statusPending");
   return (
-    <StatusIndicator tone={STATUS_TONE[status.key]}>{label}</StatusIndicator>
+    <StatusIndicator kind={STATUS_KIND[status.key]}>{label}</StatusIndicator>
   );
 }
 

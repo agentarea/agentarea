@@ -299,3 +299,15 @@ class TestParseOpenAPIOperations:
             # Must NOT have enriched fields in the UI-contract output
             assert "method" not in t
             assert "path" not in t
+
+
+@pytest.mark.parametrize("operation_id", ["wait", "completion", "load_tools"])
+def test_an_operation_named_like_a_workflow_builtin_is_refused(operation_id):
+    spec = {
+        "openapi": "3.0.0",
+        "info": {"title": "Jobs", "version": "1.0.0"},
+        "paths": {"/jobs": {"get": {"operationId": operation_id}}},
+    }
+
+    with pytest.raises(ValueError, match=f"'{operation_id}'.*reserved"):
+        parse_openapi_spec(spec)

@@ -3,8 +3,10 @@
 A single MCP server is mounted at ``/mcp/clients`` and its session manager is
 started once in the app lifespan. Each request carries a client id in the path
 (``/mcp/clients/{client_id}``); a scope middleware stashes it in a ContextVar and
-the ``list_tools`` / ``call_tool`` handlers resolve that client's own MCP
-instance set and aggregate the member tools on the fly.
+the ``list_tools`` / ``call_tool`` handlers resolve that client's attachments on
+the fly: its MCP instances' tools (aggregated, each narrowed to the tools the
+client allows), its platform toolsets (minus their disabled methods, run in the
+client's workspace), and ``activate_skill`` over its skills.
 
 ``/client-mcp/{client_id}`` is the previous address, still mounted so harnesses
 configured against it keep working until they are re-installed.
@@ -14,10 +16,17 @@ from __future__ import annotations
 
 import logging
 from contextvars import ContextVar
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from agentarea_agents_sdk.mcp_server.auth import PROTECTED_RESOURCE_SCOPE_KEY
+from agentarea_agents_sdk.mcp_server import UnknownToolsetError, selected_tools
+from agentarea_agents_sdk.mcp_server.auth import (
+    PROTECTED_RESOURCE_SCOPE_KEY,
+    use_mcp_user_context,
+)
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
 from agentarea_mcp.application.tool_list_cache import RedisToolListCache
+from agentarea_mcp.domain.client_models import ClientPlatformToolset
 from mcp.server import Server
 from mcp.types import (
     CallToolRequestParams,
@@ -28,6 +37,11 @@ from mcp.types import (
     Tool,
 )
 from starlette.types import ASGIApp, Receive, Scope, Send
+
+from agentarea_api.platform_mcp import client_platform_server
+
+if TYPE_CHECKING:
+    from agentarea_common.auth.context import UserContext
 
 logger = logging.getLogger(__name__)
 
@@ -77,14 +91,47 @@ def _tool_cache() -> RedisToolListCache:
     return _tool_list_cache
 
 
-async def _resolve_client_scope(
-    client_id: str,
-) -> tuple[MCPAggregatorProxy | None, dict]:
-    """Resolve a client's MCP instance proxy and skill registry.
+@dataclass(frozen=True)
+class ClientScope:
+    """What one client's endpoint serves, and as whom it runs platform tools."""
 
-    The set is exactly the client's own attachments. Returns
-    ``(proxy, skill_registry)``; proxy is None only when the client does not
-    exist.
+    proxy: MCPAggregatorProxy
+    skill_registry: dict
+    # Names of the platform tools the client carries.
+    platform_tools: frozenset[str]
+    # The caller, acting in the client's workspace.
+    user_context: UserContext
+
+
+def _platform_tools(client_id: str, attached: list[ClientPlatformToolset]) -> frozenset[str]:
+    """Tool names of the client's platform toolsets, minus their disabled methods.
+
+    A toolset the platform has since dropped is skipped, loudly, so the rest of
+    the bundle keeps working; a dropped method left in ``disabled_methods`` is
+    already off and needs no handling.
+    """
+    server = client_platform_server()
+    selected: set[str] = set()
+    for attachment in attached:
+        try:
+            toolset = server.resolve(attachment.toolset)
+        except UnknownToolsetError:
+            logger.error(
+                "Client %s carries platform toolset %r, which is no longer served",
+                client_id,
+                attachment.toolset,
+                exc_info=True,
+            )
+            continue
+        disabled = [m for m in attachment.disabled_methods or [] if m in toolset.tools]
+        selected |= server.select({toolset.name: disabled})
+    return frozenset(selected)
+
+
+async def _resolve_client_scope(client_id: str) -> ClientScope | None:
+    """Resolve what a client's endpoint serves; None when the client does not exist.
+
+    The set is exactly the client's own attachments.
     """
     from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
     from agentarea_agents_sdk.skills.skill_catalog_builder import SkillEntry
@@ -106,7 +153,7 @@ async def _resolve_client_scope(
             session, client_id, principal.accessible_workspaces or []
         )
         if workspace_id is None:
-            return None, {}
+            return None
 
         await _authorize_client_access(principal, client_id)
 
@@ -118,11 +165,14 @@ async def _resolve_client_scope(
             client_repo = ClientRepository(session, user_ctx)
             client = await client_repo.get_by_id(client_id)
             if client is None:
-                return None, {}
+                return None
             repo_factory = RepositoryFactory(session, user_ctx)
             secret = get_real_secret_manager(session=session, user_context=user_ctx)
 
-            namespaces = await client_repo.get_instance_namespaces(client_id)
+            links = (await client_repo.get_instance_links([client_id])).get(str(client_id), {})
+            platform_toolsets = (await client_repo.get_platform_toolsets([client_id])).get(
+                str(client_id), []
+            )
             instances = {str(i.id): i for i in client.mcp_instances}
             skills = {str(s.id): s for s in client.skills}
 
@@ -159,13 +209,19 @@ async def _resolve_client_scope(
                 instance_transports[iid] = transport
                 if headers:
                     instance_headers[iid] = headers
+                link = links.get(iid)
                 members.append(
                     AggregatedMember(
                         mcp_instance_id=iid,
                         order=order,
-                        namespace_prefix=namespaces.get(iid),
+                        namespace_prefix=link.namespace_prefix if link else None,
                         transport=instance_transports[iid],
                         pinned=spec.get("type", "docker") == "url",
+                        allowed_tools=(
+                            frozenset(link.allowed_tools)
+                            if link and link.allowed_tools is not None
+                            else None
+                        ),
                     )
                 )
             proxy = MCPAggregatorProxy(
@@ -177,7 +233,12 @@ async def _resolve_client_scope(
                 instance_headers,
                 tool_cache=_tool_cache(),
             )
-            return proxy, skill_registry
+            return ClientScope(
+                proxy=proxy,
+                skill_registry=skill_registry,
+                platform_tools=_platform_tools(client_id, platform_toolsets),
+                user_context=user_ctx,
+            )
 
 
 def _activate_skill_tool(skill_registry: dict) -> Tool:
@@ -203,21 +264,25 @@ async def _list_tools(_ctx: object, _params: PaginatedRequestParams | None) -> L
     if not client_id:
         return ListToolsResult(tools=[])
     try:
-        proxy, skill_registry = await _resolve_client_scope(client_id)
+        scope = await _resolve_client_scope(client_id)
     except ClientAccessDeniedError:
         raise ValueError("Not authorized for this client") from None
-    if proxy is None:
+    if scope is None:
         return ListToolsResult(tools=[])
-    tools = [
+    tools: list[Tool] = []
+    if scope.platform_tools:
+        with selected_tools(scope.platform_tools):
+            tools.extend(await client_platform_server().list_tools())
+    tools.extend(
         Tool(
             name=t["name"],
             description=t["description"],
             input_schema=t.get("input_schema") or t["inputSchema"],
         )
-        for t in await proxy.list_namespaced_tools()
-    ]
-    if skill_registry:
-        tools.append(_activate_skill_tool(skill_registry))
+        for t in await scope.proxy.list_namespaced_tools()
+    )
+    if scope.skill_registry:
+        tools.append(_activate_skill_tool(scope.skill_registry))
     return ListToolsResult(tools=tools)
 
 
@@ -226,20 +291,25 @@ async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolRes
     if not client_id:
         raise ValueError("No client scope on request")
     try:
-        proxy, skill_registry = await _resolve_client_scope(client_id)
+        scope = await _resolve_client_scope(client_id)
     except ClientAccessDeniedError:
         raise ValueError("Not authorized for this client") from None
-    if proxy is None:
+    if scope is None:
         raise ValueError("Client not found")
 
     arguments = params.arguments or {}
+    if params.name in scope.platform_tools:
+        # Run as the caller in the client's workspace: the tool's own
+        # authorization checks apply exactly as on /mcp/w/{workspace}.
+        with use_mcp_user_context(scope.user_context), selected_tools(scope.platform_tools):
+            return await client_platform_server().call_tool_result(params.name, arguments)
     if params.name == "activate_skill":
         from agentarea_agents_sdk.skills.skill_toolset import SkillActivationTool
 
         skill_name = arguments.get("skill_name", "")
-        result = SkillActivationTool(skill_registry).activate_skill(skill_name)
+        result = SkillActivationTool(scope.skill_registry).activate_skill(skill_name)
     else:
-        result = await proxy.call_namespaced_tool(params.name, arguments)
+        result = await scope.proxy.call_namespaced_tool(params.name, arguments)
     text = result if isinstance(result, str) else str(result)
     return CallToolResult(content=[TextContent(type="text", text=text)])
 

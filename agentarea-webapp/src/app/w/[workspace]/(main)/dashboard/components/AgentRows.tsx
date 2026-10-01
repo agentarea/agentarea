@@ -7,7 +7,6 @@ import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import Link from "@/components/WorkspaceLink";
-import { useCurrency } from "@/hooks/useCurrency";
 import type { DashboardAgentRow } from "@/lib/api-dashboard";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -30,10 +29,15 @@ function Dot() {
   );
 }
 
-export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
+export function AgentRows({
+  agents,
+  currency,
+}: {
+  agents: DashboardAgentRow[];
+  currency: string | null;
+}) {
   const t = useTranslations("DashboardPage");
   const locale = useLocale();
-  const { currency } = useCurrency();
   const fmt = (v: number) => formatMoney(v, currency, locale);
 
   const stats = (a: DashboardAgentRow, className?: string) => {

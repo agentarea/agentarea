@@ -151,6 +151,20 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
             service_cost = to_money(
                 result_dict.get("service_cost", getattr(result_obj, "service_cost", None))
             )
+            # A platform model the tool called (image, video, decision), already
+            # priced in the billing currency: it is inference spend, so it joins the
+            # run budget and task total as an LLM call does, and the event carries it
+            # for the task_summary rollup. Charged whether or not the tool then
+            # succeeded, since the provider was paid either way. Absent in older
+            # histories, so replays take no new branch.
+            model_cost = to_money(result_dict.get("model_cost"))
+            model_cost_field = (
+                {"model_cost": serialize_money(model_cost)} if model_cost > ZERO else {}
+            )
+            if model_cost > ZERO:
+                if self.budget_tracker is None:
+                    raise RuntimeError("Workflow budget tracker is not initialized")
+                self.budget_tracker.add_cost(model_cost)
 
             # Failure path: surface the error to the LLM and emit ToolCallFailed
             # so the UI renders an actual error instead of "(no result data)".
@@ -183,6 +197,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
                         "server_instance_id": result_dict.get("server_instance_id"),
                         "server_name": result_dict.get("server_name"),
                         "server_icon": result_dict.get("server_icon"),
+                        **model_cost_field,
                     },
                 )
                 await self._publish_events_immediately()
@@ -220,6 +235,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
                     "arguments": sanitize_tool_event_value(tool_args),
                     "execution_time": execution_time,
                     "service_cost": serialize_money(service_cost),
+                    **model_cost_field,
                     "payment": result_dict.get("payment"),
                     "source": result_dict.get("source"),
                     "server_instance_id": result_dict.get("server_instance_id"),
@@ -232,6 +248,8 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
             workflow.logger.info(f"MCP tool '{tool_name}' executed successfully")
 
         except Exception as e:
+            if self._is_cancellation(e):
+                raise
             workflow.logger.error(f"MCP tool call {tool_name} failed: {e}", exc_info=True)
 
             # Add error message to conversation
@@ -280,6 +298,8 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
                 retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
         except ActivityError as error:
+            if self._is_cancellation(error):
+                raise
             verdict = _governance_verdict(error)
             # An escalation of a call a human already approved is not asked
             # twice; it fails the call like any other activity error.

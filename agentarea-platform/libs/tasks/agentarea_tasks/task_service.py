@@ -840,6 +840,8 @@ class TaskService(BaseTaskService):
         *,
         additional_iterations: int = 0,
         additional_budget_usd: Money | None = None,
+        additional_tokens: int = 0,
+        additional_tool_calls: int = 0,
     ) -> dict[str, Any]:
         """Atomically grant resources to a task waiting for continuation."""
         task = await self.get_task(task_id)
@@ -864,10 +866,21 @@ class TaskService(BaseTaskService):
             current_snapshot.get("requested_policy") or {}
         )
         requested_data = requested_policy.to_json_dict()
-        if additional_iterations:
+        if additional_iterations or additional_tool_calls:
             execution = dict(requested_data.get("execution") or {})
-            execution["max_model_turns"] = current_runtime.max_model_turns + additional_iterations
+            if additional_iterations:
+                execution["max_model_turns"] = (
+                    current_runtime.max_model_turns + additional_iterations
+                )
+            if additional_tool_calls:
+                execution["max_tool_calls_total"] = (
+                    current_runtime.max_tool_calls_total + additional_tool_calls
+                )
             requested_data["execution"] = execution
+        if additional_tokens:
+            tokens = dict(requested_data.get("tokens") or {})
+            tokens["max_tokens"] = current_runtime.max_tokens + additional_tokens
+            requested_data["tokens"] = tokens
         if additional_budget_usd is not None:
             budget = dict(requested_data.get("budget") or {})
             budget["run_budget_usd"] = serialize_money(
@@ -903,6 +916,8 @@ class TaskService(BaseTaskService):
         }
         payload: dict[str, Any] = {
             "additional_iterations": additional_iterations,
+            "additional_tokens": additional_tokens,
+            "additional_tool_calls": additional_tool_calls,
             "effective_policy": next_policy.to_json_dict(),
             "governance_snapshot": next_snapshot,
         }
