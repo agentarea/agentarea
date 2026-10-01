@@ -168,27 +168,34 @@ export default async function ProvidersData({
   // Platform-supplied configurations come first: they are the ones already
   // working, with nothing for the customer to do. The section is absent
   // entirely in a deployment that supplies none, which is most of them.
+  const showsPlatformSection =
+    platformConfigs.length > 0 &&
+    (filteredPlatformConfigs.length > 0 || !searchQuery.trim());
+
   return (
     <div className="space-y-8">
-      {platformConfigs.length > 0 &&
-        (filteredPlatformConfigs.length > 0 || !searchQuery.trim()) && (
-          <div>
-            <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-              {t("platformProviderConfigsSection")} (
-              {filteredPlatformConfigs.length})
-            </h4>
-            <PlatformProviderConfigsView
-              configs={filteredPlatformConfigs}
-              viewMode={viewMode}
-            />
-          </div>
-        )}
+      {showsPlatformSection && (
+        <div>
+          <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+            {t("platformProviderConfigsSection")} (
+            {filteredPlatformConfigs.length})
+          </h4>
+          <PlatformProviderConfigsView
+            configs={filteredPlatformConfigs}
+            viewMode={viewMode}
+          />
+        </div>
+      )}
 
       {(filteredOwnConfigs.length > 0 || !searchQuery.trim()) && (
         <div>
-          <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-            {t("providerConfigsSection")} ({filteredOwnConfigs.length})
-          </h4>
+          {/* The Connected tab already names this list; a heading only earns
+              its place to tell it apart from the platform section above. */}
+          {showsPlatformSection && (
+            <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+              {t("providerConfigsSection")} ({filteredOwnConfigs.length})
+            </h4>
+          )}
           <ProviderConfigsView
             configs={filteredOwnConfigs}
             searchQuery={searchQuery}

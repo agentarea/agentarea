@@ -13,32 +13,23 @@ function ProviderConfigCardSkeleton() {
 
 interface ProvidersSkeletonProps {
   viewMode?: string;
-  configsLabel: string;
   configColumns: SkeletonColumn[];
 }
 
-// Connected tab: the configs section. The catalog lives on the Available tab.
+// Connected tab: the configs list. The catalog lives on the Available tab.
 export default function ProvidersSkeleton({
   viewMode,
-  configsLabel,
   configColumns,
 }: ProvidersSkeletonProps) {
   return (
-    <div className="space-y-8">
-      <div>
-        <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-          {configsLabel}
-        </h4>
-        <CollectionSkeleton
-          viewMode={viewMode}
-          columns={configColumns}
-          rows={5}
-          gridClassName={CARD_GRID_DENSE}
-          count={5}
-          Card={ProviderConfigCardSkeleton}
-        />
-      </div>
-    </div>
+    <CollectionSkeleton
+      viewMode={viewMode}
+      columns={configColumns}
+      rows={5}
+      gridClassName={CARD_GRID_DENSE}
+      count={5}
+      Card={ProviderConfigCardSkeleton}
+    />
   );
 }
 
