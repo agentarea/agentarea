@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
 import { HoverLink } from "@/components/ui/hover-link";
 import { ReactNode, ComponentType, isValidElement } from "react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 
 interface LinkedCardProps {
@@ -29,6 +30,7 @@ export default function LinkedCard({
   type = "view",
   className,
 }: LinkedCardProps) {
+  const t = useTranslations("Common");
   const hasIcon = icon !== undefined && icon !== null;
   const isStringIcon = typeof icon === "string";
   // Check if icon is a Lucide component (function) or React Element
@@ -131,9 +133,17 @@ export default function LinkedCard({
         )}
       </div>
 
-      <div className="flex justify-end -mb-2 -mt-4 -mr-2">
+      {/* Tucked into the corner when the card ends on its title block. Under a
+          body it sits below it instead: lifted there, the hover text landed
+          on whatever the body put in that corner (model badges, "+N"). */}
+      <div
+        className={cn(
+          "flex justify-end -mb-2 -mr-2",
+          children ? "-mt-1" : "-mt-4"
+        )}
+      >
         <HoverLink
-          text={type === "config" ? "Configure" : type === "edit" ? "Edit" : "View"}
+          text={t(type === "config" ? "configure" : type === "edit" ? "edit" : "view")}
         />
       </div>
     </Card>

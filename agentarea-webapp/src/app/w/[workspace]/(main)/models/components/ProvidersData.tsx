@@ -28,11 +28,13 @@ export default async function ProvidersData({
   const [
     t,
     tAdmin,
+    tCommon,
     { canAdminister },
     { specs: specsResponse, configs: configsResponse },
   ] = await Promise.all([
     getTranslations("Models"),
     getTranslations("AdminOnly"),
+    getTranslations("Common"),
     getViewerCapabilities(),
     listProviderConfigsWithModelInstances(),
   ]);
@@ -79,29 +81,6 @@ export default async function ProvidersData({
     (config) => config.managed_by !== "platform"
   );
 
-  // A spec already covered by a platform config isn't something the customer
-  // can add themselves, so it's dropped from "available providers" entirely
-  // rather than showing up as both configured and addable.
-  const platformSpecIds = new Set(
-    platformConfigs.map((config) => config.provider_spec_id)
-  );
-  const availableProviderSpecs = providerSpecs.filter(
-    (spec) => !platformSpecIds.has(spec.id)
-  );
-
-  // Filter provider specs based on search query
-  let filteredProviderSpecs = availableProviderSpecs;
-  if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase();
-    filteredProviderSpecs = availableProviderSpecs.filter(
-      (spec) =>
-        spec.name?.toLowerCase().includes(query) ||
-        spec.provider_key?.toLowerCase().includes(query) ||
-        // spec.description?.toLowerCase().includes(query) ||
-        spec.provider_type?.toLowerCase().includes(query)
-    );
-  }
-
   // Filter configs based on search query
   let filteredPlatformConfigs = platformConfigs;
   let filteredOwnConfigs = ownConfigs;
@@ -120,34 +99,31 @@ export default async function ProvidersData({
   // none; hasNoOwnConfigs is scoped to the customer's own section only.
   const hasNoConfigs = enhancedConfigs.length === 0;
   const hasNoOwnConfigs = ownConfigs.length === 0;
-  const hasNoSpecs = availableProviderSpecs.length === 0;
-  const hasNoData = hasNoConfigs && hasNoSpecs;
   const hasNoResults =
     filteredPlatformConfigs.length === 0 &&
     filteredOwnConfigs.length === 0 &&
-    filteredProviderSpecs.length === 0 &&
-    !hasNoData;
+    !hasNoConfigs;
 
   // Handle global empty states
-  if (hasNoData) {
+  if (hasNoConfigs) {
     return (
       <EmptyState
-        title="No models connected"
-        description="Agents cannot run without a model. Connect a provider with your own key — OpenAI, Anthropic, or any compatible endpoint."
+        title={t("empty.noModels.title")}
+        description={t("empty.noModels.description")}
         hints={[
           canAdminister
             ? {
-                text: "Add a provider and paste its API key",
+                text: t("empty.noModels.hintAdd"),
                 href: "/models/create",
               }
             : { text: tAdmin("hints.manageProvider") },
-          { text: "Choose which of its models this workspace may use" },
-          { text: "Agents then pick a model from what you allowed" },
+          { text: t("empty.noModels.hintChoose") },
+          { text: t("empty.noModels.hintPick") },
         ]}
         iconsType="llm"
         action={
           canAdminister
-            ? { label: "Add provider", href: "/models/create" }
+            ? { label: t("empty.addProvider"), href: "/models/create" }
             : undefined
         }
       />
@@ -157,10 +133,10 @@ export default async function ProvidersData({
   if (hasNoResults) {
     return (
       <EmptyState
-        title="No matching providers"
-        description={`No providers match your search query: "${searchQuery}"`}
+        title={t("empty.noMatches")}
+        description={t("empty.noMatchesDescription", { query: searchQuery })}
         iconsType="llm"
-        action={{ label: "Clear search", href: "/models" }}
+        action={{ label: tCommon("clearSearch"), href: "/models" }}
       />
     );
   }
@@ -168,27 +144,34 @@ export default async function ProvidersData({
   // Platform-supplied configurations come first: they are the ones already
   // working, with nothing for the customer to do. The section is absent
   // entirely in a deployment that supplies none, which is most of them.
+  const showsPlatformSection =
+    platformConfigs.length > 0 &&
+    (filteredPlatformConfigs.length > 0 || !searchQuery.trim());
+
   return (
     <div className="space-y-8">
-      {platformConfigs.length > 0 &&
-        (filteredPlatformConfigs.length > 0 || !searchQuery.trim()) && (
-          <div>
-            <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-              {t("platformProviderConfigsSection")} (
-              {filteredPlatformConfigs.length})
-            </h4>
-            <PlatformProviderConfigsView
-              configs={filteredPlatformConfigs}
-              viewMode={viewMode}
-            />
-          </div>
-        )}
+      {showsPlatformSection && (
+        <div>
+          <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+            {t("platformProviderConfigsSection")} (
+            {filteredPlatformConfigs.length})
+          </h4>
+          <PlatformProviderConfigsView
+            configs={filteredPlatformConfigs}
+            viewMode={viewMode}
+          />
+        </div>
+      )}
 
       {(filteredOwnConfigs.length > 0 || !searchQuery.trim()) && (
         <div>
-          <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-            {t("providerConfigsSection")} ({filteredOwnConfigs.length})
-          </h4>
+          {/* The Connected tab already names this list; a heading only earns
+              its place to tell it apart from the platform section above. */}
+          {showsPlatformSection && (
+            <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+              {t("providerConfigsSection")} ({filteredOwnConfigs.length})
+            </h4>
+          )}
           <ProviderConfigsView
             configs={filteredOwnConfigs}
             searchQuery={searchQuery}

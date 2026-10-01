@@ -1,37 +1,72 @@
-import { Brain, Store } from "lucide-react";
-import { ActiveLink } from "@/components/ui/active-link";
+"use client";
 
-const TAB =
-  "rounded-md border-b-0 px-2.5 py-1.5 font-medium hover:bg-background/70 aria-[current=page]:bg-background aria-[current=page]:shadow-sm";
+import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
+import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import { Brain, Store } from "lucide-react";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+
+const TABS = [
+  { href: "/models", icon: Brain, labelKey: "connected" },
+  { href: "/models/specs", icon: Store, labelKey: "available" },
+] as const;
+
+export type ModelsSectionCounts = Partial<
+  Record<(typeof TABS)[number]["labelKey"], number>
+>;
 
 /**
  * Connected models and the catalog of providers you could still add are two
  * pages, not one list with a footnote under it — the catalog is long enough
  * that it drowned the handful of providers actually in use.
+ *
+ * Solid segmented control, same as the explore type switcher: these entries
+ * switch the page's primary content, not filter it. The query (search, view)
+ * goes along, since the header holding both stays mounted across the switch.
+ * Where the row runs out of width (a phone) the switch scrolls sideways, as
+ * the explore type switcher does, rather than squeezing search out.
  */
 export default function ModelsSectionTabs({
-  availableCount,
+  counts,
 }: {
-  availableCount?: number;
+  counts?: ModelsSectionCounts;
 }) {
+  const t = useTranslations("Models.sections");
+  const pathname = useWorkspacePathname();
+  const router = useWorkspaceRouter();
+  const searchParams = useSearchParams();
+
+  const activeTab =
+    TABS.find((tab) => tab.href !== "/models" && pathname.startsWith(tab.href))
+      ?.href ?? "/models";
+
   return (
-    <nav
-      aria-label="Model sections"
-      className="inline-flex items-center gap-0.5 rounded-lg bg-muted/60 p-1"
-    >
-      <ActiveLink href="/models" className={TAB}>
-        <Brain className="h-4 w-4" />
-        Connected
-      </ActiveLink>
-      <ActiveLink href="/models/specs" className={TAB}>
-        <Store className="h-4 w-4" />
-        Available
-        {availableCount != null && availableCount > 0 && (
-          <span className="ml-1 tabular-nums text-muted-foreground">
-            {availableCount}
-          </span>
-        )}
-      </ActiveLink>
+    <nav aria-label={t("label")} className="min-w-0">
+      <CountSegmentedControl
+        items={TABS.map((tab) => {
+          const Icon = tab.icon;
+          const count = counts?.[tab.labelKey] || undefined;
+
+          return {
+            value: tab.href,
+            label: (
+              <span className="flex items-center gap-1.5 whitespace-nowrap">
+                <Icon className="h-4 w-4" />
+                {t(tab.labelKey)}
+              </span>
+            ),
+            count,
+          };
+        })}
+        value={activeTab}
+        onChange={(next) => {
+          const query = searchParams.toString();
+          router.push(query ? `${next}?${query}` : next);
+        }}
+        variant="solid"
+        className="max-w-full"
+        layoutId="models-section-control"
+      />
     </nav>
   );
 }
