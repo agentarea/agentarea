@@ -61,9 +61,13 @@ jobs:
             api:
               - 'agentarea-platform/apps/api/**'
               - 'VERSION'
+              - 'agentarea-platform/pyproject.toml'
+              - 'agentarea-platform/uv.lock'
             worker:
               - 'agentarea-platform/apps/worker/**'
               - 'VERSION'
+              - 'agentarea-platform/pyproject.toml'
+              - 'agentarea-platform/uv.lock'
             webapp:
               - 'agentarea-webapp/**'
               - 'VERSION'
