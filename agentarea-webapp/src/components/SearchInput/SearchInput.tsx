@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
@@ -47,11 +47,33 @@ export default function SearchInput({
     debouncedQuery,
     updateQuery,
     forceUpdate,
+    resetQuery,
   } = useSearchWithDebounce(urlValue, delay);
+
+  // Значения, которые инпут сам записал в URL и ещё не увидел обратно. Всё
+  // остальное, что приходит в URL (ссылка «Сбросить поиск», назад/вперёд,
+  // смена таба под шапкой, которая не перемонтируется), пришло извне: инпут
+  // принимает это значение, а не пишет свой устаревший запрос поверх.
+  const pendingWrites = useRef(new Set<string>());
+  const seenUrlValue = useRef(urlValue);
+  const lastDebounced = useRef(debouncedQuery);
+
+  useEffect(() => {
+    if (!urlParamName || urlValue === seenUrlValue.current) return;
+    seenUrlValue.current = urlValue;
+    if (pendingWrites.current.delete(urlValue)) return;
+    pendingWrites.current.clear();
+    resetQuery(urlValue);
+  }, [urlParamName, urlValue, resetQuery]);
 
   // Автоматическое обновление URL если указан urlParamName
   useEffect(() => {
     if (urlParamName) {
+      // Пишем только то, что пользователь набрал сам: эффект срабатывает и на
+      // смену searchParams, а тогда debouncedQuery ещё старый
+      if (debouncedQuery === lastDebounced.current) return;
+      lastDebounced.current = debouncedQuery;
+
       const nextQuery = debouncedQuery.trim() ? debouncedQuery : "";
       if (nextQuery === (searchParams.get(urlParamName) || "")) return;
 
@@ -70,6 +92,7 @@ export default function SearchInput({
       if (currentString !== newString) {
         const currentPath = urlPath || window.location.pathname;
         const newUrl = newString ? `${currentPath}?${newString}` : currentPath;
+        pendingWrites.current.add(nextQuery);
         router.replace(newUrl, { scroll: false });
       }
     }

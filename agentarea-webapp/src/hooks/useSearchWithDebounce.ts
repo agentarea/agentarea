@@ -29,6 +29,11 @@ export function useSearchWithDebounce(
     setSearchState((prev) => ({ ...prev, query: newQuery }));
   }, []);
 
+  // Сразу выставляет значение, пришедшее извне (из URL), минуя debounce
+  const resetQuery = useCallback((value: string) => {
+    setSearchState({ query: value, debouncedQuery: value, isSearching: false });
+  }, []);
+
   const forceUpdate = useCallback(() => {
     setSearchState((prev) => ({
       ...prev,
@@ -43,5 +48,6 @@ export function useSearchWithDebounce(
     isSearching: searchState.isSearching,
     updateQuery,
     forceUpdate,
+    resetQuery,
   };
 }
