@@ -265,6 +265,12 @@ func TestOpenSandboxSendsConfiguredResourceRequests(t *testing.T) {
 	if got.ResourceLimits["ephemeral-storage"] != "4Gi" {
 		t.Fatalf("storage limit = %q, want the configured 4Gi", got.ResourceLimits["ephemeral-storage"])
 	}
+	if got.Metadata["agentarea.resource_request_cpu"] != "100m" {
+		t.Fatalf("cpu request metadata = %q, want the configured 100m", got.Metadata["agentarea.resource_request_cpu"])
+	}
+	if _, stamped := got.Metadata["agentarea.resource_request_memory"]; stamped {
+		t.Fatalf("memory request metadata stamped without a configured request: %+v", got.Metadata)
+	}
 }
 
 func TestOpenSandboxRejectsRequestAboveLimit(t *testing.T) {
@@ -851,14 +857,15 @@ func TestOpenSandboxListUsesLiveWorkspaceFilteredInventory(t *testing.T) {
 					CreatedAt: expiresAt.Add(-time.Hour),
 					ExpiresAt: &expiresAt,
 					Metadata: map[string]string{
-						"agentarea.provisioning_id":  "provision-1",
-						"agentarea.workspace_id":     "workspace-1",
-						"agentarea.task_id":          "task-1",
-						"agentarea.isolation":        "gvisor",
-						"agentarea.resource_cpu":     "750m",
-						"agentarea.resource_memory":  "1Gi",
-						"agentarea.resource_storage": "2147483648",
-						"agentarea.egress_mode":      "host-public",
+						"agentarea.provisioning_id":      "provision-1",
+						"agentarea.workspace_id":         "workspace-1",
+						"agentarea.task_id":              "task-1",
+						"agentarea.isolation":            "gvisor",
+						"agentarea.resource_cpu":         "750m",
+						"agentarea.resource_memory":      "1Gi",
+						"agentarea.resource_storage":     "2147483648",
+						"agentarea.resource_request_cpu": "250m",
+						"agentarea.egress_mode":          "host-public",
 					},
 				},
 				{
@@ -898,8 +905,11 @@ func TestOpenSandboxListUsesLiveWorkspaceFilteredInventory(t *testing.T) {
 	if item.ID != "osb-running" || item.TaskID != "task-1" || item.State != "running" {
 		t.Fatalf("item = %+v", item)
 	}
-	if item.Resources["cpu"] != "750m" || item.Resources["memory"] != "1Gi" {
+	if item.Resources["cpu"] != "750m" || item.Resources["memory"] != "1Gi" || item.Resources["cpu_request"] != "250m" {
 		t.Fatalf("resources = %+v", item.Resources)
+	}
+	if _, reported := item.Resources["memory_request"]; reported {
+		t.Fatalf("memory request reported for a sandbox created without one: %+v", item.Resources)
 	}
 }
 
