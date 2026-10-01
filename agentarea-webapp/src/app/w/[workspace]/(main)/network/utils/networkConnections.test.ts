@@ -4,11 +4,7 @@ import type {
   NetworkNodeData,
   TopologyResponse,
 } from "../types";
-import {
-  focusAgentTopology,
-  getAgentConnections,
-  getNetworkScope,
-} from "./networkConnections";
+import { getAgentConnections, getNetworkScope } from "./networkConnections";
 
 function node(
   id: string,
@@ -161,66 +157,5 @@ describe("getAgentConnections", () => {
         outgoing: [],
       });
     }
-  });
-});
-
-describe("focusAgentTopology", () => {
-  it("keeps only direct connections, preserving direction, order, and topology metadata", () => {
-    const input = topology(
-      [
-        node("a"),
-        node("b"),
-        node("c"),
-        node("trigger", "trigger"),
-        node("tool", "mcp_instance"),
-      ],
-      [
-        edge("a", "b"),
-        edge("b", "c"),
-        edge("a", "trigger", "has_trigger"),
-        edge("a", "tool", "uses_mcp"),
-        edge("b", "tool", "uses_mcp"),
-        edge("a", "missing"),
-        edge("a", "a"),
-      ]
-    );
-    const before = structuredClone(input);
-    const focused = focusAgentTopology(input, "a");
-    expect(focused.nodes.map(({ id }) => id)).toEqual([
-      "a",
-      "b",
-      "trigger",
-      "tool",
-    ]);
-    expect(focused.edges).toEqual([
-      input.edges[0],
-      input.edges[2],
-      input.edges[3],
-    ]);
-    expect(focused.governance).toBe(input.governance);
-    expect(focused.deployment_mode).toBe("oss");
-    expect(input).toEqual(before);
-  });
-
-  it("keeps an isolated selected agent and returns the original topology for invalid selections", () => {
-    const input = topology([node("isolated"), node("tool", "mcp_instance")]);
-    expect(focusAgentTopology(input, "isolated")).toEqual({
-      ...input,
-      nodes: [input.nodes[0]],
-      edges: [],
-    });
-    expect(focusAgentTopology(input, "missing")).toBe(input);
-    expect(focusAgentTopology(input, "tool")).toBe(input);
-  });
-
-  it("deduplicates edge IDs without mutating repeated input edge references", () => {
-    const connection = edge("a", "b");
-    const input = topology(
-      [node("a"), node("b")],
-      [connection, connection, { ...connection }]
-    );
-    const before = structuredClone(input);
-    expect(focusAgentTopology(input, "a").edges).toEqual([connection]);
-    expect(input).toEqual(before);
   });
 });

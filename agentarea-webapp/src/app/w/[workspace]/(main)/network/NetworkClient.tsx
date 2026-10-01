@@ -3,39 +3,29 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import {
-  Activity,
-  Bot,
-  Box,
-  CircleDot,
-  RefreshCw,
-  Route,
-  ShieldCheck,
-  Zap,
-} from "lucide-react";
+import { RefreshCw, Route } from "lucide-react";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  useWorkspacePathname,
+  useWorkspaceRouter,
+} from "@/hooks/useWorkspaceNavigation";
 import {
   getNetworkPeopleAccessAction,
   previewNetworkPolicyAction,
 } from "./actions";
 import { useNetwork } from "./NetworkProvider";
-import type { NetworkNodeData, TopologyResponse } from "./types";
+import type { NetworkNodeData } from "./types";
 import { findFocusedNode } from "./utils/focusNode";
-import AccessGraphView from "./views/AccessGraphView";
-import NetworkMapView from "./views/NetworkMapView";
-import OrgChartView from "./views/OrgChartView";
+import NetworkGraphView from "./views/NetworkGraphView";
 
 export function NetworkHeaderTabs() {
-  const t = useTranslations("NetworkPage");
+  const t = useTranslations("NetworkPage.graph.lenses");
   const searchParams = useSearchParams();
   const pathname = useWorkspacePathname();
   const router = useWorkspaceRouter();
-  const requestedView = searchParams.get("view");
-  const view =
-    requestedView === "dataflow" ? "topology" : requestedView || "topology";
+  const { view } = useNetwork();
 
   const setView = (newView: string) => {
     const params = new URLSearchParams(searchParams);
@@ -47,9 +37,9 @@ export function NetworkHeaderTabs() {
     <div className="flex min-w-0 items-center gap-3 py-1.5">
       <AnimatedTabs
         tabs={[
-          { value: "topology", label: t("topology") },
-          { value: "access", label: t("accessGraph") },
-          { value: "org", label: t("organization") },
+          { value: "overview", label: t("overview.tab") },
+          { value: "delegation", label: t("delegation.tab") },
+          { value: "access", label: t("access.tab") },
         ]}
         activeTab={view}
         onChange={setView}
@@ -97,10 +87,6 @@ export default function NetworkClient() {
     setSelectedNode(findFocusedNode(topology.nodes, focus));
   }, [topology, focus]);
 
-  const handleSelect = (node: NetworkNodeData | null) => {
-    setSelectedNode(node);
-  };
-
   if (loading && !topology) {
     return <NetworkGraphSkeleton />;
   }
@@ -124,10 +110,10 @@ export default function NetworkClient() {
     );
   }
 
-  if (!topology) {
+  if (!topology || topology.nodes.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center bg-[#f4f7fb] px-6 text-center dark:bg-zinc-950">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-dashed border-blue-300 bg-white text-blue-600 shadow-sm dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-300">
+      <div className="flex h-full flex-col items-center justify-center bg-layoutBackground px-6 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-dashed border-primary/40 bg-background text-primary shadow-sm">
           <Route className="h-6 w-6" />
         </div>
         <p className="mt-4 text-sm font-semibold text-foreground">
@@ -140,10 +126,8 @@ export default function NetworkClient() {
     );
   }
 
-  const highlightId = selectedNode?.id ?? null;
-
   return (
-    <div className="flex h-full min-h-0 w-full flex-col bg-[#f4f7fb] dark:bg-zinc-950">
+    <div className="flex h-full min-h-0 w-full flex-col">
       {error && (
         <div
           className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 py-2 text-xs"
@@ -161,95 +145,21 @@ export default function NetworkClient() {
         </div>
       )}
       <div className="relative min-h-0 flex-1">
-        {view === "access" ? (
-          <AccessGraphView
-            topology={topology}
-            loadPeopleAccess={getNetworkPeopleAccessAction}
-            loadPolicy={previewNetworkPolicyAction}
-            onNodeClick={handleSelect}
-            highlightId={highlightId}
-            onPaneClick={() => handleSelect(null)}
-          />
-        ) : view === "org" ? (
-          <OrgChartView
-            topology={topology}
-            loadPeopleAccess={getNetworkPeopleAccessAction}
-            loadPolicy={previewNetworkPolicyAction}
-            onNodeClick={handleSelect}
-            highlightId={highlightId}
-            onPaneClick={() => handleSelect(null)}
-          />
-        ) : (
-          <NetworkMapView
-            topology={topology}
-            loadPeopleAccess={getNetworkPeopleAccessAction}
-            loadPolicy={previewNetworkPolicyAction}
-            onNodeClick={handleSelect}
-            highlightId={highlightId}
-            onPaneClick={() => handleSelect(null)}
-          />
-        )}
-      </div>
-      {view === "access" && <TopologyStatusBar topology={topology} />}
-    </div>
-  );
-}
-
-function TopologyStatusBar({ topology }: { topology: TopologyResponse }) {
-  const agents = topology.nodes.filter((node) => node.type === "agent").length;
-  const triggers = topology.nodes.filter(
-    (node) => node.type === "trigger"
-  ).length;
-  const capabilities = topology.nodes.length - agents - triggers;
-
-  const stats = [
-    { label: "Agents", value: agents, icon: Bot, tone: "text-[#4f67e8]" },
-    { label: "Ingress", value: triggers, icon: Zap, tone: "text-[#d88916]" },
-    {
-      label: "Capabilities",
-      value: capabilities,
-      icon: Box,
-      tone: "text-[#14886a]",
-    },
-    {
-      label: "Routes",
-      value: topology.edges.length,
-      icon: Activity,
-      tone: "text-slate-500",
-    },
-  ];
-
-  return (
-    <div className="flex h-11 shrink-0 items-center justify-between gap-4 overflow-x-auto border-t border-slate-200/80 bg-white px-3 text-[10px] dark:border-zinc-800 dark:bg-zinc-950 md:px-4">
-      <div className="flex shrink-0 items-center gap-4">
-        {stats.map(({ label, value, icon: Icon, tone }) => (
-          <div
-            key={label}
-            className="flex items-center gap-1.5 text-muted-foreground"
-          >
-            <Icon className={`h-3.5 w-3.5 ${tone}`} />
-            <span className="font-mono uppercase tracking-[0.12em]">
-              {label}
-            </span>
-            <span className="font-mono font-semibold tabular-nums text-foreground">
-              {value}
-            </span>
-          </div>
-        ))}
-      </div>
-      <div className="flex shrink-0 items-center gap-2 font-mono uppercase tracking-[0.12em] text-muted-foreground">
-        <CircleDot className="h-3 w-3 text-emerald-500" />
-        Current topology
-        <span className="h-3 w-px bg-border" />
-        <ShieldCheck className="h-3.5 w-3.5 text-[#4f67e8]" />
-        Governed
+        <NetworkGraphView
+          lens={view}
+          topology={topology}
+          loadPeopleAccess={getNetworkPeopleAccessAction}
+          loadPolicy={previewNetworkPolicyAction}
+          selectedNodeId={selectedNode?.id ?? null}
+          onSelectNode={setSelectedNode}
+        />
       </div>
     </div>
   );
 }
 
-// Placeholder for the topology canvas — scattered node bubbles while the graph
-// data loads. The header tabs stay mounted above (page subheader).
+// Placeholder for the graph canvas — scattered node bubbles while the topology
+// loads. The header tabs stay mounted above (page subheader).
 function NetworkGraphSkeleton() {
   const nodes = [
     { top: "30%", left: "22%" },
@@ -261,7 +171,7 @@ function NetworkGraphSkeleton() {
   ];
   return (
     <div
-      className="relative h-full w-full bg-[#f4f7fb] dark:bg-zinc-950"
+      className="relative h-full w-full bg-layoutBackground"
       aria-hidden="true"
     >
       {nodes.map((n, i) => (

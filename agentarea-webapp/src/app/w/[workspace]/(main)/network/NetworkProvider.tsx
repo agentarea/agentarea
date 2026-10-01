@@ -12,13 +12,14 @@ import { useSearchParams } from "next/navigation";
 import { zGetNetworkTopologyV1NetworkTopologyGetResponse } from "@/api/client/zod.gen";
 import { getNetworkTopologyAction as getNetworkTopology } from "@/lib/server-actions";
 import type { TopologyResponse } from "./types";
+import { lensFromView, type GraphLens } from "./utils/networkGraph";
 
 interface NetworkContextValue {
   topology: TopologyResponse | null;
   loading: boolean;
   error: boolean;
   fetchTopology: () => Promise<void>;
-  view: string;
+  view: GraphLens;
 }
 
 const NetworkContext = createContext<NetworkContextValue | null>(null);
@@ -33,9 +34,7 @@ export function useNetwork() {
 
 export function NetworkProvider({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
-  const requestedView = searchParams.get("view");
-  const view =
-    requestedView === "dataflow" ? "topology" : requestedView || "topology";
+  const view = lensFromView(searchParams.get("view"));
 
   const [topology, setTopology] = useState<TopologyResponse | null>(null);
   const [loading, setLoading] = useState(true);

@@ -1786,51 +1786,13 @@
     }
   },
   "NetworkPage": {
-    "title": "Network",
-    "description": "Visual overview of your workspace topology",
-    "topology": "Topology",
-    "accessGraph": "Access Graph",
-    "dataFlow": "Data Flow",
-    "organization": "Organization",
     "orgChart": {
-      "title": "Organization map",
-      "agentDescription": "Follow delegation across your agents.",
-      "allDescription": "Agents, triggers and the resources they share.",
-      "scope": "Map scope",
-      "agentsOnly": "Agents",
-      "allResources": "Full network",
-      "search": "Find a node…",
-      "clearSearch": "Clear search",
-      "matches": "{count, plural, =0 {No matching nodes} one {# matching node} other {# matching nodes}}",
-      "noAgents": "No agents in this workspace yet",
-      "showResources": "Show connected resources",
-      "zoomOut": "Zoom out",
-      "zoomIn": "Zoom in",
-      "zoomLevel": "Zoom level",
-      "fitView": "Fit map to screen",
-      "visibleNodes": "{count, plural, one {# node} other {# nodes}}",
-      "delegation": "Delegation",
-      "resourceLink": "Resource connection",
-      "hint": "Select a node to explore its connections. Drag the canvas to pan.",
       "types": {
         "agent": "Agent",
         "mcp_instance": "MCP server",
         "openapi_connection": "API connection",
         "skill": "Skill",
         "trigger": "Trigger"
-      },
-      "statuses": {
-        "active": "Active",
-        "running": "Running",
-        "enabled": "Enabled",
-        "connected": "Connected",
-        "available": "Available",
-        "inactive": "Inactive",
-        "disabled": "Disabled",
-        "stopped": "Stopped",
-        "error": "Error",
-        "failed": "Failed",
-        "unhealthy": "Unhealthy"
       },
       "relations": {
         "delegates_to": "Delegates to",
@@ -1839,22 +1801,6 @@
         "uses_mcp": "Uses server",
         "uses_openapi": "Calls API"
       }
-    },
-    "networkMap": {
-      "title": "Agent network",
-      "description": "Who delegates work, and what each agent can use.",
-      "allDescription": "Every agent, resource and connection in your workspace.",
-      "overview": "Grouped",
-      "connections": "Ungrouped",
-      "search": "Find an agent or resource…",
-      "resources": "Tools & resources",
-      "noResources": "No connected tools or resources",
-      "sharedBy": "Used by {count} agents",
-      "collapse": "Show less",
-      "more": "Show {count} more",
-      "visibleAgents": "{count, plural, one {# agent} other {# agents}}",
-      "hint": "Select a tool to see its connections. Expand a card to see all resources.",
-      "resourceCount": "{count, plural, one {# resource} other {# resources}}"
     },
     "accessDetails": {
       "panel": "Connections and permissions",
@@ -1868,8 +1814,6 @@
       "outgoing": "Connects to",
       "noConnections": "No configured connections",
       "policyTitle": "Tool permission rules",
-      "permissions": "Access",
-      "inspectAgent": "Inspect permissions for {name}",
       "loading": "Resolving policy…",
       "unavailable": "Policy could not be checked. Permissions are unknown.",
       "retry": "Try again",
@@ -1882,7 +1826,6 @@
       "precedence": "Deny rules take priority, then the allowlist, then approval requirements.",
       "previewNote": "From {count, plural, one {# workspace and agent policy} other {# workspace and agent policies}}; user and task rules are not included.",
       "openPolicies": "Open policies",
-      "mapHint": "Select an arrow to explain a connection. Permissions shows agent rules.",
       "scope": {
         "private": "Internal",
         "egress": "External",
@@ -1893,7 +1836,6 @@
         "egress": "Marked as an external resource in network configuration.",
         "unknown": "Network scope has not been specified."
       },
-      "openFullPage": "Open full page",
       "policyLoadFailed": "Couldn't load the policy"
     },
     "integration": {
@@ -1902,38 +1844,6 @@
       "retry": "Try again",
       "emptyTitle": "Your network starts with an agent",
       "emptyDescription": "Add an agent, trigger or connection. Configured relationships will appear here."
-    },
-    "accessView": {
-      "title": "Access graph",
-      "description": "Configured agent connections to internal and external resources.",
-      "scopeFilter": "Resource network scope",
-      "scopes": {
-        "all": "All resources",
-        "private": "Internal resources",
-        "egress": "External resources",
-        "unknown": "Unspecified scope"
-      },
-      "empty": "No agents or resources to map."
-    },
-    "flowMap": {
-      "description": "Select a connection to see its source, destination, and basis.",
-      "inputs": "Request sources",
-      "agents": "Agent groups",
-      "outputs": "Resources",
-      "inputsHint": "Members and configured triggers",
-      "agentsHint": "Grouped by delegation connections",
-      "outputsHint": "Connected tools, APIs, and skills",
-      "inputsEmpty": "No configured triggers",
-      "agentsEmpty": "No agents in this map",
-      "outputsEmpty": "No connected resources",
-      "agentCluster": "Delegation group",
-      "independent": "Independent agent",
-      "private": "Internal resources",
-      "egress": "External systems",
-      "unknown": "Unspecified scope",
-      "workspace": "Workspace",
-      "workspaceHint": "Agents and internal resources",
-      "workspaceEmpty": "No agents or internal resources yet"
     },
     "people": {
       "title": "Members",
@@ -1944,7 +1854,6 @@
       "unavailable": "Could not load participants. Access to the directory may be restricted, or the membership service may be unavailable.",
       "empty": "No participants returned",
       "retry": "Try again",
-      "directory": "View people and access",
       "close": "Close people panel",
       "partial": "This is a partial snapshot. People or agents beyond the response limit have not been checked.",
       "selectPerson": "Participant",
@@ -1960,12 +1869,8 @@
       "admissionHint": "Request admission through A2A. Permissions for the tools used during a run are checked separately.",
       "scopeHint": "Evaluated for a verified workspace participant; a particular token or task can impose additional restrictions.",
       "openMembers": "Manage participants",
-      "clearPerson": "Clear participant selection",
-      "count": "{count, plural, one {# participant} other {# participants}}",
-      "legend": "Request access",
       "unknownRoster": "Full participant list unknown",
-      "directoryDisabled": "The participant directory is disabled. Only the confirmed workspace owner is shown when available; other participants are unknown.",
-      "knownCount": "{count, plural, one {# confirmed participant} other {# confirmed participants}}"
+      "directoryDisabled": "The participant directory is disabled. Only the confirmed workspace owner is shown when available; other participants are unknown."
     },
     "routeDetails": {
       "title": "Connection basis",
@@ -1992,6 +1897,59 @@
       },
       "openTarget": "Open destination",
       "close": "Close connection explanation"
+    },
+    "graph": {
+      "lenses": {
+        "overview": {
+          "tab": "Overview",
+          "title": "Agent network",
+          "description": "Every agent, trigger and resource, placed by how they connect.",
+          "empty": "Nothing to map yet."
+        },
+        "delegation": {
+          "tab": "Delegation",
+          "title": "Delegation",
+          "description": "Who hands work to whom, and what starts it.",
+          "empty": "No agents to map."
+        },
+        "access": {
+          "tab": "Access",
+          "title": "Access",
+          "description": "From the people and triggers that send requests, through agents, to the resources they reach.",
+          "empty": "No agents or resources to map."
+        }
+      },
+      "issues": "Issues",
+      "search": "Find an agent or resource…",
+      "clearSearch": "Clear search",
+      "matches": "{count, plural, =0 {No matches} one {# match} other {# matches}}",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fit": "Fit graph to screen",
+      "allowed": "Can send requests",
+      "denied": "Access denied",
+      "issueText": {
+        "triggerOff": "Trigger is turned off — it will not start its agent.",
+        "agentOff": "Agent is turned off.",
+        "resourceFailed": "Resource is unavailable — its last check failed.",
+        "resourceUnused": "No agent uses this resource."
+      },
+      "counts": {
+        "agents": "{count, plural, one {# agent} other {# agents}}",
+        "resources": "{count, plural, one {# resource} other {# resources}}",
+        "triggers": "{count, plural, one {# trigger} other {# triggers}}",
+        "links": "{count, plural, one {# connection} other {# connections}}"
+      },
+      "legend": {
+        "agent": "Agent",
+        "internal": "Internal resource",
+        "external": "External system",
+        "trigger": "Trigger",
+        "delegates": "Delegates",
+        "uses": "Uses",
+        "starts": "Starts"
+      },
+      "isolated": "Not connected · {count}"
     }
   },
   "WorkspacePage": {
@@ -2246,20 +2204,6 @@
     "today": "Today",
     "vsPrevDay": "vs prev day",
     "budgetUsage": "{pct}% of {cap} budget",
-    "activity": "Activity",
-    "activityMeta": "Last 14 days · UTC",
-    "completed": "Completed",
-    "failed": "Failed",
-    "awaiting": "Awaiting",
-    "agents": "Agents",
-    "agentsActive": "{count} active",
-    "statDone": "{count} done",
-    "statFailed": "{count} failed",
-    "statMtd": "{amount} MTD",
-    "viewAllAgents": "View all agents",
-    "noAgents": "No agents yet.",
-    "noAgentsHint": "Create one and it'll show up here with live activity.",
-    "createFirstAgent": "Create your first agent",
     "blockers": "Blockers",
     "healthy": "Healthy",
     "nothingBlocking": "Nothing blocking work right now.",
@@ -2274,11 +2218,19 @@
     "relMinutes": "{count}m",
     "relHours": "{count}h",
     "relDays": "{count}d",
-    "period": "Period",
-    "periodLast7": "Last 7 days",
-    "periodLast30": "Last 30 days",
-    "periodMonthToDate": "Month to date",
-    "periodLast90": "Last 90 days"
+    "tasks": "Tasks",
+    "allTasks": "All tasks",
+    "runningNow": "Running now",
+    "recentlyFinished": "Recently finished",
+    "untitledTask": "Untitled task",
+    "noTasks": "No tasks yet.",
+    "noTasksHint": "Start a task or set up a trigger and it shows up here.",
+    "schedule": "Schedule",
+    "scheduleMeta": "Next {days} days",
+    "nothingScheduled": "Nothing scheduled — add a trigger",
+    "throughoutTheDay": "All day:",
+    "perDay": "×{count}/day",
+    "moreRuns": "+{count} more"
   },
   "BudgetsPage": {
     "couldntLoadTitle": "Couldn't load budget data",

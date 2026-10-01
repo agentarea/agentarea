@@ -101,25 +101,3 @@ export function getAgentConnections(
   }
   return { incoming, outgoing };
 }
-
-export function focusAgentTopology(
-  topology: TopologyResponse,
-  agentId: string
-): TopologyResponse {
-  if (
-    !topology.nodes.some((node) => node.id === agentId && node.type === "agent")
-  ) {
-    return topology;
-  }
-
-  const { incoming, outgoing } = getAgentConnections(topology, agentId);
-  const connections = [...incoming, ...outgoing];
-  const nodeIds = new Set([agentId, ...connections.map(({ node }) => node.id)]);
-  const selectedEdges = new Set(connections.map(({ edge }) => edge));
-
-  return {
-    ...topology,
-    nodes: topology.nodes.filter((node) => nodeIds.has(node.id)),
-    edges: topology.edges.filter((edge) => selectedEdges.delete(edge)),
-  };
-}
