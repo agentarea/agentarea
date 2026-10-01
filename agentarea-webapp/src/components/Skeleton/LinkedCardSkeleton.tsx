@@ -68,7 +68,12 @@ export default function LinkedCardSkeleton({
         )}
       </div>
 
-      <div className="-mb-2 -mr-2 -mt-4 flex justify-end">
+      <div
+        className={cn(
+          "-mb-2 -mr-2 flex justify-end",
+          lines > 0 ? "-mt-1" : "-mt-4"
+        )}
+      >
         <Skeleton className="h-4 w-4 rounded-sm" />
       </div>
     </Card>

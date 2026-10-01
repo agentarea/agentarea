@@ -131,7 +131,15 @@ export default function LinkedCard({
         )}
       </div>
 
-      <div className="flex justify-end -mb-2 -mt-4 -mr-2">
+      {/* Tucked into the corner when the card ends on its title block. Under a
+          body it sits below it instead: lifted there, the hover text landed
+          on whatever the body put in that corner (model badges, "+N"). */}
+      <div
+        className={cn(
+          "flex justify-end -mb-2 -mr-2",
+          children ? "-mt-1" : "-mt-4"
+        )}
+      >
         <HoverLink
           text={type === "config" ? "Configure" : type === "edit" ? "Edit" : "View"}
         />
