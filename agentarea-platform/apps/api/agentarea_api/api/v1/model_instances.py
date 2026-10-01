@@ -81,8 +81,10 @@ class ModelInstanceResponse(BaseModel):
     model_display_name: str | None = None
     config_name: str | None = None
     # "platform" when the instance runs on the operator's credentials rather than
-    # the workspace's own key — what the UI preselects a model from.
+    # the workspace's own key. With ``tags``, what the UI preselects a model from:
+    # the platform instance tagged "default".
     managed_by: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
     @classmethod
     def from_domain(cls, model_instance: ModelInstance) -> "ModelInstanceResponse":
@@ -109,6 +111,7 @@ class ModelInstanceResponse(BaseModel):
             else None,
             config_name=provider_config.name if provider_config else None,
             managed_by=provider_config.managed_by if provider_config else None,
+            tags=list(model_instance.tags),
         )
 
 

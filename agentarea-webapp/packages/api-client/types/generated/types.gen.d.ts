@@ -3527,6 +3527,10 @@ export type ModelInstanceResponse = {
      */
     provider_name?: string | null;
     /**
+     * Tags
+     */
+    tags?: Array<string>;
+    /**
      * Updated At
      */
     updated_at: string;

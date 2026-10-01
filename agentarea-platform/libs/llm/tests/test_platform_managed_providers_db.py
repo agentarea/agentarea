@@ -136,6 +136,7 @@ async def _install_platform_model(s: AsyncSession, spec: ProviderSpec) -> None:
             provider_config_id=config.id,
             model_spec_id=model_spec.id,
             name="Test Model mini",
+            tags=["default"],
             workspace_id=PLATFORM_WORKSPACE_ID,
             created_by="operator",
         )
@@ -229,6 +230,7 @@ async def test_platform_model_instances_are_visible_and_unwritable(session):
     # Loaded with the list, under the tenant's context: the picker preselects a
     # platform model from this, so it must not take a second query per instance.
     assert instances[0].provider_config.managed_by == MANAGED_BY_PLATFORM
+    assert instances[0].tags == ["default"]
 
     instance_id = instances[0].id
     assert await repo.delete(instance_id) is False

@@ -2,34 +2,35 @@ import type { ModelInstanceResponse } from "@/api/client/types.gen";
 
 type Instance = Pick<
   ModelInstanceResponse,
-  "id" | "model_name" | "is_active" | "managed_by"
+  "id" | "model_name" | "is_active" | "managed_by" | "tags"
 >;
 
+/** The tag that marks the platform model a new agent starts on. */
+export const DEFAULT_MODEL_TAG = "default";
+
 /**
- * The model a new agent starts on: a platform model the workspace needs no key for.
+ * The model a new agent starts on: the active platform model tagged `default`.
  *
- * The deployment's preferred model (DEFAULT_PLATFORM_MODEL, a model_name) when it
- * is offered, else the first platform model by name so every page picks the same
- * one. Never a model on the workspace's own key: preselecting that would spend
- * the customer's provider credit on a choice they did not make. `null` when the
- * workspace has no platform model, which leaves the picker empty.
+ * The tag is data the operator writes from the LLMProviderConfig resource, so the
+ * default moves with an edit in git, not a redeploy. Only platform models count:
+ * preselecting one on the workspace's own key would spend the customer's provider
+ * credit on a choice they did not make. Several tagged is a mistake the operator
+ * warns about; the first by name wins so every page agrees. `null` when none is
+ * tagged, which leaves the picker empty rather than guessing.
  */
-export function defaultModelId(
-  instances: Instance[],
-  preferredName: string
-): string | null {
-  const platform = instances.filter(
-    (instance) => instance.is_active && instance.managed_by === "platform"
-  );
-  const preferred = preferredName
-    ? platform.find((instance) => instance.model_name === preferredName)
-    : undefined;
-  if (preferred) return preferred.id;
-  const [first] = [...platform].sort(
-    (a, b) =>
-      (a.model_name ?? "").localeCompare(b.model_name ?? "") ||
-      a.id.localeCompare(b.id)
-  );
+export function defaultModelId(instances: Instance[]): string | null {
+  const [first] = instances
+    .filter(
+      (instance) =>
+        instance.is_active &&
+        instance.managed_by === "platform" &&
+        (instance.tags ?? []).includes(DEFAULT_MODEL_TAG)
+    )
+    .sort(
+      (a, b) =>
+        (a.model_name ?? "").localeCompare(b.model_name ?? "") ||
+        a.id.localeCompare(b.id)
+    );
   return first?.id ?? null;
 }
 

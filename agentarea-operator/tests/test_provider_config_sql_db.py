@@ -112,6 +112,7 @@ def _spec(provider_key: str) -> dict:
                 "contextWindow": 1024,
                 "inputCostPerToken": 1.0e-6,
                 "outputCostPerToken": 2.0e-6,
+                "tags": ["default", "fast"],
             }
         ],
     }
@@ -158,11 +159,15 @@ def test_a_platform_provider_config_is_actually_written(handler, provider_spec):
         assert secret.encrypted_value != "gateway-token"
 
         instance = conn.execute(
-            text("SELECT id FROM model_instances WHERE provider_config_id = :id"),
+            text("SELECT id, tags FROM model_instances WHERE provider_config_id = :id"),
             {"id": config_id},
         ).fetchone()
         # Derived, because agents store it and billing's rate cards name it.
         assert str(instance.id) == handler.platform_instance_id(provider_spec, "test-model")
+        assert instance.tags == ["default", "fast"]
+
+    # The cross-resource query the multi-default warning runs, against real columns.
+    assert "test-model" in handler.platform_default_models()
 
 
 def test_reconciling_twice_updates_one_configuration(handler, provider_spec):
@@ -177,6 +182,8 @@ def test_reconciling_twice_updates_one_configuration(handler, provider_spec):
     )
 
     renamed = _spec(provider_spec) | {"name": "Renamed"}
+    # The update branch writes tags too: taking "default" off in git takes it off.
+    renamed["models"] = [renamed["models"][0] | {"tags": []}]
     again, _ = handler.sync_provider_config(renamed, api_key="rotated-token", cr_name="test-cr")
 
     assert again == config_id
@@ -198,3 +205,8 @@ def test_reconciling_twice_updates_one_configuration(handler, provider_spec):
             {"n": f"provider_config_{config_id}"},
         ).scalar()
         assert count == 1
+        tags = conn.execute(
+            text("SELECT tags FROM model_instances WHERE provider_config_id = :id"),
+            {"id": config_id},
+        ).scalar()
+        assert tags == []

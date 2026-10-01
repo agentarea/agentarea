@@ -6175,6 +6175,13 @@
             ],
             "title": "Provider Name"
           },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
           "updated_at": {
             "title": "Updated At",
             "type": "string"

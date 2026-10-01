@@ -1362,6 +1362,7 @@ export const zModelInstanceResponse = z.object({
   provider_icon_url: z.string().nullish(),
   provider_key: z.string().nullish(),
   provider_name: z.string().nullish(),
+  tags: z.array(z.string()).optional(),
   updated_at: z.string(),
 });
 

@@ -6,48 +6,51 @@ import {
   type ModelSelection,
 } from "./default-model";
 
-const platform = (id: string, model_name: string, is_active = true) => ({
+const platform = (
+  id: string,
+  model_name: string,
+  tags: string[] = [],
+  is_active = true
+) => ({ id, model_name, tags, is_active, managed_by: "platform" });
+const own = (id: string, model_name: string, tags: string[] = []) => ({
   id,
   model_name,
-  is_active,
-  managed_by: "platform",
-});
-const own = (id: string, model_name: string) => ({
-  id,
-  model_name,
+  tags,
   is_active: true,
   managed_by: null,
 });
 
 describe("defaultModelId", () => {
-  it("picks the deployment's preferred platform model", () => {
+  it("picks the platform model tagged default", () => {
     const instances = [
-      platform("a", "deepseek-v3"),
-      platform("k", "kimi-k2.6"),
-      own("o", "gpt-4o"),
+      platform("a", "deepseek-v3", ["fast"]),
+      platform("k", "kimi-k2.6", ["default", "reasoning"]),
     ];
 
-    expect(defaultModelId(instances, "kimi-k2.6")).toBe("k");
+    expect(defaultModelId(instances)).toBe("k");
   });
 
-  it("falls to the first platform model by name when the preferred one is absent", () => {
-    const instances = [platform("z", "qwen-3"), platform("a", "deepseek-v3")];
-
-    expect(defaultModelId(instances, "kimi-k2.6")).toBe("a");
-    expect(defaultModelId(instances, "")).toBe("a");
+  it("leaves the picker empty when no platform model is tagged", () => {
+    expect(defaultModelId([platform("a", "deepseek-v3")])).toBeNull();
   });
 
   it("never preselects a model on the workspace's own key", () => {
-    expect(defaultModelId([own("o", "kimi-k2.6")], "kimi-k2.6")).toBeNull();
+    expect(defaultModelId([own("o", "gpt-4o", ["default"])])).toBeNull();
   });
 
-  it("skips an inactive platform model", () => {
+  it("skips an inactive default", () => {
+    expect(
+      defaultModelId([platform("k", "kimi-k2.6", ["default"], false)])
+    ).toBeNull();
+  });
+
+  it("settles several defaults by name, so every page agrees", () => {
     const instances = [
-      platform("k", "kimi-k2.6", false),
-      platform("q", "qwen-3"),
+      platform("z", "qwen-3", ["default"]),
+      platform("a", "deepseek-v3", ["default"]),
     ];
 
-    expect(defaultModelId(instances, "kimi-k2.6")).toBe("q");
+    expect(defaultModelId(instances)).toBe("a");
   });
 });
 
