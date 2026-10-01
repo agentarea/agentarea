@@ -996,6 +996,11 @@
       "models": "Models"
     },
     "noInstancesConfigured": "No instances configured",
+    "sections": {
+      "label": "Model sections",
+      "connected": "Connected",
+      "available": "Available"
+    },
     "emptyState": {
       "title": "No configurations yet",
       "description": "Create your first provider configuration to get started"
