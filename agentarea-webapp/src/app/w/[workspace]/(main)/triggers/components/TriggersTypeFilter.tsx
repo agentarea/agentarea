@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Clock, MessagesSquare, Webhook } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 
 export interface TriggerTypeCounts {
   all: number;
@@ -62,37 +62,27 @@ export default function TriggersTypeFilter({
     router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
+  // The subtle (grey) pill, same as the inbox status filter: this narrows the
+  // list rather than navigating the page.
   return (
-    <div className="flex shrink-0 items-center gap-0.5" role="group">
-      {tabs.map((tab) => {
-        const isActive = active === tab.value;
+    <CountSegmentedControl
+      items={tabs.map((tab) => {
         const Icon = LANE_ICON[tab.value];
-        return (
-          <button
-            key={tab.value}
-            type="button"
-            aria-pressed={isActive}
-            onClick={() => select(tab.value)}
-            className={cn(
-              "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors",
-              isActive
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-            )}
-          >
-            {Icon && <Icon aria-hidden="true" className="h-3.5 w-3.5" />}
-            <span>{tab.label}</span>
-            <span
-              className={cn(
-                "tabular-nums text-xs",
-                isActive ? "text-muted-foreground" : "text-muted-foreground/60"
-              )}
-            >
-              {tab.count}
+        return {
+          value: tab.value,
+          label: (
+            <span className="flex items-center gap-1.5 whitespace-nowrap">
+              {Icon && <Icon className="h-4 w-4" strokeWidth={1.8} />}
+              {tab.label}
             </span>
-          </button>
-        );
+          ),
+          count: tab.count,
+        };
       })}
-    </div>
+      value={active}
+      onChange={select}
+      layoutId="triggers-type-filter"
+      className="shrink-0"
+    />
   );
 }
