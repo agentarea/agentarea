@@ -12,9 +12,8 @@
 // bundle, and /install takes a (possibly edited) bundle + setup values. We edit
 // the analyzed bundle in place and send the result.
 import React, { useEffect, useMemo, useReducer, useState } from "react";
-import Image from "next/image";
 import { useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
+import Image from "next/image";
 import {
   Check,
   ChevronLeft,
@@ -40,7 +39,9 @@ import type {
 import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import ConfigSheet from "@/components/ConfigSheet";
+import EntityMark from "@/components/EntityMark";
 import FormError from "@/components/FormError";
+import { ModelTags } from "@/components/ModelTags";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,7 +65,10 @@ import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Switch } from "@/components/ui/switch";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import Link from "@/components/WorkspaceLink";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
+import { defaultModelId as pickDefaultModelId } from "@/lib/default-model";
+import type { EntityIdentity } from "@/lib/entity-identity";
 import { cn } from "@/lib/utils";
 import {
   analyzeBundleAction,
@@ -73,8 +77,6 @@ import {
   type WorkspaceModel,
 } from "./actions";
 import { str } from "./catalog-data";
-import EntityMark from "@/components/EntityMark";
-import type { EntityIdentity } from "@/lib/entity-identity";
 
 // ${setup.<key>} reference used by an agent's model / a connection binding.
 const SETUP_REF = /^\$\{setup\.([a-zA-Z0-9_]+)\}$/;
@@ -279,6 +281,15 @@ export function BundleInstallWizard({
         for (const f of pv.setup ?? []) {
           if (f.default !== undefined && f.default !== null)
             sv[f.key] = f.default;
+        }
+        // A model field the bundle leaves open starts on the platform default;
+        // one the bundle names a model for keeps it, as a preset's model does.
+        const defaultModelId = pickDefaultModelId(ms);
+        for (const agent of bundle.agents ?? []) {
+          const key = setupRefKey(agent.model);
+          if (key && defaultModelId && sv[key] === undefined) {
+            sv[key] = defaultModelId;
+          }
         }
         dispatch({
           type: "init",
@@ -565,9 +576,7 @@ export function BundleInstallWizard({
               <div className="space-y-4">
                 {modelsError && modelFieldKeys.size > 0 ? (
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                    <FormError className="flex-1">
-                      {modelsError}
-                    </FormError>
+                    <FormError className="flex-1">{modelsError}</FormError>
                     <Button
                       size="xs"
                       variant="outline"
@@ -1115,6 +1124,7 @@ function ModelPicker({
                     <span className="min-w-0 flex-1 truncate">
                       {m.model_display_name || m.model_name}
                     </span>
+                    <ModelTags tags={m.tags} className="ml-2" />
                     <span className="ml-2 shrink-0 text-xs text-muted-foreground">
                       {m.provider_name}
                     </span>

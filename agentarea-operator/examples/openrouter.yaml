@@ -32,6 +32,8 @@ spec:
   isPublic: true
   models:
     - modelName: gpt-4o
+      # The model a new agent starts on. Tag exactly one.
+      tags: [default]
     - modelName: gpt-4-turbo
     - modelName: gpt-3.5-turbo
 ---

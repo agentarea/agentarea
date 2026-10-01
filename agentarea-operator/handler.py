@@ -21,6 +21,7 @@ Env vars:
     WATCH_NAMESPACE                  – Namespace to watch (default: all)
 """
 
+import json
 import logging
 import os
 import uuid
@@ -371,6 +372,10 @@ def sync_provider_config(
                         "context_window": em.get("contextWindow", 4096),
                         "input_cost_per_token": em.get("inputCostPerToken"),
                         "output_cost_per_token": em.get("outputCostPerToken"),
+                        # Always written, an omitted list as []: the resource is
+                        # the whole truth about a model's tags, so taking
+                        # "default" off in git takes it off the model.
+                        "tags": em.get("tags", []),
                     },
                     workspace_id,
                 )
@@ -453,7 +458,13 @@ def _upsert_model_spec_and_instance(
         )
 
     _upsert_model_instance(
-        conn, provider_key, config_id, model_spec_id, model_name, workspace_id
+        conn,
+        provider_key,
+        config_id,
+        model_spec_id,
+        model_name,
+        workspace_id,
+        model.get("tags"),
     )
 
 
@@ -464,14 +475,20 @@ def _upsert_model_instance(
     model_spec_id: str,
     model_name: str,
     workspace_id: str,
+    tags: list[str] | None = None,
 ):
-    """Create a ModelInstance if it doesn't already exist.
+    """Create a ModelInstance if it doesn't already exist, and set its tags.
 
     The id is derived rather than generated for platform rows. It is what an agent
     stores when it selects this model and what billing's rate cards name, so a
     re-created row has to come back with the same id: a fresh one would silently
     unlink every agent using the model and match no rate card, which does not fail
     — it runs on our provider credit and charges nobody.
+
+    ``tags`` of None leaves an existing row's tags alone: discovered models have
+    no resource entry to take them from. A list, empty included, replaces them.
+    The tags are how the webapp picks the model a new agent starts on
+    (``default``), which is why they live here rather than in its configuration.
     """
     instance_id = (
         platform_instance_id(provider_key, model_name)
@@ -491,9 +508,9 @@ def _upsert_model_instance(
             text(
                 "INSERT INTO model_instances "
                 "(id, provider_config_id, model_spec_id, name, "
-                "is_active, is_public, workspace_id, created_by, "
+                "is_active, is_public, tags, workspace_id, created_by, "
                 "created_at, updated_at) "
-                "VALUES (:id, :cid, :msid, :name, true, true, "
+                "VALUES (:id, :cid, :msid, :name, true, true, CAST(:tags AS JSONB), "
                 ":ws, :created_by, now(), now())"
             ),
             {
@@ -501,10 +518,51 @@ def _upsert_model_instance(
                 "cid": config_id,
                 "msid": model_spec_id,
                 "name": model_name,
+                "tags": json.dumps(tags or []),
                 "ws": workspace_id,
                 "created_by": PLATFORM_PRINCIPAL_ID,
             },
         )
+    elif tags is not None:
+        conn.execute(
+            text(
+                "UPDATE model_instances SET tags = CAST(:tags AS JSONB), "
+                "updated_at = now() WHERE id = :id AND workspace_id = :ws"
+            ),
+            {"id": existing[0], "tags": json.dumps(tags), "ws": workspace_id},
+        )
+
+
+def platform_default_models() -> list[str]:
+    """model_name of every active platform model tagged ``default``, by name.
+
+    The webapp starts a new agent on the first of these, so more than one is not
+    an error, but it is almost certainly a mistake: the default is whichever sorts
+    first, not the one somebody meant. Across all resources, because each
+    resource only knows its own models.
+    """
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT ms.model_name FROM model_instances mi "
+                "JOIN provider_configs pc ON pc.id = mi.provider_config_id "
+                "JOIN model_specs ms ON ms.id = mi.model_spec_id "
+                "WHERE pc.managed_by = :managed_by AND mi.is_active "
+                "AND mi.tags @> CAST(:tag AS JSONB) ORDER BY ms.model_name"
+            ),
+            {"managed_by": MANAGED_BY_PLATFORM, "tag": json.dumps(["default"])},
+        ).fetchall()
+    return [row[0] for row in rows]
+
+
+def default_tag_warning(defaults: list[str]) -> str | None:
+    """What to say when the ``default`` tag is on more than one platform model."""
+    if len(defaults) <= 1:
+        return None
+    return (
+        f"{len(defaults)} platform models are tagged default "
+        f"({', '.join(defaults)}); new agents start on {defaults[0]}. Tag exactly one."
+    )
 
 
 # ─── Kopf handlers ───────────────────────────────────────────────
@@ -566,6 +624,10 @@ def on_provider_config_change(spec, meta, status, namespace, patch, **_):
         if model_count
         else "Synced (no models)"
     )
+    warning = default_tag_warning(platform_default_models())
+    if warning:
+        logger.warning("LLMProviderConfig %s/%s: %s", namespace, cr_name, warning)
+        patch.status["message"] += f"; warning: {warning}"
     logger.info(
         "Synced %s/%s → config=%s, models=%d",
         namespace, cr_name, config_id, model_count,

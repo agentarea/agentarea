@@ -1,9 +1,10 @@
 "use client";
 
-import type { ModelInstanceResponse } from "@/api/client/types.gen";
 import * as React from "react";
 import Image from "next/image";
 import { Bot, Check, ChevronDown, Plus, Search } from "lucide-react";
+import type { ModelInstanceResponse } from "@/api/client/types.gen";
+import { ModelTags } from "@/components/ModelTags";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -137,9 +138,7 @@ export function ProviderModelSelector({
 
     return providers.filter(
       (provider) =>
-        provider.configName
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
+        provider.configName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         provider.providerName
           .toLowerCase()
           .includes(searchQuery.toLowerCase()) ||
@@ -222,7 +221,9 @@ export function ProviderModelSelector({
     }
     return (
       <div className="flex items-center gap-2">
-        <span className="font-normal text-inputSize text-muted-foreground">{placeholder}</span>
+        <span className="font-normal text-inputSize text-muted-foreground">
+          {placeholder}
+        </span>
       </div>
     );
   };
@@ -350,6 +351,10 @@ export function ProviderModelSelector({
                                       {model.name}
                                     </span>
                                   </div>
+                                  <ModelTags
+                                    tags={model.tags}
+                                    className="mr-5"
+                                  />
                                 </div>
                                 <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
                                   <Check

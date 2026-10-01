@@ -6097,6 +6097,17 @@
             "title": "Is Public",
             "type": "boolean"
           },
+          "managed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Managed By"
+          },
           "model_display_name": {
             "anyOf": [
               {
@@ -6163,6 +6174,13 @@
               }
             ],
             "title": "Provider Name"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
           },
           "updated_at": {
             "title": "Updated At",

@@ -3645,6 +3645,10 @@ export type ModelInstanceResponse = {
    */
   is_public: boolean;
   /**
+   * Managed By
+   */
+  managed_by?: string | null;
+  /**
    * Model Display Name
    */
   model_display_name?: string | null;
@@ -3676,6 +3680,10 @@ export type ModelInstanceResponse = {
    * Provider Name
    */
   provider_name?: string | null;
+  /**
+   * Tags
+   */
+  tags?: Array<string>;
   /**
    * Updated At
    */

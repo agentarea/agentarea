@@ -67,6 +67,9 @@ export type WorkspaceModel = Pick<
   | "model_display_name"
   | "provider_name"
   | "provider_icon_url"
+  | "is_active"
+  | "managed_by"
+  | "tags"
 >;
 
 // The reusable-secret list lives in @/lib/server-actions, where every Connect
@@ -235,6 +238,9 @@ export async function listActiveModelInstancesAction() {
           model_display_name: model.model_display_name,
           provider_name: model.provider_name,
           provider_icon_url: model.provider_icon_url,
+          is_active: model.is_active,
+          managed_by: model.managed_by,
+          tags: model.tags,
         }))
     : undefined;
   return { data, error: result.error, status: result.status };
@@ -260,7 +266,8 @@ export async function addCatalogSkillToAgentAction(
   agentId: string
 ): Promise<ActionResult<string>> {
   const installed = await installCatalogSkillAction(skillId);
-  if (!installed.data) return { error: installed.error, status: installed.status };
+  if (!installed.data)
+    return { error: installed.error, status: installed.status };
   const tenantSkillId = installed.data;
 
   const agentRes = await getAgent(agentId);
