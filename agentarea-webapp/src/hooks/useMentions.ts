@@ -10,7 +10,9 @@ import {
 export interface Agent {
   id: string;
   name: string;
-  avatar?: string;
+  description?: string | null;
+  /** Drawn the same as in the composer's agent picker. */
+  icon?: string | null;
 }
 
 interface UseMentionsOptions {
@@ -61,7 +63,8 @@ export function useMentions({
           const formattedAgents: Agent[] = data.map((agent) => ({
             id: agent.id,
             name: agent.name,
-            avatar: undefined,
+            description: agent.description ?? null,
+            icon: (agent as { icon?: string | null }).icon ?? null,
           }));
           setAgents(formattedAgents);
         } else {

@@ -34,7 +34,10 @@ import {
 } from "@/utils/mentions";
 import ActivityGroup from "./ActivityGroup";
 import { buildActivitySegments } from "./activityView";
-import { BadgeSuggestions } from "./componets/BadgeSuggestions";
+import {
+  BadgeSuggestions,
+  BadgeSuggestionsSkeleton,
+} from "./componets/BadgeSuggestions";
 import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
 import { ChatInputArea } from "./componets/ChatInputArea";
 import { ScrollToBottomButton } from "./componets/ScrollToBottomButton";
@@ -384,19 +387,22 @@ export default function FullChat({
 
   // Badge click handler
   const handleBadgeClick = (text: string) => {
+    // A row may carry an agent mention in storage form, @[id:name]: keep that
+    // in `input` and show it as @name, exactly as picking it from the @ menu.
+    const display = formatTextForTextarea(text);
     setInput(text);
-    setInputDisplay(text);
+    setInputDisplay(display);
 
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus();
-        const length = text.length;
+        const length = display.length;
         textareaRef.current.setSelectionRange(length, length);
 
-        if (text.endsWith("@")) {
+        if (display.endsWith("@")) {
           const syntheticEvent = {
             target: {
-              value: text,
+              value: display,
               selectionStart: length,
             },
           } as React.ChangeEvent<HTMLTextAreaElement>;
@@ -1005,7 +1011,7 @@ export default function FullChat({
           the composer above is already usable. */}
       {startCentered && badgeSuggestions && (
         <div className="flex-none w-full pb-4">
-          <React.Suspense fallback={null}>
+          <React.Suspense fallback={<BadgeSuggestionsSkeleton />}>
             <BadgeSuggestions
               suggestions={badgeSuggestions}
               onBadgeClick={handleBadgeClick}

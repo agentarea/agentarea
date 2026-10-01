@@ -19,6 +19,8 @@ const startAgentVariants = cva(
           "text-[#1b1f27] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fb_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.96),inset_0_0_0_1px_rgba(205,213,225,0.9),0_1px_2px_rgba(15,23,42,0.08),0_10px_24px_-14px_rgba(15,23,42,0.18)] hover:-translate-y-[1.5px] hover:shadow-[inset_0_1px_0_rgba(255,255,255,1),inset_0_0_0_1px_rgba(191,200,214,0.95),0_3px_8px_rgba(15,23,42,0.08),0_16px_24px_-16px_rgba(15,23,42,0.18)] focus-visible:shadow-[inset_0_1px_0_rgba(255,255,255,1),0_0_0_3px_rgba(47,99,230,0.18),0_10px_24px_-12px_rgba(15,23,42,0.18)]",
       },
       size: {
+        // For a button sitting inside a row of text rather than leading a card.
+        "2xs": "h-7 gap-2 rounded-[7px] px-3 text-[10px]",
         xs: "h-8 gap-3 rounded-[8px] px-4 text-[10.5px]",
         sm: "h-9 gap-3.5 rounded-[9px] px-4 text-[11.5px]",
         md: "h-11 gap-2 rounded-[11px] px-5 text-[13px]",
@@ -33,6 +35,7 @@ const ICON: Record<
   NonNullable<VariantProps<typeof startAgentVariants>["size"]>,
   number
 > = {
+  "2xs": 12,
   xs: 13,
   sm: 14,
   md: 16,
@@ -44,12 +47,14 @@ export interface StartAgentButtonProps
     VariantProps<typeof startAgentVariants> {
   asChild?: boolean;
   isLoading?: boolean;
+  /** Drop the AgentArea mark where the button sits in a row of text. */
+  showLogo?: boolean;
 }
 
 export const StartAgentButton = React.forwardRef<
   HTMLButtonElement,
   StartAgentButtonProps
->(({ asChild = false, size = "md", light = false, className, children, disabled, isLoading = false, ...props }, ref) => {
+>(({ asChild = false, size = "md", light = false, className, children, disabled, isLoading = false, showLogo = true, ...props }, ref) => {
   const Comp = asChild ? Slot : "button";
   const isDisabled = disabled || isLoading;
   const icon = ICON[size ?? "md"];
@@ -63,17 +68,19 @@ export const StartAgentButton = React.forwardRef<
       tabIndex={asChild && isDisabled ? -1 : undefined}
       {...props}
     >
-      <Image
-        src="/simple-logo.svg"
-        alt=""
-        aria-hidden="true"
-        width={icon}
-        height={icon}
-        className={cn(
-          "h-auto shrink-0 group-disabled:opacity-50",
-          light ? "invert" : null
-        )}
-      />
+      {showLogo ? (
+        <Image
+          src="/simple-logo.svg"
+          alt=""
+          aria-hidden="true"
+          width={icon}
+          height={icon}
+          className={cn(
+            "h-auto shrink-0 group-disabled:opacity-50",
+            light ? "invert" : null
+          )}
+        />
+      ) : null}
       <Slottable>
         {asChild ? children : <span>{children ?? "Start agent"}</span>}
       </Slottable>

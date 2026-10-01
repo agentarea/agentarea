@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import type { TriggerResponse } from "@/api/client/types.gen";
 import {
   listMCPServerInstances,
@@ -15,6 +16,7 @@ type CatalogEntry = {
   name?: string;
   kind?: string;
   icon_url?: string | null;
+  description?: string | null;
   data_extractor?: string | null;
 };
 
@@ -31,11 +33,12 @@ type CatalogEntry = {
  * user nothing and an error boundary over the chat would cost them the page.
  */
 export async function loadWorkplaceSuggestions(
-  agentNames: string[]
+  agents: { id: string; name: string }[]
 ): Promise<WorkplaceSuggestion[]> {
   try {
-    const [triggersResult, mcpResult, skillsResult, catalogResult] =
+    const [t, triggersResult, mcpResult, skillsResult, catalogResult] =
       await Promise.all([
+        getTranslations("Workplace.suggestions"),
         listTriggers(),
         listMCPServerInstances(),
         listSkills(),
@@ -59,18 +62,24 @@ export async function loadWorkplaceSuggestions(
       id: String(entry.id ?? entry.data_extractor ?? entry.name ?? ""),
       name: String(entry.name ?? entry.data_extractor ?? ""),
       iconUrl: entry.icon_url ?? null,
+      description: entry.description ?? null,
     });
     const isConnected = (entry: CatalogEntry) =>
       Boolean(entry.data_extractor) &&
       listening.has(String(entry.data_extractor));
 
-    return buildWorkplaceSuggestions({
-      connectedChannels: messaging.filter(isConnected).map(toChannel),
-      availableChannels: messaging.filter((e) => !isConnected(e)).map(toChannel),
-      mcpCount: (mcpResult.data ?? []).length,
-      skillCount: (skillsResult.data ?? []).length,
-      agentNames,
-    });
+    return buildWorkplaceSuggestions(
+      {
+        connectedChannels: messaging.filter(isConnected).map(toChannel),
+        availableChannels: messaging
+          .filter((e) => !isConnected(e))
+          .map(toChannel),
+        mcpCount: (mcpResult.data ?? []).length,
+        skillCount: (skillsResult.data ?? []).length,
+        agents,
+      },
+      (key, values) => t(key, values)
+    );
   } catch (error) {
     console.error("Failed to build workplace suggestions:", error);
     return [];

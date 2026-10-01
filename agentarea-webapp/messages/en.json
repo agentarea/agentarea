@@ -1082,6 +1082,7 @@
     "writeNewTaskFor": "Write new task for {agentName}...",
     "inputControls": {
       "agent": "Agent",
+      "mentionHeading": "Mention an agent",
       "project": "Project",
       "taskPolicy": "Task policy",
       "noProject": "No project",
@@ -1477,21 +1478,33 @@
       "title": "How can I help you today?"
     },
     "suggestions": {
-      "askSpecificAgent": {
-        "label": "Ask Specific Agent",
-        "text": "I need help from agent @"
+      "getStarted": "Get started",
+      "putOnChannel": {
+        "label": "Put agent on {channel}",
+        "hint": "Answer where people already write"
       },
-      "analyzeProject": {
-        "label": "Analyze Project Structure",
-        "text": "Analyze the current project structure and identify potential architectural improvements."
+      "connectTool": {
+        "label": "Connect a tool",
+        "hint": "Give agents an MCP server"
       },
-      "generateDocs": {
-        "label": "Generate Documentation",
-        "text": "Generate comprehensive documentation for the core modules of this project."
+      "teachSkill": {
+        "label": "Teach a skill",
+        "hint": "Package a procedure once, reuse it everywhere"
       },
-      "debugIssue": {
-        "label": "Debug Issue",
-        "text": "I'm facing a bug with the API integration. Can you help me debug it?"
+      "catchUp": {
+        "label": "Catch up on {channel}",
+        "hint": "Today's messages, and what needs an answer",
+        "text": "Summarise what came in on {channel} today and flag anything that needs an answer"
+      },
+      "tryTool": {
+        "label": "Try a connected tool",
+        "hint": "See what the agent can reach",
+        "text": "List the tools you can reach right now and what each one is for"
+      },
+      "askAgent": {
+        "label": "Ask {agent}",
+        "hint": "What it’s set up to do, what it needs",
+        "text": "{agent} what are you set up to do, and what access do you have?"
       }
     }
   },
@@ -2105,10 +2118,19 @@
     "noSkills": "No skills available yet.",
     "manageSkills": "Create a skill",
     "attachTitle": "Add to this task",
-    "attachDescription": "Give this run MCP servers and skills on top of what the agent already has. Applies to this task only.",
+    "attachDescription": "Agent defaults stay as they are.",
     "mcpsHeading": "MCP servers",
     "skillsHeading": "Skills",
-    "detach": "Remove {name}"
+    "thisRun": "This run",
+    "manageSkillsLink": "Manage skills",
+    "manageMcpsLink": "Manage MCP servers",
+    "appliesInstantly": "Changes apply instantly",
+    "nothingFound": "Try something other than “{query}”.",
+    "emptySkillsTitle": "No skills yet",
+    "emptySkillsHint": "Package a procedure once, then attach it to any task or agent.",
+    "emptyMcpsTitle": "No MCP servers yet",
+    "emptyMcpsHint": "Connect one to give this task — and any agent — its tools.",
+    "nothingFoundTitle": "Nothing found"
   },
   "QuickTask": {
     "title": "New task",
@@ -2137,12 +2159,13 @@
     "noAgentsAvailable": "No agents available.",
     "createFirstAgent": "Create your first agent to get started.",
     "onboarding": {
-      "noAgentTitle": "No agent yet",
-      "noAgentSubtitle": "Create an agent to start chatting in this workspace.",
-      "noProviderSubtitle": "Connect a language model first, then add an agent.",
+      "connectModelStep": "Connect a model",
+      "createAgentStep": "Create an agent",
+      "connectModelAction": "Go to Models",
+      "connectModelPlaceholder": "Connect a model to start…",
       "createAgentAction": "Create agent",
-      "connectLLMAction": "Connect LLM",
-      "disabledPlaceholder": "Create an agent to start chatting…"
+      "createAgentPlaceholder": "Create an agent to start…",
+      "noAgent": "No agent"
     },
     "policiesLoadFailed": "Couldn't load task policies"
   },

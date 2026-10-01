@@ -2,14 +2,18 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, X } from "lucide-react";
-import ConfigSheet from "@/components/ConfigSheet";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAttachableResources } from "@/hooks/use-attachable-resources";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
-import { resolveMcpRef } from "@/lib/mcp/resolveMcpRef";
-import { McpPicker } from "./McpPicker";
-import { SkillPicker } from "./SkillPicker";
+import { skillDisplay } from "@/lib/skill-display";
+import { TaskResourcePanel } from "./TaskResourcePanel";
 
 const McpIcon = ENTITY_ICONS.mcp;
 const SkillIcon = ENTITY_ICONS.skill;
@@ -39,89 +43,8 @@ type TaskResourceAttachProps = {
  *
  * The agent owns its capabilities; this is the one-off addition for a task
  * being written right now, which is why it is additive and unconfigurable —
- * restricting an MCP's tools is a property of the agent, not of one run. The
- * pickers are the same ones the agent's own configuration uses, so a server
- * reads identically in both places.
+ * restricting an MCP's tools is a property of the agent, not of one run.
  */
-/**
- * The pickers themselves, split out so the three list requests fire when the
- * sheet is opened rather than on every composer render — this control sits in
- * the chat input, which is mounted on every page.
- */
-function AttachPickers({
-  mcps,
-  skills,
-  onMcpsChange,
-  onSkillsChange,
-}: Omit<TaskResourceAttachProps, "disabled">) {
-  const t = useTranslations("Pickers");
-  const resources = useAttachableResources();
-
-  // Same resolver the picker and the connections list use, so an attached
-  // server carries the logo you picked it by instead of a generic plug.
-  const resolveIcon = (instanceId: string) => {
-    const resolved = resolveMcpRef(
-      instanceId,
-      resources.mcpInstances,
-      resources.mcpServers
-    );
-    return resolved.status === "unresolved" ? null : (resolved.iconSrc ?? null);
-  };
-
-  return (
-    <div className="flex min-h-0 flex-col gap-5 overflow-y-auto pb-6">
-      <section className="space-y-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
-          <McpIcon className="h-4 w-4 text-muted-foreground" />
-          {t("mcpsHeading")}
-        </h3>
-        <McpPicker
-          resources={resources}
-          selectedIds={mcps.map((mcp) => mcp.id)}
-          onAdd={(instance) =>
-            onMcpsChange(
-              mcps.some((item) => item.id === instance.id)
-                ? mcps
-                : [
-                    ...mcps,
-                    {
-                      id: instance.id,
-                      name: instance.name,
-                      iconUrl: resolveIcon(instance.id),
-                    },
-                  ]
-            )
-          }
-          onRemove={(instance) =>
-            onMcpsChange(mcps.filter((item) => item.id !== instance.id))
-          }
-        />
-      </section>
-
-      <section className="space-y-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
-          <SkillIcon className="h-4 w-4 text-muted-foreground" />
-          {t("skillsHeading")}
-        </h3>
-        <SkillPicker
-          resources={resources}
-          selectedIds={skills.map((skill) => skill.id)}
-          onAdd={(skill) =>
-            onSkillsChange(
-              skills.some((item) => item.id === skill.id)
-                ? skills
-                : [...skills, { id: skill.id, name: skill.name }]
-            )
-          }
-          onRemove={(skill) =>
-            onSkillsChange(skills.filter((item) => item.id !== skill.id))
-          }
-        />
-      </section>
-    </div>
-  );
-}
-
 export function TaskResourceAttach({
   mcps,
   skills,
@@ -131,77 +54,84 @@ export function TaskResourceAttach({
 }: TaskResourceAttachProps) {
   const t = useTranslations("Pickers");
   const [open, setOpen] = useState(false);
-  const attached = [
-    ...mcps.map((ref) => ({ ref, kind: "mcp" as const })),
-    ...skills.map((ref) => ({ ref, kind: "skill" as const })),
+  const names = [
+    ...mcps.map((ref) => ref.name ?? ref.id),
+    // Read the way the panel lists them, not as the raw imported slug.
+    ...skills.map((ref) => skillDisplay({ name: ref.name ?? ref.id }).title),
   ];
 
-  const detach = (kind: "mcp" | "skill", id: string) =>
-    kind === "mcp"
-      ? onMcpsChange(mcps.filter((item) => item.id !== id))
-      : onSkillsChange(skills.filter((item) => item.id !== id));
+  // A count per kind rather than a chip per resource: the chips wrapped the
+  // composer's bottom row and crushed the agent and policy pickers beside them.
+  // Which ones are attached is a hover away, and the sheet is where they change.
+  const counts = [
+    { kind: "mcp", Icon: McpIcon, count: mcps.length },
+    { kind: "skill", Icon: SkillIcon, count: skills.length },
+  ].filter((entry) => entry.count > 0);
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1">
-      {attached.map(({ ref, kind }) => {
-        const Icon = kind === "mcp" ? McpIcon : SkillIcon;
-        return (
-          <span
-            key={`${kind}:${ref.id}`}
-            className="flex max-w-[12rem] items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-          >
-            {ref.iconUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={ref.iconUrl}
-                alt=""
-                aria-hidden="true"
-                className="h-3.5 w-3.5 shrink-0 rounded-sm object-contain"
-              />
+    <TooltipProvider delayDuration={300}>
+      <Sheet modal={false} open={open} onOpenChange={setOpen}>
+        <Tooltip>
+          <SheetTrigger asChild>
+            <TooltipTrigger asChild>
+              {/* Sized and coloured like the agent/policy pickers beside it,
+                  with the attach button's grey hover. */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                disabled={disabled}
+                aria-label={
+                  names.length
+                    ? `${t("attachTitle")}: ${names.join(", ")}`
+                    : t("attachTitle")
+                }
+                className="h-7 min-w-7 shrink-0 gap-2 rounded-md px-1.5 text-[13px] text-zinc-400 hover:bg-muted hover:text-zinc-500 data-[state=open]:bg-muted data-[state=open]:text-zinc-500 dark:text-zinc-500 dark:hover:bg-muted dark:hover:text-zinc-300 dark:data-[state=open]:text-zinc-300"
+              >
+                {counts.length ? (
+                  counts.map(({ kind, Icon, count }) => (
+                    <span key={kind} className="flex items-center gap-1">
+                      <Icon />
+                      {/* Icon and number take the pickers' two greys. */}
+                      <span className="tabular-nums dark:text-zinc-300">
+                        {count}
+                      </span>
+                    </span>
+                  ))
+                ) : (
+                  <Plus />
+                )}
+              </Button>
+            </TooltipTrigger>
+          </SheetTrigger>
+          <TooltipContent side="top" className="max-w-64">
+            {names.length ? (
+              <ul className="space-y-0.5">
+                {names.map((name, index) => (
+                  <li key={index} className="truncate">
+                    {name}
+                  </li>
+                ))}
+              </ul>
             ) : (
-              <Icon className="h-3 w-3 shrink-0" />
+              t("attachTitle")
             )}
-            <span className="truncate">{ref.name ?? ref.id}</span>
-            <button
-              type="button"
-              onClick={() => detach(kind, ref.id)}
-              disabled={disabled}
-              aria-label={t("detach", { name: ref.name ?? ref.id })}
-              className="shrink-0 hover:text-foreground"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        );
-      })}
+          </TooltipContent>
+        </Tooltip>
 
-      <ConfigSheet
-        title={t("attachTitle")}
-        description={t("attachDescription")}
-        open={open}
-        onOpenChange={setOpen}
-        triggerComponent={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            disabled={disabled}
-            aria-label={t("attachTitle")}
-            className="h-7 w-7 text-muted-foreground"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-        }
-      >
-        {open && (
-          <AttachPickers
+        <SheetContent
+          side="right"
+          hideOverlay
+          className="flex flex-col gap-0 overflow-hidden p-0 sm:w-[420px] sm:max-w-[420px]"
+        >
+          <TaskResourcePanel
             mcps={mcps}
             skills={skills}
             onMcpsChange={onMcpsChange}
             onSkillsChange={onSkillsChange}
           />
-        )}
-      </ConfigSheet>
-    </div>
+        </SheetContent>
+      </Sheet>
+    </TooltipProvider>
   );
 }

@@ -1,6 +1,15 @@
+import { formatMention } from "@/utils/mentions";
+
 export type WorkplaceSuggestion = {
   label: string;
-  text: string;
+  /** One short line beside the label: what picking the row gets you. */
+  hint: string;
+  /**
+   * The prompt put into the composer. Absent on setup rows, which link to where
+   * the thing is set up instead of asking the agent for it. May carry an agent
+   * mention in storage form, @[id:name].
+   */
+  text?: string;
   /** Set when the suggestion is something to go and set up, not something to ask. */
   href?: string;
   /**
@@ -15,6 +24,8 @@ export type ChannelOption = {
   id: string;
   name: string;
   iconUrl?: string | null;
+  /** The catalog's own line about the channel, when it has one. */
+  description?: string | null;
 };
 
 export type WorkspaceShape = {
@@ -24,8 +35,35 @@ export type WorkspaceShape = {
   availableChannels: ChannelOption[];
   mcpCount: number;
   skillCount: number;
-  agentNames: string[];
+  agents: { id: string; name: string }[];
 };
+
+export type SuggestionCopyKey =
+  | "putOnChannel.label"
+  | "putOnChannel.hint"
+  | "connectTool.label"
+  | "connectTool.hint"
+  | "teachSkill.label"
+  | "teachSkill.hint"
+  | "catchUp.label"
+  | "catchUp.hint"
+  | "catchUp.text"
+  | "tryTool.label"
+  | "tryTool.hint"
+  | "tryTool.text"
+  | "askAgent.label"
+  | "askAgent.hint"
+  | "askAgent.text";
+
+/**
+ * The words for each row, looked up by key under `Workplace.suggestions`. The
+ * server hands in next-intl's translator; this module only decides which rows
+ * there are.
+ */
+export type SuggestionCopy = (
+  key: SuggestionCopyKey,
+  values?: Record<string, string>
+) => string;
 
 /**
  * What to offer on an empty workplace.
@@ -39,6 +77,7 @@ export type WorkspaceShape = {
  */
 export function buildWorkplaceSuggestions(
   shape: WorkspaceShape,
+  copy: SuggestionCopy,
   max = 4
 ): WorkplaceSuggestion[] {
   const setup: WorkplaceSuggestion[] = [];
@@ -49,8 +88,8 @@ export function buildWorkplaceSuggestions(
     // Telegram offers Slack instead of advertising something it cannot do.
     for (const channel of shape.availableChannels.slice(0, 2)) {
       setup.push({
-        label: `Put an agent on ${channel.name}`,
-        text: `Answer where people already are — connect ${channel.name} and pick the agent that replies`,
+        label: copy("putOnChannel.label", { channel: channel.name }),
+        hint: channel.description?.trim() || copy("putOnChannel.hint"),
         href: "/triggers/create",
         iconUrl: channel.iconUrl,
       });
@@ -59,40 +98,47 @@ export function buildWorkplaceSuggestions(
 
   if (shape.mcpCount === 0) {
     setup.push({
-      label: "Connect a tool",
-      text: "Give agents an MCP server — Google, GitHub, your own API",
+      label: copy("connectTool.label"),
+      hint: copy("connectTool.hint"),
       href: "/connections",
     });
   }
 
   if (shape.skillCount === 0) {
     setup.push({
-      label: "Teach a skill",
-      text: "Package a procedure once and let every agent reuse it",
+      label: copy("teachSkill.label"),
+      hint: copy("teachSkill.hint"),
       href: "/skills",
     });
   }
 
   for (const channel of shape.connectedChannels.slice(0, 2)) {
     prompts.push({
-      label: `Catch up on ${channel.name}`,
-      text: `Summarise what came in on ${channel.name} today and flag anything that needs an answer`,
+      label: copy("catchUp.label", { channel: channel.name }),
+      hint: copy("catchUp.hint"),
+      text: copy("catchUp.text", { channel: channel.name }),
       iconUrl: channel.iconUrl,
     });
   }
 
   if (shape.mcpCount > 0) {
     prompts.push({
-      label: "Try a connected tool",
-      text: "List the tools you can reach right now and what each one is for",
+      label: copy("tryTool.label"),
+      hint: copy("tryTool.hint"),
+      text: copy("tryTool.text"),
     });
   }
 
-  const [firstAgent] = shape.agentNames;
+  const [firstAgent] = shape.agents;
   if (firstAgent) {
     prompts.push({
-      label: `Ask ${firstAgent}`,
-      text: `${firstAgent}, what are you set up to do and what access do you have?`,
+      label: copy("askAgent.label", { agent: firstAgent.name }),
+      hint: copy("askAgent.hint"),
+      // A real mention, as if picked from the @ menu, so the question is
+      // addressed to that agent rather than just naming it.
+      text: copy("askAgent.text", {
+        agent: formatMention(firstAgent.id, firstAgent.name),
+      }),
     });
   }
 

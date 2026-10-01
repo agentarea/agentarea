@@ -278,7 +278,8 @@ export function InboxClient({ items, error }: InboxClientProps) {
           >
             <SheetContent
               side="right"
-              className="flex h-full w-full max-w-none flex-col p-0 sm:max-w-none lg:hidden [&>button]:hidden"
+              // Full width inside the page frame (8px each side) on tablets.
+              className="flex h-full w-full max-w-none flex-col p-0 sm:w-[calc(100%-1rem)] sm:max-w-none lg:hidden [&>button]:hidden"
             >
               <SheetHeader className="sr-only">
                 <SheetTitle>{t("sheet.title")}</SheetTitle>
