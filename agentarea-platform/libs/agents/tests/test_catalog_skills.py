@@ -148,7 +148,6 @@ class FakeCatalogRepo:
                 source_type=(i.spec or {}).get("source_type") or "content",
                 source_url=(i.spec or {}).get("source_url"),
                 network_scope=(i.spec or {}).get("network_scope") or "private",
-                installed_version=i.installed_version,
                 created_at=i.created_at,
                 updated_at=i.updated_at,
             )

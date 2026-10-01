@@ -897,8 +897,13 @@ type ListSkillsOptions = {
 
 type ListSkillsError = HttpValidationError | undefined;
 
+/**
+ * Unpaginated, this is the workspace's own skills and never the catalog: the
+ * catalog holds ~150k skills, and walking it page by page cost ~1,500 requests
+ * per call. Catalog skills are browsed paged, in Explore.
+ */
 export async function listSkills(
-  options: ListSkillsOptions & { paginated: true }
+  options: ListSkillsOptions & { paginated: true; include_catalog?: boolean }
 ): Promise<{
   data: PaginatedResponseSkillResponse | undefined;
   error: ListSkillsError;
@@ -907,19 +912,25 @@ export async function listSkills(
   options?: ListSkillsOptions & { paginated?: false }
 ): Promise<{ data: SkillResponse[]; error: ListSkillsError }>;
 export async function listSkills(
-  options: ListSkillsOptions & { paginated?: boolean } = {}
+  options: ListSkillsOptions & {
+    paginated?: boolean;
+    include_catalog?: boolean;
+  } = {}
 ) {
   const pageSize = options.page_size || (options.paginated ? 50 : 100);
+  const includeCatalog = options.paginated
+    ? (options.include_catalog ?? true)
+    : false;
   const query = (page: number) => ({
     page,
     page_size: pageSize,
+    include_catalog: includeCatalog,
     ...(options.search ? { search: options.search } : {}),
     ...(options.source_type ? { source_type: options.source_type } : {}),
     ...(options.network_scope ? { network_scope: options.network_scope } : {}),
     ...(options.from_registry !== undefined
       ? { from_registry: options.from_registry }
       : {}),
-    ...(options.paginated ? {} : { include_catalog: false }),
   });
 
   const { data, error } = await sdk.listSkillsV1SkillsGet({

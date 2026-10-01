@@ -289,7 +289,10 @@ type ListSkillsActionOptions = {
 };
 
 export async function listSkillsAction(
-  params: ListSkillsActionOptions & { paginated: true }
+  params: ListSkillsActionOptions & {
+    paginated: true;
+    include_catalog?: boolean;
+  }
 ): Promise<{
   data: PaginatedResponseSkillResponse | undefined;
   error: unknown;
@@ -298,7 +301,10 @@ export async function listSkillsAction(
   params?: ListSkillsActionOptions & { paginated?: false }
 ): Promise<{ data: SkillResponse[]; error: unknown }>;
 export async function listSkillsAction(
-  params: ListSkillsActionOptions & { paginated?: boolean } = {}
+  params: ListSkillsActionOptions & {
+    paginated?: boolean;
+    include_catalog?: boolean;
+  } = {}
 ): Promise<
   | { data: PaginatedResponseSkillResponse | undefined; error: unknown }
   | { data: SkillResponse[]; error: unknown }
