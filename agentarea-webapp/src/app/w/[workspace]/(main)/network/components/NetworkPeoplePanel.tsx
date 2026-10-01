@@ -7,7 +7,7 @@ import { AdminOnlyState } from "@/components/AdminOnlyState";
 import Link from "@/components/WorkspaceLink";
 import { EntityIcon } from "@/lib/entity-icons";
 import type { NetworkNodeData, TopologyResponse } from "../types";
-import type { PeopleStatus } from "./NetworkPeopleNode";
+import type { PeopleStatus } from "../useNetworkPeople";
 
 interface Props {
   data: NetworkPeopleAccessResponse | null;

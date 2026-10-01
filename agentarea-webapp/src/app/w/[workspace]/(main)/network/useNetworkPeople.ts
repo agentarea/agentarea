@@ -5,7 +5,8 @@ import { useTranslations } from "next-intl";
 import type { NetworkPeopleAccessResponse } from "@/api/client/types.gen";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import type { NetworkActionResult } from "./actions";
-import type { PeopleStatus } from "./components/NetworkPeopleNode";
+
+export type PeopleStatus = "loading" | "ready" | "error" | "adminOnly";
 
 export function useNetworkPeople(
   canAdminister: boolean,

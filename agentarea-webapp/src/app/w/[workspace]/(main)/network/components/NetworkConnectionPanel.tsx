@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
 import {
+  AlertTriangle,
   ArrowDownLeft,
   ArrowUpRight,
   ExternalLink,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { EffectivePolicy } from "@/api/client/types.gen";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import Link from "@/components/WorkspaceLink";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { EntityIcon, type EntityKind } from "@/lib/entity-icons";
 import type { NetworkActionResult } from "../actions";
@@ -31,6 +32,7 @@ interface Props {
   onSelect: (node: NetworkNodeData) => void;
   onClose: () => void;
   onFocus: (agentId: string) => void;
+  issues?: string[];
   loadPolicy?: (
     agentId: string
   ) => Promise<NetworkActionResult<EffectivePolicy>>;
@@ -49,6 +51,7 @@ export default function NetworkConnectionPanel({
   onSelect,
   onClose,
   onFocus,
+  issues = [],
   loadPolicy,
 }: Props) {
   const t = useTranslations("NetworkPage.accessDetails");
@@ -128,6 +131,19 @@ export default function NetworkConnectionPanel({
         </button>
       </header>
       <div className="flex-1 space-y-5 overflow-auto p-4">
+        {issues.length > 0 && (
+          <ul className="space-y-1.5 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+            {issues.map((issue) => (
+              <li
+                key={issue}
+                className="flex items-start gap-2 text-xs text-destructive"
+              >
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {issue}
+              </li>
+            ))}
+          </ul>
+        )}
         {node.type === "agent" && (
           <button
             type="button"
