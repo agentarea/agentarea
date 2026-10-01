@@ -117,7 +117,8 @@
     "copyFailed": "Couldn’t copy to clipboard",
     "saved": "Saved",
     "deleteFailed": "Couldn’t delete {itemName}",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "display": "Display"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -255,7 +256,6 @@
     "tabMembers": "Members",
     "tabInvitations": "Invitations",
     "searchPlaceholder": "Search by user ID or email…",
-    "display": "Display",
     "ordering": "Ordering",
     "orderAccess": "Access",
     "orderUserId": "User ID",
@@ -1358,7 +1358,6 @@
       "chipSkillInside": "SKILL.md inside"
     },
     "display": {
-      "display": "Display",
       "grouping": "Grouping",
       "source": "Source",
       "scope": "Scope",
@@ -1551,6 +1550,7 @@
       "schedules": "Schedules"
     },
     "group": {
+      "grouping": "Grouping",
       "byChannel": "Channels",
       "none": "No grouping"
     },

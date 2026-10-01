@@ -7,18 +7,13 @@ import {
   Link2,
   Mail,
   Shield,
-  SlidersHorizontal,
   Users,
 } from "lucide-react";
+import DisplayMenu from "@/components/DisplayMenu";
 import SearchInput from "@/components/SearchInput";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { ToolbarButton, ToolbarDivider } from "@/components/ui/toolbar";
+import { ToolbarDivider } from "@/components/ui/toolbar";
 import type {
   InvitationsOrder,
   MembersOrder,
@@ -96,49 +91,40 @@ export function MembersToolbar({
         />
       </div>
       <div className="flex-1" />
-      {/* Same "Display" popover menu as the Skills page. */}
-      <Popover>
-        <PopoverTrigger asChild>
-          <ToolbarButton>
-            <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-            {t("display")}
-          </ToolbarButton>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-52 p-1.5">
-          <MenuSectionLabel>{t("ordering")}</MenuSectionLabel>
-          {tab === "members" ? (
-            <>
-              <MenuRow
-                icon={<Shield className="h-3.5 w-3.5" />}
-                label={t("orderAccess")}
-                selected={order === "access"}
-                onClick={() => onOrderChange("access")}
-              />
-              <MenuRow
-                icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
-                label={t("orderUserId")}
-                selected={order === "id"}
-                onClick={() => onOrderChange("id")}
-              />
-            </>
-          ) : (
-            <>
-              <MenuRow
-                icon={<Clock className="h-3.5 w-3.5" />}
-                label={t("orderExpires")}
-                selected={invitationsOrder === "expires"}
-                onClick={() => onInvitationsOrderChange("expires")}
-              />
-              <MenuRow
-                icon={<Mail className="h-3.5 w-3.5" />}
-                label={t("orderRecipient")}
-                selected={invitationsOrder === "recipient"}
-                onClick={() => onInvitationsOrderChange("recipient")}
-              />
-            </>
-          )}
-        </PopoverContent>
-      </Popover>
+      <DisplayMenu>
+        <MenuSectionLabel>{t("ordering")}</MenuSectionLabel>
+        {tab === "members" ? (
+          <>
+            <MenuRow
+              icon={<Shield className="h-3.5 w-3.5" />}
+              label={t("orderAccess")}
+              selected={order === "access"}
+              onClick={() => onOrderChange("access")}
+            />
+            <MenuRow
+              icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
+              label={t("orderUserId")}
+              selected={order === "id"}
+              onClick={() => onOrderChange("id")}
+            />
+          </>
+        ) : (
+          <>
+            <MenuRow
+              icon={<Clock className="h-3.5 w-3.5" />}
+              label={t("orderExpires")}
+              selected={invitationsOrder === "expires"}
+              onClick={() => onInvitationsOrderChange("expires")}
+            />
+            <MenuRow
+              icon={<Mail className="h-3.5 w-3.5" />}
+              label={t("orderRecipient")}
+              selected={invitationsOrder === "recipient"}
+              onClick={() => onInvitationsOrderChange("recipient")}
+            />
+          </>
+        )}
+      </DisplayMenu>
     </div>
   );
 }

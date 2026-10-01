@@ -117,7 +117,8 @@
     "copyFailed": "Не удалось скопировать в буфер обмена",
     "saved": "Сохранено",
     "deleteFailed": "Не удалось удалить {itemName}",
-    "confirm": "Подтвердить"
+    "confirm": "Подтвердить",
+    "display": "Вид"
   },
   "admin": {
     "title": "Панель администратора",
@@ -255,7 +256,6 @@
     "tabMembers": "Участники",
     "tabInvitations": "Приглашения",
     "searchPlaceholder": "Поиск по ID пользователя или email…",
-    "display": "Вид",
     "ordering": "Сортировка",
     "orderAccess": "По доступу",
     "orderUserId": "По ID пользователя",
@@ -1358,7 +1358,6 @@
       "chipSkillInside": "SKILL.md внутри"
     },
     "display": {
-      "display": "Вид",
       "grouping": "Группировка",
       "source": "Источник",
       "scope": "Область",
@@ -1551,6 +1550,7 @@
       "schedules": "Расписания"
     },
     "group": {
+      "grouping": "Группировка",
       "byChannel": "Каналы",
       "none": "Без группировки"
     },

@@ -6,7 +6,7 @@ import SearchInput from "@/components/SearchInput";
 import TriggersContent from "./components/TriggersContent";
 import TriggersHeaderTabs from "./components/TriggersHeaderTabs";
 import TriggersSkeleton from "./components/TriggersSkeleton";
-import TriggersGroupSelect from "./components/TriggersGroupSelect";
+import TriggersDisplayMenu from "./components/TriggersDisplayMenu";
 import TriggersTypeFilterSection from "./components/TriggersTypeFilterSection";
 import CreateTriggerButton from "./components/CreateTriggerButton";
 
@@ -62,7 +62,7 @@ export default async function TriggersPage({
               urlPath="/triggers"
               placeholder={t("searchPlaceholder")}
             />
-            <TriggersGroupSelect currentGroup={groupBy} />
+            <TriggersDisplayMenu currentGroup={groupBy} />
             <TriggersHeaderTabs currentTab={viewMode} />
           </div>
         </>
