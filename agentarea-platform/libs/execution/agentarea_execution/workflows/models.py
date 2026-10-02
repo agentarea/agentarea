@@ -106,6 +106,7 @@ class ContinueAsNewState(BaseModel):
     context_head_seqs: list[int] = Field(default_factory=lambda: [0])
     context_tail_start: int = 1
     last_prompt_tokens: int = 0
+    seen_urls: list[str] = Field(default_factory=list)
     agent_config: dict[str, Any]
     available_tools: list[dict[str, Any]]
     current_iteration: int
@@ -198,6 +199,9 @@ class AgentExecutionState(BaseModel):
     context_head_seqs: list[int] = Field(default_factory=lambda: [0])
     context_tail_start: int = 1
     last_prompt_tokens: int = 0
+    # Links that reached the conversation from outside the model, comparable
+    # form. The log keeps the conversation, so the web fetch gate keeps these.
+    seen_urls: list[str] = Field(default_factory=list)
     agent_config: dict[str, Any] = Field(default_factory=dict)
     available_tools: list[dict[str, Any]] = Field(default_factory=list)
     interaction_capabilities: InteractionCapabilities = Field(

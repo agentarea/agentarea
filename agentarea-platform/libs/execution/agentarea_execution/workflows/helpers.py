@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, cast
+from urllib.parse import unquote, urlsplit
 
 from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationAction,
@@ -126,6 +127,76 @@ def tool_definition_name(tool: dict[str, Any]) -> str | None:
     if tool.get("type") == "function":
         return cast(dict[str, Any], tool.get("function") or {}).get("name")
     return tool.get("name")
+
+
+_WEB_TOOL = "web"
+_WEB_FETCH_ACTION = "fetch_webpage"
+_URL_IN_TEXT = re.compile(r"https?://[^\s\"'<>`\\()\[\]{}]+", re.IGNORECASE)
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+# Bounds what a long run carries across continue-as-new; the oldest go first.
+SEEN_URLS_LIMIT = 5000
+
+
+def web_fetch_url(tool_name: str, tool_args: Mapping[str, Any]) -> str | None:
+    """The URL a call to the web toolset's fetch would open, or None for any other call.
+
+    The toolset reaches the model either as one ``web`` tool whose ``action``
+    picks the method (its arguments prefixed ``fetch_webpage_``; the action may
+    be omitted when the prefix is unambiguous) or as the per-operation
+    ``web_fetch_webpage``.
+    """
+    if tool_name == f"{_WEB_TOOL}_{_WEB_FETCH_ACTION}":
+        url = tool_args.get("url")
+    elif tool_name == _WEB_TOOL:
+        action = tool_args.get("action")
+        prefix = f"{_WEB_FETCH_ACTION}_"
+        if action != _WEB_FETCH_ACTION and (
+            action or not any(k.startswith(prefix) for k in tool_args)
+        ):
+            return None
+        url = tool_args.get(f"{prefix}url")
+    else:
+        return None
+    return url if isinstance(url, str) else ""
+
+
+def comparable_url(url: str) -> str | None:
+    """A URL reduced to what identifies the page: host, port, path and query.
+
+    The scheme, a default port, the fragment, a trailing slash and percent
+    encoding all vary between where a link is written and where it is fetched
+    without naming a different page.
+    """
+    try:
+        parts = urlsplit(url.strip().rstrip(".,;:!?"))
+        port = parts.port
+    except ValueError:
+        return None
+    scheme = parts.scheme.lower()
+    host = parts.hostname
+    if scheme not in _DEFAULT_PORTS or not host:
+        return None
+    netloc = host if port in (None, _DEFAULT_PORTS[scheme]) else f"{host}:{port}"
+    query = unquote(parts.query)
+    return netloc + unquote(parts.path).rstrip("/") + (f"?{query}" if query else "")
+
+
+def external_urls(messages: Sequence[Any]) -> list[str]:
+    """Comparable forms of the links in messages the model did not write itself.
+
+    The model's own output does not count: a link it composed could carry the
+    task's data to a server of an injected instruction's choosing. Links in the
+    instructions, the request, and tool results (search hits, links of pages
+    already read) do. Order of first appearance, without repeats.
+    """
+    found: dict[str, None] = {}
+    for message in messages:
+        if message.role == "assistant":
+            continue
+        for candidate in _URL_IN_TEXT.findall(message.content or ""):
+            if (url := comparable_url(candidate)) is not None:
+                found.setdefault(url)
+    return list(found)
 
 
 def filter_disclosed_tools(

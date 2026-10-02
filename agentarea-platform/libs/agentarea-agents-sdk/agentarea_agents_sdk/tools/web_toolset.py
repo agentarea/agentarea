@@ -1,28 +1,29 @@
-"""Web fetch toolset.
+"""Web toolset: search the public web and read pages into the conversation.
 
-Tools that pull bytes from the public internet route binary responses through
-the same canonical task-workspace repository the file and shell tools use. The LLM never sees raw bytes — for
-binary responses (images, PDFs, archives) the tool persists the payload
-under the task's artifact scope and returns a JSON description with the
-artifact path. Text responses are returned inline (truncated for context).
+``search_web`` asks the deployment's SearXNG-compatible search service.
+``fetch_webpage`` reads one page and returns its text inline, the way hosted
+fetch tools (Anthropic ``web_fetch``, Gemini ``url_context``) do: nothing is
+written to storage or to the sandbox. Downloading a file is a different
+capability with a different boundary, the sandbox shell and its egress policy.
 
-The convention matches OpenAI Assistants and Anthropic Files API: tools
-return references, callers (or downstream tools) fetch the bytes through
-the artifact endpoint.
+The page is requested through a client the caller supplies. In agent execution
+that client resolves, vets and pins the address of every hop, so an
+agent-supplied URL cannot reach the platform's own network. Without one, fetch
+fails closed.
 """
 
 from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from html.parser import HTMLParser
 from typing import Any, ClassVar
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import httpx
 
 from .decorator_tool import Toolset, tool_method
-from .file_toolset import StorageClient, WorkspaceRepositoryClient
 from .tool_authz import unrestricted
 from .tool_definition import toolset
 
@@ -36,7 +37,11 @@ _TEXT_CONTENT_TYPES: tuple[str, ...] = (
 )
 _DEFAULT_TIMEOUT_SECONDS: float = 15.0
 _INLINE_TEXT_CHAR_LIMIT: int = 50_000
-_MAX_BINARY_BYTES: int = 25 * 1024 * 1024  # 25 MiB hard ceiling per fetch
+_MAX_FETCH_BYTES: int = 5 * 1024 * 1024  # raw page ceiling; the inline text is far smaller
+_MAX_REDIRECTS: int = 5
+_USER_AGENT: str = "Mozilla/5.0 (compatible; AgentArea/1.0; +https://agentarea.ai)"
+
+FetchClientFactory = Callable[..., httpx.AsyncClient]
 
 
 class _TextExtractor(HTMLParser):
@@ -112,91 +117,29 @@ def _is_html_content_type(content_type: str | None) -> bool:
     return ct in ("text/html", "application/xhtml+xml")
 
 
-def _filename_from_url(url: str, content_type: str | None) -> str:
-    """Pick a sensible filename from URL path + content-type."""
-    path = urlparse(url).path or "/"
-    name = path.rsplit("/", 1)[-1] or "index"
-    if "." in name:
-        return name
-    ext_map = {
-        "image/png": ".png",
-        "image/jpeg": ".jpg",
-        "image/gif": ".gif",
-        "image/webp": ".webp",
-        "image/svg+xml": ".svg",
-        "application/pdf": ".pdf",
-        "application/zip": ".zip",
-        "application/octet-stream": ".bin",
-    }
-    ext = ""
-    if content_type:
-        ext = ext_map.get(content_type.lower().split(";", 1)[0].strip(), "")
-    return name + (ext or ".bin")
-
-
 @toolset(
     namespace="agentarea/web",
     display_name="Web Tools",
-    description="Search the web and fetch URLs; binary responses become live workspace files.",
+    description="Search the web and read web pages into the conversation.",
     category="information",
     plane="runtime",
     requires_user_confirmation=True,
 )
 class WebToolset(Toolset):
-    """Fetch URLs and route binary responses to the selected task storage.
-
-    In agent execution the selected storage is the live sandbox, so every
-    binary write becomes ``/workspace/downloads/{filename}`` and is immediately
-    visible to shell/file tools. It becomes durable only after explicit artifact
-    publication. ``StorageClient`` remains available for standalone SDK use.
-    """
+    """Search the web and read pages inline; never persists what it fetches."""
 
     def __init__(
         self,
-        storage: StorageClient | None = None,
-        workspace_repository: WorkspaceRepositoryClient | None = None,
-        workspace_id: str | None = None,
-        task_id: str | None = None,
-        lease_owner: str | None = None,
-        base_prefix: str = "",
         search_web: bool = True,
         fetch_webpage: bool = True,
         search_base_url: str | None = None,
-        fetch_base_url: str | None = None,
+        http_client_factory: FetchClientFactory | None = None,
     ) -> None:
         super().__init__()
-        self.storage = storage
-        self.workspace_repository = workspace_repository
-        # Only fetches that persist need a tenant. Unlike the file toolsets this
-        # one runs storage-less (search only), so requiring a workspace there
-        # would be theatre — but writing under a shared placeholder would put one
-        # tenant's fetched bytes where another can read them.
-        if (storage is not None or workspace_repository is not None) and not workspace_id:
-            raise ValueError(
-                "workspace_id is required when a store is configured: fetched content "
-                "is scoped by it, and a shared placeholder mixes tenants"
-            )
-        self.workspace_id = workspace_id or ""
-        self.task_id = task_id or ""
-        self.lease_owner = lease_owner or ""
-        self.base_prefix = base_prefix.strip("/")
         self._search_enabled = search_web
         self._fetch_enabled = fetch_webpage
         self.search_base_url = search_base_url.rstrip("/") if search_base_url else None
-        self.fetch_base_url = fetch_base_url.rstrip("/") if fetch_base_url else None
-
-    def _download_path(self, file_name: str) -> str:
-        clean = file_name.lstrip("/").replace("..", "_")
-        if self.workspace_repository is not None:
-            return f"downloads/{clean}"
-        if self.base_prefix:
-            return f"{self.base_prefix}/downloads/{clean}"
-        return f"downloads/{clean}"
-
-    def _public_file_path(self, relative_path: str) -> str:
-        if self.workspace_repository is not None:
-            return f"tasks/{self.task_id}/workspace/{relative_path}"
-        return relative_path
+        self._http_client_factory = http_client_factory
 
     @tool_method(effect="read")
     @unrestricted("the public web; reads and writes no workspace state")
@@ -258,120 +201,88 @@ class WebToolset(Toolset):
             ensure_ascii=False,
         )
 
-    @tool_method(effect="write")
+    @tool_method(effect="read")
     @unrestricted("the public web; reads and writes no workspace state")
     async def fetch_webpage(
         self,
         url: str,
         timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
     ) -> str:
-        """Fetch a URL. Text comes back inline; binary becomes a workspace file.
+        """Read a web page (HTML, text or JSON) and return its text and links.
 
-        Returns a compact JSON envelope so the LLM gets a uniform shape:
+        Only links that already appeared in this task can be opened: the
+        request itself, search results, or pages fetched earlier. Images,
+        PDFs, archives and other binary content are refused; download those
+        with the sandbox shell instead.
+
+        Returns a JSON envelope:
 
             { "url": ..., "status": int, "content_type": str,
-              "kind": "text" | "binary",
-              "text": "..." }                # when kind=text
-            { ..., "kind": "binary", "file_path": "downloads/foo.png",
-              "size": int }                  # when kind=binary
-
-        Binary responses larger than 25 MiB are refused outright — agents
-        shouldn't be pulling huge blobs into a task.
+              "truncated": bool, "text": "...",
+              "extracted_text": "...", "links": [...] }   # last two for HTML
         """
         if not self._fetch_enabled:
             return "Error: fetch_webpage is disabled for this toolset instance"
         if not url or not (url.startswith("http://") or url.startswith("https://")):
             return f"Error: url must be http(s); got {url!r}"
-        if self.fetch_base_url is None:
-            return (
-                "Error: web fetching is not configured; set WEB_FETCH_BASE_URL "
-                "to an audited egress fetch service"
-            )
+        if self._http_client_factory is None:
+            return "Error: web fetching is not configured for this toolset instance"
 
         try:
-            # The trusted worker never connects to an agent-supplied URL. The
-            # deployment-owned fetch service is responsible for DNS/IP and
-            # redirect policy and must run on the sandbox egress boundary.
-            async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=False) as client:
-                resp = await client.get(
-                    f"{self.fetch_base_url}/fetch",
-                    params={"url": url, "max_bytes": _MAX_BINARY_BYTES},
-                    headers={"Accept": "*/*"},
-                )
-                resp.raise_for_status()
+            async with (
+                self._http_client_factory(
+                    timeout=timeout_seconds,
+                    follow_redirects=True,
+                    max_redirects=_MAX_REDIRECTS,
+                ) as client,
+                client.stream(
+                    "GET",
+                    url,
+                    headers={
+                        "Accept": "text/html,application/xhtml+xml,text/plain,application/json;q=0.9,*/*;q=0.1",
+                        "User-Agent": _USER_AGENT,
+                    },
+                ) as resp,
+            ):
+                content_type = resp.headers.get("content-type")
+                if not _is_text_content_type(content_type):
+                    return (
+                        f"Error: {url} returned {content_type or 'an unknown content type'}; "
+                        "fetch_webpage reads text pages only. Download files with the "
+                        "sandbox shell instead."
+                    )
+                body = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    body.extend(chunk)
+                    if len(body) > _MAX_FETCH_BYTES:
+                        return f"Error: {url} is larger than {_MAX_FETCH_BYTES} bytes"
+                final_url = str(resp.url)
+                status = resp.status_code
+                encoding = resp.charset_encoding or "utf-8"
         except httpx.HTTPError as e:
             return f"Error fetching {url}: {e}"
 
-        content_type = resp.headers.get("content-type")
-        final_url = resp.headers.get("x-agentarea-final-url", url)
-        body = resp.content
-        if len(body) > _MAX_BINARY_BYTES:
-            return (
-                f"Error: response body is {len(body)} bytes which exceeds "
-                f"the {_MAX_BINARY_BYTES}-byte ceiling"
-            )
-
-        if _is_text_content_type(content_type):
-            try:
-                text = resp.text
-            except Exception as e:  # encoding fail: fall back to raw bytes
-                return f"Error decoding text body from {url}: {e}"
-            payload: dict[str, Any] = {
-                "url": final_url,
-                "status": resp.status_code,
-                "content_type": content_type,
-                "kind": "text",
-                "truncated": len(text) > _INLINE_TEXT_CHAR_LIMIT,
-            }
-            if _is_html_content_type(content_type):
-                extractor = _HTMLSummaryExtractor(final_url)
-                try:
-                    extractor.feed(text)
-                    payload["extracted_text"] = extractor.text()[:_INLINE_TEXT_CHAR_LIMIT]
-                    payload["links"] = extractor.links[:100]
-                except Exception:
-                    payload["extracted_text"] = ""
-                    payload["links"] = []
-            payload["text"] = text[:_INLINE_TEXT_CHAR_LIMIT]
-            return json.dumps(payload)
-
-        # Binary: write to the selected task storage. Production injects the
-        # live sandbox store; the agent may publish it explicitly afterward.
-        if self.storage is None and self.workspace_repository is None:
-            return (
-                "Error: response is binary "
-                f"({content_type or 'unknown'}) but no workspace storage "
-                "is configured for this toolset"
-            )
-
-        file_name = _filename_from_url(url, content_type)
-        download_path = self._download_path(file_name)
         try:
-            if self.workspace_repository is not None:
-                if not self.task_id:
-                    return "Error: task_id is required for canonical workspace writes"
-                await self.workspace_repository.put(
-                    self.workspace_id,
-                    self.task_id,
-                    download_path,
-                    body,
-                    content_type,
-                    owner=self.lease_owner or None,
-                )
-            else:
-                if self.storage is None:
-                    return "Error: no workspace storage configured"
-                await self.storage.put(self.workspace_id, download_path, body, content_type)
-        except Exception as e:
-            return f"Error writing workspace file {download_path}: {e}"
+            text = bytes(body).decode(encoding, errors="replace")
+        except LookupError:  # the server named a charset Python does not know
+            text = bytes(body).decode("utf-8", errors="replace")
 
-        return json.dumps(
-            {
-                "url": final_url,
-                "status": resp.status_code,
-                "content_type": content_type,
-                "kind": "binary",
-                "file_path": self._public_file_path(download_path),
-                "size": len(body),
-            }
-        )
+        payload: dict[str, Any] = {
+            "url": final_url,
+            "status": status,
+            "content_type": content_type,
+            "truncated": len(text) > _INLINE_TEXT_CHAR_LIMIT,
+        }
+        if _is_html_content_type(content_type):
+            extractor = _HTMLSummaryExtractor(final_url)
+            try:
+                extractor.feed(text)
+                payload["extracted_text"] = extractor.text()[:_INLINE_TEXT_CHAR_LIMIT]
+                payload["links"] = extractor.links[:100]
+            except Exception:
+                payload["extracted_text"] = ""
+                payload["links"] = []
+        payload["text"] = text[:_INLINE_TEXT_CHAR_LIMIT]
+        # Unescaped, so the links a later fetch may follow read in the
+        # conversation exactly as they will be requested.
+        return json.dumps(payload, ensure_ascii=False)

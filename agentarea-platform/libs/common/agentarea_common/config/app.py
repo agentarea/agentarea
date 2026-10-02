@@ -49,9 +49,6 @@ class AppSettings(BaseAppSettings):
     # Optional SearXNG-compatible endpoint used by agentarea/web.search_web.
     # When unset, search attempts fail explicitly; URL fetching remains usable.
     WEB_SEARCH_BASE_URL: str | None = None
-    # Audited service for agent-supplied URL fetches. The trusted worker never
-    # fetches those URLs directly because that would expose internal networks.
-    WEB_FETCH_BASE_URL: str | None = None
     # Comma-separated host globs and CIDRs that member-supplied URLs (MCP
     # servers, OAuth discovery, model endpoints, skill and spec imports) may
     # reach even though they are private or loopback, e.g. "localhost" for a
