@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FILTER_KEYS } from "./inboxShared";
 
@@ -16,11 +17,18 @@ export function InboxPageSkeleton() {
     <ContentBlock
       header={{ breadcrumb: [{ label: t("title") }] }}
       subheader={
-        <div className="flex items-center gap-2" aria-hidden="true">
-          {FILTER_KEYS.map((key) => (
-            <Skeleton key={key} className="h-7 w-24 rounded-md" />
-          ))}
-        </div>
+        <SubheaderToolbar
+          categories={
+            <div
+              className="flex min-w-0 items-center gap-2 overflow-hidden"
+              aria-hidden="true"
+            >
+              {FILTER_KEYS.map((key) => (
+                <Skeleton key={key} className="h-7 w-24 shrink-0 rounded-md" />
+              ))}
+            </div>
+          }
+        />
       }
       className="flex min-h-0 flex-1 flex-col overflow-hidden p-0"
     >

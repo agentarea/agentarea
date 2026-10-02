@@ -14,6 +14,7 @@ import {
   type FilterValue,
   type InboxCounts,
 } from "@/app/w/[workspace]/(main)/inbox/components/inboxShared";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 
 interface InboxToolbarProps {
@@ -36,25 +37,27 @@ export function InboxToolbar({ counts, filter, onChange }: InboxToolbarProps) {
   const t = useTranslations("InboxPage.filters");
 
   return (
-    <div className="flex h-full min-w-0 w-full items-center">
-      <CountSegmentedControl<FilterValue>
-        items={FILTER_KEYS.map((key) => {
-          const Icon = FILTER_ICON[key];
-          return {
-            value: key,
-            label: (
-              <span className="flex items-center gap-1.5 whitespace-nowrap">
-                <Icon className="h-4 w-4" strokeWidth={1.8} />
-                {t(key)}
-              </span>
-            ),
-            count: counts[key],
-          };
-        })}
-        value={filter}
-        onChange={onChange}
-        layoutId="inbox-filter-control"
-      />
-    </div>
+    <SubheaderToolbar
+      categories={
+        <CountSegmentedControl<FilterValue>
+          items={FILTER_KEYS.map((key) => {
+            const Icon = FILTER_ICON[key];
+            return {
+              value: key,
+              label: (
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
+                  <Icon className="h-4 w-4" strokeWidth={1.8} />
+                  {t(key)}
+                </span>
+              ),
+              count: counts[key],
+            };
+          })}
+          value={filter}
+          onChange={onChange}
+          layoutId="inbox-filter-control"
+        />
+      }
+    />
   );
 }
