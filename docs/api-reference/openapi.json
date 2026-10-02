@@ -814,65 +814,6 @@
         "title": "AgentResponse",
         "type": "object"
       },
-      "AgentRow": {
-        "properties": {
-          "agent_id": {
-            "format": "uuid",
-            "title": "Agent Id",
-            "type": "string"
-          },
-          "cost_mtd_usd": {
-            "title": "Cost Mtd Usd",
-            "type": "number"
-          },
-          "cost_today_usd": {
-            "title": "Cost Today Usd",
-            "type": "number"
-          },
-          "last_activity_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Activity At"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "recent_task_names": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Recent Task Names",
-            "type": "array"
-          },
-          "tasks_done_today": {
-            "title": "Tasks Done Today",
-            "type": "integer"
-          },
-          "tasks_failed_today": {
-            "title": "Tasks Failed Today",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "agent_id",
-          "name",
-          "tasks_done_today",
-          "tasks_failed_today",
-          "recent_task_names",
-          "last_activity_at",
-          "cost_today_usd",
-          "cost_mtd_usd"
-        ],
-        "title": "AgentRow",
-        "type": "object"
-      },
       "AgentToolConfig": {
         "properties": {
           "name": {
@@ -3290,11 +3231,11 @@
       },
       "DashboardResponse": {
         "properties": {
-          "agents": {
+          "active_tasks": {
             "items": {
-              "$ref": "#/components/schemas/AgentRow"
+              "$ref": "#/components/schemas/DashboardTask"
             },
-            "title": "Agents",
+            "title": "Active Tasks",
             "type": "array"
           },
           "blockers": {
@@ -3307,12 +3248,15 @@
             "title": "Daily Spend",
             "type": "array"
           },
-          "daily_tasks": {
+          "recent_tasks": {
             "items": {
-              "$ref": "#/components/schemas/DailyTaskCounts"
+              "$ref": "#/components/schemas/DashboardTask"
             },
-            "title": "Daily Tasks",
+            "title": "Recent Tasks",
             "type": "array"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/Schedule"
           },
           "spend": {
             "$ref": "#/components/schemas/SpendCard"
@@ -3321,11 +3265,89 @@
         "required": [
           "spend",
           "blockers",
-          "agents",
-          "daily_spend",
-          "daily_tasks"
+          "active_tasks",
+          "recent_tasks",
+          "schedule",
+          "daily_spend"
         ],
         "title": "DashboardResponse",
+        "type": "object"
+      },
+      "DashboardTask": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Usd"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "agent_id",
+          "title",
+          "status",
+          "started_at",
+          "finished_at",
+          "cost_usd"
+        ],
+        "title": "DashboardTask",
         "type": "object"
       },
       "DiscoverPreviewModelResponse": {
@@ -4084,6 +4106,57 @@
           "occurred_at"
         ],
         "title": "FailedTaskBlocker",
+        "type": "object"
+      },
+      "FrequentSchedule": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "cron_expression": {
+            "title": "Cron Expression",
+            "type": "string"
+          },
+          "next_run_at": {
+            "title": "Next Run At",
+            "type": "string"
+          },
+          "runs_per_day": {
+            "title": "Runs Per Day",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "trigger_id": {
+            "format": "uuid",
+            "title": "Trigger Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger_id",
+          "agent_id",
+          "title",
+          "cron_expression",
+          "runs_per_day",
+          "next_run_at"
+        ],
+        "title": "FrequentSchedule",
         "type": "object"
       },
       "FundWalletRequest": {
@@ -10191,6 +10264,35 @@
         "title": "SandboxSummary",
         "type": "object"
       },
+      "Schedule": {
+        "properties": {
+          "frequent": {
+            "items": {
+              "$ref": "#/components/schemas/FrequentSchedule"
+            },
+            "title": "Frequent",
+            "type": "array"
+          },
+          "horizon_days": {
+            "title": "Horizon Days",
+            "type": "integer"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduledRun"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "horizon_days",
+          "runs",
+          "frequent"
+        ],
+        "title": "Schedule",
+        "type": "object"
+      },
       "ScheduleTaskCreate": {
         "description": "A task to run once, at a time the caller picks.",
         "properties": {
@@ -10271,6 +10373,47 @@
           "scheduled_at"
         ],
         "title": "ScheduleTaskCreate",
+        "type": "object"
+      },
+      "ScheduledRun": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "fires_at": {
+            "title": "Fires At",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "trigger_id": {
+            "format": "uuid",
+            "title": "Trigger Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fires_at",
+          "trigger_id",
+          "agent_id",
+          "title"
+        ],
+        "title": "ScheduledRun",
         "type": "object"
       },
       "SecretConsumer": {

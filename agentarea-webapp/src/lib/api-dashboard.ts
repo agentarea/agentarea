@@ -38,15 +38,39 @@ export type DashboardFailedTask = {
   occurred_at: string;
 };
 
-export type DashboardAgentRow = {
+export type DashboardTask = {
+  task_id: string;
   agent_id: string;
-  name: string;
-  tasks_done_today: number;
-  tasks_failed_today: number;
-  recent_task_names: string[];
-  last_activity_at: string | null;
-  cost_today_usd: number;
-  cost_mtd_usd: number;
+  agent_name: string | null;
+  title: string;
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  cost_usd: number | null;
+};
+
+export type ScheduledRun = {
+  fires_at: string;
+  trigger_id: string;
+  agent_id: string;
+  agent_name: string | null;
+  title: string;
+};
+
+export type FrequentSchedule = {
+  trigger_id: string;
+  agent_id: string;
+  agent_name: string | null;
+  title: string;
+  cron_expression: string;
+  runs_per_day: number;
+  next_run_at: string;
+};
+
+export type DashboardSchedule = {
+  horizon_days: number;
+  runs: ScheduledRun[];
+  frequent: FrequentSchedule[];
 };
 
 export type DailySpendPoint = { date: string; usd: number };
@@ -64,9 +88,10 @@ export type DashboardData = {
     wallet_exhausted: DashboardWalletExhausted[];
     failed_24h: DashboardFailedTask[];
   };
-  agents: DashboardAgentRow[];
+  active_tasks: DashboardTask[];
+  recent_tasks: DashboardTask[];
+  schedule: DashboardSchedule;
   daily_spend: DailySpendPoint[];
-  daily_tasks: DailyTaskCounts[];
 };
 
 export type AgentUpcomingItem = {

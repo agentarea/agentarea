@@ -1,5 +1,5 @@
 import { useTranslations } from "next-intl";
-import { Activity, Bot, Shield, Wallet } from "lucide-react";
+import { CalendarDays, ListChecks, Shield, Wallet } from "lucide-react";
 import { BoardGrid, BoardSectionHeader } from "@/components/board";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -24,35 +24,23 @@ function SpendSkeleton() {
           <Skeleton className="mt-1 h-[5px] w-[150px] rounded-full" />
         </div>
       </div>
-      <Skeleton className="-mx-6 mt-3 flex-1 rounded-none" />
+      <Skeleton className="-mx-6 mt-1 h-[188px] rounded-none" />
     </div>
   );
 }
 
-function ActivitySkeleton() {
+function CalendarSkeleton() {
   const t = useTranslations("DashboardPage");
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <BoardSectionHeader
-        icon={<Activity />}
-        color="hsl(var(--foreground))"
-        title={t("activity")}
-        meta={t("activityMeta")}
-      />
-      <div className="mt-2.5 flex flex-1 flex-col gap-2 sm:grid sm:grid-cols-3 lg:flex lg:flex-col lg:gap-1.5">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div
-            key={i}
-            className="flex min-h-[46px] flex-1 items-center gap-3.5 rounded-[9px] border px-3.5 py-2"
-          >
-            <div className="flex min-w-[120px] flex-col gap-1.5">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-5 w-10" />
-            </div>
-            <Skeleton className="hidden h-6 flex-1 lg:block" />
-          </div>
-        ))}
+      <div className="px-6 pb-3 pt-4">
+        <BoardSectionHeader
+          icon={<CalendarDays />}
+          color="hsl(var(--foreground))"
+          title={t("schedule")}
+        />
       </div>
+      <Skeleton className="m-4 mt-0 flex-1 rounded-md" />
     </div>
   );
 }
@@ -97,21 +85,22 @@ export default function DashboardSkeleton() {
     <div aria-hidden="true" className="h-full">
       <BoardGrid
         topLeft={<SpendSkeleton />}
-        topRight={<ActivitySkeleton />}
-        bottomLeft={
-          <ListSkeleton
-            icon={<Bot />}
-            color="hsl(var(--foreground))"
-            title={t("agents")}
-            rows={5}
-          />
-        }
-        bottomRight={
+        topRight={
           <ListSkeleton
             icon={<Shield />}
             color="hsl(var(--foreground))"
             title={t("blockers")}
-            rows={4}
+            rows={3}
+          />
+        }
+        topRightPadded={false}
+        bottomLeft={<CalendarSkeleton />}
+        bottomRight={
+          <ListSkeleton
+            icon={<ListChecks />}
+            color="hsl(var(--foreground))"
+            title={t("tasks")}
+            rows={5}
           />
         }
       />

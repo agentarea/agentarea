@@ -7,22 +7,25 @@ Returns time-series and upcoming-work data for the agent landing page:
 - pending/running tasks not yet completed
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from typing import cast as type_cast
 from uuid import UUID
 
+from agentarea_api.api.v1._schedule_preview import cron_runs
 from agentarea_common.auth import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config.database import get_db_session
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.infrastructure.orm import TriggerORM
-from croniter import croniter
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import Date, Numeric, case, cast, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents/{agent_id}", tags=["dashboard"])
 
@@ -176,7 +179,7 @@ async def get_agent_overview(
 
     # ----- upcoming work (next 7 days) -----
     upcoming: list[UpcomingItem] = []
-    horizon = now + timedelta(days=7)
+    horizon = now.replace(tzinfo=UTC) + timedelta(days=7)
 
     # Active cron triggers — compute next-N fire times within horizon
     triggers_q = (
@@ -192,22 +195,11 @@ async def get_agent_overview(
         if not cron_expression:
             continue
         try:
-            itr = croniter(cron_expression, now)
-            for _ in range(10):
-                fires_at = itr.get_next(datetime)
-                if fires_at > horizon:
-                    break
-                upcoming.append(
-                    UpcomingItem(
-                        fires_at=fires_at,
-                        kind="trigger",
-                        title=trig.name,
-                        trigger_id=type_cast(UUID, trig.id),
-                        cron_expression=cron_expression,
-                    )
-                )
-        except Exception:
-            # Bad cron expression — surface as a single hint without dying
+            runs = cron_runs(
+                cron_expression, trig.timezone, now.replace(tzinfo=UTC), horizon, limit=10
+            )
+        except ValueError:
+            logger.warning("Trigger %s has an unusable schedule", trig.id, exc_info=True)
             upcoming.append(
                 UpcomingItem(
                     fires_at=now,
@@ -217,6 +209,18 @@ async def get_agent_overview(
                     cron_expression=cron_expression,
                 )
             )
+            continue
+        upcoming.extend(
+            UpcomingItem(
+                # Task timestamps are naive UTC; the list sorts across both.
+                fires_at=fires_at.replace(tzinfo=None),
+                kind="trigger",
+                title=trig.name,
+                trigger_id=type_cast(UUID, trig.id),
+                cron_expression=cron_expression,
+            )
+            for fires_at in runs
+        )
 
     # Pending or running tasks — they're already "next on the agenda"
     pending_q = (

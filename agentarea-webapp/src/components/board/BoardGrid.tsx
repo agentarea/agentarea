@@ -13,6 +13,8 @@ import { BoardCrossMark, BoardRingMark } from "./BoardMarker";
  * with plain dashed separators and the markers are hidden.
  *
  * Reusable: pass any four nodes; tweak the vertical split with `leftFraction`.
+ * The top row is as tall as its padded top-left content; an unpadded top-right
+ * cell fills that height and scrolls instead of growing the row.
  */
 
 type PlusPos = "tl" | "tr" | "bl" | "br";
@@ -71,11 +73,14 @@ export function BoardGrid({
   topRight,
   bottomLeft,
   bottomRight,
+  topRightPadded = true,
   leftFraction = 0.6,
   className,
 }: {
   topLeft: ReactNode;
   topRight: ReactNode;
+  /** Off for a full-bleed list that should scroll within the top row. */
+  topRightPadded?: boolean;
   bottomLeft: ReactNode;
   bottomRight: ReactNode;
   /** Vertical divider position as a fraction of width (default 0.6 → 1.5fr : 1fr). */
@@ -110,11 +115,17 @@ export function BoardGrid({
 
         {/* top-right */}
         <BoardCell
-          padded
+          padded={topRightPadded}
           className={cn("border-b", dashed)}
           markers={<PlusMark pos="br" />}
         >
-          {topRight}
+          {topRightPadded ? (
+            topRight
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col lg:absolute lg:inset-0">
+              {topRight}
+            </div>
+          )}
         </BoardCell>
 
         {/* bottom-left */}

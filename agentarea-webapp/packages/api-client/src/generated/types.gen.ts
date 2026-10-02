@@ -463,44 +463,6 @@ export type AgentResponse = {
 };
 
 /**
- * AgentRow
- */
-export type AgentRow = {
-    /**
-     * Agent Id
-     */
-    agent_id: string;
-    /**
-     * Cost Mtd Usd
-     */
-    cost_mtd_usd: number;
-    /**
-     * Cost Today Usd
-     */
-    cost_today_usd: number;
-    /**
-     * Last Activity At
-     */
-    last_activity_at: string | null;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Recent Task Names
-     */
-    recent_task_names: Array<string>;
-    /**
-     * Tasks Done Today
-     */
-    tasks_done_today: number;
-    /**
-     * Tasks Failed Today
-     */
-    tasks_failed_today: number;
-};
-
-/**
  * AgentToolConfig
  */
 export type AgentToolConfig = {
@@ -1914,19 +1876,58 @@ export type DailyTaskCounts = {
  */
 export type DashboardResponse = {
     /**
-     * Agents
+     * Active Tasks
      */
-    agents: Array<AgentRow>;
+    active_tasks: Array<DashboardTask>;
     blockers: Blockers;
     /**
      * Daily Spend
      */
     daily_spend: Array<DailySpendPoint>;
     /**
-     * Daily Tasks
+     * Recent Tasks
      */
-    daily_tasks: Array<DailyTaskCounts>;
+    recent_tasks: Array<DashboardTask>;
+    schedule: Schedule;
     spend: SpendCard;
+};
+
+/**
+ * DashboardTask
+ */
+export type DashboardTask = {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Agent Name
+     */
+    agent_name?: string | null;
+    /**
+     * Cost Usd
+     */
+    cost_usd: number | null;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+    /**
+     * Started At
+     */
+    started_at: string | null;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
+    /**
+     * Title
+     */
+    title: string;
 };
 
 /**
@@ -2367,6 +2368,40 @@ export type FailedTaskBlocker = {
      * Task Id
      */
     task_id: string;
+};
+
+/**
+ * FrequentSchedule
+ */
+export type FrequentSchedule = {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Agent Name
+     */
+    agent_name?: string | null;
+    /**
+     * Cron Expression
+     */
+    cron_expression: string;
+    /**
+     * Next Run At
+     */
+    next_run_at: string;
+    /**
+     * Runs Per Day
+     */
+    runs_per_day: number;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Trigger Id
+     */
+    trigger_id: string;
 };
 
 /**
@@ -5935,6 +5970,24 @@ export type SandboxSummary = {
 };
 
 /**
+ * Schedule
+ */
+export type Schedule = {
+    /**
+     * Frequent
+     */
+    frequent: Array<FrequentSchedule>;
+    /**
+     * Horizon Days
+     */
+    horizon_days: number;
+    /**
+     * Runs
+     */
+    runs: Array<ScheduledRun>;
+};
+
+/**
  * ScheduleTaskCreate
  *
  * A task to run once, at a time the caller picks.
@@ -5968,6 +6021,32 @@ export type ScheduleTaskCreate = {
      */
     scheduled_at: string;
     task_policy?: PolicyDocument | null;
+};
+
+/**
+ * ScheduledRun
+ */
+export type ScheduledRun = {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Agent Name
+     */
+    agent_name?: string | null;
+    /**
+     * Fires At
+     */
+    fires_at: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Trigger Id
+     */
+    trigger_id: string;
 };
 
 /**

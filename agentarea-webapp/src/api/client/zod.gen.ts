@@ -105,20 +105,6 @@ export const zAgentCardSummary = z.object({
 });
 
 /**
- * AgentRow
- */
-export const zAgentRow = z.object({
-  agent_id: z.string().uuid(),
-  cost_mtd_usd: z.number(),
-  cost_today_usd: z.number(),
-  last_activity_at: z.string().nullable(),
-  name: z.string(),
-  recent_task_names: z.array(z.string()),
-  tasks_done_today: z.number().int(),
-  tasks_failed_today: z.number().int(),
-});
-
-/**
  * AgentToolSettings
  *
  * Settings for an agent-to-agent (delegation) tool.
@@ -678,6 +664,20 @@ export const zDailyTaskCounts = z.object({
 });
 
 /**
+ * DashboardTask
+ */
+export const zDashboardTask = z.object({
+  agent_id: z.string().uuid(),
+  agent_name: z.string().nullish(),
+  cost_usd: z.number().nullable(),
+  finished_at: z.string().nullable(),
+  started_at: z.string().nullable(),
+  status: z.string(),
+  task_id: z.string().uuid(),
+  title: z.string(),
+});
+
+/**
  * DiscoverPreviewRequest
  */
 export const zDiscoverPreviewRequest = z.object({
@@ -782,6 +782,19 @@ export const zFailedTaskBlocker = z.object({
   error: z.string().nullable(),
   occurred_at: z.string(),
   task_id: z.string().uuid(),
+});
+
+/**
+ * FrequentSchedule
+ */
+export const zFrequentSchedule = z.object({
+  agent_id: z.string().uuid(),
+  agent_name: z.string().nullish(),
+  cron_expression: z.string(),
+  next_run_at: z.string(),
+  runs_per_day: z.number().int(),
+  title: z.string(),
+  trigger_id: z.string().uuid(),
 });
 
 /**
@@ -2365,6 +2378,26 @@ export const zSandboxListResponse = z.object({
 });
 
 /**
+ * ScheduledRun
+ */
+export const zScheduledRun = z.object({
+  agent_id: z.string().uuid(),
+  agent_name: z.string().nullish(),
+  fires_at: z.string(),
+  title: z.string(),
+  trigger_id: z.string().uuid(),
+});
+
+/**
+ * Schedule
+ */
+export const zSchedule = z.object({
+  frequent: z.array(zFrequentSchedule),
+  horizon_days: z.number().int(),
+  runs: z.array(zScheduledRun),
+});
+
+/**
  * SecretConsumer
  */
 export const zSecretConsumer = z.object({
@@ -3434,10 +3467,11 @@ export const zBlockers = z.object({
  * DashboardResponse
  */
 export const zDashboardResponse = z.object({
-  agents: z.array(zAgentRow),
+  active_tasks: z.array(zDashboardTask),
   blockers: zBlockers,
   daily_spend: z.array(zDailySpendPoint),
-  daily_tasks: z.array(zDailyTaskCounts),
+  recent_tasks: z.array(zDashboardTask),
+  schedule: zSchedule,
   spend: zSpendCard,
 });
 

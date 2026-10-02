@@ -2,17 +2,20 @@
 
 Single round-trip aggregate that powers the post-login `/dashboard` page:
 spend (today / MTD / cap / projection), org blockers (HITL, wallet
-exhausted, failed in last 24h), and per-agent activity rows.
+exhausted, failed in last 24h), running and recently finished tasks, and the
+cron schedule for the weeks ahead.
 
 All data is workspace-scoped via UserContext. Live computation against
 existing `tasks` and `wallets` tables — no rollup tables in v1.
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
 from agentarea_agents.domain.models import Agent
+from agentarea_api.api.v1._schedule_preview import cron_runs, runs_per_day
 from agentarea_common.auth import UserContextDep
 from agentarea_common.auth.route_authz import requires_workspace_admin, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
@@ -28,13 +31,23 @@ from agentarea_governance.domain.rules import (
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_tasks.infrastructure.repository import TaskRepository
+from agentarea_triggers.infrastructure.orm import TriggerORM
 from agentarea_wallet.infrastructure.repository import WalletRepository
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import Date, Numeric, case, cast, desc, func, select
+from sqlalchemy import Date, Numeric, cast, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["dashboard"])
+
+SCHEDULE_HORIZON_DAYS = 21
+# A schedule firing more often than this per day is summarised, not listed.
+MAX_LISTED_RUNS_PER_DAY = 3
+ACTIVE_TASK_STATUSES = ("pending", "submitted", "running")
+FINISHED_TASK_STATUSES = ("completed", "failed", "cancelled", "canceled")
+TASK_LIST_LIMIT = 10
 
 DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 
@@ -80,15 +93,40 @@ class Blockers(BaseModel):
     failed_24h: list[FailedTaskBlocker]
 
 
-class AgentRow(BaseModel):
+class DashboardTask(BaseModel):
+    task_id: UUID
     agent_id: UUID
-    name: str
-    tasks_done_today: int
-    tasks_failed_today: int
-    recent_task_names: list[str]
-    last_activity_at: UtcDatetime | None
-    cost_today_usd: float
-    cost_mtd_usd: float
+    # None when the agent no longer resolves — never a fabricated placeholder.
+    agent_name: str | None = None
+    title: str
+    status: str
+    started_at: UtcDatetime | None
+    finished_at: UtcDatetime | None
+    cost_usd: float | None
+
+
+class ScheduledRun(BaseModel):
+    fires_at: UtcDatetime
+    trigger_id: UUID
+    agent_id: UUID
+    agent_name: str | None = None
+    title: str
+
+
+class FrequentSchedule(BaseModel):
+    trigger_id: UUID
+    agent_id: UUID
+    agent_name: str | None = None
+    title: str
+    cron_expression: str
+    runs_per_day: int
+    next_run_at: UtcDatetime
+
+
+class Schedule(BaseModel):
+    horizon_days: int
+    runs: list[ScheduledRun]
+    frequent: list[FrequentSchedule]
 
 
 class DailySpendPoint(BaseModel):
@@ -96,29 +134,13 @@ class DailySpendPoint(BaseModel):
     usd: float
 
 
-class DailyTaskCounts(BaseModel):
-    date: str  # YYYY-MM-DD (UTC)
-    completed: int
-    failed: int
-    input_required: int
-
-
 class DashboardResponse(BaseModel):
     spend: SpendCard
     blockers: Blockers
-    agents: list[AgentRow]
+    active_tasks: list[DashboardTask]
+    recent_tasks: list[DashboardTask]
+    schedule: Schedule
     daily_spend: list[DailySpendPoint]
-    daily_tasks: list[DailyTaskCounts]
-
-
-def _utc_today_start() -> datetime:
-    now = datetime.now(UTC)
-    return datetime(now.year, now.month, now.day)
-
-
-def _utc_first_of_month() -> datetime:
-    now = datetime.now(UTC)
-    return datetime(now.year, now.month, 1)
 
 
 def _project_eom(mtd_usd: float, now: datetime) -> float | None:
@@ -140,6 +162,88 @@ def _is_monthly_spend_cap(rule: PolicyRule) -> bool:
         and rule.target == "spend"
         and (rule.params or {}).get("period", "month") == "month"
     )
+
+
+def _task_cost(task: TaskORM) -> float | None:
+    cost = (task.result or {}).get("total_cost") if isinstance(task.result, dict) else None
+    return round(float(cost), 4) if cost is not None else None
+
+
+def _dashboard_task(task: TaskORM, agent_names: dict[UUID, str]) -> DashboardTask:
+    finished = task.completed_at or (
+        task.updated_at if task.status in FINISHED_TASK_STATUSES else None
+    )
+    return DashboardTask(
+        task_id=task.id,
+        agent_id=task.agent_id,
+        agent_name=agent_names.get(task.agent_id),
+        title=(task.description or "")[:200],
+        status=task.status,
+        started_at=task.started_at or task.created_at,
+        finished_at=finished,
+        cost_usd=_task_cost(task),
+    )
+
+
+async def _build_schedule(
+    db_session: AsyncSession, workspace_id: str, agent_names: dict[UUID, str]
+) -> Schedule:
+    triggers_q = (
+        select(TriggerORM)
+        .where(TriggerORM.workspace_id == workspace_id)
+        .where(TriggerORM.is_active.is_(True))
+        .where(TriggerORM.cron_expression.isnot(None))
+    )
+    triggers = (await db_session.execute(triggers_q)).scalars().all()
+
+    now = datetime.now(UTC)
+    horizon = now + timedelta(days=SCHEDULE_HORIZON_DAYS)
+    listed_limit = SCHEDULE_HORIZON_DAYS * MAX_LISTED_RUNS_PER_DAY
+    runs: list[ScheduledRun] = []
+    frequent: list[FrequentSchedule] = []
+    for trig in triggers:
+        cron_expression = trig.cron_expression
+        if not cron_expression:
+            continue
+        try:
+            fires = cron_runs(cron_expression, trig.timezone, now, horizon, limit=listed_limit + 1)
+            per_day = (
+                runs_per_day(cron_expression, trig.timezone, now)
+                if len(fires) > listed_limit
+                else None
+            )
+        except ValueError:
+            # One bad row must not take the whole dashboard down.
+            logger.warning("Trigger %s has an unusable schedule", trig.id, exc_info=True)
+            continue
+        agent_name = agent_names.get(trig.agent_id)
+        if per_day is not None:
+            frequent.append(
+                FrequentSchedule(
+                    trigger_id=trig.id,
+                    agent_id=trig.agent_id,
+                    agent_name=agent_name,
+                    title=trig.name,
+                    cron_expression=cron_expression,
+                    runs_per_day=per_day,
+                    next_run_at=fires[0],
+                )
+            )
+            continue
+        runs.extend(
+            ScheduledRun(
+                fires_at=fires_at,
+                trigger_id=trig.id,
+                agent_id=trig.agent_id,
+                agent_name=agent_name,
+                title=trig.name,
+            )
+            for fires_at in fires
+        )
+
+    runs.sort(key=lambda r: r.fires_at)
+    frequent.sort(key=lambda f: f.runs_per_day, reverse=True)
+    return Schedule(horizon_days=SCHEDULE_HORIZON_DAYS, runs=runs, frequent=frequent)
 
 
 async def _get_workspace_policy_cap_usd(
@@ -178,8 +282,6 @@ async def get_dashboard(
     wallet_repo = factory.create_repository(WalletRepository)
 
     workspace_id = user_context.workspace_id
-    today_start = _utc_today_start()
-    month_start = _utc_first_of_month()
     twenty_four_hours_ago = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=24)
 
     # ----- spend card -----
@@ -256,93 +358,38 @@ async def get_dashboard(
 
     blockers = Blockers(hitl=hitl, wallet_exhausted=wallet_exhausted, failed_24h=failed_24h)
 
-    # ----- per-agent rows -----
-    cost_expr = cast(TaskORM.result.op("->>")("total_cost"), Numeric)
-    activity_at = func.coalesce(TaskORM.started_at, TaskORM.created_at)
-
-    today_count_expr = func.coalesce(
-        func.sum(
-            case(
-                ((TaskORM.status == "completed") & (activity_at >= today_start), 1),
-                else_=0,
-            )
-        ),
-        0,
-    )
-    failed_count_expr = func.coalesce(
-        func.sum(
-            case(
-                ((TaskORM.status == "failed") & (activity_at >= today_start), 1),
-                else_=0,
-            )
-        ),
-        0,
-    )
-    cost_today_expr = func.coalesce(
-        func.sum(case((activity_at >= today_start, cost_expr), else_=0)),
-        0,
-    )
-    cost_mtd_expr = func.coalesce(
-        func.sum(case((activity_at >= month_start, cost_expr), else_=0)),
-        0,
-    )
-
-    agg_q = (
-        select(
-            TaskORM.agent_id.label("agent_id"),
-            today_count_expr.label("done_today"),
-            failed_count_expr.label("failed_today"),
-            func.max(activity_at).label("last_activity"),
-            cost_today_expr.label("cost_today"),
-            cost_mtd_expr.label("cost_mtd"),
-        )
+    # ----- tasks: running now, and the latest to finish -----
+    active_q = (
+        select(TaskORM)
         .where(TaskORM.workspace_id == workspace_id)
-        .group_by(TaskORM.agent_id)
+        .where(TaskORM.status.in_(ACTIVE_TASK_STATUSES))
+        .order_by(desc(func.coalesce(TaskORM.started_at, TaskORM.created_at)))
+        .limit(TASK_LIST_LIMIT)
     )
-    agg_rows = (await db_session.execute(agg_q)).all()
-    agg_by_agent = {row.agent_id: row for row in agg_rows}
-
-    # Recent task names (last 3 per agent). One bounded query keeps this
-    # cheap; for big workspaces a window query (ROW_NUMBER OVER) is the
-    # follow-up — defer until measured.
+    active_tasks = [
+        _dashboard_task(t, agent_name_by_id)
+        for t in (await db_session.execute(active_q)).scalars().all()
+    ]
+    finished_at = func.coalesce(TaskORM.completed_at, TaskORM.updated_at)
     recent_q = (
-        select(TaskORM.agent_id, TaskORM.description, activity_at.label("activity"))
+        select(TaskORM)
         .where(TaskORM.workspace_id == workspace_id)
-        .order_by(TaskORM.agent_id, desc(activity_at))
-        .limit(500)
+        .where(TaskORM.status.in_(FINISHED_TASK_STATUSES))
+        .order_by(desc(finished_at))
+        .limit(TASK_LIST_LIMIT)
     )
-    recent_rows = (await db_session.execute(recent_q)).all()
-    recent_by_agent: dict[UUID, list[str]] = {}
-    for row in recent_rows:
-        bucket = recent_by_agent.setdefault(row.agent_id, [])
-        if len(bucket) < 3:
-            bucket.append(row.description[:120])
+    recent_tasks = [
+        _dashboard_task(t, agent_name_by_id)
+        for t in (await db_session.execute(recent_q)).scalars().all()
+    ]
 
-    agents: list[AgentRow] = []
-    for agent_id, name in agent_name_by_id.items():
-        agg = agg_by_agent.get(agent_id)
-        agents.append(
-            AgentRow(
-                agent_id=agent_id,
-                name=name,
-                tasks_done_today=int(agg.done_today or 0) if agg else 0,
-                tasks_failed_today=int(agg.failed_today or 0) if agg else 0,
-                recent_task_names=recent_by_agent.get(agent_id, []),
-                last_activity_at=agg.last_activity if agg else None,
-                cost_today_usd=round(float(agg.cost_today or 0), 4) if agg else 0.0,
-                cost_mtd_usd=round(float(agg.cost_mtd or 0), 4) if agg else 0.0,
-            )
-        )
-
-    # Most-active agents first
-    agents.sort(
-        key=lambda a: a.last_activity_at or datetime.min,
-        reverse=True,
-    )
+    schedule = await _build_schedule(db_session, workspace_id, agent_name_by_id)
 
     # ----- daily spend (last 30 days, UTC) -----
     spend_since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=29)
     spend_since = datetime(spend_since.year, spend_since.month, spend_since.day)
+    cost_expr = cast(TaskORM.result.op("->>")("total_cost"), Numeric)
+    activity_at = func.coalesce(TaskORM.started_at, TaskORM.created_at)
     day_col = cast(activity_at, Date).label("day")
     daily_spend_q = (
         select(day_col, func.coalesce(func.sum(cost_expr), 0).label("usd"))
@@ -364,50 +411,13 @@ async def get_dashboard(
         for i in range(30)
     ]
 
-    # ----- daily task counts (last 14 days, UTC) -----
-    tasks_since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=13)
-    tasks_since = datetime(tasks_since.year, tasks_since.month, tasks_since.day)
-    daily_tasks_q = (
-        select(
-            day_col,
-            func.coalesce(func.sum(case((TaskORM.status == "completed", 1), else_=0)), 0).label(
-                "completed"
-            ),
-            func.coalesce(func.sum(case((TaskORM.status == "failed", 1), else_=0)), 0).label(
-                "failed"
-            ),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (TaskORM.status.in_(("waiting_for_input", "waiting_for_approval")), 1),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("input_required"),
-        )
-        .where(TaskORM.workspace_id == workspace_id)
-        .where(activity_at >= tasks_since)
-        .group_by("day")
-        .order_by("day")
-    )
-    daily_task_rows = (await db_session.execute(daily_tasks_q)).all()
-    tasks_by_day = {
-        r.day.isoformat(): (int(r.completed), int(r.failed), int(r.input_required))
-        for r in daily_task_rows
-    }
-    daily_tasks = []
-    for i in range(14):
-        d = (tasks_since.date() + timedelta(days=i)).isoformat()
-        c, f, ir = tasks_by_day.get(d, (0, 0, 0))
-        daily_tasks.append(DailyTaskCounts(date=d, completed=c, failed=f, input_required=ir))
-
     return DashboardResponse(
         spend=spend,
         blockers=blockers,
-        agents=agents,
+        active_tasks=active_tasks,
+        recent_tasks=recent_tasks,
+        schedule=schedule,
         daily_spend=daily_spend,
-        daily_tasks=daily_tasks,
     )
 
 
