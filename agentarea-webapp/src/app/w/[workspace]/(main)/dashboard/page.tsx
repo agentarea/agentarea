@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { DashboardData } from "./components/DashboardData";
@@ -11,10 +12,12 @@ export const metadata: Metadata = {
 };
 
 export default async function DashboardPage() {
+  const t = await getTranslations("DashboardPage");
+
   return (
     <ContentBlock
       header={{
-        breadcrumb: [{ label: "Dashboard" }],
+        breadcrumb: [{ label: t("title") }],
         // controls: <PeriodSelect />,
       }}
       className="!p-0 lg:!overflow-hidden"
