@@ -1,4 +1,8 @@
-import { loadAgentEditData } from "../../shared/useAgentData";
+import {
+  loadAgentEditData,
+  loadAgentKeys,
+  loadDelegationData,
+} from "../../shared/useAgentData";
 import AgentEditClient from "./AgentEditClient";
 
 interface AgentEditContentProps {
@@ -8,7 +12,12 @@ interface AgentEditContentProps {
 export default async function AgentEditContent({
   agentId,
 }: AgentEditContentProps) {
-  const agentData = await loadAgentEditData(agentId);
+  const [agentData, delegation, agentKeys] = await Promise.all([
+    loadAgentEditData(agentId),
+    loadDelegationData(),
+    loadAgentKeys(agentId),
+  ]);
+  const a2aAddress = agentData.agent.a2a_url;
 
   return (
     <AgentEditClient
@@ -19,6 +28,8 @@ export default async function AgentEditContent({
       mcpInstanceList={agentData.mcpInstanceList}
       builtinTools={agentData.builtinTools}
       initialData={agentData.initialData}
+      delegation={delegation}
+      a2aAccess={a2aAddress ? { address: a2aAddress, keys: agentKeys } : null}
     />
   );
 }

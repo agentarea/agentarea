@@ -18,6 +18,7 @@ export const zA2UiActionPayload = z.object({
  * APIKeyCreateRequest
  */
 export const zApiKeyCreateRequest = z.object({
+  agent_id: z.string().uuid().nullish(),
   expires_in_days: z.number().int().gte(1).lte(3650).nullish(),
   name: z.string(),
 });
@@ -29,6 +30,7 @@ export const zApiKeyCreateRequest = z.object({
  */
 export const zApiKeyCreateResponse = z.object({
   access_count: z.number().int(),
+  agent_id: z.string().uuid().nullish(),
   created_at: z.string(),
   expires_at: z.string().nullable(),
   id: z.string().uuid(),
@@ -44,6 +46,7 @@ export const zApiKeyCreateResponse = z.object({
  */
 export const zApiKeyResponse = z.object({
   access_count: z.number().int(),
+  agent_id: z.string().uuid().nullish(),
   created_at: z.string(),
   expires_at: z.string().nullable(),
   id: z.string().uuid(),
@@ -77,6 +80,31 @@ export const zAddSkillRequest = z.object({
 });
 
 /**
+ * AgentCardLookup
+ */
+export const zAgentCardLookup = z.object({
+  url: z.string(),
+});
+
+/**
+ * AgentCardSkill
+ */
+export const zAgentCardSkill = z.object({
+  description: z.string(),
+  name: z.string(),
+});
+
+/**
+ * AgentCardSummary
+ */
+export const zAgentCardSummary = z.object({
+  address: z.string(),
+  description: z.string(),
+  name: z.string(),
+  skills: z.array(zAgentCardSkill),
+});
+
+/**
  * AgentRow
  */
 export const zAgentRow = z.object({
@@ -101,6 +129,7 @@ export const zAgentRow = z.object({
  */
 export const zAgentToolSettings = z.object({
   a2a_url: z.string().nullish(),
+  auth_secret_name: z.string().nullish(),
   description_override: z.string().nullish(),
   requires_user_confirmation: z.boolean().nullish(),
 });
@@ -1616,6 +1645,7 @@ export const zOpenApiToolConfig = z.object({
  * AgentResponse
  */
 export const zAgentResponse = z.object({
+  a2a_url: z.string().nullish(),
   a2ui_enabled: z.boolean().nullish(),
   agent_type: z.string().optional().default("stateless"),
   description: z.string().nullish(),
@@ -3662,6 +3692,13 @@ export const zCreateWorkspaceV1WorkspacesPostBody = zCreateWorkspaceBody;
  */
 export const zCreateWorkspaceV1WorkspacesPostResponse = zWorkspaceResponse;
 
+export const zReadAgentCardV1A2aAgentCardsPostBody = zAgentCardLookup;
+
+/**
+ * Successful Response
+ */
+export const zReadAgentCardV1A2aAgentCardsPostResponse = zAgentCardSummary;
+
 export const zCheckPermissionV1AccessControlCheckPostBody = zCheckRequest;
 
 /**
@@ -4112,6 +4149,10 @@ export const zGetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetQuery = z.object(
  */
 export const zGetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponse =
   zPaginatedPaymentsResponse;
+
+export const zListApiKeysV1ApiKeysGetQuery = z.object({
+  agent_id: z.string().uuid().nullish(),
+});
 
 /**
  * Response List Api Keys V1 Api Keys  Get

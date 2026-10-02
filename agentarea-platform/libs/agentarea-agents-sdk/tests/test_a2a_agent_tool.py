@@ -4,17 +4,41 @@ import json
 
 import httpx
 import pytest
-from a2a.types import Artifact, Message, Part, Role, Task, TaskState, TaskStatus
+from a2a.types import (
+    AgentCard,
+    AgentInterface,
+    Artifact,
+    Message,
+    Part,
+    Role,
+    Task,
+    TaskState,
+    TaskStatus,
+)
 from google.protobuf.json_format import MessageToDict
 
 from agentarea_agents_sdk.tools import a2a_agent_tool
 from agentarea_agents_sdk.tools.a2a_agent_tool import (
     A2AAgentTool,
-    _sanitize_tool_name,
+    delegate_tool_name,
 )
 from agentarea_agents_sdk.tools.base_tool import ToolExecutionError
 
-A2A_URL = "http://localhost:9000/a2a/rpc"
+A2A_URL = "http://localhost:9000"
+RPC_URL = "http://localhost:9000/"
+CARD_PATH = "/.well-known/agent-card.json"
+
+
+def _card(*endpoints: str) -> dict:
+    return MessageToDict(
+        AgentCard(
+            name="researcher",
+            supported_interfaces=[
+                AgentInterface(url=url, protocol_binding="JSONRPC", protocol_version="1.0")
+                for url in endpoints or (RPC_URL,)
+            ],
+        )
+    )
 
 
 def _task(state: TaskState.ValueType, *texts: str, task_id: str = "task-1") -> dict:
@@ -30,16 +54,19 @@ def _result(request: httpx.Request, result: dict) -> httpx.Response:
     )
 
 
-def _transport(*replies):
-    """A mock A2A endpoint answering each JSON-RPC call with the next reply.
+def _transport(*replies, card: dict | None = None):
+    """A mock A2A agent: its card at the well-known path, and an endpoint
+    answering each JSON-RPC call with the next reply.
 
     A reply is a callable ``(request) -> httpx.Response``; ``seen`` records the
-    requests in order.
+    JSON-RPC requests in order.
     """
     seen: list[httpx.Request] = []
     queue = list(replies)
 
     def handle(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path == CARD_PATH:
+            return httpx.Response(200, json=card or _card())
         seen.append(request)
         return queue.pop(0)(request)
 
@@ -55,29 +82,29 @@ def _get_result(state=TaskState.TASK_STATE_COMPLETED, *texts: str):
 
 
 class TestSanitizeToolName:
-    """Tests for _sanitize_tool_name helper."""
+    """Tests for delegate_tool_name helper."""
 
     def test_simple_name(self):
-        assert _sanitize_tool_name("researcher") == "delegate_to_researcher"
+        assert delegate_tool_name("researcher") == "delegate_to_researcher"
 
     def test_name_with_spaces(self):
-        assert _sanitize_tool_name("my agent") == "delegate_to_my_agent"
+        assert delegate_tool_name("my agent") == "delegate_to_my_agent"
 
     def test_name_with_special_chars(self):
-        assert _sanitize_tool_name("agent-v2.0!") == "delegate_to_agent_v2_0"
+        assert delegate_tool_name("agent-v2.0!") == "delegate_to_agent_v2_0"
 
     def test_name_starting_with_digit(self):
-        assert _sanitize_tool_name("123bot") == "delegate_to_agent_123bot"
+        assert delegate_tool_name("123bot") == "delegate_to_agent_123bot"
 
     def test_empty_name(self):
-        assert _sanitize_tool_name("") == "delegate_to_agent_"
+        assert delegate_tool_name("") == "delegate_to_agent_"
 
     def test_only_special_chars(self):
         # All chars stripped, empty -> prepend agent_
-        assert _sanitize_tool_name("---") == "delegate_to_agent_"
+        assert delegate_tool_name("---") == "delegate_to_agent_"
 
     def test_consecutive_underscores_collapsed(self):
-        assert _sanitize_tool_name("a  b") == "delegate_to_a_b"
+        assert delegate_tool_name("a  b") == "delegate_to_a_b"
 
 
 class TestA2AAgentToolProperties:
@@ -125,6 +152,31 @@ class TestA2AAgentToolExecute:
     """Tests for A2AAgentTool.execute()."""
 
     @pytest.mark.asyncio
+    async def test_the_endpoint_comes_from_the_agents_card(self):
+        transport, seen = _transport(_send_result(), card=_card(f"{A2A_URL}/v1/agents/x/a2a/rpc"))
+
+        await _tool(transport).execute(message="hello")
+
+        [request] = seen
+        assert str(request.url) == f"{A2A_URL}/v1/agents/x/a2a/rpc"
+
+    @pytest.mark.asyncio
+    async def test_a_card_naming_another_host_gets_no_message_and_no_token(self):
+        transport, seen = _transport(card=_card("https://elsewhere.example/rpc"))
+
+        with pytest.raises(ToolExecutionError, match="elsewhere.example"):
+            await _tool(transport, auth_token="test-token").execute(message="hello")
+
+        assert seen == []
+
+    @pytest.mark.asyncio
+    async def test_an_address_without_a_card_fails_naming_the_card(self):
+        transport = httpx.MockTransport(lambda request: httpx.Response(404))
+
+        with pytest.raises(ToolExecutionError, match="agent card of 'researcher'"):
+            await _tool(transport).execute(message="hello")
+
+    @pytest.mark.asyncio
     async def test_execute_success(self):
         transport, _ = _transport(_send_result(TaskState.TASK_STATE_COMPLETED, "The answer is 42."))
 
@@ -143,7 +195,7 @@ class TestA2AAgentToolExecute:
         await _tool(transport, auth_token="test-token").execute(message="hello")
 
         [request] = seen
-        assert str(request.url) == A2A_URL
+        assert str(request.url) == RPC_URL
         assert request.headers["Authorization"] == "Bearer test-token"
         assert request.headers["A2A-Version"] == "1.0"
         body = json.loads(request.content)
@@ -153,6 +205,34 @@ class TestA2AAgentToolExecute:
         assert message["messageId"]
         assert message["parts"] == [{"text": "hello"}]
         assert body["params"]["configuration"]["returnImmediately"] is True
+
+    @pytest.mark.asyncio
+    async def test_execute_resolves_the_bearer_at_call_time(self):
+        transport, seen = _transport(_send_result())
+        resolved = []
+
+        async def token() -> str:
+            resolved.append(True)
+            return "from-secret"
+
+        tool = _tool(transport, auth_token_provider=token)
+        assert resolved == []
+
+        await tool.execute(message="hello")
+
+        [request] = seen
+        assert request.headers["Authorization"] == "Bearer from-secret"
+
+    @pytest.mark.asyncio
+    async def test_execute_fails_loud_when_the_bearer_cannot_be_resolved(self):
+        transport, seen = _transport()
+
+        async def token() -> str:
+            raise LookupError("secret 'aadocs-key' not found")
+
+        with pytest.raises(ToolExecutionError, match="aadocs-key"):
+            await _tool(transport, auth_token_provider=token).execute(message="hello")
+        assert seen == []
 
     @pytest.mark.asyncio
     async def test_execute_polls_until_the_task_is_terminal(self, monkeypatch):
@@ -173,6 +253,44 @@ class TestA2AAgentToolExecute:
         assert json.loads(seen[1].content)["params"] == {"id": "task-1"}
         assert result["result"] == "done"
         assert result["task_state"] == "TASK_STATE_COMPLETED"
+
+    @pytest.mark.asyncio
+    async def test_a_task_still_running_after_the_budget_is_not_a_success(self, monkeypatch):
+        monkeypatch.setattr(a2a_agent_tool, "_POLL_INTERVAL", 0.0)
+        monkeypatch.setattr(a2a_agent_tool, "_POLL_TOTAL_BUDGET", 0.0)
+        transport, _ = _transport(_send_result(TaskState.TASK_STATE_WORKING))
+
+        result = await _tool(transport).execute(message="hello")
+
+        assert result["success"] is False
+        assert result["task_id"] == "task-1"
+        assert result["task_state"] == "TASK_STATE_WORKING"
+        assert "still working" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_a_task_waiting_for_input_stops_polling_and_says_so(self, monkeypatch):
+        monkeypatch.setattr(a2a_agent_tool, "_POLL_INTERVAL", 0.0)
+        transport, seen = _transport(
+            _send_result(TaskState.TASK_STATE_WORKING),
+            _get_result(TaskState.TASK_STATE_INPUT_REQUIRED, "Which repo?"),
+        )
+
+        result = await _tool(transport).execute(message="hello")
+
+        assert len(seen) == 2
+        assert result["success"] is False
+        assert result["task_state"] == "TASK_STATE_INPUT_REQUIRED"
+        assert "Which repo?" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_a_failed_task_is_not_a_success(self):
+        transport, _ = _transport(_send_result(TaskState.TASK_STATE_FAILED, "model quota exceeded"))
+
+        result = await _tool(transport).execute(message="hello")
+
+        assert result["success"] is False
+        assert result["task_state"] == "TASK_STATE_FAILED"
+        assert "model quota exceeded" in result["error"]
 
     @pytest.mark.asyncio
     async def test_execute_returns_a_direct_message_reply(self):

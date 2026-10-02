@@ -16,8 +16,8 @@ class TestAgentToolSettings:
     """Agent-specific settings live only on the agent variant."""
 
     def test_a2a_url_field(self):
-        settings = AgentToolSettings(a2a_url="http://localhost:9000/a2a/rpc")
-        assert settings.a2a_url == "http://localhost:9000/a2a/rpc"
+        settings = AgentToolSettings(a2a_url="http://localhost:9000")
+        assert settings.a2a_url == "http://localhost:9000"
 
     def test_description_override_field(self):
         settings = AgentToolSettings(description_override="Custom agent description")
@@ -27,6 +27,13 @@ class TestAgentToolSettings:
         settings = AgentToolSettings()
         assert settings.a2a_url is None
         assert settings.description_override is None
+        assert settings.auth_secret_name is None
+
+    def test_remote_agent_names_its_credential_by_secret(self):
+        settings = AgentToolSettings(
+            a2a_url="https://x.a2a.agentarea.ru", auth_secret_name="aadocs-key"
+        )
+        assert settings.auth_secret_name == "aadocs-key"
 
 
 class TestMcpToolSettings:

@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
@@ -130,7 +131,9 @@ class APIKey(BaseModel, WorkspaceScopedMixin):
         Authorization: Bearer <raw_token>
 
     Access is workspace-scoped: the token grants access to any MCP instance
-    that belongs to the same workspace.
+    that belongs to the same workspace. A key with ``agent_id`` reaches only
+    that agent, over A2A, and nothing else in the workspace: it is the key
+    handed to a caller outside the workspace.
     """
 
     __tablename__ = "api_keys"
@@ -144,6 +147,7 @@ class APIKey(BaseModel, WorkspaceScopedMixin):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     access_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    agent_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True, index=True)
 
     def __init__(
         self,
@@ -151,12 +155,14 @@ class APIKey(BaseModel, WorkspaceScopedMixin):
         token_hash: str,
         token_prefix: str,
         expires_at: datetime | None = None,
+        agent_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.name = name
         self.token_hash = token_hash
         self.token_prefix = token_prefix
+        self.agent_id = agent_id
         self.is_active = True
         self.expires_at = expires_at
         self.access_count = 0

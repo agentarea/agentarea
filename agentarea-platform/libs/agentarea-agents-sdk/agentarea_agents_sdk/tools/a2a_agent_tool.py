@@ -6,14 +6,20 @@ import logging
 import re
 from collections.abc import Awaitable, Callable
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import httpx
-from a2a.client import A2AClientError, A2AClientTimeoutError, Client, ClientConfig, ClientFactory
+from a2a.client import (
+    A2ACardResolver,
+    A2AClientError,
+    A2AClientTimeoutError,
+    AgentCardResolutionError,
+    Client,
+    ClientConfig,
+    ClientFactory,
+)
 from a2a.types import (
-    AgentCapabilities,
-    AgentCard,
-    AgentInterface,
     GetTaskRequest,
     Message,
     Part,
@@ -22,7 +28,7 @@ from a2a.types import (
     Task,
     TaskState,
 )
-from a2a.utils.constants import PROTOCOL_VERSION_CURRENT, TransportProtocol
+from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH
 from a2a.utils.errors import A2AError
 from google.protobuf.json_format import MessageToDict
 
@@ -39,11 +45,16 @@ _TERMINAL_STATES = frozenset(
         TaskState.TASK_STATE_REJECTED,
     }
 )
+# The remote agent is waiting on its caller: more polling will not change that.
+_INTERRUPTED_STATES = frozenset(
+    {TaskState.TASK_STATE_INPUT_REQUIRED, TaskState.TASK_STATE_AUTH_REQUIRED}
+)
 # Polling budget for delegation: stay under the 120s activity timeout.
 _POLL_TOTAL_BUDGET = 110.0
 _POLL_INTERVAL = 2.0
 
 PaymentHandler = Callable[..., Awaitable[dict[str, Any] | None]]
+TokenProvider = Callable[[], Awaitable[str]]
 # Headers httpx derives from the request itself; the payment handler re-sends
 # the body, so replaying them would describe a different request.
 _NON_REPLAYABLE_HEADERS = frozenset(
@@ -51,7 +62,23 @@ _NON_REPLAYABLE_HEADERS = frozenset(
 )
 
 
-def _sanitize_tool_name(agent_name: str) -> str:
+def _origin(url: str) -> str:
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}".lower()
+
+
+def agent_address(url: str) -> str:
+    """The address an A2A agent is known by, whichever form of it was pasted.
+
+    The agent's origin and its card URL name the same agent; the address is the
+    form the card is discovered from.
+    """
+    url = url.strip()
+    url = url.removesuffix(AGENT_CARD_WELL_KNOWN_PATH)
+    return url.rstrip("/")
+
+
+def delegate_tool_name(agent_name: str) -> str:
     """Convert agent name to a valid tool function name."""
     sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", agent_name)
     sanitized = re.sub(r"_+", "_", sanitized).strip("_")
@@ -78,7 +105,8 @@ class _PaymentTransport(httpx.AsyncBaseTransport):
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         response = await self._inner.handle_async_request(request)
-        if response.status_code != 402:
+        # Only a call is paid for; reading the agent card never is.
+        if response.status_code != 402 or request.method != "POST":
             return response
 
         response_body = (await response.aread()).decode("utf-8", errors="replace")
@@ -119,8 +147,10 @@ class _PaymentTransport(httpx.AsyncBaseTransport):
 class A2AAgentTool(BaseTool):
     """Tool that delegates a task to another agent via the A2A protocol.
 
-    Sends ``SendMessage`` through the official A2A SDK client to the target's
-    JSON-RPC endpoint, then polls ``GetTask`` until the task is terminal.
+    ``a2a_url`` is the agent's address: its card is read from
+    ``/.well-known/agent-card.json`` there, then ``SendMessage`` goes through
+    the official A2A SDK client to the endpoint the card names, and ``GetTask``
+    is polled until the task is terminal.
     """
 
     def __init__(
@@ -131,17 +161,20 @@ class A2AAgentTool(BaseTool):
         auth_token: str | None = None,
         payment_handler: PaymentHandler | None = None,
         http_transport: httpx.AsyncBaseTransport | None = None,
+        auth_token_provider: TokenProvider | None = None,
     ):
         self._agent_name = agent_name
         self._agent_description = agent_description
         self._a2a_url = a2a_url
         self._auth_token = auth_token
+        # Resolved per call, so a secret is read only when the delegate is used.
+        self._auth_token_provider = auth_token_provider
         self._payment_handler = payment_handler
         self._http_transport = http_transport
 
     @property
     def name(self) -> str:
-        return _sanitize_tool_name(self._agent_name)
+        return delegate_tool_name(self._agent_name)
 
     @property
     def description(self) -> str:
@@ -164,32 +197,51 @@ class A2AAgentTool(BaseTool):
             }
         }
 
-    def _client(self, transport: httpx.AsyncBaseTransport) -> Client:
-        headers = {"Authorization": f"Bearer {self._auth_token}"} if self._auth_token else {}
+    async def _client(self, transport: httpx.AsyncBaseTransport, auth_token: str | None) -> Client:
+        """A client for the agent at ``a2a_url``, built from the card it publishes there.
+
+        The card names the endpoint and transport. An endpoint on another origin
+        is refused: the credential was bound to ``a2a_url``, and a card must not
+        be able to send it elsewhere.
+        """
+        headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
         httpx_client = httpx.AsyncClient(
             transport=transport, timeout=A2A_CALL_TIMEOUT, headers=headers
         )
-        # The endpoint is configured, not discovered: describe it as the card
-        # would, so the client speaks JSON-RPC v1.0 to exactly that URL.
-        card = AgentCard(
-            name=self._agent_name,
-            supported_interfaces=[
-                AgentInterface(
-                    url=self._a2a_url,
-                    protocol_binding=TransportProtocol.JSONRPC.value,
-                    protocol_version=PROTOCOL_VERSION_CURRENT,
+        try:
+            card = await A2ACardResolver(httpx_client, self._a2a_url).get_agent_card()
+            origin = _origin(self._a2a_url)
+            foreign = [
+                interface.url
+                for interface in card.supported_interfaces
+                if _origin(interface.url) != origin
+            ]
+            if foreign or not card.supported_interfaces:
+                raise ToolExecutionError(
+                    self.name,
+                    f"The card of '{self._agent_name}' names no endpoint on {origin}: "
+                    f"{', '.join(foreign) or 'none'}",
                 )
-            ],
-            capabilities=AgentCapabilities(streaming=False),
-        )
-        config = ClientConfig(streaming=False, polling=True, httpx_client=httpx_client)
-        return ClientFactory(config).create(card)
+            config = ClientConfig(streaming=False, polling=True, httpx_client=httpx_client)
+            return ClientFactory(config).create(card)
+        except BaseException:
+            await httpx_client.aclose()
+            raise
 
     async def execute(self, **kwargs) -> dict[str, Any]:
         """Send SendMessage to the target agent and return the result."""
         message_text = kwargs.get("message", "")
         if not message_text:
             raise ToolExecutionError(self.name, "message is required")
+
+        auth_token = self._auth_token
+        if self._auth_token_provider:
+            try:
+                auth_token = await self._auth_token_provider()
+            except Exception as e:
+                raise ToolExecutionError(
+                    self.name, f"Could not resolve the credential for '{self._agent_name}': {e}"
+                ) from e
 
         transport: httpx.AsyncBaseTransport = self._http_transport or httpx.AsyncHTTPTransport()
         payments: _PaymentTransport | None = None
@@ -203,7 +255,7 @@ class A2AAgentTool(BaseTool):
             )
         )
         try:
-            async with self._client(transport) as client:
+            async with await self._client(transport, auth_token) as client:
                 task: Task | None = None
                 async for response in client.send_message(request):
                     if response.HasField("message"):
@@ -214,16 +266,41 @@ class A2AAgentTool(BaseTool):
                     raise ToolExecutionError(self.name, "A2A agent returned no task")
                 payment = payments.payment_result if payments else None
 
-                if task.status.state not in _TERMINAL_STATES:
+                if task.status.state not in _TERMINAL_STATES | _INTERRUPTED_STATES:
                     task = await self._poll_until_terminal(client, task)
-                return self._success(
-                    self._extract_task_result(task),
-                    task_id=task.id,
-                    task_state=TaskState.Name(task.status.state),
-                    payment=payment,
-                )
+                state = TaskState.Name(task.status.state)
+                if task.status.state == TaskState.TASK_STATE_COMPLETED:
+                    return self._success(
+                        self._extract_task_result(task),
+                        task_id=task.id,
+                        task_state=state,
+                        payment=payment,
+                    )
+                if task.status.state in _TERMINAL_STATES:
+                    error = f"'{self._agent_name}' ended the task as {state}: " + (
+                        self._extract_task_result(task)
+                    )
+                elif task.status.state in _INTERRUPTED_STATES:
+                    error = f"'{self._agent_name}' stopped at {state} on task {task.id}: " + (
+                        self._extract_task_result(task)
+                    )
+                else:
+                    error = (
+                        f"'{self._agent_name}' is still working on task {task.id}; "
+                        "no result within the delegation time limit"
+                    )
+                return {
+                    **self._failure(error),
+                    "task_id": task.id,
+                    "task_state": state,
+                    "payment": payment,
+                }
         except ToolExecutionError:
             raise
+        except AgentCardResolutionError as e:
+            raise ToolExecutionError(
+                self.name, f"Could not read the agent card of '{self._agent_name}': {e}"
+            ) from e
         except A2AClientTimeoutError as e:
             raise ToolExecutionError(
                 self.name, f"A2A call to '{self._agent_name}' timed out"
@@ -269,7 +346,7 @@ class A2AAgentTool(BaseTool):
             except A2AError:
                 logger.warning(f"A2A poll for task {task.id} failed", exc_info=True)
                 continue
-            if task.status.state in _TERMINAL_STATES:
+            if task.status.state in _TERMINAL_STATES | _INTERRUPTED_STATES:
                 return task
 
         logger.warning(f"A2A delegation to '{self._agent_name}' did not finish within budget")

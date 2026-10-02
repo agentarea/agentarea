@@ -217,6 +217,9 @@ class MCPAuthMiddleware:
             if principal is None:
                 logger.debug("MCP auth: token validation failed (no provider accepted)")
                 return False
+            if principal.bound_agent_id is not None:
+                logger.info("MCP auth: refused a key bound to agent %s", principal.bound_agent_id)
+                return False
             caller = await _select_workspace(principal, pinned_workspace)
             if caller is None:
                 return True

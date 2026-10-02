@@ -31,6 +31,12 @@ export type A2UiActionPayload = {
  */
 export type ApiKeyCreateRequest = {
     /**
+     * Agent Id
+     *
+     * Bind the key to one agent of this workspace: it then reaches only that agent over A2A, nothing else. The key to hand to a caller outside the workspace.
+     */
+    agent_id?: string | null;
+    /**
      * Expires In Days
      *
      * Optional expiry in days (omit for non-expiring)
@@ -53,6 +59,12 @@ export type ApiKeyCreateResponse = {
      * Access Count
      */
     access_count: number;
+    /**
+     * Agent Id
+     *
+     * The one agent the key reaches over A2A; None for a workspace key
+     */
+    agent_id?: string | null;
     /**
      * Created At
      */
@@ -96,6 +108,12 @@ export type ApiKeyResponse = {
      * Access Count
      */
     access_count: number;
+    /**
+     * Agent Id
+     *
+     * The one agent the key reaches over A2A; None for a workspace key
+     */
+    agent_id?: string | null;
     /**
      * Created At
      */
@@ -159,6 +177,53 @@ export type AddSkillRequest = {
      * Skill Id
      */
     skill_id: string;
+};
+/**
+ * AgentCardLookup
+ */
+export type AgentCardLookup = {
+    /**
+     * Url
+     *
+     * The agent's address, or the URL of its agent card
+     */
+    url: string;
+};
+/**
+ * AgentCardSkill
+ */
+export type AgentCardSkill = {
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Name
+     */
+    name: string;
+};
+/**
+ * AgentCardSummary
+ */
+export type AgentCardSummary = {
+    /**
+     * Address
+     *
+     * The agent's address, the form a delegate stores
+     */
+    address: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Skills
+     */
+    skills: Array<AgentCardSkill>;
 };
 /**
  * AgentCreateRequest
@@ -314,6 +379,10 @@ export type AgentPresetResponse = {
  */
 export type AgentResponse = {
     /**
+     * A2A Url
+     */
+    a2a_url?: string | null;
+    /**
      * A2Ui Enabled
      */
     a2ui_enabled?: boolean | null;
@@ -441,6 +510,12 @@ export type AgentToolSettings = {
      * A2A Url
      */
     a2a_url?: string | null;
+    /**
+     * Auth Secret Name
+     *
+     * Workspace secret holding the bearer token sent to ``a2a_url``.
+     */
+    auth_secret_name?: string | null;
     /**
      * Description Override
      */
@@ -8381,6 +8456,26 @@ export type CreateWorkspaceV1WorkspacesPostResponses = {
     201: WorkspaceResponse;
 };
 export type CreateWorkspaceV1WorkspacesPostResponse = CreateWorkspaceV1WorkspacesPostResponses[keyof CreateWorkspaceV1WorkspacesPostResponses];
+export type ReadAgentCardV1A2aAgentCardsPostData = {
+    body: AgentCardLookup;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/a2a/agent-cards';
+};
+export type ReadAgentCardV1A2aAgentCardsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ReadAgentCardV1A2aAgentCardsPostError = ReadAgentCardV1A2aAgentCardsPostErrors[keyof ReadAgentCardV1A2aAgentCardsPostErrors];
+export type ReadAgentCardV1A2aAgentCardsPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentCardSummary;
+};
+export type ReadAgentCardV1A2aAgentCardsPostResponse = ReadAgentCardV1A2aAgentCardsPostResponses[keyof ReadAgentCardV1A2aAgentCardsPostResponses];
 export type CheckPermissionV1AccessControlCheckPostData = {
     body: CheckRequest;
     path?: never;
@@ -9636,7 +9731,14 @@ export type GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponse = GetPayme
 export type ListApiKeysV1ApiKeysGetData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Agent Id
+         *
+         * Only the keys bound to this agent
+         */
+        agent_id?: string | null;
+    };
     url: '/v1/workspaces/{workspace}/api-keys/';
 };
 export type ListApiKeysV1ApiKeysGetErrors = {

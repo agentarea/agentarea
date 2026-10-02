@@ -18,11 +18,16 @@ export async function createAPIKeyAction(input: ApiKeyCreateRequest) {
     return { error: parsed.error.issues[0]?.message || "Invalid API key" };
   }
 
-  const apiKeyBody: { name: string; expires_in_days?: number } = {
+  const apiKeyBody: {
+    name: string;
+    expires_in_days?: number;
+    agent_id?: string;
+  } = {
     name: parsed.data.name,
     ...(parsed.data.expires_in_days == null
       ? {}
       : { expires_in_days: parsed.data.expires_in_days }),
+    ...(parsed.data.agent_id == null ? {} : { agent_id: parsed.data.agent_id }),
   };
 
   const result = await createAPIKeyAPI(apiKeyBody);
