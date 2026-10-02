@@ -96,6 +96,24 @@ class TestLLMModelParser:
         )
         assert len(items) == 1
 
+    def test_carries_the_model_kind(self):
+        items = parse_source(
+            "llm_models",
+            {"models": [{"provider_key": "openrouter", "model_name": "jev", "kind": "decision"}]},
+        )
+        assert items[0]["spec"]["kind"] == "decision"
+
+    def test_an_entry_without_kind_is_chat(self):
+        items = parse_source("llm_models", {"models": [{"provider_key": "p", "model_name": "m"}]})
+        assert items[0]["spec"]["kind"] == "chat"
+
+    def test_an_unknown_kind_is_refused(self):
+        with pytest.raises(ValueError, match="kind"):
+            parse_source(
+                "llm_models",
+                {"models": [{"provider_key": "p", "model_name": "m", "kind": "audio"}]},
+            )
+
 
 class TestAgentParser:
     def test_basic(self):

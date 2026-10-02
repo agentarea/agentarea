@@ -4,9 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { notFound, useParams } from "next/navigation";
 import { Link as LinkIcon, Loader2, Pencil, Terminal } from "lucide-react";
-import type { ClientResponse } from "@/api/client";
-import { useAttachableResources } from "@/hooks/use-attachable-resources";
-import { resolveMcpRef } from "@/lib/mcp/resolveMcpRef";
+import type { ClientResponse, PlatformToolsetResponse } from "@/api/client";
 import {
   AttachmentSection,
   hydrateAttachments,
@@ -31,25 +29,32 @@ import {
 import Divider from "@/components/ui/divider";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useAttachableResources } from "@/hooks/use-attachable-resources";
 import {
   apiErrorMessage,
   formatApiError,
   isApiNotFound,
 } from "@/lib/api-errors";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
+import { resolveMcpRef } from "@/lib/mcp/resolveMcpRef";
 import {
   addMcpInstanceToClientAction,
+  addPlatformToolsetToClientAction,
   addSkillToClientAction,
   deleteClientAction,
   getClientAction,
+  listClientPlatformToolsetsAction,
   removeMcpInstanceFromClientAction,
+  removePlatformToolsetFromClientAction,
   removeSkillFromClientAction,
   updateClientAction,
 } from "@/lib/server-actions";
 import { harnessOf } from "../harnesses";
+import { McpInstanceTools, PlatformToolsetMethods } from "./ToolSelection";
 
 const McpIcon = ENTITY_ICONS.mcp;
 const SkillIcon = ENTITY_ICONS.skill;
+const ToolIcon = ENTITY_ICONS.tool;
 
 export default function ClientDetailPage() {
   const params = useParams();
@@ -62,11 +67,7 @@ export default function ClientDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
   const resources = useAttachableResources();
-  const {
-    skills: allSkills,
-    mcpInstances: allMcp,
-    mcpServers,
-  } = resources;
+  const { skills: allSkills, mcpInstances: allMcp, mcpServers } = resources;
 
   const [showEdit, setShowEdit] = useState(false);
   const [editName, setEditName] = useState("");
@@ -74,6 +75,10 @@ export default function ClientDetailPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [platformCatalog, setPlatformCatalog] = useState<
+    PlatformToolsetResponse[] | null
+  >(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
 
   // Refetch after an edit: a failure throws so the caller shows it inline.
   const fetchClient = useCallback(async () => {
@@ -110,6 +115,28 @@ export default function ClientDetailPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    void (async () => {
+      try {
+        const result = await listClientPlatformToolsetsAction();
+        if (result.error || !result.data) {
+          setCatalogError(
+            apiErrorMessage(result, "Couldn’t load platform toolsets")
+          );
+          setPlatformCatalog([]);
+          return;
+        }
+        setPlatformCatalog(result.data);
+      } catch (err) {
+        console.error("Failed to load platform toolsets", err);
+        setCatalogError(
+          `Couldn’t load platform toolsets: ${formatApiError(err)}`
+        );
+        setPlatformCatalog([]);
+      }
+    })();
+  }, []);
+
   if (missing) notFound();
   if (loading) return <DetailSkeleton />;
   if (loadError || !client) {
@@ -129,6 +156,12 @@ export default function ClientDetailPage() {
     const resolved = resolveMcpRef(instance.id, allMcp, mcpServers);
     return resolved.status === "unresolved" ? undefined : resolved.iconSrc;
   };
+
+  const toolsetItems = (platformCatalog ?? []).map((toolset) => ({
+    id: toolset.name,
+    name: toolset.display_name,
+    description: toolset.description,
+  }));
 
   const handleSave = async () => {
     if (!editName.trim()) return;
@@ -259,7 +292,8 @@ export default function ClientDetailPage() {
           note={
             <p>
               Instances exposed through this harness&apos;s endpoint. Tools keep
-              the namespace prefix set on the instance.
+              the namespace prefix set on the instance; uncheck the ones the
+              harness should not see.
             </p>
           }
           triggerText="MCP Server"
@@ -280,6 +314,80 @@ export default function ClientDetailPage() {
           }
           onChanged={fetchClient}
           getIconSrc={instanceIconSrc}
+          renderDetails={(item) => {
+            const attachment = client.mcp_instances?.find(
+              (instance) => instance.id === item.id
+            );
+            return attachment ? (
+              <McpInstanceTools
+                clientId={clientId}
+                attachment={attachment}
+                onSaved={refresh}
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {item.description || "—"}
+              </p>
+            );
+          }}
+        />
+
+        <Divider />
+
+        <AttachmentSection
+          id="client-platform"
+          title="Platform Tools"
+          icon={ToolIcon}
+          note={
+            <p>
+              AgentArea toolsets served through the endpoint, in this
+              harness&apos;s workspace and with the caller&apos;s own
+              permissions. Uncheck the methods the harness should not see.
+            </p>
+          }
+          triggerText="Platform Toolset"
+          sheetTitle="Platform Tools"
+          sheetDescription="Add AgentArea toolsets to this harness's bundle"
+          availableTitle="Platform Toolsets"
+          attached={hydrateAttachments(
+            (client.platform_toolsets ?? []).map((toolset) => ({
+              id: toolset.name,
+              name: toolset.name,
+            })),
+            toolsetItems
+          )}
+          available={toolsetItems}
+          loading={platformCatalog === null}
+          emptyLabel="No platform toolsets. Add the ones this harness should manage AgentArea with."
+          emptyAvailable={
+            <p>{catalogError ?? "The platform serves no toolsets."}</p>
+          }
+          onAdd={(item) =>
+            addPlatformToolsetToClientAction(clientId, item.id, null)
+          }
+          onRemove={(item) =>
+            removePlatformToolsetFromClientAction(clientId, item.id)
+          }
+          onChanged={fetchClient}
+          renderDetails={(item) => {
+            const attachment = client.platform_toolsets?.find(
+              (toolset) => toolset.name === item.id
+            );
+            return attachment ? (
+              <PlatformToolsetMethods
+                clientId={clientId}
+                attachment={attachment}
+                toolset={platformCatalog?.find(
+                  (toolset) => toolset.name === item.id
+                )}
+                onSaved={refresh}
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {item.description || "—"}
+              </p>
+            );
+          }}
         />
 
         <Divider />

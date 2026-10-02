@@ -35,3 +35,53 @@ export function looksTextual(head: Uint8Array): boolean {
     return false;
   }
 }
+
+/** How much of a file to read before deciding whether it is text. */
+export const PROBE_BYTES = 4096;
+
+/** Read the opening chunks of a stream, at least `PROBE_BYTES` unless it ends first. */
+export async function readProbe(
+  reader: ReadableStreamDefaultReader<Uint8Array>
+): Promise<Uint8Array[]> {
+  const chunks: Uint8Array[] = [];
+  let probed = 0;
+  while (probed < PROBE_BYTES) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    probed += value.length;
+  }
+  return chunks;
+}
+
+export function concatBytes(chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return merged;
+}
+
+/** The media family of a response, without reading past its opening bytes.
+ *
+ * A declared picture is taken at its word, as the file viewer does. Otherwise
+ * bytes that read as text are never media, whatever type was declared for
+ * them; anything else is what its declared type says it is. */
+export async function sniffMedia(
+  response: Response,
+  declared: string | null
+): Promise<MediaKind | null> {
+  const body = response.body;
+  const kind = mediaKind(declared);
+  if (!body || kind === "image") {
+    await body?.cancel();
+    return kind;
+  }
+  const reader = body.getReader();
+  const head = concatBytes(await readProbe(reader));
+  await reader.cancel();
+  return looksTextual(head) ? null : kind;
+}

@@ -35,7 +35,7 @@ export const STATUS_KIND_COLOR: Record<StatusKind, string> = {
   queued: MUTED,
   scheduled: MUTED,
   running: "var(--status-info)",
-  attention: "var(--status-warning)",
+  attention: "var(--status-attention)",
   paused: MUTED,
   active: "var(--status-success)",
   off: MUTED,
@@ -214,32 +214,19 @@ export function getTaskStatusPresentation(status: string): StatusPresentation {
     case "working":
     case "in_progress":
       return { label: "Running", labelKey: "running", kind: "running" };
+    // Everything that waits on a person — an answer, an approval, a turn-limit
+    // continuation, or lifting a budget/policy block — reads as one status;
+    // the task itself says which.
     case "input_required":
     case "waiting_for_input":
-      return {
-        label: "Input Required",
-        labelKey: "inputRequired",
-        kind: "attention",
-      };
     case "waiting_for_approval":
-      return {
-        label: "Approval Required",
-        labelKey: "approvalRequired",
-        kind: "attention",
-      };
     case "waiting_for_continuation":
-      return {
-        label: "Continuation Required",
-        labelKey: "continuationRequired",
-        kind: "attention",
-      };
+    case "blocked":
+      return { label: "Needs action", labelKey: "needsAction", kind: "attention" };
     case "failed":
       return { label: "Failed", labelKey: "failed", kind: "failed" };
     case "error":
       return { label: "Error", labelKey: "error", kind: "failed" };
-    // Stopped by a budget or policy until someone lifts it.
-    case "blocked":
-      return { label: "Blocked", labelKey: "blocked", kind: "attention" };
     case "cancelled":
     case "canceled":
       return { label: "Cancelled", labelKey: "cancelled", kind: "cancelled" };

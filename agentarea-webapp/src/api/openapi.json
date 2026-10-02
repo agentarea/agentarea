@@ -2617,6 +2617,77 @@
         "title": "ClientCreate",
         "type": "object"
       },
+      "ClientMcpInstanceRef": {
+        "properties": {
+          "allowed_tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Tools"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "namespace_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Namespace Prefix"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ClientMcpInstanceRef",
+        "type": "object"
+      },
+      "ClientPlatformToolsetRef": {
+        "properties": {
+          "disabled_methods": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled Methods"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ClientPlatformToolsetRef",
+        "type": "object"
+      },
       "ClientRef": {
         "properties": {
           "id": {
@@ -2676,7 +2747,7 @@
           "mcp_instances": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/ClientRef"
+              "$ref": "#/components/schemas/ClientMcpInstanceRef"
             },
             "title": "Mcp Instances",
             "type": "array"
@@ -2684,6 +2755,14 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "platform_toolsets": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ClientPlatformToolsetRef"
+            },
+            "title": "Platform Toolsets",
+            "type": "array"
           },
           "skills": {
             "default": [],
@@ -2770,7 +2849,7 @@
         "type": "object"
       },
       "CodeToolSettings": {
-        "description": "Settings for a built-in code toolset.",
+        "description": "Settings for a built-in code toolset.\n\nThe model ids are model instances of the workspace, each of the kind its\ntoolset needs: ``agentarea/media`` takes an image and/or a video model,\n``agentarea/decide`` a decision model. No other toolset takes one.",
         "properties": {
           "disabled_methods": {
             "anyOf": [
@@ -2786,6 +2865,30 @@
             ],
             "title": "Disabled Methods"
           },
+          "image_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "agentarea/media: model instance generating images.",
+            "title": "Image Model Id"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "agentarea/decide: decision model instance.",
+            "title": "Model Id"
+          },
           "requires_user_confirmation": {
             "anyOf": [
               {
@@ -2796,6 +2899,18 @@
               }
             ],
             "title": "Requires User Confirmation"
+          },
+          "video_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "agentarea/media: model instance generating videos.",
+            "title": "Video Model Id"
           }
         },
         "title": "CodeToolSettings",
@@ -3216,8 +3331,15 @@
       "DiscoverPreviewModelResponse": {
         "properties": {
           "context_window": {
-            "title": "Context Window",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window"
           },
           "description": {
             "anyOf": [
@@ -3253,6 +3375,10 @@
             "default": false,
             "title": "Is New",
             "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ModelKind",
+            "default": "chat"
           },
           "max_output_tokens": {
             "anyOf": [
@@ -3377,8 +3503,15 @@
       "DiscoveredModelResponse": {
         "properties": {
           "context_window": {
-            "title": "Context Window",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window"
           },
           "description": {
             "anyOf": [
@@ -3410,6 +3543,10 @@
             "default": false,
             "title": "Is New",
             "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ModelKind",
+            "default": "chat"
           },
           "max_output_tokens": {
             "anyOf": [
@@ -5838,7 +5975,22 @@
         "type": "object"
       },
       "McpInstanceAssociationBody": {
+        "description": "Attach an instance, or replace how an attached one is served.",
         "properties": {
+          "allowed_tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Tools"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -6245,6 +6397,16 @@
             ],
             "title": "Model Display Name"
           },
+          "model_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "model_name": {
             "anyOf": [
               {
@@ -6449,13 +6611,32 @@
         "title": "ModelInstanceTestResponse",
         "type": "object"
       },
+      "ModelKind": {
+        "description": "What a model produces, which decides every surface it may be bound to.\n\nAn agent's main model is ``chat``; the media toolset takes ``image`` and\n``video``; the decide toolset and decision-backed trigger conditions take\n``decision``. A model has exactly one kind.",
+        "enum": [
+          "chat",
+          "embedding",
+          "image",
+          "video",
+          "decision"
+        ],
+        "title": "ModelKind",
+        "type": "string"
+      },
       "ModelSpecCreate": {
         "properties": {
           "context_window": {
-            "exclusiveMinimum": 0.0,
-            "maximum": 2147483647.0,
-            "title": "Context Window",
-            "type": "integer"
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 2147483647.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window"
           },
           "default_context_strategy": {
             "anyOf": [
@@ -6486,13 +6667,20 @@
           "input_cost_per_token": {
             "anyOf": [
               {
-                "exclusiveMaximum": 100000000.0,
-                "minimum": 0.0,
-                "type": "number"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0",
+                "lt": "100000000"
               },
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
+                "type": "null"
               }
             ],
             "title": "Input Cost Per Token"
@@ -6501,6 +6689,10 @@
             "default": true,
             "title": "Is Active",
             "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ModelKind",
+            "default": "chat"
           },
           "max_output_tokens": {
             "anyOf": [
@@ -6522,13 +6714,20 @@
           "output_cost_per_token": {
             "anyOf": [
               {
-                "exclusiveMaximum": 100000000.0,
-                "minimum": 0.0,
-                "type": "number"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0",
+                "lt": "100000000"
               },
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
+                "type": "null"
               }
             ],
             "title": "Output Cost Per Token"
@@ -6542,10 +6741,7 @@
         "required": [
           "provider_spec_id",
           "model_name",
-          "display_name",
-          "context_window",
-          "input_cost_per_token",
-          "output_cost_per_token"
+          "display_name"
         ],
         "title": "ModelSpecCreate",
         "type": "object"
@@ -7819,6 +8015,106 @@
           "status"
         ],
         "title": "PlannedUpload",
+        "type": "object"
+      },
+      "PlatformToolsetAssociationBody": {
+        "description": "Attach a platform toolset, or replace the methods an attached one leaves out.",
+        "properties": {
+          "disabled_methods": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled Methods"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PlatformToolsetAssociationBody",
+        "type": "object"
+      },
+      "PlatformToolsetMethod": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "effect": {
+            "anyOf": [
+              {
+                "enum": [
+                  "read",
+                  "write",
+                  "destructive",
+                  "privileged"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effect"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "description"
+        ],
+        "title": "PlatformToolsetMethod",
+        "type": "object"
+      },
+      "PlatformToolsetResponse": {
+        "description": "A platform toolset a client can carry.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "methods": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformToolsetMethod"
+            },
+            "title": "Methods",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "description",
+          "methods"
+        ],
+        "title": "PlatformToolsetResponse",
         "type": "object"
       },
       "PolicyDocument": {
@@ -11864,7 +12160,7 @@
           },
           "conditions": {
             "additionalProperties": true,
-            "description": "Optional conditions evaluated against event data before firing.",
+            "description": "Optional conditions evaluated against event data before firing. An LLM condition ({\"type\": \"llm\", \"description\": ...}) must name the chat or decision model instance that evaluates it in \"model_id\"; each sub-condition of a combined condition names its own.",
             "title": "Conditions",
             "type": "object"
           },
@@ -12428,7 +12724,7 @@
           },
           "conditions": {
             "additionalProperties": true,
-            "description": "Optional conditions evaluated against event data before firing.",
+            "description": "Optional conditions evaluated against event data before firing. An LLM condition ({\"type\": \"llm\", \"description\": ...}) must name the chat or decision model instance that evaluates it in \"model_id\"; each sub-condition of a combined condition names its own.",
             "title": "Conditions",
             "type": "object"
           },
@@ -13551,8 +13847,15 @@
       "agentarea_api__api__v1__model_specs__ModelSpecResponse": {
         "properties": {
           "context_window": {
-            "title": "Context Window",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window"
           },
           "created_at": {
             "title": "Created At",
@@ -13602,6 +13905,10 @@
           "is_active": {
             "title": "Is Active",
             "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ModelKind",
+            "default": "chat"
           },
           "max_output_tokens": {
             "anyOf": [
@@ -13714,8 +14021,15 @@
       "agentarea_api__api__v1__provider_specs__ModelSpecResponse": {
         "properties": {
           "context_window": {
-            "title": "Context Window",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window"
           },
           "created_at": {
             "title": "Created At",
@@ -13754,6 +14068,10 @@
           "is_active": {
             "title": "Is Active",
             "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ModelKind",
+            "default": "chat"
           },
           "max_output_tokens": {
             "anyOf": [
@@ -19222,6 +19540,64 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/clients/platform-toolsets": {
+      "get": {
+        "description": "Platform toolsets a client can carry, with the methods each can leave out.",
+        "operationId": "list_platform_toolsets_v1_clients_platform_toolsets_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlatformToolsetResponse"
+                  },
+                  "title": "Response List Platform Toolsets V1 Clients Platform Toolsets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Platform Toolsets",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/clients/{client_id}": {
       "delete": {
         "operationId": "delete_client_v1_clients__client_id__delete",
@@ -19535,6 +19911,138 @@
           }
         ],
         "summary": "Remove Mcp Instance From Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets": {
+      "post": {
+        "operationId": "add_platform_toolset_to_client_v1_clients__client_id__platform_toolsets_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformToolsetAssociationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Platform Toolset To Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets/{toolset}": {
+      "delete": {
+        "description": "Detach a toolset by the namespace the client lists it under.",
+        "operationId": "remove_platform_toolset_from_client_v1_clients__client_id__platform_toolsets__toolset__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "toolset",
+            "required": true,
+            "schema": {
+              "title": "Toolset",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Platform Toolset From Client",
         "tags": [
           "v1",
           "protected",
@@ -23492,7 +24000,7 @@
     },
     "/v1/workspaces/{workspace}/model-instances/": {
       "get": {
-        "description": "List model instances.",
+        "description": "List model instances, optionally only those whose model is of ``kind``.",
         "operationId": "list_model_instances_v1_model_instances__get",
         "parameters": [
           {
@@ -23556,6 +24064,22 @@
                 }
               ],
               "title": "Is Active"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ModelKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
             }
           }
         ],
@@ -23961,6 +24485,22 @@
                 }
               ],
               "title": "Is Active"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ModelKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
             }
           }
         ],

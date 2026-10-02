@@ -13,8 +13,10 @@ export function isRunningTask(task: { status?: string | null }): boolean {
   );
 }
 
-/** Parked on a person: an answer or an approval. */
+/** Parked on a person: an answer, an approval, a continuation or an unblock. */
 export function isAwaitingUserTask(task: { status?: string | null }): boolean {
-  const { labelKey } = getTaskStatusPresentation(String(task.status ?? ""));
-  return labelKey === "inputRequired" || labelKey === "approvalRequired";
+  return (
+    getTaskStatusPresentation(String(task.status ?? "")).labelKey ===
+    "needsAction"
+  );
 }

@@ -41,6 +41,8 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #   catalog model instances: a built-in model is added by copying it into the
 #     workspace's model_specs, the table the instance's foreign key references,
 #     and the catalog query is jsonb.
+#   video jobs: a job is read only by its own workspace and task, a finished one
+#     is recorded saved (and billed) once by a conditional update.
 #   membership backfill: the migration and the reconcile script insert rows with
 #     SQL that leans on the (workspace, user) unique constraint and the
 #     invitation and outbox tables.
@@ -55,9 +57,9 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #   tenant scope: every workspace-scoped model stays in its workspace through
 #     the ORM hook, against the migrated schema rather than create_all.
 #   task events and conversation: a retried publish batch stores each event once
-#     under the workflow's id; the SSE catch-up reads keyset batches ordered by
-#     (timestamp, id) and resumes after a given event; a conversation entry
-#     rewritten at its position replaces the first write.
+#     under the workflow's id (the primary key decides); the SSE catch-up reads
+#     keyset batches ordered by (timestamp, id) and resumes after a given event;
+#     a conversation entry rewritten at its position replaces the first write.
 PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
@@ -68,6 +70,7 @@ PY_SUITES=(
   libs/llm/tests/test_model_spec_price_precision_db.py
   libs/llm/tests/test_platform_managed_providers_db.py
   libs/llm/tests/test_catalog_model_instance_db.py
+  libs/llm/tests/test_video_generation_jobs_db.py
   apps/api/tests/test_membership_backfill_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
   libs/agents/tests/test_catalog_presets_db.py

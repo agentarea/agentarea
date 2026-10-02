@@ -482,8 +482,18 @@ async def get_trigger_service(
                 secret_manager,
                 event_broker,
             )
+            from agentarea_common.config.secrets import get_secret_manager_settings
+            from agentarea_llm.application.model_service import build_model_service
+            from agentarea_secrets.secret_manager_factory import SecretManagerFactory
+
             llm_condition_evaluator = LLMConditionEvaluator(
-                model_instance_service=model_instance_service, secret_manager=secret_manager
+                model_instance_service=model_instance_service,
+                secret_manager=secret_manager,
+                model_service=build_model_service(
+                    session=repository_factory.session,
+                    user_context=repository_factory.user_context,
+                    secret_manager_factory=SecretManagerFactory(get_secret_manager_settings()),
+                ),
             )
         except Exception as e:
             logger.warning(f"LLM condition evaluator not available: {e}", exc_info=True)

@@ -1,8 +1,9 @@
 """ClientsToolset — register harnesses (codex, claude, ...) and wire their tools.
 
 A client is an agent-proxy: it connects to ``/mcp/clients/{id}`` and gets the
-skills and MCP instances attached to it. Attaching is ``privileged`` rather than
-plain ``write`` because it widens what an outside harness can reach.
+skills, MCP instances, and platform toolsets attached to it. Attaching is
+``privileged`` rather than plain ``write`` because it widens what an outside
+harness can reach.
 
 Tool method signatures are explicit kwargs (MCP-idiomatic flat wire schema) but
 the source of truth is ``ClientCreate``/``ClientUpdate`` in
@@ -10,9 +11,11 @@ the source of truth is ``ClientCreate``/``ClientUpdate`` in
 ``libs/agents/tests/test_mcp_rest_parity.py`` enforces parity.
 """
 
+import builtins
 import json
 from uuid import UUID
 
+from agentarea_agents_sdk.mcp_server import UnknownToolsetError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -22,16 +25,13 @@ from agentarea_mcp.infrastructure.client_repository import ClientRepository
 from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
 
 from ..api.v1._access_control_grants import grant_resource_owner
-from ..api.v1.clients import client_mcp_endpoint_url
+from ..api.v1.clients import client_mcp_endpoint_url, client_responses
+from ..platform_mcp import attachable_toolset
 from .base import platform_context, platform_read_context
 
 
 def _build_service(repo_factory) -> ClientService:
     return ClientService(repo_factory.create_repository(ClientRepository))
-
-
-def _refs(items) -> list[dict[str, str]]:
-    return [{"id": str(i.id), "name": i.name} for i in items or []]
 
 
 def _summary(client) -> dict[str, str]:
@@ -46,7 +46,10 @@ def _summary(client) -> dict[str, str]:
 @toolset(
     namespace="agentarea/clients",
     display_name="Registered Clients",
-    description="Register harnesses as clients and attach skills/MCP instances to them.",
+    description=(
+        "Register harnesses as clients and attach skills, MCP instances, and platform "
+        "toolsets to them."
+    ),
     category="platform",
     plane="federate",
 )
@@ -69,21 +72,14 @@ class ClientsToolset(Toolset):
     @tool_method(effect="read")
     @requires("read", "client", id_param="client_id")
     async def get(self, client_id: str) -> str:
-        """Get a client with the skills and MCP instances attached to it."""
+        """Get a client with the skills, MCP instances, and platform toolsets attached to it."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             client = await service.get(UUID(client_id))
             if not client:
                 return json.dumps({"error": "Client not found"})
-            return json.dumps(
-                {
-                    **_summary(client),
-                    "description": client.description,
-                    "skills": _refs(client.skills),
-                    "mcp_instances": _refs(client.mcp_instances),
-                },
-                default=str,
-            )
+            (response,) = await client_responses(service, [client])
+            return response.model_dump_json()
 
     @tool_method(effect="write")
     @unrestricted("any member may register a client, as POST /v1/clients allows")
@@ -169,14 +165,20 @@ class ClientsToolset(Toolset):
         client_id: str,
         mcp_instance_id: str,
         namespace_prefix: str = "",
+        allowed_tools: builtins.list[str] | None = None,
     ) -> str:
-        """Attach an MCP instance to a client, optionally namespacing its tools."""
+        """Attach an MCP instance to a client, optionally namespacing and narrowing its tools.
+
+        ``allowed_tools`` names the instance's tools the client serves; omit it to
+        serve all of them. Re-attaching replaces both settings.
+        """
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             await service.add_mcp_instance(
                 UUID(client_id),
                 UUID(mcp_instance_id),
                 namespace_prefix or None,
+                allowed_tools,
             )
             return json.dumps({"added": True})
 
@@ -187,4 +189,36 @@ class ClientsToolset(Toolset):
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             await service.remove_mcp_instance(UUID(client_id), UUID(mcp_instance_id))
+            return json.dumps({"removed": True})
+
+    @tool_method(effect="privileged")
+    @requires("edit", "client", id_param="client_id")
+    async def add_platform_toolset(
+        self,
+        client_id: str,
+        toolset: str,
+        disabled_methods: builtins.list[str] | None = None,
+    ) -> str:
+        """Attach a platform toolset (e.g. ``agentarea/runs``) to a client.
+
+        The client's endpoint then serves the toolset's tools, minus
+        ``disabled_methods``, in the client's workspace. Re-attaching replaces
+        ``disabled_methods``.
+        """
+        try:
+            namespace = attachable_toolset(toolset, disabled_methods or ())
+        except UnknownToolsetError as exc:
+            return json.dumps({"error": str(exc)})
+        async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
+            service = _build_service(repo_factory)
+            await service.set_platform_toolset(UUID(client_id), namespace, disabled_methods)
+            return json.dumps({"added": namespace})
+
+    @tool_method(effect="privileged")
+    @requires("edit", "client", id_param="client_id")
+    async def remove_platform_toolset(self, client_id: str, toolset: str) -> str:
+        """Detach a platform toolset from a client, by the namespace the client lists."""
+        async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
+            service = _build_service(repo_factory)
+            await service.remove_platform_toolset(UUID(client_id), toolset)
             return json.dumps({"removed": True})

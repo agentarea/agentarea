@@ -10,21 +10,29 @@ from ...models import CompactMessagesRequest, CompactMessagesResult
 from ..constants import HEARTBEAT_TIMEOUT, LLM_CALL_TIMEOUT, Activities, EventTypes
 from ..retry import model_call_retry_policy
 from .budget import BudgetMixin
+from .patches import COMPACTION_BOUNDS_PAYLOAD_PATCH
 
 
 class CompactionMixin(BudgetMixin):
     """Compacting the conversation when it approaches the context window."""
 
-    async def _compact_context_if_needed(self) -> bool:
-        """Summarize the older part of the conversation once the window fills up.
+    async def _compact_context_if_needed(self, *, force: bool = False) -> bool:
+        """Summarize the logged conversation when context or a payload bound is reached.
 
         The conversation lives in the task's log, so the activity does the work:
         it writes the pending entries, keeps the most recent ones and activated
         skill content verbatim, summarizes the rest and returns the new window.
 
+        ``force`` is reserved for the versioned payload-size guard.
+
         Returns True if compaction was performed.
         """
-        if not self.context_manager or not self.context_manager.needs_compaction():
+        if not self.context_manager:
+            return False
+        if not force and not self.context_manager.needs_compaction():
+            return False
+        bounds_payload = workflow.patched(COMPACTION_BOUNDS_PAYLOAD_PATCH)
+        if force and not bounds_payload:
             return False
 
         workflow.logger.info(

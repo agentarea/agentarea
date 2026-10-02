@@ -106,7 +106,6 @@ export function ProviderSpecCard({ spec }: ProviderSpecCardProps) {
     provider_name: spec.name,
     provider_icon_url: spec.icon_url,
   }));
-
   return (
     <LinkedCard
       href={`/models/create/${spec.id}`}

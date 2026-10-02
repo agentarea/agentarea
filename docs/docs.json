@@ -154,6 +154,7 @@
               "guides/mcp/authenticate-with-oauth",
               "guides/mcp/pass-secrets",
               "guides/mcp/issue-access-tokens",
+              "guides/mcp/connect-a-harness-to-agentarea",
               "guides/mcp/build-a-compound-mcp"
             ]
           },

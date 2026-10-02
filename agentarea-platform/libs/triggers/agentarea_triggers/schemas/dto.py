@@ -64,7 +64,12 @@ class TriggerSpec(BaseModel):
     )
     conditions: dict[str, Any] = Field(
         default_factory=dict,
-        description="Optional conditions evaluated against event data before firing.",
+        description=(
+            "Optional conditions evaluated against event data before firing. An LLM "
+            'condition ({"type": "llm", "description": ...}) must name the chat or '
+            'decision model instance that evaluates it in "model_id"; each sub-condition '
+            "of a combined condition names its own."
+        ),
     )
     _reject_channel_origin = field_validator("task_parameters")(reject_channel_origin)
     enabled: bool = Field(

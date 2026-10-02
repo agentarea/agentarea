@@ -538,6 +538,26 @@
       "tool": "Инструмент",
       "activeMcpServers": "Активные MCP серверы",
       "builtinTools": "Встроенные инструменты",
+      "codeToolModels": {
+        "placeholder": "Выберите модель",
+        "addModel": "Добавить модель",
+        "clear": "Очистить: {label}",
+        "loadFailed": "Не удалось загрузить модели",
+        "pickAtLeastOne": "Выберите модель для изображений или видео: набору нужна хотя бы одна.",
+        "pickOne": "Выберите модель решений: без неё набор не работает.",
+        "image": {
+          "label": "Модель изображений",
+          "empty": "В рабочем пространстве нет моделей изображений."
+        },
+        "video": {
+          "label": "Модель видео",
+          "empty": "В рабочем пространстве нет моделей видео."
+        },
+        "decision": {
+          "label": "Модель решений",
+          "empty": "В рабочем пространстве нет моделей решений."
+        }
+      },
       "availableMcpServers": "Доступные MCP серверы",
       "availableOpenAPIConnections": "Доступные OpenAPI подключения",
       "openAPIConnections": "OpenAPI подключения",
@@ -596,7 +616,9 @@
     "form": {
       "saveFailed": "Не удалось сохранить агента",
       "validationFailed": "Некоторые поля заполнены неверно.",
-      "createFailed": "Не удалось создать агента"
+      "createFailed": "Не удалось создать агента",
+      "testAgent": "Протестировать агента",
+      "closeTest": "Закрыть тестовый чат"
     },
     "delegationConfig": {
       "title": "Делегирование",
@@ -1058,6 +1080,13 @@
       "loadingDataEdit": "Ошибка загрузки данных для редактирования. Пожалуйста, попробуйте снова."
     }
   },
+  "ModelKind": {
+    "chat": "Чат",
+    "embedding": "Эмбеддинги",
+    "image": "Изображения",
+    "video": "Видео",
+    "decision": "Решения"
+  },
   "ProviderConfigForm": {
     "title": "Конфигурация провайдера",
     "description": "Настройте ваш провайдер",
@@ -1213,12 +1242,13 @@
       "running": "Выполняется",
       "completed": "Завершено",
       "success": "Успешно",
-      "inputRequired": "Требуется ввод",
+      "needsAction": "Нужно действие",
       "approvalRequired": "Требуется согласование",
+      "blocked": "Заблокировано",
       "continuationRequired": "Требуется продолжение",
+      "inputRequired": "Требуется ввод",
       "failed": "Ошибка",
       "error": "Ошибка",
-      "blocked": "Заблокировано",
       "cancelled": "Отменено",
       "paused": "Пауза",
       "pending": "Ожидание",

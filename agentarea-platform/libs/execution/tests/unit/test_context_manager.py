@@ -10,6 +10,7 @@ from agentarea_execution.workflows.constants import (
 )
 from agentarea_execution.workflows.context_manager import (
     compactable_prefix,
+    messages_payload_bytes,
     ContextWindowManager,
     estimate_tokens,
     estimate_tokens_for_messages,
@@ -387,3 +388,7 @@ def test_compactable_prefix_leaves_recent_entries_and_carries_skills():
 
     assert count >= 3  # the skill activation no longer pins the boundary
     assert len(tail) - count >= 4
+
+
+def test_payload_bytes_count_utf8_not_characters():
+    assert messages_payload_bytes([{"content": "é"}]) == len('[{"content": "é"}]'.encode())

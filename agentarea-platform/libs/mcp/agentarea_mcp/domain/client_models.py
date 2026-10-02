@@ -2,11 +2,13 @@
 
 A Client is a governable principal that is *not* runnable — it represents an
 external harness (codex, claude-code, …) that connects to a scoped set of MCP
-server instances and skills. Its tool set is exactly its own attachments.
+server instances, platform toolsets, and skills. Its tool set is exactly its
+own attachments.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import sqlalchemy as sa
@@ -53,7 +55,41 @@ client_mcp_instances = sa.Table(
         primary_key=True,
     ),
     sa.Column("namespace_prefix", String(64), nullable=True),
+    # Tool names of the instance the client serves; NULL serves every tool.
+    sa.Column("allowed_tools", sa.JSON, nullable=True),
 )
+
+# Platform toolsets (``agentarea/runs``, ...) are code, not rows, so the link
+# names one by namespace instead of by foreign key.
+client_platform_toolsets = sa.Table(
+    "client_platform_toolsets",
+    BaseModel.metadata,
+    sa.Column(
+        "client_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    sa.Column("toolset", String(128), primary_key=True),
+    sa.Column("disabled_methods", sa.JSON, nullable=True),
+)
+
+
+@dataclass(frozen=True)
+class ClientMcpInstanceLink:
+    """How a client serves one attached MCP instance."""
+
+    namespace_prefix: str | None
+    # None serves every tool of the instance.
+    allowed_tools: list[str] | None
+
+
+@dataclass(frozen=True)
+class ClientPlatformToolset:
+    """A platform toolset attached to a client, minus the methods it leaves out."""
+
+    toolset: str
+    disabled_methods: list[str] | None
 
 
 class Client(BaseModel, WorkspaceScopedMixin):

@@ -27,12 +27,17 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useTaskActions } from "@/hooks/useTaskActions";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import {
+  useWorkspaceRouter,
+  useWorkspaceSlug,
+} from "@/hooks/useWorkspaceNavigation";
 import type { TaskWithAgent } from "@/lib/api";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { latestContinuationReason } from "@/lib/continuation";
 import type { Part } from "@/lib/events/contract";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
+import { TaskFileUrlContext } from "@/lib/events/parts/TaskFileUrl";
+import { taskSandboxFileUrl } from "@/lib/task-files";
 import { useTaskEvents } from "@/lib/events/useTaskEvents";
 import { getTaskStatusPresentation } from "@/lib/status";
 
@@ -71,6 +76,12 @@ export function TaskConversation({
   onA2UIAction,
 }: TaskConversationProps) {
   const router = useWorkspaceRouter();
+  const workspaceSlug = useWorkspaceSlug();
+  const taskFileUrl = useCallback(
+    (path: string) =>
+      taskSandboxFileUrl(task.agent_id, task.id, path, workspaceSlug),
+    [task.agent_id, task.id, workspaceSlug]
+  );
   const t = useTranslations("Chat.errors");
   const [chatInput, setChatInput] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -277,6 +288,7 @@ export function TaskConversation({
               </Button>
             </div>
           )}
+          <TaskFileUrlContext.Provider value={taskFileUrl}>
           {activitySegments.map((segment) =>
             segment.kind === "work" ? (
               <ActivityGroup
@@ -296,6 +308,7 @@ export function TaskConversation({
               />
             )
           )}
+          </TaskFileUrlContext.Provider>
           {showTerminalMessage && (
             <StatusIndicator kind={terminalKind}>
               {terminalMessage}

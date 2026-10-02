@@ -11,7 +11,6 @@ Usage:
     app.mount("/mcp", mcp.streamable_http_app())
 """
 
-from mcp.server.mcpserver import MCPServer
 from starlette.applications import Starlette
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -19,6 +18,24 @@ from ..tools.base_tool import BaseTool
 from ..tools.decorator_tool import Toolset
 from .adapter import MCPToolAdapter
 from .auth import PROTECTED_RESOURCE_SCOPE_KEY, WORKSPACE_REFERENCE_PATTERN, WORKSPACE_SCOPE_KEY
+from .toolsets import (
+    RegisteredToolset,
+    ToolsetMCPServer,
+    ToolsetSelectionMiddleware,
+    UnknownToolsetError,
+    selected_tools,
+)
+
+__all__ = [
+    "PinnedWorkspaceMiddleware",
+    "RegisteredToolset",
+    "ToolsetMCPServer",
+    "ToolsetSelectionMiddleware",
+    "UnknownToolsetError",
+    "create_mcp_server",
+    "mount_mcp_app",
+    "selected_tools",
+]
 
 
 def create_mcp_server(
@@ -27,18 +44,18 @@ def create_mcp_server(
     description: str = "",
     *,
     workspace_argument: bool,
-) -> MCPServer:
+) -> ToolsetMCPServer:
     """Factory: create an MCP server from toolsets/tools.
 
     Each Toolset is flattened — every @tool_method becomes a separate MCP tool
     named ``{toolset.name}_{method_name}``.  BaseTool instances are registered
-    with their own name as-is.
+    with their own name as-is, outside every toolset.
 
     *workspace_argument* selects how a tool call finds its workspace: True for a
     mount that spans workspaces (each workspace-scoped tool takes a required
     ``workspace``), False for a mount whose URL pins one.
     """
-    server = MCPServer(
+    server = ToolsetMCPServer(
         name=name,
         instructions=description,
     )

@@ -7,7 +7,7 @@ from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from agentarea_common.money import ZERO
-    from agentarea_governance.domain.tool_calls import metered_tool_call_count
+    from agentarea_governance.domain.tool_calls import WAIT_TOOL_NAME, metered_tool_call_count
 
     from ..models import Message, ToolCall
 
@@ -18,10 +18,16 @@ from .delegation import DelegationMixin
 from .disclosure import ToolDisclosureMixin
 from .tools import ToolExecutionMixin
 from .user_input import UserInputMixin
+from .wait import WaitMixin
 
 
 class ToolDispatchMixin(
-    ToolExecutionMixin, ToolDisclosureMixin, DelegationMixin, CompletionMixin, UserInputMixin
+    ToolExecutionMixin,
+    ToolDisclosureMixin,
+    DelegationMixin,
+    CompletionMixin,
+    UserInputMixin,
+    WaitMixin,
 ):
     """Routing the tool calls of one model turn to their handlers."""
 
@@ -204,9 +210,12 @@ class ToolDispatchMixin(
                 tasks = [self._execute_agent_delegation(tc, child_budget) for tc in agent_calls]
                 await asyncio.gather(*tasks)
 
-        # Run regular tools sequentially
+        # Run regular tools sequentially; a wait holds its place among them
         for tool_call in regular_calls:
-            await self._execute_mcp_tool(tool_call)
+            if tool_call.function["name"] == WAIT_TOOL_NAME and self._wait_tool_enabled:
+                await self._execute_wait(tool_call)
+            else:
+                await self._execute_mcp_tool(tool_call)
 
         # Handle completion last
         if completion_call:

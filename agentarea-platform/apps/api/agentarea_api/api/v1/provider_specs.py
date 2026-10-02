@@ -7,7 +7,7 @@ from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.money import Money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
-from agentarea_llm.domain.models import ModelSpec, ProviderSpec
+from agentarea_llm.domain.models import ModelKind, ModelSpec, ProviderSpec
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
@@ -55,7 +55,8 @@ class ModelSpecResponse(BaseModel):
     model_name: str
     display_name: str
     description: str | None
-    context_window: int
+    kind: ModelKind = ModelKind.CHAT
+    context_window: int | None
     max_output_tokens: int | None = None
     input_cost_per_token: Money | None = None
     output_cost_per_token: Money | None = None
@@ -74,6 +75,7 @@ class ModelSpecResponse(BaseModel):
             model_name=model_spec.model_name,
             display_name=model_spec.display_name,
             description=model_spec.description,
+            kind=ModelKind(model_spec.kind),
             context_window=model_spec.context_window,
             max_output_tokens=model_spec.max_output_tokens,
             input_cost_per_token=model_spec.input_cost_per_token,

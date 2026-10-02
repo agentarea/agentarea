@@ -3,6 +3,8 @@
 import re
 from typing import Any
 
+from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
+
 
 def parse_openapi_operations(spec: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract enriched per-operation records from an OpenAPI 3.x spec.
@@ -100,9 +102,16 @@ def parse_openapi_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
     Thin projector over parse_openapi_operations — returns the
     {name, description, inputSchema} shape for the UI contract (available_tools column).
 
-    Raises ValueError for non-OpenAPI 3.x specs.
+    Raises ValueError for non-OpenAPI 3.x specs and for an operation whose tool
+    name a workflow built-in owns: the built-in would shadow it and skip policy.
     """
     operations = parse_openapi_operations(spec)
+    for op in operations:
+        if re.sub(r"[^a-zA-Z0-9_-]", "_", op["name"]) in CONTROL_FLOW_TOOL_NAMES:
+            raise ValueError(
+                f"Operation {op['name']!r} ({op['method']} {op['path']}) uses a tool name "
+                "reserved for a workflow built-in; give it a different operationId"
+            )
     return [
         {
             "name": op["name"],

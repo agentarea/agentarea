@@ -102,6 +102,7 @@ def test_background_paths_get_the_evaluator_when_llm_conditions_are_enabled(
             session=MagicMock(),
             user_context=MagicMock(workspace_id="ws", user_id="u"),
             secret_manager=MagicMock(),
+            secret_manager_factory=MagicMock(),
             event_broker=AsyncMock(),
         )
     finally:

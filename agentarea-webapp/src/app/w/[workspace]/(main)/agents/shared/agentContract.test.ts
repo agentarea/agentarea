@@ -108,6 +108,24 @@ const tools: NonNullable<AgentResponse["tools"]> = [
       requires_user_confirmation: true,
     },
   },
+  {
+    type: "code",
+    name: "agentarea/media",
+    settings: {
+      disabled_methods: null,
+      requires_user_confirmation: false,
+      image_model_id: "0b6f1c7e-8a4d-4f6e-9d3a-6c1f2e4b5a01",
+    },
+  },
+  {
+    type: "code",
+    name: "agentarea/decide",
+    settings: {
+      disabled_methods: null,
+      requires_user_confirmation: false,
+      model_id: "5e2a9d10-3c7b-4b8e-a1f4-7d9c0b2e6f02",
+    },
+  },
   delegation,
 ];
 

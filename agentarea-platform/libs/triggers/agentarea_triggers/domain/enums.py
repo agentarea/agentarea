@@ -11,6 +11,14 @@ class TriggerType(StrEnum):
     POLLING = "polling"
 
 
+class ConditionType(StrEnum):
+    """Kinds of trigger condition; an untyped condition is an LLM condition."""
+
+    LLM = "llm"
+    RULE = "rule"
+    COMBINED = "combined"
+
+
 class TriggerStatus(StrEnum):
     """Status of a trigger."""
 

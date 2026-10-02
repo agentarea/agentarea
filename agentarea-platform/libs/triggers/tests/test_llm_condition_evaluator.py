@@ -22,6 +22,7 @@ def mock_model_instance_service():
     mock_instance.model_spec.model_name = "gpt-4"
     mock_instance.provider_config.api_key = "test-api-key"
     mock_instance.model_spec.endpoint_url = None
+    mock_instance.model_spec.kind = "chat"
 
     service.get.return_value = mock_instance
     return service
@@ -39,6 +40,7 @@ def llm_evaluator(mock_model_instance_service, mock_secret_manager):
     return LLMConditionEvaluator(
         model_instance_service=mock_model_instance_service,
         secret_manager=mock_secret_manager,
+        model_service=AsyncMock(),
         default_model_id=uuid4(),
     )
 
@@ -149,6 +151,7 @@ class TestLLMConditionEvaluator:
             "type": "llm",
             "description": "when user sends a file attachment",
             "context_fields": ["request.body"],
+            "model_id": str(uuid4()),
         }
 
         event_data = {
@@ -177,6 +180,7 @@ class TestLLMConditionEvaluator:
             "type": "llm",
             "description": "when user sends a file attachment",
             "context_fields": ["request.body"],
+            "model_id": str(uuid4()),
         }
 
         event_data = {"request": {"body": {"message": "Hello, how are you?"}}}
@@ -302,6 +306,7 @@ class TestLLMConditionEvaluator:
         valid_condition = {
             "type": "llm",
             "description": "when user sends a file",
+            "model_id": str(uuid4()),
             "context_fields": ["request.body"],
             "examples": [{"input": {"body": {"file": "test.pdf"}}, "expected": True}],
         }
@@ -315,6 +320,7 @@ class TestLLMConditionEvaluator:
         errors = llm_evaluator._validate_llm_condition(invalid_condition)
         assert len(errors) > 0
         assert any("must have a 'description'" in error for error in errors)
+        assert any("must name its 'model_id'" in error for error in errors)
 
     def test_get_nested_value(self, llm_evaluator):
         """Test nested value extraction."""
@@ -348,7 +354,7 @@ class TestLLMConditionEvaluator:
     @pytest.mark.asyncio
     async def test_llm_call_failure(self, llm_evaluator):
         """Test handling of LLM call failures."""
-        condition = {"type": "llm", "description": "test condition"}
+        condition = {"type": "llm", "description": "test condition", "model_id": str(uuid4())}
 
         event_data = {"test": "data"}
 
@@ -376,7 +382,7 @@ class TestLLMConditionEvaluator:
             "type": "combined",
             "conditions": [
                 {"type": "rule", "rules": [{"field": "test", "operator": "eq", "value": "value"}]},
-                {"type": "llm", "description": "test description"},
+                {"type": "llm", "description": "test description", "model_id": str(uuid4())},
             ],
             "logic": "AND",
         }

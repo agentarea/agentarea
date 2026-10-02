@@ -62,6 +62,9 @@ class ProviderProfile:
             LiteLLM ``provider_type`` (``ollama_chat``) next to the catalog's
             ``provider_key`` (``ollama``). Callers hold one or the other
             depending on where they sit, and neither should have to convert.
+        models_query: Query string for the model list. OpenRouter's lists only
+            text models unless asked for every output modality, which is where
+            its image, video and decision models are.
     """
 
     base_url: str | None = None
@@ -69,6 +72,7 @@ class ProviderProfile:
     auth: AuthStyle = AuthStyle.BEARER
     list_shape: ModelListShape = ModelListShape.DATA_ID
     aliases: tuple[str, ...] = field(default_factory=tuple)
+    models_query: str | None = None
 
     @property
     def requires_endpoint_url(self) -> bool:
@@ -86,8 +90,17 @@ class ProviderProfile:
         if not base:
             return None
         if self.models_path:
-            return f"{base}{self.models_path}"
-        return f"{base}/models" if base.endswith("/v1") else f"{base}/v1/models"
+            url = f"{base}{self.models_path}"
+        else:
+            url = f"{base}/models" if base.endswith("/v1") else f"{base}/v1/models"
+        return f"{url}?{self.models_query}" if self.models_query else url
+
+    def resolve_api_url(self, endpoint_url: str | None, path: str) -> str | None:
+        """Full URL of an OpenAI-style ``/v1`` endpoint, or None when there is no base."""
+        base = (endpoint_url or self.base_url or "").rstrip("/")
+        if not base:
+            return None
+        return f"{base}{path}" if base.endswith("/v1") else f"{base}/v1{path}"
 
     def build_headers(self, api_key: str | None) -> dict[str, str]:
         """Auth headers for this provider, empty when there is nothing to send."""
@@ -106,7 +119,9 @@ DEFAULT_PROFILE = ProviderProfile()
 
 PROVIDER_PROFILES: dict[str, ProviderProfile] = {
     "openai": ProviderProfile(base_url="https://api.openai.com"),
-    "openrouter": ProviderProfile(base_url="https://openrouter.ai/api"),
+    "openrouter": ProviderProfile(
+        base_url="https://openrouter.ai/api", models_query="output_modalities=all"
+    ),
     "anthropic": ProviderProfile(
         base_url="https://api.anthropic.com", auth=AuthStyle.API_KEY_HEADER
     ),

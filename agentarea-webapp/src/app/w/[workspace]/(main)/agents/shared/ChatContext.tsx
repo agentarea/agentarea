@@ -3,17 +3,17 @@
 import React, { createContext, useContext, useState } from "react";
 
 interface ChatContextType {
-  isChatSheetOpen: boolean;
-  setIsChatSheetOpen: (open: boolean) => void;
+  isChatOpen: boolean;
+  setIsChatOpen: (open: boolean) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const [isChatSheetOpen, setIsChatSheetOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   return (
-    <ChatContext.Provider value={{ isChatSheetOpen, setIsChatSheetOpen }}>
+    <ChatContext.Provider value={{ isChatOpen, setIsChatOpen }}>
       {children}
     </ChatContext.Provider>
   );
@@ -24,10 +24,9 @@ export function useChat() {
   // Return default values if context is not available (optional context)
   if (!context) {
     return {
-      isChatSheetOpen: false,
-      setIsChatSheetOpen: () => {},
+      isChatOpen: false,
+      setIsChatOpen: () => {},
     };
   }
   return context;
 }
-

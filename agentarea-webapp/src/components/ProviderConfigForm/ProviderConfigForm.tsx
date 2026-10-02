@@ -134,6 +134,7 @@ export default function ProviderConfigForm({
             model_name: model.model_name,
             display_name: model.display_name,
             description: model.description,
+            kind: model.kind,
             context_window: model.context_window,
             max_output_tokens: model.max_output_tokens ?? null,
             input_cost_per_token: model.input_cost_per_token ?? null,

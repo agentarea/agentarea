@@ -6,7 +6,11 @@ import type {
   McpToolConfigOutput,
   OpenApiToolConfig,
 } from "@/api/client/types.gen";
-import type { AgentFormValues, AgentSkill } from "../create/types";
+import type {
+  AgentFormValues,
+  AgentSkill,
+  CodeToolModelIds,
+} from "../create/types";
 
 type AgentTool = NonNullable<AgentResponse["tools"]>[number];
 
@@ -26,6 +30,15 @@ function toFormSkill(skill: Record<string, unknown>): AgentSkill {
     name,
     description: typeof description === "string" ? description : null,
   };
+}
+
+// Only the ids that are set, so toolsets without models carry no model keys.
+function toModelIds(source: CodeToolModelIds): CodeToolModelIds {
+  return Object.fromEntries(
+    (["image_model_id", "video_model_id", "model_id"] as const).flatMap(
+      (key) => (source[key] ? [[key, source[key]]] : [])
+    )
+  );
 }
 
 /** The inverse of `toToolsPayload`: stored agent or preset tools as form state. */
@@ -60,6 +73,7 @@ export function toToolsConfig(
           (t.settings?.disabled_methods ?? []).map((method) => [method, false])
         ),
         requires_user_confirmation: t.settings?.requires_user_confirmation ?? false,
+        ...toModelIds(t.settings ?? {}),
       })),
     carried_tools: tools.filter((t) => !FORM_TOOL_TYPES.has(t.type)),
   };
@@ -122,6 +136,7 @@ export function toToolsPayload(
         disabled_methods: disabled?.length ? disabled : null,
         requires_user_confirmation:
           builtin.requires_user_confirmation ?? null,
+        ...toModelIds(builtin),
       },
     });
   }

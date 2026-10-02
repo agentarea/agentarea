@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agentarea_agents_sdk import ToolExecutor
+from agentarea_agents_sdk.tools.decide_toolset import DECIDE_TOOLSET
 from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
+from agentarea_agents_sdk.tools.media_toolset import MEDIA_TOOLSET
 from agentarea_agents_sdk.tools.tool_builders import allowed_tool_names
 from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationAction,
@@ -270,6 +272,41 @@ def make_tools_activities(
                             "task_id": str(request.task_id) if request.task_id else "",
                             "search_base_url": (dependencies.settings.app.WEB_SEARCH_BASE_URL),
                             "fetch_base_url": (dependencies.settings.app.WEB_FETCH_BASE_URL),
+                        }
+                    elif tool_name == MEDIA_TOOLSET:
+                        # Generated files land on the sandbox filesystem, like web
+                        # downloads, so the shell sees them. The models are the
+                        # instances the settings name, resolved as this workspace.
+                        from agentarea_agents_sdk.tools.sandbox_file_store import SandboxFileStore
+                        from agentarea_llm.application.media_generation_service import (
+                            MediaGenerationService,
+                        )
+
+                        extra_kwargs = {
+                            "backend": MediaGenerationService(
+                                models=await ctx.get_model_service(),
+                                jobs=await ctx.get_video_generation_jobs(),
+                                task_id=str(request.task_id) if request.task_id else None,
+                                image_model_id=settings.get("image_model_id"),
+                                video_model_id=settings.get("video_model_id"),
+                                call_ref=_payment_call_ref(request),
+                            ),
+                            "storage": SandboxFileStore(
+                                mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+                                workspace_id=str(request.workspace_id),
+                                task_id=str(request.task_id) if request.task_id else "",
+                                auth_secret=sandbox_file_auth_secret(dependencies),
+                            ),
+                            "workspace_id": str(request.workspace_id),
+                        }
+                    elif tool_name == DECIDE_TOOLSET:
+                        from agentarea_llm.application.decision_service import DecisionService
+
+                        extra_kwargs = {
+                            "backend": DecisionService(
+                                models=await ctx.get_model_service(),
+                                model_id=settings.get("model_id"),
+                            ),
                         }
                     elif tool_name == "agentarea/triggers":
                         # The triggers tool defaults agent_id/workspace_id/user_id to
@@ -712,6 +749,7 @@ def make_tools_activities(
                     outcome=result.get("outcome"),
                     artifact_paths=[str(p) for p in (result.get("artifact_paths") or [])],
                     service_cost=to_money(result.get("service_cost")),
+                    model_cost=to_money(result.get("model_cost")),
                     payment=result.get("payment")
                     if isinstance(result.get("payment"), dict)
                     else None,

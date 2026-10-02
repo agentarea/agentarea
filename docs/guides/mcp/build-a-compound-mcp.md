@@ -1,26 +1,28 @@
 ---
 title: Combine several MCP servers behind one endpoint
 type: guide
-description: "Aggregate the tools of several MCP instances into a single namespaced endpoint by attaching them to a registered client, then point a harness at it."
+description: "Aggregate MCP instances and AgentArea platform toolsets into a single namespaced endpoint by attaching them to a registered client, then point a harness at it."
 prerequisites:
   - /guides/mcp/add-a-hosted-server
 related:
+  - /guides/mcp/connect-a-harness-to-agentarea
   - /guides/mcp/connect-a-remote-server
   - /guides/mcp/issue-access-tokens
   - /concepts/integration/mcp
-last_updated: 2026-07-29
+last_updated: 2026-10-01
 ---
 
 Do this when a client — a Codex or Claude harness, an IDE, another agent — should
-see one MCP endpoint that exposes tools drawn from several servers. Do not do
-this to give an AgentArea agent tools; an agent is configured with its own tool
-list and does not need an aggregate.
+see one MCP endpoint that exposes tools drawn from several servers, or a chosen
+part of AgentArea's own platform tools. Do not do this to give an AgentArea agent
+tools; an agent is configured with its own tool list and does not need an
+aggregate.
 
-The mechanism is a **registered client**. A client is a governable entity that
-owns a set of MCP instances and skills, and gets a single MCP endpoint that
-merges them. There is no separate "compound MCP" resource in the API — earlier
-drafts of these docs described a compound-mcps collection that was never part of
-the shipped surface.
+The mechanism is a **registered client** (shown as a *harness* in the web app).
+A client is a governable entity that owns a set of MCP instances, platform
+toolsets, and skills, and gets a single MCP endpoint that merges them. There is
+no separate "compound MCP" resource in the API — earlier drafts of these docs
+described a compound-mcps collection that was never part of the shipped surface.
 
 ## Prerequisites
 
@@ -56,6 +58,7 @@ from another entity.
       "kind": "harness",
       "skills": [],
       "mcp_instances": [],
+      "platform_toolsets": [],
       "mcp_endpoint_url": "https://api.example.com/mcp/clients/b4c8f210-..."
     }
     ```
@@ -70,7 +73,7 @@ from another entity.
       -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/clients/$CLIENT_ID/mcp-instances" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
-      -d "{\"id\": \"$GITHUB_INSTANCE_ID\", \"namespace_prefix\": \"gh\"}"
+      -d "{\"id\": \"$GITHUB_INSTANCE_ID\", \"namespace_prefix\": \"gh\", \"allowed_tools\": [\"search\", \"create_issue\"]}"
     ```
 
     ```text
@@ -81,6 +84,42 @@ from another entity.
     the instance namespaced `gh` is exposed as `gh__search`. Two members that both
     expose `search` stay distinguishable only if their namespaces differ, so set the
     prefix deliberately rather than leaving it null.
+
+    `allowed_tools` names the instance's own tools (without the prefix) the client
+    serves; omit it or send `null` to serve all of them. A tool left out is neither
+    listed nor callable through the endpoint. Posting the same instance again
+    replaces both `namespace_prefix` and `allowed_tools`, so send both every time.
+  </Step>
+
+  <Step title="Attach platform toolsets, if the harness should manage AgentArea">
+    List the toolsets a client can carry and the methods of each:
+
+    ```bash
+    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/clients/platform-toolsets" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq -r '.[].name'
+    ```
+
+    Attach one by namespace, leaving out the methods the harness should not see:
+
+    ```bash
+    curl -s -o /dev/null -w '%{http_code}\n' \
+      -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/clients/$CLIENT_ID/platform-toolsets" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"name": "agentarea/runs", "disabled_methods": ["cancel"]}'
+    ```
+
+    ```text
+    204
+    ```
+
+    The endpoint then serves the toolset's tools under their platform names
+    (`runs_list`, `runs_start`, ...), minus `disabled_methods`. They run in the
+    client's workspace as the calling principal, so each call is authorized
+    exactly as it would be on the platform's own MCP server; carrying a toolset
+    grants nothing the caller could not already do. Posting the same toolset
+    again replaces `disabled_methods`. Detach one with
+    `DELETE /v1/workspaces/{workspace}/clients/{client_id}/platform-toolsets/{namespace}`.
   </Step>
 
   <Step title="Attach skills, if the client should have them">
@@ -121,6 +160,8 @@ curl -s -X POST "$AGENTAREA_URL/mcp/clients/$CLIENT_ID" \
 "gh__search"
 "gh__create_issue"
 "fs__read_file"
+"runs_list"
+"runs_start"
 "activate_skill"
 ```
 
@@ -152,12 +193,22 @@ curl -s -X POST "$AGENTAREA_URL/mcp/clients/$CLIENT_ID" \
   <Accordion title="Tool names collide">
     Two members exposing the same tool name with the same or null namespace
     produce ambiguous entries. Set a distinct `namespace_prefix` on each member.
+    Platform tools never collide with member tools: member tools always carry a
+    `__` separator, platform tools never do.
   </Accordion>
-  <Accordion title="A tool that exists on the server is missing from the aggregate">
-    Member tools come from each instance's stored snapshot, discovered at its
-    last verification. Run
-    `POST /v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/discover-tools` on the member,
-    then list again.
+  <Accordion title="Attaching a platform toolset returns 422">
+    The name is not a toolset a client can carry, or `disabled_methods` names a
+    method the toolset does not have. The response lists the valid names. The
+    `workspaces` toolset is not carried: a client always acts in its own
+    workspace.
+  </Accordion>
+  <Accordion title="A tool the instance has is missing from the aggregate">
+    The attachment's `allowed_tools` leaves it out. The list names exactly what
+    is served, so a tool the instance gained after you narrowed it stays out
+    until you add it. The web app's checklist shows the instance's stored tool
+    snapshot from its last verification; if the tool is missing there too, run
+    `POST /v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/discover-tools`
+    on the member, then reopen the harness.
   </Accordion>
   <Accordion title="A member is still exposed after you removed it elsewhere">
     Members are only ever the client's own attachments. Remove one with
@@ -176,6 +227,9 @@ curl -s -X POST "$AGENTAREA_URL/mcp/clients/$CLIENT_ID" \
 <Columns cols={2}>
   <Card title="Add a hosted MCP server" icon="plug" href="/guides/mcp/add-a-hosted-server">
     Run an MCP server as a managed workload
+  </Card>
+  <Card title="Connect a harness to AgentArea" icon="plug" href="/guides/mcp/connect-a-harness-to-agentarea">
+    Manage AgentArea itself over MCP, with only the toolsets you need
   </Card>
   <Card title="Issue MCP access tokens" icon="plug" href="/guides/mcp/issue-access-tokens">
     Create, scope, rotate, and revoke the API keys that authenticate calls to

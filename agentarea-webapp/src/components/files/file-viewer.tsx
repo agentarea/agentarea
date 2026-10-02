@@ -21,14 +21,17 @@ import {
   type ApiResultLike,
 } from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
-import { looksTextual, mediaKind, type MediaKind } from "./content-sniff";
+import {
+  concatBytes,
+  looksTextual,
+  mediaKind,
+  readProbe,
+  type MediaKind,
+} from "./content-sniff";
 import { TextPreview } from "./text-preview";
 import type { BrowsedFile } from "./file-tree";
 
 type ViewerKind = MediaKind | "text" | "binary";
-
-/** How much of a file to read before deciding whether it is text. */
-const PROBE_BYTES = 4096;
 
 /** Read the opening bytes, then either the rest or nothing more.
  *
@@ -43,15 +46,8 @@ async function inspect(
   if (!body) return { kind: mediaKind(declared) ?? "binary", text: null };
 
   const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let probed = 0;
-  while (probed < PROBE_BYTES) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    probed += value.length;
-  }
-  const head = concat(chunks);
+  const chunks = await readProbe(reader);
+  const head = concatBytes(chunks);
 
   if (!looksTextual(head)) {
     await reader.cancel();
@@ -62,18 +58,33 @@ async function inspect(
     if (done) break;
     chunks.push(value);
   }
-  return { kind: "text", text: new TextDecoder().decode(concat(chunks)) };
+  return { kind: "text", text: new TextDecoder().decode(concatBytes(chunks)) };
 }
 
-function concat(chunks: Uint8Array[]): Uint8Array {
-  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  const merged = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.length;
+/** A picture, a clip or a recording, played by the browser from its URL. */
+export function MediaPreview({
+  kind,
+  url,
+  name,
+  className,
+}: {
+  kind: "image" | "video" | "audio";
+  url: string;
+  name: string;
+  className?: string;
+}) {
+  if (kind === "image") {
+    // Not next/image: the optimiser fetches the source from the server, where
+    // it carries none of the viewer's cookies, so every workspace file comes
+    // back a 401 and renders broken. These are private files behind auth, not
+    // assets worth optimising.
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt={name} className={cn("object-contain", className)} />;
   }
-  return merged;
+  if (kind === "video") {
+    return <video src={url} controls className={className} />;
+  }
+  return <audio src={url} controls className={className} />;
 }
 
 export type FetchUrlFn = (path: string) => Promise<ApiResultLike<string>>;
@@ -405,15 +416,11 @@ export function FileViewerContent({
 
         {!loading && !error && url && kind === "image" && (
           <div className="flex h-full items-center justify-center p-4">
-            {/* Not next/image: the optimiser fetches the source from the
-                server, where it carries none of the viewer's cookies, so every
-                workspace file comes back a 401 and renders broken. These are
-                private files behind auth, not assets worth optimising. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={url}
-              alt={fileName}
-              className="max-h-full max-w-full object-contain"
+            <MediaPreview
+              kind="image"
+              url={url}
+              name={fileName}
+              className="max-h-full max-w-full"
             />
           </div>
         )}
@@ -424,13 +431,18 @@ export function FileViewerContent({
 
         {!loading && !error && url && kind === "video" && (
           <div className="flex h-full items-center justify-center p-4">
-            <video src={url} controls className="max-h-full max-w-full" />
+            <MediaPreview
+              kind="video"
+              url={url}
+              name={fileName}
+              className="max-h-full max-w-full"
+            />
           </div>
         )}
 
         {!loading && !error && url && kind === "audio" && (
           <div className="flex h-full items-center justify-center p-8">
-            <audio src={url} controls className="w-full" />
+            <MediaPreview kind="audio" url={url} name={fileName} className="w-full" />
           </div>
         )}
 

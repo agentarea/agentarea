@@ -502,7 +502,7 @@ next to it stays neutral:
 | `queued` | `Circle` | muted | accepted, not started |
 | `scheduled` | `Clock` | muted | waiting for its moment |
 | `running` | `LoaderCircle` (spins, motion-safe) | `--status-info` | in flight |
-| `attention` | `CircleAlert` | `--status-warning` | waiting on a person |
+| `attention` | `CircleAlert` | `--status-attention` (orange) | waiting on a person — "Needs action" |
 | `paused` | `CirclePause` | muted | paused |
 | `active` | `CircleDot` | `--status-success` | switched on and healthy |
 | `off` | `CircleMinus` | muted | switched off, stopped, expired |
@@ -512,7 +512,9 @@ next to it stays neutral:
 
 - **Task status** — every surface that shows a task's state (list row,
   table cell, page header, inbox, filter select, detail sheet) renders
-  `<TaskStatus status={…} />` from `src/components/TaskStatus.tsx`. Use
+  `<TaskStatus status={…} />` from `src/components/TaskStatus.tsx`.
+  Everything that waits on a person (input, approval, continuation,
+  blocked) is one status, **Needs action** — the task view says which. Use
   `caption="auto" | "never"` for dense rows, and
   `useTaskStatusLabel(status)` when prose needs the name on its own.
 - **Every other status** (agent, trigger, trigger execution, MCP,

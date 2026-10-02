@@ -75,9 +75,23 @@ class BaseToolSettings(BaseModel):
 
 
 class CodeToolSettings(BaseToolSettings):
-    """Settings for a built-in code toolset."""
+    """Settings for a built-in code toolset.
+
+    The model ids are model instances of the workspace, each of the kind its
+    toolset needs: ``agentarea/media`` takes an image and/or a video model,
+    ``agentarea/decide`` a decision model. No other toolset takes one.
+    """
 
     disabled_methods: list[str] | None = None
+    image_model_id: str | None = Field(
+        default=None, description="agentarea/media: model instance generating images."
+    )
+    video_model_id: str | None = Field(
+        default=None, description="agentarea/media: model instance generating videos."
+    )
+    model_id: str | None = Field(
+        default=None, description="agentarea/decide: decision model instance."
+    )
 
 
 class McpToolSettings(BaseToolSettings):

@@ -87,6 +87,30 @@ async def test_call_namespaced_tool_unknown_raises():
         await p.call_namespaced_tool("nope__x", {})
 
 
+async def test_a_member_serves_only_its_allowed_tools(monkeypatch):
+    member = AggregatedMember(
+        mcp_instance_id="1", namespace_prefix="gh", allowed_tools=frozenset({"create_issue"})
+    )
+    p = _proxy([member])
+    dialed = []
+
+    async def fake_discover(_member):
+        return [{"name": "create_issue"}, {"name": "delete_repo"}]
+
+    async def fake_call(_member, tool_name, arguments):
+        dialed.append(tool_name)
+        return "ok"
+
+    monkeypatch.setattr(p, "_discover_member_tools", fake_discover)
+    monkeypatch.setattr(p, "_call_member_tool", fake_call)
+
+    assert [t["name"] for t in await p.list_namespaced_tools()] == ["gh__create_issue"]
+    assert await p.call_namespaced_tool("gh__create_issue", {}) == "ok"
+    with pytest.raises(ValueError, match="No member owns tool gh__delete_repo"):
+        await p.call_namespaced_tool("gh__delete_repo", {})
+    assert dialed == ["create_issue"]
+
+
 def test_streamable_candidates_honor_a_declared_transport():
     # A declared transport is authoritative: probing a second candidate costs a
     # full connect timeout per discovery, and discovery runs on every tools/list.

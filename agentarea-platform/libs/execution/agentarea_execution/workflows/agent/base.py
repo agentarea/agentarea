@@ -65,6 +65,7 @@ class AgentWorkflowBase:
         self._monthly_cap_message: str | None = None
         # Old histories retain their recorded command sequence.
         self._interaction_contract_enabled = True
+        self._wait_tool_enabled = False
 
     @property
     def _questions_available(self) -> bool:
@@ -141,7 +142,6 @@ class AgentWorkflowBase:
 
     async def _publish_events_immediately(self) -> None:
         """Persist the pending events before the run moves on.
-
         The events are the task's durable record, so a store outage holds the run
         here, retrying, rather than failing it or dropping the events. The
         activity writes idempotently by event id, which makes a retry that

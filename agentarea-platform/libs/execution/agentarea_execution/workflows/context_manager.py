@@ -88,6 +88,11 @@ def validate_tool_pairs(messages: list[dict[str, Any]]) -> bool:
     return True
 
 
+def messages_payload_bytes(messages: list[dict[str, Any]]) -> int:
+    """Size of the conversation as it travels in activity and continue-as-new payloads."""
+    return len(json.dumps(messages, ensure_ascii=False).encode("utf-8"))
+
+
 def find_compaction_boundary(
     messages: list[dict[str, Any]], keep_recent: int, *, carry_skills: bool = False
 ) -> int:
