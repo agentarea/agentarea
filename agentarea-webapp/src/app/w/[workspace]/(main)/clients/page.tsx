@@ -10,6 +10,8 @@ import EmptyState from "@/components/EmptyState/EmptyState";
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
+import { ViewModeTabs } from "@/components/HeaderTabs";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -68,6 +70,7 @@ export default function ClientsPage() {
   const searchParams = useSearchParams();
   const t = useTranslations("ClientsPage");
   const tCommon = useTranslations("Common");
+  const viewMode = searchParams.get("tab") === "table" ? "table" : "grid";
   const [clients, setClients] = useState<ClientResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -184,6 +187,9 @@ export default function ClientsPage() {
           </Button>
         ),
       }}
+      subheader={
+        <SubheaderToolbar controls={<ViewModeTabs currentTab={viewMode} />} />
+      }
     >
       <div>
         {loading ? (
@@ -198,8 +204,7 @@ export default function ClientsPage() {
           />
         ) : (
           <GridAndTableViews
-            searchParams={{ tab: searchParams.get("tab") ?? undefined }}
-            routeChange="/clients"
+            viewMode={viewMode}
             data={clients}
             columns={columns}
             itemLink={(client: ClientResponse) => `/clients/${client.id}`}

@@ -10,3 +10,7 @@ export const CARD_GRID_WIDE =
 // triggers, connections (MCP), provider-configs — 5 columns at xl, denser `sm`.
 export const CARD_GRID_DENSE =
   "grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+
+// GridAndTableViews (projects, apps, clients) — 5 columns at 2xl, wider gap.
+export const CARD_GRID_LOOSE =
+  "grid grid-cols-1 gap-[12px] md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5";
