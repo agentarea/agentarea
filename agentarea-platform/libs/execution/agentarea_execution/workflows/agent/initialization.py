@@ -383,7 +383,10 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         # Disclosure is a PDP decision: never offer the model a tool the gate
         # would reject (same policy, one decision, both ends).
         disclosed = filter_disclosed_tools(
-            self.state.effective_policy, available_tools, self.state.mcp_tool_routes
+            self.state.effective_policy,
+            available_tools,
+            self.state.mcp_tool_routes,
+            self.state.agent_config.get("tools"),
         )
         withheld = len(available_tools) - len(disclosed)
         if withheld:

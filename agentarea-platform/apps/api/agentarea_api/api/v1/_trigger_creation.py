@@ -8,6 +8,7 @@ exactly the same steps, so they live here once.
 
 import json
 import logging
+import secrets
 from typing import Any
 from uuid import UUID
 
@@ -26,7 +27,10 @@ from agentarea_triggers.domain.models import TriggerCreate as DomainTriggerCreat
 from agentarea_triggers.extractors import resolves_own_credentials
 from agentarea_triggers.schemas.dto import TriggerSpec
 from agentarea_triggers.trigger_service import TriggerService
-from agentarea_triggers.webhook_verification import channel_credential_secret_name
+from agentarea_triggers.webhook_verification import (
+    SIGNING_SECRET_KEYS,
+    channel_credential_secret_name,
+)
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
@@ -137,6 +141,23 @@ def _channel_type(spec: TriggerSpec) -> str:
     return spec.webhook_type or extractor.removesuffix("_polling") or "generic"
 
 
+def with_webhook_secret_token(
+    channel_type: str, credentials: dict[str, Any]
+) -> tuple[dict[str, Any], str | None]:
+    """Credentials carrying the token the channel echoes on every webhook, if it has one.
+
+    Telegram repeats the ``secret_token`` given to ``setWebhook`` in a header;
+    it is how the webhook tells Telegram's requests from anyone who learned the
+    URL. A token already stored is kept so re-registration does not rotate it
+    under in-flight updates.
+    """
+    if channel_type != "telegram":
+        return credentials, None
+    key = SIGNING_SECRET_KEYS["telegram"]
+    token = credentials.get(key) or secrets.token_urlsafe(32)
+    return {**credentials, key: token}, token
+
+
 async def create_trigger_from_spec(
     spec: TriggerSpec,
     *,
@@ -158,8 +179,11 @@ async def create_trigger_from_spec(
     )
 
     has_creds = False
-    if credentials and secret_manager:
-        secret_name = channel_credential_secret_name(_channel_type(spec), trigger.id)
+    secret_token: str | None = None
+    if credentials:
+        channel_type = _channel_type(spec)
+        credentials, secret_token = with_webhook_secret_token(channel_type, credentials)
+        secret_name = channel_credential_secret_name(channel_type, trigger.id)
         await secret_manager.set_secret(secret_name, json.dumps(credentials))
         has_creds = True
         logger.info(f"Stored channel credentials for trigger {trigger.id}")
@@ -169,6 +193,7 @@ async def create_trigger_from_spec(
             channel_type=getattr(trigger, "webhook_type", None),
             webhook_id=getattr(trigger, "webhook_id", None),
             credentials=credentials,
+            secret_token=secret_token,
         )
 
     if not spec.enabled:

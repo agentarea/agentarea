@@ -17,6 +17,6 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 # Type alias for dependency injection
-DatabaseSession = Annotated[AsyncSession, Depends(get_db_session)]
+DatabaseSession = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
-ReadDatabaseSessionDep = Annotated[AsyncSession, Depends(get_read_db_session)]
+ReadDatabaseSessionDep = Annotated[AsyncSession, Depends(get_read_db_session, scope="function")]

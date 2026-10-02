@@ -40,6 +40,9 @@ if [ "$1" = "inspect" ]; then
     *State.Status*)
       printf '%s' "$STUB_STATUS"
       exit "${STUB_STATUS_RC:-0}" ;;
+    *State.ExitCode*)
+      printf '%s' "${STUB_EXIT_CODE:-1}"
+      exit "${STUB_EXIT_CODE_RC:-0}" ;;
   esac
   exit 1
 fi
@@ -141,14 +144,57 @@ func TestContainerIPReportsAnAddresslessContainer(t *testing.T) {
 	}
 }
 
-// A container that exited before it could serve is removed, and the failure says
-// so. Its own output is not read on this path: that text belongs to third-party
-// code holding credentials, so it is withheld unless this host asks for it.
-func TestCreateContainerRemovesAContainerThatExitedWithoutReadingItsOutput(t *testing.T) {
+func TestClassifyStartupFailureReturnsOnlySafeReasons(t *testing.T) {
+	tests := []struct {
+		name     string
+		exitCode int
+		hasCode  bool
+		output   string
+		want     string
+	}{
+		{
+			name:   "npm package without executable",
+			output: "npm error could not determine executable to run token=secret-value",
+			want:   "package has no executable",
+		},
+		{
+			name:   "python package without executable",
+			output: "An executable named `server` is not provided by package `server` token=secret-value",
+			want:   "package has no executable",
+		},
+		{
+			name:   "dependency import failure",
+			output: "ImportError: cannot import name 'McpError' from 'mcp.shared.exceptions'",
+			want:   "workload failed to import a dependency during startup",
+		},
+		{
+			name:     "unclassified exit",
+			exitCode: 17,
+			hasCode:  true,
+			output:   "token=secret-value",
+			want:     "workload exited with code 17 during startup",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := classifyStartupFailure(test.exitCode, test.hasCode, test.output)
+			if got != test.want {
+				t.Fatalf("classifyStartupFailure() = %q, want %q", got, test.want)
+			}
+			if strings.Contains(got, "secret-value") {
+				t.Fatalf("classified reason leaked workload output: %q", got)
+			}
+		})
+	}
+}
+
+// Start failures expose a safe classification, never the untrusted process output.
+func TestCreateContainerClassifiesExitWithoutLeakingItsOutput(t *testing.T) {
 	runtime, logPath := stubRuntime(t)
 	t.Setenv("STUB_STATUS", "exited")
 	t.Setenv("STUB_RUNNING", "false")
 	t.Setenv("STUB_OWNER", "inst-exits")
+	t.Setenv("STUB_EXIT_CODE", "17")
 	t.Setenv("STUB_LOGS", "token=sk-live-6f2b91c4aa77")
 
 	var recorded bytes.Buffer
@@ -158,12 +204,16 @@ func TestCreateContainerRemovesAContainerThatExitedWithoutReadingItsOutput(t *te
 		containers: map[string]*models.Container{},
 	}
 
-	if _, err := manager.CreateContainer(context.Background(), models.CreateContainerRequest{
+	_, err := manager.CreateContainer(context.Background(), models.CreateContainerRequest{
 		ServiceName: "inst-exits",
 		Image:       "hashicorp/terraform-mcp-server:latest",
 		Port:        8080,
-	}); err == nil {
+	})
+	if err == nil {
 		t.Fatal("CreateContainer() error = nil, want the start failure reported")
+	}
+	if !strings.Contains(err.Error(), "workload exited with code 17 during startup") {
+		t.Fatalf("CreateContainer() error = %v, want the safe exit-code classification", err)
 	}
 
 	if _, tracked := manager.containers["inst-exits"]; tracked {
@@ -171,9 +221,6 @@ func TestCreateContainerRemovesAContainerThatExitedWithoutReadingItsOutput(t *te
 	}
 
 	calls := stubCalls(t, logPath)
-	if strings.Contains(calls, "logs --tail") {
-		t.Fatalf("the workload output was read with logging disabled:\n%s", calls)
-	}
 	started := strings.Index(calls, "run -d")
 	removed := strings.LastIndex(calls, "rm -f")
 	if started < 0 || removed < started {
@@ -182,8 +229,8 @@ func TestCreateContainerRemovesAContainerThatExitedWithoutReadingItsOutput(t *te
 	if strings.Contains(recorded.String(), "sk-live-6f2b91c4aa77") {
 		t.Fatalf("the workload output reached the log:\n%s", recorded.String())
 	}
-	if !strings.Contains(recorded.String(), "withheld") {
-		t.Fatalf("the log does not say the output was withheld:\n%s", recorded.String())
+	if !strings.Contains(recorded.String(), "workload exited with code 17 during startup") {
+		t.Fatalf("the log does not expose the safe reason:\n%s", recorded.String())
 	}
 }
 

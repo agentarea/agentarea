@@ -8,7 +8,12 @@ replaces the old deny-by-default, where every built-in tool needed a hand-typed
 allow row just to run.
 """
 
-from agentarea_execution.workflows.helpers import ToolAction, decide_tool_action
+from agentarea_execution.models import MCPToolRequest
+from agentarea_execution.workflows.helpers import (
+    ToolAction,
+    decide_tool_action,
+    tool_policy_aliases,
+)
 
 
 def test_no_policy_allows():
@@ -89,3 +94,46 @@ def test_a_tool_outside_an_explicit_allowlist_is_not_escalated_it_is_denied():
         "approval": {"escalation_rules": ["shell"]},
     }
     assert decide_tool_action(policy, "shell") is ToolAction.DENY
+
+
+def test_agent_config_name_requires_approval_for_delegation_tool():
+    aliases = tool_policy_aliases(
+        None, "delegate_to_docs_writer", [{"type": "agent", "name": "docs-writer"}]
+    )
+    policy = {"approval": {"escalation_rules": ["docs-writer"]}}
+    assert (
+        decide_tool_action(policy, "delegate_to_docs_writer", aliases)
+        is ToolAction.REQUIRE_APPROVAL
+    )
+
+
+def test_code_toolset_name_denies_runtime_name_even_if_approval_also_matches():
+    aliases = tool_policy_aliases(None, "shell", [{"type": "code", "name": "agentarea/shell"}])
+    policy = {
+        "tools": {"denied": ["agentarea/shell"]},
+        "approval": {"escalation_rules": ["agentarea/shell"]},
+    }
+    assert decide_tool_action(policy, "shell", aliases) is ToolAction.DENY
+
+
+def test_old_tool_activity_payload_defaults_policy_approval_to_false():
+    request = MCPToolRequest.model_validate(
+        {"tool_name": "shell", "tool_args": {}, "workspace_id": "test-workspace"}
+    )
+    assert request.policy_approval_granted is False
+
+
+def test_openapi_allowed_operation_alias_matches_slugified_runtime_name():
+    aliases = tool_policy_aliases(
+        None,
+        "list_items_",
+        [
+            {
+                "type": "openapi",
+                "name": "catalog-api",
+                "settings": {"allowed_tools": ["list items!"]},
+            }
+        ],
+    )
+    policy = {"approval": {"escalation_rules": ["list items!"]}}
+    assert decide_tool_action(policy, "list_items_", aliases) is ToolAction.REQUIRE_APPROVAL

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useCurrency } from "@/hooks/useCurrency";
 import { getTriggerExecutionStatusPresentation } from "@/lib/status";
+import { parseUtcTimestamp } from "@/utils/dateUtils";
 import { formatTriggerCost } from "../../components/triggerDisplay";
 
 interface ExecutionsTableProps {
@@ -76,13 +77,14 @@ export default function ExecutionsTable({
     {
       accessor: "executed_at",
       header: "Executed",
-      render: (value: string) => (
-        <span className="text-muted-foreground">
-          {value
-            ? formatDistanceToNow(new Date(value), { addSuffix: true })
-            : "-"}
-        </span>
-      ),
+      render: (value: string) => {
+        const date = parseUtcTimestamp(value);
+        return (
+          <span className="text-muted-foreground">
+            {date ? formatDistanceToNow(date, { addSuffix: true }) : "-"}
+          </span>
+        );
+      },
     },
     {
       accessor: "execution_time_ms",

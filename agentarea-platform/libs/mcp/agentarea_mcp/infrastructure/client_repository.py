@@ -1,12 +1,16 @@
 """Client (agent-proxy) repository."""
 
 from collections.abc import Collection
+from typing import Any
 from uuid import UUID
 
 from agentarea_agents.domain.skill_models import Skill
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import unscoped
-from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from agentarea_common.base.workspace_scoped_repository import (
+    WorkspaceScopedRepository,
+    as_record_ids,
+)
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,11 +41,15 @@ class ClientRepository(WorkspaceScopedRepository[Client]):
             selectinload(Client.mcp_instances.and_(MCPServerInstance.workspace_id == workspace_id)),
         )
 
-    async def get_by_id(self, id: UUID | str, creator_scoped: bool = False) -> Client | None:  # type: ignore[override]
+    async def get_by_id(self, id: UUID | str, creator_scoped: bool = False) -> Client | None:
         query = (
             select(Client)
             .where(Client.id == id)
-            .where(self._get_workspace_filter())
+            .where(
+                self._get_creator_workspace_filter()
+                if creator_scoped
+                else self._get_workspace_filter()
+            )
             .options(*self._scoped_links(self.user_context.workspace_id))
             .execution_options(populate_existing=True)
         )
@@ -70,13 +78,19 @@ class ClientRepository(WorkspaceScopedRepository[Client]):
         return str(workspace_id) if workspace_id is not None else None
 
     async def list_all(
-        self, limit: int | None = None, offset: int | None = None, **filters
-    ) -> list[Client]:  # type: ignore[override]
+        self,
+        limit: int | None = None,
+        offset: int | None = None,
+        ids: set[str] | None = None,
+        **filters: Any,
+    ) -> list[Client]:
         query = (
             select(Client)
             .where(self._get_workspace_filter())
             .options(*self._scoped_links(self.user_context.workspace_id))
         )
+        if ids is not None:
+            query = query.where(Client.id.in_(as_record_ids(ids)))
         for field, value in filters.items():
             if hasattr(Client, field):
                 query = query.where(getattr(Client, field) == value)

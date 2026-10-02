@@ -52,6 +52,27 @@ function describeError(payload: Record<string, unknown>): string {
 	return String(code ?? description ?? 'no error detail returned');
 }
 
+function isAuthServerMetadata(
+	payload: Record<string, unknown>,
+): payload is Record<string, unknown> & AuthServerMetadata {
+	const isOptionalStringList = (value: unknown) =>
+		value === undefined ||
+		(Array.isArray(value) && value.every(item => typeof item === 'string'));
+	const registrationEndpoint = payload['registration_endpoint'];
+
+	return (
+		typeof payload['issuer'] === 'string' &&
+		typeof payload['authorization_endpoint'] === 'string' &&
+		payload['authorization_endpoint'] !== '' &&
+		typeof payload['token_endpoint'] === 'string' &&
+		payload['token_endpoint'] !== '' &&
+		(registrationEndpoint === undefined ||
+			typeof registrationEndpoint === 'string') &&
+		isOptionalStringList(payload['code_challenge_methods_supported']) &&
+		isOptionalStringList(payload['token_endpoint_auth_methods_supported'])
+	);
+}
+
 export function createPkcePair(): {verifier: string; challenge: string} {
 	const verifier = crypto.randomBytes(32).toString('base64url');
 	const challenge = crypto
@@ -77,11 +98,11 @@ export async function discoverAuthServer(
 		throw new Error(`OAuth discovery failed (${response.status}) at ${url}`);
 	}
 
-	const metadata = (await readJson(response)) as unknown as AuthServerMetadata;
+	const metadata = await readJson(response);
 
-	if (!metadata.authorization_endpoint || !metadata.token_endpoint) {
+	if (!isAuthServerMetadata(metadata)) {
 		throw new Error(
-			`OAuth discovery at ${url} returned no authorization_endpoint/token_endpoint`,
+			`OAuth discovery at ${url} returned malformed RFC 8414 metadata (issuer, authorization_endpoint and token_endpoint are required)`,
 		);
 	}
 

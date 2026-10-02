@@ -25,6 +25,7 @@ from temporalio import activity
 
 from ...interfaces import ActivityDependencies
 from ...models import MCPToolRequest, MCPToolResult, McpToolRoute
+from ...workflows.helpers import tool_policy_aliases
 from ..heartbeat import auto_heartbeater
 from .sandbox import agent_artifact_actor, sandbox_control_auth_secret, sandbox_file_auth_secret
 
@@ -170,18 +171,23 @@ def make_tools_activities(
                 user_id=request.user_id,
                 workspace_id=request.workspace_id,
                 effective_policy=request.effective_policy,
-                aliases=request.mcp_route.policy_names(request.tool_name)
-                if request.mcp_route
-                else (),
+                aliases=tool_policy_aliases(
+                    request.mcp_route,
+                    request.tool_name,
+                    request.tools,
+                ),
             )
         )
-        if decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL:
+        if decision.action is ToolAuthorizationAction.DENY:
+            return _deny_tool_result(request.tool_name, decision.reason)
+        if (
+            decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL
+            and not request.policy_approval_granted
+        ):
             return _deny_tool_result(
                 request.tool_name,
                 f"{decision.reason}; approval must be resolved before activity execution",
             )
-        if not decision.allowed:
-            return _deny_tool_result(request.tool_name, decision.reason)
 
         user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:

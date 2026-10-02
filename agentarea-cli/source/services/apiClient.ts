@@ -1,9 +1,16 @@
-import axios, {type AxiosInstance, type AxiosError} from 'axios';
+import axios, {
+	type AxiosInstance,
+	type AxiosError,
+	type InternalAxiosRequestConfig,
+} from 'axios';
 import {tokenStorage} from '../utils/storage.js';
 import {configManager} from '../utils/config.js';
 import {logger} from '../utils/logger.js';
-import {NetworkError, AuthenticationError} from '../utils/error.js';
+import {AuthenticationError} from '../utils/error.js';
 import {type AuthToken} from '../types/index.js';
+
+// Marks a request already replayed after a 401 so it is never retried twice.
+type RetriableRequestConfig = InternalAxiosRequestConfig & {_retry?: boolean};
 
 class ApiClient {
 	private client: AxiosInstance;
@@ -43,7 +50,7 @@ class ApiClient {
 		this.client.interceptors.response.use(
 			response => response,
 			async (error: AxiosError) => {
-				const originalConfig = error.config as any;
+				const originalConfig: RetriableRequestConfig | undefined = error.config;
 
 				// Handle 401 Unauthorized
 				if (
@@ -86,108 +93,9 @@ class ApiClient {
 		);
 	}
 
-	async initialize(): Promise<void> {
-		try {
-			// Load stored token if available
-			const storedToken = await tokenStorage.getToken();
-
-			if (storedToken) {
-				// Check if token needs refresh
-				if (tokenStorage.shouldRefreshToken(storedToken)) {
-					logger.debug('Refreshing stored token');
-					const newToken = await this.refreshToken();
-					this.currentToken = newToken;
-					await tokenStorage.saveToken(newToken);
-				} else {
-					this.currentToken = storedToken;
-				}
-
-				logger.debug('API client initialized with stored token');
-			} else {
-				logger.debug(
-					'No stored token found, API client initialized without auth',
-				);
-			}
-		} catch (error) {
-			logger.error('Failed to initialize API client:', error);
-			throw new NetworkError(`Failed to initialize API client: ${error}`);
-		}
-	}
-
 	setToken(token: AuthToken): void {
 		this.currentToken = token;
 		logger.debug('API client token updated');
-	}
-
-	async login(email: string, password: string): Promise<AuthToken> {
-		try {
-			const config = configManager.get();
-
-			// Use Kratos for authentication via self-service API
-			// 1. Create a login flow
-			const flowResponse = await axios.get(
-				`${config.kratosUrl}/self-service/login/api`,
-				{
-					withCredentials: true,
-					headers: {
-						Accept: 'application/json',
-					},
-				},
-			);
-
-			const flowId = (flowResponse.data as any).id;
-
-			if (!flowId) {
-				throw new AuthenticationError('Failed to create login flow');
-			}
-
-			logger.debug(`Created login flow: ${flowId}`);
-
-			// 2. Submit login credentials to Kratos
-			const submitResponse = await axios.post(
-				`${config.kratosUrl}/self-service/login?flow=${flowId}`,
-				{
-					csrf_token: this.extractCsrfToken(flowResponse.data),
-					method: 'password',
-					password,
-					identifier: email,
-				},
-				{
-					withCredentials: true,
-					validateStatus: () => true,
-				},
-			);
-
-			// Check if login was successful (Kratos redirects on success)
-			if (submitResponse.status >= 400) {
-				throw new AuthenticationError('Invalid email or password');
-			}
-
-			// Extract session token from cookies (Kratos sets ory_kratos_session)
-			const sessionToken = this.extractSessionToken(submitResponse.headers);
-
-			if (!sessionToken) {
-				throw new AuthenticationError('Failed to obtain session token');
-			}
-
-			const token: AuthToken = {
-				accessToken: sessionToken,
-				tokenType: 'Bearer',
-				expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h default
-			};
-
-			this.currentToken = token;
-			logger.info('Successfully logged in');
-			return token;
-		} catch (error) {
-			logger.error('Login failed:', error);
-
-			if (error instanceof AuthenticationError) {
-				throw error;
-			}
-
-			throw new NetworkError(`Login failed: ${error}`);
-		}
 	}
 
 	async refreshToken(): Promise<AuthToken> {
@@ -218,49 +126,6 @@ class ApiClient {
 			logger.error('Token refresh failed:', error);
 			throw new AuthenticationError(`Token refresh failed: ${error}`);
 		}
-	}
-
-	async logout(): Promise<void> {
-		try {
-			const config = configManager.get();
-
-			// Logout from Kratos
-			await axios.get(`${config.kratosUrl}/self-service/logout/browser`, {
-				withCredentials: true,
-			});
-
-			this.currentToken = null;
-			logger.info('Successfully logged out');
-		} catch (error) {
-			logger.warn(
-				'Logout failed (may be expected if session already expired):',
-				error,
-			);
-			// Clear token anyway
-			this.currentToken = null;
-		}
-	}
-
-	private extractCsrfToken(html: string): string {
-		// Extract CSRF token from Kratos login form HTML
-		const match = html.match(/name="csrf_token"\s+value="([^"]+)"/);
-		return match ? match[1] : '';
-	}
-
-	private extractSessionToken(headers: Record<string, any>): string | null {
-		// Extract session token from Set-Cookie header
-		const setCookie = headers['set-cookie'];
-		if (Array.isArray(setCookie)) {
-			for (const cookie of setCookie) {
-				if (cookie.includes('ory_kratos_session')) {
-					const match = cookie.match(/ory_kratos_session=([^;]+)/);
-					if (match) {
-						return match[1];
-					}
-				}
-			}
-		}
-		return null;
 	}
 
 	set401Callback(callback: (error: AxiosError) => Promise<void>): void {

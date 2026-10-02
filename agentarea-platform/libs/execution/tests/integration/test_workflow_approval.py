@@ -19,6 +19,11 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from agentarea_common.auth.tool_authorization import (
+    ToolAuthorizationAction,
+    ToolAuthorizationRequest,
+    authorize_tool_invocation,
+)
 from agentarea_common.workflow.sandbox import create_workflow_runner
 from agentarea_execution.models import (
     AgentConfigRequest,
@@ -38,6 +43,7 @@ from agentarea_execution.models import (
     WorkflowEventsResult,
 )
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
+from agentarea_execution.workflows.helpers import tool_policy_aliases
 from agentarea_governance.domain.policies import EffectivePolicy, PolicyDocument, PolicyResolver
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
@@ -51,11 +57,14 @@ _APPROVER = "approver-1"
 _GATED_TOOL = "deploy_service"
 _HELPER_AGENT = "Helper"
 _DELEGATE_TOOL = f"delegate_to_{_HELPER_AGENT}"
+_CODE_TOOL = "shell"
+_CODE_TOOLSET = "agentarea/shell"
 _CHILD_QUERY = "child: summarise the deployment"
 
 _published: list[dict[str, Any]] = []
 _status_updates: list[str] = []
 _tool_requests: list[MCPToolRequest] = []
+_executed_tools: list[str] = []
 _llm_script: list[str] = []
 _llm_calls = 0
 _llm_lock = threading.Lock()
@@ -84,7 +93,10 @@ async def _mock_build_config(request: AgentConfigRequest) -> dict[str, Any]:
         "description": "Test agent",
         "instruction": "Be helpful.",
         "tools_config": {"mcp_servers": []},
-        "tools": [{"type": "agent", "name": _HELPER_AGENT}],
+        "tools": [
+            {"type": "agent", "name": _HELPER_AGENT},
+            {"type": "code", "name": _CODE_TOOLSET},
+        ],
         "context_window": 128000,
         "planning": False,
     }
@@ -102,7 +114,10 @@ async def _mock_discover_tools(request: ToolDiscoveryRequest) -> dict[str, Any]:
             },
         }
 
-    return {"tools": [tool(_GATED_TOOL), tool(_DELEGATE_TOOL)], "context_strategy": "STATIC"}
+    return {
+        "tools": [tool(_GATED_TOOL), tool(_DELEGATE_TOOL), tool(_CODE_TOOL)],
+        "context_strategy": "STATIC",
+    }
 
 
 @activity.defn(name="resolve_model_activity")
@@ -167,12 +182,33 @@ async def _mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
         return _reply(_GATED_TOOL, {"target": "prod"}, f"call_gated_{call}")
     if step == "delegate":
         return _reply(_DELEGATE_TOOL, {"message": _CHILD_QUERY}, f"call_delegate_{call}")
+    if step == "shell":
+        return _reply(_CODE_TOOL, {"command": "echo APPROVAL_OK"}, f"call_shell_{call}")
     return _reply("completion", {"result": "done", "artifacts": []}, f"call_done_{call}")
 
 
 @activity.defn(name="execute_mcp_tool_activity")
 async def _mock_execute_mcp(request: MCPToolRequest) -> dict[str, Any]:
     _tool_requests.append(request)
+    decision = await authorize_tool_invocation(
+        ToolAuthorizationRequest(
+            tool_name=request.tool_name,
+            tool_args=request.tool_args,
+            user_id=request.user_id,
+            workspace_id=request.workspace_id,
+            effective_policy=request.effective_policy,
+            aliases=tool_policy_aliases(request.mcp_route, request.tool_name, request.tools),
+        )
+    )
+    if decision.action is ToolAuthorizationAction.DENY or (
+        decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL
+        and not request.policy_approval_granted
+    ):
+        return {
+            "success": False,
+            "error": decision.reason,
+            "tool_name": request.tool_name,
+        }
     if _governance_escalates and not request.escalation_approved:
         raise ApplicationError(
             "EscalationRequiredError by SemanticGuard: production deploy",
@@ -185,6 +221,7 @@ async def _mock_execute_mcp(request: MCPToolRequest) -> dict[str, Any]:
             type="EscalationRequiredError",
             non_retryable=True,
         )
+    _executed_tools.append(request.tool_name)
     return {"success": True, "result": "deployed", "tool_name": request.tool_name}
 
 
@@ -228,6 +265,7 @@ def _reset_globals():
     global _llm_calls, _governance_escalates
     _published.clear()
     _status_updates.clear()
+    _executed_tools.clear()
     _tool_requests.clear()
     _llm_script.clear()
     _llm_calls = 0
@@ -316,9 +354,68 @@ async def test_approved_tool_runs_after_the_designated_approver_signs_off():
 
     assert result.success is True
     assert [r.tool_name for r in _tool_requests] == [_GATED_TOOL]
+    assert _tool_requests[0].policy_approval_granted is True
+    assert _executed_tools == [_GATED_TOOL]
     responses = _events("approval.response")
     assert len(responses) == 1
     assert responses[0]["data"]["approved"] is True
+
+
+@pytest.mark.asyncio
+async def test_approval_rule_on_agent_config_name_escalates_before_delegation():
+    _llm_script.extend(["delegate", "complete"])
+    policy = _policy({"escalation_rules": [_HELPER_AGENT], "approvers": [f"user:{_APPROVER}"]})
+
+    async def drive(handle):
+        escalation = await _pending_escalation(handle)
+        assert escalation["tool_name"] == _DELEGATE_TOOL
+        assert _events("AgentDelegationStarted") == []
+        await handle.signal(
+            AgentExecutionWorkflow.resolve_escalation,
+            args=[escalation["escalation_id"], True, "approved", _APPROVER],
+        )
+
+    result = await _run(_request(policy), drive)
+
+    assert result.success is True
+    assert len(_events("AgentDelegationCompleted")) == 1
+
+
+@pytest.mark.asyncio
+async def test_approval_rule_on_code_toolset_config_escalates_then_runs_tool():
+    _llm_script.extend(["shell", "complete"])
+    policy = _policy({"escalation_rules": [_CODE_TOOLSET], "approvers": [f"user:{_APPROVER}"]})
+
+    async def drive(handle):
+        escalation = await _pending_escalation(handle)
+        assert escalation["tool_name"] == _CODE_TOOL
+        assert _tool_requests == []
+        await handle.signal(
+            AgentExecutionWorkflow.resolve_escalation,
+            args=[escalation["escalation_id"], True, "approved", _APPROVER],
+        )
+
+    result = await _run(_request(policy), drive)
+
+    assert result.success is True
+    assert [request.tool_name for request in _tool_requests] == [_CODE_TOOL]
+    assert _tool_requests[0].policy_approval_granted is True
+    assert _executed_tools == [_CODE_TOOL]
+
+
+@pytest.mark.asyncio
+async def test_deny_rule_on_code_toolset_config_blocks_runtime_shell_call():
+    _llm_script.extend(["shell", "complete"])
+    policy = _policy()
+    policy["tools"] = {"denied": [_CODE_TOOLSET]}
+
+    result = await _run(_request(policy))
+
+    assert result.success is True
+    assert _tool_requests == []
+    assert _executed_tools == []
+    denied = [e for e in _events("tool.result") if e["data"].get("denied_by_policy")]
+    assert len(denied) == 1
 
 
 async def _effective_policy_of_a_run_started_with_the_approval_flag() -> dict[str, Any]:
@@ -394,6 +491,7 @@ async def test_denied_tool_never_runs_and_the_model_hears_why():
 
     assert result.success is True
     assert _tool_requests == []
+    assert _executed_tools == []
     denied = [e for e in _events("tool.result") if e["data"].get("denied_by_human")]
     assert len(denied) == 1
     assert "not today" in denied[0]["data"]["error"]

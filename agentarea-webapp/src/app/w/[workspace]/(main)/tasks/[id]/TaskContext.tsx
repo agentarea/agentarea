@@ -13,7 +13,11 @@ import {
   getAgentTaskStatusAction as getAgentTaskStatus,
   getTaskAction as getTask,
 } from "@/lib/server-actions";
-import { getTaskPolicySnapshotAction as getTaskPolicySnapshot } from "./actions";
+import {
+  getTaskPolicySnapshotAction as getTaskPolicySnapshot,
+  getTaskSummaryAction as getTaskSummary,
+} from "./actions";
+import type { TaskSummary } from "@/api/client/types.gen";
 import type {
   EffectivePolicy,
   EffectivePolicyResponse,
@@ -52,6 +56,7 @@ interface TaskStatus {
 interface TaskContextType {
   task: TaskData | null;
   taskStatus: TaskStatus | null;
+  taskSummary: TaskSummary | null;
   policy: EffectivePolicy | null;
   policyError: string | null;
   statusError: string | null;
@@ -104,6 +109,7 @@ export function TaskProvider({
     parseTaskData(initialTask)
   );
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
+  const [taskSummary, setTaskSummary] = useState<TaskSummary | null>(null);
   const t = useTranslations("TaskInfoPanel");
   const [statusError, setStatusError] = useState<string | null>(null);
   const [policy, setPolicy] = useState<EffectivePolicy | null>(null);
@@ -167,6 +173,29 @@ export function TaskProvider({
     loadStatus();
   }, [statusAgentId, statusTaskId, t]);
 
+  useEffect(() => {
+    setTaskSummary(null);
+    if (!statusTaskId || !statusAgentId) return;
+
+    let cancelled = false;
+    const loadSummary = async () => {
+      try {
+        const res = await getTaskSummary(statusAgentId, statusTaskId);
+        if (!cancelled && !res.error) {
+          setTaskSummary(res.data ?? null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Failed to load task summary", err);
+        }
+      }
+    };
+    void loadSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [statusAgentId, statusTaskId]);
+
   const policyTaskId = task?.id;
 
   // Tasks without a snapshot return 404, which means "no policy".
@@ -207,6 +236,7 @@ export function TaskProvider({
       value={{
         task,
         taskStatus,
+        taskSummary,
         policy,
         policyError,
         statusError,

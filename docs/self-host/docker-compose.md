@@ -20,6 +20,15 @@ of anything, or when you want MCP server instances and agent sandboxes confined
 by a RuntimeClass — the Compose stack drives MCP containers through the host
 Docker socket, which offers no kernel isolation.
 
+<Warning>
+Compose is a single-tenant deployment. Every workspace's agent code runs in one
+shared `sandbox-executor` container on the host kernel
+(`SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT`), and MCP
+containers share the host Docker daemon. Do not open sign-up to people you do
+not trust on a Compose install; run untrusted, multi-tenant workloads on
+Kubernetes with a gVisor RuntimeClass.
+</Warning>
+
 Two Compose files sit at the repository root:
 
 | File | Purpose |
@@ -109,6 +118,10 @@ This guide covers `docker-compose.yaml`.
     | API and OpenAPI docs | http://localhost:8000/docs |
     | MCP Manager | http://localhost:7999 |
     | Kratos public API | http://localhost:4433 |
+
+    Compose exposes Kratos directly and does not install a reverse proxy. Before
+    exposing the host, place Kratos behind an operator-managed proxy and rate-limit
+    `/self-service/*` by client IP.
 
     The Compose file publishes no ports for PostgreSQL, Valkey, RustFS, Temporal, or
     the event service. They are reachable only on the Compose networks.

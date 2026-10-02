@@ -1,5 +1,5 @@
 import type { ModelInstanceResponse } from "@/api/client/types.gen";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Bot, Cpu, FileText, MessageSquare } from "lucide-react";
 import {
@@ -28,6 +28,7 @@ type BasicInformationProps = {
   errors: FieldErrors<AgentFormValues>;
   setValue: UseFormSetValue<AgentFormValues>;
   llmModelInstances: LLMModelInstance[];
+  suggestedName?: string;
   onOpenConfigSheet?: () => void;
   onRefreshModels?: () => void;
 };
@@ -38,11 +39,16 @@ const BasicInformation = ({
   errors,
   llmModelInstances,
   onRefreshModels,
+  suggestedName,
 }: BasicInformationProps) => {
   const [searchableSelectOpen, setSearchableSelectOpen] = useState(false);
   const [configSheetOpen, setConfigSheetOpen] = useState(false);
   const configSheetTriggerRef = useRef<HTMLButtonElement>(null);
   const t = useTranslations("AgentsPage.create");
+  const [nameReady, setNameReady] = useState(!suggestedName);
+  useEffect(() => {
+    if (suggestedName) setNameReady(true);
+  }, [suggestedName]);
 
   const handleConfigSheetOpenChange = (open: boolean) => {
     setConfigSheetOpen(open);
@@ -83,6 +89,17 @@ const BasicInformation = ({
           <Input
             id="name"
             {...register("name", { required: "Agent name is required" })}
+            readOnly={Boolean(suggestedName) && !nameReady}
+            defaultValue={suggestedName}
+            onFocus={
+              suggestedName
+                ? (event) => {
+                    if (event.currentTarget.value === suggestedName) {
+                      event.currentTarget.select();
+                    }
+                  }
+                : undefined
+            }
             placeholder={t("agentNamePlaceholder")}
             // className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-blue-400 transition-colors"
             aria-invalid={!!getNestedErrorMessage(errors, "name")}

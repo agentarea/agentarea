@@ -251,6 +251,25 @@ async def test_both_discovery_modes_use_resolved_run_tools(
         saved.tools if run_tools is None else run_tools
     )
 
+@pytest.mark.asyncio
+async def test_file_toolset_is_discovered_with_workspace_scope(activity_context):
+    ctx, functions = activity_context
+    saved = agent(tools=[{"type": "code", "name": "agentarea/files"}])
+    ctx.get_agent_service.return_value.get.return_value = saved
+
+    result = await functions["discover_tool_providers_activity"](
+        ToolDiscoveryRequest(
+            agent_id=saved.id,
+            user_context_data={"user_id": "user", "workspace_id": "workspace"},
+        )
+    )
+
+    file_provider = next(
+        (provider for provider in result.providers if provider.name == "agentarea/files"),
+        None,
+    )
+    assert file_provider is not None
+    assert "files" in file_provider.tool_names
 
 @pytest.fixture
 def file_storage(monkeypatch):

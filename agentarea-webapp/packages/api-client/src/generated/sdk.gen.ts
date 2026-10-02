@@ -1682,27 +1682,16 @@ export const getDashboardV1DashboardGet = <ThrowOnError extends boolean = false>
 /**
  * Export Workspace Config
  *
- * Export current workspace configuration as YAML.
+ * Export the current workspace in the canonical Bundle YAML format.
  *
- * This endpoint exports all workspace-scoped resources:
- * - Agents (excluding system default agent)
- * - MCP server instances
- * - Provider configurations
+ * The output is accepted by the bundle Analyze and Install flow and can
+ * include agents, MCPs, skills, cron automations, and supported webhook
+ * channels. MCP credentials and Telegram tokens are setup-field references,
+ * never exported values. Provider configurations are not represented by the
+ * Bundle schema; configure them separately in the destination workspace.
  *
- * **Important Notes:**
- * - Secrets (API keys, passwords) are replaced with placeholders
- * - Built-in/catalog resources (carrying registry_item_id) are excluded
- * - Only resources in the current workspace are exported
- * - References to specs are included (server_spec_id, provider_spec_id)
- *
- * There is no matching import endpoint. Recreating a workspace goes through
- * the platform toolsets (``agentarea/agents``, ``agentarea/mcp_servers``,
- * ``agentarea/providers``, ``agentarea/skills``, ...) or bundle install,
- * both of which handle secrets as first-class inputs instead of smuggling
- * placeholders through a YAML file.
- *
- * **Returns:**
- * YAML file content describing the workspace
+ * The response is served as ``text/plain`` so generated API clients receive
+ * the YAML body as a string.
  */
 export const exportWorkspaceConfigV1ExportGet = <ThrowOnError extends boolean = false>(options?: Options<ExportWorkspaceConfigV1ExportGetData, ThrowOnError>): RequestResult<ExportWorkspaceConfigV1ExportGetResponses, ExportWorkspaceConfigV1ExportGetErrors, ThrowOnError> => (options?.client ?? client).get<ExportWorkspaceConfigV1ExportGetResponses, ExportWorkspaceConfigV1ExportGetErrors, ThrowOnError>({
     security: [{

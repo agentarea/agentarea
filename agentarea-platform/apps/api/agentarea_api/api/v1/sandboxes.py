@@ -1,12 +1,12 @@
 """Workspace-scoped live sandbox inventory."""
 
 import logging
-from datetime import datetime
 
 import httpx
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config import get_settings
+from agentarea_common.utils.types import UtcDatetime
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -30,8 +30,8 @@ class SandboxSummary(BaseModel):
     workspace_id: str = Field(exclude=True)
     task_id: str
     state: str
-    created_at: datetime
-    expires_at: datetime | None
+    created_at: UtcDatetime
+    expires_at: UtcDatetime | None
     resources: SandboxResources
     isolation: str
 

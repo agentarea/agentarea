@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import mimetypes
 import re
@@ -45,7 +46,7 @@ from agentarea_common.events.contract import (
     canonical_type,
 )
 from agentarea_common.money import ZERO, Money, serialize_money
-from agentarea_common.utils.types import UtcDatetime
+from agentarea_common.utils.types import UtcDatetime, utc_isoformat
 from agentarea_common.workspaces.lookup import workspace_api_prefix
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
@@ -673,6 +674,44 @@ async def _tail_task_events_sse(
         )
 
 
+async def _with_sse_heartbeats(
+    source: AsyncGenerator[str, None],
+    *,
+    interval_seconds: float = 15.0,
+) -> AsyncGenerator[str, None]:
+    """Emit SSE comments while preserving a pending source read."""
+    # ensure_future, not create_task: anext() returns an awaitable, not a coroutine.
+    next_frame: asyncio.Future[str] = asyncio.ensure_future(anext(source))
+    heartbeat: asyncio.Task[None] | None = None
+    try:
+        while True:
+            heartbeat = asyncio.create_task(asyncio.sleep(interval_seconds))
+            done, _ = await asyncio.wait(
+                (next_frame, heartbeat), return_when=asyncio.FIRST_COMPLETED
+            )
+            if next_frame in done:
+                heartbeat.cancel()
+                await asyncio.gather(heartbeat, return_exceptions=True)
+                heartbeat = None
+                try:
+                    frame = next_frame.result()
+                except StopAsyncIteration:
+                    return
+                yield frame
+                next_frame = asyncio.ensure_future(anext(source))
+            else:
+                heartbeat = None
+                yield ": ping\n\n"
+    finally:
+        pending: list[asyncio.Future[Any]] = [next_frame]
+        if heartbeat is not None:
+            pending.append(heartbeat)
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        await source.aclose()
+
+
 @router.post(
     "/",
     dependencies=[
@@ -745,11 +784,37 @@ async def create_task_for_agent_with_stream(
             user_context.workspace_id, data.attachments, user_context.user_id
         )
 
+    creation_error: tuple[str, str] | None = None
+    if created_task is None:
+        try:
+            payload = RunCreate(
+                agent_id=agent_id,
+                description=data.description,
+                parameters=data.parameters,
+                execution=data.execution,
+                requires_human_approval=data.requires_human_approval or False,
+                project_id=data.project_id,
+                task_policy=data.task_policy,
+            )
+            created_task = await task_service.start_run(
+                payload,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
+            )
+        except PolicyValidationError:
+            creation_error = ("Task policy rejected", "policy_validation_error")
+        except AgentModelNotConfiguredError:
+            creation_error = ("Agent model is not configured", "model_not_configured")
+        except ValueError:
+            creation_error = ("Agent validation error", "agent_not_found")
+        except Exception:
+            logger.error("Task creation failed for agent %s", agent_id, exc_info=True)
+            creation_error = ("Task creation failed", "creation_failed")
+
     async def task_creation_stream() -> AsyncGenerator[str, None]:
         """Generate Server-Sent Events for task creation and execution."""
         task = created_task
         try:
-            # Send initial connection event
             yield _format_sse_event(
                 "connected",
                 {
@@ -760,24 +825,20 @@ async def create_task_for_agent_with_stream(
                 },
             )
 
+            if creation_error is not None:
+                error, error_type = creation_error
+                error_data: dict[str, str | None] = {
+                    **({"task_id": None} if error_type == "creation_failed" else {}),
+                    "agent_id": str(agent_id),
+                    "error": error,
+                    "error_type": error_type,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+                yield _format_sse_event("error", error_data)
+                return
             if task is None:
-                # Create and execute task using service layer
-                payload = RunCreate(
-                    agent_id=agent_id,
-                    description=data.description,
-                    parameters=data.parameters,
-                    execution=data.execution,
-                    requires_human_approval=data.requires_human_approval or False,
-                    project_id=data.project_id,
-                    task_policy=data.task_policy,
-                )
-                task = await task_service.start_run(
-                    payload,
-                    workspace_id=user_context.workspace_id,
-                    user_id=user_context.user_id,
-                )
+                raise RuntimeError("Task creation completed without a task")
 
-            # Send task created event
             yield _format_sse_event(
                 "task_created",
                 {
@@ -786,16 +847,11 @@ async def create_task_for_agent_with_stream(
                     "description": task.description,
                     "status": task.status,
                     "execution_id": task.execution_id,
-                    "created_at": task.created_at.isoformat(),
+                    "created_at": utc_isoformat(task.created_at),
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
 
-            # Stream execution events by tailing the durable event log. We
-            # already emitted "connected" above, so suppress the helper's own.
-            # Tailing the DB (not Redis pub/sub) is what makes a fast task's
-            # events show up: they are published before any subscriber could
-            # attach, but they are durably logged, so replay is lossless.
             if task.execution_id and task.status in ["running", "pending"]:
                 async for chunk in _tail_task_events_sse(
                     task.id,
@@ -806,7 +862,6 @@ async def create_task_for_agent_with_stream(
                 ):
                     yield chunk
             else:
-                # Task failed to start
                 yield _format_sse_event(
                     "task_failed",
                     {
@@ -818,7 +873,6 @@ async def create_task_for_agent_with_stream(
                         "timestamp": datetime.now(UTC).isoformat(),
                     },
                 )
-
         except PolicyValidationError:
             yield _format_sse_event(
                 "error",
@@ -840,7 +894,6 @@ async def create_task_for_agent_with_stream(
                 },
             )
         except ValueError:
-            # Agent validation errors
             yield _format_sse_event(
                 "error",
                 {
@@ -864,13 +917,11 @@ async def create_task_for_agent_with_stream(
             )
 
     return StreamingResponse(
-        task_creation_stream(),
+        _with_sse_heartbeats(task_creation_stream()),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Cache-Control",
         },
     )
 
@@ -1220,7 +1271,7 @@ class TaskArtifactItem(BaseModel):
     size: int
     content_type: str | None
     sha256: str | None
-    created_at: datetime | None
+    created_at: UtcDatetime | None
     download_url: str
 
 
@@ -2296,13 +2347,11 @@ async def stream_task_events(
                 )
 
         return StreamingResponse(
-            event_stream(),
+            _with_sse_heartbeats(event_stream()),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Cache-Control",
             },
         )
 

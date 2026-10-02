@@ -16,7 +16,7 @@ The graph backend is OpenFGA.
 """
 
 import logging
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from agentarea_agents.domain.skill_models import Skill
@@ -146,7 +146,7 @@ class GraphEdge(BaseModel):
     to: str
     relation: str
 
-    def model_dump(self, **kwargs):  # type: ignore[override]
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
         data = super().model_dump(**kwargs)
         data["from"] = data.pop("from_")
         return data

@@ -311,6 +311,14 @@ ingress:
     # kubernetes.io/ingress.class: nginx
     # nginx.ingress.kubernetes.io/ssl-redirect: "true"
     # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  # Per-client rate limit on the Kratos ingress when ingress-nginx is selected.
+  kratosRateLimit:
+    # -- Add ingress-nginx per-client request limits to the Kratos ingress when `ingress.className` (or the legacy ingress-class annotation) is `nginx`.
+    enabled: true
+    # -- Requests per second allowed from one client IP.
+    requestsPerSecond: 10
+    # -- Multiplier for the ingress-nginx burst allowance.
+    burstMultiplier: 5
   # Host configuration for each service
   hosts:
     frontend:
@@ -364,6 +372,11 @@ backend:
   # -- Total budget the kubelet allows for the two above before SIGKILL. Keep it
   # above preStopDelay + shutdownTimeout, or draining is cut short.
   terminationGracePeriodSeconds: 30
+  # -- Addresses whose X-Forwarded-For uvicorn trusts (uvicorn FORWARDED_ALLOW_IPS).
+  # The API is reached through the ingress, so "*" makes per-client rate limits
+  # see the real caller; narrow it to the ingress controller's pod CIDR if other
+  # in-cluster workloads can reach the API directly.
+  forwardedAllowIps: "*"
 
   image:
     repository: agentarea/agentarea-api
@@ -1372,7 +1385,7 @@ kratos:
     hashers:
       algorithm: bcrypt
       bcrypt:
-        cost: 8
+        cost: 12
     identity:
       default_schema_id: default
       schemas:

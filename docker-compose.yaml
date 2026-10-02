@@ -26,6 +26,7 @@ services:
       - MCP_MANAGER_URL=http://agentarea-mcp-manager:80/api/mcp
       - REDIS_URL=redis://valkey:6379
       - MCP_CLIENT_TIMEOUT=30
+      - MCP_GATEWAY_AUTH_SECRET=${MCP_GATEWAY_AUTH_SECRET:?MCP_GATEWAY_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
       # Server settings
       - PORT=${PORT:-8000}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -273,7 +274,7 @@ services:
     container_name: agentarea-mcp-manager
     restart: unless-stopped
     ports:
-      - "7999:80" # Internal proxy (unified entry point)
+      - "127.0.0.1:7999:80" # Internal proxy (unified entry point)
     volumes:
       # Manager drives MCP containers through the host Docker socket (docker CLI
       # ships in the image). No podman, no privileged mode.
@@ -476,6 +477,7 @@ services:
       - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
       - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
       - MCP_MANAGER_URL=http://agentarea-mcp-manager:80
+      - MCP_GATEWAY_AUTH_SECRET=${MCP_GATEWAY_AUTH_SECRET:?MCP_GATEWAY_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
       - SANDBOX_CLEANUP_AUTH_SECRET=${SANDBOX_CLEANUP_AUTH_SECRET:?SANDBOX_CLEANUP_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
 
       # Access control: the authorization graph lives in OpenFGA. Bootstrap

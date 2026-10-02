@@ -199,7 +199,7 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
                     url, headers, transport = await instance_service._resolve_mcp_url_and_headers(
                         full
                     )
-                    spec = await instance_service._get_transport_spec_for_instance(full)
+                    spec = await instance_service.get_transport_spec_for_instance(full)
                 except Exception:
                     logger.exception("Failed to resolve MCP url for instance %s", iid)
                     continue

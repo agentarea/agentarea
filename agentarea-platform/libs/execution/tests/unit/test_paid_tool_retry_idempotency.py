@@ -9,6 +9,7 @@ the settled payment instead of paying again.
 import asyncio
 import base64
 import dataclasses
+import importlib
 import json
 from decimal import Decimal
 from types import SimpleNamespace
@@ -136,6 +137,92 @@ async def _run_with_one_retry(fn, request: MCPToolRequest):
     with pytest.raises(asyncio.CancelledError):
         await env.run(fn, request)
     return await env.run(fn, request)
+
+
+def _prepare_fake_code_tool(monkeypatch) -> list[str]:
+    executed: list[str] = []
+
+    class FakeExecutor:
+        def register_tool(self, tool_instance: Any) -> None:
+            pass
+
+        async def execute_tool(
+            self, *, tool_name: str, tool_args: dict[str, Any], **_: Any
+        ) -> dict[str, Any]:
+            executed.append(tool_name)
+            return {"success": True, "result": "executed"}
+
+    async def offload(**kwargs: Any) -> str:
+        return kwargs["content"]
+
+    monkeypatch.setattr(tool_activities, "ToolExecutor", FakeExecutor)
+    # Patch the module object the activity imports from (sys.modules), not a dotted
+    # path: path resolution walks package attributes, which other suite modules rebind.
+    monkeypatch.setattr(
+        importlib.import_module("agentarea_agents_sdk.tools.code_tools_loader"),
+        "create_code_tool_instance",
+        lambda *_args, **_kwargs: object(),
+    )
+    monkeypatch.setattr(tool_activities, "_offload_large_activity_output", offload)
+    return executed
+
+
+@pytest.mark.asyncio
+async def test_policy_approved_code_tool_executes_in_activity(monkeypatch, activity_fns):
+    _, execute_mcp_tool_activity = activity_fns
+    executed = _prepare_fake_code_tool(monkeypatch)
+    request = _request(
+        tool_name="example",
+        tool_args={},
+        tools=[{"type": "code", "name": "agentarea/example"}],
+        effective_policy={"approval": {"escalation_rules": ["agentarea/example"]}},
+        policy_approval_granted=True,
+    )
+
+    result = await ActivityEnvironment().run(execute_mcp_tool_activity, request)
+
+    assert result.success is True
+    assert executed == ["example"]
+
+
+@pytest.mark.asyncio
+async def test_activity_rejects_unapproved_policy_rule(monkeypatch, activity_fns):
+    _, execute_mcp_tool_activity = activity_fns
+    executed = _prepare_fake_code_tool(monkeypatch)
+    request = _request(
+        tool_name="example",
+        tool_args={},
+        tools=[{"type": "code", "name": "agentarea/example"}],
+        effective_policy={"approval": {"escalation_rules": ["agentarea/example"]}},
+    )
+
+    result = await ActivityEnvironment().run(execute_mcp_tool_activity, request)
+
+    assert result.success is False
+    assert "approval must be resolved" in (result.error or "")
+    assert executed == []
+
+
+@pytest.mark.asyncio
+async def test_activity_deny_overrides_approval_grant(monkeypatch, activity_fns):
+    _, execute_mcp_tool_activity = activity_fns
+    executed = _prepare_fake_code_tool(monkeypatch)
+    request = _request(
+        tool_name="example",
+        tool_args={},
+        tools=[{"type": "code", "name": "agentarea/example"}],
+        effective_policy={
+            "tools": {"denied": ["agentarea/example"]},
+            "approval": {"escalation_rules": ["agentarea/example"]},
+        },
+        policy_approval_granted=True,
+    )
+
+    result = await ActivityEnvironment().run(execute_mcp_tool_activity, request)
+
+    assert result.success is False
+    assert "denied by policy" in (result.error or "")
+    assert executed == []
 
 
 @pytest.mark.asyncio

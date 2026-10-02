@@ -14,11 +14,10 @@ import (
 	"github.com/agentarea/mcp-manager/internal/models"
 )
 
-// GET /containers and /containers/:service serialize models.Container
-// straight to JSON, including Environment — the resolved secret values the
-// container actually runs with. Unlike the instance inspection routes, these
-// carried neither redaction nor authentication, so any workload that could
-// reach the manager could read every container's credentials.
+// GET /containers and /containers/:service are manager-bearer-protected
+// inspection routes. Keep Environment redacted as defense-in-depth: the
+// resolved values are the secrets the containers actually run with, and
+// exposing them to an internal caller is still a credential leak.
 
 const containerDisclosedSecret = "1AZWarzwBu32uEudLyEwrynvwayCBkkv-test-container-secret" // pragma: allowlist secret
 
@@ -43,40 +42,10 @@ func containerDisclosureManager() *container.Manager {
 	})
 }
 
-func TestListContainersRequiresInspectionSecret(t *testing.T) {
-	t.Setenv(containerInspectionAuthSecretEnv, "")
-	recorder := httptest.NewRecorder()
-	ctx, _ := gin.CreateTestContext(recorder)
-	ctx.Request = httptest.NewRequest(http.MethodGet, "/containers", nil)
-	ctx.Request.Header.Set("Authorization", "Bearer anything")
-
-	(&Handler{logger: slog.Default(), containerManager: containerDisclosureManager()}).listContainers(ctx)
-
-	if recorder.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401; body=%s", recorder.Code, recorder.Body.String())
-	}
-}
-
-func TestGetContainerRequiresInspectionSecret(t *testing.T) {
-	t.Setenv(containerInspectionAuthSecretEnv, "")
-	recorder := httptest.NewRecorder()
-	ctx, _ := gin.CreateTestContext(recorder)
-	ctx.Request = httptest.NewRequest(http.MethodGet, "/containers/telegram-mcp", nil)
-	ctx.Params = gin.Params{{Key: "service", Value: "telegram-mcp"}}
-
-	(&Handler{logger: slog.Default(), containerManager: containerDisclosureManager()}).getContainer(ctx)
-
-	if recorder.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401; body=%s", recorder.Code, recorder.Body.String())
-	}
-}
-
 func TestListContainersDoesNotDiscloseContainerEnvironments(t *testing.T) {
-	t.Setenv(containerInspectionAuthSecretEnv, "inspection-secret")
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/containers", nil)
-	ctx.Request.Header.Set("Authorization", "Bearer inspection-secret")
 
 	(&Handler{logger: slog.Default(), containerManager: containerDisclosureManager()}).listContainers(ctx)
 
@@ -92,11 +61,9 @@ func TestListContainersDoesNotDiscloseContainerEnvironments(t *testing.T) {
 }
 
 func TestGetContainerDoesNotDiscloseTheContainerEnvironment(t *testing.T) {
-	t.Setenv(containerInspectionAuthSecretEnv, "inspection-secret")
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/containers/telegram-mcp", nil)
-	ctx.Request.Header.Set("Authorization", "Bearer inspection-secret")
 	ctx.Params = gin.Params{{Key: "service", Value: "telegram-mcp"}}
 
 	(&Handler{logger: slog.Default(), containerManager: containerDisclosureManager()}).getContainer(ctx)

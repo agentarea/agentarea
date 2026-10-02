@@ -1,3 +1,5 @@
+import logging
+import socket
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
@@ -5,6 +7,11 @@ from agentarea_common.auth.authorization import assert_workspace_admin
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.errors import BadRequestError, NotFoundError
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.utils.url_safety import (
+    OutboundPolicy,
+    UnsafeUrlError,
+    validate_outbound_url,
+)
 from sqlalchemy import delete, select
 
 if TYPE_CHECKING:
@@ -51,6 +58,29 @@ def _reject_platform_managed(config: ProviderConfig, verb: str) -> None:
             f"Provider configuration '{config.name}' is supplied by the platform "
             f"and cannot be {verb}."
         )
+
+
+logger = logging.getLogger(__name__)
+
+
+def _reject_unsafe_endpoint(endpoint_url: str | None) -> None:
+    """Refuse a member-supplied LLM endpoint that points at a non-public address.
+
+    The worker and the API POST to this URL on every run and model test, from
+    inside the deployment; an unchecked value reaches cloud metadata and internal
+    services. Private endpoints (a local Ollama) are admitted through
+    ``OUTBOUND_PRIVATE_ALLOWLIST`` / ``ALLOW_PRIVATE_URLS``. A name that does not
+    resolve yet reaches nothing and is left for the model test to report.
+    """
+    if not endpoint_url:
+        return
+    try:
+        validate_outbound_url(endpoint_url, policy=OutboundPolicy.from_env())
+    except UnsafeUrlError as exc:
+        if isinstance(exc.__cause__, socket.gaierror):
+            return
+        logger.warning("Refused provider endpoint %s", endpoint_url, exc_info=True)
+        raise BadRequestError(f"Endpoint URL is not an allowed address: {exc}") from exc
 
 
 class ProviderService:
@@ -140,6 +170,7 @@ class ProviderService:
             ProviderConfig: The created provider configuration.
         """
         await self._assert_may_manage_configs()
+        _reject_unsafe_endpoint(payload.endpoint_url)
         config_id = uuid4()
         config = ProviderConfig(
             id=config_id,
@@ -267,6 +298,7 @@ class ProviderService:
         if "description" in patch:
             config.description = patch["description"]
         if "endpoint_url" in patch:
+            _reject_unsafe_endpoint(patch["endpoint_url"])
             config.endpoint_url = patch["endpoint_url"]
         if "is_active" in patch:
             config.is_active = patch["is_active"]

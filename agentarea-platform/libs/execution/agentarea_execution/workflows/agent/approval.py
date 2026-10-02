@@ -92,7 +92,11 @@ class ToolApprovalMixin(BudgetMixin):
             approvers=approvers_for_tool(
                 self.state.effective_policy,
                 tool_name,
-                tool_policy_aliases(self.state.mcp_tool_routes, tool_name),
+                tool_policy_aliases(
+                    self.state.mcp_tool_routes,
+                    tool_name,
+                    self.state.agent_config.get("tools"),
+                ),
             ),
         )
         self._pending_escalations[escalation_id] = escalation
@@ -218,12 +222,11 @@ class ToolApprovalMixin(BudgetMixin):
             return False
         return bool(approved)
 
-    async def _gate_tool_call(self, tool_call: ToolCall) -> bool:
-        """Single policy enforcement point applied to EVERY capability tool call.
+    async def _gate_tool_call(self, tool_call: ToolCall) -> tuple[bool, bool]:
+        """Return whether the call may proceed and whether policy approval granted it.
 
-        Returns True if the call may proceed; False if it was denied by policy
-        or its approval was rejected (a tool message has already been appended
-        so the LLM sees the outcome).
+        The second value is true only when this exact tool call passed its human
+        approval gate; activity-side authorization uses it to honor that decision.
         """
         import json
 
@@ -235,14 +238,14 @@ class ToolApprovalMixin(BudgetMixin):
 
         if self._monthly_cap_message:
             await self._deny_tool_call(tool_call, tool_name, self._monthly_cap_message)
-            return False
+            return False, False
 
         # The model may only call what it was offered: a name it invented, recalled
         # from earlier context, or read in a skill never reaches an executor.
         offered = {name for t in self.state.available_tools if (name := tool_definition_name(t))}
         if tool_name not in offered:
             await self._deny_tool_call(tool_call, tool_name, "tool is not available to this agent")
-            return False
+            return False, False
 
         # Like hosted fetch tools, a page may be opened only from a link that
         # reached the conversation from outside the model, so an injected
@@ -260,21 +263,23 @@ class ToolApprovalMixin(BudgetMixin):
                     "a page can be fetched only from a link that already appeared in this "
                     "task: the request, search results or a page fetched earlier",
                 )
-                return False
+                return False, False
 
-        decision = decide_tool_action(
-            self.state.effective_policy,
+        aliases = tool_policy_aliases(
+            self.state.mcp_tool_routes,
             tool_name,
-            tool_policy_aliases(self.state.mcp_tool_routes, tool_name),
+            self.state.agent_config.get("tools"),
         )
+        decision = decide_tool_action(self.state.effective_policy, tool_name, aliases)
         workflow.logger.info(f"Tool '{tool_name}' policy decision: {decision.value}")
 
         if decision is ToolAction.DENY:
             await self._deny_tool_call(tool_call, tool_name, "not permitted by policy")
-            return False
+            return False, False
         if decision is ToolAction.REQUIRE_APPROVAL:
-            return await self._require_tool_approval(tool_call, tool_name, tool_args)
-        return True
+            approved = await self._require_tool_approval(tool_call, tool_name, tool_args)
+            return approved, approved
+        return True, False
 
     def _link_reached_task(self, url: str) -> bool:
         """Whether ``url`` came into the conversation from outside the model."""

@@ -4,10 +4,14 @@ import asyncio
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
-from agentarea_mcp.application.mcp_client import platform_client_factory
+from agentarea_mcp.application.mcp_client import (
+    MCPGatewayStartupFailureError,
+    platform_client_factory,
+)
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
 from agentarea_mcp.verification import _list_tools, _RuntimeInstance
 
@@ -97,7 +101,6 @@ def test_runtime_instance_uses_converted_transport_as_authority():
     assert runtime.json_spec["command"] == ["/opt/mcp-pkg/bin/server"]
     assert "args" not in runtime.json_spec
     assert "endpoint_url" not in runtime.json_spec
-
 
 
 class _AsyncContextManagerMock:
@@ -199,6 +202,33 @@ async def test_verify_happy_path_sets_succeeded():
     assert result["status"] == "succeeded"
     assert result["error"] is None
     assert result["schema_version"] == 1
+
+
+@pytest.mark.asyncio
+async def test_verify_fails_with_safe_manager_start_failure_detail():
+    inst = _make_instance("docker")
+    db_mock = _make_db_mock(inst)
+
+    async def fail_start(_endpoint_url, headers=None):
+        raise MCPGatewayStartupFailureError("package has no executable")
+
+    with (
+        patch("agentarea_mcp.verification.get_database", return_value=db_mock),
+        patch("agentarea_mcp.verification.get_settings") as mock_settings,
+    ):
+        mock_settings.return_value.mcp.manager_gateway_url.return_value = "http://fake-go/mcp"
+        mock_settings.return_value.mcp.manager_gateway_headers.return_value = {}
+
+        from agentarea_mcp.verification import verify
+
+        result = await verify(cast(Any, inst), _list_tools_fn=fail_start)
+
+    assert result["status"] == "failed"
+    failure = result["error"]
+    assert failure is not None
+    assert failure["detail"] == "package has no executable"
+    assert "package has no executable" in failure["message"]
+    assert "MCPError" not in failure["message"]
 
 
 # ---------------------------------------------------------------------------
@@ -522,7 +552,9 @@ async def test_list_tools_uses_shared_client_for_explicit_sse_url():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools("https://mcp.notion.com/sse", httpx_client_factory=platform_client_factory)
+        await _list_tools(
+            "https://mcp.notion.com/sse", httpx_client_factory=platform_client_factory
+        )
 
     assert targets[0][0] == "https://mcp.notion.com/sse"
 
@@ -588,7 +620,12 @@ async def test_list_tools_declared_streamable_uses_shared_client():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools("https://mcp.vercel.com", None, "streamable-http", httpx_client_factory=platform_client_factory)
+        await _list_tools(
+            "https://mcp.vercel.com",
+            None,
+            "streamable-http",
+            httpx_client_factory=platform_client_factory,
+        )
 
     assert targets == [("https://mcp.vercel.com", "streamable-http")]
 

@@ -25,7 +25,11 @@ import {
   type McpInstance,
   type McpServer,
 } from "@/lib/mcp/resolveMcpRef";
-import { getCurrencySymbol } from "@/lib/money";
+import {
+  getCurrencySymbol,
+  isPositiveMoneyInput,
+  parseMoneyInput,
+} from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { Policy, PolicyEffect } from "@/types/policies";
 import {
@@ -180,13 +184,6 @@ function newDraft(id: string, effect: PolicyEffect = "cap"): PolicyDraft {
 // Loosely validate ReBAC subject refs (user:<id> | group:<id>#member, etc.).
 const SUBJECT_REF_RE = /^[a-zA-Z]+:[^\s]+/;
 
-function parseMoney(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const n = Number(trimmed);
-  if (Number.isNaN(n)) return null;
-  return n.toFixed(2);
-}
 
 function parseInt2(value: string): number | null {
   const trimmed = value.trim();
@@ -515,8 +512,10 @@ function buildRuleBodies(
       if (perCall !== null) params.max_tokens_per_call = perCall;
       return { bodies: [{ target: "tokens", effect, params }] };
     }
-    const amount = parseMoney(form.amountUsd);
+    const amount = parseMoneyInput(form.amountUsd);
     if (amount === null) return { error: "Enter a valid amount." };
+    if (!isPositiveMoneyInput(amount))
+      return { error: "Enter an amount greater than 0." };
     if (form.capKind === "service")
       return {
         bodies: [{ target: "service", effect, params: { amount_usd: amount } }],
@@ -1440,13 +1439,17 @@ export default function PolicyEditor({
         const built = builtDrafts[0].result;
         if ("error" in built) return;
         const body = built.bodies[0];
-        await updatePolicyRuleAction(target.policy.id, {
+        const result = await updatePolicyRuleAction(target.policy.id, {
           target: body.target,
           effect: body.effect,
           params: body.params,
           condition: body.condition ?? null,
           enabled: activeDraft.form.enabled,
         });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
       } else {
         // POST one rule per scope/body pair (deny/approval may fan out over tools).
         for (const subject of subjects) {
@@ -1454,7 +1457,7 @@ export default function PolicyEditor({
             if ("error" in item.result) continue;
             for (const body of item.result.bodies) {
               try {
-                await createPolicyRuleAction({
+                const result = await createPolicyRuleAction({
                   subject_type: subject.subject_type,
                   subject_id: subject.subject_id,
                   target: body.target,
@@ -1463,6 +1466,11 @@ export default function PolicyEditor({
                   condition: body.condition ?? null,
                   enabled: item.draft.form.enabled,
                 });
+                if (!result.ok) {
+                  setActiveDraftId(item.draft.id);
+                  setError(result.error);
+                  return;
+                }
               } catch (e) {
                 setActiveDraftId(item.draft.id);
                 throw e;

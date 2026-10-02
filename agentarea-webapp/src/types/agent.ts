@@ -1,3 +1,5 @@
+import type { AgentResponse } from "@/api/client/types.gen";
+
 export interface ModelInfo {
   provider_name?: string;
   provider_icon_url?: string;
@@ -5,46 +7,34 @@ export interface ModelInfo {
   config_name?: string;
 }
 
-export interface ToolSettings {
-  disabled_methods?: string[];  // For code tools
-  allowed_tools?: string[] | null;  // For MCP and OpenAPI tools; null = all, [] = none
-  openapi_connection_id?: string;  // For OpenAPI tools
-  load_mode?: string;
-}
-
-// `agent` is a delegation edge: the tool call hands the task to another agent.
-export interface ToolConfig {
-  type: 'code' | 'mcp' | 'openapi' | 'agent';
-  name: string;
-  settings?: ToolSettings;
-}
-
-export interface Agent {
-  id: string;
+export type Agent = Omit<AgentResponse, "slug"> & {
   slug?: string | null;
-  name: string;
-  description?: string | null;
-  status: string;
-  instruction?: string | null;
-  model_id?: string | null;
   model_info?: ModelInfo | null;
   icon?: string;
-  tools?: ToolConfig[] | null;
-  // TODO: Consolidate tools vs tools_config
-  tools_config?: {
-    builtin_tools?: Array<{ tool_name: string; [key: string]: any }>;
-    mcp_server_configs?: Array<{ server_id: string; tools?: string[]; [key: string]: any }>;
-    openapi_configs?: Array<{ openapi_connection_id: string; allowed_tools?: string[] | null; [key: string]: any }>;
-    [key: string]: any;
-  } | null;
-  planning?: boolean | null;
-  a2ui_enabled?: boolean | null;
-  skills?: Array<{ id: string; name: string; description?: string | null }> | null;
-  // Catalog provenance (ADR-003): a read-only built-in agent that has not been
-  // forked into the workspace yet. Resolved by slug or UUID; install to fork.
-  is_catalog?: boolean | null;
-  registry_item_id?: string | null;
-  update_available?: boolean | null;
+};
+
+export type AgentSkillView = {
+  id: string;
+  name: string;
+  description?: string | null;
+};
+
+export function agentSkillViews(skills: Agent["skills"]): AgentSkillView[] {
+  const views: AgentSkillView[] = [];
+  for (const skill of skills ?? []) {
+    const id = skill.id;
+    const name = skill.name;
+    if (typeof id !== "string" || typeof name !== "string") continue;
+    const description = skill.description;
+    views.push({
+      id,
+      name,
+      ...(typeof description === "string" || description === null
+        ? { description }
+        : {}),
+    });
+  }
+  return views;
 }
 
 /**

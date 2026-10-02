@@ -171,6 +171,9 @@ The following table lists configurable parameters of the chart and their default
 | ingress.enabled | bool | `false` |  |
 | ingress.className | string | `""` |  |
 | ingress.annotations | object | `{}` |  |
+| ingress.kratosRateLimit.enabled | bool | `true` | Add ingress-nginx per-client request limits to the Kratos ingress when `ingress.className` (or the legacy ingress-class annotation) is `nginx`. |
+| ingress.kratosRateLimit.requestsPerSecond | int | `10` | Requests per second allowed from one client IP. |
+| ingress.kratosRateLimit.burstMultiplier | int | `5` | Multiplier for the ingress-nginx burst allowance. |
 | ingress.hosts.frontend.host | string | `""` |  |
 | ingress.hosts.frontend.paths[0].path | string | `"/"` |  |
 | ingress.hosts.frontend.paths[0].pathType | string | `"Prefix"` |  |
@@ -190,6 +193,7 @@ The following table lists configurable parameters of the chart and their default
 | backend.preStopDelay | int | `5` | Seconds the pod keeps serving after it is marked for deletion, covering the gap before its removal from the Service endpoints has propagated. |
 | backend.shutdownTimeout | int | `20` | Seconds uvicorn then waits for open connections to finish. Must be finite: the API serves SSE, and those connections never close on their own. |
 | backend.terminationGracePeriodSeconds | int | `30` | Total budget the kubelet allows for the two above before SIGKILL. Keep it above preStopDelay + shutdownTimeout, or draining is cut short. |
+| backend.forwardedAllowIps | string | `"*"` | Addresses whose X-Forwarded-For uvicorn trusts (uvicorn FORWARDED_ALLOW_IPS). The API is reached through the ingress, so "*" makes per-client rate limits see the real caller; narrow it to the ingress controller's pod CIDR if other in-cluster workloads can reach the API directly. |
 | backend.image.repository | string | `"agentarea/agentarea-api"` |  |
 | backend.image.tag | string | `"latest"` |  |
 | backend.image.pullPolicy | string | `""` |  |
@@ -559,7 +563,7 @@ The following table lists configurable parameters of the chart and their default
 | kratos.config.secrets.cipher[0] | string | `"${KRATOS_SECRETS_CIPHER}"` |  |
 | kratos.config.ciphers.algorithm | string | `"xchacha20-poly1305"` |  |
 | kratos.config.hashers.algorithm | string | `"bcrypt"` |  |
-| kratos.config.hashers.bcrypt.cost | int | `8` |  |
+| kratos.config.hashers.bcrypt.cost | int | `12` |  |
 | kratos.config.identity.default_schema_id | string | `"default"` |  |
 | kratos.config.identity.schemas[0].id | string | `"default"` |  |
 | kratos.config.identity.schemas[0].url | string | `"file:///etc/config/kratos/identity.schema.json"` |  |

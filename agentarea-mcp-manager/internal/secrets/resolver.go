@@ -202,9 +202,9 @@ func (sr *InfisicalSecretResolver) ResolveInstanceEnvVars(instanceID string, env
 	return resolved, nil
 }
 
-// Close closes the secret resolver
+// Close closes the secret resolver. The Infisical SDK client holds no
+// connection or goroutine of its own, so there is nothing to release.
 func (sr *InfisicalSecretResolver) Close() error {
 	sr.logger.Info("Closing Infisical secret resolver")
-	// TODO: Close Infisical client if needed
 	return nil
 }

@@ -19,7 +19,9 @@ from agentarea_common.config.database import get_db_session
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.service import MCPServerInstanceService, derive_bundle_verification
 from agentarea_mcp.application.validation_service import MCPValidationError
+from agentarea_mcp.domain.env_schema import normalize_env_schema
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.package_import import MCPRuntimeRetirementError
 from agentarea_mcp.schemas.dto import (
     MCPServerCreate,
     MCPServerInstanceCreate,
@@ -61,29 +63,29 @@ class MCPServerInstanceResponse(BaseModel):
         cls,
         instance: MCPServerInstance,
         verification_override: dict | None = None,
+        secret_env_names: set[str] | None = None,
     ) -> "MCPServerInstanceResponse":
         json_spec = dict(instance.json_spec or {})
 
-        # Mask secret env var values
-        secret_names = set(json_spec.get("env_vars", []))
-        if secret_names:
-            masked_value = "*" * 6
-            env = json_spec.get("environment")
-            if isinstance(env, dict):
-                masked_env = {k: (masked_value if k in secret_names else v) for k, v in env.items()}
-                for name in secret_names:
-                    if name not in masked_env:
-                        masked_env[name] = masked_value
-                json_spec["environment"] = masked_env
-            headers = json_spec.get("headers")
-            if isinstance(headers, dict):
-                masked_headers = {
-                    k: (masked_value if k in secret_names else v) for k, v in headers.items()
+        # Old rows may still contain secret plaintext without env_vars metadata.
+        raw_env_vars = json_spec.get("env_vars")
+        listed_secret_names = (
+            {name for name in raw_env_vars if isinstance(name, str)}
+            if isinstance(raw_env_vars, list)
+            else set()
+        )
+        secret_names = listed_secret_names | (secret_env_names or set())
+        masked_value = "*" * 6
+        for field_name in ("environment", "headers"):
+            values = json_spec.get(field_name)
+            if isinstance(values, dict):
+                masked_values = {
+                    name: masked_value if name in secret_names else value
+                    for name, value in values.items()
                 }
-                for name in secret_names:
-                    if name not in masked_headers:
-                        masked_headers[name] = masked_value
-                json_spec["headers"] = masked_headers
+                for name in listed_secret_names:
+                    masked_values.setdefault(name, masked_value)
+                json_spec[field_name] = masked_values
 
         verification = (
             verification_override
@@ -106,6 +108,47 @@ class MCPServerInstanceResponse(BaseModel):
                 "updated_at": instance.updated_at,
             }
         )
+
+
+async def _instance_secret_env_names(
+    service: MCPServerInstanceService,
+    instance: MCPServerInstance,
+    schema_cache: dict[str, list[dict[str, Any]]] | None = None,
+) -> set[str]:
+    spec_id = str(instance.server_spec_id or "")
+    if not spec_id:
+        return set()
+
+    cache = schema_cache if schema_cache is not None else {}
+    if spec_id not in cache:
+        server_spec = await service.mcp_server_repository.get_server_by_id(spec_id)
+        cache[spec_id] = normalize_env_schema(
+            getattr(server_spec, "env_schema", None) if server_spec else None
+        )
+    schema = cache[spec_id]
+    known_names = {entry["name"] for entry in schema}
+    secret_names = {entry["name"] for entry in schema if entry.get("isSecret")}
+
+    json_spec = instance.json_spec or {}
+    for field_name in ("environment", "headers"):
+        values = json_spec.get(field_name)
+        if isinstance(values, dict):
+            secret_names.update(name for name in values if name not in known_names)
+    return secret_names
+
+
+async def _instance_response(
+    service: MCPServerInstanceService,
+    instance: MCPServerInstance,
+    *,
+    verification_override: dict | None = None,
+    schema_cache: dict[str, list[dict[str, Any]]] | None = None,
+) -> MCPServerInstanceResponse:
+    return MCPServerInstanceResponse.from_domain(
+        instance,
+        verification_override=verification_override,
+        secret_env_names=await _instance_secret_env_names(service, instance, schema_cache),
+    )
 
 
 class ValidateRequest(BaseModel):
@@ -184,7 +227,7 @@ async def create_mcp_server_instance(
         if instance_type in ("docker", "command"):
             response.status_code = 202
 
-        return MCPServerInstanceResponse.from_domain(instance)
+        return await _instance_response(service, instance)
 
     except MCPValidationError as e:
         raise HTTPException(status_code=422, detail={"errors": e.errors}) from e
@@ -232,7 +275,7 @@ async def create_mcp_server_connection(
                 instance_type = server_spec.json_spec.get("type", instance_type)
         if instance_type in ("docker", "command"):
             response.status_code = 202
-        return MCPServerInstanceResponse.from_domain(instance)
+        return await _instance_response(service, instance)
     except MCPValidationError as e:
         raise HTTPException(status_code=422, detail={"errors": e.errors}) from e
     except PermissionError as e:
@@ -299,9 +342,11 @@ async def check_mcp_server_instance_configuration(
             resp = await client.post(
                 f"{settings.mcp.MCP_MANAGER_URL}/containers/validate",
                 json=validation_request,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    **settings.mcp.manager_inspection_headers(),
+                },
             )
-
             if resp.status_code == 200:
                 return {"valid": True, "message": "Configuration is valid", "details": resp.json()}
             else:
@@ -348,6 +393,7 @@ async def list_mcp_server_instances(
     instances = await service.list()
 
     response_instances = []
+    schema_cache: dict[str, list[dict[str, Any]]] = {}
     for instance in instances:
         instance_type = (instance.json_spec or {}).get("type", "")
         if instance_type == "bundle":
@@ -363,10 +409,14 @@ async def list_mcp_server_instances(
                     logger.debug("bundle member %s lookup failed: %s", mid, e)
             derived_v = derive_bundle_verification(instance, members)
             response_instances.append(
-                MCPServerInstanceResponse.from_domain(instance, verification_override=derived_v)
+                await _instance_response(
+                    service, instance, verification_override=derived_v, schema_cache=schema_cache
+                )
             )
         else:
-            response_instances.append(MCPServerInstanceResponse.from_domain(instance))
+            response_instances.append(
+                await _instance_response(service, instance, schema_cache=schema_cache)
+            )
 
     return response_instances
 
@@ -401,9 +451,9 @@ async def get_mcp_server_instance(
             except Exception as e:
                 logger.debug("bundle member %s lookup failed: %s", mid, e)
         derived_v = derive_bundle_verification(instance, members)
-        return MCPServerInstanceResponse.from_domain(instance, verification_override=derived_v)
+        return await _instance_response(service, instance, verification_override=derived_v)
 
-    return MCPServerInstanceResponse.from_domain(instance)
+    return await _instance_response(service, instance)
 
 
 class MCPInstanceConsumer(BaseModel):
@@ -508,10 +558,17 @@ async def update_mcp_server_instance(
     user_context: UserContextDep,
     service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    instance = await service.update_instance(instance_id, data)
+    try:
+        instance = await service.update_instance(instance_id, data)
+    except MCPRuntimeRetirementError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=str(exc),
+            headers={"Retry-After": "1"},
+        ) from exc
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
-    return MCPServerInstanceResponse.from_domain(instance)
+    return await _instance_response(service, instance)
 
 
 @router.delete(
@@ -523,7 +580,14 @@ async def delete_mcp_server_instance(
     user_context: UserContextDep,
     service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    success = await service.delete_instance(instance_id)
+    try:
+        success = await service.delete_instance(instance_id)
+    except MCPRuntimeRetirementError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=str(exc),
+            headers={"Retry-After": "1"},
+        ) from exc
     if not success:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
     return {"status": "success"}
@@ -641,7 +705,10 @@ async def get_containers_health(
         row = {"instance_id": str(instance.id), "name": getattr(instance, "name", None)}
         url = f"{settings.mcp.MCP_MANAGER_URL}/instances/{instance.id}/health"
         try:
-            response = await client.get(url)
+            response = await client.get(
+                url,
+                headers=settings.mcp.manager_inspection_headers(),
+            )
         except httpx.RequestError as e:
             logger.warning(
                 "MCP manager unreachable for instance %s: %s", instance.id, e, exc_info=True

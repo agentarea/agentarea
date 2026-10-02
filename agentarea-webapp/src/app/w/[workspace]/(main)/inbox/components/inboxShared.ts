@@ -2,6 +2,7 @@ import type { useFormatter } from "next-intl";
 import type { GetInboxItemsV1InboxGetData } from "@/api/client";
 import type { TaskWithAgent } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
+import { parseUtcTimestamp } from "@/utils/dateUtils";
 
 export const FILTER_KEYS = [
   "all",
@@ -71,9 +72,8 @@ export function formatRelative(
   now: Date,
   dateStr?: string | null
 ): string {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  return Number.isNaN(date.getTime()) ? "" : format.relativeTime(date, now);
+  const date = parseUtcTimestamp(dateStr);
+  return date ? format.relativeTime(date, now) : "";
 }
 
 export function fmtCost(

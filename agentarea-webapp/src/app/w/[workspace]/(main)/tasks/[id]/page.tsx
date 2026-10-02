@@ -15,6 +15,7 @@ export default function TaskDetailsPage() {
   const {
     task,
     taskStatus,
+    taskSummary,
     policy,
     policyError,
     statusError,
@@ -75,7 +76,28 @@ export default function TaskDetailsPage() {
     !conversationActivity.eventsError
       ? conversationActivity.streamStatus
       : taskStatus?.status || task.status;
-  const executionTime = taskStatus?.execution_time || "N/A";
+  const executionStatus =
+    conversationActivity?.executionStatus ?? taskStatus?.execution_status;
+  const durationMs = taskSummary?.duration_ms;
+  const summaryExecutionTime =
+    typeof durationMs === "number" && Number.isFinite(durationMs)
+      ? `${(durationMs / 1000).toFixed(1)}s`
+      : null;
+  const reportedExecutionTime = taskStatus?.execution_time;
+  let executionTime =
+    summaryExecutionTime ??
+    (reportedExecutionTime && reportedExecutionTime !== "N/A"
+      ? reportedExecutionTime
+      : "N/A");
+  if (executionTime === "N/A" && currentStatus === "running") {
+    executionTime = "In progress";
+  } else if (
+    executionTime === "N/A" &&
+    currentStatus === "completed" &&
+    executionStatus === "waiting"
+  ) {
+    executionTime = "Awaiting follow-up";
+  }
   const startTime = taskStatus?.start_time || task.created_at || "";
   const endTime = taskStatus?.end_time;
   const rawCost =
@@ -118,10 +140,7 @@ export default function TaskDetailsPage() {
                 result: task.result,
               }}
               currentStatus={currentStatus}
-              executionStatus={
-                conversationActivity?.executionStatus ??
-                taskStatus?.execution_status
-              }
+              executionStatus={executionStatus}
               isActive={
                 currentStatus === "running" &&
                 conversationActivity?.executionStatus === "running"

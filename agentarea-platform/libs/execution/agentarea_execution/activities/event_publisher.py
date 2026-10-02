@@ -167,8 +167,11 @@ def _is_non_retryable_error(error: Exception) -> bool:
         or "pricing is not configured" in error_str
         or "effective policy is missing required runtime limit" in error_str
     )
+    # A refused endpoint stays refused until the member changes the config.
+    refused_endpoint = "endpoint is not an allowed address" in error_str
     return (
         accounting_contract_error
+        or refused_endpoint
         or _is_auth_error(error)
         or _is_quota_error(error)
         or _is_model_error(error)

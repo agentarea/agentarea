@@ -1024,12 +1024,10 @@ export type BundleAutomation = {
 /**
  * BundleChannel
  *
- * A messaging channel that lets an agent receive and reply to messages.
+ * An inbound webhook trigger bound to one of the package's agents.
  *
- * Installs as an inbound trigger (e.g. a Telegram webhook): a message to the
- * bot becomes a task for ``agent``, and the reply is delivered back on the same
- * channel. Credentials (a bot token) enter via ``bindings`` → ``${setup.x}``,
- * exactly like an MCP's secret bindings, so the token is never inlined.
+ * Telegram channels may require a bot token, which enters via ``bindings`` →
+ * ``${setup.x}``; generic webhook triggers need no credential.
  */
 export type BundleChannel = {
     /**
@@ -1069,9 +1067,9 @@ export type BundleChannel = {
     /**
      * Type
      *
-     * Channel provider. Only Telegram in v0.1.0.
+     * Webhook provider for the created trigger.
      */
-    type?: 'telegram';
+    type?: 'telegram' | 'generic';
 };
 
 /**
@@ -7278,7 +7276,7 @@ export type TriggerCreate = {
     /**
      * Webhook Id
      *
-     * Public webhook path segment. Auto-generated if omitted for webhook triggers.
+     * Public webhook path segment. Custom values must be at least 16 URL-safe characters; auto-generated if omitted for webhook triggers.
      */
     webhook_id?: string | null;
     /**
@@ -7644,7 +7642,7 @@ export type TriggerSpec = {
     /**
      * Webhook Id
      *
-     * Public webhook path segment. Auto-generated if omitted for webhook triggers.
+     * Public webhook path segment. Custom values must be at least 16 URL-safe characters; auto-generated if omitted for webhook triggers.
      */
     webhook_id?: string | null;
     /**

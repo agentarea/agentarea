@@ -16,6 +16,12 @@ import {
   createOpenAPIConnectionAction as createOpenAPIConnection,
   previewOpenAPISpecAction as previewOpenAPISpec,
 } from "@/lib/server-actions";
+import {
+  isAbsoluteBaseUrl,
+  previewFromOpenAPISpec,
+  resolveOpenAPIServerUrl,
+} from "./openapi-preview";
+import type { PreviewTool } from "./openapi-preview";
 
 type SpecMode = "url" | "json";
 
@@ -24,10 +30,6 @@ interface HeaderRow {
   value: string;
 }
 
-interface PreviewTool {
-  name: string;
-  description: string;
-}
 
 const SAFE_HEADERS = new Set([
   "accept",
@@ -47,61 +49,6 @@ function isSecretHeader(name: string) {
   return !SAFE_HEADERS.has(name.toLowerCase().trim());
 }
 
-interface OpenAPIOperation {
-  operationId?: string;
-  summary?: string;
-  description?: string;
-}
-
-interface OpenAPISpec {
-  openapi?: string;
-  info?: { title?: string; description?: string; version?: string };
-  servers?: Array<{ url?: string }>;
-  paths?: Record<
-    string,
-    Record<string, OpenAPIOperation | undefined> | null | undefined
-  >;
-}
-
-function extractFromSpec(spec: OpenAPISpec) {
-  const info = spec.info || {};
-  const servers = spec.servers || [];
-  const tools: PreviewTool[] = [];
-
-  if (spec.openapi && String(spec.openapi).startsWith("3.")) {
-    const paths = spec.paths || {};
-    const methods = [
-      "get",
-      "post",
-      "put",
-      "patch",
-      "delete",
-      "head",
-      "options",
-    ];
-    for (const [path, pathItem] of Object.entries(paths)) {
-      if (!pathItem || typeof pathItem !== "object") continue;
-      for (const method of methods) {
-        const op = pathItem[method];
-        if (!op) continue;
-        tools.push({
-          name:
-            op.operationId ||
-            `${method}_${path.replace(/[{}]/g, "").split("/").filter(Boolean).join("_")}`,
-          description: op.summary || op.description || "",
-        });
-      }
-    }
-  }
-
-  return {
-    title: info.title || null,
-    description: info.description || null,
-    version: info.version || null,
-    base_url: servers[0]?.url || null,
-    tools,
-  };
-}
 
 export function AddOpenAPIForm() {
   const router = useWorkspaceRouter();
@@ -120,6 +67,11 @@ export function AddOpenAPIForm() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
   const [specResolved, setSpecResolved] = useState(false);
+
+  const baseUrlError =
+    baseUrl.trim() && !isAbsoluteBaseUrl(baseUrl)
+      ? t("baseUrlAbsoluteRequired")
+      : null;
 
   const addHeader = () => setHeaders([...headers, { name: "", value: "" }]);
   const removeHeader = (i: number) =>
@@ -204,7 +156,7 @@ export function AddOpenAPIForm() {
             applyPreview({
               title: data.title,
               description: data.description,
-              base_url: data.base_url,
+              base_url: resolveOpenAPIServerUrl(data.base_url ?? undefined, url),
               version: data.version,
               tools: (data.tools ?? []).map((tool) => ({
                 name: tool.name ?? "",
@@ -231,7 +183,7 @@ export function AddOpenAPIForm() {
       if (!raw.trim()) return;
       try {
         const parsed = JSON.parse(raw);
-        const result = extractFromSpec(parsed);
+        const result = previewFromOpenAPISpec(parsed);
         if (result.tools.length > 0) {
           applyPreview(result);
         } else {
@@ -251,8 +203,12 @@ export function AddOpenAPIForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+    if (!isAbsoluteBaseUrl(baseUrl)) {
+      setError(t("baseUrlAbsoluteRequired"));
+      return;
+    }
+    setLoading(true);
 
     let specContent: Record<string, unknown> | undefined;
     if (specMode === "json" && specJson.trim()) {
@@ -423,7 +379,13 @@ export function AddOpenAPIForm() {
               onChange={(e) => setBaseUrl(e.target.value)}
               required
               type="url"
+              aria-invalid={!!baseUrlError}
             />
+            {baseUrlError && (
+              <p className="text-xs text-destructive" role="alert">
+                {baseUrlError}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">{t("baseUrlHint")}</p>
           </div>
 
@@ -507,7 +469,10 @@ export function AddOpenAPIForm() {
           )}
 
           <div className="flex gap-3">
-            <Button type="submit" disabled={loading || !name || !baseUrl}>
+            <Button
+              type="submit"
+              disabled={loading || !name || !isAbsoluteBaseUrl(baseUrl)}
+            >
               {loading ? t("creating") : t("createConnection")}
             </Button>
             <Button

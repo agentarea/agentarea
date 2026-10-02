@@ -594,7 +594,7 @@ const ToolConfig = ({
     if (!tool) return;
     setEditError(null);
     try {
-      const instanceId = tool.mcp_server_id as unknown as string;
+      const instanceId = tool.mcp_server_id;
       const result = await getMCPServerInstance(instanceId);
       const instance = result.data;
       if (result.error || !instance) {

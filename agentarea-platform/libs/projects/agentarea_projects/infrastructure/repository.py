@@ -1,11 +1,15 @@
 """Project repository."""
 
+from typing import Any
 from uuid import UUID
 
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.domain.skill_models import Skill
 from agentarea_common.auth.context import UserContext
-from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from agentarea_common.base.workspace_scoped_repository import (
+    WorkspaceScopedRepository,
+    as_record_ids,
+)
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
@@ -37,12 +41,16 @@ class ProjectRepository(WorkspaceScopedRepository[Project]):
             selectinload(Project.agents.and_(Agent.workspace_id == workspace_id)),
         )
 
-    async def get_by_id(self, id: UUID | str, creator_scoped: bool = False) -> Project | None:  # type: ignore[override]
+    async def get_by_id(self, id: UUID | str, creator_scoped: bool = False) -> Project | None:
         """Get project by ID with eager-loaded associations."""
         query = (
             select(Project)
             .where(Project.id == id)
-            .where(self._get_workspace_filter())
+            .where(
+                self._get_creator_workspace_filter()
+                if creator_scoped
+                else self._get_workspace_filter()
+            )
             .options(*self._scoped_links())
             .execution_options(populate_existing=True)
         )
@@ -50,10 +58,16 @@ class ProjectRepository(WorkspaceScopedRepository[Project]):
         return result.scalar_one_or_none()
 
     async def list_all(
-        self, limit: int | None = None, offset: int | None = None, **filters
-    ) -> list[Project]:  # type: ignore[override]
+        self,
+        limit: int | None = None,
+        offset: int | None = None,
+        ids: set[str] | None = None,
+        **filters: Any,
+    ) -> list[Project]:
         """List all projects in the workspace with associations."""
         query = select(Project).where(self._get_workspace_filter()).options(*self._scoped_links())
+        if ids is not None:
+            query = query.where(Project.id.in_(as_record_ids(ids)))
         for field, value in filters.items():
             if hasattr(Project, field):
                 query = query.where(getattr(Project, field) == value)

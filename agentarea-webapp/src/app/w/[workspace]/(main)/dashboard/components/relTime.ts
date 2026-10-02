@@ -1,12 +1,14 @@
 // Localized compact relative time ("just now", "5m", "3h", "2d") for the
 // dashboard lists. The unit strings come from the message catalog so ru/en
 // render in the active language.
+import { getValidTimestamp } from "@/utils/dateUtils";
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
 export function formatRelTime(iso: string | null, t: Translator): string {
-  if (!iso) return "—";
-  const diff = Date.now() - new Date(iso).getTime();
+  const timestamp = getValidTimestamp(iso);
+  if (timestamp === null) return "—";
+  const diff = Date.now() - timestamp;
   const mins = Math.round(diff / 60000);
   if (mins < 1) return t("relJustNow");
   if (mins < 60) return t("relMinutes", { count: mins });

@@ -382,3 +382,16 @@ async def test_resolve_signing_secret_ignores_other_triggers_credentials():
     result = await resolve_signing_secret("slack", {}, {}, reader, trigger_id)
 
     assert result is None
+
+
+class TestTelegramSecretToken:
+    """Telegram does not sign bodies; the echoed secret token is the only proof
+    an update came from Telegram rather than from someone who learned the URL."""
+
+    def test_matching_token_verifies_and_forged_one_does_not(self):
+        from agentarea_triggers.webhook_verification import TelegramSecretTokenVerifier
+
+        verifier = TelegramSecretTokenVerifier()
+        assert verifier.verify({"x-telegram-bot-api-secret-token": "tok"}, b"{}", "tok")
+        assert not verifier.verify({"x-telegram-bot-api-secret-token": "nope"}, b"{}", "tok")
+        assert not verifier.verify({}, b"{}", "tok")

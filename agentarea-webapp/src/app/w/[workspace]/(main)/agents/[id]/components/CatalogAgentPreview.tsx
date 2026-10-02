@@ -6,7 +6,7 @@ import {
 } from "@/lib/agent-identity";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { ProviderIcon } from "@/components/ui/provider-icon";
-import type { Agent } from "@/types/agent";
+import { agentSkillViews, type Agent } from "@/types/agent";
 import { InstallAgentButton } from "./InstallAgentButton";
 
 /**
@@ -33,10 +33,14 @@ export function CatalogAgentPreview({
   const providerName = agent.model_info?.provider_name || null;
   const providerIconUrl = agent.model_info?.provider_icon_url || null;
 
-  const skills = agent.skills ?? [];
-  const mcpConfigs = agent.tools_config?.mcp_server_configs ?? [];
-  const openapiConfigs = agent.tools_config?.openapi_configs ?? [];
-  const connectionsCount = mcpConfigs.length + openapiConfigs.length;
+  const skills = agentSkillViews(agent.skills);
+  let mcpCount = 0;
+  let openapiCount = 0;
+  for (const tool of agent.tools ?? []) {
+    if (tool.type === "mcp") mcpCount += 1;
+    else if (tool.type === "openapi") openapiCount += 1;
+  }
+  const connectionsCount = mcpCount + openapiCount;
 
   return (
     <div className="mx-auto w-full max-w-[1180px]">
@@ -121,7 +125,7 @@ export function CatalogAgentPreview({
             <EmptyRow text="No connections required." />
           ) : (
             <div className="px-[15px] py-3 text-[12.5px] text-foreground/80">
-              {mcpConfigs.length} MCP · {openapiConfigs.length} API
+              {mcpCount} MCP · {openapiCount} API
             </div>
           )}
         </Card>

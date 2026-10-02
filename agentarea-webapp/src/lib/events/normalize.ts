@@ -7,6 +7,7 @@
  */
 
 import { EventInput } from "./contract";
+import { parseUtcTimestamp } from "@/utils/dateUtils";
 
 type RawData = Record<string, unknown>;
 
@@ -64,6 +65,5 @@ export function eventTimestamp(data: RawData): Date | null {
     (typeof data.original_timestamp === "string" && data.original_timestamp) ||
     null;
   if (!raw) return null;
-  const date = new Date(raw);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return parseUtcTimestamp(raw);
 }

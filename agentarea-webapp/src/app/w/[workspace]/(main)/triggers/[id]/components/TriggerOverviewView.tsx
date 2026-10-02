@@ -27,6 +27,7 @@ import { CopyableText } from "@/components/ui/copyable-text";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import Link from "@/components/WorkspaceLink";
+import { TriggerStatusBadge } from "../TriggerDetailStatus";
 import { getPricingCurrency } from "@/lib/api-dashboard";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import {
@@ -173,12 +174,10 @@ export async function TriggerOverviewView({
                 <h1 className="m-0 text-[18px] font-semibold tracking-[-0.022em]">
                   {model.name}
                 </h1>
-                <StatusIndicator
-                  kind={model.status.kind}
+                <TriggerStatusBadge
+                  status={model.status}
                   className="whitespace-nowrap text-[13px] font-medium"
-                >
-                  {model.status.label}
-                </StatusIndicator>
+                />
               </div>
 
               {model.description && (

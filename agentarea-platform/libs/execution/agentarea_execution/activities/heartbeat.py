@@ -8,7 +8,7 @@ enabling:
 """
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from functools import wraps
 from typing import Any
 
@@ -22,7 +22,9 @@ async def _heartbeat_every(delay: float) -> None:
         activity.heartbeat()
 
 
-def auto_heartbeater[F: Callable[..., Any]](fn: F) -> F:
+def auto_heartbeater[**P, R](
+    fn: Callable[P, Coroutine[Any, Any, R]],
+) -> Callable[P, Coroutine[Any, Any, R]]:
     """Decorator that auto-heartbeats during long-running activities.
 
     If heartbeat_timeout is configured on the activity execution,
@@ -31,7 +33,7 @@ def auto_heartbeater[F: Callable[..., Any]](fn: F) -> F:
     """
 
     @wraps(fn)
-    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         heartbeat_timeout = activity.info().heartbeat_timeout
         heartbeat_task = None
         if heartbeat_timeout:
@@ -48,4 +50,4 @@ def auto_heartbeater[F: Callable[..., Any]](fn: F) -> F:
                 except asyncio.CancelledError:
                     pass
 
-    return wrapper  # type: ignore[return-value]
+    return wrapper

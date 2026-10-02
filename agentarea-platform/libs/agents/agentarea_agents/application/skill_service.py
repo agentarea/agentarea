@@ -74,8 +74,8 @@ def _project_catalog_skill(item: CatalogSkillItem) -> Skill:
         updated_at=item.updated_at,
     )
     # Read-only catalog projection markers consumed by the API DTO.
-    skill.is_catalog = True  # type: ignore[attr-defined]
-    skill.update_available = False  # type: ignore[attr-defined]
+    skill.is_catalog = True
+    skill.update_available = False
     return skill
 
 
@@ -97,8 +97,8 @@ def _project_catalog_summary(row: CatalogSkillSummary) -> Skill:
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
-    skill.is_catalog = True  # type: ignore[attr-defined]
-    skill.update_available = False  # type: ignore[attr-defined]
+    skill.is_catalog = True
+    skill.update_available = False
     return skill
 
 
@@ -479,7 +479,7 @@ class SkillService:
             forked = forked_by_item.get(item.id)
             if forked is not None:
                 if item.version and item.version != item.installed_version:
-                    forked.update_available = True  # type: ignore[attr-defined]
+                    forked.update_available = True
                 continue
             projections.append(_project_catalog_skill(item))
         return projections
@@ -573,7 +573,7 @@ class SkillService:
                 continue
             catalog_version, installed_version = versions.get(str(item_id), (None, None))
             if catalog_version and catalog_version != installed_version:
-                skill.update_available = True  # type: ignore[attr-defined]
+                skill.update_available = True
 
     async def get_with_catalog(self, skill_id: UUID | str) -> Skill | None:
         """Get a tenant skill by id, falling back to a catalog projection.

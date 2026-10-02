@@ -181,6 +181,13 @@ async def cleanup_all_connections():
     except Exception as e:
         logger.exception("Error in events router cleanup: %s", e)
 
+    try:
+        from agentarea_api.api.rate_limit import close_rate_limit_client
+
+        await close_rate_limit_client()
+    except Exception:
+        logger.warning("Error closing rate-limit Redis client", exc_info=True)
+
     logger.info("All connection cleanup completed")
 
 

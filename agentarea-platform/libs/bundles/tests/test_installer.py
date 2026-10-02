@@ -1,10 +1,13 @@
 """Installer orchestration tests (mocked domain services)."""
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from agentarea_bundles.application.analyzer import parse_bundle
+from agentarea_agents.application import workspace_export_service
+from agentarea_agents.application.workspace_export_service import WorkspaceExportService
+from agentarea_bundles.application.analyzer import BundleAnalyzer, parse_bundle
 from agentarea_bundles.application.installer import BundleInstaller, BundleInstallError
 from agentarea_bundles.schemas.result import InstallAction
 from agentarea_common.auth.authorization import AuthorizationService
@@ -415,3 +418,134 @@ agents:
         ("code", "agentarea/shell"),
         ("code", "agentarea/files"),
     ]
+
+
+async def test_exported_workspace_bundle_installs_agent_skill_and_disabled_triggers(
+    monkeypatch,
+):
+    source_workspace_id = "source"
+    source_context = UserContext(
+        user_id="source-user",
+        workspace_id=source_workspace_id,
+        admin_workspaces=[source_workspace_id],
+    )
+    skill = SimpleNamespace(
+        id=uuid4(),
+        workspace_id=source_workspace_id,
+        registry_item_id=None,
+        is_catalog=False,
+        slug="daily-skill",
+        name="Daily Skill",
+        description="",
+        content="# Daily Skill",
+        source_url=None,
+    )
+    agent = SimpleNamespace(
+        id=uuid4(),
+        workspace_id=source_workspace_id,
+        registry_item_id=None,
+        is_catalog=False,
+        slug="daily-agent",
+        name="Daily Agent",
+        description="",
+        instruction="Summarize the workspace.",
+        model_id="gpt-4o",
+        tools=[{"type": "code", "name": "agentarea/shell"}],
+        skills=[skill],
+        planning=None,
+        a2ui_enabled=None,
+    )
+    cron = SimpleNamespace(
+        id=uuid4(),
+        name="nightly-summary",
+        trigger_type="cron",
+        agent_id=agent.id,
+        cron_expression="0 0 * * *",
+        timezone="UTC",
+        task_parameters={"text": "Prepare the nightly summary."},
+        is_active=False,
+        conditions={},
+    )
+    webhook = SimpleNamespace(
+        id=uuid4(),
+        name="incoming-events",
+        trigger_type="webhook",
+        webhook_type="generic",
+        webhook_id="source-webhook-id-must-not-export",
+        agent_id=agent.id,
+        task_parameters={"text": "Process the inbound event."},
+        is_active=False,
+        conditions={},
+        allowed_methods=["POST"],
+        validation_rules={},
+        webhook_config=None,
+        event_types=[],
+    )
+    agent_service = SimpleNamespace(
+        list=AsyncMock(return_value=[agent]),
+        get_with_skills=AsyncMock(return_value=agent),
+    )
+    skill_service = SimpleNamespace(list=AsyncMock(return_value=[skill]))
+    trigger_repository = SimpleNamespace(list_all=AsyncMock(return_value=[cron, webhook]))
+    monkeypatch.setattr(
+        workspace_export_service,
+        "load_workspace",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                id=source_workspace_id,
+                name="Source workspace",
+                slug="source-workspace",
+            )
+        ),
+        raising=False,
+    )
+
+    export_service = WorkspaceExportService(
+        agent_service=agent_service,
+        repository_factory=SimpleNamespace(user_context=source_context),
+        skill_service=skill_service,
+        trigger_repository=trigger_repository,
+    )
+    yaml_text = await export_service.export_workspace()
+    package = parse_bundle(yaml_text)
+    preview = await BundleAnalyzer().analyze(package)
+
+    assert preview.installable
+    assert preview.issues == []
+    assert package.name == "source-workspace"
+    assert package.display_name == "Source workspace"
+    assert package.agents[0].skills == [package.skills[0].key]
+    assert package.agents[0].toolsets == ["agentarea/shell"]
+
+    model_setup = next(field for field in package.setup if field.label == "Model for Daily Agent")
+    assert package.agents[0].model == f"${{setup.{model_setup.key}}}"
+    assert model_setup.type.value == "string"
+    assert len(package.automations) == 1
+    assert package.automations[0].enabled is False
+    assert len(package.channels) == 1
+    assert package.channels[0].type == "generic"
+    assert package.channels[0].enabled is False
+    assert "source-webhook-id-must-not-export" not in yaml_text
+
+    target_context = UserContext(
+        user_id="target-user",
+        workspace_id="target",
+        admin_workspaces=["target"],
+    )
+    installer, deps = _installer(user_context=target_context)
+    result = await installer.install(package, {model_setup.key: "gpt-4o"})
+
+    assert {entity.action for entity in result.entities} == {InstallAction.CREATED}
+    assert len(deps["skill_service"].calls) == 1
+    assert deps["agent_service"].calls[0].model_id == "gpt-4o"
+    assert len(deps["agent_service"].calls) == 1
+    assert len(deps["trigger_service"].created) == 2
+    created = {
+        getattr(trigger.trigger_type, "value", trigger.trigger_type): trigger
+        for trigger in deps["trigger_service"].created
+    }
+    assert created["cron"].task_parameters == {"text": "Prepare the nightly summary."}
+    assert created["cron"].cron_expression == "0 0 * * *"
+    assert created["cron"].timezone == "UTC"
+    assert created["webhook"].task_parameters == {"text": "Process the inbound event."}
+    assert len(deps["trigger_service"].disabled) == 2

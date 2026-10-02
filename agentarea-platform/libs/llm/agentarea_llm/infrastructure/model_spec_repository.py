@@ -62,8 +62,8 @@ def _project_catalog_model_spec(item: CatalogModelSpecItem) -> ModelSpec:
     model.created_at = item.created_at
     model.updated_at = item.updated_at
     if item.provider_spec_id is not None:
-        model.provider_spec_id = UUID(item.provider_spec_id)  # type: ignore[assignment]
-    model.is_catalog = True  # type: ignore[attr-defined]
+        model.provider_spec_id = UUID(item.provider_spec_id)
+    model.is_catalog = True
     # Attach a transient provider_spec for the API projection (provider_name /
     # provider_key). provider_specs remain real DB rows in this change.
     if item.provider_key is not None:

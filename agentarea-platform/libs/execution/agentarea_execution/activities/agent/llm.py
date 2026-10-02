@@ -13,6 +13,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.extensions.customer_pricing import price_llm_call
 from agentarea_common.money import ZERO, to_money, to_optional_money
+from agentarea_common.utils.llm_endpoint import guarded_llm_endpoint
 from agentarea_tasks.domain.models import ConversationEntry
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
@@ -308,11 +309,11 @@ def make_llm_activities(
                     "model pricing is not configured; compaction budget cannot be enforced"
                 )
 
-            if endpoint_url:
-                local_host = dependencies.settings.app.local_host
-                endpoint_url = endpoint_url.replace("localhost", local_host).replace(
-                    "127.0.0.1", local_host
-                )
+            endpoint_url = await guarded_llm_endpoint(
+                endpoint_url,
+                managed_by=managed_by,
+                local_host=dependencies.settings.app.local_host,
+            )
 
             llm_model = LLMModel(
                 provider_type=provider_type,

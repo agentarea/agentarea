@@ -10,7 +10,14 @@ metadata:
     {{- with .Values.global.extraLabels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
-  {{- with .Values.ingress.annotations }}
+  {{- $annotations := deepCopy (.Values.ingress.annotations | default dict) -}}
+  {{- $ingressClass := .Values.ingress.className | default (get $annotations "kubernetes.io/ingress.class") -}}
+  {{- $rateLimit := .Values.ingress.kratosRateLimit -}}
+  {{- if and (eq $ingressClass "nginx") $rateLimit.enabled }}
+  {{- $_ := set $annotations "nginx.ingress.kubernetes.io/limit-rps" (printf "%v" $rateLimit.requestsPerSecond) -}}
+  {{- $_ := set $annotations "nginx.ingress.kubernetes.io/limit-burst-multiplier" (printf "%v" $rateLimit.burstMultiplier) -}}
+  {{- end }}
+  {{- with $annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}

@@ -105,7 +105,8 @@ class DelegationMixin(ToolApprovalMixin):
         """
         from ..agent_execution_workflow import AgentExecutionWorkflow
 
-        if not await self._gate_tool_call(tool_call):
+        allowed, _ = await self._gate_tool_call(tool_call)
+        if not allowed:
             return
         tool_name = tool_call.function["name"]
         agent_info = self._agent_tool_registry[tool_name]

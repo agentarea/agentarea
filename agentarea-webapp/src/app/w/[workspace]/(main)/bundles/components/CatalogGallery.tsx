@@ -1260,12 +1260,11 @@ function DetailView({
   );
 
   // Setup runs on a connections page — the catalog never configures inline.
-  // An MCP entry links to its spec; an HTTP API entry to its connect form.
+  // An MCP entry links to its spec, which the API resolves by catalog item id
+  // (ADR-003); an HTTP API entry to its connect form.
   const connectHref = isCatalogApi
     ? `/connections/catalog/${entry.id}`
-    : entry.installEntityId
-      ? `/connections/create/${entry.installEntityId}`
-      : "/connections/add";
+    : `/connections/create/${entry.id}`;
 
   useEffect(() => {
     // Reset only when the selected item changes.

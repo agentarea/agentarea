@@ -105,7 +105,12 @@ class TriggerSpec(BaseModel):
     # Webhook-specific
     webhook_id: str | None = Field(
         default=None,
-        description="Public webhook path segment. Auto-generated if omitted for webhook triggers.",
+        min_length=16,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description=(
+            "Public webhook path segment. Custom values must be at least 16 URL-safe "
+            "characters; auto-generated if omitted for webhook triggers."
+        ),
     )
     allowed_methods: list[str] = Field(
         default_factory=lambda: ["POST"],

@@ -114,7 +114,12 @@ def make_service():
 
 
 @pytest.fixture
-def model_scope():
+def model_scope(monkeypatch):
+    # A self-hosted endpoint on this machine, admitted the way an install admits
+    # one: by naming it in the private allowlist.
+    from agentarea_common.config import get_settings
+
+    monkeypatch.setattr(get_settings().app, "OUTBOUND_PRIVATE_ALLOWLIST", "localhost")
     record = SimpleNamespace(
         id=UUID(MODEL_ID),
         workspace_id="ws-model",

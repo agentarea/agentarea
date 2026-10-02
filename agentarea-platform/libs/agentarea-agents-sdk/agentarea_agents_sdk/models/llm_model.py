@@ -554,7 +554,8 @@ class LLMModel:
             logger.info(f"Calling LLM with streaming for model {params['model']}")
 
             # Make the streaming LLM call
-            response_stream = await acompletion(**params)
+            # LiteLLM's stream overload does not describe its chunk shape.
+            response_stream = cast(AsyncIterator[Any], await acompletion(**params))
 
             # Collect streaming response
             complete_content = ""
@@ -564,7 +565,7 @@ class LLMModel:
             tool_calls = []
             tool_calls_buffer = {}  # Buffer for streaming tool calls
 
-            async for chunk in response_stream:  # type: ignore[assignment]
+            async for chunk in response_stream:
                 # chunk: ModelResponse
                 if chunk.choices:
                     delta = chunk.choices[0].delta
@@ -833,7 +834,8 @@ class LLMModel:
             logger.info(f"Starting streaming LLM call for model {params['model']}")
 
             # Make the streaming LLM call
-            response_stream = await litellm.acompletion(**params)
+            # LiteLLM's stream overload does not describe its chunk shape.
+            response_stream = cast(AsyncIterator[Any], await litellm.acompletion(**params))
 
             # Process streaming response
             complete_content = ""  # Keep track for tool calls and final usage
@@ -842,7 +844,7 @@ class LLMModel:
             usage = LLMUsage()
             cost = Decimal(0)
 
-            async for chunk in response_stream:  # type: ignore[assignment]
+            async for chunk in response_stream:
                 # chunk: ModelResponse
                 delta_content = ""
                 delta_reasoning = ""

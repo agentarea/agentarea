@@ -2069,6 +2069,7 @@
     "name": "Имя",
     "baseUrl": "Базовый URL",
     "baseUrlHint": "Базовый URL для API запросов",
+    "baseUrlAbsoluteRequired": "Введите абсолютный базовый URL с HTTP или HTTPS.",
     "description": "Описание (необязательно)",
     "customHeaders": "Пользовательские заголовки (необязательно)",
     "addHeader": "Добавить заголовок",

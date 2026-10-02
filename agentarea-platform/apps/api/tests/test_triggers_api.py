@@ -813,7 +813,7 @@ class TestTriggersAPI:
             "name": "Test Trigger",
             "agent_id": str(uuid4()),
             "trigger_type": "webhook",
-            "webhook_id": "test_webhook",
+            "webhook_id": "test_webhook_123",
             "webhook_type": "invalid_webhook_type",
         }
 
@@ -822,6 +822,32 @@ class TestTriggersAPI:
         # Should fail validation
         assert response.status_code == 422
         assert "Invalid webhook type" in str(response.json())
+
+    async def test_short_custom_webhook_id_is_rejected_with_422(self, async_client):
+        response = await async_client.post(
+            "/v1/workspaces/acme/triggers/",
+            json={
+                "name": "Webhook",
+                "agent_id": str(uuid4()),
+                "trigger_type": "webhook",
+                "webhook_id": "short-id",
+            },
+        )
+
+        assert response.status_code == 422
+
+    async def test_custom_webhook_id_rejects_non_url_safe_chars_with_422(self, async_client):
+        response = await async_client.post(
+            "/v1/workspaces/acme/triggers/",
+            json={
+                "name": "Webhook",
+                "agent_id": str(uuid4()),
+                "trigger_type": "webhook",
+                "webhook_id": "unsafe/hook-id_123",
+            },
+        )
+
+        assert response.status_code == 422
 
     async def test_missing_required_fields(self, async_client):
         """Test trigger creation with missing required fields."""

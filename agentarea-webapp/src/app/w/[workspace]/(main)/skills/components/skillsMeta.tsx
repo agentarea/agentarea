@@ -11,6 +11,7 @@ import {
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { deterministicHue } from "@/lib/avatar-hue";
 import type { SkillNetworkScope, SkillSourceType } from "@/types/skill";
+import { getValidTimestamp } from "@/utils/dateUtils";
 
 /**
  * Linear-style metadata for the Skills page. The original design grouped by
@@ -93,9 +94,8 @@ export function SkillTile({
 
 /** Compact relative age, e.g. "today", "3d", "2w", "5mo", "1y". */
 export function shortAge(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "—";
+  const then = getValidTimestamp(iso);
+  if (then === null) return "—";
   const days = Math.floor((Date.now() - then) / 86_400_000);
   if (days < 1) return "today";
   if (days < 7) return `${days}d`;

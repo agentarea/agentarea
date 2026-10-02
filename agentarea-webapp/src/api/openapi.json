@@ -96,12 +96,14 @@
             "title": "Agent Id"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "expires_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -122,6 +124,7 @@
           "last_accessed_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -178,12 +181,14 @@
             "title": "Agent Id"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "expires_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -204,6 +209,7 @@
           "last_accessed_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -510,6 +516,7 @@
           "last_activity_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -1246,6 +1253,7 @@
             "title": "Changes"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -1816,7 +1824,7 @@
       },
       "BundleChannel": {
         "additionalProperties": false,
-        "description": "A messaging channel that lets an agent receive and reply to messages.\n\nInstalls as an inbound trigger (e.g. a Telegram webhook): a message to the\nbot becomes a task for ``agent``, and the reply is delivered back on the same\nchannel. Credentials (a bot token) enter via ``bindings`` \u2192 ``${setup.x}``,\nexactly like an MCP's secret bindings, so the token is never inlined.",
+        "description": "An inbound webhook trigger bound to one of the package's agents.\n\nTelegram channels may require a bot token, which enters via ``bindings`` \u2192\n``${setup.x}``; generic webhook triggers need no credential.",
         "properties": {
           "agent": {
             "description": "BundleAgent key that handles inbound messages.",
@@ -1856,9 +1864,12 @@
             "type": "string"
           },
           "type": {
-            "const": "telegram",
             "default": "telegram",
-            "description": "Channel provider. Only Telegram in v0.1.0.",
+            "description": "Webhook provider for the created trigger.",
+            "enum": [
+              "telegram",
+              "generic"
+            ],
             "title": "Type",
             "type": "string"
           }
@@ -3305,6 +3316,7 @@
           "finished_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -3316,6 +3328,7 @@
           "started_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -4090,6 +4103,7 @@
             "title": "Error"
           },
           "occurred_at": {
+            "format": "date-time",
             "title": "Occurred At",
             "type": "string"
           },
@@ -4131,6 +4145,7 @@
             "type": "string"
           },
           "next_run_at": {
+            "format": "date-time",
             "title": "Next Run At",
             "type": "string"
           },
@@ -4400,6 +4415,7 @@
             "title": "Agent Name"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4638,6 +4654,7 @@
           "accepted_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -4658,6 +4675,7 @@
             "title": "Accepted By User Id"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4676,6 +4694,7 @@
             "$ref": "#/components/schemas/InvitationEmailDelivery"
           },
           "expires_at": {
+            "format": "date-time",
             "title": "Expires At",
             "type": "string"
           },
@@ -4756,6 +4775,7 @@
         "description": "What an invitee is shown before joining: who asked, where to, until when.\n\nThe caller is not a member yet, so nothing else about the workspace leaves\nthis endpoint. The inviter fields are nullable because the identity\nprovider may not resolve them; the client states that rather than guessing.",
         "properties": {
           "expires_at": {
+            "format": "date-time",
             "title": "Expires At",
             "type": "string"
           },
@@ -4800,6 +4820,7 @@
           "accepted_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -4820,6 +4841,7 @@
             "title": "Accepted By User Id"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4835,6 +4857,7 @@
             "title": "Email"
           },
           "expires_at": {
+            "format": "date-time",
             "title": "Expires At",
             "type": "string"
           },
@@ -4945,6 +4968,7 @@
             "type": "object"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4969,6 +4993,7 @@
             "type": "string"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -5569,6 +5594,7 @@
             "title": "Auth Config Id"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -5629,6 +5655,7 @@
             "title": "Tools"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -5698,6 +5725,7 @@
             "title": "Cmd"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -5787,6 +5815,7 @@
             "type": "array"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -6262,6 +6291,7 @@
           "joined_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -6422,6 +6452,7 @@
             "title": "Config Name"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -6544,6 +6575,7 @@
             "type": "array"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -7274,12 +7306,14 @@
             "type": "integer"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "expires_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -7300,6 +7334,7 @@
           "last_accessed_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -7463,6 +7498,7 @@
             "type": "string"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -7528,6 +7564,7 @@
             "type": "string"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -7895,6 +7932,7 @@
           "created_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -9109,6 +9147,7 @@
       "ProviderConfigResponse": {
         "properties": {
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9194,6 +9233,7 @@
             "type": "boolean"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -9316,6 +9356,7 @@
       "ProviderSpecResponse": {
         "properties": {
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9373,6 +9414,7 @@
             "type": "string"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -9395,6 +9437,7 @@
       "ProviderSpecWithModelsResponse": {
         "properties": {
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9459,6 +9502,7 @@
             "type": "string"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -9561,6 +9605,7 @@
             "title": "Category"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9638,6 +9683,7 @@
             "type": "boolean"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -9674,6 +9720,7 @@
       "RegistryResponse": {
         "properties": {
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9715,6 +9762,7 @@
           "last_synced_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -9748,6 +9796,7 @@
             "type": "string"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -10394,6 +10443,7 @@
             "title": "Agent Name"
           },
           "fires_at": {
+            "format": "date-time",
             "title": "Fires At",
             "type": "string"
           },
@@ -11558,6 +11608,7 @@
             "type": "string"
           },
           "timestamp": {
+            "format": "date-time",
             "title": "Timestamp",
             "type": "string"
           }
@@ -11653,6 +11704,7 @@
             "type": "string"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -11732,6 +11784,7 @@
           "scheduled_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -11809,6 +11862,7 @@
           "ended_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -11857,6 +11911,7 @@
           "started_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -11918,6 +11973,7 @@
             "title": "Agent Name"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -12019,6 +12075,7 @@
           "scheduled_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -12424,13 +12481,15 @@
           "webhook_id": {
             "anyOf": [
               {
+                "minLength": 16,
+                "pattern": "^[A-Za-z0-9_-]+$",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Public webhook path segment. Auto-generated if omitted for webhook triggers.",
+            "description": "Public webhook path segment. Custom values must be at least 16 URL-safe characters; auto-generated if omitted for webhook triggers.",
             "title": "Webhook Id"
           },
           "webhook_type": {
@@ -12495,6 +12554,7 @@
             "title": "Error Message"
           },
           "executed_at": {
+            "format": "date-time",
             "title": "Executed At",
             "type": "string"
           },
@@ -12611,6 +12671,7 @@
             "type": "integer"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -12672,6 +12733,7 @@
           "last_execution_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -12687,6 +12749,7 @@
           "next_run_time": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -12716,6 +12779,7 @@
             "type": "string"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -12988,13 +13052,15 @@
           "webhook_id": {
             "anyOf": [
               {
+                "minLength": 16,
+                "pattern": "^[A-Za-z0-9_-]+$",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Public webhook path segment. Auto-generated if omitted for webhook triggers.",
+            "description": "Public webhook path segment. Custom values must be at least 16 URL-safe characters; auto-generated if omitted for webhook triggers.",
             "title": "Webhook Id"
           },
           "webhook_type": {
@@ -13025,6 +13091,7 @@
           "last_execution_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -13270,6 +13337,7 @@
             "title": "Cron Expression"
           },
           "fires_at": {
+            "format": "date-time",
             "title": "Fires At",
             "type": "string"
           },
@@ -13695,6 +13763,7 @@
           "created_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -13739,6 +13808,7 @@
           "updated_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -14001,6 +14071,7 @@
             "title": "Context Window"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -14142,6 +14213,7 @@
             "title": "Supports Vision"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -14175,6 +14247,7 @@
             "title": "Context Window"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -14283,6 +14356,7 @@
             "title": "Supports Vision"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -20592,7 +20666,7 @@
     },
     "/v1/workspaces/{workspace}/export": {
       "get": {
-        "description": "Export current workspace configuration as YAML.\n\nThis endpoint exports all workspace-scoped resources:\n- Agents (excluding system default agent)\n- MCP server instances\n- Provider configurations\n\n**Important Notes:**\n- Secrets (API keys, passwords) are replaced with placeholders\n- Built-in/catalog resources (carrying registry_item_id) are excluded\n- Only resources in the current workspace are exported\n- References to specs are included (server_spec_id, provider_spec_id)\n\nThere is no matching import endpoint. Recreating a workspace goes through\nthe platform toolsets (``agentarea/agents``, ``agentarea/mcp_servers``,\n``agentarea/providers``, ``agentarea/skills``, ...) or bundle install,\nboth of which handle secrets as first-class inputs instead of smuggling\nplaceholders through a YAML file.\n\n**Returns:**\nYAML file content describing the workspace",
+        "description": "Export the current workspace in the canonical Bundle YAML format.\n\nThe output is accepted by the bundle Analyze and Install flow and can\ninclude agents, MCPs, skills, cron automations, and supported webhook\nchannels. MCP credentials and Telegram tokens are setup-field references,\nnever exported values. Provider configurations are not represented by the\nBundle schema; configure them separately in the destination workspace.\n\nThe response is served as ``text/plain`` so generated API clients receive\nthe YAML body as a string.",
         "operationId": "export_workspace_config_v1_export_get",
         "parameters": [
           {

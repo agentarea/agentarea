@@ -274,7 +274,7 @@ def _probing(service: MCPServerInstanceService, url: str = URL) -> MCPServerInst
     service.repository.get_by_id = AsyncMock(
         return_value=MagicMock(id="inst-1", server_spec_id=None)
     )
-    service._get_transport_spec_for_instance = AsyncMock(  # type: ignore[method-assign]
+    service.get_transport_spec_for_instance = AsyncMock(  # type: ignore[method-assign]
         return_value={"type": "url", "endpoint_url": url}
     )
     return service

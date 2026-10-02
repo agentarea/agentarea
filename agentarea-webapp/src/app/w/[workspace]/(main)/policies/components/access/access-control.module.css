@@ -38,31 +38,6 @@
   padding: 6px 2px 14px;
   flex-shrink: 0;
 }
-.seg {
-  display: inline-flex;
-  background: var(--access-hover2);
-  border-radius: 8px;
-  padding: 3px;
-}
-.segBtn {
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--access-muted);
-  font-size: 12.5px;
-  font-weight: 500;
-  border: none;
-  background: none;
-  cursor: pointer;
-}
-.segBtnOn {
-  background: #fff;
-  color: hsl(var(--foreground));
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07);
-}
 .spacer {
   flex: 1;
 }

@@ -18,6 +18,22 @@ from agentarea_mcp.transport_spec import merge_transport_spec, server_transport_
 
 _PACKAGE_IMPORT_TIMEOUT_SECONDS = 20 * 60
 
+_MCP_RETIRE_RETRIES = 5
+_MCP_RETIRE_BASE_DELAY_SECONDS = 0.2
+_MCP_RETIRE_MAX_DELAY_SECONDS = 1.0
+
+
+class MCPRuntimeRetirementError(RuntimeError):
+    """A transient runtime retirement failure that left desired state unchanged."""
+
+    status_code = 503
+
+
+class MCPRuntimeRetirementConflictError(MCPRuntimeRetirementError):
+    """The manager could not retire this runtime before the retry window ended."""
+
+    status_code = 409
+
 
 def _now_iso() -> str:
     """Return a timezone-aware UTC timestamp for package import state."""
@@ -60,11 +76,14 @@ async def retire_runtime_before_mutation(
     headers = settings.manager_gateway_headers()
     retryable = {409, 502, 503, 504}
     last_error: Exception | None = None
+    saw_conflict = False
 
     async with httpx.AsyncClient(timeout=settings.MCP_CLIENT_TIMEOUT) as client:
-        for attempt in range(3):
+        for attempt in range(_MCP_RETIRE_RETRIES):
             try:
                 response = await client.delete(url, headers=headers)
+                if response.status_code == 409:
+                    saw_conflict = True
                 if response.status_code == 204:
                     return
                 if response.status_code not in retryable:
@@ -74,10 +93,18 @@ async def retire_runtime_before_mutation(
                 )
             except (httpx.TransportError, httpx.TimeoutException) as exc:
                 last_error = exc
-            if attempt < 2:
-                await asyncio.sleep(0.2 * (attempt + 1))
+            if attempt + 1 < _MCP_RETIRE_RETRIES:
+                delay = min(
+                    _MCP_RETIRE_BASE_DELAY_SECONDS * (2**attempt),
+                    _MCP_RETIRE_MAX_DELAY_SECONDS,
+                )
+                await asyncio.sleep(delay)
 
-    raise RuntimeError(
+    if saw_conflict:
+        raise MCPRuntimeRetirementConflictError(
+            f"MCP runtime retirement for {instance_id} is still in progress; retry the mutation"
+        ) from last_error
+    raise MCPRuntimeRetirementError(
         f"MCP runtime retirement failed for {instance_id}; desired state was preserved"
     ) from last_error
 

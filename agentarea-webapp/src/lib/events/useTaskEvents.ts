@@ -134,7 +134,7 @@ export function useTaskEvents(
 
   const [state, setState] = useState<EventState>(initialState);
   const [rawEvents, setRawEvents] = useState<DisplayEvent[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
 

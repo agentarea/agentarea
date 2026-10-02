@@ -122,6 +122,7 @@ import {
   removeSkillFromProject,
   removeSkillMember,
   resolveEscalation,
+  resolvePrincipals,
   resumeAgentTask,
   sendTaskCommand,
   submitTaskInput,
@@ -447,6 +448,17 @@ export async function getSkillContentAction(skillId: string) {
 
 export async function getSkillFilesAction(skillId: string) {
   return await getSkillFiles(skillId);
+}
+
+export async function loadSkillDetailAction(skillId: string) {
+  const [skill, content, files, members, allSkills] = await Promise.all([
+    getSkill(skillId),
+    getSkillContent(skillId),
+    getSkillFiles(skillId),
+    listSkillMembers(skillId),
+    listSkills(),
+  ]);
+  return { skill, content, files, members, allSkills };
 }
 
 export async function getSkillFileAction(skillId: string, filePath: string) {
@@ -1005,7 +1017,47 @@ export async function downloadWorkspaceFileAction(filePath: string) {
 }
 
 export async function workspaceFileHistoryAction(filePath: string) {
-  return await workspaceFileHistory(filePath);
+  const result = await workspaceFileHistory(filePath);
+  if (result.error || !result.data) return result;
+
+  const events = result.data.events;
+  const actorIds = [
+    ...new Set(
+      events
+        .map((event) =>
+          event.actor_type === "agent" ? event.agent_id : event.created_by
+        )
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const names = new Map<string, string>();
+  if (actorIds.length > 0) {
+    try {
+      const principals = await resolvePrincipals(actorIds);
+      for (const principal of principals.data ?? []) {
+        const name = principal.display_name?.trim() || principal.email?.trim();
+        if (name) names.set(principal.id, name);
+      }
+    } catch (error) {
+      console.error("Failed to resolve file history actors", error);
+    }
+  }
+
+  return {
+    ...result,
+    data: {
+      ...result.data,
+      events: events.map((event) => ({
+        ...event,
+        actor_display_name:
+          names.get(
+            event.actor_type === "agent"
+              ? (event.agent_id ?? "")
+              : event.created_by
+          ) ?? null,
+      })),
+    },
+  };
 }
 
 export async function previewOpenAPISpecAction(body: {

@@ -27,7 +27,9 @@ async def load_workspace(
         repository = WorkspaceRepository(session)
         if workspace_id is not None:
             return await repository.get(workspace_id)
-        return await repository.get_by_slug(slug)  # type: ignore[arg-type]
+        if slug is None:
+            raise ValueError("name a workspace by exactly one of workspace_id or slug")
+        return await repository.get_by_slug(slug)
 
 
 async def workspace_slug_for(workspace_id: str) -> str:

@@ -6,6 +6,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 import httpx
+from agentarea_common.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +161,11 @@ class MCPConfigurationValidator:
                 logger.info(f"Validating configuration with golang manager: {validation_url}")
 
                 try:
-                    response = await client.post(validation_url, json=validation_payload)
+                    response = await client.post(
+                        validation_url,
+                        json=validation_payload,
+                        headers=get_settings().mcp.manager_inspection_headers(),
+                    )
 
                     if response.status_code == 200:
                         validation_result = response.json()

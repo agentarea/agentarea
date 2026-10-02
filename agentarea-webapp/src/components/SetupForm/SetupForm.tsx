@@ -12,10 +12,10 @@ import {
 } from "@/components/ui/select";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { cn } from "@/lib/utils";
-import type { SetupField } from "@/app/w/[workspace]/(main)/bundles/types";
+import type { SetupFieldView } from "@/app/w/[workspace]/(main)/bundles/types";
 
 export interface SetupFormProps {
-  schema: SetupField[];
+  schema: SetupFieldView[];
   values: Record<string, string | number | boolean>;
   onChange: (key: string, value: string | number | boolean) => void;
   errors?: Record<string, string>;

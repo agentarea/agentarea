@@ -19,7 +19,7 @@ Key endpoints:
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
@@ -34,12 +34,13 @@ from agentarea_api.api.v1._trigger_creation import (
     create_trigger_from_spec,
     get_channel_webhook_service,
     resolve_channel_credentials,
+    with_webhook_secret_token,
 )
 from agentarea_common.auth.dependencies import UserContext, get_user_context
 from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.base.pagination import MAX_PAGE
 from agentarea_common.config.database import get_db_session
-from agentarea_common.utils.types import NaiveUtcDatetime, UtcDatetime
+from agentarea_common.utils.types import NaiveUtcDatetime, UtcDatetime, utc_isoformat
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
@@ -611,7 +612,7 @@ async def triggers_health_check(
             "overall_status": "unhealthy",
             "service": "triggers",
             "error": "health check failed",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_isoformat(datetime.now(UTC)),
             "components": {},
         }
 
@@ -739,6 +740,7 @@ async def update_trigger(
                 and updated_trigger_any.data_extractor
             ):
                 channel_type = str(updated_trigger_any.data_extractor).removesuffix("_polling")
+            credentials, secret_token = with_webhook_secret_token(channel_type, credentials)
             secret_name = channel_credential_secret_name(channel_type, trigger_id)
             await secret_manager.set_secret(secret_name, json.dumps(credentials))
             has_creds = True
@@ -746,6 +748,7 @@ async def update_trigger(
                 channel_type=getattr(updated_trigger, "webhook_type", None),
                 webhook_id=getattr(updated_trigger, "webhook_id", None),
                 credentials=credentials,
+                secret_token=secret_token,
             )
             logger.info(f"Updated channel credentials for trigger {trigger_id}")
         elif secret_manager:

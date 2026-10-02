@@ -14,15 +14,14 @@ import {
   enableTriggerAction,
   runTriggerNowAction,
 } from "./actions";
+import { useTriggerDetailStatus } from "./TriggerDetailStatus";
 
 export default function TriggerHeaderControls({
   triggerId,
   triggerName,
-  isActive,
 }: {
   triggerId: string;
   triggerName: string;
-  isActive: boolean;
 }) {
   const router = useWorkspaceRouter();
   const pathname = useWorkspacePathname();
@@ -34,7 +33,7 @@ export default function TriggerHeaderControls({
   const isEditing = pathname === `/triggers/${triggerId}/edit`;
   const isSaving = useFormSubmittingState("create-trigger-form");
   const [isToggling, setIsToggling] = useState(false);
-  const [active, setActive] = useState(isActive);
+  const { active, setActive } = useTriggerDetailStatus();
   const [isRunning, setIsRunning] = useState(false);
   // Why a run produced no task. Shown next to the button:
   // it is the answer to what was just asked, and it is worth re-reading.
@@ -50,7 +49,11 @@ export default function TriggerHeaderControls({
       if (result.error) {
         setError(result.error);
       } else {
-        setActive(!active);
+        const nextActive =
+          result.data && typeof result.data.is_active === "boolean"
+            ? result.data.is_active
+            : !active;
+        setActive(nextActive);
         router.refresh();
       }
     } catch (err) {

@@ -21,6 +21,7 @@ from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
+from agentarea_common.utils.types import utc_isoformat
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
@@ -114,8 +115,8 @@ class SkillResponse(BaseModel):
             source_url=skill.source_url,
             network_scope=network_scope,
             workspace_id=getattr(skill, "workspace_id", "") or "",
-            created_at=skill.created_at.isoformat() if skill.created_at else "",
-            updated_at=skill.updated_at.isoformat() if skill.updated_at else "",
+            created_at=utc_isoformat(skill.created_at) if skill.created_at else "",
+            updated_at=utc_isoformat(skill.updated_at) if skill.updated_at else "",
             is_catalog=bool(getattr(skill, "is_catalog", False)),
             registry_item_id=str(registry_item_id) if registry_item_id else None,
             update_available=bool(getattr(skill, "update_available", False)),

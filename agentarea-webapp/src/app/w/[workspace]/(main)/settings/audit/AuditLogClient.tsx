@@ -209,7 +209,8 @@ export default function AuditLogClient({
         <ResourceCell
           event={{
             ...event,
-            changes: expandedId === event.id ? event.changes : undefined,
+            changes:
+              expandedId === event.id ? (event.changes ?? null) : null,
           }}
         />
       ),

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/backends"
@@ -40,6 +41,138 @@ func (u RemoteUpstream) InstanceProxyURL(instanceID string) string {
 	return strings.TrimRight(u.BaseURL, "/") + "/dataplane/v1/instances/" + instanceID + "/proxy/mcp"
 }
 
+const (
+	startFailureBackoffBase = time.Second
+	startFailureBackoffCap  = 30 * time.Second
+)
+
+type startFailureState struct {
+	consecutive int
+	reason      string
+	retryAt     time.Time
+}
+
+type failureReasonError interface {
+	FailureReason() string
+}
+
+type retryDelayError interface {
+	RetryDelay() time.Duration
+}
+
+// StartupFailureError exposes a classified start failure without returning
+// workload output. Cause remains available to the manager for diagnostics.
+type StartupFailureError struct {
+	reason     string
+	cause      error
+	retryDelay time.Duration
+}
+
+func (e *StartupFailureError) Error() string {
+	return "MCP workload failed during startup: " + e.reason
+}
+
+func (e *StartupFailureError) Unwrap() error {
+	return e.cause
+}
+
+func (e *StartupFailureError) FailureReason() string {
+	return e.reason
+}
+
+func (e *StartupFailureError) RetryDelay() time.Duration {
+	return e.retryDelay
+}
+
+// StartBackoffError says an instance is still inside its failed-start cooldown.
+type StartBackoffError struct {
+	reason     string
+	retryDelay time.Duration
+}
+
+func (e *StartBackoffError) Error() string {
+	return "MCP instance is failing after a startup failure: " + e.reason
+}
+
+func (e *StartBackoffError) FailureReason() string {
+	return e.reason
+}
+
+func (e *StartBackoffError) RetryDelay() time.Duration {
+	return e.retryDelay
+}
+
+type workloadStoppedDuringStartupError struct {
+	status string
+}
+
+func (e *workloadStoppedDuringStartupError) Error() string {
+	return fmt.Sprintf("MCP workload stopped while starting (state %q)", e.status)
+}
+
+func (e *workloadStoppedDuringStartupError) FailureReason() string {
+	if state := safeStartupState(e.status); state != "" {
+		return fmt.Sprintf("workload stopped during startup (state %s)", state)
+	}
+	return "workload stopped during startup"
+}
+
+func startFailureBackoff(consecutive int) time.Duration {
+	if consecutive <= 0 {
+		return 0
+	}
+	delay := startFailureBackoffBase
+	for attempt := 1; attempt < consecutive && delay < startFailureBackoffCap; attempt++ {
+		delay *= 2
+		if delay > startFailureBackoffCap {
+			return startFailureBackoffCap
+		}
+	}
+	return delay
+}
+
+func (r *ProviderRuntime) startBackoff(instanceID string) error {
+	r.startFailuresMu.Lock()
+	defer r.startFailuresMu.Unlock()
+	state, exists := r.startFailures[instanceID]
+	if !exists {
+		return nil
+	}
+	retryDelay := time.Until(state.retryAt)
+	if retryDelay <= 0 {
+		return nil
+	}
+	return &StartBackoffError{reason: state.reason, retryDelay: retryDelay}
+}
+
+func (r *ProviderRuntime) recordStartFailure(instanceID string, cause error, fallback string) *StartupFailureError {
+	reason := fallback
+	var classified failureReasonError
+	if errors.As(cause, &classified) && strings.TrimSpace(classified.FailureReason()) != "" {
+		reason = classified.FailureReason()
+	}
+
+	r.startFailuresMu.Lock()
+	if r.startFailures == nil {
+		r.startFailures = make(map[string]startFailureState)
+	}
+	state := r.startFailures[instanceID]
+	state.consecutive++
+	delay := startFailureBackoff(state.consecutive)
+	state.reason = reason
+	state.retryAt = time.Now().Add(delay)
+	r.startFailures[instanceID] = state
+	r.startFailuresMu.Unlock()
+
+	return &StartupFailureError{reason: reason, cause: cause, retryDelay: delay}
+}
+
+func (r *ProviderRuntime) clearStartFailure(instanceID string) {
+	r.startFailuresMu.Lock()
+	delete(r.startFailures, instanceID)
+	r.startFailuresMu.Unlock()
+}
+
 type ProviderRuntime struct {
 	providers      ProviderSelector
 	backend        backends.Backend
@@ -47,6 +180,9 @@ type ProviderRuntime struct {
 	startupTimeout time.Duration
 	remote         *RemoteUpstream
 	observer       RuntimeObserver
+
+	startFailuresMu sync.Mutex
+	startFailures   map[string]startFailureState
 }
 
 func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backend, cfg *config.Config, startupTimeout time.Duration, remote *RemoteUpstream) (*ProviderRuntime, error) {
@@ -62,10 +198,14 @@ func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backe
 		config:         cfg,
 		startupTimeout: startupTimeout,
 		remote:         remote,
+		startFailures:  make(map[string]startFailureState),
 	}, nil
 }
 
 func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPServerInstance) (string, error) {
+	if err := r.startBackoff(instance.InstanceID); err != nil {
+		return "", err
+	}
 	provider, err := r.providers.GetProvider(instance)
 	if err != nil {
 		return "", err
@@ -79,9 +219,8 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 		return "", fmt.Errorf("inspect MCP runtime status: %w", statusErr)
 	}
 	if statusErr == nil && runtimeStatusStopped(status.Status) {
-		// A stopped workload never becomes ready again — mcp-base exits when
-		// its stdio server dies — so it is replaced, not waited on until the
-		// startup timeout gives up on it.
+		// A stopped workload never becomes ready again, so replace it rather
+		// than waiting for the startup deadline.
 		if err := r.delete(ctx, instance, BoundaryDeletion); err != nil {
 			return "", fmt.Errorf("remove stopped MCP workload: %w", err)
 		}
@@ -96,9 +235,10 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 			return "", err
 		}
 		if err := provider.CreateInstance(ctx, instance); err != nil {
+			failure := r.recordStartFailure(instance.InstanceID, err, "workload failed during startup")
 			observeErr := r.observeOperation(context.WithoutCancel(ctx), instance, operationID, OperationCreation, OperationFailed)
 			boundaryErr := r.observeBoundary(context.WithoutCancel(ctx), instance, operationID, BoundaryCreationFailed)
-			return "", errors.Join(err, observeErr, boundaryErr)
+			return "", errors.Join(failure, observeErr, boundaryErr)
 		}
 		if err := r.observeOperation(ctx, instance, operationID, OperationCreation, OperationCompleted); err != nil {
 			return "", r.cleanupFailedStart(instance, err)
@@ -111,15 +251,23 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 			operationID = r.newOperationID()
 		}
 		if status, err = r.awaitRunning(ctx, instance); err != nil {
-			return "", err
+			return "", r.recordStartFailure(instance.InstanceID, err, "workload did not become ready during startup")
 		}
 	}
-	// A started container reports running before its server listens; waiting
-	// here turns that window into a longer first request instead of a
-	// connection-refused 502. A remote data plane does the same wait itself.
+	// A running container may not have bound the bridge port while its package
+	// installs or its stdio server initializes.
 	if activating && r.remote == nil && status != nil && status.InternalURL != "" {
 		if err := r.awaitListening(ctx, instance, status.InternalURL, startDeadline); err != nil {
-			return "", r.cleanupFailedStart(instance, fmt.Errorf("MCP instance never listened: %w", err))
+			port := status.Port
+			if port <= 0 {
+				port, _ = instancePort(instance, instanceType)
+			}
+			reason := fmt.Sprintf("workload did not listen within %s", r.startupTimeout)
+			if port > 0 {
+				reason = fmt.Sprintf("workload did not listen on port %d within %s", port, r.startupTimeout)
+			}
+			failure := r.recordStartFailure(instance.InstanceID, err, reason)
+			return "", r.cleanupFailedStart(instance, failure)
 		}
 	}
 	if activating {
@@ -127,7 +275,7 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 			return "", r.cleanupFailedStart(instance, err)
 		}
 	}
-
+	r.clearStartFailure(instance.InstanceID)
 	return r.upstreamURL(instance, instanceType)
 }
 
@@ -138,36 +286,38 @@ func (r *ProviderRuntime) awaitRunning(ctx context.Context, instance *models.MCP
 	defer deadline.Stop()
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
+	lastState := ""
 	for {
 		status, statusErr := r.backend.GetInstanceStatus(ctx, instance.InstanceID)
+		if statusErr == nil {
+			lastState = status.Status
+		}
 		if statusErr == nil && runtimeStatusReady(status.Status) {
 			return status, nil
 		}
 		if statusErr != nil && !errors.Is(statusErr, backends.ErrInstanceNotFound) {
-			return nil, r.cleanupFailedStart(instance, fmt.Errorf("inspect MCP runtime while starting: %w", statusErr))
+			cause := &StartupFailureError{
+				reason: "workload could not be inspected during startup",
+				cause:  fmt.Errorf("inspect MCP runtime while starting: %w", statusErr),
+			}
+			return nil, r.cleanupFailedStart(instance, cause)
 		}
 		if statusErr == nil && runtimeStatusStopped(status.Status) {
-			return nil, r.cleanupFailedStart(instance, fmt.Errorf("MCP workload stopped while starting (state %q)", status.Status))
+			return nil, r.cleanupFailedStart(instance, &workloadStoppedDuringStartupError{status: status.Status})
 		}
 		select {
 		case <-ctx.Done():
-			// The gateway allows a start exactly StartupTimeout, which is
-			// also this loop's deadline, so this branch — not the timer
-			// below — is the one production takes. Report the same last
-			// state the timer would: without it the log says only that time
-			// ran out, and the workload has already been cleaned up by the
-			// time anyone could go and look at it.
-			if statusErr != nil {
-				return nil, r.cleanupFailedStart(instance,
-					fmt.Errorf("MCP instance did not become ready: %w", errors.Join(ctx.Err(), statusErr)))
+			cause := &StartupFailureError{
+				reason: startupReadinessFailureReason(r.startupTimeout, lastState),
+				cause:  ctx.Err(),
 			}
-			return nil, r.cleanupFailedStart(instance,
-				fmt.Errorf("MCP instance did not become ready; last state %q: %w", status.Status, ctx.Err()))
+			return nil, r.cleanupFailedStart(instance, cause)
 		case <-deadline.C:
-			if statusErr != nil {
-				return nil, r.cleanupFailedStart(instance, fmt.Errorf("MCP instance did not become ready: %w", statusErr))
+			cause := &StartupFailureError{
+				reason: startupReadinessFailureReason(r.startupTimeout, lastState),
+				cause:  errors.New("startup deadline expired"),
 			}
-			return nil, r.cleanupFailedStart(instance, fmt.Errorf("MCP instance did not become ready; last state %q", status.Status))
+			return nil, r.cleanupFailedStart(instance, cause)
 		case <-ticker.C:
 		}
 	}
@@ -190,7 +340,7 @@ func (r *ProviderRuntime) awaitListening(ctx context.Context, instance *models.M
 			}
 			status, err := r.backend.GetInstanceStatus(waitCtx, instance.InstanceID)
 			if err == nil && runtimeStatusStopped(status.Status) {
-				cancel(fmt.Errorf("the workload stopped (state %q)", status.Status))
+				cancel(&workloadStoppedDuringStartupError{status: status.Status})
 				return
 			}
 		}
@@ -263,13 +413,30 @@ func (r *ProviderRuntime) cleanupFailedStart(instance *models.MCPServerInstance,
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := r.delete(cleanupCtx, instance, BoundaryFailedStartCleanup); err != nil {
+		var classified failureReasonError
+		var retryable retryDelayError
+		if errors.As(cause, &classified) {
+			var delay time.Duration
+			if errors.As(cause, &retryable) {
+				delay = retryable.RetryDelay()
+			}
+			return &StartupFailureError{
+				reason:     classified.FailureReason(),
+				cause:      errors.Join(cause, fmt.Errorf("cleanup failed MCP activation: %w", err)),
+				retryDelay: delay,
+			}
+		}
 		return errors.Join(cause, fmt.Errorf("cleanup failed MCP activation: %w", err))
 	}
 	return cause
 }
 
 func (r *ProviderRuntime) Delete(ctx context.Context, instance *models.MCPServerInstance) error {
-	return r.delete(ctx, instance, BoundaryDeletion)
+	if err := r.delete(ctx, instance, BoundaryDeletion); err != nil {
+		return err
+	}
+	r.clearStartFailure(instance.InstanceID)
+	return nil
 }
 
 func (r *ProviderRuntime) delete(ctx context.Context, instance *models.MCPServerInstance, boundary RuntimeBoundary) error {
@@ -335,4 +502,22 @@ func runtimeStatusStopped(status string) bool {
 	default:
 		return false
 	}
+}
+
+func safeStartupState(status string) string {
+	switch state := strings.ToLower(strings.TrimSpace(status)); state {
+	case "created", "creating", "pending", "running", "healthy", "ready",
+		"stopped", "exited", "dead", "error", "failed", "restarting", "paused":
+		return state
+	default:
+		return ""
+	}
+}
+
+func startupReadinessFailureReason(timeout time.Duration, lastState string) string {
+	reason := fmt.Sprintf("workload did not become ready within %s", timeout)
+	if state := safeStartupState(lastState); state != "" {
+		return fmt.Sprintf("%s (last state: %s)", reason, state)
+	}
+	return reason
 }

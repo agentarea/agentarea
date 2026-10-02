@@ -54,7 +54,6 @@ const ROUTES = [
   "/skills/create",
   "/policies/new",
   "/triggers/create",
-  "/triggers/new",
   "/connections/add",
   "/connections/add-openapi",
   "/models/create",

@@ -320,3 +320,21 @@ async def test_a_rule_naming_the_tool_through_its_server_applies_at_the_proxy(mo
     await _authorize_mcp_tool_calls(
         _CALL, SimpleNamespace(user_id="u1", workspace_id="ws1"), object(), instance_id=uuid4()
     )
+
+
+def test_member_upstream_never_sees_caller_cookies_nor_sets_ours():
+    """A URL-type upstream is member-supplied: the caller's cookies and forwarding
+    headers must not reach it, and its Set-Cookie must not land on the API origin."""
+    inbound = _filter_inbound_headers(
+        {
+            "Cookie": "ory_kratos_session=secret",
+            "X-Forwarded-For": "10.0.0.1",
+            "Accept": "application/json",
+        }
+    )
+    outbound = _filter_outbound_headers(
+        {"Set-Cookie": "session=x; Domain=.agentarea.dev", "Content-Type": "application/json"}
+    )
+
+    assert inbound == {"Accept": "application/json"}
+    assert outbound == {"Content-Type": "application/json"}

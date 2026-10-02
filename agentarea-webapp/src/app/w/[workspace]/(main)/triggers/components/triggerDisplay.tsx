@@ -5,6 +5,7 @@ import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { getValidTimestamp } from "@/utils/dateUtils";
 
 export interface TriggerCatalogEntry {
   id?: string;
@@ -322,8 +323,11 @@ export function formatTriggerCost(
 
 /** Compact relative time like "in 14h" / "3m ago" (matches the design). */
 export function formatCompactDistance(value: Date | string | number): string {
-  const target = new Date(value).getTime();
-  if (Number.isNaN(target)) return "—";
+  const target =
+    typeof value === "string"
+      ? getValidTimestamp(value)
+      : new Date(value).getTime();
+  if (target === null || Number.isNaN(target)) return "—";
   const diff = target - Date.now();
   const seconds = Math.round(Math.abs(diff) / 1000);
 

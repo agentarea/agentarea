@@ -82,7 +82,7 @@ def _a2a_metadata(request: Request, **extra: str | None) -> dict[str, Any]:
 
 async def load_a2a_agent(
     agent_id: str,
-    db_session: AsyncSession = Depends(get_read_db_session),
+    db_session: AsyncSession = Depends(get_read_db_session, scope="function"),
 ) -> Agent:
     """The agent the A2A URL names, looked up across workspaces.
 

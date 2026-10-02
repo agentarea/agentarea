@@ -19,7 +19,7 @@ from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
 from enum import StrEnum
 from functools import lru_cache
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import Field
 from sqlalchemy import Engine, create_engine
@@ -97,6 +97,10 @@ class TenantScopeSettings(BaseAppSettings):
     """
 
     mode: TenantScopeMode = Field(validation_alias="AGENTAREA_DB_TENANT_SCOPE")
+
+    # Pydantic Settings may populate required fields from the environment.
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
 
 
 class Database:
@@ -257,7 +261,7 @@ def get_db_settings() -> DatabaseSettings:
 @lru_cache
 def get_tenant_scope_settings() -> TenantScopeSettings:
     """Get the tenant scope enforcement settings."""
-    return TenantScopeSettings()  # pyright: ignore[reportCallIssue]
+    return TenantScopeSettings()
 
 
 # Global database instance - initialized lazily so importing this module does

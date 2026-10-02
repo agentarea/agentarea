@@ -290,9 +290,7 @@ export async function createTriggerAction(
   }
 
   try {
-    const { data, error } = await createTrigger(
-      validated.data as unknown as Parameters<typeof createTrigger>[0]
-    );
+    const { data, error } = await createTrigger(validated.data);
 
     if (error) {
       const errorMessage = formatApiError(error);

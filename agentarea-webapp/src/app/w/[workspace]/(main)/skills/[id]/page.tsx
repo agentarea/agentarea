@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
@@ -48,10 +48,9 @@ import {
   getSkillAction as getSkill,
   getSkillContentAction as getSkillContent,
   getSkillFileAction as getSkillFile,
-  getSkillFilesAction as getSkillFiles,
   installSkillAction as installSkill,
   listSkillMembersAction as listSkillMembers,
-  listSkillsAction as listSkills,
+  loadSkillDetailAction,
   removeSkillMemberAction as removeSkillMember,
   updateSkillAction as updateSkill,
 } from "@/lib/server-actions";
@@ -107,6 +106,9 @@ export default function SkillDetailPage() {
   const [editDescription, setEditDescription] = useState("");
   const [editContent, setEditContent] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
+  const hasChangesRef = useRef(false);
+  const skillIdRef = useRef(skillId);
+  const loadedSkillIdRef = useRef<string | null>(null);
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
@@ -126,19 +128,24 @@ export default function SkillDetailPage() {
   const [addChildError, setAddChildError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
+      if (skillIdRef.current !== skillId) {
+        skillIdRef.current = skillId;
+        hasChangesRef.current = false;
+      }
       setLoading(true);
       setLoadError(null);
       setNotFound(false);
       try {
-        const [skillRes, contentRes, filesRes, membersRes, allSkillsRes] =
-          await Promise.all([
-            getSkill(skillId),
-            getSkillContent(skillId),
-            getSkillFiles(skillId),
-            listSkillMembers(skillId),
-            listSkills(),
-          ]);
+        const {
+          skill: skillRes,
+          content: contentRes,
+          files: filesRes,
+          members: membersRes,
+          allSkills: allSkillsRes,
+        } = await loadSkillDetailAction(skillId);
+        if (cancelled) return;
 
         if (skillRes.error || !skillRes.data) {
           if (isApiNotFound(skillRes)) {
@@ -155,6 +162,7 @@ export default function SkillDetailPage() {
 
         const skillData = skillRes.data as Skill;
         const contentData = contentRes.data as SkillContent;
+        loadedSkillIdRef.current = skillId;
 
         setSkill(skillData);
         setContent(contentData);
@@ -175,27 +183,33 @@ export default function SkillDetailPage() {
             : null
         );
 
-        setEditName(skillData.name);
-        setEditDescription(skillData.description || "");
-        setEditContent(contentData?.content || "");
+        if (!hasChangesRef.current) {
+          setEditName(skillData.name);
+          setEditDescription(skillData.description || "");
+          setEditContent(contentData?.content || "");
+        }
 
         if (contentData?.content) {
           setSelectedFile("SKILL.md");
           setFileContent(contentData.content);
         }
       } catch (err) {
+        if (cancelled) return;
         console.error("Failed to load skill", err);
         setLoadError(`${t("error.loadSkill")}: ${formatApiError(err)}`);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    fetchData();
+    void fetchData();
+    return () => {
+      cancelled = true;
+    };
   }, [skillId, reloadKey, t, tChildren]);
 
   useEffect(() => {
-    if (!skill || !content) return;
+    if (loadedSkillIdRef.current !== skillId || !skill || !content) return;
 
     const nameChanged = editName !== skill.name;
     const descChanged = editDescription !== (skill.description || "");
@@ -204,12 +218,13 @@ export default function SkillDetailPage() {
       editContent !== (content?.content || "");
 
     const changed = nameChanged || descChanged || contentChanged;
+    hasChangesRef.current = changed;
     setHasChanges(changed);
     if (changed) {
       setSaved(false);
       setActionError(null);
     }
-  }, [editName, editDescription, editContent, skill, content]);
+  }, [skillId, editName, editDescription, editContent, skill, content]);
 
   const handleFileSelect = async (path: string) => {
     setSelectedFile(path);
@@ -301,6 +316,7 @@ export default function SkillDetailPage() {
       }
 
       setHasChanges(false);
+      hasChangesRef.current = false;
       setIsEditing(false);
       setSaved(true);
     } catch (err) {
@@ -610,7 +626,10 @@ export default function SkillDetailPage() {
                 ) : isEditing && canEditFile ? (
                   <textarea
                     value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
+                    onChange={(e) => {
+                      hasChangesRef.current = true;
+                      setEditContent(e.target.value);
+                    }}
                     className="w-full h-full p-4 bg-background text-sm font-mono leading-relaxed resize-none focus:outline-none"
                     spellCheck={false}
                   />

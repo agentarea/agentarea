@@ -314,6 +314,24 @@ class StripeSignatureVerifier(SignatureVerifier):
         return ["stripe-signature"]
 
 
+class TelegramSecretTokenVerifier(SignatureVerifier):
+    """Telegram echoes the ``secret_token`` given to ``setWebhook`` in a header.
+
+    Telegram does not sign the body; the token it repeats on every update is
+    the only proof a request came from Telegram for this bot.
+    """
+
+    def verify(self, headers: dict[str, str], body: bytes | str, secret: str) -> bool:
+        token = headers.get("x-telegram-bot-api-secret-token", "")
+        if not token:
+            logger.warning("Missing Telegram secret token header")
+            return False
+        return hmac.compare_digest(token.encode("utf-8"), secret.encode("utf-8"))
+
+    def get_required_headers(self) -> list[str]:
+        return ["x-telegram-bot-api-secret-token"]
+
+
 # Registry mapping WebhookType to its signature verifier
 VERIFIER_REGISTRY: dict[str, type[SignatureVerifier]] = {
     "slack": SlackSignatureVerifier,
@@ -321,9 +339,14 @@ VERIFIER_REGISTRY: dict[str, type[SignatureVerifier]] = {
     "discord": DiscordSignatureVerifier,
     "linear": LinearSignatureVerifier,
     "stripe": StripeSignatureVerifier,
-    # telegram uses bot token validation at a different level
+    "telegram": TelegramSecretTokenVerifier,
     # generic uses configurable HMAC
 }
+
+#: Types whose triggers created before verification existed carry no secret.
+#: They keep being accepted (with a warning) instead of going dark on upgrade;
+#: every trigger created or re-registered now has one and is verified.
+LEGACY_UNSIGNED_TYPES: frozenset[str] = frozenset({"telegram"})
 
 # Credential key names used for each channel's signing secret
 SIGNING_SECRET_KEYS: dict[str, str] = {
@@ -334,6 +357,7 @@ SIGNING_SECRET_KEYS: dict[str, str] = {
     "stripe": "signing_secret",
     "generic": "signing_secret",
     "email": "signing_secret",
+    "telegram": "secret_token",
 }
 
 
@@ -496,6 +520,14 @@ async def verify_webhook_signature(
         wt, validation_rules, webhook_config, secret_reader, trigger_id
     )
     if not secret:
+        if wt in LEGACY_UNSIGNED_TYPES:
+            logger.warning(
+                "webhook_type=%s trigger_id=%s has no secret token; accepting a legacy "
+                "unsigned webhook. Re-save the trigger to register one.",
+                wt,
+                trigger_id,
+            )
+            return None
         if wt in VERIFIER_REGISTRY:
             logger.warning(
                 "webhook_type=%s has a registered signature scheme but no signing "

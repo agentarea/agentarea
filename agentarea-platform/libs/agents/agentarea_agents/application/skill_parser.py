@@ -9,6 +9,8 @@ from typing import BinaryIO, ClassVar
 
 import frontmatter
 
+from .skill_package_limits import check_zip_budget
+
 
 @dataclass
 class SkillMetadata:
@@ -195,6 +197,7 @@ class SkillParser:
             zip_data = io.BytesIO(zip_data)
 
         with zipfile.ZipFile(zip_data, "r") as zf:
+            check_zip_budget(zf)
             file_paths = []
             file_sizes = {}
 

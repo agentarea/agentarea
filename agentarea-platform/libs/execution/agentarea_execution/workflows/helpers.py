@@ -19,6 +19,7 @@ from temporalio import workflow
 with workflow.unsafe.imports_passed_through():
     from uuid import uuid4
 
+    from agentarea_agents_sdk.tools.a2a_agent_tool import delegate_tool_name
     from agentarea_common.money import ZERO, Money, to_money
 
 from agentarea_agents_sdk.prompts import MessageTemplates, PromptBuilder
@@ -27,11 +28,37 @@ from ..models import McpToolRoute
 
 
 def tool_policy_aliases(
-    routes: Mapping[str, McpToolRoute] | None, tool_name: str
+    routes: Mapping[str, McpToolRoute] | McpToolRoute | None,
+    tool_name: str,
+    tool_configs: Sequence[Any] | None = None,
 ) -> tuple[str, ...]:
-    """The names besides ``tool_name`` a policy rule may use for this tool."""
-    route = (routes or {}).get(tool_name)
-    return route.policy_names(tool_name) if route else ()
+    """Resolve configured and routed names that govern this model-facing tool."""
+    route = routes.get(tool_name) if isinstance(routes, Mapping) else routes
+    aliases = list(route.policy_names(tool_name)) if route else []
+
+    for config in tool_configs or ():
+        if not isinstance(config, Mapping):
+            continue
+        name = config.get("name")
+        if not isinstance(name, str):
+            continue
+        tool_type = config.get("type")
+        if tool_type == "agent" and delegate_tool_name(name) == tool_name:
+            aliases.append(name)
+        elif tool_type == "code" and name.rsplit("/", 1)[-1] == tool_name:
+            aliases.append(name)
+        elif tool_type == "openapi":
+            settings = config.get("settings")
+            allowed_tools = settings.get("allowed_tools") if isinstance(settings, Mapping) else None
+            if isinstance(allowed_tools, Sequence) and not isinstance(allowed_tools, str):
+                aliases.extend(
+                    operation_name
+                    for operation_name in allowed_tools
+                    if isinstance(operation_name, str)
+                    and re.sub(r"[^a-zA-Z0-9_-]", "_", operation_name) == tool_name
+                )
+
+    return tuple(dict.fromkeys(alias for alias in aliases if alias and alias != tool_name))
 
 
 def resolve_effective_budget(
@@ -203,6 +230,7 @@ def filter_disclosed_tools(
     effective_policy: dict[str, Any] | None,
     tools: list[dict[str, Any]],
     mcp_tool_routes: Mapping[str, McpToolRoute] | None = None,
+    tool_configs: Sequence[Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Offer the model only the capability tools policy would actually let it call.
 
@@ -219,7 +247,7 @@ def filter_disclosed_tools(
         if name in CONTROL_FLOW_TOOL_NAMES:
             disclosed.append(tool)
             continue
-        aliases = tool_policy_aliases(mcp_tool_routes, name)
+        aliases = tool_policy_aliases(mcp_tool_routes, name, tool_configs)
         if decide_tool_action(effective_policy, name, aliases) is not ToolAction.DENY:
             disclosed.append(tool)
     return disclosed

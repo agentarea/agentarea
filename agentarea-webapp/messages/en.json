@@ -2069,6 +2069,7 @@
     "name": "Name",
     "baseUrl": "Base URL",
     "baseUrlHint": "The base URL for API requests",
+    "baseUrlAbsoluteRequired": "Enter an absolute HTTP or HTTPS base URL.",
     "description": "Description (optional)",
     "customHeaders": "Custom Headers (optional)",
     "addHeader": "Add Header",

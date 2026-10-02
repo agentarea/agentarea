@@ -13,6 +13,7 @@ from agentarea_mcp.application.service import (
 )
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
+from agentarea_mcp.package_import import MCPRuntimeRetirementError
 from agentarea_mcp.schemas.dto import (
     MCPServerCreate,
     MCPServerInstanceCreate,
@@ -24,6 +25,7 @@ from agentarea_mcp.schemas.dto import (
 def graph(monkeypatch):
     """Creating an instance writes ownership tuples; record them instead."""
     return install_graph_ownership_stub(monkeypatch)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -174,6 +176,9 @@ async def test_update_container_config_retires_runtime_before_persisting_change(
     instance = _make_instance("docker")
     instance.json_spec = {"type": "docker", "environment": {"MODE": "old"}}
     svc = _make_service({str(instance.id): instance})
+    svc.mcp_server_repository.get_server_by_id.return_value.env_schema = [
+        {"name": "MODE", "isSecret": False}
+    ]
 
     async def retire_before_mutation(_instance_id):
         assert svc.repository.update.await_count == 0
@@ -193,6 +198,7 @@ async def test_update_container_config_retires_runtime_before_persisting_change(
         json_spec={"type": "docker", "environment": {"MODE": "new"}},
     )
 
+
 @pytest.mark.asyncio
 async def test_update_converted_spec_keeps_imported_transport_metadata():
     instance = _make_instance("docker")
@@ -206,6 +212,9 @@ async def test_update_converted_spec_keeps_imported_transport_metadata():
         "environment": {"MODE": "old"},
     }
     svc = _make_service({str(instance.id): instance})
+    svc.mcp_server_repository.get_server_by_id.return_value.env_schema = [
+        {"name": "MODE", "isSecret": False}
+    ]
     svc._retire_runtime_before_mutation = AsyncMock()
 
     updated = await svc.update_instance(
@@ -240,7 +249,7 @@ async def test_transport_spec_for_converted_instance_ignores_server_command_defa
     server_spec.docker_image_url = None
     server_spec.json_spec = {"type": "command"}
 
-    merged = await svc._get_transport_spec_for_instance(instance)
+    merged = await svc.get_transport_spec_for_instance(instance)
 
     assert merged["type"] == "docker"
     assert merged["image"] == instance.json_spec["image"]
@@ -265,6 +274,9 @@ async def test_update_command_spec_drops_package_import_state():
         "environment": {"TOKEN": "old"},
     }
     svc = _make_service({str(instance.id): instance})
+    svc.mcp_server_repository.get_server_by_id.return_value.env_schema = [
+        {"name": "TOKEN", "isSecret": False}
+    ]
     svc._retire_runtime_before_mutation = AsyncMock()
 
     updated = await svc.update_instance(
@@ -345,7 +357,7 @@ async def test_delete_container_instance_retires_runtime_before_desired_state():
 async def test_delete_preserves_desired_state_when_runtime_retirement_fails():
     instance = _make_instance("docker")
     svc = _make_service({str(instance.id): instance})
-    client = _RetireClient([503, 503, 503])
+    client = _RetireClient([503, 503, 503, 503, 503])
     mcp_settings = MagicMock()
     mcp_settings.MCP_CLIENT_TIMEOUT = 30
     mcp_settings.manager_retire_url.return_value = f"http://manager/mcp/{instance.id}"
@@ -357,8 +369,12 @@ async def test_delete_preserves_desired_state_when_runtime_retirement_fails():
         patch("agentarea_mcp.application.service.asyncio.sleep", new=AsyncMock()),
     ):
         settings.return_value.mcp = mcp_settings
-        with pytest.raises(RuntimeError, match="desired state was preserved"):
+        with pytest.raises(
+            MCPRuntimeRetirementError, match="desired state was preserved"
+        ) as exc_info:
             await svc.delete_instance(instance.id)
+
+    assert exc_info.value.status_code == 503
 
     assert await svc.repository.get_by_id(instance.id) is instance
     svc.event_broker.publish.assert_not_awaited()
@@ -1112,3 +1128,82 @@ class TestNormalizeUrlKeys:
 
         spec = {"type": "docker", "image": "x:y", "port": 8080}
         assert _normalize_url_keys(spec) is spec
+
+
+@pytest.mark.asyncio
+async def test_get_instance_masks_legacy_catalog_secret_values():
+    from datetime import UTC, datetime
+
+    from agentarea_api.api.v1.mcp_server_instances import get_mcp_server_instance
+
+    instance = _make_instance("command")
+    instance.description = ""
+    instance.json_spec = {
+        "type": "command",
+        "environment": {"API_TOKEN": "legacy-plaintext-token"},
+    }
+    instance.created_at = datetime(2026, 1, 1, tzinfo=UTC)
+    instance.updated_at = instance.created_at
+    service = _make_service({str(instance.id): instance})
+    service.mcp_server_repository.get_server_by_id.return_value.env_schema = [
+        {"name": "API_TOKEN", "isSecret": True}
+    ]
+
+    response = await get_mcp_server_instance(instance.id, MagicMock(), service)
+    payload = response.model_dump(mode="json")
+
+    assert payload["json_spec"]["environment"]["API_TOKEN"] == "*" * 6
+    assert "legacy-plaintext-token" not in repr(payload)
+
+
+@pytest.mark.asyncio
+async def test_undeclared_mcp_instance_environment_values_are_stored_as_secrets():
+    service = _make_service()
+    service.mcp_server_repository.get_server_by_id.return_value.env_schema = [
+        {"name": "MODE", "isSecret": False}
+    ]
+
+    cleaned, secrets = await service._extract_secrets_from_spec(
+        {
+            "environment": {"MODE": "production", "UNDECLARED_TOKEN": "unknown-secret"},
+            "headers": {"X-Undeclared-Credential": "unknown-header-secret"},
+        },
+        "test-spec-id",
+    )
+
+    assert cleaned["environment"] == {"MODE": "production"}
+    assert cleaned["headers"] == {}
+    assert secrets == {
+        "UNDECLARED_TOKEN": "unknown-secret",
+        "X-Undeclared-Credential": "unknown-header-secret",
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_moves_legacy_plaintext_secret_to_secret_manager():
+    instance = _make_instance("command")
+    instance.json_spec = {
+        "type": "command",
+        "command": "uvx",
+        "args": ["pkg"],
+        "environment": {"TOKEN": "legacy-plaintext-token"},
+    }
+    service = _make_service({str(instance.id): instance})
+    service.mcp_server_repository.get_server_by_id.return_value.env_schema = [
+        {"name": "TOKEN", "isSecret": True}
+    ]
+    service._retire_runtime_before_mutation = AsyncMock()
+
+    updated = await service.update_instance(
+        instance.id,
+        MCPServerInstanceUpdate(
+            json_spec={
+                "environment": {"TOKEN": "******"},
+            }
+        ),
+    )
+
+    service.env_service.set_instance_environment.assert_awaited_once_with(
+        instance.id, {"TOKEN": "legacy-plaintext-token"}
+    )
+    assert "legacy-plaintext-token" not in repr(updated.json_spec)

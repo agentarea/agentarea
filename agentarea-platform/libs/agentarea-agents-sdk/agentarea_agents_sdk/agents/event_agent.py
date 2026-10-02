@@ -119,10 +119,11 @@ class EventAgent:
         # Wire context persistence, if provided
         if context_service and context_task_id:
             # Lazy import to avoid hard dependency in type layer
+            create_context_event_listener: Callable[..., Any] | None
             try:
                 from ..context.context_service import create_context_event_listener
             except Exception:
-                create_context_event_listener = None  # type: ignore
+                create_context_event_listener = None
 
             if create_context_event_listener:
                 ctx_listener = create_context_event_listener(context_service, context_task_id)
@@ -201,11 +202,12 @@ class EventAgent:
         # Attempt to load and map prior events into message history
         try:
             if self._context_service and self._context_task_id:
+                events_to_messages: Callable[..., Any] | None
                 try:
                     # Lazy import to avoid hard dependency
-                    from ..context.context_service import events_to_messages  # type: ignore
+                    from ..context.context_service import events_to_messages
                 except Exception:
-                    events_to_messages = None  # type: ignore
+                    events_to_messages = None
                 if events_to_messages:
                     try:
                         prior_events = await self._context_service.list_events(

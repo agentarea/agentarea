@@ -11,7 +11,6 @@ const __dirname = path.dirname(__filename);
 
 // Default configuration values
 const defaultConfig: CLIConfig = {
-	kratosUrl: process.env['KRATOS_URL'] || 'http://localhost:4433',
 	apiBaseUrl: process.env['API_URL'] || 'http://localhost:8000',
 	apiTimeout: Number(process.env['API_TIMEOUT']) || 30000,
 	maxRetries: Number(process.env['MAX_RETRIES']) || 3,
@@ -39,10 +38,6 @@ export class ConfigManager {
 		try {
 			// Load from environment variables (highest priority)
 			const envConfig: Partial<CLIConfig> = {};
-
-			if (process.env['KRATOS_URL']) {
-				envConfig.kratosUrl = process.env['KRATOS_URL'];
-			}
 
 			if (process.env['API_URL']) {
 				envConfig.apiBaseUrl = process.env['API_URL'];
@@ -134,10 +129,6 @@ export class ConfigManager {
 
 	validate(): void {
 		try {
-			if (!this.config.kratosUrl) {
-				throw new Error('KRATOS_URL is required');
-			}
-
 			if (!this.config.apiBaseUrl) {
 				throw new Error('API_URL is required');
 			}

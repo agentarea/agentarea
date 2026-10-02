@@ -454,6 +454,7 @@ def make_config_activities(
                 else _as_tool_config_list(agent.tools),
                 mcp_server_instance_service=mcp_server_instance_service,
                 agent_service=agent_service,
+                workspace_id=user_context.workspace_id,
                 base_url=base_url,
             )
 

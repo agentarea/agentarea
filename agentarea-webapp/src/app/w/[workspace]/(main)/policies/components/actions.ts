@@ -13,6 +13,10 @@ import {
 } from "@/api/client/zod.gen";
 import { createPolicy, deletePolicy, updatePolicy } from "@/lib/api";
 
+type PolicyActionResult =
+  | { ok: true; data: PolicyRuleResponse }
+  | { ok: false; error: string };
+
 function errorMessage(error: unknown, fallback: string): string {
   if (!error) return fallback;
   if (typeof error === "string") return error;
@@ -35,29 +39,35 @@ function errorMessage(error: unknown, fallback: string): string {
 
 export async function createPolicyRuleAction(
   input: PolicyRuleCreateRequest
-): Promise<PolicyRuleResponse> {
+): Promise<PolicyActionResult> {
   const body = zCreatePolicyRuleV1PoliciesPostBody.parse(input);
   const { data, error } = await createPolicy(body);
 
   if (error || !data) {
-    throw new Error(errorMessage(error, "Save failed"));
+    return { ok: false, error: errorMessage(error, "Save failed") };
   }
 
-  return zCreatePolicyRuleV1PoliciesPostResponse.parse(data);
+  return {
+    ok: true,
+    data: zCreatePolicyRuleV1PoliciesPostResponse.parse(data),
+  };
 }
 
 export async function updatePolicyRuleAction(
   id: string,
   input: PolicyRuleUpdateRequest
-): Promise<PolicyRuleResponse> {
+): Promise<PolicyActionResult> {
   const body = zUpdatePolicyRuleV1PoliciesRuleIdPatchBody.parse(input);
   const { data, error } = await updatePolicy(id, body);
 
   if (error || !data) {
-    throw new Error(errorMessage(error, "Save failed"));
+    return { ok: false, error: errorMessage(error, "Save failed") };
   }
 
-  return zUpdatePolicyRuleV1PoliciesRuleIdPatchResponse.parse(data);
+  return {
+    ok: true,
+    data: zUpdatePolicyRuleV1PoliciesRuleIdPatchResponse.parse(data),
+  };
 }
 
 export async function deletePolicyRuleAction(id: string): Promise<void> {

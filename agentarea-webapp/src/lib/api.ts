@@ -857,11 +857,6 @@ export const deleteModelInstance = async (instanceId: string) => {
   return { data, error };
 };
 
-export const healthCheck = async () => {
-  // TODO: Implement health check endpoint
-  return { data: { status: "healthy" }, error: null };
-};
-
 export const listAllTools = async (options?: {
   include?: "code" | "mcp" | "code,mcp";
   mcpInstanceId?: string;
@@ -1166,20 +1161,10 @@ export const listTriggers = async (params?: {
   return { data, error };
 };
 
-export const createTrigger = async (body: {
-  name: string;
-  trigger_type: TriggerCreate["trigger_type"];
-  agent_id: string;
-  config: Record<string, unknown>;
-  task_parameters?: Record<string, unknown>;
-  failure_threshold?: number;
-}) => {
-  // Flatten config into the body — backend expects flat fields
-  const { config, ...rest } = body;
-  const flat = { ...rest, ...config };
+export const createTrigger = async (body: TriggerCreate) => {
   const { data, error } = await sdk.createTriggerV1TriggersPost({
     client: serverClient,
-    body: flat,
+    body,
   });
   return { data, error };
 };

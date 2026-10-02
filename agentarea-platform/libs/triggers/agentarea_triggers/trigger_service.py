@@ -200,8 +200,6 @@ class TriggerService:
                 trigger_type=trigger.trigger_type.value,
             )
 
-            # TODO: Publish trigger creation event when event system is defined
-
             # Schedule cron trigger if applicable
             if trigger.trigger_type == TriggerType.CRON and isinstance(trigger, CronTrigger):
                 try:
@@ -326,7 +324,6 @@ class TriggerService:
 
         if updated_trigger:
             logger.info(f"Updated trigger {trigger_id}")
-            # TODO: Publish trigger update event when event system is defined
 
             # Update schedule if it's a cron trigger
             if updated_trigger.trigger_type == TriggerType.CRON and isinstance(
@@ -385,7 +382,6 @@ class TriggerService:
 
         if success:
             logger.info(f"Deleted trigger {trigger_id}")
-            # TODO: Publish trigger deletion event when event system is defined
 
         return success
 
@@ -452,7 +448,6 @@ class TriggerService:
 
         if success:
             logger.info(f"Enabled trigger {trigger_id}")
-            # TODO: Publish trigger enabled event when event system is defined
 
             # Get trigger to check type
             trigger = await self.get_trigger(trigger_id)
@@ -488,7 +483,6 @@ class TriggerService:
 
         if success:
             logger.info(f"Disabled trigger {trigger_id}")
-            # TODO: Publish trigger disabled event when event system is defined
 
             # Get trigger to check type
             trigger = await self.get_trigger(trigger_id)

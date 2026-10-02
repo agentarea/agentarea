@@ -62,7 +62,7 @@ export default function AgentsList({
       ) : (
         <span className="text-xs text-muted-foreground">—</span>
       ),
-    tools_config: (_value: unknown, item: AgentWithToolIcons) => {
+    tools: (_value: unknown, item: AgentWithToolIcons) => {
       const toolIcons = item.tool_icons ?? [];
 
       if (toolIcons.length === 0) {

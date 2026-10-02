@@ -7,12 +7,13 @@ from pydantic import (
     GetCoreSchemaHandler,
     GetJsonSchemaHandler,
     PlainSerializer,
+    WithJsonSchema,
 )
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema
 
 
-def _utc_z_isoformat(dt: datetime) -> str:
+def utc_isoformat(dt: datetime) -> str:
     """Render a datetime as RFC 3339 UTC with a trailing ``Z``.
 
     DB timestamps are naive UTC (``TIMESTAMP WITHOUT TIME ZONE``); serialized
@@ -25,9 +26,11 @@ def _utc_z_isoformat(dt: datetime) -> str:
     return dt.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-# Reusable field type for API response datetimes: JSON-serializes as UTC ``Z``.
+# Reusable response timestamp: UTC ``Z`` on the wire, ``date-time`` in its schema.
 UtcDatetime = Annotated[
-    datetime, PlainSerializer(_utc_z_isoformat, return_type=str, when_used="json")
+    datetime,
+    PlainSerializer(utc_isoformat, return_type=str, when_used="json"),
+    WithJsonSchema({"type": "string", "format": "date-time"}, mode="serialization"),
 ]
 
 

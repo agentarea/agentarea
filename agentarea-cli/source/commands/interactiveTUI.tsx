@@ -31,7 +31,7 @@ interface Agent {
 interface CommandResult {
 	type: 'success' | 'error' | 'info';
 	message: string;
-	data?: any;
+	data?: string;
 }
 
 export function InteractiveTUI({userEmail, token}: InteractiveTUIProps) {

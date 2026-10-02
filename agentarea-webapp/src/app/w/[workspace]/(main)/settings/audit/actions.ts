@@ -1,5 +1,9 @@
 "use server";
 
+import type {
+  AuditEventResponse,
+  AuditLogListResponse,
+} from "@/api/client/types.gen";
 import {
   getAllTasks,
   listAgents,
@@ -18,30 +22,16 @@ import {
 import { apiErrorMessage } from "@/lib/api-errors";
 import { getAuthContext } from "@/lib/getAuthContext";
 
-export interface AuditChange {
-  field: string;
-  before?: unknown;
-  after?: unknown;
-}
+export type AuditChange = NonNullable<AuditEventResponse["changes"]>[number];
 
-export interface AuditEvent {
-  id: string;
-  action: string;
-  actor_id: string;
-  actor_type: string;
-  resource_type: string;
-  resource_id?: string | null;
-  source_ip?: string | null;
-  created_at: string;
-  changes?: AuditChange[];
+export type AuditEvent = AuditEventResponse & {
   actor?: AuditActorDisplay;
   resource?: AuditResourceDisplay;
-}
+};
 
-export interface AuditLogResponse {
+export type AuditLogResponse = Omit<AuditLogListResponse, "events"> & {
   events: AuditEvent[];
-  next_cursor: string | null;
-}
+};
 
 export interface AuditActorDisplay {
   label: string;
@@ -97,8 +87,8 @@ export async function fetchAuditLogs(params?: {
     };
   }
 
-  const raw = result.data as unknown as AuditLogResponse;
-  const events = await enrichAuditEvents(raw.events ?? []);
+  const raw = result.data;
+  const events = await enrichAuditEvents(raw.events);
 
   return { data: { ...raw, events }, error: null };
 }

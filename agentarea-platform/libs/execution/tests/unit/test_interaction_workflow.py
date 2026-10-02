@@ -279,8 +279,10 @@ async def test_unavailable_approval_denies_tool_without_escalation(instance):
         "approvers": ["user:owner"],
     }
     with patch(f"{MODULE}.wait_condition", new=AsyncMock()) as wait:
-        allowed = await instance._gate_tool_call(call("shell", command="deploy"))
-    assert allowed is False
+        allowed, policy_approval_granted = await instance._gate_tool_call(
+            call("shell", command="deploy")
+        )
+    assert (allowed, policy_approval_granted) == (False, False)
     wait.assert_not_awaited()
     assert instance._pending_escalations == {}
     assert "approval" in instance.state.messages[-1].content

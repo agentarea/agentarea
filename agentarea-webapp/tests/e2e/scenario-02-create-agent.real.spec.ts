@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   appPath,
+  authedRequest,
   createKratosUser,
   deleteKratosUser,
   installBrowserSession,
@@ -10,6 +11,7 @@ import {
 import {
   cleanupModelChain,
   deleteAgent,
+  expectHydrated,
   expectRedirectedAwayFrom,
   gotoCommitted,
   runRealStack,
@@ -56,6 +58,7 @@ test.describe("Scenario 02 MP - create an agent and set its configuration", () =
   test("creates an agent through the form, persists an edit, and removes it", async ({
     context,
     page,
+    request,
   }) => {
     test.setTimeout(90_000);
     await installBrowserSession(context, user);
@@ -64,6 +67,9 @@ test.describe("Scenario 02 MP - create an agent and set its configuration", () =
 
     // --- Create through the real form -------------------------------------
     await gotoCommitted(page, "/agents/create");
+    // react-hook-form writes its default name into #name when the field
+    // registers on hydration; typing before that is overwritten.
+    await expectHydrated(page.locator("#name"));
     await page.locator("#name").fill(name);
     await page.locator("#description").fill("Scenario 02 created through the UI");
     await page
@@ -107,7 +113,21 @@ test.describe("Scenario 02 MP - create an agent and set its configuration", () =
     // Submit is bound to the form by id (it lives in the page header), so target
     // it precisely rather than a fuzzy /save/i that can match the wrong element.
     await page.locator('button[form="agent-form"]').click();
-    await page.waitForTimeout(1500); // let the save server-action round-trip
+    // Reloading before the save server action lands aborts it; wait for the
+    // edit to be persisted instead.
+    await expect
+      .poll(
+        async () => {
+          const res = await authedRequest(request, user, "get", `/v1/agents/${createdRef}`);
+          if (!res.ok()) return undefined;
+          const agent: unknown = await res.json();
+          return agent && typeof agent === "object" && "description" in agent
+            ? agent.description
+            : undefined;
+        },
+        { timeout: 30_000 }
+      )
+      .toBe(editedDescription);
     await page.reload({ waitUntil: "commit" });
     await expect(page.locator("#name")).toHaveValue(name, { timeout: 15_000 });
     await expect(

@@ -180,10 +180,8 @@ func (d *DockerBackend) ExecuteSandbox(ctx context.Context, req warmpool.Execute
 // the same filesystem ExecuteSandbox (bash) runs against. The control plane
 // signs the ScopeFiles token; the executor secret never reaches the worker.
 //
-// TODO(prod-warm-pool): route per-task file requests to the same warm-pool pod
-// that owns the task's exec session (sticky routing), so files land in the pod
-// bash will actually run in. This dev path targets the single configured
-// executor, matching ExecuteSandbox.
+// The Docker backend has one shared executor, so every task's files and bash
+// meet there; the Kubernetes backend routes both to the task's own pod.
 func (d *DockerBackend) SandboxFilePut(ctx context.Context, req warmpool.FilePutRequest) (*warmpool.FilePutResponse, error) {
 	base, err := d.sharedExecutorBase()
 	if err != nil {

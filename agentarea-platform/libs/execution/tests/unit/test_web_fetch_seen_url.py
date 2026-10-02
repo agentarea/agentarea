@@ -67,7 +67,7 @@ async def test_link_only_the_model_wrote_is_not_fetched(name, args):
     _next_turn(wf, "Opening it now.")
     tool_call = _call(name, args)
 
-    assert await wf._gate_tool_call(tool_call) is False
+    assert await wf._gate_tool_call(tool_call) == (False, False)
     wf._deny_tool_call.assert_awaited_once_with(tool_call, name, _DENIAL)
 
 
@@ -82,7 +82,7 @@ async def test_link_from_search_results_stays_fetchable_after_it_reaches_the_log
         "web", {"action": "fetch_webpage", "fetch_webpage_url": "http://Constract.io"}
     )
 
-    assert await wf._gate_tool_call(tool_call) is True
+    assert await wf._gate_tool_call(tool_call) == (True, False)
     wf._deny_tool_call.assert_not_awaited()
 
 
@@ -91,4 +91,4 @@ async def test_search_is_not_subject_to_the_link_rule():
     wf = _workflow("web", ("user", "Find competitors."))
     tool_call = _call("web", {"action": "search_web", "search_web_query": "смета ремонта"})
 
-    assert await wf._gate_tool_call(tool_call) is True
+    assert await wf._gate_tool_call(tool_call) == (True, False)

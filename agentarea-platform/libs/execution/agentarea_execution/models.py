@@ -563,6 +563,8 @@ class MCPToolRequest(BaseModel):
     # Set only by the workflow, after a human approved this exact call following
     # a governance escalation; the escalating gate decides whether it suffices.
     escalation_approved: bool = False
+    # Set only after the workflow policy gate approved this exact tool call.
+    policy_approval_granted: bool = False
 
 
 class MCPToolResult(BaseModel):
