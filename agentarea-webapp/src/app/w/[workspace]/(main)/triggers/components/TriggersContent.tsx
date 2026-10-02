@@ -73,6 +73,7 @@ export default async function TriggersContent({
   return (
     <TriggersList
       triggers={filteredTriggers}
+      totalCount={triggers.length}
       catalog={catalog}
       viewMode={viewMode}
       searchQuery={searchQuery}

@@ -1,5 +1,13 @@
-import type { ConnectionState, ConnectionStateKey } from "./state";
+import { getOpenApiConnectionDisplayStatus } from "@/lib/status";
+import {
+  getMcpConnectionState,
+  getOpenApiConnectionState,
+  type ConnectionState,
+  type ConnectionStateKey,
+} from "./state";
+import type { MCPInstance, OpenAPIConnection } from "./types";
 import type { ConnectionUsage } from "./usage";
+import { getMCPInstanceToolCount } from "./utils";
 
 /**
  * Three buckets an operator scans in order: what is broken, what is carrying
@@ -41,6 +49,44 @@ export interface ConnectionListRow {
   name: string;
   _state: ConnectionState;
   _usage: ConnectionUsage | undefined;
+}
+
+/** What the filters and sections read off an MCP instance. */
+export function mcpConnectionListRow(
+  instance: MCPInstance,
+  usage: ConnectionUsage | undefined
+): ConnectionListRow {
+  return {
+    name: instance.name,
+    _state: getMcpConnectionState({
+      verification: instance.verification,
+      last_dispatch: instance.last_dispatch,
+      toolCount: getMCPInstanceToolCount(instance),
+    }),
+    _usage: usage,
+  };
+}
+
+/** What the filters and sections read off an OpenAPI connection. */
+export function openApiConnectionListRow(
+  connection: OpenAPIConnection
+): ConnectionListRow {
+  const toolCount = connection.available_tools.length;
+  return {
+    name: connection.name,
+    _state: getOpenApiConnectionState(
+      getOpenApiConnectionDisplayStatus(connection.status, toolCount),
+      toolCount
+    ),
+    _usage: undefined,
+  };
+}
+
+/** Reads the `filter` URL param; anything unknown falls back to "all". */
+export function parseListFilter(value: unknown): ListFilter {
+  return LIST_FILTERS.includes(value as ListFilter)
+    ? (value as ListFilter)
+    : "all";
 }
 
 export interface ConnectionSection<T extends ConnectionListRow> {

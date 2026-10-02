@@ -5,10 +5,13 @@ import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import FormError from "@/components/FormError/FormError";
 import SearchInput from "@/components/SearchInput";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { AddConnectionDropdown } from "./components/AddConnectionDropdown";
+import ConnectionsFilterSection from "./components/ConnectionsFilterSection";
 import MCPHeaderTabs from "./components/MCPHeaderTabs";
 import MCPServersContent from "./components/MCPServersContent";
 import MCPSkeleton, { mcpSkeletonColumns } from "./components/MCPSkeleton";
+import { parseListFilter } from "./list-sections";
 
 export const metadata: Metadata = {
   title: "Connections",
@@ -33,6 +36,7 @@ export default async function MCPServersPage({
     typeof resolvedSearchParams.search === "string"
       ? resolvedSearchParams.search
       : "";
+  const filter = parseListFilter(resolvedSearchParams.filter);
   // An OAuth callback that could not resolve its connection lands here via `/`.
   const oauthError =
     resolvedSearchParams.oauth === "error"
@@ -48,10 +52,15 @@ export default async function MCPServersPage({
         controls: <AddConnectionDropdown />,
       }}
       subheader={
-        <>
-          <SearchInput urlParamName="search" urlPath="/connections" />
-          <MCPHeaderTabs currentTab={tab} />
-        </>
+        <SubheaderToolbar
+          categories={
+            <Suspense fallback={<div className="h-7" />}>
+              <ConnectionsFilterSection currentFilter={filter} />
+            </Suspense>
+          }
+          search={<SearchInput urlParamName="search" urlPath="/connections" />}
+          controls={<MCPHeaderTabs currentTab={tab} />}
+        />
       }
     >
       {oauthError && (
@@ -60,18 +69,18 @@ export default async function MCPServersPage({
         </FormError>
       )}
       <Suspense
-        key={`${searchQuery}-${tab}`}
+        key={`${searchQuery}-${tab}-${filter}`}
         fallback={
           <div id="my-connections">
-            <MCPSkeleton
-              viewMode={tab}
-              columns={mcpSkeletonColumns(t)}
-              headerLabel={t("myConnections")}
-            />
+            <MCPSkeleton viewMode={tab} columns={mcpSkeletonColumns(t)} />
           </div>
         }
       >
-        <MCPServersContent searchQuery={searchQuery} viewMode={tab} />
+        <MCPServersContent
+          searchQuery={searchQuery}
+          viewMode={tab}
+          filter={filter}
+        />
       </Suspense>
     </ContentBlock>
   );

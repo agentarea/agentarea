@@ -10,6 +10,7 @@ import AgentsHeaderTabs from "@/app/w/[workspace]/(main)/agents/components/Agent
 import AgentsSkeleton from "@/app/w/[workspace]/(main)/agents/components/AgentsSkeleton";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import SearchInput from "@/components/SearchInput";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -65,10 +66,10 @@ export default async function AgentsBrowsePage({
         ),
       }}
       subheader={
-        <>
-          <SearchInput urlParamName="search" urlPath="/agents" />
-          <AgentsHeaderTabs currentTab={tab} />
-        </>
+        <SubheaderToolbar
+          search={<SearchInput urlParamName="search" urlPath="/agents" />}
+          controls={<AgentsHeaderTabs currentTab={tab} />}
+        />
       }
     >
       <Suspense

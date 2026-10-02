@@ -24,20 +24,14 @@ export function mcpSkeletonColumns(t: (key: string) => string): SkeletonColumn[]
 interface MCPSkeletonProps {
   viewMode?: string;
   columns: SkeletonColumn[];
-  /** "My connections" section heading — kept visible while content loads. */
-  headerLabel: string;
 }
 
 export default function MCPSkeleton({
   viewMode,
   columns,
-  headerLabel,
 }: MCPSkeletonProps) {
   return (
     <div className="py-1">
-      <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-        {headerLabel}
-      </h4>
       <CollectionSkeleton
         viewMode={viewMode}
         columns={columns}

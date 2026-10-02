@@ -82,7 +82,6 @@ export default function TriggersTypeFilter({
       value={active}
       onChange={select}
       layoutId="triggers-type-filter"
-      className="shrink-0"
     />
   );
 }

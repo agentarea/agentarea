@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
@@ -22,6 +23,8 @@ export type TriggersGroupBy = "channel" | "none";
 
 interface TriggersListProps {
   triggers: EnrichedTrigger[];
+  /** Triggers in the workspace before the type filter and search. */
+  totalCount: number;
   catalog: TriggerCatalogEntry[];
   viewMode: "grid" | "table";
   searchQuery: string;
@@ -38,6 +41,7 @@ interface TriggerGroup {
 
 export default function TriggersList({
   triggers,
+  totalCount,
   catalog,
   viewMode,
   searchQuery,
@@ -45,6 +49,7 @@ export default function TriggersList({
 }: TriggersListProps) {
   const t = useTranslations("TriggersPage");
   const tCommon = useTranslations("Common");
+  const searchParams = useSearchParams();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   // Groups that actually have triggers come first (largest first); empty
@@ -76,7 +81,7 @@ export default function TriggersList({
 
   const hasTriggers = triggers.length > 0;
 
-  if (!hasTriggers && !searchQuery) {
+  if (totalCount === 0) {
     return <TriggersEmptyState />;
   }
 
@@ -87,6 +92,24 @@ export default function TriggersList({
         description={t("noMatchingTriggersDescription", { query: searchQuery })}
         iconsType="triggers"
         action={{ label: tCommon("clearSearch"), href: "/triggers" }}
+      />
+    );
+  }
+
+  // The workspace has triggers, just none of the selected type.
+  if (!hasTriggers) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("type");
+    const query = params.toString();
+    return (
+      <EmptyState
+        title={t("noTriggersOfType")}
+        description={t("noTriggersOfTypeDescription")}
+        iconsType="triggers"
+        action={{
+          label: t("showAllTriggers"),
+          href: query ? `/triggers?${query}` : "/triggers",
+        }}
       />
     );
   }
