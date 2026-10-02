@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import SearchInput from "@/components/SearchInput";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { parsePageParam } from "@/lib/offsetPage";
 import { statusesForFilter } from "@/lib/taskStatusFilter";
 import { TasksData } from "./components/TasksData";
@@ -68,15 +69,21 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
         breadcrumb: [{ label: t("title") }],
       }}
       subheader={
-        <>
-          <SearchInput
-            urlParamName="search"
-            urlPath="/tasks"
-            resetParamNames={RESET_ON_SEARCH}
-          />
-          <TasksStatusFilter />
-          <TasksHeaderTabs currentTab={tab} />
-        </>
+        <SubheaderToolbar
+          search={
+            <SearchInput
+              urlParamName="search"
+              urlPath="/tasks"
+              resetParamNames={RESET_ON_SEARCH}
+            />
+          }
+          controls={
+            <>
+              <TasksStatusFilter />
+              <TasksHeaderTabs currentTab={tab} />
+            </>
+          }
+        />
       }
     >
       <Suspense
