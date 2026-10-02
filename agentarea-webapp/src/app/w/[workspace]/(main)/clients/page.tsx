@@ -33,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { createClientAction, listClientsAction } from "@/lib/server-actions";
+import ClientsSkeleton from "./ClientsSkeleton";
 import { HARNESS_OPTIONS, HarnessBadge, HarnessIcon } from "./harnesses";
 
 const McpIcon = ENTITY_ICONS.mcp;
@@ -193,9 +194,7 @@ export default function ClientsPage() {
     >
       <div>
         {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
+          <ClientsSkeleton viewMode={viewMode} />
         ) : loadError ? (
           <EmptyState
             title={t("loadFailed")}
