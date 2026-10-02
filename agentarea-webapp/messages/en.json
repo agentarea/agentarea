@@ -2700,6 +2700,64 @@
     "addFailed": "Couldn’t add {item}",
     "removeFailed": "Couldn’t remove {item}"
   },
+  "CatalogPage": {
+    "title": "Catalog",
+    "description": "Browse the catalog. Filter by type, use case, or integration, then add to your workspace.",
+    "types": {
+      "bundles": "Bundles",
+      "agents": "Agents",
+      "skills": "Skills",
+      "connections": "Connections"
+    },
+    "search": {
+      "bundles": "Search bundles…",
+      "agents": "Search agents…",
+      "skills": "Search skills…",
+      "connections": "Search connections…"
+    },
+    "allOfType": {
+      "bundles": "All bundles",
+      "agents": "All agents",
+      "skills": "All skills",
+      "connections": "All connections"
+    },
+    "inCatalog": "{count} in the catalog.",
+    "display": {
+      "ordering": "Ordering",
+      "recommended": "Recommended",
+      "name": "Name A–Z"
+    },
+    "empty": {
+      "noMatchesTitle": "No matches",
+      "noMatchesDescription": "Nothing matches your search and filters.",
+      "nothingTitle": "Nothing published yet",
+      "nothingDescription": "The catalog is synced from the platform registry. Entries of this type appear here once they are published.",
+      "clearFilters": "Clear filters",
+      "notFoundTitle": "Item not found",
+      "notFoundDescription": "This item may have been removed or isn't available.",
+      "backToCatalog": "Back to catalog"
+    },
+    "bringYourOwn": {
+      "connections": {
+        "mcp": "Connect your own MCP server",
+        "openapi": "Point at any REST API you already have",
+        "agent": "Or describe it to an agent and have it wire the connection up",
+        "action": "Add your own"
+      },
+      "skills": {
+        "write": "Write the skill yourself",
+        "action": "Create a skill"
+      },
+      "agents": {
+        "build": "Build the agent yourself",
+        "action": "Create an agent"
+      },
+      "bundles": {
+        "import": "Import a bundle you already have",
+        "action": "Import a bundle"
+      }
+    }
+  },
   "BundleInstall": {
     "modelsLoadFailed": "Couldn't load workspace models",
     "skillFileLoadFailed": "Couldn't load the file",

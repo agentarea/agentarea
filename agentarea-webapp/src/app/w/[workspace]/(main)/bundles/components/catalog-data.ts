@@ -64,11 +64,6 @@ export const SORT_KEYS = ["recommended", "name"] as const;
 export type SortMode = (typeof SORT_KEYS)[number];
 export const DEFAULT_SORT: SortMode = "recommended";
 
-export const SORT_LABELS: Record<SortMode, string> = {
-  recommended: "Recommended",
-  name: "Name A–Z",
-};
-
 export function isSortMode(v: unknown): v is SortMode {
   return typeof v === "string" && (SORT_KEYS as readonly string[]).includes(v);
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { browseCatalog } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import {
@@ -107,6 +108,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       : null,
   ]);
   const tBundle = await getTranslations("BundleInstall");
+  const t = await getTranslations("CatalogPage");
   const entries: CatalogEntry[] = (items as RegistryItem[]).map((it) =>
     normalize(type, it)
   );
@@ -127,18 +129,19 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     <ExplorePendingProvider>
       <ContentBlock
         header={{
-          breadcrumb: [{ label: "Catalog" }],
-          description:
-            "Browse the catalog. Filter by type, use case, or integration, then add to your workspace.",
+          breadcrumb: [{ label: t("title") }],
+          description: t("description"),
         }}
         subheader={
-          <>
-            <ExploreTypeTabs initialType={type} />
-            <div className="flex items-center gap-2">
-              <ExploreSortSelect initialSort={sort} />
-              <ExploreViewToggle initialView={initialView} />
-            </div>
-          </>
+          <SubheaderToolbar
+            categories={<ExploreTypeTabs initialType={type} />}
+            controls={
+              <>
+                <ExploreSortSelect initialSort={sort} />
+                <ExploreViewToggle initialView={initialView} />
+              </>
+            }
+          />
         }
       >
         <CatalogGallery
