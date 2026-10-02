@@ -1311,6 +1311,7 @@
       "allSources": "Все источники",
       "scope": "Область",
       "allScopes": "Все области",
+      "all": "Все",
       "clear": "Сбросить",
       "scopeValues": {
         "private": "Приватная",

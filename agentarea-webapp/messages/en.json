@@ -1311,6 +1311,7 @@
       "allSources": "All sources",
       "scope": "Scope",
       "allScopes": "All scopes",
+      "all": "All",
       "clear": "Clear",
       "scopeValues": {
         "private": "Private",

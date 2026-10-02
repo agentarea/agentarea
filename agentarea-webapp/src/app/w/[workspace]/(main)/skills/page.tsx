@@ -1,7 +1,4 @@
-import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
-import ContentBlock from "@/components/ContentBlock";
-import CreateSkillButton from "./components/CreateSkillButton";
 import SkillsView from "./components/SkillsView";
 
 export const metadata = {
@@ -17,7 +14,6 @@ export default async function SkillsPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const t = await getTranslations("SkillsPage");
   const resolvedSearchParams = await searchParams;
 
   // View mode: prefer URL, fall back to cookie, default to the Linear list.
@@ -39,28 +35,9 @@ export default async function SkillsPage({
   const order: "name" | "created" =
     orderParam === "created" ? "created" : "name";
 
-  const sourceTab = asString(resolvedSearchParams.source_type) || "all";
   const scope = asString(resolvedSearchParams.network_scope);
-  const search = asString(resolvedSearchParams.search);
 
-  return (
-    <ContentBlock
-      header={{
-        breadcrumb: [{ label: t("title") }],
-        controls: <CreateSkillButton />,
-      }}
-      className="p-0 overflow-hidden"
-    >
-      <SkillsView
-        initial={{
-          view,
-          group,
-          order,
-          sourceTab,
-          scope,
-          search,
-        }}
-      />
-    </ContentBlock>
-  );
+  // SkillsView owns the page chrome (header, scope tabs, search, display): the
+  // tab counts come from the same client-side fetch as the list.
+  return <SkillsView initial={{ view, group, order, scope }} />;
 }
