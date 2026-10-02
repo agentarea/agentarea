@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Grid2x2, Plus, Share2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,6 +11,7 @@ import type {
   AccessControlRelationshipsResponse,
   SkillCollection,
 } from "@/types/access-control";
+import { ACCESS_VIEW_PARAM, parseAccessView } from "./AccessViewTabs";
 import GraphPane from "./GraphPane";
 import ResolveAccessCard from "./ResolveAccessCard";
 import {
@@ -19,7 +21,6 @@ import {
 import { layoutGraph } from "./graph-layout";
 import styles from "./access-control.module.css";
 
-type ViewMode = "matrix" | "relationships";
 type ResourceKind = "collection" | "mcp" | "agent";
 
 interface ResolveOption {
@@ -61,7 +62,8 @@ export default function AccessControlExplorer({
   collections,
 }: AccessControlExplorerProps) {
   const router = useWorkspaceRouter();
-  const [view, setView] = useState<ViewMode>("relationships");
+  // Switched by AccessViewTabs in the page subheader.
+  const view = parseAccessView(useSearchParams().get(ACCESS_VIEW_PARAM));
 
   const agents = useMemo(
     () => graph.nodes.filter((n) => n.kind === "agent"),
@@ -261,31 +263,6 @@ export default function AccessControlExplorer({
   return (
     <div className={styles.explorer}>
       <div className={styles.tbar}>
-        <div className={styles.seg} role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "matrix"}
-            className={cn(styles.segBtn, view === "matrix" && styles.segBtnOn)}
-            onClick={() => setView("matrix")}
-          >
-            <Grid2x2 className="h-3.5 w-3.5 opacity-75" />
-            Matrix
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "relationships"}
-            className={cn(
-              styles.segBtn,
-              view === "relationships" && styles.segBtnOn
-            )}
-            onClick={() => setView("relationships")}
-          >
-            <Share2 className="h-3.5 w-3.5 opacity-75" />
-            Relationships
-          </button>
-        </div>
         <div className={styles.spacer} />
         <div className={styles.headline}>
           <b>{graph.stats.governed_skill_count.toLocaleString()}</b> skills

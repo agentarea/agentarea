@@ -2627,6 +2627,21 @@
     }
   },
   "PoliciesPage": {
+    "title": "Policies",
+    "newPolicy": "New policy",
+    "newRule": "New rule",
+    "tabs": {
+      "policies": "Policies",
+      "access": "Access"
+    },
+    "accessView": {
+      "matrix": "Matrix",
+      "relationships": "Relationships"
+    },
+    "empty": {
+      "title": "No policies yet — agents run unrestricted",
+      "description": "A policy governs what agents may do: which tools they call, what they spend, what needs approval."
+    },
     "accessControl": {
       "loadFailedTitle": "Couldn't load access control",
       "loadFailed": "Failed to load access control",
