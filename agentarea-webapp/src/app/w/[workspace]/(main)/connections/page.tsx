@@ -3,12 +3,12 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
+import { ViewModeTabs } from "@/components/HeaderTabs";
 import FormError from "@/components/FormError/FormError";
 import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { AddConnectionDropdown } from "./components/AddConnectionDropdown";
 import ConnectionsFilterSection from "./components/ConnectionsFilterSection";
-import MCPHeaderTabs from "./components/MCPHeaderTabs";
 import MCPServersContent from "./components/MCPServersContent";
 import MCPSkeleton, { mcpSkeletonColumns } from "./components/MCPSkeleton";
 import { parseListFilter } from "./list-sections";
@@ -59,7 +59,7 @@ export default async function MCPServersPage({
             </Suspense>
           }
           search={<SearchInput urlParamName="search" urlPath="/connections" />}
-          controls={<MCPHeaderTabs currentTab={tab} />}
+          controls={<ViewModeTabs currentTab={tab} />}
         />
       }
     >

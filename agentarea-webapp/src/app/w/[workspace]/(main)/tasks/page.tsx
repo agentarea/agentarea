@@ -4,12 +4,12 @@ import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { ViewModeTabs } from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { parsePageParam } from "@/lib/offsetPage";
 import { statusesForFilter } from "@/lib/taskStatusFilter";
 import { TasksData } from "./components/TasksData";
-import TasksHeaderTabs from "./components/TasksHeaderTabs";
 import TasksSkeleton from "./components/TasksSkeleton";
 import TasksStatusFilter from "./components/TasksStatusFilter";
 
@@ -80,7 +80,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
           controls={
             <>
               <TasksStatusFilter />
-              <TasksHeaderTabs currentTab={tab} />
+              <ViewModeTabs currentTab={tab} defaultTab="table" />
             </>
           }
         />

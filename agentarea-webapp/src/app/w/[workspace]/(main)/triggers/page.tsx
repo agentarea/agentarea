@@ -2,10 +2,10 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
+import { ViewModeTabs } from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import TriggersContent from "./components/TriggersContent";
-import TriggersHeaderTabs from "./components/TriggersHeaderTabs";
 import TriggersSkeleton from "./components/TriggersSkeleton";
 import TriggersDisplayMenu from "./components/TriggersDisplayMenu";
 import TriggersTypeFilterSection from "./components/TriggersTypeFilterSection";
@@ -69,7 +69,7 @@ export default async function TriggersPage({
           controls={
             <>
               <TriggersDisplayMenu currentGroup={groupBy} />
-              <TriggersHeaderTabs currentTab={viewMode} />
+              <ViewModeTabs currentTab={viewMode} defaultTab="table" />
             </>
           }
         />
