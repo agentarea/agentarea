@@ -6,10 +6,13 @@ with workflow.unsafe.imports_passed_through():
     from ..helpers import (
         ToolAction,
         approvers_for_tool,
+        comparable_url,
         decide_tool_action,
+        external_urls,
         sanitize_tool_event_value,
         tool_definition_name,
         tool_policy_aliases,
+        web_fetch_url,
     )
     from ..models import Message, PendingEscalation, ToolCall
 
@@ -22,7 +25,7 @@ from ..constants import (
 )
 from ..retry import bookkeeping_retry_policy
 from .budget import BudgetMixin
-from .patches import APPROVAL_RESPONSE_ONCE_PATCH
+from .patches import APPROVAL_RESPONSE_ONCE_PATCH, WEB_FETCH_SEEN_URL_PATCH
 
 
 class ToolApprovalMixin(BudgetMixin):
@@ -241,6 +244,24 @@ class ToolApprovalMixin(BudgetMixin):
             await self._deny_tool_call(tool_call, tool_name, "tool is not available to this agent")
             return False
 
+        # Like hosted fetch tools, a page may be opened only from a link that
+        # reached the conversation from outside the model, so an injected
+        # instruction cannot have it compose a URL that carries data away.
+        if tool_name not in (self.state.mcp_tool_routes or {}):
+            fetch_url = web_fetch_url(tool_name, tool_args)
+            if (
+                fetch_url is not None
+                and not self._link_reached_task(fetch_url)
+                and workflow.patched(WEB_FETCH_SEEN_URL_PATCH)
+            ):
+                await self._deny_tool_call(
+                    tool_call,
+                    tool_name,
+                    "a page can be fetched only from a link that already appeared in this "
+                    "task: the request, search results or a page fetched earlier",
+                )
+                return False
+
         decision = decide_tool_action(
             self.state.effective_policy,
             tool_name,
@@ -254,3 +275,11 @@ class ToolApprovalMixin(BudgetMixin):
         if decision is ToolAction.REQUIRE_APPROVAL:
             return await self._require_tool_approval(tool_call, tool_name, tool_args)
         return True
+
+    def _link_reached_task(self, url: str) -> bool:
+        """Whether ``url`` came into the conversation from outside the model."""
+        target = comparable_url(url)
+        if target is None:
+            return False
+        # Entries already in the log were remembered when they were written.
+        return target in self.state.seen_urls or target in external_urls(self.state.messages)

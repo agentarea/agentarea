@@ -1,5 +1,6 @@
 """Capability tool calls (MCP, OpenAPI, platform toolsets) and their payments."""
 
+import functools
 import itertools
 import logging
 from collections.abc import Awaitable, Callable
@@ -254,28 +255,25 @@ def make_tools_activities(
                             "workspace_id": str(request.workspace_id),
                         }
                     elif tool_name == "agentarea/web":
-                        # Web downloads must land on the SAME sandbox filesystem
-                        # bash runs in (via SandboxFileStore), not durable-only,
-                        # so a binary the agent fetches is visible to the shell
-                        # commands it runs next. Durable write-through keeps it
-                        # retrievable through the /files API. Mirrors agentarea/files.
-                        from agentarea_agents_sdk.tools.sandbox_file_store import SandboxFileStore
+                        # Pages are read into the conversation, never stored. The
+                        # client resolves, vets and pins every hop's address, and
+                        # with an empty policy it reaches public addresses only:
+                        # an agent-supplied URL is less trusted than a member's,
+                        # so OUTBOUND_PRIVATE_ALLOWLIST does not apply to it.
+                        from agentarea_common.utils.url_safety import (
+                            OutboundPolicy,
+                            safe_async_client,
+                        )
 
                         extra_kwargs = {
-                            "storage": SandboxFileStore(
-                                mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
-                                workspace_id=str(request.workspace_id),
-                                task_id=str(request.task_id) if request.task_id else "",
-                                auth_secret=sandbox_file_auth_secret(dependencies),
+                            "search_base_url": dependencies.settings.app.WEB_SEARCH_BASE_URL,
+                            "http_client_factory": functools.partial(
+                                safe_async_client, policy=OutboundPolicy()
                             ),
-                            "workspace_id": str(request.workspace_id),
-                            "task_id": str(request.task_id) if request.task_id else "",
-                            "search_base_url": (dependencies.settings.app.WEB_SEARCH_BASE_URL),
-                            "fetch_base_url": (dependencies.settings.app.WEB_FETCH_BASE_URL),
                         }
                     elif tool_name == MEDIA_TOOLSET:
-                        # Generated files land on the sandbox filesystem, like web
-                        # downloads, so the shell sees them. The models are the
+                        # Generated files land on the sandbox filesystem, so the
+                        # shell sees them. The models are the
                         # instances the settings name, resolved as this workspace.
                         from agentarea_agents_sdk.tools.sandbox_file_store import SandboxFileStore
                         from agentarea_llm.application.media_generation_service import (

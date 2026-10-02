@@ -14,7 +14,7 @@ with workflow.unsafe.imports_passed_through():
     from agentarea_common.money import ZERO, Money
 
     from ..context_manager import ContextWindowManager
-    from ..helpers import BudgetTracker, EventManager
+    from ..helpers import SEEN_URLS_LIMIT, BudgetTracker, EventManager, external_urls
     from ..models import AgentExecutionState, PendingEscalation
 
 from ...models import ConversationWindow, WorkflowEventsRequest
@@ -128,13 +128,28 @@ class AgentWorkflowBase:
             next_seq=self.state.conversation_next_seq,
         )
 
+    def _remember_external_urls(self) -> None:
+        """Keep the links the pending entries brought in from outside the model.
+
+        The pending entries are the workflow's only copy of the conversation
+        until they reach the log; the web fetch gate needs their links after.
+        """
+        known = set(self.state.seen_urls)
+        for url in external_urls(self.state.messages):
+            if url not in known:
+                known.add(url)
+                self.state.seen_urls.append(url)
+        del self.state.seen_urls[:-SEEN_URLS_LIMIT]
+
     def _mark_conversation_written(self) -> None:
         """Record that an activity wrote the pending entries to the log."""
+        self._remember_external_urls()
         self.state.conversation_next_seq += len(self.state.messages)
         self.state.messages = []
 
     def _apply_conversation_window(self, window: ConversationWindow) -> None:
         """Adopt the window an activity left the log in; nothing is pending after it."""
+        self._remember_external_urls()
         self.state.messages = []
         self.state.context_head_seqs = list(window.head_seqs)
         self.state.context_tail_start = window.tail_start

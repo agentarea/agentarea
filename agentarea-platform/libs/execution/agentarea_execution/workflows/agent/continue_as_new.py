@@ -151,6 +151,7 @@ class ContinueAsNewMixin(CompactionMixin):
         self.state.context_head_seqs = list(state.context_head_seqs)
         self.state.context_tail_start = state.context_tail_start
         self.state.last_prompt_tokens = state.last_prompt_tokens
+        self.state.seen_urls = list(state.seen_urls)
 
         # Restore agent tool registry for delegation routing
         self._agent_tool_registry = state.agent_tool_registry
@@ -252,6 +253,7 @@ class ContinueAsNewMixin(CompactionMixin):
             context_head_seqs=self.state.context_head_seqs,
             context_tail_start=self.state.context_tail_start,
             last_prompt_tokens=self.state.last_prompt_tokens,
+            seen_urls=self.state.seen_urls,
             agent_config=self.state.agent_config,
             available_tools=self.state.available_tools,
             current_iteration=self.state.current_iteration,

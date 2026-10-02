@@ -1,21 +1,16 @@
 """Unit-level coverage for ``WebToolset``.
 
-Network and storage are both stubbed:
-  - ``httpx.MockTransport`` serves canned responses (text + binary).
-  - ``InMemoryStorage`` (the SDK's own in-memory ``StorageClient`` impl)
-    catches the binary writes so we can assert on the resulting key
-    layout without booting RustFS.
+The network is stubbed with ``httpx.MockTransport``: search through a patched
+``httpx.AsyncClient``, fetch through the client factory the toolset is given.
 """
 
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 
-from agentarea_agents_sdk.tools.file_toolset import InMemoryStorage
 from agentarea_agents_sdk.tools.web_toolset import WebToolset
 
 _REAL_ASYNC_CLIENT = httpx.AsyncClient  # captured before any monkeypatch
@@ -35,6 +30,14 @@ def _patched_client_factory(transport: httpx.MockTransport):
             await self._client.aclose()
 
     return _Client
+
+
+def _fetching(handler) -> WebToolset:
+    """A toolset whose fetch client is served by ``handler``."""
+    transport = httpx.MockTransport(handler)
+    return WebToolset(
+        http_client_factory=lambda **kw: _REAL_ASYNC_CLIENT(transport=transport, **kw)
+    )
 
 
 @pytest.mark.asyncio
@@ -83,178 +86,88 @@ async def test_search_without_backend_fails_loudly() -> None:
 
 
 @pytest.mark.asyncio
-async def test_text_response_is_returned_inline(monkeypatch) -> None:
+async def test_html_page_is_returned_inline_with_text_and_links() -> None:
     body = (
         "<html><head><title>T</title><style>.hidden{color:red}</style></head>"
-        "<body><script>alert(1)</script><p>hi</p><a href='/docs'>Docs</a></body></html>"
+        "<body><script>alert(1)</script><p>смета</p><a href='/docs'>Docs</a></body></html>"
     )
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, text=body, headers={"content-type": "text/html"})
+        return httpx.Response(
+            200, content=body.encode(), headers={"content-type": "text/html; charset=utf-8"}
+        )
 
-    monkeypatch.setattr(
-        "agentarea_agents_sdk.tools.web_toolset.httpx.AsyncClient",
-        _patched_client_factory(httpx.MockTransport(handler)),
-    )
-
-    storage = InMemoryStorage()
-    tool = WebToolset(
-        storage=storage,
-        workspace_id="ws-1",
-        base_prefix="tasks/t",
-        fetch_base_url="http://fetch.test",
-    )
-
-    result = await tool.fetch_webpage("https://example.test/page")
+    result = await _fetching(handler).fetch_webpage("https://example.test/page")
     payload = json.loads(result)
 
-    assert payload["kind"] == "text"
     assert payload["status"] == 200
-    assert "<p>hi</p>" in payload["text"]
-    assert "hi" in payload["extracted_text"]
+    assert "<p>смета</p>" in payload["text"]
+    assert "смета" in payload["extracted_text"]
     assert "alert" not in payload["extracted_text"]
     assert "color:red" not in payload["extracted_text"]
     assert {"href": "https://example.test/docs", "text": "Docs"} in payload["links"]
-    # No artifact written for text responses.
-    assert await storage.list("ws-1") == []
+    # Links stay readable in the conversation, where the next fetch is checked.
+    assert "смета" in result
 
 
 @pytest.mark.asyncio
-async def test_binary_response_is_persisted_as_artifact(monkeypatch) -> None:
-    png = b"\x89PNG\r\n\x1a\n" + bytes(range(64))
-
+async def test_redirect_is_followed_and_final_url_reported() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=png, headers={"content-type": "image/png"})
+        if request.url.path == "/old":
+            return httpx.Response(301, headers={"location": "https://example.test/new"})
+        return httpx.Response(200, text="moved here", headers={"content-type": "text/plain"})
 
-    monkeypatch.setattr(
-        "agentarea_agents_sdk.tools.web_toolset.httpx.AsyncClient",
-        _patched_client_factory(httpx.MockTransport(handler)),
-    )
+    payload = json.loads(await _fetching(handler).fetch_webpage("https://example.test/old"))
 
-    storage = InMemoryStorage()
-    tool = WebToolset(
-        storage=storage,
-        workspace_id="ws-7",
-        base_prefix="tasks/t-9",
-        fetch_base_url="http://fetch.test",
-    )
-
-    result = await tool.fetch_webpage("https://cdn.example.test/foo.png")
-    payload = json.loads(result)
-
-    assert payload["kind"] == "binary"
-    assert payload["content_type"] == "image/png"
-    assert payload["size"] == len(png)
-    expected_path = "tasks/t-9/downloads/foo.png"
-    assert payload["file_path"] == expected_path
-
-    # The bytes really landed in the storage layer under the workspace.
-    data, ct = await storage.get("ws-7", expected_path)
-    assert data == png
-    assert ct == "image/png"
+    assert payload["url"] == "https://example.test/new"
+    assert payload["text"] == "moved here"
 
 
 @pytest.mark.asyncio
-async def test_binary_response_is_committed_to_canonical_task_workspace(monkeypatch) -> None:
-    png = b"\x89PNG\r\n\x1a\ncanonical"
-
+async def test_binary_content_is_refused_not_stored() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=png, headers={"content-type": "image/png"})
+        return httpx.Response(200, content=b"%PDF-1.4", headers={"content-type": "application/pdf"})
 
-    monkeypatch.setattr(
-        "agentarea_agents_sdk.tools.web_toolset.httpx.AsyncClient",
-        _patched_client_factory(httpx.MockTransport(handler)),
-    )
+    result = await _fetching(handler).fetch_webpage("https://example.test/report.pdf")
 
-    repository = AsyncMock()
-    tool = WebToolset(
-        workspace_repository=repository,
-        workspace_id="ws-7",
-        task_id="task-9",
-        lease_owner="workflow-9",
-        fetch_base_url="http://fetch.test",
-    )
-
-    payload = json.loads(await tool.fetch_webpage("https://cdn.example.test/foo.png"))
-
-    assert payload["file_path"] == "tasks/task-9/workspace/downloads/foo.png"
-    repository.put.assert_awaited_once_with(
-        "ws-7",
-        "task-9",
-        "downloads/foo.png",
-        png,
-        "image/png",
-        owner="workflow-9",
-    )
+    assert result.startswith("Error:")
+    assert "application/pdf" in result
+    assert "sandbox shell" in result
 
 
 @pytest.mark.asyncio
-async def test_canonical_binary_write_requires_task_id(monkeypatch) -> None:
+async def test_oversized_page_is_refused() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=b"png", headers={"content-type": "image/png"})
+        return httpx.Response(
+            200, content=b"a" * (5 * 1024 * 1024 + 1), headers={"content-type": "text/plain"}
+        )
 
-    monkeypatch.setattr(
-        "agentarea_agents_sdk.tools.web_toolset.httpx.AsyncClient",
-        _patched_client_factory(httpx.MockTransport(handler)),
-    )
-    repository = AsyncMock()
+    result = await _fetching(handler).fetch_webpage("https://example.test/huge")
 
-    result = await WebToolset(
-        workspace_repository=repository,
-        workspace_id="ws-7",
-        fetch_base_url="http://fetch.test",
-    ).fetch_webpage("https://cdn.example.test/foo.png")
-
-    assert result == "Error: task_id is required for canonical workspace writes"
-    repository.put.assert_not_awaited()
+    assert result.startswith("Error:")
+    assert "larger than" in result
 
 
 @pytest.mark.asyncio
-async def test_binary_without_storage_returns_error(monkeypatch) -> None:
+async def test_transport_refusal_is_reported_as_error() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=b"\x00\x01", headers={"content-type": "image/png"})
+        raise httpx.ConnectError("refusing request to non-public address", request=request)
 
-    monkeypatch.setattr(
-        "agentarea_agents_sdk.tools.web_toolset.httpx.AsyncClient",
-        _patched_client_factory(httpx.MockTransport(handler)),
-    )
+    result = await _fetching(handler).fetch_webpage("https://internal.test/")
 
-    tool = WebToolset(storage=None, fetch_base_url="http://fetch.test")
-    result = await tool.fetch_webpage("https://cdn.example.test/x.png")
-    assert result.startswith("Error: response is binary")
+    assert result.startswith("Error fetching https://internal.test/")
 
 
 @pytest.mark.asyncio
 async def test_non_http_url_is_refused() -> None:
-    tool = WebToolset()
-    result = await tool.fetch_webpage("file:///etc/passwd")
+    result = await _fetching(lambda r: httpx.Response(200)).fetch_webpage("file:///etc/passwd")
     assert result.startswith("Error: url must be http(s)")
 
 
 @pytest.mark.asyncio
-async def test_filename_inferred_from_content_type_when_path_has_none(
-    monkeypatch,
-) -> None:
-    pdf = b"%PDF-1.4\n%hello"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=pdf, headers={"content-type": "application/pdf"})
-
-    monkeypatch.setattr(
-        "agentarea_agents_sdk.tools.web_toolset.httpx.AsyncClient",
-        _patched_client_factory(httpx.MockTransport(handler)),
-    )
-
-    storage = InMemoryStorage()
-    tool = WebToolset(
-        storage=storage,
-        workspace_id="ws",
-        base_prefix="tasks/t",
-        fetch_base_url="http://fetch.test",
-    )
-    payload = json.loads(await tool.fetch_webpage("https://example.test/report"))
-
-    assert payload["file_path"].endswith(".pdf")
+async def test_fetch_without_client_fails_closed() -> None:
+    result = await WebToolset().fetch_webpage("https://example.test/")
+    assert result.startswith("Error: web fetching is not configured")
 
 
 def test_web_toolset_exposes_only_search_and_fetch() -> None:
@@ -263,9 +176,3 @@ def test_web_toolset_exposes_only_search_and_fetch() -> None:
         "web_search_web",
         "web_fetch_webpage",
     }
-
-
-@pytest.mark.asyncio
-async def test_fetch_without_audited_egress_service_fails_closed() -> None:
-    result = await WebToolset().fetch_webpage("https://example.test/")
-    assert result.startswith("Error: web fetching is not configured")
