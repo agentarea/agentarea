@@ -2423,6 +2423,14 @@
     "currencyLoadFailed": "Couldn't load the billing currency"
   },
   "SecretsPage": {
+    "title": "Secrets",
+    "loadFailedTitle": "Couldn't load secrets",
+    "loadFailed": "Failed to load secrets",
+    "empty": {
+      "title": "No secrets yet",
+      "description": "Nothing here holds a credential. Create a secret to reuse it across LLM providers and API connections, instead of pasting the same key into each one.",
+      "action": "Create secret"
+    },
     "newSecret": "New secret",
     "createDialog": {
       "title": "New secret",
