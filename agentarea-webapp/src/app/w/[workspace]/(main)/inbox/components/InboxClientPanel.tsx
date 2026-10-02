@@ -205,20 +205,21 @@ export function InboxClientPanel({
       {pend && (
         <footer className="shrink-0 border-t border-border bg-background px-5 py-3.5 sm:px-6">
           <div className="flex gap-2.5 sm:justify-end">
-            <button
+            <Button
+              variant="destructiveOutline"
+              className="flex-1 sm:flex-none"
               onClick={() => onResolve(task, false)}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-4 text-[13px] font-semibold text-red-600 transition hover:border-red-500 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-none"
             >
-              <X size={16} strokeWidth={2} aria-hidden />
+              <X aria-hidden />
               {t("reject")}
-            </button>
-            <button
+            </Button>
+            <Button
+              className="flex-1 sm:flex-none"
               onClick={() => onResolve(task, true)}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-[13px] font-semibold text-white shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-none"
             >
-              <Check size={16} strokeWidth={2.2} aria-hidden />
+              <Check aria-hidden />
               {t("approve")}
-            </button>
+            </Button>
           </div>
         </footer>
       )}
