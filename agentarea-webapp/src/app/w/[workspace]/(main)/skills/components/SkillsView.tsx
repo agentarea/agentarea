@@ -4,39 +4,26 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import {
-  ArrowDownAZ,
-  Clock,
-  Filter,
-  Inbox,
-  Layers,
-  Rows3,
-  Tag,
-  X,
-} from "lucide-react";
+import { ArrowDownAZ, Clock, Layers, Rows3, Tag } from "lucide-react";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
+import ContentBlock from "@/components/ContentBlock";
 import DisplayMenu from "@/components/DisplayMenu";
 import EmptyState from "@/components/EmptyState";
 import HeaderTabs from "@/components/HeaderTabs";
+import SearchInput from "@/components/SearchInput";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { GroupHeader } from "@/components/ui/group-header";
 import {
   MenuRow,
   MenuSectionLabel,
   MenuSeparator,
 } from "@/components/ui/menu-row";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ToolbarButton, ToolbarDivider } from "@/components/ui/toolbar";
 import { listSkillsAction } from "@/lib/server-actions";
-import { cn } from "@/lib/utils";
 import type { PaginatedSkills, Skill } from "@/types/skill";
 import { setCookie } from "@/utils/cookies";
 import { getValidTimestamp } from "@/utils/dateUtils";
+import CreateSkillButton from "./CreateSkillButton";
 import SkillRow from "./SkillRow";
 import SkillsCard from "./SkillsCard";
 import SkillsContentSkeleton from "./SkillsContentSkeleton";
@@ -56,23 +43,18 @@ interface InitialState {
   view: ViewKey;
   group: GroupKey;
   order: OrderKey;
-  sourceTab: string; // "all" | content | github | zip | path
   scope: string; // "" | private | ingress | egress
-  search: string;
 }
 
-const SOURCE_TABS: { value: string; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "content", label: "Content" },
-  { value: "github", label: "GitHub" },
-  { value: "zip", label: "Uploaded" },
-  { value: "path", label: "Local" },
-];
-
-// Source tabs duplicate the Filters + Display grouping already on this page and
-// stay mostly empty in practice, so they're hidden for now. Flip to re-enable —
-// all the backing state/logic is kept intact below.
-const SHOW_SOURCE_TABS = false;
+// URL params the page keeps in sync, with the value that leaves them out.
+const URL_DEFAULTS = {
+  view: "list",
+  group: "source",
+  order: "name",
+  network_scope: "",
+  search: "",
+};
+type UrlKey = keyof typeof URL_DEFAULTS;
 
 async function fetchAllSkills(): Promise<Skill[]> {
   const all: Skill[] = [];
@@ -109,14 +91,13 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
   const [view, setView] = useState<ViewKey>(initial.view);
   const [group, setGroup] = useState<GroupKey>(initial.group);
   const [order, setOrder] = useState<OrderKey>(initial.order);
-  const [sourceTab, setSourceTab] = useState(initial.sourceTab);
   const [scope, setScope] = useState(initial.scope);
-  const [search, setSearch] = useState(initial.search);
+  // The SearchInput in the subheader owns `?search=`; the list reads it back.
+  const search = searchParams.get("search") ?? "";
 
   // local-only UI state
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [filtersOpen, setFiltersOpen] = useState(Boolean(initial.scope));
 
   useEffect(() => {
     let active = true;
@@ -133,43 +114,18 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
 
   // Sync the shareable bits of state into the URL without a navigation.
   const syncUrl = useCallback(
-    (next: Partial<InitialState>) => {
-      const merged: InitialState = {
-        view,
-        group,
-        order,
-        sourceTab,
-        scope,
-        search,
-        ...next,
-      };
+    (next: Partial<Record<UrlKey, string>>) => {
       const params = new URLSearchParams(searchParams.toString());
-      const set = (key: string, value: string, empty: string) => {
-        if (value && value !== empty) params.set(key, value);
+      for (const [key, value] of Object.entries(next) as [UrlKey, string][]) {
+        if (value && value !== URL_DEFAULTS[key]) params.set(key, value);
         else params.delete(key);
-      };
-      set("view", merged.view, "list");
-      set("group", merged.group, "source");
-      set("order", merged.order, "name");
-      set("source_type", merged.sourceTab, "all");
-      set("network_scope", merged.scope, "");
-      set("search", merged.search, "");
+      }
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, {
         scroll: false,
       });
     },
-    [
-      view,
-      group,
-      order,
-      sourceTab,
-      scope,
-      search,
-      searchParams,
-      router,
-      pathname,
-    ]
+    [searchParams, router, pathname]
   );
 
   const toggleFavorite = useCallback((id: string) => {
@@ -185,8 +141,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  // Apply the non-tab filters (scope / search) — drives tab counts too.
-  const baseFiltered = useMemo(() => {
+  const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return skills.filter((s) => {
       if (scope && s.network_scope !== scope) return false;
@@ -198,21 +153,14 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
     });
   }, [skills, scope, search]);
 
-  const tabCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: baseFiltered.length };
-    for (const s of baseFiltered) {
-      counts[s.source_type] = (counts[s.source_type] ?? 0) + 1;
+  // Counts describe the whole list, independent of the search.
+  const scopeCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: skills.length };
+    for (const s of skills) {
+      counts[s.network_scope] = (counts[s.network_scope] ?? 0) + 1;
     }
     return counts;
-  }, [baseFiltered]);
-
-  const visible = useMemo(
-    () =>
-      sourceTab === "all"
-        ? baseFiltered
-        : baseFiltered.filter((s) => s.source_type === sourceTab),
-    [baseFiltered, sourceTab]
-  );
+  }, [skills]);
 
   const sortItems = useCallback(
     (arr: Skill[]) => {
@@ -248,14 +196,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
       .filter((g) => g.items.length > 0);
   }, [group, visible, sortItems]);
 
-  const hasActiveFilters =
-    Boolean(scope) || Boolean(search) || sourceTab !== "all";
-
   // ---- toolbar control helpers ----
-  const onTab = (value: string) => {
-    setSourceTab(value);
-    syncUrl({ sourceTab: value });
-  };
   const onView = (value: ViewKey) => {
     setView(value);
     setCookie("view_skills", value);
@@ -272,151 +213,106 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
   const onScope = (value: string) => {
     const v = value === "all" ? "" : value;
     setScope(v);
-    syncUrl({ scope: v });
-  };
-  const onSearch = (value: string) => {
-    setSearch(value);
-    syncUrl({ search: value });
+    syncUrl({ network_scope: v });
   };
   const clearFilters = () => {
     setScope("");
-    setSearch("");
-    setSourceTab("all");
-    syncUrl({ scope: "", search: "", sourceTab: "all" });
+    syncUrl({ network_scope: "", search: "" });
   };
 
   return (
-    <div className="skills-cq flex h-full w-full flex-col">
-      {/* ---------------- toolbar ---------------- */}
-      <div className="flex h-[42px] shrink-0 items-center gap-1.5 border-b border-zinc-200 px-4 dark:border-zinc-700">
-        {/* source tabs — scroll horizontally when the panel is narrow so the
-            right-hand controls always stay visible */}
-        {SHOW_SOURCE_TABS ? (
-          <>
-            <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
-              {SOURCE_TABS.map((tab) => (
-                <button
-                  key={tab.value}
-                  type="button"
-                  onClick={() => onTab(tab.value)}
-                  className={cn(
-                    "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium transition-colors",
-                    sourceTab === tab.value
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                  )}
-                >
-                  {tab.label}
-                  <span className="text-[11px] text-muted-foreground/70">
-                    {tabCounts[tab.value] ?? 0}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <ToolbarDivider />
-          </>
-        ) : (
-          <div className="min-w-0 flex-1" />
-        )}
-
-        {/* Filter toggle */}
-        <ToolbarButton
-          onClick={() => setFiltersOpen((v) => !v)}
-          active={filtersOpen}
-        >
-          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="skills-btn-label">{t("filters.filter")}</span>
-        </ToolbarButton>
-
-        {/* Display menu */}
-        <DisplayMenu labelClassName="skills-btn-label">
-          <MenuSectionLabel>{t("display.grouping")}</MenuSectionLabel>
-          <MenuRow
-            icon={<Layers className="h-3.5 w-3.5" />}
-            label={t("display.source")}
-            selected={group === "source"}
-            onClick={() => onGroup("source")}
-          />
-          <MenuRow
-            icon={<Tag className="h-3.5 w-3.5" />}
-            label={t("display.scope")}
-            selected={group === "scope"}
-            onClick={() => onGroup("scope")}
-          />
-          <MenuRow
-            icon={<Rows3 className="h-3.5 w-3.5" />}
-            label={t("display.none")}
-            selected={group === "none"}
-            onClick={() => onGroup("none")}
-          />
-          <MenuSeparator />
-          <MenuSectionLabel>{t("display.ordering")}</MenuSectionLabel>
-          <MenuRow
-            icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
-            label={t("display.name")}
-            selected={order === "name"}
-            onClick={() => onOrder("name")}
-          />
-          <MenuRow
-            icon={<Clock className="h-3.5 w-3.5" />}
-            label={t("display.created")}
-            selected={order === "created"}
-            onClick={() => onOrder("created")}
-          />
-        </DisplayMenu>
-
-        {/* list / grid segment */}
-        <HeaderTabs
-          className="ml-1 shrink-0"
-          value={view}
-          onChange={(v) => onView(v as ViewKey)}
-          tabs={[
-            { value: "list", label: "List view" },
-            { value: "grid", label: "Grid view" },
-          ]}
-        />
-      </div>
-
-      {/* ---------------- applied filter row ---------------- */}
-      {filtersOpen && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 px-3.5 py-2 dark:border-zinc-700">
-          <FilterSelect
-            value={scope || "all"}
-            placeholder={t("filters.scope")}
-            active={Boolean(scope)}
-            onValueChange={onScope}
-          >
-            <SelectItem value="all">{t("filters.allScopes")}</SelectItem>
-            {SCOPE_ORDER.map((s) => (
-              <SelectItem key={s} value={s}>
-                {SCOPE_META[s].label}
-              </SelectItem>
-            ))}
-          </FilterSelect>
-          <div className="relative">
-            <input
-              value={search}
-              onChange={(e) => onSearch(e.target.value)}
-              placeholder={t("searchPlaceholder")}
-              className="h-6 w-44 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+    <ContentBlock
+      header={{
+        breadcrumb: [{ label: t("title") }],
+        controls: <CreateSkillButton />,
+      }}
+      subheader={
+        <SubheaderToolbar
+          categories={
+            <CountSegmentedControl
+              items={[
+                { value: "all", label: t("filters.all") },
+                ...SCOPE_ORDER.map((key) => {
+                  const Icon = SCOPE_META[key].icon;
+                  return {
+                    value: key,
+                    label: (
+                      <span className="flex items-center gap-1.5 whitespace-nowrap">
+                        <Icon className="h-4 w-4" strokeWidth={1.8} />
+                        {t(`filters.scopeValues.${key}`)}
+                      </span>
+                    ),
+                  };
+                }),
+              ].map((item) => ({
+                ...item,
+                count: isLoading ? undefined : (scopeCounts[item.value] ?? 0),
+              }))}
+              value={scope || "all"}
+              onChange={onScope}
+              layoutId="skills-scope-filter"
             />
-          </div>
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-              {t("filters.clear")}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* ---------------- body ---------------- */}
-      <div className="min-h-0 flex-1 overflow-auto">
+          }
+          search={
+            <SearchInput
+              urlParamName="search"
+              delay={250}
+              placeholder={t("searchPlaceholder")}
+            />
+          }
+          controls={
+            <>
+              <DisplayMenu>
+                <MenuSectionLabel>{t("display.grouping")}</MenuSectionLabel>
+                <MenuRow
+                  icon={<Layers className="h-3.5 w-3.5" />}
+                  label={t("display.source")}
+                  selected={group === "source"}
+                  onClick={() => onGroup("source")}
+                />
+                <MenuRow
+                  icon={<Tag className="h-3.5 w-3.5" />}
+                  label={t("display.scope")}
+                  selected={group === "scope"}
+                  onClick={() => onGroup("scope")}
+                />
+                <MenuRow
+                  icon={<Rows3 className="h-3.5 w-3.5" />}
+                  label={t("display.none")}
+                  selected={group === "none"}
+                  onClick={() => onGroup("none")}
+                />
+                <MenuSeparator />
+                <MenuSectionLabel>{t("display.ordering")}</MenuSectionLabel>
+                <MenuRow
+                  icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
+                  label={t("display.name")}
+                  selected={order === "name"}
+                  onClick={() => onOrder("name")}
+                />
+                <MenuRow
+                  icon={<Clock className="h-3.5 w-3.5" />}
+                  label={t("display.created")}
+                  selected={order === "created"}
+                  onClick={() => onOrder("created")}
+                />
+              </DisplayMenu>
+              <HeaderTabs
+                value={view}
+                onChange={(v) => onView(v as ViewKey)}
+                tabs={[
+                  { value: "list", label: "List view" },
+                  { value: "grid", label: "Grid view" },
+                ]}
+              />
+            </>
+          }
+        />
+      }
+      className="p-0"
+    >
+      {/* The size container lets the rows drop columns as the panel narrows. */}
+      <div className="skills-cq">
         {isLoading ? (
           <SkillsContentSkeleton view={view} />
         ) : error ? (
@@ -442,12 +338,13 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
             <CatalogSuggestions type="skills" />
           </div>
         ) : visible.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-1.5 py-24 text-muted-foreground">
-            <Inbox className="h-6 w-6" />
-            <p className="text-sm font-semibold text-foreground">
-              {t("emptyHere")}
-            </p>
-            <p className="text-xs">{t("emptyHereDescription")}</p>
+          <div className="p-4">
+            <EmptyState
+              title={t("emptyHere")}
+              description={t("emptyHereDescription")}
+              iconsType="skills"
+              action={{ label: t("filters.clear"), onClick: clearFilters }}
+            />
           </div>
         ) : view === "grid" ? (
           <div
@@ -492,34 +389,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function FilterSelect({
-  value,
-  placeholder,
-  active,
-  onValueChange,
-  children,
-}: {
-  value: string;
-  placeholder: string;
-  active: boolean;
-  onValueChange: (v: string) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger
-        className={cn(
-          "h-6 w-auto gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-normal shadow-none focus:ring-0",
-          active ? "font-medium text-foreground" : "text-muted-foreground"
-        )}
-      >
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>{children}</SelectContent>
-    </Select>
+    </ContentBlock>
   );
 }

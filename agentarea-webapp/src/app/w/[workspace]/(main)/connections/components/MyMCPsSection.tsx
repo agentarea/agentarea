@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { formatDistanceToNow } from "date-fns";
 import { Server } from "lucide-react";
@@ -16,8 +17,12 @@ import { deterministicHue } from "@/lib/avatar-hue";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 import { getMCPConnectionIconSrc } from "@/lib/entity-identity";
 import { getOpenApiConnectionDisplayStatus } from "@/lib/status";
-import { cn } from "@/lib/utils";
-import { LIST_FILTERS } from "../list-sections";
+import {
+  buildConnectionList,
+  mcpConnectionListRow,
+  openApiConnectionListRow,
+  type ListFilter,
+} from "../list-sections";
 import {
   getMcpConnectionState,
   getOpenApiConnectionState,
@@ -25,7 +30,6 @@ import {
 } from "../state";
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 import type { ConnectionUsage } from "../usage";
-import { useConnectionListFilter } from "../useConnectionListFilter";
 import { getMCPInstanceToolCount } from "../utils";
 import {
   MCPInstanceCard,
@@ -59,6 +63,8 @@ interface MyMCPsSectionProps {
   /** Per-connection usage, keyed by MCP instance id. */
   usage?: Record<string, ConnectionUsage>;
   viewMode?: string;
+  /** Narrows the list; the tabs that set it live in the page subheader. */
+  filter?: ListFilter;
   searchQuery?: string;
   hasNoData?: boolean;
 }
@@ -69,11 +75,13 @@ export function MyMCPsSection({
   openApiConnections = [],
   usage = {},
   viewMode = "grid",
+  filter = "all",
   searchQuery = "",
   hasNoData = false,
 }: MyMCPsSectionProps) {
   const t = useTranslations("MCPServersPage");
   const router = useWorkspaceRouter();
+  const searchParams = useSearchParams();
 
   type TableRow = {
     id: string;
@@ -93,31 +101,22 @@ export function MyMCPsSection({
   // filtering and grouping, so they are computed once rather than per cell.
   const rows = useMemo<TableRow[]>(
     () => [
-      ...mcpInstances.map((inst) => {
-        const instanceUsage = usage[inst.id];
-        return {
-          id: inst.id,
-          name: inst.name,
-          description: inst.description,
-          endpoint_url: inst.endpoint_url,
-          type: "MCP" as const,
-          _type: "mcp" as const,
-          _instance: inst,
-          _serverSpec: mcpServers.find(
-            (server) => server.id === inst.server_spec_id
-          ),
-          _connection: null,
-          _state: getMcpConnectionState({
-            verification: inst.verification,
-            last_dispatch: inst.last_dispatch,
-            toolCount: getMCPInstanceToolCount(inst),
-          }),
-          _usage: instanceUsage,
-        };
-      }),
+      ...mcpInstances.map((inst) => ({
+        ...mcpConnectionListRow(inst, usage[inst.id]),
+        id: inst.id,
+        description: inst.description,
+        endpoint_url: inst.endpoint_url,
+        type: "MCP" as const,
+        _type: "mcp" as const,
+        _instance: inst,
+        _serverSpec: mcpServers.find(
+          (server) => server.id === inst.server_spec_id
+        ),
+        _connection: null,
+      })),
       ...openApiConnections.map((conn) => ({
+        ...openApiConnectionListRow(conn),
         id: conn.id,
-        name: conn.name,
         description: conn.description,
         endpoint_url: conn.base_url,
         type: "OpenAPI" as const,
@@ -125,27 +124,15 @@ export function MyMCPsSection({
         _instance: null,
         _serverSpec: undefined,
         _connection: conn,
-        _state: getOpenApiConnectionState(
-          getOpenApiConnectionDisplayStatus(
-            conn.status,
-            conn.available_tools.length
-          ),
-          conn.available_tools.length
-        ),
-        _usage: undefined,
       })),
     ],
     [mcpInstances, mcpServers, openApiConnections, usage]
   );
 
-  const {
-    filter,
-    setFilter,
-    counts,
-    visibleRows,
-    sections,
-    showSectionHeadings,
-  } = useConnectionListFilter(rows);
+  const { visibleRows, sections, showSectionHeadings } = useMemo(
+    () => buildConnectionList(rows, filter),
+    [rows, filter]
+  );
 
   // Subtitle under the connection name — transport for MCP, host for OpenAPI.
   const rowSubtitle = (item: TableRow): string => {
@@ -361,31 +348,6 @@ export function MyMCPsSection({
     );
   }
 
-  const filters = (
-    <div className="mb-3 flex flex-wrap items-center gap-1">
-      {LIST_FILTERS.map((key) => (
-        <button
-          key={key}
-          type="button"
-          onClick={() => setFilter(key)}
-          disabled={key !== "all" && counts[key] === 0}
-          className={cn(
-            "rounded-md border px-2 py-1 text-[11px] transition-colors",
-            filter === key
-              ? "border-primary/40 bg-primary/10 text-foreground"
-              : "border-border text-muted-foreground hover:bg-muted/50",
-            key !== "all" &&
-              counts[key] === 0 &&
-              "opacity-40 hover:bg-transparent"
-          )}
-        >
-          {t(`listFilters.${key}`)}
-          <span className="ml-1 tabular-nums">{counts[key]}</span>
-        </button>
-      ))}
-    </div>
-  );
-
   const unifiedColumns = [
     {
       accessor: "type",
@@ -426,62 +388,59 @@ export function MyMCPsSection({
   };
 
   if (visibleRows.length === 0) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("filter");
+    const query = params.toString();
     return (
-      <div>
-        {filters}
-        <EmptyState
-          title={t(`listFilters.empty.${filter}`)}
-          description={t("listFilters.emptyDescription")}
-          iconsType="mcp"
-          action={{
-            label: t("listFilters.all"),
-            onClick: () => setFilter("all"),
-          }}
-        />
-      </div>
+      <EmptyState
+        title={t(`listFilters.empty.${filter}`)}
+        description={t("listFilters.emptyDescription")}
+        iconsType="mcp"
+        action={{
+          label: t("listFilters.all"),
+          href: query ? `/connections?${query}` : "/connections",
+        }}
+      />
     );
   }
 
   return (
-    <div>
-      {filters}
-      <div className="space-y-5">
-        {sections.map((section, index) => (
-          <div key={section.key}>
-            {showSectionHeadings && (
-              <h5 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground/80">
-                {t(`sections.${section.key}`)} ({section.rows.length})
-              </h5>
-            )}
-            {viewMode === "table" ? (
-              <Table
-                data={section.rows}
-                columns={unifiedColumns}
-                onRowClick={openRow}
-                hideHeader={index > 0}
-              />
-            ) : (
-              <div className={CARD_GRID_DENSE}>
-                {section.rows.map((row) =>
-                  row._type === "mcp" && row._instance ? (
-                    <MCPInstanceCard
-                      key={row.id}
-                      instance={row._instance}
-                      serverSpec={row._serverSpec}
-                      usage={row._usage}
-                    />
-                  ) : row._connection ? (
-                    <OpenAPIConnectionCard
-                      key={`openapi-${row.id}`}
-                      connection={row._connection}
-                    />
-                  ) : null
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+    <div className="space-y-5">
+      {sections.map((section, index) => (
+        <div key={section.key}>
+          {showSectionHeadings && (
+            <h5 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground/80">
+              {t(`sections.${section.key}`)} ({section.rows.length})
+            </h5>
+          )}
+          {viewMode === "table" ? (
+            <Table
+              data={section.rows}
+              columns={unifiedColumns}
+              onRowClick={openRow}
+              hideHeader={index > 0}
+            />
+          ) : (
+            <div className={CARD_GRID_DENSE}>
+              {section.rows.map((row) =>
+                row._type === "mcp" && row._instance ? (
+                  <MCPInstanceCard
+                    key={row.id}
+                    instance={row._instance}
+                    serverSpec={row._serverSpec}
+                    usage={row._usage}
+                  />
+                ) : row._connection ? (
+                  <OpenAPIConnectionCard
+                    key={`openapi-${row.id}`}
+                    connection={row._connection}
+                  />
+                ) : null
+              )}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

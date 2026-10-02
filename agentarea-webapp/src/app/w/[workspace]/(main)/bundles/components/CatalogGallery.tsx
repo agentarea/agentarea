@@ -28,7 +28,6 @@ import {
   Search,
   Send,
   ShieldCheck,
-  SlidersHorizontal,
   Sparkles,
   Star,
   Telescope,
@@ -37,6 +36,7 @@ import {
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { Streamdown } from "streamdown";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import DisplayMenu from "@/components/DisplayMenu";
 import EmptyState from "@/components/EmptyState";
 import EntityMark from "@/components/EntityMark";
 import FormError from "@/components/FormError";
@@ -64,7 +64,6 @@ import {
 } from "@/components/ui/popover";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { ToolbarButton } from "@/components/ui/toolbar";
 import Link from "@/components/WorkspaceLink";
 import {
   apiErrorMessage,
@@ -101,7 +100,6 @@ import {
   normalize,
   PROTOCOL_LABELS,
   SORT_KEYS,
-  SORT_LABELS,
   str,
   strArr,
   TYPE_KEYS,
@@ -129,11 +127,12 @@ import type { CatalogSection } from "./catalog-sections";
 
 type LucideIcon = React.ComponentType<{ className?: string }>;
 
-const TYPES: { key: CatalogType; label: string; icon: LucideIcon }[] = [
-  { key: "bundles", label: "Bundles", icon: Blocks },
-  { key: "agents", label: "Agents", icon: Bot },
-  { key: "skills", label: "Skills", icon: Puzzle },
-  { key: "connections", label: "Connections", icon: Plug },
+// Labels live in the CatalogPage messages (`types.<key>`).
+const TYPES: { key: CatalogType; icon: LucideIcon }[] = [
+  { key: "bundles", icon: Blocks },
+  { key: "agents", icon: Bot },
+  { key: "skills", icon: Puzzle },
+  { key: "connections", icon: Plug },
 ];
 
 /**
@@ -147,33 +146,23 @@ const TYPES: { key: CatalogType; label: string; icon: LucideIcon }[] = [
  * speech either — `apps/api/agentarea_api/tools/mcp_servers_toolset.py`
  * exposes `create_spec` to agents through `get_platform_tools()`.
  */
-const BRING_YOUR_OWN: Record<CatalogType, { text: string; href?: string }[]> = {
+// Texts live in the CatalogPage messages (`bringYourOwn.<type>.<key>`).
+const BRING_YOUR_OWN: Record<CatalogType, { key: string; href?: string }[]> = {
   connections: [
-    { text: "Connect your own MCP server", href: "/connections/add" },
-    {
-      text: "Point at any REST API you already have",
-      href: "/connections/add-openapi",
-    },
-    {
-      text: "Or describe it to an agent and have it wire the connection up",
-      href: "/workplace",
-    },
+    { key: "mcp", href: "/connections/add" },
+    { key: "openapi", href: "/connections/add-openapi" },
+    { key: "agent", href: "/workplace" },
   ],
-  skills: [{ text: "Write the skill yourself", href: "/skills/create" }],
-  agents: [{ text: "Build the agent yourself", href: "/agents/create" }],
-  bundles: [
-    { text: "Import a bundle you already have", href: "/bundles/import" },
-  ],
+  skills: [{ key: "write", href: "/skills/create" }],
+  agents: [{ key: "build", href: "/agents/create" }],
+  bundles: [{ key: "import", href: "/bundles/import" }],
 };
 
-const BRING_YOUR_OWN_ACTION: Record<
-  CatalogType,
-  { label: string; href: string }
-> = {
-  connections: { label: "Add your own", href: "/connections/add" },
-  skills: { label: "Create a skill", href: "/skills/create" },
-  agents: { label: "Create an agent", href: "/agents/create" },
-  bundles: { label: "Import a bundle", href: "/bundles/import" },
+const BRING_YOUR_OWN_ACTION_HREF: Record<CatalogType, string> = {
+  connections: "/connections/add",
+  skills: "/skills/create",
+  agents: "/agents/create",
+  bundles: "/bundles/import",
 };
 
 const VIEW_KEYS = ["grid", "table"] as const;
@@ -297,21 +286,19 @@ export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
     parseAsString.withDefault(ALL)
   );
   const [, setItemId] = useQueryState("item", parseAsString);
+  const t = useTranslations("CatalogPage.types");
 
   return (
     <CountSegmentedControl
-      items={TYPES.map((t) => {
-        const Icon = t.icon;
-        return {
-          value: t.key,
-          label: (
-            <span className="flex items-center gap-1.5">
-              <Icon className="h-4 w-4" />
-              {t.label}
-            </span>
-          ),
-        };
-      })}
+      items={TYPES.map(({ key, icon: Icon }) => ({
+        value: key,
+        label: (
+          <span className="flex items-center gap-1.5 whitespace-nowrap">
+            <Icon className="h-4 w-4" />
+            {t(key)}
+          </span>
+        ),
+      }))}
       value={type}
       onChange={(next) => {
         void setType(next);
@@ -337,6 +324,7 @@ export function ExploreViewToggle({
     parseAsStringLiteral(VIEW_KEYS).withDefault(initialView)
   );
   const [itemId] = useQueryState("item", parseAsString);
+  const t = useTranslations("Common");
 
   // Restore the persisted view when landing on /explore without an explicit
   // ?view param (e.g. via the sidebar link). The server seeds `initialView`
@@ -360,8 +348,8 @@ export function ExploreViewToggle({
   return (
     <HeaderTabs
       tabs={[
-        { value: "table", label: "Table view" },
-        { value: "grid", label: "Grid view" },
+        { value: "table", label: t("table") },
+        { value: "grid", label: t("grid") },
       ]}
       value={view}
       onChange={(v) => {
@@ -391,33 +379,26 @@ export function ExploreSortSelect({
     })
   );
   const [itemId] = useQueryState("item", parseAsString);
+  const t = useTranslations("CatalogPage.display");
 
   if (itemId) return null;
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <ToolbarButton aria-label="Display options">
-          <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-          Display
-        </ToolbarButton>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-52 p-1.5">
-        <MenuSectionLabel>Ordering</MenuSectionLabel>
-        <MenuRow
-          icon={<Sparkles className="h-3.5 w-3.5" />}
-          label={SORT_LABELS.recommended}
-          selected={sort === "recommended"}
-          onClick={() => void setSort("recommended")}
-        />
-        <MenuRow
-          icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
-          label={SORT_LABELS.name}
-          selected={sort === "name"}
-          onClick={() => void setSort("name")}
-        />
-      </PopoverContent>
-    </Popover>
+    <DisplayMenu>
+      <MenuSectionLabel>{t("ordering")}</MenuSectionLabel>
+      <MenuRow
+        icon={<Sparkles className="h-3.5 w-3.5" />}
+        label={t("recommended")}
+        selected={sort === "recommended"}
+        onClick={() => void setSort("recommended")}
+      />
+      <MenuRow
+        icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
+        label={t("name")}
+        selected={sort === "name"}
+        onClick={() => void setSort("name")}
+      />
+    </DisplayMenu>
   );
 }
 
@@ -535,6 +516,7 @@ export default function CatalogGallery({
   const [deepAttempt, setDeepAttempt] = useState(0);
   const tBundle = useTranslations("BundleInstall");
   const tCommon = useTranslations("Common");
+  const tCatalog = useTranslations("CatalogPage");
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Re-seed whenever a server round-trip lands with a different page. The props
@@ -763,11 +745,11 @@ export default function CatalogGallery({
               </div>
             ) : (
               <EmptyState
-                title="Item not found"
-                description="This item may have been removed or isn't available."
+                title={tCatalog("empty.notFoundTitle")}
+                description={tCatalog("empty.notFoundDescription")}
                 iconsType="404"
                 action={{
-                  label: "Back to catalog",
+                  label: tCatalog("empty.backToCatalog"),
                   onClick: () => void setItemId(null),
                 }}
               />
@@ -780,8 +762,8 @@ export default function CatalogGallery({
               <Input
                 value={draftQuery}
                 onChange={(e) => setDraftQuery(e.target.value)}
-                placeholder={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}…`}
-                aria-label={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}`}
+                placeholder={tCatalog(`search.${type}`)}
+                aria-label={tCatalog(`search.${type}`)}
                 className="pl-9"
               />
             </div>
@@ -810,22 +792,27 @@ export default function CatalogGallery({
               paging.entries.length === 0 &&
               !paging.error && (
                 <EmptyState
-                  title={hasFilters ? "No matches" : "Nothing published yet"}
-                  description={
+                  title={tCatalog(
+                    hasFilters ? "empty.noMatchesTitle" : "empty.nothingTitle"
+                  )}
+                  description={tCatalog(
                     hasFilters
-                      ? "Nothing matches your search and filters."
-                      : "The catalog is synced from the platform registry. Entries of this type appear here once they are published."
-                  }
+                      ? "empty.noMatchesDescription"
+                      : "empty.nothingDescription"
+                  )}
                   icons={hasFilters ? [Telescope, Compass, Search] : undefined}
                   // Failing to find something is the one moment where the way
                   // out of the catalog is worth showing. "Clear filters" on its
                   // own assumed the answer was always in here and you had
                   // merely filtered wrong.
-                  hints={BRING_YOUR_OWN[type]}
+                  hints={BRING_YOUR_OWN[type].map(({ key, href }) => ({
+                    text: tCatalog(`bringYourOwn.${type}.${key}`),
+                    href,
+                  }))}
                   action={
                     hasFilters
                       ? {
-                          label: "Clear filters",
+                          label: tCatalog("empty.clearFilters"),
                           onClick: () => {
                             setDraftQuery("");
                             void setQuery(null);
@@ -835,7 +822,10 @@ export default function CatalogGallery({
                         }
                       : undefined
                   }
-                  additionAction={BRING_YOUR_OWN_ACTION[type]}
+                  additionAction={{
+                    label: tCatalog(`bringYourOwn.${type}.action`),
+                    href: BRING_YOUR_OWN_ACTION_HREF[type],
+                  }}
                 />
               )}
 
@@ -867,8 +857,10 @@ export default function CatalogGallery({
               initialSections.length > 0 &&
               paging.entries.length > 0 && (
                 <CatalogShelfHeading
-                  title={`All ${TYPES.find((t) => t.key === type)?.label.toLowerCase() ?? ""}`}
-                  description={`${paging.total.toLocaleString()} in the catalog.`}
+                  title={tCatalog(`allOfType.${type}`)}
+                  description={tCatalog("inCatalog", {
+                    count: paging.total.toLocaleString(),
+                  })}
                 />
               )}
 
@@ -2558,7 +2550,7 @@ export function CatalogGallerySkeleton({
     const saved = fromUrl ?? getCookie(EXPLORE_VIEW_COOKIE);
     return saved === "table" || saved === "grid" ? saved : initialView;
   });
-  const label = TYPES.find((t) => t.key === type)?.label.toLowerCase() ?? "";
+  const t = useTranslations("CatalogPage.search");
   return (
     <div className="flex gap-6">
       <aside className="hidden w-52 shrink-0 lg:block">
@@ -2569,7 +2561,7 @@ export function CatalogGallerySkeleton({
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             disabled
-            placeholder={`Search ${label}…`}
+            placeholder={t(type)}
             aria-hidden
             className="pl-9"
           />

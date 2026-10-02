@@ -1,5 +1,7 @@
+import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import {
   CatalogGallerySkeleton,
   ExploreSortSelect,
@@ -18,25 +20,29 @@ import { EXPLORE_VIEW_COOKIE } from "../bundles/components/catalog-data";
 export default async function Loading() {
   // Seed the skeleton from the persisted view so a hard refresh skeletons the
   // same layout (grid vs table) the page will paint.
-  const cookieStore = await cookies();
+  const [t, cookieStore] = await Promise.all([
+    getTranslations("CatalogPage"),
+    cookies(),
+  ]);
   const initialView =
     cookieStore.get(EXPLORE_VIEW_COOKIE)?.value === "table" ? "table" : "grid";
 
   return (
     <ContentBlock
       header={{
-        breadcrumb: [{ label: "Catalog" }],
-        description:
-          "Browse the catalog. Filter by type, use case, or integration, then add to your workspace.",
+        breadcrumb: [{ label: t("title") }],
+        description: t("description"),
       }}
       subheader={
-        <>
-          <ExploreTypeTabs initialType="bundles" />
-          <div className="flex items-center gap-2">
-            <ExploreSortSelect />
-            <ExploreViewToggle initialView={initialView} />
-          </div>
-        </>
+        <SubheaderToolbar
+          categories={<ExploreTypeTabs initialType="bundles" />}
+          controls={
+            <>
+              <ExploreSortSelect />
+              <ExploreViewToggle initialView={initialView} />
+            </>
+          }
+        />
       }
     >
       <CatalogGallerySkeleton initialView={initialView} />

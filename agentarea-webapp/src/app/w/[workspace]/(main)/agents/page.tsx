@@ -6,10 +6,11 @@ import Link from "@/components/WorkspaceLink";
 import { Plus } from "lucide-react";
 import { AGENT_COLUMNS } from "@/app/w/[workspace]/(main)/agents/components/agentColumns";
 import AgentsContent from "@/app/w/[workspace]/(main)/agents/components/AgentsContent";
-import AgentsHeaderTabs from "@/app/w/[workspace]/(main)/agents/components/AgentsHeaderTabs";
 import AgentsSkeleton from "@/app/w/[workspace]/(main)/agents/components/AgentsSkeleton";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { ViewModeTabs } from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -65,10 +66,10 @@ export default async function AgentsBrowsePage({
         ),
       }}
       subheader={
-        <>
-          <SearchInput urlParamName="search" urlPath="/agents" />
-          <AgentsHeaderTabs currentTab={tab} />
-        </>
+        <SubheaderToolbar
+          search={<SearchInput urlParamName="search" urlPath="/agents" />}
+          controls={<ViewModeTabs currentTab={tab} />}
+        />
       }
     >
       <Suspense

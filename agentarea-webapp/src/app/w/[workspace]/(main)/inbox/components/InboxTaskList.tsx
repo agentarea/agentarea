@@ -13,6 +13,7 @@ import {
 } from "@/app/w/[workspace]/(main)/inbox/components/inboxShared";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { TaskStatus } from "@/components/TaskStatus";
+import { Button } from "@/components/ui/button";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { cn } from "@/lib/utils";
 
@@ -174,19 +175,16 @@ function ActionIcon({
   const Icon = tone === "approve" ? Check : X;
 
   return (
-    <button
+    <Button
+      size="xs"
+      variant={tone === "approve" ? "primaryOutline" : "destructiveOutline"}
+      className="w-6 px-0"
       onClick={onClick}
       title={title}
       aria-label={title}
-      className={cn(
-        "grid h-7 w-7 place-items-center rounded-md border border-border bg-background",
-        tone === "approve"
-          ? "text-emerald-600 hover:border-emerald-500 hover:bg-emerald-500/10"
-          : "text-red-500 hover:border-red-500 hover:bg-red-500/10"
-      )}
     >
-      <Icon size={15} strokeWidth={2} />
-    </button>
+      <Icon />
+    </Button>
   );
 }
 

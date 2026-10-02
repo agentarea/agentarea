@@ -9,6 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ToolbarButton } from "@/components/ui/toolbar";
+import { cn } from "@/lib/utils";
 
 export interface DisplayMenuProps {
   /** Menu body: `MenuSectionLabel` + `MenuRow`s from `@/components/ui/menu-row`. */
@@ -33,7 +34,10 @@ export default function DisplayMenu({
       <PopoverTrigger asChild>
         <ToolbarButton>
           <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className={labelClassName}>{t("display")}</span>
+          {/* Icon-only on a phone, so the subheader keeps room for the rest. */}
+          <span className={cn("max-sm:sr-only", labelClassName)}>
+            {t("display")}
+          </span>
         </ToolbarButton>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-52 p-1.5">

@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
+import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import EmptyState from "@/components/EmptyState/EmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
+import { ViewModeTabs } from "@/components/HeaderTabs";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { listMCPServerInstances } from "@/lib/api";
 import { mcpAppEntries, type McpAppEntry } from "@/lib/apps/mcp/tools";
@@ -22,6 +25,13 @@ export default async function AppsPage({
 }) {
   const t = await getTranslations("AppsPage");
   const resolvedSearchParams = await searchParams;
+  // Read tab from URL or fallback to cookie
+  const cookieStore = await cookies();
+  const cookieTab = cookieStore.get("tab_apps")?.value;
+  const tab =
+    typeof resolvedSearchParams.tab === "string"
+      ? resolvedSearchParams.tab
+      : cookieTab || "grid";
   const instances = requireApiData(
     await listMCPServerInstances(),
     "MCP connections"
@@ -76,12 +86,14 @@ export default async function AppsPage({
         breadcrumb: [{ label: t("title") }],
         description: t("description"),
       }}
+      subheader={
+        <SubheaderToolbar controls={<ViewModeTabs currentTab={tab} />} />
+      }
     >
       <GridAndTableViews
-        searchParams={resolvedSearchParams}
+        viewMode={tab}
         data={items}
         columns={columns}
-        routeChange="/apps"
         itemLink={appLink}
         emptyState={
           <EmptyState

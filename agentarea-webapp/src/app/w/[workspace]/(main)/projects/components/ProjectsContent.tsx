@@ -1,11 +1,11 @@
-import type { ProjectResponse } from "@/api/client/types.gen";
 import { FileText } from "lucide-react";
+import type { ProjectResponse } from "@/api/client/types.gen";
 import EmptyState from "@/components/EmptyState";
-import { ProjectsEmptyState } from "./ProjectsEmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { Badge } from "@/components/ui/badge";
 import { listProjects } from "@/lib/api";
 import { ENTITY_ICONS, EntityIcon } from "@/lib/entity-icons";
+import { ProjectsEmptyState } from "./ProjectsEmptyState";
 
 const AgentIcon = ENTITY_ICONS.agent;
 const SkillIcon = ENTITY_ICONS.skill;
@@ -13,14 +13,14 @@ const McpIcon = ENTITY_ICONS.mcp;
 
 interface ProjectsContentProps {
   searchQuery?: string;
-  searchParams?: { [key: string]: string | string[] | undefined };
+  viewMode?: string;
 }
 
 const countOf = (item: unknown[] | undefined) => item?.length ?? 0;
 
 export default async function ProjectsContent({
   searchQuery = "",
-  searchParams = {},
+  viewMode = "grid",
 }: ProjectsContentProps) {
   const { data: projects = [] } = await listProjects();
 
@@ -35,9 +35,7 @@ export default async function ProjectsContent({
   }
 
   if ((projects as ProjectResponse[]).length === 0) {
-    return (
-      <ProjectsEmptyState />
-    );
+    return <ProjectsEmptyState />;
   }
 
   const columns = [
@@ -91,65 +89,67 @@ export default async function ProjectsContent({
   ];
 
   return (
-    <div className="p-4">
-      <GridAndTableViews
-        searchParams={searchParams}
-        routeChange="/projects"
-        data={filteredProjects}
-        columns={columns}
-        itemLink={(project: ProjectResponse) => `/projects/${project.id}`}
-        emptyState={
-          <EmptyState
-            title="No matching projects"
-            description={`No projects found matching: "${searchQuery}"`}
-            iconsType="agent"
-            action={{ label: "Clear search", href: "/projects" }}
-          />
-        }
-        cardContent={(project: ProjectResponse) => (
-          <div className="flex h-full flex-col gap-3">
-            <div className="flex items-start gap-2">
-              <EntityIcon kind="project" className="mt-0.5 flex-shrink-0 text-primary" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[16px] font-[500]">{project.name}</div>
-                {project.parent_project_id && (
-                  <Badge variant="outline" className="mt-1 text-[10px]">
-                    sub-project
-                  </Badge>
-                )}
+    <GridAndTableViews
+      viewMode={viewMode}
+      data={filteredProjects}
+      columns={columns}
+      itemLink={(project: ProjectResponse) => `/projects/${project.id}`}
+      emptyState={
+        <EmptyState
+          title="No matching projects"
+          description={`No projects found matching: "${searchQuery}"`}
+          iconsType="agent"
+          action={{ label: "Clear search", href: "/projects" }}
+        />
+      }
+      cardContent={(project: ProjectResponse) => (
+        <div className="flex h-full flex-col gap-3">
+          <div className="flex items-start gap-2">
+            <EntityIcon
+              kind="project"
+              className="mt-0.5 flex-shrink-0 text-primary"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[16px] font-[500]">
+                {project.name}
               </div>
-            </div>
-
-            {project.description && (
-              <div className="line-clamp-2 text-[14px] opacity-50">
-                {project.description}
-              </div>
-            )}
-
-            {project.instructions && (
-              <div className="flex items-start gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
-                <FileText className="mt-0.5 h-3 w-3 flex-shrink-0" />
-                <span className="line-clamp-2">{project.instructions}</span>
-              </div>
-            )}
-
-            <div className="mt-auto flex items-center gap-3 pt-1 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <AgentIcon className="h-3.5 w-3.5" />
-                {countOf(project.agents)}
-              </span>
-              <span className="flex items-center gap-1">
-                <SkillIcon className="h-3.5 w-3.5" />
-                {countOf(project.skills)}
-              </span>
-              <span className="flex items-center gap-1">
-                <McpIcon className="h-3.5 w-3.5" />
-                {countOf(project.mcp_instances)}
-              </span>
+              {project.parent_project_id && (
+                <Badge variant="outline" className="mt-1 text-[10px]">
+                  sub-project
+                </Badge>
+              )}
             </div>
           </div>
-        )}
-      />
-    </div>
+
+          {project.description && (
+            <div className="line-clamp-2 text-[14px] opacity-50">
+              {project.description}
+            </div>
+          )}
+
+          {project.instructions && (
+            <div className="flex items-start gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
+              <FileText className="mt-0.5 h-3 w-3 flex-shrink-0" />
+              <span className="line-clamp-2">{project.instructions}</span>
+            </div>
+          )}
+
+          <div className="mt-auto flex items-center gap-3 pt-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <AgentIcon className="h-3.5 w-3.5" />
+              {countOf(project.agents)}
+            </span>
+            <span className="flex items-center gap-1">
+              <SkillIcon className="h-3.5 w-3.5" />
+              {countOf(project.skills)}
+            </span>
+            <span className="flex items-center gap-1">
+              <McpIcon className="h-3.5 w-3.5" />
+              {countOf(project.mcp_instances)}
+            </span>
+          </div>
+        </div>
+      )}
+    />
   );
 }
