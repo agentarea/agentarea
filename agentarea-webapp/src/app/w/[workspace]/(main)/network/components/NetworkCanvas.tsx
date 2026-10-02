@@ -129,7 +129,8 @@ function stylesheet(
   palette: Palette,
   glyphs: Partial<Record<EntityKind, string>>,
   logos: Map<string, string>,
-  font: string
+  font: string,
+  transition: number
 ): StylesheetJson {
   const glyph = (kind: GraphKind, color: string) => {
     const markup = glyphs[KINDS[kind]];
@@ -180,6 +181,9 @@ function stylesheet(
         "text-wrap": "ellipsis",
         "text-max-width": "140px",
         "min-zoomed-font-size": 9,
+        "transition-property":
+          "opacity, border-width, border-color, background-color, underlay-opacity",
+        "transition-duration": transition,
       },
     },
     {
@@ -250,6 +254,8 @@ function stylesheet(
         "text-background-padding": "2px",
         "text-rotation": "autorotate",
         "min-zoomed-font-size": 8,
+        "transition-property": "opacity, width, line-color, target-arrow-color",
+        "transition-duration": transition,
       },
     },
     {
@@ -347,6 +353,66 @@ function stylesheet(
       },
     },
   ];
+}
+
+const MOTION_MS = 450;
+
+/**
+ * Bring the canvas to `elements` by difference: keep what stays, so it can
+ * move to its new place, add what is new beside a neighbour that already
+ * exists, and drop what is gone. Rebuilding everything made each change
+ * redraw the graph from nothing.
+ */
+function syncElements(cy: Core, elements: ElementDefinition[]) {
+  const next = new Map(elements.map((element) => [element.data.id, element]));
+  const centre = (() => {
+    const extent = cy.extent();
+    return { x: (extent.x1 + extent.x2) / 2, y: (extent.y1 + extent.y2) / 2 };
+  })();
+  cy.batch(() => {
+    for (const element of elements) {
+      const id = element.data.id as string;
+      const existing = cy.getElementById(id);
+      const { id: _id, parent, source: _s, target: _t, ...data } = element.data;
+      if (existing.nonempty()) {
+        existing.data(data);
+        if (
+          existing.group() === "nodes" &&
+          (existing.data("parent") ?? null) !== (parent ?? null)
+        ) {
+          existing.nodes().move({ parent: parent ?? null });
+        }
+        continue;
+      }
+      if (element.group === "edges") {
+        cy.add(element);
+        continue;
+      }
+      const neighbour = elements.find(
+        (other) =>
+          other.group === "edges" &&
+          (other.data.source === id || other.data.target === id) &&
+          cy
+            .getElementById(
+              other.data.source === id ? other.data.target : other.data.source
+            )
+            .nonempty()
+      );
+      const anchor = neighbour
+        ? cy
+            .getElementById(
+              neighbour.data.source === id
+                ? neighbour.data.target
+                : neighbour.data.source
+            )
+            .position()
+        : centre;
+      cy.add({ ...element, position: { ...anchor } });
+    }
+    cy.elements()
+      .filter((element) => !next.has(element.id()))
+      .remove();
+  });
 }
 
 export default function NetworkCanvas({
@@ -508,7 +574,8 @@ export default function NetworkCanvas({
         palette,
         glyphs,
         logos,
-        getComputedStyle(container.current ?? document.body).fontFamily
+        getComputedStyle(container.current ?? document.body).fontFamily,
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 160
       )
     );
   }, [ready, logos, theme]);
@@ -516,104 +583,131 @@ export default function NetworkCanvas({
   useEffect(() => {
     const cy = cyRef.current;
     if (!ready || !cy) return;
-    cy.batch(() => {
-      cy.elements().remove();
-      cy.add(elements);
-    });
+    syncElements(cy, elements);
+    const duration = window.matchMedia("(prefers-reduced-motion: reduce)")
+      .matches
+      ? 0
+      : MOTION_MS;
     const order = isolatedNodes(graph).map((node) => node.id);
-    const animate = !window.matchMedia("(prefers-reduced-motion: reduce)")
-      .matches;
+    const group = cy.getElementById(ISOLATED_GROUP);
     const isolated = cy
       .nodes("[?isolated]")
       .sort((a, b) => order.indexOf(a.id()) - order.indexOf(b.id()));
-    const connected = cy
-      .elements()
-      .not(isolated)
-      .not(cy.getElementById(ISOLATED_GROUP));
-    const shelve = () => {
-      if (isolated.nonempty()) {
-        const ids = isolated.map((node) => node.id());
-        let positions;
-        if (connected.empty()) {
-          positions = shelfPositions(ids, { x: 0, y: 0 }, cy.width());
-        } else {
-          const box = connected.boundingBox();
-          // Beside the graph when it is narrower than the screen, below it
-          // otherwise, so the shelf spends the room the graph leaves free.
-          const beside = box.w / Math.max(box.h, 1) < cy.width() / cy.height();
-          positions = beside
-            ? shelfPositions(
-                ids,
-                { x: box.x2 + 100, y: box.y1 },
-                Math.max(300, box.h * (cy.width() / cy.height()) - box.w - 100)
-              )
-            : shelfPositions(
-                ids,
-                { x: box.x1, y: box.y2 + 100 },
-                Math.max(box.w, 450)
-              );
+    const connected = cy.elements().not(isolated).not(group);
+    const movable = cy.nodes("[kind != 'group']");
+    const before = new Map(
+      movable.map((node) => [node.id(), { ...node.position() }])
+    );
+
+    // Settle the final layout instantly, then play one transition from where
+    // every node was to where it lands, camera included — so switching lens
+    // or adding a node moves the graph instead of rebuilding it.
+    if (connected.nonempty()) {
+      if (lens === "overview") {
+        // fcose starts from random positions; a fixed seed keeps the same
+        // workspace looking the same between visits.
+        const random = Math.random;
+        let seed = 7;
+        Math.random = () => {
+          seed = (seed * 16807) % 2147483647;
+          return (seed - 1) / 2147483646;
+        };
+        try {
+          connected
+            .layout({
+              name: "fcose",
+              quality: "proof",
+              randomize: true,
+              animate: false,
+              nodeDimensionsIncludeLabels: true,
+              nodeRepulsion: () => 9000,
+              idealEdgeLength: (edge: { data: (key: string) => string }) =>
+                edge.data("relation") === "delegates_to" ? 90 : 120,
+              nodeSeparation: 80,
+              packComponents: true,
+              tilingPaddingVertical: 40,
+              tilingPaddingHorizontal: 60,
+              fit: false,
+            } as LayoutOptions)
+            .run();
+        } finally {
+          Math.random = random;
         }
-        isolated.positions(
-          (node) => positions.get(node.id()) ?? { x: 0, y: 0 }
+      } else {
+        const positions = hierarchyPositions(
+          connected.nodes().map((node) => ({
+            id: node.id(),
+            size: node.data("size") as number,
+          })),
+          connected.edges().map((edge) => ({
+            source: edge.source().id(),
+            target: edge.target().id(),
+          })),
+          lens === "delegation" ? "TB" : "LR"
         );
+        connected
+          .nodes()
+          .positions((node) => positions.get(node.id()) ?? { x: 0, y: 0 });
       }
-      cy.fit(undefined, 40);
-    };
-    if (connected.empty()) {
-      shelve();
-    } else if (lens === "overview") {
-      // fcose places nodes from a random start; a fixed seed keeps the same
-      // workspace looking the same between visits.
-      const random = Math.random;
-      let seed = 7;
-      Math.random = () => {
-        seed = (seed * 16807) % 2147483647;
-        return (seed - 1) / 2147483646;
-      };
-      try {
-        const layout = connected.layout({
-          name: "fcose",
-          quality: "proof",
-          randomize: true,
-          animate,
-          animationDuration: 450,
-          nodeDimensionsIncludeLabels: true,
-          nodeRepulsion: () => 9000,
-          idealEdgeLength: (edge: { data: (key: string) => string }) =>
-            edge.data("relation") === "delegates_to" ? 90 : 120,
-          nodeSeparation: 80,
-          packComponents: true,
-          tilingPaddingVertical: 40,
-          tilingPaddingHorizontal: 60,
-          fit: false,
-        } as LayoutOptions);
-        layout.one("layoutstop", shelve);
-        layout.run();
-      } finally {
-        Math.random = random;
-      }
-    } else {
-      const positions = hierarchyPositions(
-        connected.nodes().map((node) => ({
-          id: node.id(),
-          size: node.data("size") as number,
-        })),
-        connected.edges().map((edge) => ({
-          source: edge.source().id(),
-          target: edge.target().id(),
-        })),
-        lens === "delegation" ? "TB" : "LR"
-      );
-      const layout = connected.layout({
-        name: "preset",
-        positions: Object.fromEntries(positions),
-        animate,
-        animationDuration: 350,
-        fit: false,
-      });
-      layout.one("layoutstop", shelve);
-      layout.run();
     }
+    if (isolated.nonempty()) {
+      const ids = isolated.map((node) => node.id());
+      let positions;
+      if (connected.empty()) {
+        positions = shelfPositions(ids, { x: 0, y: 0 }, cy.width());
+      } else {
+        const box = connected.boundingBox();
+        // Beside the graph when it is narrower than the screen, below it
+        // otherwise, so the shelf spends the room the graph leaves free.
+        const beside = box.w / Math.max(box.h, 1) < cy.width() / cy.height();
+        positions = beside
+          ? shelfPositions(
+              ids,
+              { x: box.x2 + 100, y: box.y1 },
+              Math.max(300, box.h * (cy.width() / cy.height()) - box.w - 100)
+            )
+          : shelfPositions(
+              ids,
+              { x: box.x1, y: box.y2 + 100 },
+              Math.max(box.w, 450)
+            );
+      }
+      isolated.positions((node) => positions.get(node.id()) ?? { x: 0, y: 0 });
+    }
+
+    const after = new Map(
+      movable.map((node) => [node.id(), { ...node.position() }])
+    );
+    const box = cy.elements().boundingBox();
+    const padding = 40;
+    const zoom = Math.min(
+      cy.maxZoom(),
+      Math.max(
+        cy.minZoom(),
+        Math.min(
+          (cy.width() - 2 * padding) / Math.max(box.w, 1),
+          (cy.height() - 2 * padding) / Math.max(box.h, 1)
+        )
+      )
+    );
+    const pan = {
+      x: cy.width() / 2 - zoom * (box.x1 + box.w / 2),
+      y: cy.height() / 2 - zoom * (box.y1 + box.h / 2),
+    };
+    if (!duration) {
+      cy.viewport({ zoom, pan });
+      return;
+    }
+    cy.stop(true, false);
+    movable.stop(true, false);
+    movable.positions((node) => before.get(node.id()) ?? node.position());
+    movable.forEach((node) => {
+      node.animate(
+        { position: after.get(node.id()) },
+        { duration, easing: "ease-in-out-cubic" }
+      );
+    });
+    cy.animate({ zoom, pan }, { duration, easing: "ease-in-out-cubic" });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- relayout only when the shape changes
   }, [ready, structure]);
 

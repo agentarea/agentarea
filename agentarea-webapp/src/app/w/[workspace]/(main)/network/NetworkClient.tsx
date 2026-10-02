@@ -8,10 +8,6 @@ import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  useWorkspacePathname,
-  useWorkspaceRouter,
-} from "@/hooks/useWorkspaceNavigation";
-import {
   getNetworkPeopleAccessAction,
   previewNetworkPolicyAction,
 } from "./actions";
@@ -23,14 +19,15 @@ import NetworkGraphView from "./views/NetworkGraphView";
 export function NetworkHeaderTabs() {
   const t = useTranslations("NetworkPage.graph.lenses");
   const searchParams = useSearchParams();
-  const pathname = useWorkspacePathname();
-  const router = useWorkspaceRouter();
   const { view } = useNetwork();
 
+  // A lens is client state mirrored into the URL. history.replaceState keeps
+  // useSearchParams in sync without a server round trip, so the graph starts
+  // moving on the click rather than after a refetch.
   const setView = (newView: string) => {
     const params = new URLSearchParams(searchParams);
     params.set("view", newView);
-    router.replace(`${pathname}?${params.toString()}`);
+    window.history.replaceState(null, "", `?${params.toString()}`);
   };
 
   return (
