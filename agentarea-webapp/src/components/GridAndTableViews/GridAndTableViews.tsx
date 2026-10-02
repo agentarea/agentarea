@@ -18,22 +18,28 @@ type Column<T> = {
   render?(value: unknown, item?: T): React.ReactNode;
   headerClassName?: string;
   cellClassName?: string;
+  /** Marks the identity cell as the row's native link when `rowHref` is set. */
+  rowLink?: boolean;
 };
 
 const TabsView = ({
   searchParams,
+  selectedTab,
+  showViewToggle = true,
   leftComponent,
   routeChange,
   children,
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
+  selectedTab?: string;
+  showViewToggle?: boolean;
   leftComponent?: React.ReactNode;
   routeChange: string;
   children: React.ReactNode;
 }) => {
   const t = useTranslations("Common");
 
-  const tab = searchParams?.tab;
+  const tab = selectedTab ?? searchParams?.tab;
   const activeTab =
     typeof tab === "string" && (tab === "grid" || tab === "table")
       ? tab
@@ -41,23 +47,27 @@ const TabsView = ({
 
   return (
     <TabsWithNavigation activeTab={activeTab} routeChange={routeChange}>
-      <div className="mb-3 flex flex-row items-center justify-between gap-[10px]">
-        <div className="flex flex-1 flex-row items-center gap-[10px]">
-          {leftComponent}
-        </div>
+      {(showViewToggle || leftComponent) && (
+        <div className="mb-3 flex flex-row items-center justify-between gap-[10px]">
+          <div className="flex flex-1 flex-row items-center gap-[10px]">
+            {leftComponent}
+          </div>
 
-        <div>
-          <HeaderTabs
-            paramName="tab"
-            defaultTab="grid"
-            currentTab={activeTab}
-            tabs={[
-              { value: "table", label: t("table") },
-              { value: "grid", label: t("grid") },
-            ]}
-          />
+          {showViewToggle && (
+            <div>
+              <HeaderTabs
+                paramName="tab"
+                defaultTab="grid"
+                currentTab={activeTab}
+                tabs={[
+                  { value: "table", label: t("table") },
+                  { value: "grid", label: t("grid") },
+                ]}
+              />
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       {children}
     </TabsWithNavigation>
@@ -73,9 +83,14 @@ export default function GridAndTableViews<T extends GridItem>({
   columns,
   cardContent,
   itemLink,
+  rowHref,
   cardClassName,
   gridClassName,
+  tableClassName,
   rowProps,
+  selectedTab,
+  showViewToggle = true,
+  wrapCardContent = true,
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
   isEmpty?: boolean;
@@ -86,16 +101,26 @@ export default function GridAndTableViews<T extends GridItem>({
   data: T[];
   columns: Column<T>[];
   cardContent: (item: T) => React.ReactNode;
+  /** Link the shared card wrapper; table rows use `rowHref` when provided. */
   itemLink?: (item: T) => string;
+  rowHref?: (item: T) => string;
   cardClassName?: string;
   gridClassName?: string;
-  /** Extra attributes for each row and card, e.g. drag source or drop target. */
+  tableClassName?: string;
+  /** Extra attributes for each row and wrapped card. */
   rowProps?: (item: T) => React.HTMLAttributes<HTMLElement>;
+  /** Use a route's existing view switcher instead of rendering a second one. */
+  selectedTab?: string;
+  showViewToggle?: boolean;
+  /** `cardContent` owns its card and link, so do not add a shared wrapper. */
+  wrapCardContent?: boolean;
 }) {
   return (
     <TabsView
       routeChange={routeChange}
       searchParams={searchParams}
+      selectedTab={selectedTab}
+      showViewToggle={showViewToggle}
       leftComponent={leftComponent}
     >
       {!data.length ? (
@@ -113,6 +138,13 @@ export default function GridAndTableViews<T extends GridItem>({
                 const linkFunction = item.itemLink || itemLink;
                 const { className: extraClassName, ...extraProps } =
                   rowProps?.(item) ?? {};
+                if (!wrapCardContent) {
+                  return (
+                    <React.Fragment key={item.id}>
+                      {cardContent(item)}
+                    </React.Fragment>
+                  );
+                }
                 return linkFunction ? (
                   <Link
                     key={item.id}
@@ -145,12 +177,15 @@ export default function GridAndTableViews<T extends GridItem>({
           <TabsContent value="table">
             <Table
               data={data}
+              className={tableClassName}
               columns={columns}
               rowProps={rowProps}
               // The row goes where the card goes. Passed as a href rather than
               // a click handler: this component renders on the server, so a
               // closure never reaches the browser and the rows were inert.
-              rowHref={(item) => (item.itemLink ?? itemLink)?.(item) ?? ""}
+              rowHref={(item) =>
+                rowHref?.(item) ?? (item.itemLink ?? itemLink)?.(item) ?? ""
+              }
             />
           </TabsContent>
         </>

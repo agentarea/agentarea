@@ -171,9 +171,9 @@ export async function TriggerOverviewView({
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="m-0 text-[18px] font-semibold tracking-[-0.022em]">
+                <h2 className="m-0 text-[18px] font-semibold tracking-[-0.022em]">
                   {model.name}
-                </h1>
+                </h2>
                 <TriggerStatusBadge
                   status={model.status}
                   className="whitespace-nowrap text-[13px] font-medium"
@@ -520,7 +520,7 @@ function ExecutionRow({
     >
       <div className="min-w-0 flex-1">
         <div className="truncate text-[12.5px] font-medium">{when}</div>
-        <div className="mt-px truncate text-[11px] text-muted-foreground/80">
+        <div className="mt-px truncate text-[11px] text-muted-foreground">
           {sub}
         </div>
       </div>

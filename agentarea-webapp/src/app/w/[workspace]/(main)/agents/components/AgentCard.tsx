@@ -1,7 +1,7 @@
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { Card } from "@/components/ui/card";
 import { HoverLink } from "@/components/ui/hover-link";
-import ModelBadge from "@/components/ui/model-badge";
+import AgentModelBadge from "./AgentModelBadge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import Link from "@/components/WorkspaceLink";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
       <div className="block h-full">
         <Card
           className={cn(
-            "group relative flex h-full cursor-pointer flex-col justify-between overflow-hidden p-0 transition-all duration-300",
+            "group relative flex h-full cursor-pointer flex-col justify-between overflow-hidden p-0 transition-[box-shadow,border-color,background-color,transform] duration-300",
             "border border-zinc-200 dark:border-zinc-800",
             "bg-white dark:bg-zinc-900",
             "hover:shadow-lg hover:shadow-zinc-200/50 dark:hover:shadow-zinc-950/50",
@@ -70,7 +70,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
                       )}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                    <ModelBadge
+                    <AgentModelBadge
                       providerName={agent.model_info?.provider_name}
                       iconUrl={agent.model_info?.provider_icon_url}
                       modelDisplayName={agent.model_info?.model_display_name}

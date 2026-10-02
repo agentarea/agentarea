@@ -120,7 +120,11 @@
     "saved": "Saved",
     "deleteFailed": "Couldn’t delete {itemName}",
     "confirm": "Confirm",
-    "display": "Display"
+    "display": "Display",
+    "skipToContent": "Skip to content",
+    "switchToDarkTheme": "Switch to dark theme",
+    "switchToLightTheme": "Switch to light theme",
+    "scrollToLatestMessage": "Scroll to latest message"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -1096,6 +1100,8 @@
     "modelCount": "{count, plural, =0 {} one {+ # Model} other {+ # Models}}",
     "endpointUrl": "Endpoint URL",
     "apiKey": "API Key",
+    "editApiKey": "Edit API key",
+    "cancelEditing": "Cancel editing",
     "modelInstances": "model instances",
     "providerConfigurationUpdatedSuccessfully": "Provider configuration updated successfully",
     "providerConfigurationCreatedSuccessfully": "Provider configuration created successfully",
@@ -1268,6 +1274,10 @@
   "SkillsPage": {
     "title": "Skills",
     "description": "Manage reusable skills that can be assigned to agents",
+    "rowActions": {
+      "favorite": "Favorite skill",
+      "duplicate": "Duplicate skill"
+    },
     "addSkill": "Add Skill",
     "backToSkills": "Back to Skills",
     "skill": "Skill",
@@ -1317,7 +1327,8 @@
         "ingress": "Ingress",
         "egress": "Egress"
       },
-      "filter": "Filter"
+      "filter": "Filter",
+      "accessibleLabel": "Filter skills"
     },
     "table": {
       "name": "Name",
@@ -1444,7 +1455,8 @@
       "none": "No grouping",
       "ordering": "Ordering",
       "name": "Name",
-      "created": "Created"
+      "created": "Created",
+      "accessibleLabel": "Display options"
     },
     "emptyHere": "No skills here",
     "emptyHereDescription": "Nothing matches this view yet.",
@@ -1836,6 +1848,7 @@
       "failureWarning": "{count, plural, one {# consecutive failure} other {# consecutive failures}} of {threshold}",
       "noSchedule": "Waiting for an incoming request",
       "metricsLoadFailed": "Failed to load metrics",
+      "executionsLoadFailed": "Failed to load executions",
       "periodHours": "Over the last {hours}h",
       "durationRange": "{min}s — {max}s range",
       "failures": "Failures",
@@ -1856,6 +1869,14 @@
     }
   },
   "NetworkPage": {
+    "graphSelection": {
+      "title": "Nodes and relationships",
+      "nodes": "Nodes ({count})",
+      "relationships": "Relationships ({count})",
+      "relationshipLabel": "{source} to {target}: {relation}",
+      "showMore": "Show more",
+      "showLess": "Show less"
+    },
     "orgChart": {
       "types": {
         "agent": "Agent",
@@ -2634,7 +2655,158 @@
     },
     "editor": {
       "loadFailedTitle": "Couldn't load policy",
-      "loadFailed": "Failed to load policies"
+      "loadFailed": "Failed to load policies",
+      "breadcrumbPolicies": "Policies",
+      "titles": {
+        "edit": "Edit policy rule",
+        "newPolicy": "New policy rule",
+        "newAgent": "New agent policy",
+        "newWorkspace": "New workspace rule"
+      },
+      "actions": {
+        "addRule": "Add rule",
+        "cancel": "Cancel",
+        "createRule": "{count, plural, one {Create rule} other {Create rules}}",
+        "delete": "Delete",
+        "deleteFailed": "Delete failed",
+        "saveFailed": "Save failed",
+        "saveRule": "Save rule"
+      },
+      "sections": {
+        "controlPlane": "Policy control plane",
+        "rules": "Policy Rules",
+        "configuration": "Rule Config",
+        "ruleType": "Rule type",
+        "ruleTypeFixed": "The rule type is fixed once a rule is created.",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "impactRail": "Impact Rail"
+      },
+      "effects": {
+        "allow": "Allow",
+        "cap": "Budget",
+        "approval": "Approval",
+        "deny": "Deny",
+        "safety": "Safety"
+      },
+      "scope": {
+        "policyDescription": "This policy applies to {scope}. Tool access grants are managed in the <accessView>Access view</accessView>.",
+        "allAgentsInWorkspace": "every agent in this workspace",
+        "selectedAgent": "the selected agent",
+        "selectedAgents": "the selected agents",
+        "target": "Target",
+        "workspace": "Workspace",
+        "allAgentsOption": "All agents",
+        "selectedAgentsOption": "Selected agents",
+        "selectAgentPlaceholder": "Select an agent",
+        "addAgent": "Add agent",
+        "removeAgent": "Remove {agent}",
+        "addAgentsPrompt": "Add agents to scope this policy.",
+        "toolAccessManaged": "Granting tool access is managed in the",
+        "accessView": "Access view",
+        "affectedAgents": "Affected agents",
+        "workspaceAgentCount": "{count, plural, one {# workspace agent} other {# workspace agents}}",
+        "selectedAgentCount": "{count, plural, one {# selected agent} other {# selected agents}}",
+        "noAgentsSelected": "No agents selected",
+        "agent": "Agent",
+        "noAgentsInWorkspace": "No agents in this workspace yet.",
+        "selectAgentPreview": "Select an agent to preview the affected scope.",
+        "moreAgents": "{count, plural, one {+# more agent} other {+# more agents}}"
+      },
+      "ruleIndex": "Rule {number}",
+      "removeRule": "Remove rule {number}",
+      "budget": {
+        "type": "Budget type",
+        "spend": "Spend budget",
+        "perService": "Per-service budget",
+        "tokens": "Token budget",
+        "maxTokens": "Max tokens",
+        "maxTokensPerCall": "Max tokens per call",
+        "amount": "Amount",
+        "period": "Period",
+        "perMonth": "Per month",
+        "perTask": "Per task",
+        "moneyPlaceholder": "0.00",
+        "numberPlaceholder": "optional"
+      },
+      "tools": {
+        "deniedTools": "Denied tools",
+        "approvalRequiredTools": "Tools requiring approval",
+        "noToolsAttached": "No tools are attached to the affected agents yet.",
+        "agentCount": "{count, plural, one {# agent} other {# agents}}",
+        "notInAgentCatalog": "not in current agent catalog",
+        "mcpSource": "MCP",
+        "mcpSourceNamed": "MCP · {name}",
+        "openApiSource": "OpenAPI",
+        "openApiSourceNamed": "OpenAPI · {name}",
+        "builtInSource": "Built-in",
+        "customSource": "Custom",
+        "genericSource": "Tool",
+        "advancedSelector": "Advanced selector",
+        "namePlaceholder": "Tool name"
+      },
+      "condition": {
+        "parameterGuard": "Parameter guard",
+        "clear": "Clear",
+        "parameterPlaceholder": "Parameter",
+        "anyParameter": "Any parameter",
+        "equals": "Equals",
+        "notEquals": "Not equals",
+        "contains": "Contains",
+        "exists": "Exists",
+        "valuePlaceholder": "Value",
+        "help": "Stored as a policy condition. Runtime enforcement for parameter conditions needs the policy engine to evaluate rule conditions before tool execution."
+      },
+      "approvers": {
+        "label": "Approvers",
+        "emptyHelp": "Leave empty to allow any workspace member to approve.",
+        "roleOrGroup": "Role or group",
+        "role": "Role",
+        "groupMembers": "Group members",
+        "rolePlaceholder": "admin",
+        "groupPlaceholder": "security",
+        "advancedSubjectRef": "Advanced subject ref",
+        "subjectRefPlaceholder": "user:<id>, role:<name>, or group:<id>#member",
+        "subjectRefInvalidHint": "Use a subject ref like user:<id>, role:<name>, or group:<id>#member"
+      },
+      "tagInput": {
+        "add": "Add",
+        "invalidValue": "Invalid value",
+        "removeValue": "Remove {value}"
+      },
+      "safety": {
+        "promptInjection": "Prompt-injection detection",
+        "outputSanitizer": "Output sanitizer"
+      },
+      "validation": {
+        "agentRequired": "Add at least one agent for this policy.",
+        "workspaceRequired": "No workspace context available.",
+        "tokenBudgetRequired": "Enter a token budget.",
+        "amountInvalid": "Enter a valid amount.",
+        "amountMustBePositive": "Enter an amount greater than 0.",
+        "atLeastOneToolRequired": "Add at least one tool.",
+        "toolRequired": "Add a tool.",
+        "safetyCheckRequired": "Enable at least one safety check.",
+        "ruleInvalid": "Rule {number} ({effect}): {error}"
+      },
+      "summary": {
+        "agentScopePending": "agent scope pending",
+        "workspaceScopeMissing": "workspace scope missing",
+        "scope": "Scope",
+        "workspace": "Workspace",
+        "agentCount": "{count, plural, one {# agent} other {# agents}}",
+        "drafts": "Drafts",
+        "active": "Active",
+        "activeCount": "{enabled}/{total} enabled",
+        "selected": "Selected",
+        "target": "Target",
+        "params": "Params",
+        "guard": "Guard",
+        "none": "none",
+        "rules": "Rules",
+        "pending": "pending",
+        "compiledOutput": "Compiled output"
+      }
     }
   },
   "ProjectSettingsPage": {

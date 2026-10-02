@@ -272,7 +272,7 @@ function SpecHeader({
 
       <div className="min-w-0 flex-1 pt-0.5">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+          <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
           {version && (
             <span className="font-mono text-[11px] text-muted-foreground">
               v{version.replace(/^v/, "")}
@@ -321,7 +321,7 @@ function SpecHeader({
 function EncryptionNote() {
   const t = useTranslations("MCPServersPage.createInstance.connect");
   return (
-    <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground/60">
+    <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
       <Lock className="h-3.5 w-3.5" />
       {t("encryptionNote")}
     </div>
@@ -622,7 +622,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
             autoComplete="off"
             {...register("instanceName", { required: true })}
           />
-          <p className="text-xs text-muted-foreground/60">{t("nameHint")}</p>
+          <p className="text-xs text-muted-foreground">{t("nameHint")}</p>
         </div>
 
         {/* Error */}

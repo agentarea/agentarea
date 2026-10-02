@@ -1,4 +1,5 @@
 "use server";
+import { getTranslations } from "next-intl/server";
 
 import type {
   PolicyRuleCreateRequest,
@@ -44,7 +45,8 @@ export async function createPolicyRuleAction(
   const { data, error } = await createPolicy(body);
 
   if (error || !data) {
-    return { ok: false, error: errorMessage(error, "Save failed") };
+    const t = await getTranslations("PoliciesPage.editor");
+    return { ok: false, error: errorMessage(error, t("actions.saveFailed")) };
   }
 
   return {
@@ -61,7 +63,8 @@ export async function updatePolicyRuleAction(
   const { data, error } = await updatePolicy(id, body);
 
   if (error || !data) {
-    return { ok: false, error: errorMessage(error, "Save failed") };
+    const t = await getTranslations("PoliciesPage.editor");
+    return { ok: false, error: errorMessage(error, t("actions.saveFailed")) };
   }
 
   return {
@@ -74,6 +77,7 @@ export async function deletePolicyRuleAction(id: string): Promise<void> {
   const { error } = await deletePolicy(id);
 
   if (error) {
-    throw new Error(errorMessage(error, "Delete failed"));
+    const t = await getTranslations("PoliciesPage.editor");
+    throw new Error(errorMessage(error, t("actions.deleteFailed")));
   }
 }

@@ -69,7 +69,7 @@ export default function SettingsClient({
                   "group relative flex flex-col md:flex-row md:items-start gap-3 w-full p-4",
                   "bg-white dark:bg-zinc-900",
                   "border border-zinc-200/60 dark:border-zinc-800",
-                  "rounded-md transition-all duration-300 ease-out",
+                  "rounded-md",
                   "shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)]",
                   "relative overflow-hidden"
                 )}
@@ -111,7 +111,7 @@ export default function SettingsClient({
                   "group relative flex flex-col md:flex-row md:items-start gap-3 w-full p-4",
                   "bg-white dark:bg-zinc-900",
                   "border border-zinc-200/60 dark:border-zinc-800",
-                  "rounded-md transition-all duration-300 ease-out",
+                  "rounded-md",
                   "shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)]",
                   "relative overflow-hidden"
                 )}

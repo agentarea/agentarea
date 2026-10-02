@@ -202,7 +202,7 @@ const BasicInformation = ({
             />
             <span className="text-muted-foreground">Enable A2UI</span>
           </label>
-          <span className="text-xs text-muted-foreground/60">
+          <span className="text-xs text-muted-foreground">
             Allow agent to render interactive UI surfaces
           </span>
         </div>

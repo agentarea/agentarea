@@ -14,7 +14,7 @@ export const ToolbarButton = React.forwardRef<
     ref={ref}
     type={type}
     className={cn(
-      "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal transition-colors",
+      "inline-flex h-7 min-w-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal transition-colors motion-reduce:transition-none max-[767px]:h-11 max-[767px]:min-w-11",
       active
         ? "bg-muted text-foreground"
         : "text-foreground/80 hover:bg-muted/60",

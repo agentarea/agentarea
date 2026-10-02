@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link as LinkIcon, Plus, UsersRound, X } from "lucide-react";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { AgentSelect } from "@/components/AgentSelect";
@@ -113,11 +113,13 @@ interface ToolsConfigLike {
   } | null> | null;
 }
 
+type ToolSource = "builtin" | "custom" | "mcp" | "openapi" | "tool";
+
 interface ToolOption {
   id: string;
   label: string;
-  source: string;
-  sourceLabel: string;
+  source: ToolSource;
+  sourceName?: string;
   description?: string;
   parameterKeys: string[];
   agents: string[];
@@ -291,10 +293,10 @@ function approverLabel(ref: string, members: MemberOption[]): string {
 function addToolOption(
   map: Map<string, ToolOption>,
   id: string,
-  source: string,
+  source: ToolSource,
   agentName: string,
   metadata?: {
-    sourceLabel?: string;
+    sourceName?: string;
     description?: string | null;
     parameterKeys?: string[];
   }
@@ -318,7 +320,7 @@ function addToolOption(
     id: normalized,
     label: humanizeToolName(normalized),
     source,
-    sourceLabel: metadata?.sourceLabel ?? source,
+    sourceName: metadata?.sourceName,
     description: metadata?.description ?? undefined,
     parameterKeys: metadata?.parameterKeys ?? [],
     agents: [agentName],
@@ -350,7 +352,7 @@ function buildToolCatalog(
           for (const available of ref.availableTools) {
             if (allowedSet && !allowedSet.has(available.name)) continue;
             addToolOption(map, available.name, "mcp", agentName, {
-              sourceLabel: `MCP · ${ref.displayName}`,
+              sourceName: ref.displayName,
               description: available.description,
               parameterKeys: schemaParameterKeys(available.inputSchema),
             });
@@ -358,12 +360,12 @@ function buildToolCatalog(
         } else {
           for (const allowed of allowedTools) {
             addToolOption(map, allowed, "mcp", agentName, {
-              sourceLabel: `MCP · ${ref.displayName}`,
+              sourceName: ref.displayName,
             });
           }
           if (unrestricted) {
             addToolOption(map, name, "mcp", agentName, {
-              sourceLabel: `MCP · ${ref.displayName}`,
+              sourceName: ref.displayName,
             });
           }
         }
@@ -376,7 +378,7 @@ function buildToolCatalog(
           for (const available of connection.available_tools) {
             if (allowedSet && !allowedSet.has(available.name)) continue;
             addToolOption(map, available.name, "openapi", agentName, {
-              sourceLabel: `OpenAPI · ${connection.name}`,
+              sourceName: connection.name,
               description: available.description,
               parameterKeys: schemaParameterKeys(available.inputSchema),
             });
@@ -384,16 +386,12 @@ function buildToolCatalog(
         } else {
           for (const allowed of allowedTools) {
             addToolOption(map, allowed, "openapi", agentName, {
-              sourceLabel: connection
-                ? `OpenAPI · ${connection.name}`
-                : "OpenAPI",
+              sourceName: connection?.name,
             });
           }
           if (unrestricted) {
             addToolOption(map, name, "openapi", agentName, {
-              sourceLabel: connection
-                ? `OpenAPI · ${connection.name}`
-                : "OpenAPI",
+              sourceName: connection?.name,
             });
           }
         }
@@ -408,23 +406,19 @@ function buildToolCatalog(
     }
 
     for (const builtin of agent.tools_config?.builtin_tools ?? []) {
-      addToolOption(map, str(builtin?.tool_name), "builtin", agentName, {
-        sourceLabel: "Built-in",
-      });
+      addToolOption(map, str(builtin?.tool_name), "builtin", agentName);
     }
     for (const mcp of agent.tools_config?.mcp_server_configs ?? []) {
       for (const name of [
         ...asToolNames(mcp?.allowed_tools),
         ...asToolNames(mcp?.tools),
       ]) {
-        addToolOption(map, name, "mcp", agentName, { sourceLabel: "MCP" });
+        addToolOption(map, name, "mcp", agentName);
       }
     }
     for (const openapi of agent.tools_config?.openapi_configs ?? []) {
       for (const name of asToolNames(openapi?.allowed_tools)) {
-        addToolOption(map, name, "openapi", agentName, {
-          sourceLabel: "OpenAPI",
-        });
+        addToolOption(map, name, "openapi", agentName);
       }
     }
   }
@@ -494,28 +488,35 @@ interface RuleBody {
   params: Record<string, unknown>;
   condition?: string | null;
 }
+type RuleBuildError =
+  | "tokenBudgetRequired"
+  | "amountInvalid"
+  | "amountMustBePositive"
+  | "atLeastOneToolRequired"
+  | "toolRequired"
+  | "safetyCheckRequired";
 
-// Build the rule bodies the form describes. Returns an error string instead
+// Build the rule bodies the form describes. Returns an error code instead
 // when the form is incomplete.
 function buildRuleBodies(
   effect: PolicyEffect,
   form: FormState
-): { bodies: RuleBody[] } | { error: string } {
+): { bodies: RuleBody[] } | { error: RuleBuildError } {
   if (effect === "cap") {
     if (form.capKind === "tokens") {
       const maxTokens = parseInt2(form.maxTokens);
       const perCall = parseInt2(form.maxTokensPerCall);
       if (maxTokens === null && perCall === null)
-        return { error: "Enter a token budget." };
+        return { error: "tokenBudgetRequired" };
       const params: Record<string, unknown> = {};
       if (maxTokens !== null) params.max_tokens = maxTokens;
       if (perCall !== null) params.max_tokens_per_call = perCall;
       return { bodies: [{ target: "tokens", effect, params }] };
     }
     const amount = parseMoneyInput(form.amountUsd);
-    if (amount === null) return { error: "Enter a valid amount." };
+    if (amount === null) return { error: "amountInvalid" };
     if (!isPositiveMoneyInput(amount))
-      return { error: "Enter an amount greater than 0." };
+      return { error: "amountMustBePositive" };
     if (form.capKind === "service")
       return {
         bodies: [{ target: "service", effect, params: { amount_usd: amount } }],
@@ -532,7 +533,7 @@ function buildRuleBodies(
   }
 
   if (effect === "deny") {
-    if (form.tools.length === 0) return { error: "Add at least one tool." };
+    if (form.tools.length === 0) return { error: "atLeastOneToolRequired" };
     const condition = buildCondition(form);
     return {
       bodies: form.tools.map((tool) => ({
@@ -547,7 +548,7 @@ function buildRuleBodies(
   if (effect === "approval") {
     const params: Record<string, unknown> = {};
     if (form.approvers.length > 0) params.approvers = form.approvers;
-    if (form.tools.length === 0) return { error: "Add a tool." };
+    if (form.tools.length === 0) return { error: "toolRequired" };
     const condition = buildCondition(form);
     return {
       bodies: form.tools.map((tool) => ({
@@ -561,7 +562,7 @@ function buildRuleBodies(
 
   // safety
   if (!form.promptInjection && !form.outputSanitizer)
-    return { error: "Enable at least one safety check." };
+    return { error: "safetyCheckRequired" };
   return {
     bodies: [
       {
@@ -587,6 +588,7 @@ function EffectSegmented({
   onChange: (effect: PolicyEffect) => void;
   disabled?: boolean;
 }) {
+  const t = useTranslations("PoliciesPage.editor");
   return (
     <div className="inline-flex flex-wrap items-center gap-px border border-border/70 bg-muted/30 p-px">
       {EDITABLE_EFFECTS.map((effect) => {
@@ -611,7 +613,13 @@ function EffectSegmented({
               strokeWidth={1.8}
               aria-hidden
             />
-            {style.label}
+            {effect === "cap"
+              ? t("effects.cap")
+              : effect === "deny"
+                ? t("effects.deny")
+                : effect === "approval"
+                  ? t("effects.approval")
+                  : t("effects.safety")}
           </button>
         );
       })}
@@ -632,6 +640,7 @@ function TagInput({
   validate?: (value: string) => boolean;
   invalidHint?: string;
 }) {
+  const t = useTranslations("PoliciesPage.editor");
   const [draft, setDraft] = useState("");
   const [hint, setHint] = useState<string | null>(null);
 
@@ -639,7 +648,7 @@ function TagInput({
     const value = draft.trim();
     if (!value) return;
     if (validate && !validate(value)) {
-      setHint(invalidHint ?? "Invalid value");
+      setHint(invalidHint ?? t("tagInput.invalidValue"));
       return;
     }
     if (!values.includes(value)) onChange([...values, value]);
@@ -659,7 +668,7 @@ function TagInput({
               {value}
               <button
                 type="button"
-                aria-label={`Remove ${value}`}
+                aria-label={t("tagInput.removeValue", { value })}
                 onClick={() => onChange(values.filter((v) => v !== value))}
                 className="text-muted-foreground hover:text-foreground"
               >
@@ -685,7 +694,7 @@ function TagInput({
           placeholder={placeholder}
         />
         <Button type="button" variant="outline" size="sm" onClick={add}>
-          Add
+          {t("tagInput.add")}
         </Button>
       </div>
       {hint && <p className="text-xs text-destructive">{hint}</p>}
@@ -704,6 +713,7 @@ function ToolSelector({
   onChange: (next: string[]) => void;
   emptyText: string;
 }) {
+  const t = useTranslations("PoliciesPage.editor");
   const visibleOptions = useMemo(() => {
     const byId = new Map(options.map((option) => [option.id, option]));
     for (const value of values) {
@@ -712,7 +722,6 @@ function ToolSelector({
           id: value,
           label: humanizeToolName(value),
           source: "custom",
-          sourceLabel: "Custom",
           parameterKeys: [],
           agents: [],
         });
@@ -741,8 +750,24 @@ function ToolSelector({
               tool.agents.length > 0
                 ? tool.agents.length === 1
                   ? tool.agents[0]
-                  : `${tool.agents.length} agents`
-                : "not in current agent catalog";
+                  : t("tools.agentCount", { count: tool.agents.length })
+                : t("tools.notInAgentCatalog");
+            const sourceLabel =
+              tool.source === "mcp"
+                ? tool.sourceName
+                  ? t("tools.mcpSourceNamed", { name: tool.sourceName })
+                  : t("tools.mcpSource")
+                : tool.source === "openapi"
+                  ? tool.sourceName
+                    ? t("tools.openApiSourceNamed", {
+                        name: tool.sourceName,
+                      })
+                    : t("tools.openApiSource")
+                  : tool.source === "builtin"
+                    ? t("tools.builtInSource")
+                    : tool.source === "custom"
+                      ? t("tools.customSource")
+                      : t("tools.genericSource");
             return (
               <div
                 key={tool.id}
@@ -773,7 +798,7 @@ function ToolSelector({
                     {tool.label}
                   </span>
                   <span className="mt-1 flex flex-wrap gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                    <span>{tool.sourceLabel}</span>
+                    <span>{sourceLabel}</span>
                     <span>{agentLabel}</span>
                   </span>
                   {tool.description && (
@@ -811,7 +836,7 @@ function ToolSelector({
 
       <details className="border-t border-border/60 pt-3">
         <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-          Advanced selector
+          {t("tools.advancedSelector")}
         </summary>
         <div className="mt-3">
           <TagInput
@@ -824,7 +849,7 @@ function ToolSelector({
               );
               onChange([...catalogValues, ...customValues]);
             }}
-            placeholder="Tool name"
+            placeholder={t("tools.namePlaceholder")}
           />
         </div>
       </details>
@@ -841,13 +866,14 @@ function ToolConditionBuilder({
   form: FormState;
   update: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
 }) {
+  const t = useTranslations("PoliciesPage.editor");
   const hasCondition = Boolean(form.conditionParam.trim());
 
   return (
     <div className="border-t border-border/60 pt-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <Label className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-          Parameter guard
+          {t("condition.parameterGuard")}
         </Label>
         {hasCondition && (
           <Button
@@ -859,7 +885,7 @@ function ToolConditionBuilder({
               update("conditionValue", "");
             }}
           >
-            Clear
+            {t("condition.clear")}
           </Button>
         )}
       </div>
@@ -871,10 +897,12 @@ function ToolConditionBuilder({
           }
         >
           <SelectTrigger>
-            <SelectValue placeholder="Parameter" />
+            <SelectValue placeholder={t("condition.parameterPlaceholder")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__none">Any parameter</SelectItem>
+            <SelectItem value="__none">
+              {t("condition.anyParameter")}
+            </SelectItem>
             {paramOptions.map((param) => (
               <SelectItem key={param} value={param}>
                 {param}
@@ -893,23 +921,23 @@ function ToolConditionBuilder({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="equals">Equals</SelectItem>
-            <SelectItem value="not_equals">Not equals</SelectItem>
-            <SelectItem value="contains">Contains</SelectItem>
-            <SelectItem value="exists">Exists</SelectItem>
+            <SelectItem value="equals">{t("condition.equals")}</SelectItem>
+            <SelectItem value="not_equals">
+              {t("condition.notEquals")}
+            </SelectItem>
+            <SelectItem value="contains">{t("condition.contains")}</SelectItem>
+            <SelectItem value="exists">{t("condition.exists")}</SelectItem>
           </SelectContent>
         </Select>
         <Input
           value={form.conditionValue}
           disabled={!hasCondition || form.conditionOperator === "exists"}
           onChange={(event) => update("conditionValue", event.target.value)}
-          placeholder="Value"
+          placeholder={t("condition.valuePlaceholder")}
         />
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        Stored as a policy condition. Runtime enforcement for parameter
-        conditions needs the policy engine to evaluate rule conditions before
-        tool execution.
+        {t("condition.help")}
       </p>
     </div>
   );
@@ -924,6 +952,7 @@ function ApproverSelector({
   values: string[];
   onChange: (next: string[]) => void;
 }) {
+  const t = useTranslations("PoliciesPage.editor");
   const [subjectKind, setSubjectKind] = useState<"role" | "group">("role");
   const [subjectName, setSubjectName] = useState("");
 
@@ -967,7 +996,7 @@ function ApproverSelector({
               {approverLabel(ref, members)}
               <button
                 type="button"
-                aria-label={`Remove ${ref}`}
+                aria-label={t("tagInput.removeValue", { value: ref })}
                 onClick={() =>
                   onChange(values.filter((value) => value !== ref))
                 }
@@ -1026,7 +1055,7 @@ function ApproverSelector({
 
       <div className="border-t border-border/60 pt-3">
         <Label className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-          Role or group
+          {t("approvers.roleOrGroup")}
         </Label>
         <div className="mt-2 grid gap-2 sm:grid-cols-[160px_minmax(0,1fr)_auto]">
           <Select
@@ -1037,8 +1066,10 @@ function ApproverSelector({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="role">Role</SelectItem>
-              <SelectItem value="group">Group members</SelectItem>
+              <SelectItem value="role">{t("approvers.role")}</SelectItem>
+              <SelectItem value="group">
+                {t("approvers.groupMembers")}
+              </SelectItem>
             </SelectContent>
           </Select>
           <Input
@@ -1050,7 +1081,11 @@ function ApproverSelector({
                 addStructuredSubject();
               }
             }}
-            placeholder={subjectKind === "role" ? "admin" : "security"}
+            placeholder={
+              subjectKind === "role"
+                ? t("approvers.rolePlaceholder")
+                : t("approvers.groupPlaceholder")
+            }
           />
           <Button
             type="button"
@@ -1058,14 +1093,14 @@ function ApproverSelector({
             size="sm"
             onClick={addStructuredSubject}
           >
-            Add
+            {t("tagInput.add")}
           </Button>
         </div>
       </div>
 
       <details className="border-t border-border/60 pt-3">
         <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-          Advanced subject ref
+          {t("approvers.advancedSubjectRef")}
         </summary>
         <div className="mt-3">
           <TagInput
@@ -1076,9 +1111,9 @@ function ApproverSelector({
               );
               onChange([...standardValues, ...nextCustom]);
             }}
-            placeholder="user:<id>, role:<name>, or group:<id>#member"
+            placeholder={t("approvers.subjectRefPlaceholder")}
             validate={(value) => SUBJECT_REF_RE.test(value)}
-            invalidHint="Use a subject ref like user:<id>, role:<name>, or group:<id>#member"
+            invalidHint={t("approvers.subjectRefInvalidHint")}
           />
         </div>
       </details>
@@ -1102,6 +1137,7 @@ function MoneyField({
   // currency is loading/unavailable), never a guessed symbol.
   currencySymbol: string;
 }) {
+  const t = useTranslations("PoliciesPage.editor");
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
@@ -1114,7 +1150,7 @@ function MoneyField({
           inputMode="decimal"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="0.00"
+          placeholder={t("budget.moneyPlaceholder")}
           className="pl-6"
         />
       </div>
@@ -1133,6 +1169,7 @@ function NumberField({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const t = useTranslations("PoliciesPage.editor");
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
@@ -1141,7 +1178,7 @@ function NumberField({
         inputMode="numeric"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="optional"
+        placeholder={t("budget.numberPlaceholder")}
       />
     </div>
   );
@@ -1230,6 +1267,29 @@ export default function PolicyEditor({
   const router = useWorkspaceRouter();
   const locale = useLocale();
   const { currency } = useCurrency();
+  const t = useTranslations("PoliciesPage.editor");
+  const effectLabel = (effect: PolicyEffect) =>
+    effect === "allow"
+      ? t("effects.allow")
+      : effect === "cap"
+        ? t("effects.cap")
+        : effect === "approval"
+          ? t("effects.approval")
+          : effect === "deny"
+            ? t("effects.deny")
+            : t("effects.safety");
+  const ruleErrorLabel = (error: RuleBuildError) =>
+    error === "tokenBudgetRequired"
+      ? t("validation.tokenBudgetRequired")
+      : error === "amountInvalid"
+        ? t("validation.amountInvalid")
+        : error === "amountMustBePositive"
+          ? t("validation.amountMustBePositive")
+          : error === "atLeastOneToolRequired"
+            ? t("validation.atLeastOneToolRequired")
+            : error === "toolRequired"
+              ? t("validation.toolRequired")
+              : t("validation.safetyCheckRequired");
   const currencySymbol = useMemo(
     () => getCurrencySymbol(currency, locale),
     [currency, locale]
@@ -1408,8 +1468,8 @@ export default function PolicyEditor({
     if (!subjects) {
       setError(
         subjectType === "agent"
-          ? "Add at least one agent for this policy."
-          : "No workspace context available."
+          ? t("validation.agentRequired")
+          : t("validation.workspaceRequired")
       );
       return;
     }
@@ -1424,7 +1484,11 @@ export default function PolicyEditor({
     if (invalidDraft && "error" in invalidDraft.result) {
       setActiveDraftId(invalidDraft.draft.id);
       setError(
-        `Rule ${invalidDraft.index + 1} (${EFFECT_STYLES[invalidDraft.draft.effect].label}): ${invalidDraft.result.error}`
+        t("validation.ruleInvalid", {
+          number: invalidDraft.index + 1,
+          effect: effectLabel(invalidDraft.draft.effect),
+          error: ruleErrorLabel(invalidDraft.result.error),
+        })
       );
       return;
     }
@@ -1483,7 +1547,7 @@ export default function PolicyEditor({
       router.push(returnHref);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save policy");
+      setError(e instanceof Error ? e.message : t("actions.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -1498,17 +1562,17 @@ export default function PolicyEditor({
       router.push(returnHref);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete policy");
+      setError(e instanceof Error ? e.message : t("actions.deleteFailed"));
     } finally {
       setSaving(false);
     }
   };
 
   const title = isEdit
-    ? "Edit policy rule"
+    ? t("titles.edit")
     : subjectType === "agent"
-      ? "New agent policy"
-      : "New workspace rule";
+      ? t("titles.newAgent")
+      : t("titles.newWorkspace");
   const hasAgentScopeEditor = subjectType === "agent" && !isEdit;
   const compiledSubjects = resolveSubjects();
   const compiledDrafts = drafts.map((draft) => ({
@@ -1521,10 +1585,17 @@ export default function PolicyEditor({
   const compiledError =
     compiledSubjects === null
       ? subjectType === "agent"
-        ? "agent scope pending"
-        : "workspace scope missing"
+        ? t("summary.agentScopePending")
+        : t("summary.workspaceScopeMissing")
       : firstInvalidDraft && "error" in firstInvalidDraft.result
-        ? `${EFFECT_STYLES[firstInvalidDraft.draft.effect].label}: ${firstInvalidDraft.result.error}`
+        ? t("validation.ruleInvalid", {
+            number:
+              drafts.findIndex(
+                (draft) => draft.id === firstInvalidDraft.draft.id
+              ) + 1,
+            effect: effectLabel(firstInvalidDraft.draft.effect),
+            error: ruleErrorLabel(firstInvalidDraft.result.error),
+          })
         : null;
   const compiledRuleCount =
     compiledSubjects && !firstInvalidDraft
@@ -1538,27 +1609,33 @@ export default function PolicyEditor({
   const enabledDraftCount = drafts.filter((draft) => draft.form.enabled).length;
   const compiledRows = [
     {
-      label: "scope",
+      label: t("summary.scope"),
       value:
         subjectType === "workspace"
-          ? "workspace"
-          : `${selectedAgentIds.length} agent${selectedAgentIds.length === 1 ? "" : "s"}`,
+          ? t("summary.workspace")
+          : t("summary.agentCount", { count: selectedAgentIds.length }),
     },
-    { label: "drafts", value: String(drafts.length) },
+    { label: t("summary.drafts"), value: String(drafts.length) },
     {
-      label: "active",
-      value: `${enabledDraftCount}/${drafts.length} enabled`,
+      label: t("summary.active"),
+      value: t("summary.activeCount", {
+        enabled: enabledDraftCount,
+        total: drafts.length,
+      }),
     },
-    { label: "selected", value: EFFECT_STYLES[effect].label.toLowerCase() },
-    { label: "target", value: previewTarget(effect, form) },
-    { label: "params", value: previewParams(effect, form) },
+    { label: t("summary.selected"), value: effectLabel(effect) },
+    { label: t("summary.target"), value: previewTarget(effect, form) },
+    { label: t("summary.params"), value: previewParams(effect, form) },
     {
-      label: "guard",
-      value: buildCondition(form) ?? "none",
+      label: t("summary.guard"),
+      value: buildCondition(form) ?? t("summary.none"),
     },
     {
-      label: "rules",
-      value: compiledRuleCount === null ? "pending" : String(compiledRuleCount),
+      label: t("summary.rules"),
+      value:
+        compiledRuleCount === null
+          ? t("summary.pending")
+          : String(compiledRuleCount),
     },
   ];
 
@@ -1578,34 +1655,44 @@ export default function PolicyEditor({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 space-y-1">
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Policy Control Plane
+                {t("sections.controlPlane")}
               </p>
               <h2 className="text-lg font-semibold text-foreground">{title}</h2>
               <p className="max-w-2xl text-sm text-muted-foreground">
-                This policy applies to{" "}
-                {subjectType === "workspace"
-                  ? "every agent in this workspace"
-                  : selectedAgents.length === 1
-                    ? "the selected agent"
-                    : "the selected agents"}
-                . Tool access grants are managed in the Access view.
+                {t.rich("scope.policyDescription", {
+                  scope: t(
+                    subjectType === "workspace"
+                      ? "scope.allAgentsInWorkspace"
+                      : selectedAgents.length === 1
+                        ? "scope.selectedAgent"
+                        : "scope.selectedAgents"
+                  ),
+                  accessView: (chunks) => (
+                    <Link
+                      href="/policies?view=access"
+                      className="text-primary underline-offset-4 hover:underline"
+                    >
+                      {chunks}
+                    </Link>
+                  ),
+                })}
               </p>
             </div>
             <div className="min-w-[220px] border border-border/70 bg-background px-3 py-2">
               <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                Target
+                {t("scope.target")}
               </p>
               {isEdit ? (
                 <p className="mt-1 text-sm font-medium text-foreground">
                   {subjectType === "workspace"
-                    ? "Workspace"
+                    ? t("scope.workspace")
                     : selectedAgents[0]?.name || target.policy.subject_id}
                 </p>
               ) : (
                 <div className="mt-2 inline-flex flex-wrap items-center gap-px border border-border/70 bg-muted/30 p-px">
                   {[
-                    { value: "workspace" as const, label: "All agents" },
-                    { value: "agents" as const, label: "Selected agents" },
+                    { value: "workspace" as const, label: t("scope.allAgentsOption") },
+                    { value: "agents" as const, label: t("scope.selectedAgentsOption") },
                   ].map((option) => {
                     const active = scopeMode === option.value;
                     return (
@@ -1632,13 +1719,13 @@ export default function PolicyEditor({
             <div className="mt-4 grid gap-3 border-t border-border/70 pt-4 lg:grid-cols-[minmax(240px,360px)_minmax(0,1fr)]">
               <div className="flex items-end gap-2">
                 <div className="min-w-0 flex-1 space-y-1.5">
-                  <Label htmlFor="policy-agent">Agent</Label>
+                  <Label htmlFor="policy-agent">{t("scope.agent")}</Label>
                   <AgentSelect
                     id="policy-agent"
                     agents={addableAgents}
                     value={agentToAddId}
                     onChange={setAgentToAddId}
-                    placeholder="Select an agent"
+                    placeholder={t("scope.selectAgentPlaceholder")}
                   />
                 </div>
                 <Button
@@ -1647,7 +1734,7 @@ export default function PolicyEditor({
                   size="icon"
                   disabled={!agentToAddId}
                   onClick={addSelectedAgent}
-                  aria-label="Add agent"
+                  aria-label={t("scope.addAgent")}
                 >
                   <Plus />
                 </Button>
@@ -1670,7 +1757,9 @@ export default function PolicyEditor({
                         variant="ghost"
                         size="icon"
                         onClick={() => removeSelectedAgent(agent.id)}
-                        aria-label={`Remove ${agent.name}`}
+                        aria-label={t("scope.removeAgent", {
+                          agent: agent.name,
+                        })}
                       >
                         <X />
                       </Button>
@@ -1678,7 +1767,7 @@ export default function PolicyEditor({
                   ))
                 ) : (
                   <p className="border border-dashed border-border/70 px-3 py-3 text-sm text-muted-foreground">
-                    Add agents to scope this policy.
+                    {t("scope.addAgentsPrompt")}
                   </p>
                 )}
               </div>
@@ -1687,7 +1776,7 @@ export default function PolicyEditor({
         </div>
 
         <div className="relative px-5">
-          <BlueprintSection code="01" title="Policy Rules">
+          <BlueprintSection code="01" title={t("sections.rules")}>
             <div className="space-y-3">
               <div className="grid gap-2 md:grid-cols-2">
                 {drafts.map((draft, index) => {
@@ -1714,7 +1803,7 @@ export default function PolicyEditor({
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                            Rule {index + 1}
+                            {t("ruleIndex", { number: index + 1 })}
                           </p>
                           <div className="mt-1 flex items-center gap-2">
                             <Icon
@@ -1723,10 +1812,12 @@ export default function PolicyEditor({
                               aria-hidden
                             />
                             <span className="text-sm font-medium text-foreground">
-                              {style.label}
+                              {effectLabel(draft.effect)}
                             </span>
                             <span className="text-xs text-muted-foreground">
-                              {draft.form.enabled ? "enabled" : "disabled"}
+                              {draft.form.enabled
+                                ? t("sections.enabled")
+                                : t("sections.disabled")}
                             </span>
                           </div>
                           <p className="mt-1 truncate text-xs text-muted-foreground">
@@ -1742,7 +1833,9 @@ export default function PolicyEditor({
                               event.stopPropagation();
                               removeDraft(draft.id);
                             }}
-                            aria-label={`Remove rule ${index + 1}`}
+                            aria-label={t("removeRule", {
+                              number: index + 1,
+                            })}
                           >
                             <X />
                           </Button>
@@ -1761,13 +1854,13 @@ export default function PolicyEditor({
                   onClick={addDraft}
                 >
                   <Plus className="mr-1.5" />
-                  Add rule
+                  {t("actions.addRule")}
                 </Button>
               )}
 
               <div className="flex flex-wrap items-center justify-between gap-3 border border-border/70 bg-background px-3 py-3">
                 <div className="min-w-0 space-y-2">
-                  <Label>Rule type</Label>
+                  <Label>{t("sections.ruleType")}</Label>
                   <EffectSegmented
                     value={effect}
                     onChange={updateActiveEffect}
@@ -1775,12 +1868,12 @@ export default function PolicyEditor({
                   />
                   {isEdit && (
                     <p className="text-xs text-muted-foreground">
-                      The rule type is fixed once a rule is created.
+                      {t("sections.ruleTypeFixed")}
                     </p>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <Label htmlFor="policy-enabled">Enabled</Label>
+                  <Label htmlFor="policy-enabled">{t("sections.enabled")}</Label>
                   <Switch
                     id="policy-enabled"
                     checked={form.enabled}
@@ -1793,10 +1886,10 @@ export default function PolicyEditor({
 
           {/* Effect-specific fields */}
           {effect === "cap" && (
-            <BlueprintSection code="02" title="Rule Config">
+            <BlueprintSection code="02" title={t("sections.configuration")}>
               <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="cap-kind">Budget type</Label>
+                  <Label htmlFor="cap-kind">{t("budget.type")}</Label>
                   <Select
                     value={form.capKind}
                     onValueChange={(v) => update("capKind", v as CapKind)}
@@ -1805,11 +1898,9 @@ export default function PolicyEditor({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="spend">Spend budget</SelectItem>
-                      <SelectItem value="service">
-                        Per-service budget
-                      </SelectItem>
-                      <SelectItem value="tokens">Token budget</SelectItem>
+                      <SelectItem value="spend">{t("budget.spend")}</SelectItem>
+                      <SelectItem value="service">{t("budget.perService")}</SelectItem>
+                      <SelectItem value="tokens">{t("budget.tokens")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1818,13 +1909,13 @@ export default function PolicyEditor({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <NumberField
                       id="max-tokens"
-                      label="Max tokens"
+                      label={t("budget.maxTokens")}
                       value={form.maxTokens}
                       onChange={(v) => update("maxTokens", v)}
                     />
                     <NumberField
                       id="max-tokens-call"
-                      label="Max tokens per call"
+                      label={t("budget.maxTokensPerCall")}
                       value={form.maxTokensPerCall}
                       onChange={(v) => update("maxTokensPerCall", v)}
                     />
@@ -1833,14 +1924,14 @@ export default function PolicyEditor({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <MoneyField
                       id="cap-amount"
-                      label="Amount"
+                      label={t("budget.amount")}
                       value={form.amountUsd}
                       onChange={(v) => update("amountUsd", v)}
                       currencySymbol={currencySymbol}
                     />
                     {form.capKind === "spend" && (
                       <div className="space-y-1.5">
-                        <Label htmlFor="cap-period">Period</Label>
+                        <Label htmlFor="cap-period">{t("budget.period")}</Label>
                         <Select
                           value={form.period}
                           onValueChange={(v) =>
@@ -1851,8 +1942,8 @@ export default function PolicyEditor({
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="month">Per month</SelectItem>
-                            <SelectItem value="run">Per task</SelectItem>
+                            <SelectItem value="month">{t("budget.perMonth")}</SelectItem>
+                            <SelectItem value="run">{t("budget.perTask")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1864,14 +1955,14 @@ export default function PolicyEditor({
           )}
 
           {effect === "deny" && (
-            <BlueprintSection code="02" title="Rule Config">
+            <BlueprintSection code="02" title={t("sections.configuration")}>
               <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
-                <Label>Denied tools</Label>
+                <Label>{t("tools.deniedTools")}</Label>
                 <ToolSelector
                   options={toolCatalog}
                   values={form.tools}
                   onChange={(next) => update("tools", next)}
-                  emptyText="No tools are attached to the affected agents yet."
+                  emptyText={t("tools.noToolsAttached")}
                 />
                 {form.tools.length > 0 && (
                   <ToolConditionBuilder
@@ -1882,12 +1973,12 @@ export default function PolicyEditor({
                 )}
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <LinkIcon className="h-3 w-3" />
-                  Granting tool access is managed in the{" "}
+                  {t("scope.toolAccessManaged")}{" "}
                   <Link
                     href="/policies?view=access"
                     className="text-primary underline-offset-4 hover:underline"
                   >
-                    Access view
+                    {t("scope.accessView")}
                   </Link>
                   .
                 </p>
@@ -1896,15 +1987,15 @@ export default function PolicyEditor({
           )}
 
           {effect === "approval" && (
-            <BlueprintSection code="02" title="Rule Config">
+            <BlueprintSection code="02" title={t("sections.configuration")}>
               <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
                 <div className="space-y-1.5">
-                  <Label>Tools requiring approval</Label>
+                  <Label>{t("tools.approvalRequiredTools")}</Label>
                   <ToolSelector
                     options={toolCatalog}
                     values={form.tools}
                     onChange={(next) => update("tools", next)}
-                    emptyText="No tools are attached to the affected agents yet."
+                    emptyText={t("tools.noToolsAttached")}
                   />
                   {form.tools.length > 0 && (
                     <ToolConditionBuilder
@@ -1915,14 +2006,14 @@ export default function PolicyEditor({
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Approvers</Label>
+                  <Label>{t("approvers.label")}</Label>
                   <ApproverSelector
                     members={members}
                     values={form.approvers}
                     onChange={(next) => update("approvers", next)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Leave empty to allow any workspace member to approve.
+                    {t("approvers.emptyHelp")}
                   </p>
                 </div>
               </div>
@@ -1930,11 +2021,11 @@ export default function PolicyEditor({
           )}
 
           {effect === "safety" && (
-            <BlueprintSection code="02" title="Rule Config">
+            <BlueprintSection code="02" title={t("sections.configuration")}>
               <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="prompt-injection" className="font-normal">
-                    Prompt-injection detection
+                    {t("safety.promptInjection")}
                   </Label>
                   <Switch
                     id="prompt-injection"
@@ -1944,7 +2035,7 @@ export default function PolicyEditor({
                 </div>
                 <div className="flex items-center justify-between">
                   <Label htmlFor="output-sanitizer" className="font-normal">
-                    Output sanitizer
+                    {t("safety.outputSanitizer")}
                   </Label>
                   <Switch
                     id="output-sanitizer"
@@ -1975,7 +2066,7 @@ export default function PolicyEditor({
               disabled={saving}
               onClick={remove}
             >
-              Delete
+              {t("actions.delete")}
             </Button>
           ) : (
             <span />
@@ -1988,7 +2079,7 @@ export default function PolicyEditor({
               disabled={saving}
               onClick={() => router.push(returnHref)}
             >
-              Cancel
+              {t("actions.cancel")}
             </Button>
             <Button
               type="button"
@@ -1998,10 +2089,8 @@ export default function PolicyEditor({
               onClick={save}
             >
               {isEdit
-                ? "Save rule"
-                : drafts.length > 1
-                  ? "Create rules"
-                  : "Create rule"}
+                ? t("actions.saveRule")
+                : t("actions.createRule", { count: drafts.length })}
             </Button>
           </div>
         </div>
@@ -2010,7 +2099,7 @@ export default function PolicyEditor({
       <aside className="h-fit border border-border/70 bg-background">
         <div className="border-b border-border/70 bg-muted/20 px-4 py-3">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Impact Rail
+            {t("sections.impactRail")}
           </p>
         </div>
         <div className="flex items-center gap-2 border-b border-border/70 px-4 py-3">
@@ -2019,14 +2108,16 @@ export default function PolicyEditor({
           </span>
           <div>
             <h3 className="text-sm font-medium text-foreground">
-              Affected agents
+              {t("scope.affectedAgents")}
             </h3>
             <p className="text-xs text-muted-foreground">
               {subjectType === "workspace"
-                ? `${affectedAgents.length} workspace agent${affectedAgents.length === 1 ? "" : "s"}`
+                ? t("scope.workspaceAgentCount", { count: affectedAgents.length })
                 : affectedAgents.length > 0
-                  ? `${affectedAgents.length} selected agent${affectedAgents.length === 1 ? "" : "s"}`
-                  : "No agents selected"}
+                  ? t("scope.selectedAgentCount", {
+                      count: affectedAgents.length,
+                    })
+                  : t("scope.noAgentsSelected")}
             </p>
           </div>
         </div>
@@ -2043,7 +2134,7 @@ export default function PolicyEditor({
                   size="xs"
                   right={
                     <span className="text-[11px] text-muted-foreground">
-                      Agent
+                      {t("scope.agent")}
                     </span>
                   }
                 />
@@ -2052,13 +2143,15 @@ export default function PolicyEditor({
           ) : (
             <p className="border border-dashed border-border/70 px-3 py-3 text-sm text-muted-foreground">
               {subjectType === "workspace"
-                ? "No agents in this workspace yet."
-                : "Select an agent to preview the affected scope."}
+                ? t("scope.noAgentsInWorkspace")
+                : t("scope.selectAgentPreview")}
             </p>
           )}
           {affectedAgents.length > 8 && (
             <p className="text-xs text-muted-foreground">
-              +{affectedAgents.length - 8} more
+              {t("scope.moreAgents", {
+                count: affectedAgents.length - 8,
+              })}
             </p>
           )}
         </div>
@@ -2066,11 +2159,11 @@ export default function PolicyEditor({
         <div className="border-t border-border/70 p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Compiled output
+              {t("summary.compiledOutput")}
             </p>
             {compiledError && (
               <span className="border border-dashed border-border/70 px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
-                pending
+                {t("summary.pending")}
               </span>
             )}
           </div>

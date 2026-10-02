@@ -152,9 +152,9 @@ export default function ChatRendererShowcase() {
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-sm font-semibold text-foreground">
+              <h2 className="text-sm font-semibold text-foreground">
                 All chat renderers
-              </h1>
+              </h2>
               <p className="mt-0.5 max-w-2xl text-xs leading-5 text-muted-foreground">
                 A deterministic demo task built from production components.
                 Interactions update local state only; no model, tool, upload, or

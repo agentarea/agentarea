@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import type { ExecutionHistoryResponse } from "@/api/client/types.gen";
 import { getTriggerExecutions, resolvePrincipals } from "@/lib/api";
 import ExecutionsTable from "./ExecutionsTable";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -28,12 +29,16 @@ export default async function TriggerExecutionsPage({
 
   if (error || !data) {
     return (
-      <div className="flex h-64 items-center justify-center text-destructive">
-        Failed to load executions
-      </div>
+      <RetryEmptyState
+        title={t("executionsLoadFailed")}
+        iconsType="triggers"
+        additionAction={{
+          label: t("overview"),
+          href: `/triggers/${id}`,
+        }}
+      />
     );
   }
-
   const executions = (data as ExecutionHistoryResponse).executions;
 
   if (executions.length === 0) {

@@ -115,7 +115,7 @@ export function TeamSwitcher({ workspaces }: { workspaces: Workspace[] }) {
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
                 size="lg"
-                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground transition-all duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground transition-colors duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
               >
                 <div className="flex aspect-square size-8 items-center justify-center bg-transparent">
                   <WorkspaceIcon workspace={active} size={32} />

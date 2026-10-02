@@ -73,7 +73,7 @@ export default function TaskSubheader({ taskId }: { taskId: string }) {
         );
       })}
       <div
-        className="absolute -bottom-[1.2px] h-[1.5px] bg-foreground transition-all duration-300 ease-out rounded-full"
+        className="absolute -bottom-[1.2px] h-[1.5px] bg-foreground transition-[left,width] duration-300 ease-out rounded-full"
         style={{
           left: indicatorStyle.left,
           width: indicatorStyle.width,

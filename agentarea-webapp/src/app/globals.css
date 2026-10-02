@@ -206,7 +206,7 @@
     --secondary-foreground: 0 0% 9%;
 
     --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
+    --muted-foreground: 0 0% 40%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 89.8%;
@@ -219,7 +219,7 @@
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
     --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-foreground: 240 5.3% 24%;
     --sidebar-primary: 240 5.9% 10%;
     --sidebar-primary-foreground: 0 0% 98%;
     --sidebar-accent: 240 4.8% 95.9%;
@@ -292,7 +292,7 @@
     --secondary: 0 0% 14.9%;
     --secondary-foreground: 0 0% 98%;
     --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
+    --muted-foreground: 0 0% 68%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 14.9%;
@@ -304,7 +304,7 @@
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
     --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-foreground: 0 0% 83.1%;
     --sidebar-primary: 224.3 76.3% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 3.7% 15.9%;
@@ -386,7 +386,7 @@
     @apply rounded-md bg-white dark:bg-zinc-800;
     @apply cursor-pointer p-[14px] md:p-[16px] lg:p-[18px];
     @apply border border-zinc-200 dark:border-zinc-700;
-    @apply transition-all duration-300 hover:shadow-md;
+    @apply transition-shadow duration-300 hover:shadow-md;
   }
 
   .card-shadow {
@@ -588,7 +588,7 @@
   .small-link {
     @apply text-xs text-primary dark:text-accent-foreground;
     @apply flex items-center gap-2;
-    @apply transition-all duration-300 hover:text-accent;
+    @apply transition-colors duration-300 hover:text-accent;
   }
 
   /* Force select content to match trigger width */
@@ -776,7 +776,7 @@
   min-height: 40px !important;
   max-height: 40px !important;
   border-radius: 4px !important;
-  transition: all 0.2s ease !important;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease !important;
 }
 
 /* Labels */
@@ -874,8 +874,6 @@
 .ory-elements select:focus,
 .ory-elements textarea:focus {
   border-color: #2252b3 !important;
-  outline: none !important;
-  box-shadow: none !important;
   background-color: hsl(var(--background)) !important;
 }
 
@@ -897,7 +895,7 @@
   border-radius: 4px !important;
   overflow: hidden !important;
   padding: 0 !important;
-  transition: all 0.2s ease !important;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease !important;
 }
 
 .ory-elements div[data-radix-password-toggle-field-root] > div input,
@@ -908,9 +906,6 @@
   flex: 1 !important;
   background: transparent !important;
   font-size: 0.9375rem !important;
-  outline: none !important;
-  box-shadow: none !important;
-  --tw-ring-color: transparent !important;
 }
 
 .ory-elements div[data-radix-password-toggle-field-root] > div button,
@@ -927,11 +922,45 @@
   --tw-ring-color: transparent !important;
 }
 
-/* Global focus reset for Ory */
-.ory-elements *:focus {
-  outline: none !important;
-  box-shadow: none !important;
-  --tw-ring-color: transparent !important;
+/* Keyboard focus rings for Ory controls */
+.ory-elements :focus-visible {
+  outline: 2px solid #2252b3 !important;
+  outline-offset: 2px !important;
+}
+
+.dark .ory-elements :focus-visible {
+  outline-color: #93c5fd !important;
+}
+
+/* Ory Elements ships light-only tokens. The in-app settings form sits on the
+   app's dark surface, where its labels (#0f172a) read at 1.1:1 and inputs stayed
+   white: map the semantic tokens its forms read onto the app theme (derived
+   input/form tokens resolve from these). Auth cards stay light on purpose — the
+   wordmark and provider icons are drawn for a light card. */
+.dark .ory-elements.ory-app-theme {
+  --interface-background-default-primary: hsl(var(--background));
+  --interface-background-default-primary-hover: hsl(var(--accent));
+  --interface-background-default-secondary: hsl(var(--muted));
+  --interface-background-default-secondary-hover: hsl(var(--accent));
+  --interface-background-default-tertiary: hsl(var(--accent));
+  --interface-background-disabled-disabled: hsl(var(--muted));
+  --interface-border-default-primary: hsl(var(--border));
+  --interface-border-disabled-disabled: hsl(var(--border));
+  --interface-foreground-default-primary: hsl(var(--foreground));
+  --interface-foreground-default-secondary: hsl(var(--muted-foreground));
+  --interface-foreground-default-tertiary: hsl(var(--muted-foreground));
+  --interface-foreground-disabled-on-disabled: hsl(var(--muted-foreground));
+}
+
+.ory-elements div[data-radix-password-toggle-field-root]:has(:focus-visible) > div,
+.ory-elements [data-radix-password-toggle-field-root]:has(:focus-visible) > div {
+  outline: 2px solid #2252b3 !important;
+  outline-offset: 2px !important;
+}
+
+.dark .ory-elements div[data-radix-password-toggle-field-root]:has(:focus-visible) > div,
+.dark .ory-elements [data-radix-password-toggle-field-root]:has(:focus-visible) > div {
+  outline-color: #93c5fd !important;
 }
 
 /* Horizontal Divider with Circles */
@@ -1031,14 +1060,10 @@
   }
 }
 
-/* recharts: suppress the browser focus-ring "box" drawn when the chart svg is
-   clicked/focused (its surface has tabindex=0 for a11y). Kept UNLAYERED so
-   Tailwind's @layer purge can't strip it — the class only exists at runtime. */
-.recharts-surface:focus,
+/* Keep keyboard focus visible on interactive chart surfaces. */
 .recharts-surface:focus-visible,
-.recharts-wrapper:focus,
 .recharts-wrapper:focus-visible,
-.recharts-wrapper :focus,
 .recharts-wrapper :focus-visible {
-  outline: none !important;
+  outline: 2px solid hsl(var(--ring)) !important;
+  outline-offset: 2px !important;
 }

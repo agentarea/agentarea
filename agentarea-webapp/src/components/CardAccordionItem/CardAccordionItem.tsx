@@ -96,7 +96,7 @@ export function CardAccordionItem({
           hideChevron
             ? null
             : chevron || (
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all duration-300 group-hover:text-accent group-data-[state=open]:rotate-90" />
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-[transform,color] duration-300 group-hover:text-accent group-data-[state=open]:rotate-90" />
               )
         }
         onClick={onHeaderClick}

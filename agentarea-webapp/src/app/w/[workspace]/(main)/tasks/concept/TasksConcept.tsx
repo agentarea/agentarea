@@ -98,7 +98,7 @@ export default function TasksConcept() {
       <header className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Tasks</h1>
+            <h2 className="text-xl font-semibold tracking-tight">Tasks</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Three perspectives. The same agent work.
             </p>

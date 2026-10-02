@@ -20,7 +20,7 @@ export function ActiveLink({ href, children, className }: ActiveLinkProps) {
       aria-current={isActive ? "page" : undefined}
       className={cn(
         "flex items-center gap-1 p-1 text-xs border-b border-transparent border-b-[1.5px]",
-        "transition-all duration-300",
+        "transition-colors duration-300",
         className,
         isActive
           ? "border-foreground text-foreground"

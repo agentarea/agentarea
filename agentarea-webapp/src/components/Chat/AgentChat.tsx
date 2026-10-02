@@ -239,22 +239,23 @@ export default function AgentChat({
           <div ref={messagesEndRef} className="aa-messages-end" />
         </div>
 
-        <div
-          className={`absolute bottom-4 right-4 z-20 transition-opacity duration-200 ${isAtBottom ? "pointer-events-none opacity-0" : "opacity-100"}`}
-        >
-          <Button
-            onClick={() => {
-              scrollToBottom();
-              requestAnimationFrame(() => {
-                checkIfAtBottom();
-              });
-            }}
-            size="sm"
-            className="h-8 w-8 rounded-full bg-white text-text shadow-lg hover:text-white dark:bg-zinc-900 dark:text-zinc-200"
-          >
-            <ChevronDown />
-          </Button>
-        </div>
+        {!isAtBottom && (
+          <div className="absolute bottom-4 right-4 z-20">
+            <Button
+              aria-label={tCommon("scrollToLatestMessage")}
+              onClick={() => {
+                scrollToBottom();
+                requestAnimationFrame(() => {
+                  checkIfAtBottom();
+                });
+              }}
+              size="sm"
+              className="h-8 w-8 rounded-full bg-white text-text shadow-lg hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:bg-zinc-900 dark:text-zinc-200"
+            >
+              <ChevronDown />
+            </Button>
+          </div>
+        )}
       </CardContent>
 
       <CardFooter className="p-0">

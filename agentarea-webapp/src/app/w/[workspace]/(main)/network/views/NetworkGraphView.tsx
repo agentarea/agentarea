@@ -11,6 +11,7 @@ import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { cn } from "@/lib/utils";
 import type { NetworkActionResult } from "../actions";
 import NetworkCanvas from "../components/NetworkCanvas";
+import NetworkSelectionList from "../components/NetworkSelectionList";
 import NetworkConnectionPanel from "../components/NetworkConnectionPanel";
 import NetworkPeoplePanel from "../components/NetworkPeoplePanel";
 import NetworkRoutePanel from "../components/NetworkRoutePanel";
@@ -302,6 +303,15 @@ export default function NetworkGraphView({
         </div>
       </div>
 
+      {visible.nodes.length > 0 && (
+        <NetworkSelectionList
+          nodes={visible.nodes}
+          edges={visible.edges}
+          selectedId={canvasSelection}
+          onSelectNode={selectNode}
+          onSelectEdge={selectEdge}
+        />
+      )}
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
           {visible.nodes.length === 0 ? (

@@ -120,7 +120,11 @@
     "saved": "Сохранено",
     "deleteFailed": "Не удалось удалить {itemName}",
     "confirm": "Подтвердить",
-    "display": "Вид"
+    "display": "Вид",
+    "skipToContent": "Перейти к основному содержимому",
+    "switchToDarkTheme": "Переключить на тёмную тему",
+    "switchToLightTheme": "Переключить на светлую тему",
+    "scrollToLatestMessage": "Прокрутить к последнему сообщению"
   },
   "admin": {
     "title": "Панель администратора",
@@ -1096,6 +1100,8 @@
     "modelCount": "{count, plural, =0 {} one {+ # модель} few {+ # модели} many {+ # моделей} other {+ # модели}}",
     "endpointUrl": "URL-адрес конечной точки",
     "apiKey": "Ключ API",
+    "editApiKey": "Изменить API-ключ",
+    "cancelEditing": "Отменить редактирование",
     "modelInstances": "Экземпляры моделей",
     "providerConfigurationUpdatedSuccessfully": "Конфигурация провайдера успешно обновлена",
     "providerConfigurationCreatedSuccessfully": "Конфигурация провайдера успешно создана",
@@ -1268,6 +1274,10 @@
   "SkillsPage": {
     "title": "Навыки",
     "description": "Управление многоразовыми навыками агентов.",
+    "rowActions": {
+      "favorite": "В избранное",
+      "duplicate": "Создать копию"
+    },
     "addSkill": "Добавить навык",
     "backToSkills": "Назад к навыкам",
     "skill": "Навык",
@@ -1317,7 +1327,8 @@
         "ingress": "Входящая",
         "egress": "Исходящая"
       },
-      "filter": "Фильтр"
+      "filter": "Фильтр",
+      "accessibleLabel": "Фильтровать навыки"
     },
     "table": {
       "name": "Имя",
@@ -1444,7 +1455,8 @@
       "none": "Без группировки",
       "ordering": "Сортировка",
       "name": "Имя",
-      "created": "Создано"
+      "created": "Создано",
+      "accessibleLabel": "Параметры отображения"
     },
     "emptyHere": "Здесь нет навыков",
     "emptyHereDescription": "Под этот вид пока ничего не подходит.",
@@ -1836,6 +1848,7 @@
       "failureWarning": "{count, plural, one {# сбой} few {# сбоя} other {# сбоев}} подряд из {threshold}",
       "noSchedule": "Ожидает входящий запрос",
       "metricsLoadFailed": "Не удалось загрузить метрики",
+      "executionsLoadFailed": "Не удалось загрузить список выполнений",
       "periodHours": "За последние {hours} ч",
       "durationRange": "разброс {min}s — {max}s",
       "failures": "Сбои",
@@ -1856,6 +1869,14 @@
     }
   },
   "NetworkPage": {
+    "graphSelection": {
+      "title": "Узлы и связи",
+      "nodes": "Узлы ({count})",
+      "relationships": "Связи ({count})",
+      "relationshipLabel": "{source} → {target}: {relation}",
+      "showMore": "Показать ещё",
+      "showLess": "Показать меньше"
+    },
     "orgChart": {
       "types": {
         "agent": "Агент",
@@ -2634,7 +2655,158 @@
     },
     "editor": {
       "loadFailedTitle": "Не удалось загрузить политику",
-      "loadFailed": "Ошибка загрузки политик"
+      "loadFailed": "Ошибка загрузки политик",
+      "breadcrumbPolicies": "Политики",
+      "titles": {
+        "edit": "Изменить правило политики",
+        "newPolicy": "Новое правило политики",
+        "newAgent": "Политика агента",
+        "newWorkspace": "Новое правило для пространства"
+      },
+      "actions": {
+        "addRule": "Добавить правило",
+        "cancel": "Отмена",
+        "createRule": "{count, plural, one {Создать правило} few {Создать правила} many {Создать правил} other {Создать правило}}",
+        "delete": "Удалить",
+        "deleteFailed": "Не удалось удалить правило",
+        "saveFailed": "Не удалось сохранить правило",
+        "saveRule": "Сохранить правило"
+      },
+      "sections": {
+        "controlPlane": "Управление политиками",
+        "rules": "Правила политики",
+        "configuration": "Настройки правила",
+        "ruleType": "Тип правила",
+        "ruleTypeFixed": "Тип правила нельзя изменить после его создания.",
+        "enabled": "Включено",
+        "disabled": "Выключено",
+        "impactRail": "Область влияния"
+      },
+      "effects": {
+        "allow": "Разрешение",
+        "cap": "Лимит",
+        "approval": "Согласование",
+        "deny": "Запрет",
+        "safety": "Безопасность"
+      },
+      "scope": {
+        "policyDescription": "Политика распространяется на {scope}. Выдача доступа к инструментам настраивается на странице <accessView>«Доступ»</accessView>.",
+        "allAgentsInWorkspace": "всех агентов в этом рабочем пространстве",
+        "selectedAgent": "выбранного агента",
+        "selectedAgents": "выбранных агентов",
+        "target": "Цель",
+        "workspace": "Рабочее пространство",
+        "allAgentsOption": "Все агенты",
+        "selectedAgentsOption": "Выбранные агенты",
+        "selectAgentPlaceholder": "Выберите агента",
+        "addAgent": "Добавить агента",
+        "removeAgent": "Удалить агента «{agent}»",
+        "addAgentsPrompt": "Добавьте агентов, на которых должна распространяться политика.",
+        "toolAccessManaged": "Выдача доступа к инструментам настраивается в разделе",
+        "accessView": "Доступ",
+        "affectedAgents": "Затронутые агенты",
+        "workspaceAgentCount": "{count, plural, one {# агент в рабочем пространстве} few {# агента в рабочем пространстве} many {# агентов в рабочем пространстве} other {# агента в рабочем пространстве}}",
+        "selectedAgentCount": "{count, plural, one {# выбранный агент} few {# выбранных агента} many {# выбранных агентов} other {# выбранного агента}}",
+        "noAgentsSelected": "Агенты не выбраны",
+        "agent": "Агент",
+        "noAgentsInWorkspace": "В этом рабочем пространстве пока нет агентов.",
+        "selectAgentPreview": "Выберите агента, чтобы увидеть охват политики.",
+        "moreAgents": "{count, plural, one {Ещё # агент} few {Ещё # агента} many {Ещё # агентов} other {Ещё # агента}}"
+      },
+      "ruleIndex": "Правило № {number}",
+      "removeRule": "Удалить правило № {number}",
+      "budget": {
+        "type": "Тип бюджета",
+        "spend": "Бюджет расходов",
+        "perService": "Бюджет на сервис",
+        "tokens": "Бюджет токенов",
+        "maxTokens": "Максимум токенов",
+        "maxTokensPerCall": "Максимум токенов за вызов",
+        "amount": "Сумма",
+        "period": "Период",
+        "perMonth": "В месяц",
+        "perTask": "На задачу",
+        "moneyPlaceholder": "0,00",
+        "numberPlaceholder": "необязательно"
+      },
+      "tools": {
+        "deniedTools": "Запрещённые инструменты",
+        "approvalRequiredTools": "Инструменты, требующие согласования",
+        "noToolsAttached": "У затронутых агентов пока нет подключённых инструментов.",
+        "agentCount": "{count, plural, one {# агент} few {# агента} many {# агентов} other {# агента}}",
+        "notInAgentCatalog": "нет в текущем каталоге агента",
+        "mcpSource": "MCP",
+        "mcpSourceNamed": "MCP · {name}",
+        "openApiSource": "OpenAPI",
+        "openApiSourceNamed": "OpenAPI · {name}",
+        "builtInSource": "Встроенный",
+        "customSource": "Пользовательский",
+        "genericSource": "Инструмент",
+        "advancedSelector": "Расширенный выбор",
+        "namePlaceholder": "Название инструмента"
+      },
+      "condition": {
+        "parameterGuard": "Условие по параметру",
+        "clear": "Очистить",
+        "parameterPlaceholder": "Параметр",
+        "anyParameter": "Любой параметр",
+        "equals": "Равно",
+        "notEquals": "Не равно",
+        "contains": "Содержит",
+        "exists": "Существует",
+        "valuePlaceholder": "Значение",
+        "help": "Сохраняется в условии политики. Чтобы условие применялось во время выполнения, механизм политик должен проверять правила перед вызовом инструмента."
+      },
+      "approvers": {
+        "label": "Согласующие",
+        "emptyHelp": "Оставьте поле пустым, чтобы согласовать могли любые участники рабочего пространства.",
+        "roleOrGroup": "Роль или группа",
+        "role": "Роль",
+        "groupMembers": "Участники группы",
+        "rolePlaceholder": "администратор",
+        "groupPlaceholder": "безопасность",
+        "advancedSubjectRef": "Расширенная ссылка на субъекта",
+        "subjectRefPlaceholder": "user:<id>, role:<name> или group:<id>#member",
+        "subjectRefInvalidHint": "Укажите ссылку на субъекта, например user:<id>, role:<name> или group:<id>#member"
+      },
+      "tagInput": {
+        "add": "Добавить",
+        "invalidValue": "Недопустимое значение",
+        "removeValue": "Удалить {value}"
+      },
+      "safety": {
+        "promptInjection": "Обнаружение инъекций в промпт",
+        "outputSanitizer": "Очистка вывода"
+      },
+      "validation": {
+        "agentRequired": "Добавьте хотя бы одного агента для этой политики.",
+        "workspaceRequired": "Контекст рабочего пространства недоступен.",
+        "tokenBudgetRequired": "Укажите бюджет токенов.",
+        "amountInvalid": "Введите корректную сумму.",
+        "amountMustBePositive": "Сумма должна быть больше 0.",
+        "atLeastOneToolRequired": "Добавьте хотя бы один инструмент.",
+        "toolRequired": "Добавьте инструмент.",
+        "safetyCheckRequired": "Включите хотя бы одну проверку безопасности.",
+        "ruleInvalid": "Правило № {number} («{effect}»): {error}"
+      },
+      "summary": {
+        "agentScopePending": "агенты не выбраны",
+        "workspaceScopeMissing": "пространство не выбрано",
+        "scope": "Охват",
+        "workspace": "Рабочее пространство",
+        "agentCount": "{count, plural, one {# агент} few {# агента} many {# агентов} other {# агента}}",
+        "drafts": "Черновики",
+        "active": "Активные",
+        "activeCount": "{enabled}/{total} включено",
+        "selected": "Действие",
+        "target": "Цель",
+        "params": "Парам.",
+        "guard": "Условие",
+        "none": "нет",
+        "rules": "Правила",
+        "pending": "ожидает",
+        "compiledOutput": "Сформированная политика"
+      }
     }
   },
   "ProjectSettingsPage": {

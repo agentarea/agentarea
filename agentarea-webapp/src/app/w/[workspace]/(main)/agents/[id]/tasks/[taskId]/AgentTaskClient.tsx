@@ -184,9 +184,9 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
               <Bot className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
                 {agent.name}
-              </h1>
+              </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 Task ID: {taskId}
               </p>

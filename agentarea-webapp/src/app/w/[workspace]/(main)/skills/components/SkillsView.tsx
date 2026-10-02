@@ -307,7 +307,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
                   )}
                 >
                   {tab.label}
-                  <span className="text-[11px] text-muted-foreground/70">
+                  <span className="text-[11px] text-muted-foreground">
                     {tabCounts[tab.value] ?? 0}
                   </span>
                 </button>
@@ -322,6 +322,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
 
         {/* Filter toggle */}
         <ToolbarButton
+          aria-label={t("filters.accessibleLabel")}
           onClick={() => setFiltersOpen((v) => !v)}
           active={filtersOpen}
         >
@@ -330,7 +331,10 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
         </ToolbarButton>
 
         {/* Display menu */}
-        <DisplayMenu labelClassName="skills-btn-label">
+        <DisplayMenu
+          labelClassName="skills-btn-label"
+          accessibleLabel={t("display.accessibleLabel")}
+        >
           <MenuSectionLabel>{t("display.grouping")}</MenuSectionLabel>
           <MenuRow
             icon={<Layers className="h-3.5 w-3.5" />}
@@ -417,6 +421,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
 
       {/* ---------------- body ---------------- */}
       <div className="min-h-0 flex-1 overflow-auto">
+        {/* Keep Skills' collapsible groups and row/card actions local; the shared view contract does not model that combination. */}
         {isLoading ? (
           <SkillsContentSkeleton view={view} />
         ) : error ? (

@@ -435,7 +435,9 @@ export function AddMCPServerForm() {
         {/* Server Type Selector — hidden in JSON mode (auto-detected) */}
         {!jsonMode && (
           <div className="space-y-2">
-            <FormLabel htmlFor="type" icon={Server} required>Server Type</FormLabel>
+            <FormLabel htmlFor="type" icon={Server} required>
+              <span id="server-type-label">Server Type</span>
+            </FormLabel>
             <Controller
               control={control}
               name="type"
@@ -446,7 +448,11 @@ export function AddMCPServerForm() {
                     field.onChange(value);
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger
+                    id="type"
+                    aria-labelledby="server-type-label"
+                    aria-required="true"
+                  >
                     <SelectValue placeholder="Select server type" />
                   </SelectTrigger>
                   <SelectContent>

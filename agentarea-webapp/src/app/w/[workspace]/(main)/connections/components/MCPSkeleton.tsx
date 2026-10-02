@@ -35,7 +35,7 @@ export default function MCPSkeleton({
 }: MCPSkeletonProps) {
   return (
     <div className="py-1">
-      <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+      <h4 className="mb-3 text-xs uppercase text-muted-foreground">
         {headerLabel}
       </h4>
       <CollectionSkeleton

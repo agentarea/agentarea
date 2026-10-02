@@ -227,7 +227,7 @@ export default function QuickTaskDialog() {
               embedded
               className="!h-auto min-w-0 !max-w-none !gap-0 !py-0"
             />
-            <div className="mt-2 flex items-center justify-end gap-4 px-1 text-[11px] text-muted-foreground/70">
+            <div className="mt-2 flex items-center justify-end gap-4 px-1 text-[11px] text-muted-foreground">
               {policiesNotice && (
                 <span
                   role={policiesNotice.isError ? "alert" : undefined}

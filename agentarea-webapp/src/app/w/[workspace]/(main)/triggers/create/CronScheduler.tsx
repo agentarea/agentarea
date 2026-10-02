@@ -474,7 +474,7 @@ export function CronScheduler({
       <div className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
         <span>{description}</span>
         {frequency !== "custom" && (
-          <code className="ml-auto font-mono text-muted-foreground/70">
+          <code className="ml-auto font-mono text-muted-foreground">
             {cronExpr}
           </code>
         )}

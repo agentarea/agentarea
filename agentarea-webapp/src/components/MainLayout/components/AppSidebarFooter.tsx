@@ -64,7 +64,7 @@ export function AppSidebarFooter() {
       </div>
       <NavUser />
       {open && (
-        <div className="flex items-center justify-center pb-1 text-[10px] text-muted-foreground/40">
+        <div className="flex items-center justify-center pb-1 text-[10px] text-muted-foreground">
           v{APP_VERSION}
         </div>
       )}

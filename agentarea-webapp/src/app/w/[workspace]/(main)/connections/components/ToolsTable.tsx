@@ -198,7 +198,7 @@ function MCPToolRow({
             <span className="text-xs font-medium break-words">
               {displayName}
             </span>
-            <span className="font-mono text-[10px] text-muted-foreground/70 break-all">
+            <span className="font-mono text-[10px] text-muted-foreground break-all">
               {name}
             </span>
           </>
@@ -233,7 +233,7 @@ function MCPToolRow({
             "mt-0.5 inline-flex items-center gap-1 text-[11px] tabular-nums",
             principals.length
               ? "text-foreground/70"
-              : "text-muted-foreground/50"
+              : "text-muted-foreground"
           )}
           title={t("equippedBy")}
         >
@@ -312,7 +312,7 @@ function ToolsGroup({
                         {row.path}
                       </span>
                     )}
-                    <span className="break-all font-mono text-[10px] text-muted-foreground/70">
+                    <span className="break-all font-mono text-[10px] text-muted-foreground">
                       {row.name}
                     </span>
                   </div>
