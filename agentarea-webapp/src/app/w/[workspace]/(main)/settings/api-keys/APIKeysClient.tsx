@@ -6,6 +6,7 @@ import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Trash2 } from "lucide-react";
+import type { ApiKeyResponse } from "@/api/client/types.gen";
 import BaseModal from "@/components/BaseModal";
 import EmptyState from "@/components/EmptyState";
 import Table, { type Column } from "@/components/Table/Table";
@@ -18,15 +19,7 @@ import CreateAPIKeyDialog from "./components/CreateAPIKeyDialog";
 
 type APIKeyStatusType = "active" | "revoked" | "expired"; // pragma: allowlist secret
 
-interface APIKey {
-  id: string;
-  name: string;
-  token_prefix: string;
-  status: APIKeyStatusType;
-  created_at: string;
-  expires_at?: string | null;
-  last_used_at?: string | null;
-}
+type APIKey = ApiKeyResponse & { status: APIKeyStatusType };
 
 export function RevokeKeyAction({
   apiKey,
@@ -130,7 +123,7 @@ export default function APIKeysClient({
     },
     {
       header: t("table.lastUsed"),
-      accessor: "last_used_at",
+      accessor: "last_accessed_at",
       headerClassName: "w-[150px]",
       cellClassName: "whitespace-nowrap text-xs text-muted-foreground",
       render: (value) =>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   TaskConversation,
   type TaskConversationActivity,
@@ -15,16 +16,31 @@ export default function TaskDetailsPage() {
   const {
     task,
     taskStatus,
+    taskSummary,
     policy,
     policyError,
     statusError,
     loading,
     error,
     refresh,
+    setLiveStatus,
   } = useTaskContext();
+  const t = useTranslations("TaskInfoPanel");
   const [, setRefreshing] = useState(false);
   const [conversationActivity, setConversationActivity] =
     useState<TaskConversationActivity | null>(null);
+  const streamStatus =
+    conversationActivity &&
+    !conversationActivity.eventsLoading &&
+    !conversationActivity.eventsError
+      ? conversationActivity.streamStatus
+      : null;
+
+  // The header's task controls sit in the layout; they follow the stream.
+  useEffect(() => {
+    setLiveStatus(streamStatus);
+  }, [setLiveStatus, streamStatus]);
+  useEffect(() => () => setLiveStatus(null), [setLiveStatus]);
 
   const handleActivityChange = useCallback(
     (activity: TaskConversationActivity) => setConversationActivity(activity),
@@ -69,13 +85,29 @@ export default function TaskDetailsPage() {
     );
   }
 
-  const currentStatus =
-    conversationActivity &&
-    !conversationActivity.eventsLoading &&
-    !conversationActivity.eventsError
-      ? conversationActivity.streamStatus
-      : taskStatus?.status || task.status;
-  const executionTime = taskStatus?.execution_time || "N/A";
+  const currentStatus = streamStatus ?? (taskStatus?.status || task.status);
+  const executionStatus =
+    conversationActivity?.executionStatus ?? taskStatus?.execution_status;
+  const durationMs = taskSummary?.duration_ms;
+  const summaryExecutionTime =
+    typeof durationMs === "number" && Number.isFinite(durationMs)
+      ? `${(durationMs / 1000).toFixed(1)}s`
+      : null;
+  const reportedExecutionTime = taskStatus?.execution_time;
+  let executionTime =
+    summaryExecutionTime ??
+    (reportedExecutionTime && reportedExecutionTime !== "N/A"
+      ? reportedExecutionTime
+      : "N/A");
+  if (executionTime === "N/A" && currentStatus === "running") {
+    executionTime = t("executionInProgress");
+  } else if (
+    executionTime === "N/A" &&
+    currentStatus === "completed" &&
+    executionStatus === "waiting"
+  ) {
+    executionTime = t("executionAwaitingFollowUp");
+  }
   const startTime = taskStatus?.start_time || task.created_at || "";
   const endTime = taskStatus?.end_time;
   const rawCost =
@@ -118,10 +150,7 @@ export default function TaskDetailsPage() {
                 result: task.result,
               }}
               currentStatus={currentStatus}
-              executionStatus={
-                conversationActivity?.executionStatus ??
-                taskStatus?.execution_status
-              }
+              executionStatus={executionStatus}
               isActive={
                 currentStatus === "running" &&
                 conversationActivity?.executionStatus === "running"

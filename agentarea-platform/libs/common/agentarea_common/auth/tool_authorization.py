@@ -31,8 +31,9 @@ class ToolAuthorizationRequest:
     """Inputs to the tool invocation PDP.
 
     The decision is the resolved policy snapshot's verdict for ``tool_name``;
-    ``user_id``/``workspace_id`` are carried as request context. ``aliases`` are
-    the tool's other names a rule may target (see ``decide_tool_policy``).
+    ``user_id``/``workspace_id`` are carried as request context. ``aliases`` and
+    ``restricting_aliases`` are the tool's other names a rule may target (see
+    ``decide_tool_policy``).
     """
 
     tool_name: str
@@ -41,6 +42,7 @@ class ToolAuthorizationRequest:
     workspace_id: str | None = None
     effective_policy: dict[str, Any] | None = None
     aliases: Sequence[str] = ()
+    restricting_aliases: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
@@ -64,7 +66,12 @@ async def authorize_tool_invocation(
     policy) is authoritative, and disclosure, the workflow gate, and the tool
     activity all read the one answer.
     """
-    return decide_tool_policy(request.effective_policy, request.tool_name, aliases=request.aliases)
+    return decide_tool_policy(
+        request.effective_policy,
+        request.tool_name,
+        aliases=request.aliases,
+        restricting_aliases=request.restricting_aliases,
+    )
 
 
 def decide_tool_policy(
@@ -72,6 +79,7 @@ def decide_tool_policy(
     tool_name: str,
     *,
     aliases: Sequence[str] = (),
+    restricting_aliases: Sequence[str] = (),
 ) -> ToolAuthorizationDecision:
     """Evaluate only the task policy portion of a tool invocation decision.
 
@@ -87,15 +95,23 @@ def decide_tool_policy(
     here would collapse them again and make the strictest allowlist the one
     that restricts nothing.
 
-    A tool may be known by several names — an MCP tool by the name the model
-    calls, its canonical ``mcp:<instance>:<tool>`` id, and the raw name its
-    server advertises. A rule naming any of them governs the tool.
+    A tool may be known by several names. ``aliases`` are its canonical names
+    — an MCP tool by the name the model calls, its canonical
+    ``mcp:<instance>:<tool>`` id, and the raw name its server advertises — and
+    a rule naming any of them governs the tool.
+
+    ``restricting_aliases`` are names taken from configuration an agent editor
+    controls (a delegate's config name, a code toolset namespace, an OpenAPI
+    connection). They may only narrow: a deny or approval rule naming one
+    applies, but they never satisfy an allowlist, so editing an agent cannot
+    make a tool match an administrator's ALLOW rule.
     """
     names = (tool_name, *aliases)
+    restricting_names = (*names, *restricting_aliases)
     tools = (effective_policy or {}).get("tools") or {}
 
     denied = tools.get("denied") or []
-    if any_name_matches(names, denied):
+    if any_name_matches(restricting_names, denied):
         return ToolAuthorizationDecision(
             ToolAuthorizationAction.DENY,
             f"tool '{tool_name}' is denied by policy",
@@ -113,7 +129,7 @@ def decide_tool_policy(
     # an approval gate install, render in the UI, and never fire.
     approval = (effective_policy or {}).get("approval") or {}
     if approval.get("requires_human_approval") is True or any_name_matches(
-        names, approval.get("escalation_rules") or []
+        restricting_names, approval.get("escalation_rules") or []
     ):
         return ToolAuthorizationDecision(
             ToolAuthorizationAction.REQUIRE_APPROVAL,

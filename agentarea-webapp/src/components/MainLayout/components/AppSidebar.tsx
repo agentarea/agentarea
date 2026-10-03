@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useTranslations } from "next-intl";
+import { getPendingApprovalCountAction } from "@/components/Approvals/actions";
 import Link from "@/components/WorkspaceLink";
 import { useWorkspacePathname } from "@/hooks/useWorkspaceNavigation";
 import { Inbox, SquarePen } from "lucide-react";
@@ -39,6 +40,36 @@ export function AppSidebarContent({
   const pathname = useWorkspacePathname();
   const inboxActive = pathname === "/inbox" || pathname.startsWith("/inbox/");
   const homeActive = pathname === "/workplace";
+  const [pendingApprovals, setPendingApprovals] = React.useState(0);
+
+  // Re-read on every navigation (deciding in the inbox or on a task page
+  // changes it) and periodically, so new escalations surface while idle.
+  React.useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      getPendingApprovalCountAction()
+        .then((result) => {
+          if (cancelled) return;
+          if (result.error) {
+            console.error("Failed to count pending approvals", result.error);
+            return;
+          }
+          setPendingApprovals(result.data ?? 0);
+        })
+        .catch((error: unknown) => {
+          console.error("Failed to count pending approvals", error);
+        });
+    void load();
+    const interval = window.setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [pathname]);
+  const inboxLabel =
+    pendingApprovals > 0
+      ? t("inboxPending", { count: pendingApprovals })
+      : t("inbox");
 
   return (
     <>
@@ -88,18 +119,26 @@ export function AppSidebarContent({
               <SidebarMenuButton
                 asChild
                 isActive={inboxActive}
-                className={cn(navItemClassName, "w-8 shrink-0")}
+                className={cn(navItemClassName, "relative w-8 shrink-0")}
               >
                 <Link
                   href="/inbox"
-                  aria-label={t("inbox")}
+                  aria-label={inboxLabel}
                   aria-current={inboxActive ? "page" : undefined}
                 >
                   <Inbox />
+                  {pendingApprovals > 0 && (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-[color:var(--status-attention)] px-1 text-[10px] font-semibold leading-none text-white tabular-nums"
+                    >
+                      {pendingApprovals > 99 ? "99+" : pendingApprovals}
+                    </span>
+                  )}
                 </Link>
               </SidebarMenuButton>
             </TooltipTrigger>
-            <TooltipContent side="right">{t("inbox")}</TooltipContent>
+            <TooltipContent side="right">{inboxLabel}</TooltipContent>
           </Tooltip>
         </div>
       </SidebarHeader>

@@ -29,7 +29,7 @@ def _workflow(result: MCPToolResult) -> AgentExecutionWorkflow:
     instance.budget_tracker.add_cost(Decimal("2"))
     instance.event_manager = MagicMock()
     instance._publish_events_immediately = AsyncMock()
-    instance._gate_tool_call = AsyncMock(return_value=True)
+    instance._gate_tool_call = AsyncMock(return_value=(True, False))
     instance._maybe_offload_output = AsyncMock(side_effect=lambda text, _id: text)
     instance._execute_governed_tool = AsyncMock(return_value=result)
     return instance
@@ -58,9 +58,7 @@ async def test_model_cost_is_added_to_the_run_budget():
 @pytest.mark.asyncio
 async def test_a_failed_tool_still_charges_the_model_it_paid_for():
     """The image was generated (and paid for) before saving it failed."""
-    instance = _workflow(
-        MCPToolResult(success=False, error="disk full", model_cost=Decimal("4"))
-    )
+    instance = _workflow(MCPToolResult(success=False, error="disk full", model_cost=Decimal("4")))
 
     await instance._execute_mcp_tool(_call())
 

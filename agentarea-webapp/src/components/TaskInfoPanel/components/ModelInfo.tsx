@@ -10,7 +10,7 @@ import {
   listTriggersAction as listTriggers,
 } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
-import { Agent } from "@/types/agent";
+import { agentSkillViews, type Agent } from "@/types/agent";
 import { Task } from "../types";
 import ActionLink from "./ActionLink";
 import ExpandableText from "./ExpandableText";
@@ -58,31 +58,31 @@ export default function ModelInfo({
       try {
         setLoading(true);
         const { data } = await getAgent(targetAgentId);
-        const agentData = data as Agent;
-
-        if (agentData) {
+        if (data) {
+          let agentData: Agent = { ...data };
           // If model_info is missing but model_id exists, try to fetch model info
           if (!agentData.model_info && agentData.model_id) {
             try {
               const { data: instances } = await listModelInstances();
               const model = instances?.find(
-                (m: unknown) =>
-                  (m as { id?: unknown }).id === agentData.model_id
+                (instance) => instance.id === agentData.model_id
               );
-
               if (model) {
-                agentData.model_info = {
-                  provider_name: model.provider_name || undefined,
-                  provider_icon_url: model.provider_icon_url || undefined,
-                  model_display_name: model.model_display_name || undefined,
-                  config_name: model.config_name || undefined,
+                agentData = {
+                  ...agentData,
+                  model_info: {
+                    provider_name: model.provider_name || undefined,
+                    provider_icon_url: model.provider_icon_url || undefined,
+                    model_display_name: model.model_display_name || undefined,
+                    config_name: model.config_name || undefined,
+                  },
                 };
               }
             } catch (err) {
               console.warn("Failed to fetch model info", err);
             }
           }
-          setAgent(agentData as Agent);
+          setAgent(agentData);
         }
       } catch (error) {
         console.error("Failed to fetch agent details:", error);
@@ -130,6 +130,7 @@ export default function ModelInfo({
 
   // Triggers come from the Triggers API, filtered by agent.
   const validTriggers = triggers.filter((tr) => tr && (tr.name || tr.id));
+  const skills = agentSkillViews(agent.skills);
 
   return (
     <Section title={t("agentInfo")} contentClassName="space-y-4 text-xs">
@@ -227,13 +228,13 @@ export default function ModelInfo({
       </div>
 
       {/* Skills */}
-      {agent.skills && agent.skills.length > 0 && (
+      {skills.length > 0 && (
         <div className="space-y-1.5">
           <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             {t("skills")}
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {agent.skills.map((skill) => (
+            {skills.map((skill) => (
               <Badge
                 key={skill.id}
                 variant="secondary"

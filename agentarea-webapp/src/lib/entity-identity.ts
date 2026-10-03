@@ -31,16 +31,23 @@ type JsonSpecLike = { icons?: unknown } | null | undefined;
 /**
  * Minimal shape needed to resolve a connection icon: just the `json_spec`.
  * Both the OpenAPI-schema instance and server types (whose `json_spec` is a
- * `Record<string, unknown>`) satisfy this, so callers pass them directly — no
- * `as any`. Kept narrow on purpose so it doesn't drag in `verification`/`tools`.
+ * `Record<string, unknown>`) satisfy this, so callers pass them directly
+ * without weakening the type. Kept narrow on purpose so it doesn't drag in
+ * `verification`/`tools`.
  */
 export type IconSpecSource = { json_spec?: Record<string, unknown> | null };
 
 /** First icon URL declared by a raw registry ServerJSON spec. */
 export function firstIconSrc(spec: JsonSpecLike): string | undefined {
-  const firstIcon = Array.isArray(spec?.icons) ? spec.icons[0] : undefined;
-  if (firstIcon && typeof firstIcon === "object" && "src" in firstIcon) {
-    const src = (firstIcon as { src?: unknown }).src;
+  const icons = spec?.icons;
+  const firstIcon: unknown = Array.isArray(icons) ? icons[0] : undefined;
+  if (
+    typeof firstIcon === "object" &&
+    firstIcon !== null &&
+    !Array.isArray(firstIcon) &&
+    "src" in firstIcon
+  ) {
+    const src = firstIcon.src;
     return typeof src === "string" && src.length > 0 ? src : undefined;
   }
   return undefined;

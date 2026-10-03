@@ -1,12 +1,4 @@
 // Authentication Types
-export interface User {
-	id: string;
-	email: string;
-	name?: string;
-	createdAt: Date;
-	lastLoginAt?: Date;
-}
-
 export interface AuthToken {
 	accessToken: string;
 	refreshToken?: string;
@@ -16,12 +8,6 @@ export interface AuthToken {
 	// it was registered against, so a refresh can be replayed without a browser.
 	clientId?: string;
 	apiUrl?: string;
-}
-
-export interface Credentials {
-	email: string;
-	password: string;
-	apiKey?: string;
 }
 
 // Agent Types
@@ -77,7 +63,6 @@ export interface TaskError {
 
 // Configuration Types
 export interface CLIConfig {
-	kratosUrl: string;
 	apiBaseUrl: string;
 	apiTimeout?: number;
 	maxRetries?: number;

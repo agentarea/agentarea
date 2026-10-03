@@ -302,3 +302,18 @@ async def test_gateway_start_retry_repeats_only_the_starting_503(monkeypatch):
     assert sleeps == [2.0, 1.0]
     assert workload.status_code == 503
     assert len(bodies) == 4
+
+
+@pytest.mark.asyncio
+async def test_gateway_start_failure_response_raises_classified_error():
+    reason = "package has no executable"
+    response = httpx2.Response(
+        503,
+        headers={mcp_client.GATEWAY_START_FAILURE_HEADER: reason},
+    )
+    transport = mcp_client.GatewayStartRetryTransport(httpx2.MockTransport(lambda _: response))
+    async with httpx2.AsyncClient(transport=transport) as client:
+        with pytest.raises(mcp_client.MCPGatewayStartupFailureError) as exc_info:
+            await client.post("http://gateway/mcp/x/mcp", content=b'{"id":1}')
+
+    assert exc_info.value.detail == reason

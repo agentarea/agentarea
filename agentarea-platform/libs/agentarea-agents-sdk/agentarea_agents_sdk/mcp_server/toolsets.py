@@ -15,9 +15,9 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
-from mcp.types import CallToolResult, TextContent, Tool
+from mcp.types import CallToolResult, InputRequiredResult, TextContent, Tool
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,12 @@ class ToolsetMCPServer(MCPServer):
             return tools
         return [tool for tool in tools if tool.name in selection]
 
-    async def call_tool(self, name: str, arguments: dict[str, Any], context=None):  # type: ignore[override]
+    async def call_tool(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        context: Context[Any, Any] | None = None,
+    ) -> CallToolResult | InputRequiredResult:
         selection = _selected_tools_var.get()
         if selection is not None and name not in selection:
             raise ToolError(f"Unknown tool: {name}")

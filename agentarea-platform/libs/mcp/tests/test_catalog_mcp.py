@@ -9,10 +9,16 @@ cover the projection itself; the merged list runs against the real schema in
 """
 
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.infrastructure.catalog_mcp_repository import CatalogMcpItem
-from agentarea_mcp.infrastructure.repository import _project_catalog_mcp_server
+from agentarea_mcp.infrastructure.repository import (
+    MCPServerRepository,
+    _project_catalog_mcp_server,
+)
+from sqlalchemy import true
 
 _TS = datetime(2024, 1, 2, 3, 4, 5)
 
@@ -81,3 +87,122 @@ def test_project_command_type_builds_cmd_and_base_image():
     server = _project_catalog_mcp_server(item)
     assert server.cmd == ["uvx", "pkg"]
     assert server.docker_image_url == "agentarea/agentarea-mcp-base"
+
+
+def test_project_derives_schema_from_raw_package_environment_variables():
+    item = _item(
+        spec={
+            "connection_type": "command",
+            "package_registry": "pypi",
+            "package_name": "distribution-name",
+            "raw_spec": {
+                "packages": [
+                    {
+                        "registryType": "pypi",
+                        "name": "distribution-name",
+                        "environmentVariables": [
+                            {
+                                "name": "API_TOKEN",
+                                "description": "API credential",
+                                "isSecret": True,
+                                "isRequired": True,
+                            }
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+
+    server = _project_catalog_mcp_server(item)
+
+    assert server.env_schema == [
+        {
+            "name": "API_TOKEN",
+            "description": "API credential",
+            "isSecret": True,
+            "isRequired": True,
+            "required": True,
+        }
+    ]
+
+
+def test_project_derives_schema_from_raw_remote_headers():
+    item = _item(
+        spec={
+            "connection_type": "url",
+            "url": "https://api.example.test/mcp",
+            "raw_spec": {
+                "remotes": [
+                    {
+                        "url": "https://api.example.test/mcp",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "description": "Bearer credential",
+                                "isSecret": True,
+                                "isRequired": True,
+                            }
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+
+    server = _project_catalog_mcp_server(item)
+
+    assert server.env_schema[0]["name"] == "Authorization"
+    assert server.env_schema[0]["isSecret"] is True
+    assert server.env_schema[0]["isRequired"] is True
+
+
+async def test_synced_catalog_row_derives_env_schema_from_its_catalog_item():
+    item = _item(
+        spec={
+            "connection_type": "command",
+            "package_registry": "pypi",
+            "package_name": "distribution-name",
+            "env_schema": [],
+            "raw_spec": {
+                "packages": [
+                    {
+                        "registryType": "pypi",
+                        "name": "distribution-name",
+                        "environmentVariables": [
+                            {"name": "API_TOKEN", "isSecret": True, "isRequired": True}
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+    server = MCPServer(
+        name="Synced",
+        slug="synced",
+        description="",
+        status="active",
+        workspace_id="platform",
+        created_by="platform",
+        registry_item_id=item.id,
+        json_spec=item.spec["raw_spec"],
+        env_schema=[],
+    )
+    server.id = item.id
+
+    repo = MCPServerRepository.__new__(MCPServerRepository)
+    repo.model_class = MCPServer
+    repo.session = MagicMock()
+    repo.session.execute = AsyncMock(
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=server))
+    )
+    repo._get_workspace_filter = MagicMock(return_value=true())
+    catalog_repo = MagicMock()
+    catalog_repo.get_item = AsyncMock(return_value=item)
+    repo._get_catalog_repository = MagicMock(return_value=catalog_repo)
+
+    result = await repo.get_server_by_id(str(item.id))
+
+    assert result is server
+    assert server.env_schema[0]["name"] == "API_TOKEN"
+    assert server.env_schema[0]["isSecret"] is True

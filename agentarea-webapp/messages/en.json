@@ -120,7 +120,14 @@
     "saved": "Saved",
     "deleteFailed": "Couldn’t delete {itemName}",
     "confirm": "Confirm",
-    "display": "Display"
+    "display": "Display",
+    "skipToContent": "Skip to content",
+    "switchToDarkTheme": "Switch to dark theme",
+    "switchToLightTheme": "Switch to light theme",
+    "scrollToLatestMessage": "Scroll to latest message",
+    "previousPage": "Previous",
+    "nextPage": "Next",
+    "pageNumber": "Page {page}"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -201,7 +208,9 @@
     "policies": "Policies",
     "settings": "Settings",
     "logout": "Logout",
-    "workspaceSettings": "Workspace settings"
+    "workspaceSettings": "Workspace settings",
+    "inboxPending": "{count, plural, one {Inbox, # approval waiting} other {Inbox, # approvals waiting}}",
+    "audit": "Audit"
   },
   "MembersPage": {
     "title": "Members",
@@ -429,6 +438,14 @@
       "switchLanguage": "Switch Language",
       "theme": "Theme",
       "themeDescription": "Change the theme of the application"
+    },
+    "workspace": {
+      "title": "Workspace",
+      "description": "Administer this workspace",
+      "exportTitle": "Export workspace",
+      "exportDescription": "Download agents, MCP connections, skills and triggers as a bundle YAML you can import into another workspace. Credentials are replaced by setup fields the importer fills in.",
+      "export": "Export",
+      "exportFailed": "Could not export the workspace"
     },
     "subscription": {
       "title": "Subscription",
@@ -1096,6 +1113,8 @@
     "modelCount": "{count, plural, =0 {} one {+ # Model} other {+ # Models}}",
     "endpointUrl": "Endpoint URL",
     "apiKey": "API Key",
+    "editApiKey": "Edit API key",
+    "cancelEditing": "Cancel editing",
     "modelInstances": "model instances",
     "providerConfigurationUpdatedSuccessfully": "Provider configuration updated successfully",
     "providerConfigurationCreatedSuccessfully": "Provider configuration created successfully",
@@ -1222,9 +1241,6 @@
     "noTasksByCreatorDescription": "Nobody has started a task matching this filter",
     "noTasksOnPageDescription": "This page is past the last task",
     "firstPage": "First page",
-    "previousPage": "Previous",
-    "nextPage": "Next",
-    "pageNumber": "Page {page}",
     "unknownCreator": "Unknown",
     "showTasksBy": "Show tasks started by {name}",
     "taskRunning": "Task Running",
@@ -1263,11 +1279,27 @@
       "memory": "Memory",
       "metrics": "Metrics"
     },
-    "startTaskAction": "Choose an agent"
+    "startTaskAction": "Choose an agent",
+    "controls": {
+      "pause": "Pause",
+      "resume": "Resume",
+      "cancel": "Cancel task",
+      "pauseFailed": "Could not pause the task",
+      "resumeFailed": "Could not resume the task",
+      "cancelFailed": "Could not cancel the task",
+      "cancelTitle": "Cancel this task?",
+      "cancelDescription": "The agent stops at once and the task ends as cancelled. This cannot be undone.",
+      "keepRunning": "Keep running",
+      "cancelConfirm": "Cancel task"
+    }
   },
   "SkillsPage": {
     "title": "Skills",
     "description": "Manage reusable skills that can be assigned to agents",
+    "rowActions": {
+      "favorite": "Favorite skill",
+      "duplicate": "Duplicate skill"
+    },
     "addSkill": "Add Skill",
     "backToSkills": "Back to Skills",
     "skill": "Skill",
@@ -1317,7 +1349,8 @@
         "ingress": "Ingress",
         "egress": "Egress"
       },
-      "filter": "Filter"
+      "filter": "Filter",
+      "accessibleLabel": "Filter skills"
     },
     "table": {
       "name": "Name",
@@ -1444,7 +1477,8 @@
       "none": "No grouping",
       "ordering": "Ordering",
       "name": "Name",
-      "created": "Created"
+      "created": "Created",
+      "accessibleLabel": "Display options"
     },
     "emptyHere": "No skills here",
     "emptyHereDescription": "Nothing matches this view yet.",
@@ -1541,7 +1575,9 @@
     "modelsLoadFailed": "Couldn't load models",
     "modelChangeFailed": "Couldn't switch the model",
     "selectModel": "Select model",
-    "changeModel": "Change"
+    "changeModel": "Change",
+    "executionInProgress": "In progress",
+    "executionAwaitingFollowUp": "Awaiting follow-up"
   },
   "Workplace": {
     "hero": {
@@ -1777,7 +1813,8 @@
       "selectSecret": "Select a secret",
       "keepExistingSecret": "Keep existing secret",
       "noSecrets": "No workspace secrets yet.",
-      "newSecret": "New secret"
+      "newSecret": "New secret",
+      "createdWithSecretTitle": "Webhook created"
     },
     "detail": {
       "overview": "Overview",
@@ -1836,6 +1873,7 @@
       "failureWarning": "{count, plural, one {# consecutive failure} other {# consecutive failures}} of {threshold}",
       "noSchedule": "Waiting for an incoming request",
       "metricsLoadFailed": "Failed to load metrics",
+      "executionsLoadFailed": "Failed to load executions",
       "periodHours": "Over the last {hours}h",
       "durationRange": "{min}s — {max}s range",
       "failures": "Failures",
@@ -1843,7 +1881,19 @@
       "spend": "Spend",
       "spendPerRun": "{cost} per run",
       "noCostedRuns": "No costed runs yet",
-      "cost": "Cost"
+      "cost": "Cost",
+      "firstPage": "First page",
+      "noExecutionsOnPage": "No runs on this page",
+      "signing": "Request signing",
+      "signingStatus": {
+        "signed": "Signed",
+        "unsigned": "Unsigned",
+        "unsupported": "Not verified"
+      },
+      "signingSignedHint": "Requests without a valid signature are refused.",
+      "signingUnsignedHint": "Anyone who knows this URL can start the agent. Generate a signing secret, then sign every request with it.",
+      "signingUnsignedChannelHint": "Anyone who knows this URL can start the agent. Save the channel credentials again to register a secret.",
+      "signingUnsupportedHint": "AgentArea does not verify this provider's requests yet, so anyone who knows this URL can start the agent. Keep the URL private."
     },
     "error": {
       "createFailed": "Failed to create trigger",
@@ -1852,10 +1902,39 @@
       "loadFailed": "Failed to load trigger",
       "enableFailed": "Failed to enable trigger",
       "disableFailed": "Failed to disable trigger",
-      "runFailed": "Couldn't run the trigger"
+      "runFailed": "Couldn't run the trigger",
+      "rotateSigningSecretFailed": "Failed to generate the signing secret"
+    },
+    "signing": {
+      "sign": "Generate signing secret",
+      "rotate": "Rotate secret",
+      "signTitle": "Require signed requests?",
+      "signDescription": "From now on, requests without a valid signature are refused. Update every sender to sign with the new secret.",
+      "signConfirm": "Generate secret",
+      "rotateTitle": "Rotate the signing secret?",
+      "rotateDescription": "Requests signed with the current secret are refused as soon as the new one exists. Update every sender right away.",
+      "rotateConfirm": "Rotate secret",
+      "issuedTitle": "Signing secret generated",
+      "issuedDescription": "Sign every request to this webhook with this secret. Unsigned requests are refused.",
+      "secretLabel": "Signing secret",
+      "secretWarning": "Shown only once. Copy it now and store it where the sender runs.",
+      "headerLabel": "Header",
+      "valueLabel": "Signature",
+      "valueText": "Hex-encoded HMAC-{algorithm} of the raw request body, keyed with this secret.",
+      "valueTextWithPrefix": "Hex-encoded HMAC-{algorithm} of the raw request body, keyed with this secret, after the prefix {prefix}.",
+      "exampleLabel": "Example",
+      "done": "Done"
     }
   },
   "NetworkPage": {
+    "graphSelection": {
+      "title": "Nodes and relationships",
+      "nodes": "Nodes ({count})",
+      "relationships": "Relationships ({count})",
+      "relationshipLabel": "{source} to {target}: {relation}",
+      "showMore": "Show more",
+      "showLess": "Show less"
+    },
     "orgChart": {
       "types": {
         "agent": "Agent",
@@ -2069,6 +2148,7 @@
     "name": "Name",
     "baseUrl": "Base URL",
     "baseUrlHint": "The base URL for API requests",
+    "baseUrlAbsoluteRequired": "Enter an absolute HTTP or HTTPS base URL.",
     "description": "Description (optional)",
     "customHeaders": "Custom Headers (optional)",
     "addHeader": "Add Header",
@@ -2203,19 +2283,6 @@
     "hint": "Tap to enable tools for your agent",
     "toolsEnabled": "{count, plural, =1 {# tool enabled} other {# tools enabled}}"
   },
-  "ApprovalRequestMessage": {
-    "approvalRequired": "Approval Required:",
-    "approved": "Approved",
-    "denied": "Denied",
-    "waiting": "Waiting...",
-    "arguments": "Arguments",
-    "approve": "Approve",
-    "deny": "Deny",
-    "denyReasonPlaceholder": "Reason for denial (optional)",
-    "cancel": "Cancel",
-    "sendingDecision": "Sending decision...",
-    "reason": "Reason:"
-  },
   "ErrorMessage": {
     "error": "Error",
     "type": "Type:",
@@ -2227,15 +2294,6 @@
     "description": "Track who did what, when, and from where across your workspace",
     "noEvents": "No audit events found.",
     "loadMore": "Load more",
-    "filter": {
-      "all": "All resources",
-      "agent": "Agents",
-      "mcp_server": "MCP Servers",
-      "mcp_instance": "MCP Instances",
-      "task": "Tasks",
-      "trigger": "Triggers",
-      "skill": "Skills"
-    },
     "table": {
       "action": "Action",
       "resource": "Resource",
@@ -2243,7 +2301,54 @@
       "ip": "IP",
       "when": "When"
     },
-    "loadFailed": "Couldn't load the audit log"
+    "loadFailed": "Couldn't load the audit log",
+    "noMatches": "No events match these filters.",
+    "filters": {
+      "resourceType": "Resource type",
+      "action": "Action",
+      "actor": "Actor",
+      "since": "From date",
+      "until": "To date",
+      "allResources": "All resources",
+      "allActions": "All actions",
+      "anyone": "Anyone",
+      "people": "People",
+      "agents": "Agents",
+      "reset": "Reset filters"
+    },
+    "actionGroups": {
+      "toolCalls": "Tool calls and approvals",
+      "access": "Access and credentials",
+      "config": "Configuration"
+    },
+    "resourceTypes": {
+      "task": "Tasks",
+      "agent": "Agents",
+      "skill": "Skills",
+      "trigger": "Triggers",
+      "mcp_server": "MCP servers",
+      "mcp_instance": "MCP connections",
+      "client": "Harnesses",
+      "governance_policy": "Policies",
+      "secret": "Secrets",
+      "api_key": "API keys",
+      "member": "Members",
+      "invitation": "Invitations",
+      "access_grant": "Access grants"
+    },
+    "export": {
+      "button": "Export CSV",
+      "working": "Exporting…",
+      "failed": "Couldn't export the audit log",
+      "truncated": "Exported the newest {count} events. Narrow the filters to export older ones."
+    },
+    "details": {
+      "tool": "Tool",
+      "decision": "Decision",
+      "reason": "Reason",
+      "comment": "Comment",
+      "arguments": "Arguments"
+    }
   },
   "AuthConsent": {
     "title": "Authorize {clientName}",
@@ -2275,39 +2380,18 @@
     "today": "Today",
     "vsPrevDay": "vs prev day",
     "budgetUsage": "{pct}% of {cap} budget",
-    "activity": "Activity",
-    "activityMeta": "Last 14 days · UTC",
-    "completed": "Completed",
-    "failed": "Failed",
-    "awaiting": "Awaiting",
-    "agents": "Agents",
-    "agentsActive": "{count} active",
-    "statDone": "{count} done",
-    "statFailed": "{count} failed",
-    "statMtd": "{amount} MTD",
-    "viewAllAgents": "View all agents",
-    "noAgents": "No agents yet.",
-    "noAgentsHint": "Create one and it'll show up here with live activity.",
-    "createFirstAgent": "Create your first agent",
     "blockers": "Blockers",
-    "healthy": "Healthy",
     "nothingBlocking": "Nothing blocking work right now.",
     "allClearHint": "Every agent is running smoothly.",
     "awaitingInput": "Awaiting input",
+    "awaitingContinuation": "Waiting to continue",
+    "blocked": "Blocked",
     "walletExhausted": "Wallet exhausted",
     "failed24h": "Failed (24h)",
     "budgetExhausted": "Budget exhausted — {amount} / {period}",
     "taskFailed": "Task failed",
+    "taskBlocked": "Task is blocked",
     "timeAgo": "{time} ago",
-    "relJustNow": "just now",
-    "relMinutes": "{count}m",
-    "relHours": "{count}h",
-    "relDays": "{count}d",
-    "period": "Period",
-    "periodLast7": "Last 7 days",
-    "periodLast30": "Last 30 days",
-    "periodMonthToDate": "Month to date",
-    "periodLast90": "Last 90 days",
     "tasks": "Tasks",
     "allTasks": "All tasks",
     "runningNow": "Running now",
@@ -2320,7 +2404,9 @@
     "nothingScheduled": "Nothing scheduled — add a trigger",
     "throughoutTheDay": "All day:",
     "perDay": "×{count}/day",
-    "moreRuns": "+{count} more"
+    "fromDate": "from {date}",
+    "moreRuns": "+{count} more",
+    "runCount": "Scheduled runs: {count}"
   },
   "BudgetsPage": {
     "couldntLoadTitle": "Couldn't load budget data",
@@ -2477,7 +2563,8 @@
       "pending": "Needs approval",
       "input": "Needs input",
       "completed": "Completed",
-      "failed": "Failed"
+      "failed": "Failed",
+      "decided": "Decided"
     },
     "row": {
       "untitled": "Untitled task",
@@ -2502,8 +2589,6 @@
       "openChat": "Open chat",
       "close": "Close details panel",
       "requestedRecently": "Requested recently",
-      "willRun": "Approving will let the agent run <b>{tool}</b>.",
-      "requestedAction": "the requested action",
       "outputPending": "Output will be available after the action runs.",
       "noOutput": "No output was returned for this task."
     },
@@ -2535,7 +2620,11 @@
       },
       "viewAll": "View all",
       "taskHistory": "Open task history",
-      "triggers": "Check triggers"
+      "triggers": "Check triggers",
+      "decided": {
+        "title": "No decisions yet",
+        "description": "Approved and rejected calls will be listed here with who decided and when."
+      }
     },
     "detailEmpty": {
       "title": "Select a task",
@@ -2544,7 +2633,26 @@
       "openNext": "Review next approval"
     },
     "resolveFailed": "Couldn’t resolve “{task}”",
-    "resolveManyFailed": "Couldn’t resolve {failed} of {total}"
+    "resolveManyFailed": "Couldn’t resolve {failed} of {total}",
+    "batch": {
+      "approveTitle": "{count, plural, one {Approve # call?} other {Approve # calls?}}",
+      "rejectTitle": "{count, plural, one {Reject # call?} other {Reject # calls?}}",
+      "approveDescription": "Each agent will run the call shown below. Review the arguments before you confirm.",
+      "rejectDescription": "None of the calls below will run. Each agent is told the call was rejected.",
+      "commentLabel": "Comment (optional, sent with every decision)",
+      "commentPlaceholder": "Why you approve or reject",
+      "cancel": "Cancel",
+      "approveConfirm": "{count, plural, one {Approve # call} other {Approve # calls}}",
+      "rejectConfirm": "{count, plural, one {Reject # call} other {Reject # calls}}"
+    },
+    "decisions": {
+      "loadFailed": "Failed to load approval decisions",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "resolved": "Resolved",
+      "by": "by {name}",
+      "comment": "“{comment}”"
+    }
   },
   "AppsPage": {
     "title": "Apps",
@@ -2633,7 +2741,139 @@
     },
     "editor": {
       "loadFailedTitle": "Couldn't load policy",
-      "loadFailed": "Failed to load policies"
+      "loadFailed": "Failed to load policies",
+      "breadcrumbPolicies": "Policies",
+      "titles": {
+        "edit": "Edit policy rule",
+        "newPolicy": "New policy rule",
+        "newAgent": "New agent policy",
+        "newWorkspace": "New workspace rule"
+      },
+      "actions": {
+        "addRule": "Add rule",
+        "cancel": "Cancel",
+        "createRule": "{count, plural, one {Create rule} other {Create rules}}",
+        "delete": "Delete",
+        "deleteFailed": "Delete failed",
+        "saveFailed": "Save failed",
+        "saveRule": "Save rule"
+      },
+      "sections": {
+        "controlPlane": "Policy control plane",
+        "rules": "Policy Rules",
+        "configuration": "Rule Config",
+        "ruleType": "Rule type",
+        "ruleTypeFixed": "The rule type is fixed once a rule is created.",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "impactRail": "Impact Rail"
+      },
+      "effects": {
+        "allow": "Allow",
+        "cap": "Budget",
+        "approval": "Approval",
+        "deny": "Deny",
+        "safety": "Safety"
+      },
+      "scope": {
+        "policyDescription": "This policy applies to {scope}. Tool access grants are managed in the <accessView>Access view</accessView>.",
+        "allAgentsInWorkspace": "every agent in this workspace",
+        "selectedAgent": "the selected agent",
+        "selectedAgents": "the selected agents",
+        "target": "Target",
+        "workspace": "Workspace",
+        "allAgentsOption": "All agents",
+        "selectedAgentsOption": "Selected agents",
+        "selectAgentPlaceholder": "Select an agent",
+        "addAgent": "Add agent",
+        "removeAgent": "Remove {agent}",
+        "addAgentsPrompt": "Add agents to scope this policy.",
+        "toolAccessManaged": "Granting tool access is managed in the",
+        "accessView": "Access view",
+        "affectedAgents": "Affected agents",
+        "workspaceAgentCount": "{count, plural, one {# workspace agent} other {# workspace agents}}",
+        "selectedAgentCount": "{count, plural, one {# selected agent} other {# selected agents}}",
+        "noAgentsSelected": "No agents selected",
+        "agent": "Agent",
+        "noAgentsInWorkspace": "No agents in this workspace yet.",
+        "selectAgentPreview": "Select an agent to preview the affected scope.",
+        "moreAgents": "{count, plural, one {+# more agent} other {+# more agents}}"
+      },
+      "ruleIndex": "Rule {number}",
+      "removeRule": "Remove rule {number}",
+      "budget": {
+        "type": "Budget type",
+        "spend": "Spend budget",
+        "perService": "Per-service budget",
+        "tokens": "Token budget",
+        "maxTokens": "Max tokens",
+        "maxTokensPerCall": "Max tokens per call",
+        "amount": "Amount",
+        "period": "Period",
+        "perMonth": "Per month",
+        "perTask": "Per task",
+        "moneyPlaceholder": "0.00",
+        "numberPlaceholder": "optional"
+      },
+      "tools": {
+        "deniedTools": "Denied tools",
+        "approvalRequiredTools": "Tools requiring approval",
+        "noToolsAttached": "No tools are attached to the affected agents yet.",
+        "agentCount": "{count, plural, one {# agent} other {# agents}}",
+        "notInAgentCatalog": "not in current agent catalog",
+        "mcpSource": "MCP",
+        "mcpSourceNamed": "MCP · {name}",
+        "openApiSource": "OpenAPI",
+        "openApiSourceNamed": "OpenAPI · {name}",
+        "builtInSource": "Built-in",
+        "customSource": "Custom",
+        "genericSource": "Tool",
+        "advancedSelector": "Advanced selector",
+        "namePlaceholder": "Tool name",
+        "everyCallHint": "The rule applies to every call of the selected tools. Conditions on tool arguments aren't supported yet."
+      },
+      "approvers": {
+        "label": "Approvers",
+        "emptyHelp": "Leave empty to allow any workspace member to approve.",
+        "unsupportedHint": "{count, plural, one {This approver is a role or group, which can't approve yet. Remove it to save.} other {# approvers are roles or groups, which can't approve yet. Remove them to save.}}"
+      },
+      "tagInput": {
+        "add": "Add",
+        "removeValue": "Remove {value}"
+      },
+      "safety": {
+        "promptInjection": "Prompt-injection detection",
+        "outputSanitizer": "Output sanitizer"
+      },
+      "validation": {
+        "agentRequired": "Add at least one agent for this policy.",
+        "workspaceRequired": "No workspace context available.",
+        "tokenBudgetRequired": "Enter a token budget.",
+        "amountInvalid": "Enter a valid amount.",
+        "amountMustBePositive": "Enter an amount greater than 0.",
+        "amountMustNotBeNegative": "The amount can't be negative.",
+        "atLeastOneToolRequired": "Add at least one tool.",
+        "toolRequired": "Add a tool.",
+        "safetyCheckRequired": "Enable at least one safety check.",
+        "approverUnsupported": "Only workspace members can approve; remove role and group approvers.",
+        "ruleInvalid": "Rule {number} ({effect}): {error}"
+      },
+      "summary": {
+        "agentScopePending": "agent scope pending",
+        "workspaceScopeMissing": "workspace scope missing",
+        "scope": "Scope",
+        "workspace": "Workspace",
+        "agentCount": "{count, plural, one {# agent} other {# agents}}",
+        "drafts": "Drafts",
+        "active": "Active",
+        "activeCount": "{enabled}/{total} enabled",
+        "selected": "Selected",
+        "target": "Target",
+        "params": "Params",
+        "rules": "Rules",
+        "pending": "pending",
+        "compiledOutput": "Compiled output"
+      }
     }
   },
   "ProjectSettingsPage": {
@@ -2692,10 +2932,39 @@
     "agentInstallFailed": "Couldn't add the agent",
     "agentsLoadFailed": "Couldn't load workspace agents",
     "skillInstallFailed": "Couldn't add the skill",
-    "skillAttachFailed": "Couldn't add the skill to {agent}"
+    "skillAttachFailed": "Couldn't add the skill to {agent}",
+    "start": "Start",
+    "installBundle": "Install bundle"
   },
   "ProjectOverviewPage": {
     "loadFailed": "Couldn't load the project",
     "agentsLoadFailed": "Couldn't load workspace agents"
+  },
+  "Approvals": {
+    "cardLabel": "Pending approval",
+    "required": "Approval required",
+    "requiredForTool": "Approval required for {tool}",
+    "willRun": "Approving lets the agent run <b>{tool}</b> with these arguments.",
+    "requestedAction": "the requested action",
+    "argumentsLoading": "Loading the call to approve…",
+    "argumentsFailed": "Could not load the call to approve",
+    "notAnApprover": "This approval is reserved for a designated approver.",
+    "noArguments": "The call has no arguments.",
+    "commentLabel": "Comment (optional)",
+    "commentPlaceholder": "Why you approve or reject — saved with the decision",
+    "approve": "Approve",
+    "reject": "Reject",
+    "decisionFailed": "Could not send the decision",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "resolved": "Resolved",
+    "outcomeForTool": "{outcome}: {tool}",
+    "decidedBy": "by {name}",
+    "decidedByAt": "by {name} · {time}",
+    "comment": "“{comment}”"
+  },
+  "ToolPart": {
+    "blockedByPolicy": "Blocked by policy",
+    "rejectedByApprover": "Rejected by approver"
   }
 }

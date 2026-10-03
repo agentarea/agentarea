@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import AuditEventORM
@@ -20,6 +21,27 @@ class AuditRepository:
         self._session.add(event)
         await self._session.flush()
         return event
+
+    async def insert_once(self, event: AuditEventORM) -> bool:
+        """Insert an event keyed by its preset ``id``; a repeat of that id is a no-op.
+
+        For writers that are retried as a whole (Temporal activities): the same
+        source event always maps to the same id, so a retry cannot double the
+        trail. Returns whether this call wrote the row.
+        """
+        values = {
+            column.key: value
+            for column in AuditEventORM.__table__.columns
+            if (value := getattr(event, column.key)) is not None
+        }
+        stmt = (
+            pg_insert(AuditEventORM)
+            .values(**values)
+            .on_conflict_do_nothing(index_elements=[AuditEventORM.id])
+            .returning(AuditEventORM.id)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none() is not None
 
     async def query(
         self,

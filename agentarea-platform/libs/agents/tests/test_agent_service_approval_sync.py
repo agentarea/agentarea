@@ -202,7 +202,6 @@ async def _agent_with_admin_rule(session, member):
             target="tool:files",
             effect=PolicyEffect.APPROVAL,
         ),
-        subject_id=str(agent.id),
     )
     return agent
 

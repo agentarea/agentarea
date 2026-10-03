@@ -22,6 +22,16 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+// The approval card reads pending escalations through a server action. Its
+// module pulls server-only code that cannot load under jsdom, so the action is
+// stubbed at that boundary; this suite does not exercise approvals.
+vi.mock("@/lib/server-actions", () => ({
+  listPendingEscalationsAction: vi.fn(async () => ({
+    data: [],
+    error: undefined,
+  })),
+}));
+
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));

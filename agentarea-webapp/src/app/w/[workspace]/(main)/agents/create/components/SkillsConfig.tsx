@@ -131,7 +131,7 @@ const SkillsConfig = ({
 
         {/* Empty state */}
         {selectedSkills.length === 0 && (
-          <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground/50">
+          <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground">
             <p>No skills assigned. Add skills to enhance this agent&apos;s capabilities.</p>
           </Note>
         )}

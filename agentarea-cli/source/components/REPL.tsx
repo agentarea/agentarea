@@ -84,11 +84,11 @@ export function REPL({userEmail, token}: REPLProps) {
 
 		setTimeout(processNextCommand, 100);
 
-		return (() => {
+		return () => {
 			if (!isClosed) {
 				rl.close();
 			}
-		}) as any;
+		};
 	}, [isRunning]);
 
 	const executeCommand = async (command: string): Promise<CommandResult> => {

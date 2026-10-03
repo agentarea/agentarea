@@ -66,10 +66,12 @@ import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Switch } from "@/components/ui/switch";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import Link from "@/components/WorkspaceLink";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { defaultModelId as pickDefaultModelId } from "@/lib/default-model";
 import type { EntityIdentity } from "@/lib/entity-identity";
 import { cn } from "@/lib/utils";
+import { agentPath } from "@/types";
 import {
   analyzeBundleAction,
   installBundleAction,
@@ -220,6 +222,7 @@ export function BundleInstallWizard({
   onBack: () => void;
 }) {
   const { canAdminister } = useViewerCapabilities();
+  const router = useWorkspaceRouter();
   const [phase, setPhase] = useState<Phase>({ kind: "analyzing" });
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [models, setModels] = useState<WorkspaceModel[]>([]);
@@ -468,6 +471,17 @@ export function BundleInstallWizard({
           kind: "error",
           message: apiErrorMessage(installed, t("installFailed")),
         });
+        return;
+      }
+      // A bundle that ships an agent is started, not just installed: open the
+      // first one (bundle order) on its new-task page. The button keeps
+      // spinning until the route changes. Agentless bundles get the summary.
+      const agent = (installed.data.entities ?? []).find(
+        (e) => e.kind === "agent" && e.id
+      );
+      if (agent?.id) {
+        router.push(agentPath({ id: agent.id }, "/new-task"));
+        router.refresh();
         return;
       }
       setPhase({ kind: "done", result: installed.data });
@@ -894,10 +908,12 @@ export function BundleInstallWizard({
                 isLoading={phase.kind === "installing"}
                 disabled={blockIssues.length > 0 || missingRequired.length > 0}
               >
-                Install bundle
+                {agents.some((a) => !agentOff.has(a.key))
+                  ? t("start")
+                  : t("installBundle")}
               </StartAgentButton>
               <Button variant="ghost" size="sm" onClick={onBack}>
-                Cancel
+                {tCommon("cancel")}
               </Button>
             </div>
           </div>

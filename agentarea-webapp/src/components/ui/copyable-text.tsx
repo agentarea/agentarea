@@ -40,7 +40,7 @@ export function CopyableText({
       type="button"
       onClick={handleCopy}
       className={cn(
-        "group flex w-full min-w-0 max-w-full cursor-pointer items-center justify-between gap-2 overflow-hidden rounded-md border border-border/50 bg-muted/30 px-3 py-1.5 text-left transition-all hover:bg-muted/50",
+        "group flex w-full min-w-0 max-w-full cursor-pointer items-center justify-between gap-2 overflow-hidden rounded-md border border-border/50 bg-muted/30 px-3 py-1.5 text-left transition-colors hover:bg-muted/50",
         className
       )}
     >

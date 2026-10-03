@@ -18,6 +18,7 @@ from agentarea_execution.workflows.helpers import BudgetTracker, EventManager
 @pytest.fixture
 def flow(monkeypatch):
     monkeypatch.setattr(workflow_module.workflow, "logger", logging.getLogger("test-llm-call"))
+    monkeypatch.setattr(workflow_module.workflow, "patched", lambda _patch_id: True)
     flow = workflow_module.AgentExecutionWorkflow()
     flow.state.task_id = "task-1"
     flow.state.agent_id = "agent-1"

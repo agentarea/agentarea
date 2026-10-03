@@ -11,7 +11,7 @@ with workflow.unsafe.imports_passed_through():
     from agentarea_common.money import ZERO, serialize_money
 
 
-from ...models import AgentExecutionResult, UpdateTaskStatusRequest
+from ...models import AgentExecutionResult, ConversationResumeSnapshot, UpdateTaskStatusRequest
 from ..constants import (
     ACTIVITY_TIMEOUT,
     Activities,
@@ -21,6 +21,7 @@ from ..constants import (
 from ..retry import bookkeeping_retry_policy
 from .budget import BudgetMixin
 from .errors import ErrorReportingMixin
+from .patches import CONVERSATION_RESUME_SNAPSHOT_PATCH
 
 
 class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
@@ -93,6 +94,16 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
             final_status = "cancelled"
         else:
             final_status = "failed"
+        conversation_pending = self._conversation_payload()
+        # A completed conversation can be continued by a later message after the
+        # workflow closes; the snapshot tells that run where the log stands.
+        conversation_resume = (
+            self._conversation_resume_snapshot(len(conversation_pending))
+            if final_status == "completed"
+            and not self._is_delegation_child()
+            and workflow.patched(CONVERSATION_RESUME_SNAPSHOT_PATCH)
+            else None
+        )
         await workflow.execute_activity(
             Activities.UPDATE_TASK_STATUS,
             args=[
@@ -114,7 +125,8 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                     total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
                     own_cost=self._own_cost,
                     conversation=self._conversation_window(),
-                    conversation_pending=self._conversation_payload(),
+                    conversation_pending=conversation_pending,
+                    conversation_resume=conversation_resume,
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
@@ -148,6 +160,18 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
             total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
             reasoning_iterations_used=self.state.current_iteration,
             total_tool_calls=self.state.tool_calls_used,
+        )
+
+    def _conversation_resume_snapshot(self, pending_count: int) -> ConversationResumeSnapshot:
+        """The window and counters as they stand once the pending entries are written."""
+        return ConversationResumeSnapshot(
+            head_seqs=list(self.state.context_head_seqs),
+            tail_start=self.state.context_tail_start,
+            next_seq=self.state.conversation_next_seq + pending_count,
+            current_iteration=max(self.state.current_iteration, 1),
+            tool_calls_used=self.state.tool_calls_used,
+            tokens_used=self.state.tokens_used,
+            last_prompt_tokens=self.state.last_prompt_tokens,
         )
 
     async def _handle_workflow_error(self, error: Exception) -> None:

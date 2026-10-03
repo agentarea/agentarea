@@ -320,8 +320,8 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
             return (
                 False,
                 "budget_exceeded",
-                f"Budget exceeded ({self.budget_tracker.describe(self.budget_tracker.cost, 2)}/"
-                f"{self.budget_tracker.describe(self.budget_tracker.budget_limit, 2)})",
+                f"Budget exceeded ({self.budget_tracker.describe(self.budget_tracker.cost)}/"
+                f"{self.budget_tracker.describe(self.budget_tracker.budget_limit)})",
             )
 
         # Check for cancellation (this could be extended for other cancellation conditions)
@@ -342,8 +342,8 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
             limit = self._policy_limit("execution", "max_tool_calls_total")
             return f"Tool-call budget exhausted ({self.state.tool_calls_used}/{limit} calls)"
         return (
-            f"Budget exceeded ({self._budget.describe(self._budget.cost, 2)}/"
-            f"{self._budget.describe(self._budget.budget_limit, 2)})"
+            f"Budget exceeded ({self._budget.describe(self._budget.cost)}/"
+            f"{self._budget.describe(self._budget.budget_limit)})"
         )
 
     def _answer_unanswered_tool_calls(self, content: str) -> None:

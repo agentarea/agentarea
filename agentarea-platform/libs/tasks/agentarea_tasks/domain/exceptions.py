@@ -1,5 +1,7 @@
 """Domain exceptions for the tasks library."""
 
+from agentarea_common.money import Money
+
 
 class AgentModelNotConfiguredError(Exception):
     """Raised when starting a run for an agent that has no model configured.
@@ -48,15 +50,16 @@ class BudgetCapExceededError(Exception):
         self,
         *,
         workspace_id: str,
-        current_mtd_usd: float,
-        cap_usd: float,
+        current_mtd_usd: Money,
+        cap_usd: Money,
         currency: str = "USD",
     ):
         self.workspace_id = workspace_id
         self.current_mtd_usd = current_mtd_usd
         self.cap_usd = cap_usd
         self.currency = currency
+        # At the amounts' own precision: a cap below a cent must not read as 0.00.
         super().__init__(
-            f"Workspace {workspace_id} MTD spend {current_mtd_usd:.2f} {currency} "
-            f"has reached cap {cap_usd:.2f} {currency}"
+            f"Workspace {workspace_id} MTD spend {current_mtd_usd} {currency} "
+            f"has reached cap {cap_usd} {currency}"
         )

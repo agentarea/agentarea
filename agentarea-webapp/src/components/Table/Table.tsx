@@ -1,4 +1,5 @@
 import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from "lucide-react";
+import Link from "@/components/WorkspaceLink";
 import {
   TableBody,
   TableCell,
@@ -16,6 +17,8 @@ export type Column<T = unknown> = {
   render?(value: unknown, item?: T): React.ReactNode;
   headerClassName?: string;
   cellClassName?: string;
+  /** Marks this cell as the native link for a row with `rowHref`. */
+  rowLink?: boolean;
   /** Makes the header a sort toggle; takes effect only with `onSortChange`. */
   sortable?: boolean;
 };
@@ -107,7 +110,7 @@ export default function Table<T>({
                         })
                       }
                       className={cn(
-                        "inline-flex items-center gap-1 uppercase hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+                        "inline-flex min-h-11 min-w-11 items-center justify-center gap-1 uppercase hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring md:min-h-6 md:min-w-6",
                         active && "text-foreground"
                       )}
                     >
@@ -131,33 +134,45 @@ export default function Table<T>({
           const { className: extraClassName, ...extraRowProps } =
             rowProps?.(item) ?? {};
           const href = rowHref?.(item);
+          const hasRowLink = Boolean(href && columns.some((column) => column.rowLink));
           const rowClassName = cn(
             "group border-b border-zinc-100 transition-colors duration-200 dark:border-zinc-800",
-            // Only a table that actually handles the click should look
-            // clickable; without this every row invites one that does nothing.
             (href || onRowClick) &&
               "cursor-pointer hover:bg-primary/5 dark:hover:bg-primary/10",
             row.className as string | undefined,
             extraClassName
           );
-          const cells = columns.map((column) => (
-            <TableCell
-              key={String(row.id) + "-" + column.accessor}
-              className={cn(
-                "py-[10px] first:pl-[20px] last:pr-[20px]",
-                column.cellClassName
-              )}
-            >
-              {column.render
-                ? column.render(row[column.accessor], item)
-                : (row[column.accessor] as React.ReactNode)}
-            </TableCell>
-          ));
+          const cells = columns.map((column) => {
+            const content = column.render
+              ? column.render(row[column.accessor], item)
+              : (row[column.accessor] as React.ReactNode);
+            return (
+              <TableCell
+                key={String(row.id) + "-" + column.accessor}
+                className={cn(
+                  "py-[10px] first:pl-[20px] last:pr-[20px]",
+                  column.cellClassName
+                )}
+              >
+                {href && column.rowLink ? (
+                  <Link
+                    href={href}
+                    className="block rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                  >
+                    {content}
+                  </Link>
+                ) : (
+                  content
+                )}
+              </TableCell>
+            );
+          });
 
           return href ? (
             <TableRowNav
               key={row.id as React.Key}
               href={href}
+              hasNativeLink={hasRowLink}
               {...extraRowProps}
               className={rowClassName}
             >

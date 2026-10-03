@@ -29,6 +29,10 @@ import (
 // remote server sends does not carry it.
 const StartingHeader = "X-AgentArea-MCP-Starting"
 
+// StartFailureHeader carries a classified startup failure without exposing
+// workload output.
+const StartFailureHeader = "X-AgentArea-MCP-Start-Failure"
+
 // maxRequestBodyBytes bounds the request body the gateway buffers before it
 // waits for a workload. MCP requests are JSON-RPC messages; tool arguments that
 // carry files are the large ones.
@@ -300,9 +304,7 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		return
 	}
 	if err != nil {
-		g.logger.Warn("MCP demand could not be satisfied", slog.String("instance_id", instanceID), slog.String("error", err.Error()))
-		response.Header().Set("Retry-After", "5")
-		http.Error(response, "MCP instance is unavailable", http.StatusBadGateway)
+		g.writeDemandFailure(response, instanceID, err)
 		return
 	}
 
@@ -347,6 +349,13 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 				outbound.Out.Header.Set("Authorization", "Bearer "+g.remote.Token)
 			}
 		},
+		ModifyResponse: func(upstreamResponse *http.Response) error {
+			// These markers are owned by the gateway and must never be spoofed
+			// by an MCP workload response.
+			upstreamResponse.Header.Del(StartingHeader)
+			upstreamResponse.Header.Del(StartFailureHeader)
+			return nil
+		},
 		ErrorHandler: func(writer http.ResponseWriter, _ *http.Request, proxyErr error) {
 			g.logger.Warn("MCP upstream request failed", slog.String("instance_id", instanceID), slog.String("error", proxyErr.Error()))
 			http.Error(writer, "MCP upstream request failed", http.StatusBadGateway)
@@ -354,6 +363,50 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 	}
 	proxy.ServeHTTP(response, request.WithContext(proxyCtx))
 
+}
+
+func (g *Gateway) writeDemandFailure(response http.ResponseWriter, instanceID string, err error) {
+	g.logger.Warn("MCP demand could not be satisfied", slog.String("instance_id", instanceID), slog.String("error", err.Error()))
+	reason, retryAfter, classified := startupFailureDetails(err)
+	if !classified {
+		response.Header().Set("Retry-After", "5")
+		http.Error(response, "MCP instance is unavailable", http.StatusBadGateway)
+		return
+	}
+	response.Header().Set(StartFailureHeader, reason)
+	response.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+	http.Error(response, "MCP workload failed during startup: "+reason, http.StatusServiceUnavailable)
+}
+
+func startupFailureDetails(err error) (string, int, bool) {
+	var classified failureReasonError
+	if !errors.As(err, &classified) {
+		return "", 0, false
+	}
+	reason := strings.TrimSpace(strings.NewReplacer("\r", " ", "\n", " ").Replace(classified.FailureReason()))
+	if reason == "" {
+		return "", 0, false
+	}
+	return reason, retryAfterSeconds(err), true
+}
+
+func retryAfterSeconds(err error) int {
+	var retryable retryDelayError
+	if !errors.As(err, &retryable) {
+		return 1
+	}
+	delay := retryable.RetryDelay()
+	if delay <= 0 {
+		return 1
+	}
+	seconds := int(delay / time.Second)
+	if delay%time.Second != 0 {
+		seconds++
+	}
+	if seconds < 1 {
+		return 1
+	}
+	return seconds
 }
 
 // statusResponseWriter records the final status only. Unwrap lets net/http's

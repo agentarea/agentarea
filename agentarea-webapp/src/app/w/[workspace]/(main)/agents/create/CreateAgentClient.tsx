@@ -13,12 +13,12 @@ import AgentForm from "../shared/AgentForm";
 import type { DelegationData } from "../shared/useAgentData";
 import { addAgent, type AddAgentFormState } from "./actions";
 import type { AgentFormValues } from "./types";
-import { generateAgentName } from "./utils/agentNameGenerator";
 
 type MCPServer = McpServerResponse;
 type LLMModelInstance = ModelInstanceResponse;
 
 export default function CreateAgentClient({
+  suggestedName,
   mcpServers,
   llmModelInstances,
   mcpInstanceList,
@@ -27,6 +27,7 @@ export default function CreateAgentClient({
   triggerCatalog,
   delegation,
 }: {
+  suggestedName: string;
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
   mcpInstanceList: McpServerInstanceResponse[];
@@ -59,7 +60,7 @@ export default function CreateAgentClient({
       create={{ presets, triggerCatalog }}
       delegation={delegation}
       initialData={{
-        name: generateAgentName(),
+        name: suggestedName,
         description: "",
         instruction: "",
         model_id: "",

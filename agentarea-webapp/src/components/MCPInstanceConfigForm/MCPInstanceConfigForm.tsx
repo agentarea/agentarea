@@ -20,6 +20,7 @@ type MCPServer = McpServerResponse;
 type EnvSchemaItem = {
   default?: string;
   description?: string;
+  isRequired?: boolean;
   isSecret?: boolean;
   name?: string;
   required?: boolean;
@@ -177,7 +178,7 @@ export default function MCPInstanceConfigForm({
             {envSchema.map((envVar) => {
               const envName = envVar.name || "";
               if (!envName) return null;
-              const isRequired = Boolean(envVar?.required);
+              const isRequired = Boolean(envVar.isRequired ?? envVar.required);
               const description = envVar.description || "";
               const errorKey = `env_${envName}`;
               return (

@@ -25,9 +25,10 @@ from urllib.parse import urlparse
 
 import httpx
 from agentarea_agents_sdk.mcp_server.auth import WORKSPACE_REFERENCE_PATTERN
+from agentarea_api.api.rate_limit import limit_oauth_registration
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config import get_settings
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 oauth_as_router = APIRouter(tags=["oauth-as"])
@@ -275,9 +276,30 @@ async def hydra_auth_redirect(request: Request) -> Response:
     return RedirectResponse(url=target, status_code=302)
 
 
+_DCR_FIELDS = (
+    "client_name",
+    "client_uri",
+    "logo_uri",
+    "policy_uri",
+    "tos_uri",
+    "contacts",
+    "redirect_uris",
+    "token_endpoint_auth_method",
+    "audience",
+    "response_types",
+    "grant_types",
+    "scope",
+    "skip_consent",
+)
+_DCR_TOKEN_AUTH_METHODS = frozenset({"none", "client_secret_basic", "client_secret_post"})
+
+
 @oauth_as_router.post(
     "/oauth2/register",
-    dependencies=[unrestricted("OAuth authorization-server surface; unauthenticated by protocol")],
+    dependencies=[
+        unrestricted("OAuth authorization-server surface; unauthenticated by protocol"),
+        Depends(limit_oauth_registration),
+    ],
 )
 async def hydra_dcr_proxy(request: Request) -> Response:
     """Dynamic Client Registration (RFC 7591) — proxy to Hydra admin API.
@@ -301,6 +323,17 @@ async def hydra_dcr_proxy(request: Request) -> Response:
         client_data = _json.loads(await request.body())
     except Exception:
         client_data = {}
+    if not isinstance(client_data, dict):
+        return Response(
+            content=_json.dumps(
+                {
+                    "error": "invalid_client_metadata",
+                    "error_description": "the registration request must be a JSON object",
+                }
+            ),
+            status_code=400,
+            headers={"Content-Type": "application/json"},
+        )
 
     # Security-relevant fields are FORCED, not defaulted. `setdefault` let the
     # caller keep its own value, so a self-registering client could ask for
@@ -360,7 +393,8 @@ async def hydra_dcr_proxy(request: Request) -> Response:
     client_data["scope"] = " ".join(sorted(granted_scopes))
 
     # A redirect_uri is the client's own callback, so it stays caller-supplied —
-    # but only over https, or loopback for desktop clients.
+    # but only over https, or plain http to loopback for desktop clients
+    # (RFC 8252 §7.3). Any other scheme with a loopback host is not a callback.
     redirect_uris = client_data.get("redirect_uris") or []
     if not redirect_uris:
         return Response(
@@ -375,13 +409,20 @@ async def hydra_dcr_proxy(request: Request) -> Response:
         )
     for uri in redirect_uris:
         parsed = urlparse(str(uri))
-        is_loopback = parsed.hostname in ("localhost", "127.0.0.1", "::1")
+        is_loopback = parsed.scheme == "http" and parsed.hostname in (
+            "localhost",
+            "127.0.0.1",
+            "::1",
+        )
         if parsed.scheme != "https" and not is_loopback:
             return Response(
                 content=_json.dumps(
                     {
                         "error": "invalid_redirect_uri",
-                        "error_description": "redirect_uris must use https, or loopback for native clients",
+                        "error_description": (
+                            "redirect_uris must use https, or http to a loopback host "
+                            "for native clients"
+                        ),
                     }
                 ),
                 status_code=400,
@@ -394,10 +435,30 @@ async def hydra_dcr_proxy(request: Request) -> Response:
     if not client_data.get("contacts"):
         client_data["contacts"] = []
 
+    auth_method = client_data.get("token_endpoint_auth_method")
+    if auth_method is not None and auth_method not in _DCR_TOKEN_AUTH_METHODS:
+        return Response(
+            content=_json.dumps(
+                {
+                    "error": "invalid_client_metadata",
+                    "error_description": (
+                        f"token_endpoint_auth_method must be one of {sorted(_DCR_TOKEN_AUTH_METHODS)}"
+                    ),
+                }
+            ),
+            status_code=400,
+            headers={"Content-Type": "application/json"},
+        )
+
+    # The admin API accepts every client field, token lifespans and URLs Hydra
+    # will fetch (jwks_uri, sector_identifier_uri) included; a caller gets only
+    # the descriptive fields plus what was forced above.
+    registration = {key: client_data[key] for key in _DCR_FIELDS if key in client_data}
+
     async with httpx.AsyncClient(timeout=httpx.Timeout(15)) as client:
         upstream = await client.post(
             f"{admin_url}/admin/clients",
-            content=_json.dumps(client_data).encode(),
+            content=_json.dumps(registration).encode(),
             headers={"Content-Type": "application/json"},
         )
     return Response(

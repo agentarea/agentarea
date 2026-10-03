@@ -154,6 +154,10 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         if config.start_delay:
             temporal_params["start_delay"] = config.start_delay
 
+        if config.start_signal:
+            temporal_params["start_signal"] = config.start_signal
+            temporal_params["start_signal_args"] = config.start_signal_args
+
         # Convert retry policy
         temporal_params["retry_policy"] = RetryPolicy(
             maximum_attempts=config.retry_attempts,
@@ -233,6 +237,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                     requires_human_approval=args.get("requires_human_approval", False),
                     workflow_metadata=args.get("workflow_metadata", {}),
                     effective_policy=args["effective_policy"],
+                    resume=args.get("resume"),
                 )
                 workflow_args = [execution_request]
             else:

@@ -57,6 +57,11 @@ failure code eliminates most of them in one request.
     | `capability_unavailable` | A required capability could not run. Status is `blocked`, not `failed`. | `last_error` in the rollup. |
     | `missing_final_response` | The agent completed without producing a final answer. | The last `llm.call.completed` event. |
     | `task_unsuccessful` | The loop ended without success and without a more specific cause. | Rollup, then the event log. |
+    | `no_credits`, `credit_limit_reached` | A plan entitlement gate refused the model call: the balance is spent. Status is `blocked`. | Top up the balance, then start the task again. |
+    | `model_unpriced` | The model is not available on the workspace's plan. Status is `blocked`. | Pick a model the plan prices. |
+    | `billing_unavailable`, `billing_error`, `account_unresolved` | The entitlement check could not reach billing, so a platform-funded call was refused. Status is `blocked`. | Retry later. |
+    | `governance_denied` | Another governance gate refused the model call; `error` names its reason. Status is `blocked`. | The workspace policy that gate enforces. |
+    | `monthly_spend_cap_exceeded` | The workspace reached its monthly spend cap before or during the run. | Raise the cap or wait for the next month. |
 
     A `blocked` status with `capability_unavailable` is not a model failure — it is
     the platform refusing to certify success it could not check.

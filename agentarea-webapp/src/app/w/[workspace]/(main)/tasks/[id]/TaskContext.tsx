@@ -8,16 +8,24 @@ import {
   useState,
 } from "react";
 import { useTranslations } from "next-intl";
-import { apiErrorMessage, formatApiError, isApiNotFound } from "@/lib/api-errors";
+import type { TaskSummary } from "@/api/client/types.gen";
+import {
+  apiErrorMessage,
+  formatApiError,
+  isApiNotFound,
+} from "@/lib/api-errors";
 import {
   getAgentTaskStatusAction as getAgentTaskStatus,
   getTaskAction as getTask,
 } from "@/lib/server-actions";
-import { getTaskPolicySnapshotAction as getTaskPolicySnapshot } from "./actions";
 import type {
   EffectivePolicy,
   EffectivePolicyResponse,
 } from "@/types/policies";
+import {
+  getTaskPolicySnapshotAction as getTaskPolicySnapshot,
+  getTaskSummaryAction as getTaskSummary,
+} from "./actions";
 
 interface TaskData {
   id: string;
@@ -38,6 +46,8 @@ interface TaskStatus {
   execution_id?: string;
   status?: string;
   execution_status?: string;
+  /** The workflow holds a signal-based pause; status stays "running" meanwhile. */
+  paused?: boolean;
   start_time?: string;
   end_time?: string;
   execution_time?: string;
@@ -52,12 +62,19 @@ interface TaskStatus {
 interface TaskContextType {
   task: TaskData | null;
   taskStatus: TaskStatus | null;
+  taskSummary: TaskSummary | null;
   policy: EffectivePolicy | null;
   policyError: string | null;
   statusError: string | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  /**
+   * The status the open conversation's event stream reports, published by the
+   * overview page; null on tabs without a live stream.
+   */
+  liveStatus: string | null;
+  setLiveStatus: (status: string | null) => void;
 }
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
@@ -104,12 +121,14 @@ export function TaskProvider({
     parseTaskData(initialTask)
   );
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
+  const [taskSummary, setTaskSummary] = useState<TaskSummary | null>(null);
   const t = useTranslations("TaskInfoPanel");
   const [statusError, setStatusError] = useState<string | null>(null);
   const [policy, setPolicy] = useState<EffectivePolicy | null>(null);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!initialTask && !initialError);
   const [error, setError] = useState<string | null>(initialError ?? null);
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
 
   const loadTask = useCallback(async () => {
     if (!taskId) {
@@ -167,6 +186,29 @@ export function TaskProvider({
     loadStatus();
   }, [statusAgentId, statusTaskId, t]);
 
+  useEffect(() => {
+    setTaskSummary(null);
+    if (!statusTaskId || !statusAgentId) return;
+
+    let cancelled = false;
+    const loadSummary = async () => {
+      try {
+        const res = await getTaskSummary(statusAgentId, statusTaskId);
+        if (!cancelled && !res.error) {
+          setTaskSummary(res.data ?? null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Failed to load task summary", err);
+        }
+      }
+    };
+    void loadSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [statusAgentId, statusTaskId]);
+
   const policyTaskId = task?.id;
 
   // Tasks without a snapshot return 404, which means "no policy".
@@ -207,12 +249,15 @@ export function TaskProvider({
       value={{
         task,
         taskStatus,
+        taskSummary,
         policy,
         policyError,
         statusError,
         loading,
         error,
         refresh: loadTask,
+        liveStatus,
+        setLiveStatus,
       }}
     >
       {children}

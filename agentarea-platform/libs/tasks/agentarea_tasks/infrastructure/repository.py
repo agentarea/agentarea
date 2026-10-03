@@ -8,6 +8,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from agentarea_common.events.contract import APPROVAL_REQUEST, APPROVAL_RESPONSE
 from sqlalchemy import Numeric, cast, func, literal, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
@@ -553,6 +554,65 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
 
         return [self._orm_to_domain(event_orm) for event_orm in event_orms]
 
+    async def unanswered_approval_requests(self, task_ids: Sequence[UUID]) -> dict[UUID, TaskEvent]:
+        """Each task's latest ``approval.request`` that no ``approval.response`` answered.
+
+        A response answers the request that carries the same ``escalation_id``.
+        """
+        if not task_ids:
+            return {}
+        result = await self.session.execute(
+            select(TaskEventORM)
+            .where(
+                TaskEventORM.task_id.in_(task_ids),
+                TaskEventORM.event_type.in_((APPROVAL_REQUEST, APPROVAL_RESPONSE)),
+                self._get_workspace_filter(),
+            )
+            .order_by(TaskEventORM.timestamp.asc(), TaskEventORM.id.asc())
+        )
+        events = [self._orm_to_domain(orm) for orm in result.scalars().all()]
+        answered = {
+            (event.task_id, event.data.get("escalation_id"))
+            for event in events
+            if event.event_type == APPROVAL_RESPONSE
+        }
+        unanswered: dict[UUID, TaskEvent] = {}
+        for event in events:
+            if (
+                event.event_type == APPROVAL_REQUEST
+                and (event.task_id, event.data.get("escalation_id")) not in answered
+            ):
+                unanswered[event.task_id] = event
+        return unanswered
+
+    async def approval_decisions(
+        self, *, limit: int, offset: int
+    ) -> tuple[list[tuple[TaskEvent, str | None]], int]:
+        """One newest-first page of the workspace's ``approval.response`` events.
+
+        Each decision comes with its task's description (None once the task is
+        gone), plus the total number of decisions.
+        """
+        conditions = [TaskEventORM.event_type == APPROVAL_RESPONSE, self._get_workspace_filter()]
+        total = (
+            await self.session.scalar(
+                select(func.count()).select_from(TaskEventORM).where(*conditions)
+            )
+        ) or 0
+        result = await self.session.execute(
+            select(TaskEventORM, TaskORM.description)
+            .outerjoin(
+                TaskORM,
+                (TaskORM.id == TaskEventORM.task_id)
+                & (TaskORM.workspace_id == self.user_context.workspace_id),
+            )
+            .where(*conditions)
+            .order_by(TaskEventORM.timestamp.desc(), TaskEventORM.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return [(self._orm_to_domain(orm), description) for orm, description in result.all()], total
+
     def _orm_to_domain(self, event_orm: TaskEventORM) -> TaskEvent:
         """Convert ORM model to domain model."""
         return TaskEvent.model_validate(
@@ -578,8 +638,9 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
     async def write(self, task_id: UUID, entries: Sequence[ConversationEntry]) -> None:
         """Store entries at their sequence numbers; writing a position again replaces it.
 
-        The workflow is the only writer and assigns positions deterministically,
-        so a retry rewrites the same entry and a later write is the current truth.
+        Positions are assigned deterministically — by the workflow, or by the
+        API before it resumes a closed conversation — so a retry rewrites the
+        same entry and a later write is the current truth.
         """
         if not entries:
             return
@@ -636,6 +697,15 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
         head_set = set(head_seqs)
         tail = [by_seq[seq] for seq in sorted(by_seq) if seq >= tail_start and seq not in head_set]
         return head, tail
+
+    async def read_all(self, task_id: UUID) -> list[ConversationEntry]:
+        """Every entry of the task's conversation, in log order."""
+        result = await self.session.execute(
+            select(TaskConversationEntryORM)
+            .where(TaskConversationEntryORM.task_id == task_id, self._get_workspace_filter())
+            .order_by(TaskConversationEntryORM.seq)
+        )
+        return [self._orm_to_entry(row) for row in result.scalars().all()]
 
     @staticmethod
     def _orm_to_entry(row: TaskConversationEntryORM) -> ConversationEntry:

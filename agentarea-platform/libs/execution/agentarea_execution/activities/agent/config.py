@@ -347,6 +347,14 @@ def make_config_activities(
                     *attachments,
                 ]
 
+            # Workflow code may not look a connection up, so the operations an
+            # OpenAPI attachment exposes are resolved here for the policy gate.
+            openapi_operation_tools: dict[str, list[str]] = {}
+            if any(tool.get("type") == "openapi" for tool in tools):
+                openapi_operation_tools = await ToolManager(
+                    openapi_connection_service=await ctx.get_openapi_connection_service()
+                ).openapi_operation_tools(tools)
+
             # Build configuration using Pydantic model
             return AgentConfigResult(
                 id=str(agent.id),
@@ -370,6 +378,7 @@ def make_config_activities(
                 skills=skills_info,
                 runtime=runtime,
                 runtime_event_data=runtime_event_data(runtime),
+                openapi_operation_tools=openapi_operation_tools,
             )
 
     @activity.defn
@@ -405,6 +414,10 @@ def make_config_activities(
                 mcp_server_instance_service=mcp_server_instance_service,
                 agent_service=agent_service,
                 base_url=base_url,
+                # Workspace-scoped toolsets (agentarea/files, context, media) refuse
+                # to build without it; dropping it here silently hid them from the model.
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
             )
 
             tool_defs = [ToolDefinition(**t) for t in split.explicit_tools]
@@ -454,6 +467,8 @@ def make_config_activities(
                 else _as_tool_config_list(agent.tools),
                 mcp_server_instance_service=mcp_server_instance_service,
                 agent_service=agent_service,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
                 base_url=base_url,
             )
 

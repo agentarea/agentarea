@@ -314,7 +314,7 @@ export function NavMain({
                   <DropdownMenu open={isHovered} modal={false}>
                     <DropdownMenuTrigger asChild>
                       <SidebarMenuButton
-                        className="group/btn relative overflow-hidden transition-all duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 data-[state=open]:bg-zinc-100 dark:data-[state=open]:bg-zinc-800"
+                        className="group/btn relative overflow-hidden transition-colors duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 data-[state=open]:bg-zinc-100 dark:data-[state=open]:bg-zinc-800"
                         onMouseEnter={() => openOnHover(item.url)}
                         onMouseLeave={() => closeOnHoverLeave(item.url)}
                       >
@@ -324,7 +324,7 @@ export function NavMain({
                             {item.titleKey ? t(item.titleKey) : item.title}
                           </span>
                         )}
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-0 bg-primary transition-all duration-300 group-hover/btn:h-6 rounded-r-full" />
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-0 bg-primary transition-[height] duration-300 group-hover/btn:h-6 rounded-r-full" />
                       </SidebarMenuButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
@@ -388,7 +388,7 @@ export function NavMain({
                     <SidebarMenuButton
                       tooltip={item.titleKey ? t(item.titleKey) : item.title}
                       className={cn(
-                        "group/btn relative overflow-hidden transition-all duration-200",
+                        "group/btn relative overflow-hidden transition-colors duration-200",
                         isItemActive(item.url) 
                           ? "bg-zinc-100 dark:bg-zinc-800 font-medium text-primary" 
                           : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
@@ -415,7 +415,7 @@ export function NavMain({
                             asChild
                             isActive={isItemActive(subItem.url)}
                             className={cn(
-                              "transition-all duration-200 relative overflow-hidden",
+                              "transition-colors duration-200 relative overflow-hidden",
                               isItemActive(subItem.url) 
                                 ? "bg-primary/5 text-primary font-medium"
                                 : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"

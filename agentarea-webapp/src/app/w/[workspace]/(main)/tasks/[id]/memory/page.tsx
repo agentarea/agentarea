@@ -1,3 +1,4 @@
+// Keep this legacy task-memory URL as a redirect for existing links.
 import { redirect } from "next/navigation";
 import { workspacePath } from "@/lib/workspace-routes";
 

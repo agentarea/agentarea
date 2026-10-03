@@ -7,6 +7,7 @@ import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { getTrigger, getTriggerMetrics } from "@/lib/api";
 import { requireApiData } from "@/lib/server-resource";
 import TriggerDetailTabs from "./TriggerDetailTabs";
+import { TriggerDetailStatusProvider } from "./TriggerDetailStatus";
 import TriggerHeaderControls from "./TriggerHeaderControls";
 
 interface Props {
@@ -39,26 +40,27 @@ export default async function TriggerLayout({ params, children }: Props) {
   )?.total_executions;
 
   return (
-    <ContentBlock
-      header={{
-        breadcrumb: [
-          { label: t("title"), href: "/triggers" },
-          { label: trigger.name, href: `/triggers/${id}` },
-        ],
-        controls: (
-          <TriggerHeaderControls
-            triggerId={id}
-            triggerName={trigger.name}
-            isActive={trigger.is_active}
-          />
-        ),
-      }}
-      className="p-0"
-      subheader={
-        <TriggerDetailTabs triggerId={id} executionCount={executionCount} />
-      }
-    >
-      {children}
-    </ContentBlock>
+    <TriggerDetailStatusProvider key={id} initialActive={trigger.is_active}>
+      <ContentBlock
+        header={{
+          breadcrumb: [
+            { label: t("title"), href: "/triggers" },
+            { label: trigger.name, href: `/triggers/${id}` },
+          ],
+          controls: (
+            <TriggerHeaderControls
+              triggerId={id}
+              triggerName={trigger.name}
+            />
+          ),
+        }}
+        className="p-0"
+        subheader={
+          <TriggerDetailTabs triggerId={id} executionCount={executionCount} />
+        }
+      >
+        {children}
+      </ContentBlock>
+    </TriggerDetailStatusProvider>
   );
 }

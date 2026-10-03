@@ -18,25 +18,41 @@ export function TableRowNav({
   href,
   className,
   children,
+  hasNativeLink = false,
   ...props
 }: {
   href: string;
   className?: string;
   children: React.ReactNode;
+  /** Leave keyboard activation to an anchor rendered inside the row. */
+  hasNativeLink?: boolean;
 } & React.HTMLAttributes<HTMLTableRowElement>) {
   const router = useWorkspaceRouter();
 
   return (
     <TableRow
-      role="link"
-      tabIndex={0}
-      onClick={() => router.push(href)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          router.push(href);
+      role={hasNativeLink ? undefined : "link"}
+      tabIndex={hasNativeLink ? undefined : 0}
+      onClick={(event) => {
+        if (
+          hasNativeLink &&
+          event.target instanceof Element &&
+          event.target.closest("a")
+        ) {
+          return;
         }
+        router.push(href);
       }}
+      onKeyDown={
+        hasNativeLink
+          ? undefined
+          : (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                router.push(href);
+              }
+            }
+      }
       className={className}
       {...props}
     >

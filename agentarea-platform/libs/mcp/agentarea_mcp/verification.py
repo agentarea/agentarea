@@ -12,6 +12,7 @@ path.
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Literal
 
 import httpx
 from agentarea_common.config import get_database, get_settings
@@ -122,12 +123,12 @@ def _now_iso() -> str:
 
 
 def _make_payload(
-    status: str,
+    status: Literal["never_attempted", "in_progress", "succeeded", "failed"],
     error: VerificationError | None = None,
 ) -> VerificationPayload:
     return VerificationPayload(
         schema_version=VERIFICATION_SCHEMA_VERSION,
-        status=status,  # type: ignore[arg-type]
+        status=status,
         at=_now_iso(),
         error=error,
     )
@@ -439,6 +440,12 @@ async def verify(
 
                 # MCP protocol-level error — fail fast, no retry.
                 message = f"{type(leaf).__name__}: {leaf}" if str(leaf) else type(leaf).__name__
+                detail = None
+                if instance_type in ("docker", "command"):
+                    from agentarea_mcp.application.mcp_client import MCPGatewayStartupFailureError
+
+                    if isinstance(leaf, MCPGatewayStartupFailureError):
+                        detail = leaf.detail
                 if instance_type == "url" and not isinstance(leaf, MCPError):
                     # Refusals and connection failures of a member-chosen
                     # address would otherwise say which internal ports answer.
@@ -454,7 +461,7 @@ async def verify(
                     VerificationError(
                         code="mcp_error",
                         message=message,
-                        detail=None,
+                        detail=detail,
                     ),
                 )
                 await _save_verification(locked.id, payload, db)

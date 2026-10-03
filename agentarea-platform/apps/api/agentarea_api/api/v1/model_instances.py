@@ -10,8 +10,10 @@ from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.config import get_settings
 from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.money import Money
+from agentarea_common.utils.llm_endpoint import guarded_llm_endpoint
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance, ModelKind
@@ -320,7 +322,8 @@ async def validate_model_instance(
         if not provider_type:
             raise HTTPException(status_code=400, detail="Provider type is not configured")
         model_name = model_spec.model_name
-        endpoint_url = getattr(model_spec, "endpoint_url", None)
+        # The address lives on the provider config (Ollama, OpenAI-compatible, ...).
+        endpoint_url = provider_config.endpoint_url
 
         # Get API key from secret manager
         api_key = None
@@ -353,7 +356,13 @@ async def validate_model_instance(
                 provider_type=provider_type,
                 model_name=model_name,
             )
-        resolved_endpoint_url = endpoint_url
+        # The same address a run will call: vetted, then localhost mapped the
+        # way the worker maps it.
+        resolved_endpoint_url = await guarded_llm_endpoint(
+            endpoint_url,
+            managed_by=provider_config.managed_by,
+            local_host=get_settings().app.local_host,
+        )
 
         logger.info(f"Testing LLM configuration via SDK: {provider_type}/{model_name}")
 

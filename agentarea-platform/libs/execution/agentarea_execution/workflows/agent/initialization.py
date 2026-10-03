@@ -10,7 +10,7 @@ with workflow.unsafe.imports_passed_through():
 
     from agentarea_agents_sdk.skills import SkillActivationTool, SkillCatalogBuilder, SkillEntry
     from agentarea_agents_sdk.tools.disclosure import DisclosureContext, NamedLookupPolicy
-    from agentarea_common.money import serialize_money
+    from agentarea_common.money import ZERO, serialize_money
     from agentarea_governance.domain.tool_calls import WAIT_TOOL_NAME
 
     from ...interaction import resolve_interaction_capabilities
@@ -33,6 +33,7 @@ from ...models import (
     AgentConfigRequest,
     AgentConfigResult,
     AgentExecutionRequest,
+    AgentExecutionResume,
     DiscoverToolProvidersResult,
     ResolveModelRequest,
     ToolDiscoveryRequest,
@@ -112,6 +113,34 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
 
         # Initialize agent configuration
         await self._initialize_agent_config()
+
+        if request.resume is not None:
+            self._adopt_resume(request.resume)
+
+    def _adopt_resume(self, resume: AgentExecutionResume) -> None:
+        """Continue a closed, completed conversation instead of starting a new one.
+
+        Configuration, tools and policy come from this run's own initialization;
+        the conversation position, the counters and the spend carry on. With the
+        iteration counter past the first turn the run does not seed a system
+        prompt and goal again; the follow-up message is its start signal.
+        """
+        snapshot = resume.snapshot
+        self.state.context_head_seqs = list(snapshot.head_seqs)
+        self.state.context_tail_start = snapshot.tail_start
+        self.state.conversation_next_seq = snapshot.next_seq
+        self.state.current_iteration = snapshot.current_iteration
+        self.state.tool_calls_used = snapshot.tool_calls_used
+        self.state.tokens_used = snapshot.tokens_used
+        self.state.last_prompt_tokens = snapshot.last_prompt_tokens
+        self._budget.add_cost(resume.total_cost)
+        if resume.own_cost is not None:
+            self._delegated_cost = max(resume.total_cost - resume.own_cost, ZERO)
+        self._resume_system_prompt_missing = resume.system_prompt_missing
+        workflow.logger.info(
+            f"Resuming conversation at entry {snapshot.next_seq}, "
+            f"iteration {snapshot.current_iteration}"
+        )
 
     async def _initialize_agent_config(self) -> None:
         """Initialize agent configuration and available tools."""
@@ -383,7 +412,10 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         # Disclosure is a PDP decision: never offer the model a tool the gate
         # would reject (same policy, one decision, both ends).
         disclosed = filter_disclosed_tools(
-            self.state.effective_policy, available_tools, self.state.mcp_tool_routes
+            self.state.effective_policy,
+            available_tools,
+            self.state.mcp_tool_routes,
+            *self._policy_tool_configs(),
         )
         withheld = len(available_tools) - len(disclosed)
         if withheld:

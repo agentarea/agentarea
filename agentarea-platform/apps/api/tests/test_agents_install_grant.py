@@ -169,3 +169,27 @@ async def test_editing_another_members_agent_grants_nothing(
 
     assert resp.status_code == 200
     captured_grant.assert_not_awaited()
+
+
+@pytest.mark.flow(MainFlow.AUTH_WORKSPACE_SCOPING)
+@pytest.mark.asyncio
+async def test_editing_in_an_unregistered_code_tool_is_refused_like_on_create(
+    async_client, mock_agent_service, monkeypatch
+):
+    # A code config naming no toolset builds nothing, yet its name would reach
+    # policy as a name of the agent's tools; PATCH must refuse it as create does.
+    monkeypatch.setattr("agentarea_api.api.v1.agents.require_permission", AsyncMock())
+
+    resp = await async_client.patch(
+        f"/v1/workspaces/acme/agents/{uuid4()}",
+        json={
+            "tools": [
+                {"type": "code", "name": "agentarea/shell"},
+                {"type": "code", "name": "web_bypass/shell"},
+            ]
+        },
+    )
+
+    assert resp.status_code == 400
+    assert "web_bypass/shell" in resp.json()["detail"]
+    mock_agent_service.update_agent.assert_not_awaited()

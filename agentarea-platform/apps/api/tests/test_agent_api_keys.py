@@ -5,13 +5,13 @@ the agent, but the key opens no workspace, no other agent and no REST route.
 """
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.domain.skill_models import Skill, agent_skills_table
-from agentarea_api.api.deps.services import get_db_session
+from agentarea_api.api.deps.services import get_audit_service, get_db_session
 from agentarea_api.api.v1.api_keys import router
 from agentarea_common.auth import dependencies
 from agentarea_common.auth.access import authorize_agent_action
@@ -90,7 +90,7 @@ async def _agent(session_factory) -> Agent:
         return agent
 
 
-def _client(session_factory) -> TestClient:
+def _client(session_factory, audit: AsyncMock | None = None) -> TestClient:
     async def session():
         async with session_factory() as s:
             yield s
@@ -98,6 +98,8 @@ def _client(session_factory) -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_db_session] = session
+    # audit_events is Postgres-typed (JSONB, INET); SQLite cannot hold it.
+    app.dependency_overrides[get_audit_service] = lambda: audit or AsyncMock()
     app.dependency_overrides[get_user_context] = lambda: MEMBER
     return TestClient(app)
 
@@ -127,18 +129,42 @@ async def test_a_key_bound_to_an_agent_authenticates_as_its_issuer_on_that_agent
 
 
 async def test_a_key_cannot_be_bound_to_an_agent_outside_the_workspace(session_factory):
-    response = _client(session_factory).post(
+    audit = AsyncMock()
+    response = _client(session_factory, audit).post(
         "/v1/workspaces/acme/api-keys/", json={"name": "x", "agent_id": str(uuid4())}
     )
 
     assert response.status_code == 404, response.text
+    audit.record.assert_not_awaited()
+
+
+async def test_a_created_key_is_audited_by_name_and_never_by_token(session_factory):
+    audit = AsyncMock()
+    created = _client(session_factory, audit).post(
+        "/v1/workspaces/acme/api-keys/", json={"name": "ci deploy"}
+    )
+
+    assert created.status_code == 201, created.text
+    audit.record.assert_awaited_once()
+    action, resource_type, resource_id = audit.record.await_args.args
+    metadata = audit.record.await_args.kwargs["event_metadata"]
+    assert (action, resource_type, str(resource_id)) == (
+        "api_key.create",
+        "api_key",
+        created.json()["id"],
+    )
+    assert metadata["resource_name"] == "ci deploy"
+    assert metadata["token_prefix"] == created.json()["token_prefix"]
+    assert created.json()["token"] not in str(audit.record.await_args)
 
 
 async def test_the_keys_of_one_agent_are_listed_apart(session_factory):
     agent = await _agent(session_factory)
     client = _client(session_factory)
     client.post("/v1/workspaces/acme/api-keys/", json={"name": "workspace key"})
-    client.post("/v1/workspaces/acme/api-keys/", json={"name": "agent key", "agent_id": str(agent.id)})
+    client.post(
+        "/v1/workspaces/acme/api-keys/", json={"name": "agent key", "agent_id": str(agent.id)}
+    )
 
     listed = client.get(f"/v1/workspaces/acme/api-keys/?agent_id={agent.id}")
 

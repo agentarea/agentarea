@@ -1,9 +1,7 @@
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { getTranslations } from "next-intl/server";
+import FilesSkeleton from "./FilesSkeleton";
 
-export default function Loading() {
-  return (
-    <div className="flex h-full items-center justify-center py-8">
-      <LoadingSpinner />
-    </div>
-  );
+export default async function Loading() {
+  const t = await getTranslations("FilesPage");
+  return <FilesSkeleton title={t("title")} />;
 }

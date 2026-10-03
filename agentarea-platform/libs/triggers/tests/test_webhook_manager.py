@@ -11,6 +11,7 @@ from uuid import uuid4
 import pytest
 from agentarea_triggers.domain.enums import ExecutionStatus, WebhookType
 from agentarea_triggers.domain.models import TriggerExecution, WebhookTrigger
+from agentarea_triggers.trigger_service import resolve_task_query
 from agentarea_triggers.webhook_manager import (
     DefaultWebhookManager,
     WebhookExecutionCallback,
@@ -656,6 +657,28 @@ class TestDefaultWebhookManager:
         assert parsed_data["raw_data"] == {"custom": "data", "value": 42}
         assert parsed_data["method"] == "POST"
         assert parsed_data["query_params"] == {"param": "test"}
+
+    @pytest.mark.asyncio
+    async def test_generic_webhook_text_is_the_task(self, webhook_manager, sample_webhook_trigger):
+        """A trigger with no task text runs what the request's ``text`` asks.
+
+        The trigger page promises that, and the signing dialog's example sends
+        ``{"text": ...}``; the text used to stay nested under ``body``, so every
+        such run failed with "no task text".
+        """
+        request_data = WebhookRequestData(
+            webhook_id=sample_webhook_trigger.webhook_id,
+            method="POST",
+            headers={"content-type": "application/json"},
+            body={"text": "Summarise the incident", "severity": "high"},
+            query_params={},
+        )
+
+        parsed_data = await webhook_manager._parse_webhook_data(
+            sample_webhook_trigger, request_data
+        )
+
+        assert resolve_task_query(sample_webhook_trigger, parsed_data) == "Summarise the incident"
 
 
 if __name__ == "__main__":

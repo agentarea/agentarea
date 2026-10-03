@@ -21,6 +21,7 @@ import {
   type ApiResultLike,
 } from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
+import { parseUtcTimestamp } from "@/utils/dateUtils";
 import {
   concatBytes,
   looksTextual,
@@ -96,6 +97,7 @@ export type ArtifactEvent = {
   agent_id?: string | null;
   task_id?: string | null;
   created_at: string;
+  actor_display_name?: string | null;
 };
 
 export type FetchHistoryFn = (
@@ -110,6 +112,8 @@ const ACTION_KEYS: Record<string, string> = {
   deleted: "action.deleted",
   moved: "action.moved",
 };
+
+const UUID_PATTERN = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
 function useProvenance(file: BrowsedFile, fetchHistory?: FetchHistoryFn) {
   const t = useTranslations("FilesPage");
@@ -169,18 +173,25 @@ function ProvenanceStrip({
   const describe = (event: ArtifactEvent) => {
     const actionKey = ACTION_KEYS[event.action];
     const isAgent = event.actor_type === "agent";
+    const resolvedActorName = event.actor_display_name?.trim();
+    const actorName =
+      resolvedActorName && !UUID_PATTERN.test(resolvedActorName)
+        ? resolvedActorName
+        : !isAgent && !UUID_PATTERN.test(event.created_by)
+          ? event.created_by
+          : null;
     return t("changeBy", {
       action: actionKey ? t(actionKey) : event.action,
       actor: isAgent
-        ? event.agent_id
-          ? t("agentActor", { id: event.agent_id })
+        ? actorName
+          ? t("agentActor", { id: actorName })
           : t("unnamedAgent")
-        : event.created_by || t("unknownActor"),
+        : actorName || t("unknownActor"),
     });
   };
   const when = (iso: string) => {
-    const date = new Date(iso);
-    return Number.isNaN(date.getTime()) ? iso : format.relativeTime(date);
+    const date = parseUtcTimestamp(iso);
+    return date ? format.relativeTime(date) : iso;
   };
 
   if (loading) {
@@ -275,7 +286,10 @@ export function FileViewerContent({
 }) {
   const t = useTranslations("FilesPage");
   const tCommon = useTranslations("Common");
-  const [url, setUrl] = useState<string | null>(null);
+  const [resolvedUrl, setResolvedUrl] = useState<{
+    path: string;
+    url: string;
+  } | null>(null);
   const [kind, setKind] = useState<ViewerKind | null>(null);
   const [text, setText] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -283,7 +297,7 @@ export function FileViewerContent({
 
   useEffect(() => {
     let cancelled = false;
-    setUrl(null);
+    setResolvedUrl(null);
     setKind(null);
     setText(null);
     setError(null);
@@ -308,7 +322,7 @@ export function FileViewerContent({
         }
         return;
       }
-      setUrl(href);
+      setResolvedUrl({ path: file.path, url: href });
 
       // A picture or a PDF cannot also be source code, so those two are taken
       // at their word and never fetched here — the element does that itself.
@@ -345,6 +359,7 @@ export function FileViewerContent({
       cancelled = true;
     };
   }, [file, fetchUrl, t]);
+  const url = resolvedUrl?.path === file.path ? resolvedUrl.url : null;
 
   const fileName = file.path.split("/").pop() || file.path;
 
@@ -397,7 +412,7 @@ export function FileViewerContent({
         )}
       </div>
 
-      {fetchHistory && (
+      {url && fetchHistory && (
         <ProvenanceStrip file={file} fetchHistory={fetchHistory} />
       )}
 

@@ -1,5 +1,8 @@
 "use client";
 
+
+import { useTranslations } from "next-intl";
+
 import { useState } from "react";
 import { Edit, X } from "lucide-react";
 import { FieldValues } from "react-hook-form";
@@ -13,6 +16,8 @@ import {
 } from "@/components/ui/tooltip";
 
 export default function ApiKeyEditInput({ field }: { field: FieldValues }) {
+  const t = useTranslations("ProviderConfigForm");
+
   const [editApiKey, setEditApiKey] = useState(false);
 
   return (
@@ -32,6 +37,7 @@ export default function ApiKeyEditInput({ field }: { field: FieldValues }) {
               variant="outline"
               size="icon"
               type="button"
+              aria-label={t(editApiKey ? "cancelEditing" : "editApiKey")}
               onClick={() => {
                 if (editApiKey) {
                   field.onChange("");
@@ -49,7 +55,7 @@ export default function ApiKeyEditInput({ field }: { field: FieldValues }) {
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {editApiKey ? "Cancel editing" : "Edit API key"}
+            {t(editApiKey ? "cancelEditing" : "editApiKey")}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

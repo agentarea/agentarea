@@ -44,7 +44,7 @@ export default function ContentBlock({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {header && (
-        <div className="flex shrink-0 min-h-[40px] flex-row items-center justify-between border-b border-zinc-200 bg-white px-2 sm:px-4 dark:border-zinc-700 dark:bg-zinc-800">
+        <div className="flex shrink-0 min-h-[40px] flex-row items-center justify-between border-b border-zinc-200 bg-white px-2 sm:px-4 dark:border-zinc-700 dark:bg-zinc-800 max-[767px]:[&_button]:min-h-11 max-[767px]:[&_button]:min-w-11">
           {"title" in header ? (
             <>
               <div className="flex flex-col gap-1">
@@ -86,9 +86,12 @@ export default function ContentBlock({
                             )}
                           >
                             {index === header.breadcrumb.length - 1 ? (
-                              <BreadcrumbPage className="block min-w-0 truncate font-semibold">
+                              <h1
+                                aria-current="page"
+                                className="block min-w-0 truncate text-[length:inherit] font-semibold leading-[inherit] text-foreground"
+                              >
                                 {item.label}
-                              </BreadcrumbPage>
+                              </h1>
                             ) : item.href ? (
                               <BreadcrumbLink asChild>
                                 <Link
@@ -114,7 +117,7 @@ export default function ContentBlock({
                 </div>
               </div>
               {header.controls && (
-                <div className="ml-2 flex shrink-0 items-center">
+                <div className="ml-2 flex shrink-0 items-center max-[767px]:gap-1 max-[767px]:[&_a]:inline-flex max-[767px]:[&_a]:min-h-11 max-[767px]:[&_a]:min-w-11 max-[767px]:[&_a]:items-center max-[767px]:[&_a]:justify-center">
                   {header.controls}
                 </div>
               )}
@@ -123,7 +126,7 @@ export default function ContentBlock({
         </div>
       )}
       {subheader && (
-        <div className="flex h-[42px] shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800 md:gap-10">
+        <div className="flex h-[42px] shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800 md:gap-10 max-[767px]:h-auto max-[767px]:min-h-11 max-[767px]:[&_button]:min-h-11 max-[767px]:[&_button]:min-w-11 max-[767px]:[&_a]:inline-flex max-[767px]:[&_a]:min-h-11 max-[767px]:[&_a]:min-w-11 max-[767px]:[&_a]:items-center max-[767px]:[&_a]:justify-center">
           {subheader}
         </div>
       )}

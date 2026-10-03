@@ -175,7 +175,7 @@ export const BuiltinToolIconGrid = ({
               {/* Main tool card */}
               <Card
                 className={cn(
-                  "relative transition-all duration-200 ease-out",
+                  "relative transition-[background-color,box-shadow] duration-200 ease-out",
                   "border-0 shadow-sm hover:shadow-md",
                   isSelected
                     ? "bg-primary/8 ring-1 ring-primary/20"

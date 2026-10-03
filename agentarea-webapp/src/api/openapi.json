@@ -96,12 +96,14 @@
             "title": "Agent Id"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "expires_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -122,6 +124,7 @@
           "last_accessed_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -178,12 +181,14 @@
             "title": "Agent Id"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "expires_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -204,6 +209,7 @@
           "last_accessed_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -487,11 +493,11 @@
         "properties": {
           "cost_mtd_usd": {
             "title": "Cost Mtd Usd",
-            "type": "number"
+            "type": "string"
           },
           "cost_today_usd": {
             "title": "Cost Today Usd",
-            "type": "number"
+            "type": "string"
           },
           "daily_spend": {
             "items": {
@@ -510,6 +516,7 @@
           "last_activity_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -814,65 +821,6 @@
         "title": "AgentResponse",
         "type": "object"
       },
-      "AgentRow": {
-        "properties": {
-          "agent_id": {
-            "format": "uuid",
-            "title": "Agent Id",
-            "type": "string"
-          },
-          "cost_mtd_usd": {
-            "title": "Cost Mtd Usd",
-            "type": "number"
-          },
-          "cost_today_usd": {
-            "title": "Cost Today Usd",
-            "type": "number"
-          },
-          "last_activity_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Activity At"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "recent_task_names": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Recent Task Names",
-            "type": "array"
-          },
-          "tasks_done_today": {
-            "title": "Tasks Done Today",
-            "type": "integer"
-          },
-          "tasks_failed_today": {
-            "title": "Tasks Failed Today",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "agent_id",
-          "name",
-          "tasks_done_today",
-          "tasks_failed_today",
-          "recent_task_names",
-          "last_activity_at",
-          "cost_today_usd",
-          "cost_mtd_usd"
-        ],
-        "title": "AgentRow",
-        "type": "object"
-      },
       "AgentToolConfig": {
         "properties": {
           "name": {
@@ -1129,6 +1077,141 @@
         "title": "AnalyzeRequest",
         "type": "object"
       },
+      "ApprovalDecision": {
+        "description": "One answered approval request, as the workflow recorded the answer.",
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "title": "Decided At",
+            "type": "string"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "escalation_id": {
+            "title": "Escalation Id",
+            "type": "string"
+          },
+          "task_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Description"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "tool_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Name"
+          }
+        },
+        "required": [
+          "escalation_id",
+          "task_id",
+          "decided_at"
+        ],
+        "title": "ApprovalDecision",
+        "type": "object"
+      },
+      "ApprovalDecisionsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalDecision"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "ApprovalDecisionsResponse",
+        "type": "object"
+      },
       "ApprovalPolicy": {
         "additionalProperties": false,
         "description": "Human approval and escalation requirements.",
@@ -1305,6 +1388,7 @@
             "title": "Changes"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -1418,8 +1502,76 @@
         "title": "AuditLogListResponse",
         "type": "object"
       },
+      "BlockedTaskBlocker": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "agent_id",
+          "description",
+          "error",
+          "occurred_at"
+        ],
+        "title": "BlockedTaskBlocker",
+        "type": "object"
+      },
       "Blockers": {
         "properties": {
+          "awaiting_continuation": {
+            "items": {
+              "$ref": "#/components/schemas/HitlBlocker"
+            },
+            "title": "Awaiting Continuation",
+            "type": "array"
+          },
+          "blocked_24h": {
+            "items": {
+              "$ref": "#/components/schemas/BlockedTaskBlocker"
+            },
+            "title": "Blocked 24H",
+            "type": "array"
+          },
           "failed_24h": {
             "items": {
               "$ref": "#/components/schemas/FailedTaskBlocker"
@@ -1444,6 +1596,8 @@
         },
         "required": [
           "hitl",
+          "awaiting_continuation",
+          "blocked_24h",
           "wallet_exhausted",
           "failed_24h"
         ],
@@ -1875,7 +2029,7 @@
       },
       "BundleChannel": {
         "additionalProperties": false,
-        "description": "A messaging channel that lets an agent receive and reply to messages.\n\nInstalls as an inbound trigger (e.g. a Telegram webhook): a message to the\nbot becomes a task for ``agent``, and the reply is delivered back on the same\nchannel. Credentials (a bot token) enter via ``bindings`` \u2192 ``${setup.x}``,\nexactly like an MCP's secret bindings, so the token is never inlined.",
+        "description": "An inbound webhook trigger bound to one of the package's agents.\n\nTelegram channels may require a bot token, which enters via ``bindings`` \u2192\n``${setup.x}``; generic webhook triggers need no credential.",
         "properties": {
           "agent": {
             "description": "BundleAgent key that handles inbound messages.",
@@ -1915,9 +2069,12 @@
             "type": "string"
           },
           "type": {
-            "const": "telegram",
             "default": "telegram",
-            "description": "Channel provider. Only Telegram in v0.1.0.",
+            "description": "Webhook provider for the created trigger.",
+            "enum": [
+              "telegram",
+              "generic"
+            ],
             "title": "Type",
             "type": "string"
           }
@@ -3250,7 +3407,7 @@
           },
           "usd": {
             "title": "Usd",
-            "type": "number"
+            "type": "string"
           }
         },
         "required": [
@@ -3290,11 +3447,11 @@
       },
       "DashboardResponse": {
         "properties": {
-          "agents": {
+          "active_tasks": {
             "items": {
-              "$ref": "#/components/schemas/AgentRow"
+              "$ref": "#/components/schemas/DashboardTask"
             },
-            "title": "Agents",
+            "title": "Active Tasks",
             "type": "array"
           },
           "blockers": {
@@ -3307,12 +3464,15 @@
             "title": "Daily Spend",
             "type": "array"
           },
-          "daily_tasks": {
+          "recent_tasks": {
             "items": {
-              "$ref": "#/components/schemas/DailyTaskCounts"
+              "$ref": "#/components/schemas/DashboardTask"
             },
-            "title": "Daily Tasks",
+            "title": "Recent Tasks",
             "type": "array"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/Schedule"
           },
           "spend": {
             "$ref": "#/components/schemas/SpendCard"
@@ -3321,11 +3481,91 @@
         "required": [
           "spend",
           "blockers",
-          "agents",
-          "daily_spend",
-          "daily_tasks"
+          "active_tasks",
+          "recent_tasks",
+          "schedule",
+          "daily_spend"
         ],
         "title": "DashboardResponse",
+        "type": "object"
+      },
+      "DashboardTask": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Usd"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "agent_id",
+          "title",
+          "status",
+          "started_at",
+          "finished_at",
+          "cost_usd"
+        ],
+        "title": "DashboardTask",
         "type": "object"
       },
       "DiscoverPreviewModelResponse": {
@@ -4068,6 +4308,7 @@
             "title": "Error"
           },
           "occurred_at": {
+            "format": "date-time",
             "title": "Occurred At",
             "type": "string"
           },
@@ -4084,6 +4325,58 @@
           "occurred_at"
         ],
         "title": "FailedTaskBlocker",
+        "type": "object"
+      },
+      "FrequentSchedule": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "cron_expression": {
+            "title": "Cron Expression",
+            "type": "string"
+          },
+          "next_run_at": {
+            "format": "date-time",
+            "title": "Next Run At",
+            "type": "string"
+          },
+          "runs_per_day": {
+            "title": "Runs Per Day",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "trigger_id": {
+            "format": "uuid",
+            "title": "Trigger Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger_id",
+          "agent_id",
+          "title",
+          "cron_expression",
+          "runs_per_day",
+          "next_run_at"
+        ],
+        "title": "FrequentSchedule",
         "type": "object"
       },
       "FundWalletRequest": {
@@ -4327,6 +4620,7 @@
             "title": "Agent Name"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4565,6 +4859,7 @@
           "accepted_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -4585,6 +4880,7 @@
             "title": "Accepted By User Id"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4603,6 +4899,7 @@
             "$ref": "#/components/schemas/InvitationEmailDelivery"
           },
           "expires_at": {
+            "format": "date-time",
             "title": "Expires At",
             "type": "string"
           },
@@ -4683,6 +4980,7 @@
         "description": "What an invitee is shown before joining: who asked, where to, until when.\n\nThe caller is not a member yet, so nothing else about the workspace leaves\nthis endpoint. The inviter fields are nullable because the identity\nprovider may not resolve them; the client states that rather than guessing.",
         "properties": {
           "expires_at": {
+            "format": "date-time",
             "title": "Expires At",
             "type": "string"
           },
@@ -4727,6 +5025,7 @@
           "accepted_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -4747,6 +5046,7 @@
             "title": "Accepted By User Id"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4762,6 +5062,7 @@
             "title": "Email"
           },
           "expires_at": {
+            "format": "date-time",
             "title": "Expires At",
             "type": "string"
           },
@@ -4872,6 +5173,7 @@
             "type": "object"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4896,6 +5198,7 @@
             "type": "string"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -5496,6 +5799,7 @@
             "title": "Auth Config Id"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -5556,6 +5860,7 @@
             "title": "Tools"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -5625,6 +5930,7 @@
             "title": "Cmd"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -5714,6 +6020,7 @@
             "type": "array"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -6189,6 +6496,7 @@
           "joined_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -6349,6 +6657,7 @@
             "title": "Config Name"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -6471,6 +6780,7 @@
             "type": "array"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -7201,12 +7511,14 @@
             "type": "integer"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "expires_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -7227,6 +7539,7 @@
           "last_accessed_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -7390,6 +7703,7 @@
             "type": "string"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -7455,6 +7769,7 @@
             "type": "string"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -7822,6 +8137,7 @@
           "created_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -9036,6 +9352,7 @@
       "ProviderConfigResponse": {
         "properties": {
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9121,6 +9438,7 @@
             "type": "boolean"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -9243,6 +9561,7 @@
       "ProviderSpecResponse": {
         "properties": {
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9300,6 +9619,7 @@
             "type": "string"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -9322,6 +9642,7 @@
       "ProviderSpecWithModelsResponse": {
         "properties": {
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9386,6 +9707,7 @@
             "type": "string"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -9488,6 +9810,7 @@
             "title": "Category"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9565,6 +9888,7 @@
             "type": "boolean"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -9601,6 +9925,7 @@
       "RegistryResponse": {
         "properties": {
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9642,6 +9967,7 @@
           "last_synced_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -9675,6 +10001,7 @@
             "type": "string"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -10191,6 +10518,35 @@
         "title": "SandboxSummary",
         "type": "object"
       },
+      "Schedule": {
+        "properties": {
+          "frequent": {
+            "items": {
+              "$ref": "#/components/schemas/FrequentSchedule"
+            },
+            "title": "Frequent",
+            "type": "array"
+          },
+          "horizon_days": {
+            "title": "Horizon Days",
+            "type": "integer"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduledRun"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "horizon_days",
+          "runs",
+          "frequent"
+        ],
+        "title": "Schedule",
+        "type": "object"
+      },
       "ScheduleTaskCreate": {
         "description": "A task to run once, at a time the caller picks.",
         "properties": {
@@ -10271,6 +10627,48 @@
           "scheduled_at"
         ],
         "title": "ScheduleTaskCreate",
+        "type": "object"
+      },
+      "ScheduledRun": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "fires_at": {
+            "format": "date-time",
+            "title": "Fires At",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "trigger_id": {
+            "format": "uuid",
+            "title": "Trigger Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fires_at",
+          "trigger_id",
+          "agent_id",
+          "title"
+        ],
+        "title": "ScheduledRun",
         "type": "object"
       },
       "SecretConsumer": {
@@ -11083,7 +11481,7 @@
           "cap_usd": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -11093,7 +11491,7 @@
           },
           "mtd_usd": {
             "title": "Mtd Usd",
-            "type": "number"
+            "type": "string"
           },
           "pct_of_cap": {
             "anyOf": [
@@ -11109,7 +11507,7 @@
           "projected_eom_usd": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -11124,7 +11522,7 @@
           },
           "today_usd": {
             "title": "Today Usd",
-            "type": "number"
+            "type": "string"
           }
         },
         "required": [
@@ -11415,6 +11813,7 @@
             "type": "string"
           },
           "timestamp": {
+            "format": "date-time",
             "title": "Timestamp",
             "type": "string"
           }
@@ -11510,6 +11909,7 @@
             "type": "string"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -11589,6 +11989,7 @@
           "scheduled_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -11666,6 +12067,7 @@
           "ended_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -11714,6 +12116,7 @@
           "started_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -11775,6 +12178,7 @@
             "title": "Agent Name"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -11876,6 +12280,7 @@
           "scheduled_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -12281,13 +12686,15 @@
           "webhook_id": {
             "anyOf": [
               {
+                "minLength": 16,
+                "pattern": "^[A-Za-z0-9_-]+$",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Public webhook path segment. Auto-generated if omitted for webhook triggers.",
+            "description": "Public webhook path segment. Custom values must be at least 16 URL-safe characters; auto-generated if omitted for webhook triggers.",
             "title": "Webhook Id"
           },
           "webhook_type": {
@@ -12352,6 +12759,7 @@
             "title": "Error Message"
           },
           "executed_at": {
+            "format": "date-time",
             "title": "Executed At",
             "type": "string"
           },
@@ -12468,6 +12876,7 @@
             "type": "integer"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -12529,6 +12938,7 @@
           "last_execution_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -12544,6 +12954,7 @@
           "next_run_time": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -12551,6 +12962,29 @@
               }
             ],
             "title": "Next Run Time"
+          },
+          "signature_scheme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WebhookSignatureScheme"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signing scheme of a generic webhook; null for other types."
+          },
+          "signing_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Generated signing secret of a generic webhook. Returned only by the create and rotate calls that generated it; never readable afterwards.",
+            "title": "Signing Secret"
           },
           "task_parameters": {
             "additionalProperties": true,
@@ -12573,6 +13007,7 @@
             "type": "string"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -12610,6 +13045,23 @@
               }
             ],
             "title": "Webhook Id"
+          },
+          "webhook_signing": {
+            "anyOf": [
+              {
+                "enum": [
+                  "signed",
+                  "unsigned",
+                  "unsupported"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What protects the public webhook URL. 'signed': requests without a valid signature or token are refused. 'unsigned': this trigger has no secret, so any request starts the agent. 'unsupported': the platform does not verify this provider's requests. Null for non-webhook triggers, or when the stored secret could not be read.",
+            "title": "Webhook Signing"
           },
           "webhook_type": {
             "anyOf": [
@@ -12845,13 +13297,15 @@
           "webhook_id": {
             "anyOf": [
               {
+                "minLength": 16,
+                "pattern": "^[A-Za-z0-9_-]+$",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Public webhook path segment. Auto-generated if omitted for webhook triggers.",
+            "description": "Public webhook path segment. Custom values must be at least 16 URL-safe characters; auto-generated if omitted for webhook triggers.",
             "title": "Webhook Id"
           },
           "webhook_type": {
@@ -12882,6 +13336,7 @@
           "last_execution_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -13127,6 +13582,7 @@
             "title": "Cron Expression"
           },
           "fires_at": {
+            "format": "date-time",
             "title": "Fires At",
             "type": "string"
           },
@@ -13528,7 +13984,7 @@
           },
           "budget_usd": {
             "title": "Budget Usd",
-            "type": "number"
+            "type": "string"
           },
           "period": {
             "title": "Period",
@@ -13552,6 +14008,7 @@
           "created_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -13596,6 +14053,7 @@
           "updated_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -13630,6 +14088,33 @@
           "status"
         ],
         "title": "WalletResponse",
+        "type": "object"
+      },
+      "WebhookSignatureScheme": {
+        "description": "How a sender signs requests to a generic webhook.",
+        "properties": {
+          "algorithm": {
+            "description": "HMAC digest, e.g. 'sha256'.",
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "header": {
+            "description": "Request header carrying the signature.",
+            "title": "Header",
+            "type": "string"
+          },
+          "prefix": {
+            "description": "Text before the hex digest in the header; often empty.",
+            "title": "Prefix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "header",
+          "algorithm",
+          "prefix"
+        ],
+        "title": "WebhookSignatureScheme",
         "type": "object"
       },
       "WorkspaceDirectoryResponse": {
@@ -13764,7 +14249,7 @@
           "monthly_cap_usd": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -13784,8 +14269,16 @@
           "monthly_cap_usd": {
             "anyOf": [
               {
-                "minimum": 0.0,
-                "type": "number"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0"
               },
               {
                 "type": "null"
@@ -13858,6 +14351,7 @@
             "title": "Context Window"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -13999,6 +14493,7 @@
             "title": "Supports Vision"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -14032,6 +14527,7 @@
             "title": "Context Window"
           },
           "created_at": {
+            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -14140,6 +14636,7 @@
             "title": "Supports Vision"
           },
           "updated_at": {
+            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -20449,7 +20946,7 @@
     },
     "/v1/workspaces/{workspace}/export": {
       "get": {
-        "description": "Export current workspace configuration as YAML.\n\nThis endpoint exports all workspace-scoped resources:\n- Agents (excluding system default agent)\n- MCP server instances\n- Provider configurations\n\n**Important Notes:**\n- Secrets (API keys, passwords) are replaced with placeholders\n- Built-in/catalog resources (carrying registry_item_id) are excluded\n- Only resources in the current workspace are exported\n- References to specs are included (server_spec_id, provider_spec_id)\n\nThere is no matching import endpoint. Recreating a workspace goes through\nthe platform toolsets (``agentarea/agents``, ``agentarea/mcp_servers``,\n``agentarea/providers``, ``agentarea/skills``, ...) or bundle install,\nboth of which handle secrets as first-class inputs instead of smuggling\nplaceholders through a YAML file.\n\n**Returns:**\nYAML file content describing the workspace",
+        "description": "Export the current workspace in the canonical Bundle YAML format.\n\nThe output is accepted by the bundle Analyze and Install flow and can\ninclude agents, MCPs, skills, cron automations, and supported webhook\nchannels. MCP credentials and Telegram tokens are setup-field references,\nnever exported values. Provider configurations are not represented by the\nBundle schema; configure them separately in the destination workspace.\n\nThe response is served as ``text/plain`` so generated API clients receive\nthe YAML body as a string.",
         "operationId": "export_workspace_config_v1_export_get",
         "parameters": [
           {
@@ -21363,6 +21860,84 @@
           }
         ],
         "summary": "Get Inbox Items",
+        "tags": [
+          "v1",
+          "protected",
+          "inbox"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/inbox/decisions": {
+      "get": {
+        "description": "Answered approval requests, newest first: who decided what, and when.",
+        "operationId": "list_approval_decisions_v1_inbox_decisions_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "maximum": 1000000,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalDecisionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Approval Decisions",
         "tags": [
           "v1",
           "protected",
@@ -31811,7 +32386,7 @@
         ]
       },
       "post": {
-        "description": "Create a new trigger.\n\nCreates a new trigger with the specified configuration. The trigger will be\nvalidated and, if it's a cron trigger, automatically scheduled.\n\nIf channel_credentials are provided, they are stored encrypted in the secret\nstore under key ``channel_cred:{webhook_type}:{trigger_id}``.\n\nArgs:\n    payload: Trigger creation DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    secret_catalog: Workspace-scoped catalog for selected credential references.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The created trigger.\n\nRaises:\n    HTTPException: If validation fails or creation errors occur.",
+        "description": "Create a new trigger.\n\nCreates a new trigger with the specified configuration. The trigger will be\nvalidated and, if it's a cron trigger, automatically scheduled.\n\nIf channel_credentials are provided, they are stored encrypted in the secret\nstore under key ``channel_cred:{webhook_type}:{trigger_id}``.\n\nA generic webhook created without a signing secret gets a generated one,\nreturned once in ``signing_secret``; requests must then be signed as\n``signature_scheme`` describes.\n\nArgs:\n    payload: Trigger creation DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    secret_catalog: Workspace-scoped catalog for selected credential references.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The created trigger.\n\nRaises:\n    HTTPException: If validation fails or creation errors occur.",
         "operationId": "create_trigger_v1_triggers__post",
         "parameters": [
           {
@@ -32168,7 +32743,7 @@
         ]
       },
       "put": {
-        "description": "Update an existing trigger.\n\nUpdates the specified trigger with the provided data. Only non-null fields\nin the request will be updated. Secret selections preserve unselected\ncredential fields; legacy raw credentials replace the stored bundle.\n\nArgs:\n    trigger_id: The unique identifier of the trigger.\n    payload: Trigger update DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    secret_catalog: Workspace-scoped catalog for selected credential references.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The updated trigger.\n\nRaises:\n    HTTPException: If trigger not found or validation fails.",
+        "description": "Update an existing trigger.\n\nUpdates the specified trigger with the provided data. Only non-null fields\nin the request will be updated. Secret selections preserve unselected\ncredential fields; legacy raw credentials replace the stored bundle, except\nthe Telegram secret token, which is kept. A channel webhook is registered\nwith its provider before anything is saved; if the provider refuses, the\ncall fails with 502 and nothing changes.\n\nArgs:\n    trigger_id: The unique identifier of the trigger.\n    payload: Trigger update DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    secret_catalog: Workspace-scoped catalog for selected credential references.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The updated trigger.\n\nRaises:\n    HTTPException: If trigger not found or validation fails.",
         "operationId": "update_trigger_v1_triggers__trigger_id__put",
         "parameters": [
           {
@@ -32829,6 +33404,70 @@
           }
         ],
         "summary": "Run Trigger Now",
+        "tags": [
+          "v1",
+          "protected",
+          "triggers"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/triggers/{trigger_id}/signing-secret": {
+      "post": {
+        "description": "Generate a new signing secret for a generic webhook and return it once.\n\nSigns an unsigned webhook, or replaces the secret of a signed one: from\nthis call on, requests signed with any previous secret, or not signed, are\nrefused. The secret is in ``signing_secret`` of this response only.\n\nRaises:\n    HTTPException: 404 if the trigger does not exist; 400 if it is not a\n        generic webhook (other channels are signed with their provider's\n        secret); 409 if its secret is set inline in ``validation_rules`` or\n        ``webhook_config``, which this call cannot replace.",
+        "operationId": "rotate_signing_secret_v1_triggers__trigger_id__signing_secret_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trigger_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trigger Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate Signing Secret",
         "tags": [
           "v1",
           "protected",

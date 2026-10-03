@@ -20,7 +20,7 @@ export type KbdProps = {
 };
 
 const VARIANTS = {
-  default: "border-border/60 bg-muted/40 text-muted-foreground/70",
+  default: "border-border/60 bg-muted/40 text-muted-foreground",
   inverse: "border-white/20 bg-white/10 text-white/80",
 };
 

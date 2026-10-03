@@ -11,7 +11,7 @@ import logging
 from uuid import UUID
 
 from agentarea_agents.infrastructure.repository import AgentRepository
-from agentarea_api.api.deps.services import DatabaseSessionDep
+from agentarea_api.api.deps.services import AuditServiceDep, DatabaseSessionDep
 from agentarea_common.auth.authorization import assert_workspace_admin, is_workspace_admin
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
@@ -112,6 +112,7 @@ async def create_api_key(
     data: APIKeyCreateRequest,
     db_session: DatabaseSessionDep,
     user_context: UserContextDep,
+    audit: AuditServiceDep,
     service: APIKeyService = Depends(get_api_key_service),
 ):
     """Create a new API key. The raw ``token`` value is returned once — store it securely."""
@@ -126,9 +127,20 @@ async def create_api_key(
             agent_id=data.agent_id,
         )
         base = APIKeyResponse.model_validate(record)
-        return APIKeyCreateResponse(**base.model_dump(), token=raw_token)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to create token: {exc}") from exc
+    await audit.record(
+        "api_key.create",
+        "api_key",
+        record.id,
+        event_metadata={
+            "resource_name": record.name,
+            "token_prefix": record.token_prefix,
+            "agent_id": str(record.agent_id) if record.agent_id else None,
+            "expires_at": base.expires_at.isoformat() if base.expires_at else None,
+        },
+    )
+    return APIKeyCreateResponse(**base.model_dump(), token=raw_token)
 
 
 @router.get(
@@ -192,6 +204,7 @@ async def get_api_key(
 async def revoke_api_key(
     token_id: UUID,
     user_context: UserContextDep,
+    audit: AuditServiceDep,
     service: APIKeyService = Depends(get_api_key_service),
 ):
     """Immediately revoke an API key.
@@ -206,6 +219,13 @@ async def revoke_api_key(
     if str(record.created_by) != user_context.user_id:
         await assert_workspace_admin(user_context)
 
+    name, token_prefix = record.name, record.token_prefix
     revoked = await service.revoke_token(token_id)
     if not revoked:
         raise HTTPException(status_code=404, detail="API key not found")
+    await audit.record(
+        "api_key.revoke",
+        "api_key",
+        token_id,
+        event_metadata={"resource_name": name, "token_prefix": token_prefix},
+    )

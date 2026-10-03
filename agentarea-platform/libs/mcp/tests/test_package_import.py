@@ -79,6 +79,7 @@ class _Settings:
     def manager_gateway_headers():
         return {"X-AgentArea-Manager-Authorization": "Bearer manager-secret"}
 
+
 class _Row:
     def __init__(self, json_spec: dict):
         self.id = uuid4()
@@ -94,7 +95,6 @@ class _Row:
         object.__setattr__(self, name, value)
 
 
-
 def _patch_http(monkeypatch, handler):
     transport = httpx.MockTransport(handler)
     real_client = httpx.AsyncClient
@@ -103,7 +103,9 @@ def _patch_http(monkeypatch, handler):
         return real_client(transport=transport, **kwargs)
 
     monkeypatch.setattr("agentarea_mcp.package_import.httpx.AsyncClient", factory)
-    monkeypatch.setattr("agentarea_mcp.package_import.get_settings", lambda: SimpleNamespace(mcp=_Settings()))
+    monkeypatch.setattr(
+        "agentarea_mcp.package_import.get_settings", lambda: SimpleNamespace(mcp=_Settings())
+    )
 
 
 @pytest.mark.asyncio
@@ -167,6 +169,7 @@ async def test_import_200_converts_spec_and_retires_before_persisting(monkeypatc
     }
     assert row.set_events == ["persist"]
 
+
 @pytest.mark.asyncio
 async def test_import_records_effective_source_from_server_command(monkeypatch):
     row = _Row({"type": "command", "environment": {"MODE": "prod"}})
@@ -222,7 +225,6 @@ def test_converted_instance_merge_drops_server_transport_fields():
     assert merged["catalog_name"] == "time"
 
 
-
 @pytest.mark.asyncio
 async def test_import_422_records_rejected_without_retirement(monkeypatch):
     row = _Row({"type": "command", "command": "uvx", "args": ["--from", "pkg", "pkg"]})
@@ -271,7 +273,12 @@ def test_converted_docker_spec_passes_create_and_transport_validation():
     assert MCPConfigurationValidator.validate_json_spec(spec) == []
     payload = MCPServerInstanceCreate(name="converted", server_spec_id=uuid4(), json_spec=spec)
     assert payload.json_spec == spec
-    assert _server_transport_spec(SimpleNamespace(json_spec=spec, remote_url=None, cmd=None, docker_image_url=None)) == spec
+    assert (
+        _server_transport_spec(
+            SimpleNamespace(json_spec=spec, remote_url=None, cmd=None, docker_image_url=None)
+        )
+        == spec
+    )
 
 
 @pytest.mark.asyncio
@@ -397,3 +404,33 @@ async def test_import_timeout_records_unavailable(monkeypatch):
 
     assert row.json_spec["package_import"]["status"] == "unavailable"
     assert "manager timeout" in row.json_spec["package_import"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_retirement_conflict_retries_then_raises_retryable_conflict(monkeypatch):
+    from agentarea_mcp.package_import import (
+        MCPRuntimeRetirementConflictError,
+        retire_runtime_before_mutation,
+    )
+
+    calls = 0
+    delays: list[float] = []
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(409)
+
+    async def fake_sleep(seconds: float) -> None:
+        delays.append(seconds)
+
+    _patch_http(monkeypatch, handler)
+    monkeypatch.setattr("agentarea_mcp.package_import.asyncio.sleep", fake_sleep)
+
+    with pytest.raises(MCPRuntimeRetirementConflictError) as exc_info:
+        await retire_runtime_before_mutation(uuid4())
+
+    assert exc_info.value.status_code == 409
+    assert calls > 3
+    assert delays
+    assert all(0 < delay <= 1 for delay in delays)

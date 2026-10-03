@@ -157,52 +157,6 @@ export function getOpenApiConnectionDisplayStatus(
   return normalized;
 }
 
-/** MCP servers and instances — deployment (`requested` … `deleted`) and
- * runtime (`pending` … `failed`) vocabularies share this one presentation. */
-export function getMcpCatalogStatusPresentation(
-  status: string
-): StatusPresentation {
-  switch (normalizeStatus(status)) {
-    case "active":
-      return { label: "active", kind: "active" };
-    case "connected":
-      return { label: "connected", kind: "active" };
-    case "available":
-      return { label: "available", kind: "active" };
-    case "ready":
-      return { label: "ready", kind: "active" };
-    case "created":
-      return { label: "created", kind: "active" };
-    // A server that runs is up — steady state, not work in flight.
-    case "running":
-      return { label: "running", kind: "active" };
-    case "setup":
-      return { label: "setup", kind: "draft" };
-    case "requested":
-      return { label: "requested", kind: "queued" };
-    case "pending":
-      return { label: "pending", kind: "queued" };
-    case "creating":
-      return { label: "creating", kind: "running" };
-    case "starting":
-      return { label: "starting", kind: "running" };
-    case "stopping":
-      return { label: "stopping", kind: "running" };
-    case "failed":
-      return { label: "failed", kind: "failed" };
-    case "error":
-      return { label: "error", kind: "failed" };
-    case "inactive":
-      return { label: "inactive", kind: "off" };
-    case "stopped":
-      return { label: "stopped", kind: "off" };
-    case "deleted":
-      return { label: "deleted", kind: "cancelled" };
-    default:
-      return fallbackStatusPresentation(status);
-  }
-}
-
 export function getTaskStatusPresentation(status: string): StatusPresentation {
   switch (normalizeStatus(status)) {
     case "completed":
@@ -222,7 +176,11 @@ export function getTaskStatusPresentation(status: string): StatusPresentation {
     case "waiting_for_approval":
     case "waiting_for_continuation":
     case "blocked":
-      return { label: "Needs action", labelKey: "needsAction", kind: "attention" };
+      return {
+        label: "Needs action",
+        labelKey: "needsAction",
+        kind: "attention",
+      };
     case "failed":
       return { label: "Failed", labelKey: "failed", kind: "failed" };
     case "error":
@@ -275,6 +233,29 @@ export function getTriggerStatusPresentation(
     case "error":
     case "failed":
       return { label: "Error", kind: "failed" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
+
+/**
+ * What protects a webhook URL. Only "signed" is a healthy state: the other two
+ * accept a request from anyone who knows the URL.
+ */
+export function getWebhookSigningPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "signed":
+      return { label: "Signed", labelKey: "signed", kind: "active" };
+    case "unsigned":
+      return { label: "Unsigned", labelKey: "unsigned", kind: "attention" };
+    case "unsupported":
+      return {
+        label: "Not verified",
+        labelKey: "unsupported",
+        kind: "attention",
+      };
     default:
       return fallbackStatusPresentation(status);
   }

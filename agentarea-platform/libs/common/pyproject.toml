@@ -20,6 +20,7 @@ dependencies = [
     "infisicalsdk>=1.0.8",
     "temporalio[opentelemetry]>=1.12.0",
     "faststream[kafka,redis]>=0.5.42",
+    "fastapi>=0.121.0",
     "boto3>=1.34.0",
     "botocore>=1.36.16",
     "httpx>=0.27.0",

@@ -236,7 +236,7 @@ export function MyMCPsSection({
 
         if (!connectionUsage) {
           return (
-            <span className="font-mono text-[12px] text-muted-foreground/60 tabular-nums">
+            <span className="font-mono text-[12px] text-muted-foreground tabular-nums">
               {total > 0 ? t("table.toolsTotal", { total }) : "—"}
             </span>
           );
@@ -252,7 +252,7 @@ export function MyMCPsSection({
             <span
               className={
                 connectionUsage.agents === 0
-                  ? "text-[12px] text-muted-foreground/60"
+                  ? "text-[12px] text-muted-foreground"
                   : "text-[12px] text-foreground/80"
               }
             >
@@ -449,7 +449,7 @@ export function MyMCPsSection({
         {sections.map((section, index) => (
           <div key={section.key}>
             {showSectionHeadings && (
-              <h5 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground/80">
+              <h5 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
                 {t(`sections.${section.key}`)} ({section.rows.length})
               </h5>
             )}

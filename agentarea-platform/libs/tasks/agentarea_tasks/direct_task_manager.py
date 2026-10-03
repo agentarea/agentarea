@@ -15,6 +15,7 @@ from uuid import UUID, uuid4
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.extensions.customer_pricing import get_customer_pricing, price_llm_call
 from agentarea_common.money import ZERO, serialize_money, to_money
+from agentarea_common.utils.llm_endpoint import guarded_llm_endpoint
 from agentarea_governance.domain.policies import effective_policy_from_json
 from agentarea_governance.domain.tool_calls import metered_tool_call_count
 
@@ -356,8 +357,9 @@ class DirectTaskManager(BaseTaskManager):
         api_key_secret = model_instance.provider_config.api_key_secret_name
         api_key = await secret_manager.get_secret(api_key_secret) if api_key_secret else ""
 
-        endpoint_url = (
-            model_instance.provider_config.endpoint_url or model_instance.model_spec.endpoint_url
+        endpoint_url = await guarded_llm_endpoint(
+            model_instance.provider_config.endpoint_url or model_instance.model_spec.endpoint_url,
+            managed_by=model_instance.provider_config.managed_by,
         )
         input_cost_per_token = model_instance.model_spec.input_cost_per_token
         output_cost_per_token = model_instance.model_spec.output_cost_per_token

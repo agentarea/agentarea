@@ -129,7 +129,7 @@ export default function SearchInput({
   );
 
   return (
-    <div className="relative w-full transition-all duration-300">
+    <div className="relative w-full">
       <div className="absolute left-0 top-1/2 -translate-y-1/2 transform text-muted-foreground">
         <Search className="h-4 w-4" />
       </div>

@@ -139,7 +139,7 @@ class PoliciesToolset(Toolset):
 
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
-            created = await service.create_rule(rule=rule, subject_id=payload.subject_id)
+            created = await service.create_rule(rule=rule)
             return json.dumps(_rule_json(created), default=str)
 
     @tool_method(effect="privileged")

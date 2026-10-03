@@ -4,13 +4,15 @@ from temporalio import workflow
 from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
+    from agentarea_common.money import serialize_money
+
     from ..context_strategy import ContextStrategy, allows_history_preservation
 
 from ...models import CompactMessagesRequest, CompactMessagesResult
 from ..constants import HEARTBEAT_TIMEOUT, LLM_CALL_TIMEOUT, Activities, EventTypes
 from ..retry import model_call_retry_policy
 from .budget import BudgetMixin
-from .patches import COMPACTION_BOUNDS_PAYLOAD_PATCH
+from .patches import COMPACTION_BOUNDS_PAYLOAD_PATCH, PAID_CALL_PERSISTED_BEFORE_LIMITS_PATCH
 
 
 class CompactionMixin(BudgetMixin):
@@ -71,17 +73,51 @@ class CompactionMixin(BudgetMixin):
                 type="LLMAccountingUnavailable",
                 non_retryable=True,
             )
-        self._record_inference_usage(
-            cost=result.cost,
-            total_tokens=result.usage.total_tokens,
-            source="Context compaction",
-        )
+        billed_first = workflow.patched(PAID_CALL_PERSISTED_BEFORE_LIMITS_PATCH)
+        if billed_first:
+            self._account_inference_usage(
+                cost=result.cost,
+                total_tokens=result.usage.total_tokens,
+                source="Context compaction",
+            )
+        else:
+            self._record_inference_usage(
+                cost=result.cost,
+                total_tokens=result.usage.total_tokens,
+                source="Context compaction",
+            )
         if result.history_chunk_stored:
             self.state.history_chunk_counter += 1
         self.state.last_prompt_tokens = result.context_tokens
         self.context_manager.update_usage(result.context_tokens)
         self.context_manager.mark_compacted()
 
+        # The summary is a paid model call. It is persisted as llm.call.completed,
+        # the one event every spend consumer (usage metering, task summaries)
+        # reads; purpose keeps it out of the transcript's assistant turn. Same
+        # publish batch as ContextCompacted, so no new workflow command.
+        self._events.add_event(
+            EventTypes.LLM_CALL_COMPLETED,
+            {
+                "iteration": self.state.current_iteration,
+                "purpose": "compaction",
+                "model_id": self.state.agent_config.get("model_id"),
+                "model_name": (self.state.resolved_model or {}).get("model_name"),
+                "managed_by": (self.state.resolved_model or {}).get("managed_by"),
+                "cost": serialize_money(result.cost),
+                # CompactMessagesResult carries no pre-conversion provider cost.
+                "provider_cost_usd": None,
+                "total_cost": serialize_money(self._budget.cost),
+                "usage": {
+                    "cost": serialize_money(result.cost),
+                    "usage": result.usage.model_dump(),
+                },
+                "content": "",
+                "thinking": "",
+                "tool_calls": [],
+                "role": "assistant",
+            },
+        )
         self._events.add_event(
             EventTypes.CONTEXT_COMPACTED,
             {
@@ -93,6 +129,8 @@ class CompactionMixin(BudgetMixin):
             },
         )
         await self._publish_events_immediately()
+        if billed_first:
+            self._enforce_inference_limits("Context compaction")
 
         workflow.logger.info(
             f"Compacted {result.original_message_count} messages, "

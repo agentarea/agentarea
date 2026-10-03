@@ -9,7 +9,7 @@ related:
   - /self-host/requirements
   - /self-host/kubernetes
   - /self-host/troubleshooting
-last_updated: 2026-07-29
+last_updated: 2026-10-03
 ---
 
 Getting AgentArea onto a hostname takes more than an Ingress resource. Three
@@ -72,6 +72,33 @@ different problem with a different mechanism.
 
     `ingress.annotations` and `ingress.tls` are shared across all three Ingresses.
     There is no per-host override.
+  </Step>
+
+  <Step title="Let the API see the client's address">
+    Dynamic client registration (`POST /oauth2/register`) is rate-limited to 10
+    a minute per client address. A2A JSON-RPC calls are limited to 300 a minute
+    per API key, or per user for a user token, so the address does not matter
+    for them. Behind the ingress the address the API sees is the proxy's, so
+    uvicorn takes the client's from `X-Forwarded-For` when the request comes
+    from an address in `backend.forwardedAllowIps`.
+
+    uvicorn reads that header right to left and uses the first address not in
+    the list. The default lists the private, CGNAT and loopback ranges, where
+    ingress controllers and cloud load balancers sit, so a client cannot choose
+    its own address by sending the header to a proxy that appends to it. Do not
+    set `"*"`: uvicorn then takes the leftmost entry, which the client wrote.
+
+    ```yaml
+    backend:
+      # The range your ingress controller's pods use.
+      forwardedAllowIps: "10.42.0.0/16"
+    ```
+
+    Narrow the list as above when clients reach the ingress from private
+    addresses (an internal deployment): with every entry trusted, uvicorn falls
+    back to the leftmost one. A pod that reaches the API Service directly can
+    still set the header itself; a NetworkPolicy that admits only the ingress
+    to the backend closes that.
   </Step>
 
   <Step title="Set the URLs the platform advertises">

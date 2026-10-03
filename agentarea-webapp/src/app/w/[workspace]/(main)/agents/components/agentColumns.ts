@@ -25,7 +25,7 @@ export const AGENT_COLUMNS: AgentColumnMeta[] = [
   },
   { accessor: "model_info", labelKey: "model", barClassName: "h-5 w-24 rounded-full" },
   { accessor: "active_task_count", labelKey: "activeTasks", barClassName: "h-4 w-6" },
-  { accessor: "tools_config", labelKey: "tools", barClassName: "h-6 w-16" },
+  { accessor: "tools", labelKey: "tools", barClassName: "h-6 w-16" },
 ];
 
 /** Grid classes shared by the real agents grid and its skeleton. */

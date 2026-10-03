@@ -150,7 +150,7 @@ async function MyConnectionsSectionServer({
   if (openApiError && mcpInstances.length === 0) {
     return (
       <>
-        <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+        <h4 className="mb-3 text-xs uppercase text-muted-foreground">
           {t("myConnections")}
         </h4>
         {loadErrors}
@@ -161,7 +161,7 @@ async function MyConnectionsSectionServer({
   if (searchQuery.trim() && totalConnections === 0) {
     return (
       <div className="py-1">
-        <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+        <h4 className="mb-3 text-xs uppercase text-muted-foreground">
           {t("myConnections")}
           {!openApiError && " (0)"}
         </h4>
@@ -178,7 +178,7 @@ async function MyConnectionsSectionServer({
 
   return (
     <>
-      <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+      <h4 className="mb-3 text-xs uppercase text-muted-foreground">
         {t("myConnections")}
         {!openApiError && ` (${totalConnections})`}
       </h4>

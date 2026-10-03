@@ -13,7 +13,6 @@ import {
 } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
-import type { Agent } from "@/types";
 import {
   type OpenApiConnectionRef,
   resolveAgentToolIcons,
@@ -23,11 +22,13 @@ import AgentsList from "./AgentsList";
 interface AgentsContentProps {
   searchQuery?: string;
   viewMode?: string;
+  searchParams?: { [key: string]: string | string[] | undefined };
 }
 
 export default async function AgentsContent({
   searchQuery = "",
   viewMode = "grid",
+  searchParams = {},
 }: AgentsContentProps) {
   const t = await getTranslations("AgentsPage");
   const tCommon = await getTranslations("Common");
@@ -98,9 +99,9 @@ export default async function AgentsContent({
     }
   }
 
-  // Bridge the API response to the domain Agent type once, at the boundary.
-  // (The /agents list returns only your own agents — catalog lives in Explore.)
-  const agentList = (agents ?? []) as unknown as Agent[];
+  // The API response already carries the generated Agent contract; this route
+  // only adds model metadata and tool icons for display.
+  const agentList = agents;
   const models = (modelInstances ?? []) as Array<{
     id: string;
     provider_name?: string | null;
@@ -181,12 +182,20 @@ export default async function AgentsContent({
     return (
       <div className="space-y-4">
         {partialErrorBlock}
-        <AgentsList initialAgents={filteredAgents} viewMode={viewMode} />
+        <AgentsList
+          initialAgents={filteredAgents}
+          viewMode={viewMode}
+          searchParams={searchParams}
+        />
       </div>
     );
   }
 
   return (
-    <AgentsList initialAgents={filteredAgents} viewMode={viewMode} />
+    <AgentsList
+      initialAgents={filteredAgents}
+      viewMode={viewMode}
+      searchParams={searchParams}
+    />
   );
 }

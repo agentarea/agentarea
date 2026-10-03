@@ -12,7 +12,9 @@ from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from agentarea_common.utils.slug import generate_slug
 from sqlalchemy import DateTime, String, and_, case, cast, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 
+from agentarea_mcp.domain.env_schema import derive_env_schema_from_spec, normalize_env_schema
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.infrastructure.catalog_mcp_repository import (
@@ -43,9 +45,7 @@ def _project_catalog_mcp_server(item: CatalogMcpItem) -> MCPServer:
             cmd_list = [command_str, *args]
     remote_url = spec.get("url") if conn_type == "url" else None
     raw_spec = spec.get("raw_spec") or spec
-    env_schema = spec.get("env_schema")
-    if not isinstance(env_schema, list):
-        env_schema = []
+    env_schema = derive_env_schema_from_spec(spec)
 
     server = MCPServer(
         name=item.name,
@@ -68,7 +68,7 @@ def _project_catalog_mcp_server(item: CatalogMcpItem) -> MCPServer:
     # timestamps so the response schema's required datetimes are populated.
     server.created_at = item.created_at
     server.updated_at = item.updated_at
-    server.is_catalog = True  # type: ignore[attr-defined]
+    server.is_catalog = True
     return server
 
 
@@ -242,6 +242,20 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
                 return candidate
         raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
 
+    async def _hydrate_catalog_env_schema(self, server: MCPServer) -> MCPServer:
+        if not getattr(server, "registry_item_id", None):
+            return server
+
+        env_schema = normalize_env_schema(server.env_schema)
+        if not env_schema:
+            item = await self._get_catalog_repository().get_item(str(server.registry_item_id))
+            if item:
+                env_schema = derive_env_schema_from_spec(item.spec)
+
+        if env_schema != server.env_schema:
+            set_committed_value(server, "env_schema", env_schema)
+        return server
+
     async def get_server_by_id(
         self,
         server_id: str,
@@ -265,7 +279,7 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         result = await self.session.execute(query)
         server = result.scalar_one_or_none()
         if server is not None:
-            return server
+            return await self._hydrate_catalog_env_schema(server)
 
         # Built-in catalog specs are globally readable by id, not workspace-scoped
         # (ADR-003). Reconcile mirrors them into mcp_servers under the platform
@@ -288,8 +302,8 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             # (the platform principal's), a graph check would refuse every
             # other workspace -- "Permission denied" on a catalog connection.
             # Writes still go through the PDP, which denies them.
-            server.is_catalog = True  # type: ignore[attr-defined]
-            return server
+            server.is_catalog = True
+            return await self._hydrate_catalog_env_schema(server)
 
         # Fall back to a read-only catalog projection: built-in specs may live in
         # the registry catalog only (ADR-003), addressed by their registry-item id.

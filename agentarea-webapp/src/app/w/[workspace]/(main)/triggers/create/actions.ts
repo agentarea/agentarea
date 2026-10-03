@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import type { TriggerCreate, TriggerUpdate } from "@/api/client/types.gen";
+import type {
+  TriggerCreate,
+  TriggerUpdate,
+  WebhookSignatureScheme,
+} from "@/api/client/types.gen";
 import {
   zGetCatalogV1TriggersCatalogGetResponse,
   zTriggerCreate,
@@ -16,6 +20,13 @@ export type TriggerFormState = {
   message: string;
   errors?: { [key: string]: string[] };
   success?: boolean;
+  /** Set by create: the new trigger, so the form can open it. */
+  triggerId?: string;
+  /**
+   * A generic webhook's generated signing secret. Returned by the create call
+   * only, so this state is the one chance to show it.
+   */
+  signing?: { secret: string; scheme: WebhookSignatureScheme };
 };
 
 const zTriggerCatalogEntry = z.object({
@@ -290,9 +301,7 @@ export async function createTriggerAction(
   }
 
   try {
-    const { data, error } = await createTrigger(
-      validated.data as unknown as Parameters<typeof createTrigger>[0]
-    );
+    const { data, error } = await createTrigger(validated.data);
 
     if (error) {
       const errorMessage = formatApiError(error);
@@ -307,6 +316,11 @@ export async function createTriggerAction(
       return {
         message: "Trigger created successfully!",
         success: true,
+        triggerId: data.id,
+        signing:
+          data.signing_secret && data.signature_scheme
+            ? { secret: data.signing_secret, scheme: data.signature_scheme }
+            : undefined,
       };
     }
   } catch (err) {

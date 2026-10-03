@@ -2,9 +2,12 @@
 
 import base64
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import httpx
 import pytest
+from agentarea_api.api.v1 import mcp_proxy
 from agentarea_api.api.v1.mcp_proxy import (
     _authorize_mcp_tool_calls,
     _filter_inbound_headers,
@@ -14,8 +17,13 @@ from agentarea_api.api.v1.mcp_proxy import (
     _resolve_upstream_url,
 )
 from agentarea_common.testing.flows import MainFlow
+from agentarea_common.testing.mocks import TestSecretManager as InMemorySecrets
 from agentarea_governance.domain.policies import EffectivePolicy, ToolsPolicy
+from agentarea_mcp.application.service import MCPServerInstanceService
+from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from fastapi import HTTPException
+from fastapi.responses import StreamingResponse
+from starlette.requests import Request
 
 # ----- _resolve_upstream_url -----
 
@@ -320,3 +328,99 @@ async def test_a_rule_naming_the_tool_through_its_server_applies_at_the_proxy(mo
     await _authorize_mcp_tool_calls(
         _CALL, SimpleNamespace(user_id="u1", workspace_id="ws1"), object(), instance_id=uuid4()
     )
+
+
+def test_member_upstream_never_sees_caller_cookies_nor_sets_ours():
+    """A URL-type upstream is member-supplied: the caller's cookies and forwarding
+    headers must not reach it, and its Set-Cookie must not land on the API origin."""
+    inbound = _filter_inbound_headers(
+        {
+            "Cookie": "ory_kratos_session=secret",
+            "X-Forwarded-For": "10.0.0.1",
+            "Accept": "application/json",
+        }
+    )
+    outbound = _filter_outbound_headers(
+        {"Set-Cookie": "session=x; Domain=.agentarea.dev", "Content-Type": "application/json"}
+    )
+
+    assert inbound == {"Accept": "application/json"}
+    assert outbound == {"Content-Type": "application/json"}
+
+
+@pytest.mark.asyncio
+async def test_the_upstream_receives_the_connections_stored_secret_header(monkeypatch):
+    """A URL connection's credential header lives in the secret store, not in
+    json_spec; the proxied request must still carry it upstream."""
+    endpoint = "https://mcp.example.com/mcp"
+    server = SimpleNamespace(
+        remote_url=endpoint,
+        cmd=None,
+        docker_image_url=None,
+        json_spec={"type": "url", "endpoint_url": endpoint},
+    )
+    instance = MCPServerInstance(
+        name="remote",
+        server_spec_id="spec",
+        json_spec={"type": "url", "headers": {}, "env_vars": ["X-Api-Key"]},
+    )
+    instance.id = uuid4()
+
+    with patch("agentarea_mcp.application.service.get_database", MagicMock()):
+        service = MCPServerInstanceService(
+            repository_factory=MagicMock(),
+            event_broker=MagicMock(),
+            secret_manager=InMemorySecrets(),
+        )
+    service.mcp_server_repository = SimpleNamespace(get_server_by_id=AsyncMock(return_value=server))
+    await service.env_service.set_instance_environment(instance.id, {"X-Api-Key": "canary"})
+
+    monkeypatch.setattr(
+        mcp_proxy,
+        "MCPServerInstanceRepository",
+        lambda *_: SimpleNamespace(get_by_id=AsyncMock(return_value=instance)),
+    )
+    monkeypatch.setattr(
+        mcp_proxy,
+        "MCPServerRepository",
+        lambda *_: SimpleNamespace(get_server_by_id=AsyncMock(return_value=server)),
+    )
+    monkeypatch.setattr(
+        mcp_proxy, "_guard_and_pin_upstream", lambda url, *_args, **_kw: (url, None, None)
+    )
+    received: list[httpx.Request] = []
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        received.append(request)
+        return httpx.Response(200, stream=httpx.ByteStream(b"{}"))
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        mcp_proxy.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=httpx.MockTransport(upstream), **kwargs),
+    )
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": f"/v1/mcp/{instance.id}/mcp",
+            "headers": [(b"accept", b"text/event-stream")],
+            "query_string": b"",
+        }
+    )
+
+    response = await mcp_proxy.proxy_instance(
+        instance.id,
+        request,
+        MagicMock(user_id="u1", workspace_id="ws1"),
+        MagicMock(),
+        InMemorySecrets(),
+        service,
+    )
+    assert isinstance(response, StreamingResponse)
+    async for _ in response.body_iterator:
+        pass
+
+    (sent,) = received
+    assert sent.headers["x-api-key"] == "canary"

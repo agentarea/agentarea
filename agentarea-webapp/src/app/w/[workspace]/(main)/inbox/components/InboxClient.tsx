@@ -10,8 +10,11 @@ import {
 import { useTranslations } from "next-intl";
 import { Check } from "lucide-react";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
+import { InboxBatchDecisionDialog } from "@/app/w/[workspace]/(main)/inbox/components/InboxBatchDecisionDialog";
 import { InboxClientPanel } from "@/app/w/[workspace]/(main)/inbox/components/InboxClientPanel";
+import { InboxDecisionList } from "@/app/w/[workspace]/(main)/inbox/components/InboxDecisionList";
 import { InboxDetailEmpty } from "@/app/w/[workspace]/(main)/inbox/components/InboxDetailEmpty";
+import { InboxEmptyState } from "@/app/w/[workspace]/(main)/inbox/components/InboxEmptyState";
 import { InboxSelectionBar } from "@/app/w/[workspace]/(main)/inbox/components/InboxSelectionBar";
 import {
   countInbox,
@@ -20,10 +23,12 @@ import {
   isPending,
   RESOLVED_ESCALATION_STATUS,
   type FilterValue,
+  type InboxDecision,
   type InboxTask,
 } from "@/app/w/[workspace]/(main)/inbox/components/inboxShared";
 import { InboxTaskList } from "@/app/w/[workspace]/(main)/inbox/components/InboxTaskList";
 import { InboxToolbar } from "@/app/w/[workspace]/(main)/inbox/components/InboxToolbar";
+import type { ApprovalDecisionResult } from "@/components/Approvals/ApprovalDecisionCard";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import FormError from "@/components/FormError";
@@ -41,9 +46,20 @@ import { resolveEscalationAction } from "@/lib/server-actions";
 interface InboxClientProps {
   items: InboxTask[];
   error: string | null;
+  decisions: InboxDecision[];
+  decisionsTotal: number;
+  decisionsError: string | null;
 }
 
-export function InboxClient({ items, error }: InboxClientProps) {
+type BatchDecision = { approved: boolean; tasks: InboxTask[] };
+
+export function InboxClient({
+  items,
+  error,
+  decisions,
+  decisionsTotal,
+  decisionsError,
+}: InboxClientProps) {
   const router = useWorkspaceRouter();
   const t = useTranslations("InboxPage");
   const [filter, setFilter] = useQueryState(
@@ -57,6 +73,7 @@ export function InboxClient({ items, error }: InboxClientProps) {
     Record<string, typeof RESOLVED_ESCALATION_STATUS>
   >({});
   const [resolveError, setResolveError] = useState<string | null>(null);
+  const [batch, setBatch] = useState<BatchDecision | null>(null);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
@@ -78,8 +95,8 @@ export function InboxClient({ items, error }: InboxClientProps) {
   );
 
   const { counts, unknown } = useMemo(
-    () => countInbox(items.map(effectiveStatus)),
-    [items, effectiveStatus]
+    () => countInbox(items.map(effectiveStatus), decisionsTotal),
+    [items, effectiveStatus, decisionsTotal]
   );
 
   useEffect(() => {
@@ -88,7 +105,9 @@ export function InboxClient({ items, error }: InboxClientProps) {
     }
   }, [unknown]);
 
+  const showingDecisions = filter === "decided";
   const visible = useMemo(() => {
+    if (filter === "decided") return [];
     return items.filter((task) =>
       filter === "all" ? true : inboxBucket(effectiveStatus(task)) === filter
     );
@@ -101,9 +120,9 @@ export function InboxClient({ items, error }: InboxClientProps) {
   const selectedWithEffectiveStatus = selected
     ? { ...selected, status: effectiveStatus(selected) }
     : null;
-  const pendingTasks = items.filter(
-    (task) => isPending(effectiveStatus(task)) && task.escalation_id
-  );
+  const decidable = (task: InboxTask) =>
+    isPending(effectiveStatus(task)) && Boolean(task.escalation_id);
+  const pendingTasks = items.filter(decidable);
   const anyChecked = checked.size > 0;
 
   function changeFilter(next: FilterValue) {
@@ -113,7 +132,7 @@ export function InboxClient({ items, error }: InboxClientProps) {
   }
 
   // Jump to the first task still waiting on a decision; a filter that hides
-  // it (completed / failed) switches to the approval queue first.
+  // it (completed / failed / decided) switches to the approval queue first.
   function openNextPending() {
     const next = items.find((task) => isPending(effectiveStatus(task)));
     if (!next) return;
@@ -129,10 +148,15 @@ export function InboxClient({ items, error }: InboxClientProps) {
     });
   }
 
-  async function resolveOne(task: InboxTask, approved: boolean) {
+  async function resolveOne(
+    task: InboxTask,
+    approved: boolean,
+    comment = "",
+    escalationId = task.escalation_id
+  ): Promise<ApprovalDecisionResult> {
     const id = String(task.id);
 
-    if (!task.escalation_id) {
+    if (!escalationId) {
       router.push(`/tasks/${id}`);
       return;
     }
@@ -164,28 +188,32 @@ export function InboxClient({ items, error }: InboxClientProps) {
       const result = await resolveEscalationAction(
         task.agent_id,
         id,
-        task.escalation_id,
+        escalationId,
         approved,
-        ""
+        comment
       );
       if (result.error) {
         console.error("Failed to resolve escalation:", result.error);
         revert();
         setResolveError(apiErrorMessage(result, label));
-        return;
+        return result;
       }
       startTransition(() => router.refresh());
+      return result;
     } catch (e) {
       console.error("Failed to resolve escalation:", e);
       revert();
       setResolveError(`${label}: ${formatApiError(e)}`);
+      return { error: e };
     }
   }
 
-  async function resolveMany(tasks: InboxTask[], approved: boolean) {
-    const targets = tasks.filter(
-      (task) => isPending(effectiveStatus(task)) && task.escalation_id
-    );
+  async function resolveMany(
+    tasks: InboxTask[],
+    approved: boolean,
+    comment: string
+  ) {
+    const targets = tasks.filter(decidable);
     if (!targets.length) return;
 
     setResolved((prev) => {
@@ -206,7 +234,7 @@ export function InboxClient({ items, error }: InboxClientProps) {
           String(task.id),
           task.escalation_id as string,
           approved,
-          ""
+          comment
         )
       )
     );
@@ -242,10 +270,19 @@ export function InboxClient({ items, error }: InboxClientProps) {
     startTransition(() => router.refresh());
   }
 
+  // Deciding several at once always shows each call first: the batch dialog
+  // lists every tool and its arguments before anything is sent.
+  function confirmBatch(tasks: InboxTask[], approved: boolean) {
+    const targets = tasks.filter(decidable);
+    if (targets.length) setBatch({ approved, tasks: targets });
+  }
+
+  const checkedTasks = items.filter((task) => checked.has(String(task.id)));
+
   const approveAll =
     filter === "pending" && pendingTasks.length > 0 ? (
       <button
-        onClick={() => resolveMany(pendingTasks, true)}
+        onClick={() => confirmBatch(pendingTasks, true)}
         className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-[12.5px] font-semibold text-primary-foreground shadow-sm transition hover:brightness-95"
       >
         <Check size={14} strokeWidth={2.4} /> {t("approveAll")}
@@ -297,18 +334,8 @@ export function InboxClient({ items, error }: InboxClientProps) {
             {anyChecked && (
               <InboxSelectionBar
                 checkedCount={checked.size}
-                onApprove={() =>
-                  resolveMany(
-                    items.filter((task) => checked.has(String(task.id))),
-                    true
-                  )
-                }
-                onReject={() =>
-                  resolveMany(
-                    items.filter((task) => checked.has(String(task.id))),
-                    false
-                  )
-                }
+                onApprove={() => confirmBatch(checkedTasks, true)}
+                onReject={() => confirmBatch(checkedTasks, false)}
                 onClear={() => setChecked(new Set())}
               />
             )}
@@ -318,18 +345,28 @@ export function InboxClient({ items, error }: InboxClientProps) {
             )}
 
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <InboxTaskList
-                visible={visible}
-                filter={filter}
-                counts={counts}
-                selectedId={selectedId}
-                checked={checked}
-                anyChecked={anyChecked}
-                effectiveStatus={effectiveStatus}
-                onSelect={setSelectedId}
-                onToggleCheck={toggleCheck}
-                onResolve={resolveOne}
-              />
+              {showingDecisions ? (
+                <InboxDecisionList
+                  decisions={decisions}
+                  error={decisionsError}
+                  empty={<InboxEmptyState filter="decided" counts={counts} />}
+                />
+              ) : (
+                <InboxTaskList
+                  visible={visible}
+                  filter={filter}
+                  counts={counts}
+                  selectedId={selectedId}
+                  checked={checked}
+                  anyChecked={anyChecked}
+                  effectiveStatus={effectiveStatus}
+                  onSelect={setSelectedId}
+                  onToggleCheck={toggleCheck}
+                  onResolve={(task, approved) => {
+                    void resolveOne(task, approved);
+                  }}
+                />
+              )}
             </div>
           </div>
 
@@ -351,6 +388,17 @@ export function InboxClient({ items, error }: InboxClientProps) {
           )}
         </div>
       )}
+
+      <InboxBatchDecisionDialog
+        approved={batch?.approved ?? null}
+        tasks={batch?.tasks ?? []}
+        onCancel={() => setBatch(null)}
+        onConfirm={(approved, comment) => {
+          const tasks = batch?.tasks ?? [];
+          setBatch(null);
+          void resolveMany(tasks, approved, comment);
+        }}
+      />
     </ContentBlock>
   );
 }

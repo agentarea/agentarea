@@ -6,7 +6,10 @@ does the member still has access, so the route must not answer as if they were
 gone.
 """
 
+from unittest.mock import AsyncMock
+
 import pytest
+from agentarea_api.api.deps.services import get_audit_service
 from agentarea_api.api.v1.workspace_invitations import get_membership_service, router
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
@@ -26,7 +29,12 @@ class FakeMemberships:
 
 
 @pytest.fixture
-def app_for():
+def audit() -> AsyncMock:
+    return AsyncMock()
+
+
+@pytest.fixture
+def app_for(audit):
     def build(revoked: bool) -> FastAPI:
         app = FastAPI()
         app.include_router(router, prefix="/v1/workspaces/{workspace}")
@@ -34,6 +42,7 @@ def app_for():
             user_id=OWNER, workspace_id=WORKSPACE, admin_workspaces=[WORKSPACE]
         )
         app.dependency_overrides[get_membership_service] = lambda: FakeMemberships(revoked)
+        app.dependency_overrides[get_audit_service] = lambda: audit
         return app
 
     return build
@@ -55,3 +64,16 @@ async def test_a_removal_the_graph_has_not_taken_yet_is_accepted_not_done(app_fo
 
     assert response.status_code == 202
     assert response.json() == {"status": "revocation_pending"}
+
+
+@pytest.mark.parametrize("revoked", [True, False])
+async def test_a_removal_is_audited_whether_or_not_the_graph_caught_up(app_for, audit, revoked):
+    """The membership ended in both cases; only access revocation is pending in one."""
+    await _delete(app_for(revoked))
+
+    audit.record.assert_awaited_once_with(
+        "member.remove",
+        "member",
+        "member-user",
+        event_metadata={"self_removal": False, "access_revoked": revoked},
+    )

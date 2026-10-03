@@ -182,7 +182,8 @@ function FolderRow({
           {...extra}
           className={cn(
             "flex items-center rounded hover:bg-muted",
-            selectedFolder === node.path && "bg-primary/10 text-primary",
+            selectedFolder === node.path &&
+              "bg-primary/10 text-primary dark:text-primary-foreground",
             extraClassName
           )}
         >
@@ -190,7 +191,7 @@ function FolderRow({
             <button
               type="button"
               aria-label={node.name}
-              className="shrink-0 rounded p-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+              className="flex size-11 shrink-0 items-center justify-center rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring md:size-6"
               style={{ marginLeft: `${depth * 16}px` }}
             >
               <ChevronRight
@@ -225,7 +226,7 @@ function FolderRow({
             type="button"
             {...extra}
             className={cn(
-              "flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-sm hover:bg-muted",
+              "flex min-h-11 w-full items-center gap-1.5 rounded px-2 py-1 text-left text-sm hover:bg-muted md:min-h-6",
               extraClassName
             )}
             style={{ paddingLeft: `${depth * 16 + 4}px` }}

@@ -353,6 +353,22 @@ class TestTypedParams:
     def test_accepts_subject_ref_approver(self):
         assert_enforceable(_rule("*", PolicyEffect.APPROVAL, approvers=["user:alice"]))
 
+    @pytest.mark.parametrize(
+        "approvers",
+        [
+            ["role:admin"],
+            ["group:security#member"],
+            ["group:security"],
+            ["user:alice#member"],
+            ["user:alice", "role:admin"],
+        ],
+    )
+    def test_rejects_approvers_no_resolution_path_matches(self, approvers: list[str]):
+        """Only ``user:<id>`` ever grants approval (#198): any other ref is stored
+        but never matches, so as the sole approver it blocks the escalation forever."""
+        with pytest.raises(ValueError, match="#198"):
+            assert_enforceable(_rule("tool:send_email", PolicyEffect.APPROVAL, approvers=approvers))
+
     def test_error_message_names_the_offending_rule(self):
         with pytest.raises(ValueError, match="spend"):
             assert_enforceable(_rule("spend", PolicyEffect.CAP, amount_usd="abc"))

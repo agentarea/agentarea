@@ -34,7 +34,7 @@ export default function FormLabel({
       {children}
       {required && <span className="text-sm text-red-500">*</span>}
       {optional && (
-        <span className="text-xs font-light text-zinc-400">
+        <span className="text-xs font-light text-muted-foreground">
           ({t("optional")})
         </span>
       )}

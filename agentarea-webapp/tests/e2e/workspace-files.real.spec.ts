@@ -11,14 +11,24 @@ import {
 import { gotoCommitted, runRealStack } from "./helpers/scenarios";
 
 async function createFolder(page: Page, name: string) {
-  await page.getByRole("button", { name: "New folder", exact: true }).click();
   const dialog = page.getByRole("dialog");
+  // A click that lands before hydration opens nothing; retry until it does.
+  await expect(async () => {
+    if (!(await dialog.isVisible()))
+      await page.getByRole("button", { name: "New folder", exact: true }).click({ timeout: 2_000 });
+    await expect(dialog).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
   await dialog.getByLabel("Folder name", { exact: true }).fill(name);
   await dialog
     .getByRole("button", { name: "Create folder", exact: true })
     .click();
-  await expect(dialog).toBeHidden();
+  // Creation is a server action: ~1s alone in dev, over 5s under suite load.
+  await expect(dialog).toBeHidden({ timeout: 20_000 });
 }
+
+// Folder changes go through router.replace, a server round trip that takes
+// well over the default 5s under suite load.
+const FOLDER_NAV_TIMEOUT = 15_000;
 
 function contentRow(page: Page, name: string) {
   return page.getByRole("row").filter({
@@ -67,7 +77,7 @@ test.describe("Workspace folder view", () => {
     await contentRow(page, "Materials")
       .getByText("Materials", { exact: true })
       .click();
-    await expect(openFolder("Materials")).toBeVisible();
+    await expect(openFolder("Materials")).toBeVisible({ timeout: FOLDER_NAV_TIMEOUT });
 
     await createFolder(page, "Drafts");
     await expect(contentRow(page, "Drafts")).toBeVisible();
@@ -75,20 +85,25 @@ test.describe("Workspace folder view", () => {
     // Re-fetch the root from the server before navigating back to the empty
     // child. This proves folders survive beyond the creating page's state.
     await page.reload({ waitUntil: "domcontentloaded" });
-    await folderTree.getByText("All files", { exact: true }).click();
+    // Right after the reload a tree click can land before hydration and be
+    // dropped; retry until the root listing shows.
+    await expect(async () => {
+      await folderTree.getByText("All files", { exact: true }).click({ timeout: 2_000 });
+      await expect(contentRow(page, "Materials")).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
     await contentRow(page, "Materials")
       .getByText("Materials", { exact: true })
       .click();
-    await expect(contentRow(page, "Drafts")).toBeVisible();
+    await expect(contentRow(page, "Drafts")).toBeVisible({ timeout: FOLDER_NAV_TIMEOUT });
 
     // The tree and the contents table must drive the same current folder.
     await folderTree.getByText("All files", { exact: true }).click();
-    await expect(contentRow(page, "Materials")).toBeVisible();
+    await expect(contentRow(page, "Materials")).toBeVisible({ timeout: FOLDER_NAV_TIMEOUT });
     await folderTree.getByText("Materials", { exact: true }).click();
     await contentRow(page, "Drafts")
       .getByText("Drafts", { exact: true })
       .click();
-    await expect(openFolder("Drafts")).toBeVisible();
+    await expect(openFolder("Drafts")).toBeVisible({ timeout: FOLDER_NAV_TIMEOUT });
 
     const filename =
       "Quarterly-research-notes-with-a-long-descriptive-filename.txt";
@@ -151,14 +166,15 @@ test.describe("Workspace folder view", () => {
     await contentRow(page, filename)
       .getByText(filename, { exact: true })
       .click();
-    const preview = page.getByRole("dialog");
-    await expect(preview).toBeVisible();
+    // A file opens as a tab of the "Open files" strip, named after the file.
+    const preview = page.getByRole("tabpanel", { name: filename, exact: true });
+    await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(
       preview.getByText(contents.trim(), { exact: true })
     ).toBeVisible({
       timeout: 20_000,
     });
-    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: `Close ${filename}`, exact: true }).click();
     await expect(preview).toBeHidden();
 
     await page.setViewportSize({ width: 390, height: 844 });

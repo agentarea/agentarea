@@ -83,6 +83,8 @@ class KratosAuthProvider(BaseAuthProvider):
                 algorithms=["ES256"],
                 audience=self.audience,
                 issuer=self.issuer,
+                # A token without an expiry would never stop working.
+                options={"require": ["exp", "iat", "sub", "aud", "iss"]},
             )
 
             # Validate claims

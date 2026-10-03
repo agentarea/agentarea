@@ -106,7 +106,7 @@ export function MonthOutlook({
 
       <div className="note mt-2.5 flex items-center gap-2 p-0 text-left text-[11px] sm:mt-3.5 sm:text-xs">
         <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
-        <span className="leading-relaxed">{hint}</span>
+        <span className="leading-relaxed text-muted-foreground">{hint}</span>
       </div>
     </div>
   );

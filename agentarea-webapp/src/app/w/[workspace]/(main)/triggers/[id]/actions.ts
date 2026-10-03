@@ -1,10 +1,12 @@
 "use server";
 
 import { getTranslations } from "next-intl/server";
+import type { WebhookSignatureScheme } from "@/api/client/types.gen";
 import {
-  enableTrigger,
-  disableTrigger,
   deleteTrigger,
+  disableTrigger,
+  enableTrigger,
+  rotateTriggerSigningSecret,
   runTriggerNow,
 } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
@@ -13,7 +15,10 @@ export async function enableTriggerAction(triggerId: string) {
   const result = await enableTrigger(triggerId);
   if (result.error) {
     const t = await getTranslations("TriggersPage.error");
-    return { success: false, error: apiErrorMessage(result, t("enableFailed")) };
+    return {
+      success: false,
+      error: apiErrorMessage(result, t("enableFailed")),
+    };
   }
   return { success: true, data: result.data };
 }
@@ -57,4 +62,30 @@ export async function runTriggerNowAction(triggerId: string) {
     taskId: result.data.task_id ?? null,
     reason: result.data.reason ?? null,
   };
+}
+
+/**
+ * Generate a new signing secret for a generic webhook. The secret is returned
+ * here once and never again; every sender must switch to it, because requests
+ * signed with the previous one are refused from now on.
+ */
+export async function rotateSigningSecretAction(triggerId: string): Promise<
+  | {
+      success: true;
+      signingSecret: string;
+      scheme: WebhookSignatureScheme;
+    }
+  | { success: false; error: string }
+> {
+  const result = await rotateTriggerSigningSecret(triggerId);
+  const secret = result.data?.signing_secret;
+  const scheme = result.data?.signature_scheme;
+  if (result.error || !secret || !scheme) {
+    const t = await getTranslations("TriggersPage.error");
+    return {
+      success: false,
+      error: apiErrorMessage(result, t("rotateSigningSecretFailed")),
+    };
+  }
+  return { success: true, signingSecret: secret, scheme };
 }

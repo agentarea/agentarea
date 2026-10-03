@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 export interface CountSegmentedControlItem<T extends string = string> {
@@ -63,6 +63,7 @@ export function CountSegmentedControl<T extends string = string>({
   activeCountClassName,
   layoutId = "count-segmented-control",
 }: CountSegmentedControlProps<T>) {
+  const shouldReduceMotion = useReducedMotion();
   const styles = VARIANTS[variant];
   return (
     <div
@@ -98,11 +99,15 @@ export function CountSegmentedControl<T extends string = string>({
                   activePillClassName
                 )}
                 initial={false}
-                transition={{
-                  type: "spring",
-                  stiffness: 380,
-                  damping: 32,
-                }}
+                transition={
+                  shouldReduceMotion
+                    ? { duration: 0 }
+                    : {
+                        type: "spring",
+                        stiffness: 380,
+                        damping: 32,
+                      }
+                }
               />
             ) : null}
 
@@ -110,7 +115,7 @@ export function CountSegmentedControl<T extends string = string>({
             {item.count != null ? (
               <span
                 className={cn(
-                  "relative z-10 text-[11px] font-normal text-muted-foreground/80 transition-colors dark:text-zinc-500",
+                  "relative z-10 text-[11px] font-normal text-muted-foreground transition-colors",
                   countClassName,
                   isActive && styles.activeCount,
                   isActive && activeCountClassName

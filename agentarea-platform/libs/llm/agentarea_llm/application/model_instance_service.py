@@ -58,12 +58,7 @@ class ModelInstanceService(BaseCrudService[ModelInstance]):
             is_public=is_public,
         )
 
-        instance = await self.create(instance)
-
-        # TODO: Add event publishing when events are defined for new architecture
-        # await self.event_broker.publish(ModelInstanceCreated(...))
-
-        return instance
+        return await self.create(instance)
 
     async def update_model_instance(
         self,
@@ -87,18 +82,8 @@ class ModelInstanceService(BaseCrudService[ModelInstance]):
         if is_public is not None:
             instance.is_public = is_public
 
-        instance = await self.update(instance)
-
-        # TODO: Add event publishing when events are defined for new architecture
-        # await self.event_broker.publish(ModelInstanceUpdated(...))
-
-        return instance
+        return await self.update(instance)
 
     async def delete_model_instance(self, id: UUID) -> bool:
         """Delete a ModelInstance."""
-        success = await self.delete(id)
-        if success:
-            # TODO: Add event publishing when events are defined for new architecture
-            # await self.event_broker.publish(ModelInstanceDeleted(instance_id=id))
-            pass
-        return success
+        return await self.delete(id)

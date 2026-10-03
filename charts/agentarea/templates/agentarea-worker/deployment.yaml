@@ -96,6 +96,7 @@ spec:
                   key: {{ include "agentarea.mcpGatewaySecretKey" . }}
             {{- include "agentarea.temporal.envs" . | nindent 12 }}
             {{- include "agentarea.worker.envs" . | nindent 12 }}
+            {{- include "agentarea.outboundPolicy.envs" . | nindent 12 }}
             - name: WORKFLOW__TEMPORAL_GRACEFUL_SHUTDOWN_SECONDS
               value: {{ .Values.worker.shutdownTimeout | quote }}
             {{- if .Values.openfga.enabled }}

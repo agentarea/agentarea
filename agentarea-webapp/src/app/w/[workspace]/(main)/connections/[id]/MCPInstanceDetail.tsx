@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { mcpIdentity } from "@/lib/entity-identity";
-import { getMCPInstanceConsumers, type MCPInstanceConsumer } from "@/lib/api";
+import type { MCPInstanceConsumer } from "@/lib/api";
 import { getMcpVerificationStatusPresentation } from "@/lib/status";
 import { discoverMCPInstanceToolsAction as discoverMCPInstanceTools } from "@/lib/server-actions";
 import { OAuthConnectPanel } from "../OAuthConnectPanel";
@@ -47,6 +47,8 @@ interface Props {
   instance: MCPInstance;
   serverSpec: MCPServer | null;
   memberNames?: Record<string, string>;
+  consumers: MCPInstanceConsumer[] | null;
+  consumersError: string | null;
 }
 
 const MCP_TRANSPORT = {
@@ -117,6 +119,8 @@ export default function MCPInstanceDetail({
   instance,
   serverSpec,
   memberNames = {},
+  consumers,
+  consumersError,
 }: Props) {
   const t = useTranslations("MCPServersPage.instanceDetail");
   const tCommon = useTranslations("Common");
@@ -156,38 +160,7 @@ export default function MCPInstanceDetail({
   const [isVerifying, setIsVerifying] = useState(false);
   const [oauthState, setOauthState] = useState<OAuthConnectState | undefined>();
 
-  // One fetch for both the tools table (principals per tool) and the consumers
-  // section (tools per agent) — the endpoint scans every agent in the
-  // workspace, so it must not be called twice for the same page.
-  const [consumers, setConsumers] = useState<MCPInstanceConsumer[] | null>(null);
-  const [consumersError, setConsumersError] = useState<string | null>(null);
-  const [consumersAttempt, setConsumersAttempt] = useState(0);
-  useEffect(() => {
-    let active = true;
-    setConsumersError(null);
-    getMCPInstanceConsumers(instance.id)
-      .then((result) => {
-        if (!active) return;
-        if (result.error || !result.data) {
-          setConsumersError(
-            apiErrorMessage(result, t("errors.consumersLoadFailed"))
-          );
-          return;
-        }
-        setConsumers(result.data);
-      })
-      .catch((err) => {
-        console.error("Failed to load MCP instance consumers", err);
-        if (active) {
-          setConsumersError(
-            `${t("errors.consumersLoadFailed")}: ${formatApiError(err)}`
-          );
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [instance.id, consumersAttempt, t]);
+
 
   const handleVerify = async () => {
     setIsVerifying(true);
@@ -371,7 +344,7 @@ export default function MCPInstanceDetail({
   // top-row so it stays discoverable without dominating the layout.
   const apiBaseUrl =
     typeof window !== "undefined"
-      ? (window as unknown as { __ENV__?: { CLIENT_API_URL?: string } })
+      ? (window as Window & { __ENV__?: { CLIENT_API_URL?: string } })
           .__ENV__?.CLIENT_API_URL || ""
       : "";
   const agentareaProxyUrl = `${apiBaseUrl}/v1/mcp/${instance.id}/mcp`;
@@ -793,7 +766,7 @@ export default function MCPInstanceDetail({
                   size="xs"
                   variant="outline"
                   className="self-start"
-                  onClick={() => setConsumersAttempt((n) => n + 1)}
+                  onClick={() => router.refresh()}
                 >
                   <RefreshCw />
                   {tCommon("retry")}

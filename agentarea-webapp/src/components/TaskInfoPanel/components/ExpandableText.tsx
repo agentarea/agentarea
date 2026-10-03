@@ -46,7 +46,7 @@ export default function ExpandableText({
       <p
         ref={textRef}
         className={cn(
-          "text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap transition-all overflow-hidden",
+          "text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap overflow-hidden",
           textClassName
         )}
         style={

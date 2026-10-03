@@ -3,21 +3,24 @@
 import { useTranslations } from "next-intl";
 import type { SettingsFlow } from "@ory/client-fetch";
 import type { OryClientConfiguration } from "@ory/elements-react";
-import { Globe, LogOut, Moon } from "lucide-react";
+import { FileDown, Globe, LogOut, Moon } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
-import { cn } from "@/lib/utils";
+import ExportWorkspaceButton from "./components/ExportWorkspaceButton";
 import LanguageSelect from "./components/LanguageSelect";
 import ProfileForm from "./components/ProfileForm";
+import SettingsRow from "./components/SettingsRow";
 
 export default function SettingsClient({
   flow,
   config,
+  canAdminister,
 }: {
   flow: SettingsFlow;
   config: OryClientConfiguration;
+  canAdminister: boolean;
 }) {
   const t = useTranslations("SettingsPage");
   const { signOut } = useAuth();
@@ -63,91 +66,44 @@ export default function SettingsClient({
               </p>
             </div>
             <div className="grid grid-cols-1 gap-3 p-4">
-              {/* Language Setting */}
-              <div
-                className={cn(
-                  "group relative flex flex-col md:flex-row md:items-start gap-3 w-full p-4",
-                  "bg-white dark:bg-zinc-900",
-                  "border border-zinc-200/60 dark:border-zinc-800",
-                  "rounded-md transition-all duration-300 ease-out",
-                  "shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)]",
-                  "relative overflow-hidden"
-                )}
+              <SettingsRow
+                icon={Globe}
+                title={t("preferences.language")}
+                description={t("preferences.languageDescription")}
               >
-                <div
-                  className="absolute inset-0 opacity-[0.015] dark:opacity-[0.03] pointer-events-none"
-                  style={{
-                    backgroundImage: `repeating-linear-gradient(
-                       -45deg,
-                       currentColor,
-                       currentColor 1px,
-                       transparent 1px,
-                       transparent 10px
-                     )`,
-                  }}
-                />
-                <div className="flex items-center gap-3 z-10">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10">
-                    <Globe className="h-4 w-4" />
-                  </div>
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                      {t("preferences.language")}
-                    </span>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {t("preferences.languageDescription")}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="z-10 ml-11 md:ml-auto">
-                  <LanguageSelect />
-                </div>
-              </div>
-
-              {/* Theme Setting */}
-              <div
-                className={cn(
-                  "group relative flex flex-col md:flex-row md:items-start gap-3 w-full p-4",
-                  "bg-white dark:bg-zinc-900",
-                  "border border-zinc-200/60 dark:border-zinc-800",
-                  "rounded-md transition-all duration-300 ease-out",
-                  "shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)]",
-                  "relative overflow-hidden"
-                )}
+                <LanguageSelect />
+              </SettingsRow>
+              <SettingsRow
+                icon={Moon}
+                title={t("preferences.theme")}
+                description={t("preferences.themeDescription")}
               >
-                <div
-                  className="absolute inset-0 opacity-[0.015] dark:opacity-[0.03] pointer-events-none"
-                  style={{
-                    backgroundImage: `repeating-linear-gradient(
-                       -45deg,
-                       currentColor,
-                       currentColor 1px,
-                       transparent 1px,
-                       transparent 10px
-                     )`,
-                  }}
-                />
-                <div className="flex items-center gap-3 z-10">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10">
-                    <Moon className="h-4 w-4" />
-                  </div>
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                      {t("preferences.theme")}
-                    </span>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {t("preferences.themeDescription")}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="z-10 ml-11 md:ml-auto">
-                  <ThemeToggle />
-                </div>
-              </div>
+                <ThemeToggle />
+              </SettingsRow>
             </div>
           </section>
+
+          {canAdminister && (
+            <section id="workspace" className="border-0 p-0">
+              <div className="px-4 pt-3">
+                <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                  {t("workspace.title")}
+                </h2>
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  {t("workspace.description")}
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 p-4">
+                <SettingsRow
+                  icon={FileDown}
+                  title={t("workspace.exportTitle")}
+                  description={t("workspace.exportDescription")}
+                >
+                  <ExportWorkspaceButton />
+                </SettingsRow>
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </ContentBlock>

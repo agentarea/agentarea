@@ -55,7 +55,7 @@ export default async function McpAppPage({ params }: Props) {
     >
       <div className="flex h-full min-h-0 flex-col">
         <div className="shrink-0 border-b border-border/70 bg-muted/20 px-4 py-3">
-          <h1 className="truncate text-base font-semibold">{displayTitle}</h1>
+          <h2 className="truncate text-base font-semibold">{displayTitle}</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             {t("connection")}: {app.instanceName}
           </p>

@@ -114,7 +114,7 @@ export default function TriggersTable({
       render: (_value, trigger) => {
         if (!trigger?.last_execution_at) {
           return (
-            <span className="text-[13px] text-muted-foreground/60">—</span>
+            <span className="text-[13px] text-muted-foreground">—</span>
           );
         }
         const failing = Number(trigger.consecutive_failures ?? 0) > 0;
@@ -142,7 +142,7 @@ export default function TriggersTable({
             {formatCompactDistance(trigger.created_at)}
           </span>
         ) : (
-          <span className="text-[13px] text-muted-foreground/60">—</span>
+          <span className="text-[13px] text-muted-foreground">—</span>
         ),
     },
     {

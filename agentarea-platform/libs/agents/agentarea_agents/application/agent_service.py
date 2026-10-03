@@ -117,8 +117,8 @@ def _project_catalog_item(item: CatalogAgentItem) -> Agent:
         registry_item_id=item.id,
     )
     # Read-only catalog projection markers consumed by the API DTO.
-    agent.is_catalog = True  # type: ignore[attr-defined]
-    agent.update_available = False  # type: ignore[attr-defined]
+    agent.is_catalog = True
+    agent.update_available = False
     return agent
 
 
@@ -333,7 +333,7 @@ class AgentService(BaseCrudService[Agent]):
             targets,
         )
 
-    async def list(self, include_catalog: bool = False) -> list[Agent]:  # type: ignore[override]
+    async def list(self, include_catalog: bool = False) -> list[Agent]:
         """List the workspace's own agents.
 
         Catalog (built-in) agents live in the registry and are discovered via
@@ -358,7 +358,7 @@ class AgentService(BaseCrudService[Agent]):
         for item in catalog_items:
             forked = forked_by_item.get(item.id)
             if forked is not None and item.version and item.version != item.installed_version:
-                forked.update_available = True  # type: ignore[attr-defined]
+                forked.update_available = True
 
         if not include_catalog:
             return list(tenant_agents)

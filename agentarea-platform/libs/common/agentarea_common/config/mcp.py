@@ -85,6 +85,15 @@ class MCPSettings(BaseAppSettings):
             raise RuntimeError("MCP_GATEWAY_AUTH_SECRET must contain at least 32 bytes")
         return {MCP_MANAGER_AUTH_HEADER: f"Bearer {secret}"}
 
+    def manager_inspection_headers(self) -> dict[str, str]:
+        """Build the bearer header for internal manager inspection routes."""
+        if self.MCP_GATEWAY_AUTH_SECRET is None:
+            raise RuntimeError("MCP_GATEWAY_AUTH_SECRET is required for manager inspection")
+        secret = self.MCP_GATEWAY_AUTH_SECRET.get_secret_value()
+        if len(secret) < 32:
+            raise RuntimeError("MCP_GATEWAY_AUTH_SECRET must contain at least 32 bytes")
+        return {"Authorization": f"Bearer {secret}"}
+
 
 class MCPManagerSettings(BaseSettings):
     """MCP Manager service configuration."""

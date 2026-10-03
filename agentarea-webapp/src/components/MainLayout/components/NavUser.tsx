@@ -61,7 +61,7 @@ export function NavUser() {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="!h-auto gap-2.5 py-1.5 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground transition-all duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="!h-auto gap-2.5 py-1.5 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground transition-colors duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
             >
               <EntityAvatar
                 size={28}
@@ -75,7 +75,7 @@ export function NavUser() {
                 <span className="truncate text-[13px] font-semibold text-zinc-900 dark:text-zinc-100">
                   {user.name}
                 </span>
-                <span className="truncate text-[11px] text-zinc-500/80">
+                <span className="truncate text-[11px] text-muted-foreground">
                   {user.email}
                 </span>
               </div>
@@ -134,7 +134,7 @@ export function NavUser() {
               {t("logout")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <div className="px-2 py-1 text-[10px] text-muted-foreground/50">
+            <div className="px-2 py-1 text-[10px] text-muted-foreground">
               AgentArea v{APP_VERSION}
             </div>
           </DropdownMenuContent>

@@ -2,6 +2,7 @@ import { listAgentPresets } from "@/lib/api";
 import { listTriggerCatalogAction } from "@/app/w/[workspace]/(main)/triggers/create/actions";
 import { loadAgentData, loadDelegationData } from "../shared/useAgentData";
 import CreateAgentClient from "./CreateAgentClient";
+import { generateAgentName } from "./utils/agentNameGenerator";
 
 export default async function CreateAgentContent() {
   const [agentData, delegation, presetsResponse, triggerCatalog] = await Promise.all([
@@ -19,6 +20,7 @@ export default async function CreateAgentContent() {
 
   return (
     <CreateAgentClient
+      suggestedName={generateAgentName()}
       mcpServers={agentData.mcpServers}
       llmModelInstances={agentData.llmModelInstances}
       mcpInstanceList={agentData.mcpInstanceList}

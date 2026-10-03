@@ -18,8 +18,10 @@ from agentarea_agents_sdk.tools.tool_authz import (
     unrestricted,
 )
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.audit import AuditService
 from agentarea_common.auth.identity_directory import get_identity_directory, identity_for
 from agentarea_common.workspaces import (
+    INVITATION_STATUS_REVOKED,
     InvitationNotFound,
     MembershipRemovalRejected,
     WorkspaceInvitationRepository,
@@ -122,6 +124,12 @@ class MembersToolset(Toolset):
             if expires_in_days is not None:
                 kwargs["expires_in_days"] = expires_in_days
             invitation, token = await service.create_invitation(**kwargs)
+            await AuditService(session, user_ctx).record(
+                "member.invite",
+                "invitation",
+                invitation.id,
+                event_metadata={"resource_name": invitation.email},
+            )
             delivery = await deliver_invitation_for_workspace(
                 workspace_repo=WorkspaceRepository(session),
                 workspace_id=user_ctx.workspace_id,
@@ -151,13 +159,20 @@ class MembersToolset(Toolset):
         async with platform_context() as (session, user_ctx, _repo, _broker, _secret):
             service = _build_service(session)
             try:
-                await service.revoke(
+                invitation = await service.revoke(
                     actor=user_ctx,
                     workspace_id=user_ctx.workspace_id,
                     invitation_id=UUID(invitation_id),
                 )
             except InvitationNotFound:
                 return json.dumps({"error": "Invitation not found"})
+            if invitation.status == INVITATION_STATUS_REVOKED:
+                await AuditService(session, user_ctx).record(
+                    "member.invitation_revoke",
+                    "invitation",
+                    invitation.id,
+                    event_metadata={"resource_name": invitation.email},
+                )
             return json.dumps({"revoked": True})
 
     @tool_method(effect="privileged")
@@ -177,6 +192,15 @@ class MembersToolset(Toolset):
                 )
             except MembershipRemovalRejected as exc:
                 return json.dumps({"error": str(exc)})
+            await AuditService(session, user_ctx).record(
+                "member.remove",
+                "member",
+                user_id,
+                event_metadata={
+                    "self_removal": user_id == user_ctx.user_id,
+                    "access_revoked": revoked,
+                },
+            )
             if not revoked:
                 return json.dumps(
                     {

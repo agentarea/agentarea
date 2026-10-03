@@ -2,6 +2,7 @@
 
 import { TaskProvider, useTaskContext } from "./TaskContext";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { TaskControls } from "./components/TaskControls";
 import TaskSubheader from "./components/TaskSubheader";
 
 interface TaskLayoutClientProps {
@@ -46,6 +47,7 @@ function TaskLayoutContent({
     <ContentBlock
       header={{
         breadcrumb,
+        controls: <TaskControls />,
       }}
       subheader={<TaskSubheader taskId={taskId} />}
       className="p-0"

@@ -71,7 +71,7 @@ def _authorization():
 
 
 WRITES = {
-    "create_rule": lambda s: s.create_rule(rule=_rule(), subject_id=WORKSPACE),
+    "create_rule": lambda s: s.create_rule(rule=_rule()),
     "update_rule": lambda s: s.update_rule(rule_id="r-1", enabled=False),
     "set_rule_enabled": lambda s: s.set_rule_enabled(rule_id="r-1", enabled=False),
     "delete_rule": lambda s: s.delete_rule(rule_id="r-1"),

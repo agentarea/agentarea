@@ -16,6 +16,7 @@ from agentarea_api.api.deps.services import (
     UserContextDep,
 )
 from agentarea_common.auth.route_authz import enforced_in_handler, requires_workspace_admin
+from agentarea_common.utils.types import utc_isoformat
 from agentarea_secrets.catalog_service import (
     SURFACED_OWNER_TYPES,
     DuplicateSecretNameError,
@@ -94,8 +95,8 @@ class SecretResponse(BaseModel):
             id=secret.id,
             name=secret.secret_name,
             description=secret.description,
-            created_at=secret.created_at.isoformat() if secret.created_at else None,
-            updated_at=secret.updated_at.isoformat() if secret.updated_at else None,
+            created_at=utc_isoformat(secret.created_at) if secret.created_at else None,
+            updated_at=utc_isoformat(secret.updated_at) if secret.updated_at else None,
             used_by=used_by,
             owner=owner,
         )

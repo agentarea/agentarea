@@ -25,6 +25,9 @@ services:
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - AGENTAREA_DB_TENANT_SCOPE=${AGENTAREA_DB_TENANT_SCOPE:?AGENTAREA_DB_TENANT_SCOPE is required (log|enforce)}
+      # Member-set LLM/MCP endpoints may target this machine in development
+      # (a local Ollama, a mock LLM). Production leaves this empty.
+      - OUTBOUND_PRIVATE_ALLOWLIST=${OUTBOUND_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
@@ -329,7 +332,7 @@ services:
     container_name: mcp-manager
     restart: unless-stopped
     ports:
-      - "7999:80" # API server
+      - "127.0.0.1:7999:80" # API server
     tmpfs:
       - /tmp
       - /run
@@ -555,6 +558,9 @@ services:
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - AGENTAREA_DB_TENANT_SCOPE=${AGENTAREA_DB_TENANT_SCOPE:?AGENTAREA_DB_TENANT_SCOPE is required (log|enforce)}
+      # Member-set LLM/MCP endpoints may target this machine in development
+      # (a local Ollama, a mock LLM). Production leaves this empty.
+      - OUTBOUND_PRIVATE_ALLOWLIST=${OUTBOUND_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}

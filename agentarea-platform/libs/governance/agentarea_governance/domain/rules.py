@@ -206,7 +206,13 @@ class ExecutionCapParams(BaseModel):
 
 
 class ApprovalParams(BaseModel):
-    """``params`` for an ``approval`` rule; approvers are ReBAC subject refs."""
+    """``params`` for an ``approval`` rule; approvers are direct user subjects.
+
+    Every resolution path (``caller_can_approve`` in the workflow and the API,
+    ``is_approver``) matches only ``user:<id>``. A ``role:``/``group:``/userset
+    ref would be stored and then never grant approval — and as the only approver
+    it leaves the escalation unresolvable — until a roles model exists (#198).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -216,7 +222,12 @@ class ApprovalParams(BaseModel):
     @classmethod
     def _validate_refs(cls, value: list[str]) -> list[str]:
         for ref in value:
-            parse_subject(ref)  # raises ValueError on a non subject-ref (e.g. a raw id)
+            type_, _id, relation = parse_subject(ref)  # rejects a raw id
+            if type_ != "user" or relation is not None:
+                raise ValueError(
+                    f"approver {ref!r} is not resolved yet (issue #198); approvers must be "
+                    "workspace users ('user:<id>')"
+                )
         return value
 
 

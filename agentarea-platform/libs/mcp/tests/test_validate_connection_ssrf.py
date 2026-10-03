@@ -93,7 +93,7 @@ class TestValidateConnectionRefusesNonPublicTargets:
         spec = {"type": "url", "endpoint_url": "http://169.254.169.254/latest/meta-data/"}
 
         with patch.object(
-            service, "_get_transport_spec_for_instance", new=AsyncMock(return_value=spec)
+            service, "get_transport_spec_for_instance", new=AsyncMock(return_value=spec)
         ):
             result = await service.probe_instance_auth("inst-1")
 

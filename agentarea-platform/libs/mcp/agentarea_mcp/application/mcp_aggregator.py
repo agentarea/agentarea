@@ -298,25 +298,32 @@ class MCPAggregatorProxy:
                 )
         return aggregated
 
-    async def call_namespaced_tool(self, namespaced_name: str, arguments: dict[str, Any]) -> Any:
-        """Route a namespaced tool call to the owning member instance."""
+    def owner_of(self, namespaced_name: str) -> tuple[AggregatedMember, str] | None:
+        """The member serving ``namespaced_name`` and the raw name it advertises.
+
+        None when no member's namespace claims the name, or the claiming member
+        does not serve that tool.
+        """
         for member in self.members:
-            namespace = self._get_namespace(member)
-            prefix = f"{namespace}{NS_SEP}"
+            prefix = f"{self._get_namespace(member)}{NS_SEP}"
             if namespaced_name.startswith(prefix):
                 tool_name = namespaced_name[len(prefix) :]
-                if not member.serves(tool_name):
-                    break
-                try:
-                    return await self._call_member_tool(member, tool_name, arguments)
-                except Exception:
-                    if self._tool_cache is not None:
-                        instance_id = str(member.mcp_instance_id)
-                        mcp_url = self.instance_urls.get(instance_id)
-                        headers = self.instance_headers.get(instance_id) or {}
-                        cache_key = (
-                            self._cache_key(member, mcp_url, headers) if mcp_url else instance_id
-                        )
-                        await self._tool_cache.invalidate(cache_key)
-                    raise
-        raise ValueError(f"No member owns tool {namespaced_name}")
+                return (member, tool_name) if member.serves(tool_name) else None
+        return None
+
+    async def call_namespaced_tool(self, namespaced_name: str, arguments: dict[str, Any]) -> Any:
+        """Route a namespaced tool call to the owning member instance."""
+        owner = self.owner_of(namespaced_name)
+        if owner is None:
+            raise ValueError(f"No member owns tool {namespaced_name}")
+        member, tool_name = owner
+        try:
+            return await self._call_member_tool(member, tool_name, arguments)
+        except Exception:
+            if self._tool_cache is not None:
+                instance_id = str(member.mcp_instance_id)
+                mcp_url = self.instance_urls.get(instance_id)
+                headers = self.instance_headers.get(instance_id) or {}
+                cache_key = self._cache_key(member, mcp_url, headers) if mcp_url else instance_id
+                await self._tool_cache.invalidate(cache_key)
+            raise

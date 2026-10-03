@@ -63,8 +63,8 @@ class ExecutionServiceInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_effective_policy(self, execution_id: str) -> dict[str, Any] | None:
-        """Get the effective governance policy from the workflow."""
+    async def get_live_state(self, execution_id: str) -> dict[str, Any] | None:
+        """The running workflow's own state (e.g. a signal-based pause), or None."""
         pass
 
     @abstractmethod

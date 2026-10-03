@@ -177,7 +177,7 @@ async function* openSseRequest(
 		throw new SSEError('Task stream response has no body');
 	}
 
-	yield* parseSseStream(response.body as unknown as AsyncIterable<Uint8Array>);
+	yield* parseSseStream(response.body);
 }
 
 export interface StreamTaskEventsOptions {

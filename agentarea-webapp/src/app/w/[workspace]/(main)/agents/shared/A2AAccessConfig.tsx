@@ -94,7 +94,7 @@ export default function A2AAccessConfig({
               {t("keysLoadFailed")}
             </p>
           ) : activeKeys.length === 0 ? (
-            <Note className="cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground/50">
+            <Note className="cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground">
               <p>{t("noKeys")}</p>
             </Note>
           ) : (

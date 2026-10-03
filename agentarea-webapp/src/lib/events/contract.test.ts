@@ -120,4 +120,20 @@ describe("reduceParts", () => {
     expect(parts).toHaveLength(1);
     expect(parts[0].kind).toBe("tool");
   });
+
+  it("keeps a compaction call out of the transcript", () => {
+    const parts = reduceParts([
+      { eventType: "llm.call.completed", data: { execution_id: "e", iteration: 1, content: "answer" } },
+      {
+        eventType: "llm.call.completed",
+        data: { execution_id: "e", iteration: 1, purpose: "compaction", content: "" },
+      },
+      {
+        eventType: "llm.call.completed",
+        data: { execution_id: "e", iteration: 2, purpose: "compaction", content: "" },
+      },
+    ]);
+    expect(parts).toHaveLength(1);
+    expect(parts[0].data.content).toBe("answer");
+  });
 });

@@ -10,7 +10,7 @@ for REST clients reading the OpenAPI doc.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, overload
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -31,14 +31,23 @@ def _validate_url_field(v: str | None) -> str | None:
     return v
 
 
+@overload
+def _validate_base_url_field(v: None) -> None: ...
+
+
+@overload
+def _validate_base_url_field(v: str) -> str: ...
+
+
 def _validate_base_url_field(v: str | None) -> str | None:
     """Base URL placeholders stay in the path, checked before the host is resolved."""
     if v is None:
-        return v
+        return None
     from agentarea_openapi.application.url_validator import url_template_variables
 
     url_template_variables(v)
-    return _validate_url_field(v)
+    _validate_url_field(v)
+    return v
 
 
 class HeaderInput(BaseModel):
@@ -177,7 +186,7 @@ class OpenAPIConnectionCreate(BaseModel):
     @field_validator("base_url")
     @classmethod
     def _validate_base_url(cls, v: str) -> str:
-        return _validate_base_url_field(v)  # type: ignore[return-value]
+        return _validate_base_url_field(v)
 
     @field_validator("spec_url")
     @classmethod

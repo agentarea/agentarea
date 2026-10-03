@@ -8,7 +8,22 @@ import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { fetchAuditLogs, type AuditEvent } from "./actions";
+import {
+  exportAuditLogs,
+  fetchAuditLogs,
+  type AuditActorOption,
+  type AuditEvent,
+  type AuditLogFilters as AuditLogFiltersQuery,
+} from "./actions";
+import { AuditChangeList } from "./AuditChangeList";
+import { auditEventsToCsv } from "./auditCsv";
+import {
+  ALL,
+  AuditLogFilters,
+  EMPTY_FILTERS,
+  isFiltered,
+  type AuditFilterState,
+} from "./AuditLogFilters";
 import {
   auditActorIcon,
   auditResourceIcon,
@@ -16,25 +31,44 @@ import {
 } from "./auditIcons";
 import { auditActionColor, auditVerb, formatAuditTime } from "./format";
 
-function ChangesDetail({ changes }: { changes: AuditEvent["changes"] }) {
-  if (!changes || changes.length === 0) return null;
+/** Metadata keys worth a line under the resource, with their label keys. */
+const DETAIL_KEYS = ["tool", "decision", "reason", "comment"] as const;
+
+function AuditDetails({ event }: { event: AuditEvent }) {
+  const t = useTranslations("AuditLogPage.details");
+  const metadata = event.event_metadata ?? {};
+  const argumentKeys = Array.isArray(metadata.argument_keys)
+    ? metadata.argument_keys.filter((key) => typeof key === "string")
+    : [];
+  const details = DETAIL_KEYS.flatMap((key) => {
+    const value = metadata[key];
+    return typeof value === "string" && value ? [{ key, value }] : [];
+  });
+  if (details.length === 0 && argumentKeys.length === 0) return null;
 
   return (
-    <div className="mt-2 space-y-1">
-      {changes.map((change, i) => (
-        <div key={i} className="text-xs font-mono">
-          <span className="text-muted-foreground">
-            {String(change.field ?? "unknown")}:
-          </span>{" "}
-          <span className="text-red-500 line-through">
-            {String(change.before ?? "null")}
-          </span>{" "}
-          <span className="text-emerald-600">
-            {String(change.after ?? "null")}
-          </span>
+    <dl className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+      {details.map(({ key, value }) => (
+        <div key={key} className="flex min-w-0 gap-1">
+          <dt className="shrink-0">{t(key)}:</dt>
+          <dd className="min-w-0 break-words text-foreground/80">
+            {key === "tool" ? (
+              <span className="font-mono">{value}</span>
+            ) : (
+              value
+            )}
+          </dd>
         </div>
       ))}
-    </div>
+      {argumentKeys.length > 0 && (
+        <div className="flex min-w-0 gap-1">
+          <dt className="shrink-0">{t("arguments")}:</dt>
+          <dd className="min-w-0 break-words font-mono text-foreground/80">
+            {argumentKeys.join(", ")}
+          </dd>
+        </div>
+      )}
+    </dl>
   );
 }
 
@@ -79,8 +113,9 @@ function ResourceCell({ event }: { event: AuditEvent }) {
           {event.resource_id.slice(0, 8)}
         </div>
       )}
+      <AuditDetails event={event} />
       {event.changes && event.changes.length > 0 && (
-        <ChangesDetail changes={event.changes} />
+        <AuditChangeList changes={event.changes} className="mt-2 space-y-1" />
       )}
     </div>
   );
@@ -125,25 +160,63 @@ function ActorCell({ event }: { event: AuditEvent }) {
 interface Props {
   initialEvents: AuditEvent[];
   initialCursor: string | null;
+  actorOptions: AuditActorOption[];
+}
+
+/** The API query a filter state stands for; dates cover whole local days. */
+function toQuery(filters: AuditFilterState): AuditLogFiltersQuery {
+  return {
+    resource_type:
+      filters.resourceType === ALL ? undefined : filters.resourceType,
+    action: filters.action === ALL ? undefined : filters.action,
+    actor_id: filters.actorId === ALL ? undefined : filters.actorId,
+    since: filters.since
+      ? new Date(`${filters.since}T00:00:00`).toISOString()
+      : undefined,
+    until: filters.until
+      ? new Date(`${filters.until}T23:59:59.999`).toISOString()
+      : undefined,
+  };
 }
 
 export default function AuditLogClient({
   initialEvents,
   initialCursor,
+  actorOptions,
 }: Props) {
   const t = useTranslations("AuditLogPage");
   const [events, setEvents] = useState<AuditEvent[]>(initialEvents);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
-  const [resourceFilter] = useState("all");
+  const [filters, setFilters] = useState<AuditFilterState>(EMPTY_FILTERS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [isExporting, startExport] = useTransition();
+
+  const applyFilters = (next: AuditFilterState) => {
+    setFilters(next);
+    setExpandedId(null);
+    startTransition(async () => {
+      const { data, error } = await fetchAuditLogs({
+        ...toQuery(next),
+        limit: 50,
+      });
+      if (!data) {
+        setLoadMoreError(error);
+        return;
+      }
+      setLoadMoreError(null);
+      setEvents(data.events);
+      setCursor(data.next_cursor ?? null);
+    });
+  };
 
   const loadMore = () => {
     if (!cursor) return;
     startTransition(async () => {
       const { data, error } = await fetchAuditLogs({
-        resource_type: resourceFilter === "all" ? undefined : resourceFilter,
+        ...toQuery(filters),
         cursor,
         limit: 50,
       });
@@ -153,13 +226,42 @@ export default function AuditLogClient({
       }
       setLoadMoreError(null);
       setEvents((prev) => [...prev, ...data.events]);
-      setCursor(data.next_cursor);
+      setCursor(data.next_cursor ?? null);
     });
   };
 
-  if (events.length === 0) {
-    return <EmptyState title={t("noEvents")} iconsType="audit" />;
-  }
+  const exportCsv = () => {
+    setExportNotice(null);
+    startExport(async () => {
+      const { data, error } = await exportAuditLogs(toQuery(filters));
+      if (!data) {
+        setExportNotice(`${t("export.failed")}: ${error}`);
+        return;
+      }
+      const blob = new Blob([auditEventsToCsv(data.events)], {
+        type: "text/csv;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      if (data.truncated) {
+        setExportNotice(t("export.truncated", { count: data.events.length }));
+      }
+    });
+  };
+
+  const filterBar = (
+    <AuditLogFilters
+      value={filters}
+      onChange={applyFilters}
+      actorOptions={actorOptions}
+      onExport={exportCsv}
+      exporting={isExporting}
+    />
+  );
 
   const columns = [
     {
@@ -209,7 +311,8 @@ export default function AuditLogClient({
         <ResourceCell
           event={{
             ...event,
-            changes: expandedId === event.id ? event.changes : undefined,
+            changes:
+              expandedId === event.id ? (event.changes ?? null) : null,
           }}
         />
       ),
@@ -246,16 +349,29 @@ export default function AuditLogClient({
 
   return (
     <>
-      <Table
-        data={events.map((event) => ({
-          ...event,
-          className: "hover:bg-zinc-50 dark:hover:bg-zinc-800/50",
-        }))}
-        columns={columns}
-        onRowClick={(event: AuditEvent) =>
-          setExpandedId(expandedId === event.id ? null : event.id)
-        }
-      />
+      {filterBar}
+      {exportNotice && (
+        <p role="status" className="mb-3 text-sm text-muted-foreground">
+          {exportNotice}
+        </p>
+      )}
+      {events.length === 0 ? (
+        <EmptyState
+          title={isFiltered(filters) ? t("noMatches") : t("noEvents")}
+          iconsType="audit"
+        />
+      ) : (
+        <Table
+          data={events.map((event) => ({
+            ...event,
+            className: "hover:bg-zinc-50 dark:hover:bg-zinc-800/50",
+          }))}
+          columns={columns}
+          onRowClick={(event: AuditEvent) =>
+            setExpandedId(expandedId === event.id ? null : event.id)
+          }
+        />
+      )}
 
       {loadMoreError && (
         <p role="alert" className="mt-4 text-center text-sm text-destructive">

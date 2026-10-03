@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { FormSkeleton } from "@/components/Skeleton";
 import { getAgent, listModelInstances } from "@/lib/api";
 import { requireApiData } from "@/lib/server-resource";
-import type { Agent } from "@/types";
 import AgentNewTask from "./components/AgentNewTask";
 
 export const metadata: Metadata = {
@@ -35,7 +34,7 @@ export default async function AgentNewTaskPage({ params }: Props) {
 
   return (
     <Suspense fallback={<FormSkeleton className="p-4" />}>
-      <AgentNewTask agent={{ ...agent, model_info } as Agent} />
+      <AgentNewTask agent={{ ...agent, model_info }} />
     </Suspense>
   );
 }

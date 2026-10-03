@@ -13,7 +13,7 @@ export function rewriteUrls(
   config: OryMiddlewareOptions
 ) {
   for (const [_, [matchPath, replaceWith]] of [
-    // TODO load these dynamically from the project config
+    // Route paths are fixed; destination URLs come from the project config below.
 
     // Old AX routes
     ["/ui/recovery", config.project?.recovery_ui_url],

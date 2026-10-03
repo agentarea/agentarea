@@ -15,6 +15,7 @@ from agentarea_common.extensions.customer_pricing import (
     price_llm_call,
 )
 from agentarea_common.money import to_money, to_optional_money
+from agentarea_common.utils.llm_endpoint import guarded_llm_endpoint
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.application.provider_credentials import resolve_provider_api_key
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
@@ -177,10 +178,9 @@ class LLMExecutionService:
             if input_cost_per_token is None or output_cost_per_token is None:
                 raise ValueError("model pricing is not configured; run budget cannot be enforced")
 
-            if endpoint_url:
-                endpoint_url = endpoint_url.replace("localhost", self._local_host).replace(
-                    "127.0.0.1", self._local_host
-                )
+            endpoint_url = await guarded_llm_endpoint(
+                endpoint_url, managed_by=managed_by, local_host=self._local_host
+            )
 
             llm_model = LLMModel(
                 provider_type=str(provider_type),

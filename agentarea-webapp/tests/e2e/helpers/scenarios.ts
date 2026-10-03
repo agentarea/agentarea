@@ -1,4 +1,10 @@
-import { expect, type APIRequestContext, type APIResponse, type Page } from "@playwright/test";
+import {
+  expect,
+  type APIRequestContext,
+  type APIResponse,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 import {
   appHref,
   appPath,
@@ -42,6 +48,21 @@ export async function gotoCommitted(page: Page, route: string) {
     }
     throw error;
   }
+}
+
+// gotoCommitted returns before React hydrates under `next dev`; a fill or click
+// that lands earlier is dropped or overwritten. React tags each hydrated DOM
+// node with a `__reactProps$<id>` key, so its presence means the node is live.
+export async function expectHydrated(target: Locator, timeout = 30_000) {
+  await expect
+    .poll(
+      () =>
+        target.evaluate((el) =>
+          Object.keys(el).some((key) => key.startsWith("__reactProps$"))
+        ),
+      { timeout }
+    )
+    .toBe(true);
 }
 
 export async function expectPath(page: Page, path: string, timeout = 25_000) {

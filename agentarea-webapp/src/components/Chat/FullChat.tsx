@@ -818,7 +818,7 @@ export default function FullChat({
   return (
     <div
       className={cn(
-        "mx-auto flex h-full w-full flex-col gap-0 rounded-lg transition-all duration-700 ease-out",
+        "mx-auto flex h-full w-full flex-col gap-0 rounded-lg transition-[gap,max-width,padding] duration-700 ease-out",
         "justify-between",
         startCentered && !hasUserMessages
           ? "justify-center gap-8 overflow-y-auto overflow-x-hidden md:overflow-visible" // Allow vertical scroll on mobile/small screens if content overflows
@@ -835,8 +835,8 @@ export default function FullChat({
           className={cn(
             // Keep Workplace visuals intact when startCentered is true
             startCentered
-              ? "flex items-center justify-center transition-all duration-500 flex-none w-full"
-              : "flex flex-1 min-h-0 w-full items-center justify-center transition-all duration-500 pb-24"
+              ? "flex items-center justify-center transition-[flex,padding-bottom] duration-500 flex-none w-full"
+              : "flex flex-1 min-h-0 w-full items-center justify-center transition-[flex,padding-bottom] duration-500 pb-24"
           )}
         >
           {welcomeComponent ? (
@@ -853,7 +853,7 @@ export default function FullChat({
 
       {/* Messages Container */}
       <div
-        className={`relative flex flex-col overflow-auto p-0 transition-all duration-700 ease-out ${
+        className={`relative flex flex-col overflow-auto p-0 transition-[height,flex] duration-700 ease-out ${
           hasUserMessages ? "h-full flex-1" : "h-0 flex-none"
         }`}
       >
@@ -943,7 +943,7 @@ export default function FullChat({
       {/* Input Area */}
       <div
         className={cn(
-          "group relative mx-auto w-full transition-all duration-700 ease-out",
+          "group relative mx-auto w-full transition-[max-width,padding] duration-700 ease-out",
           !embedded && "max-w-3xl px-4 md:px-6"
         )}
       >

@@ -1,11 +1,15 @@
 """Installer orchestration tests (mocked domain services)."""
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from agentarea_bundles.application.analyzer import parse_bundle
+from agentarea_agents.application import workspace_export_service
+from agentarea_agents.application.workspace_export_service import WorkspaceExportService
+from agentarea_bundles.application.analyzer import BundleAnalyzer, parse_bundle
 from agentarea_bundles.application.installer import BundleInstaller, BundleInstallError
+from agentarea_bundles.schemas.bundle import setup_refs
 from agentarea_bundles.schemas.result import InstallAction
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
@@ -33,65 +37,99 @@ automations:
 
 
 class FakeMcpServerSvc:
-    def __init__(self): self.calls = []
+    def __init__(self):
+        self.calls = []
+
     async def create_mcp_server(self, payload):
         self.calls.append(payload)
         return SimpleNamespace(id=uuid4())
 
 
 class FakeMcpInstSvc:
-    def __init__(self, existing=None): self.existing = existing; self.calls = []
-    async def get_by_name(self, name): return self.existing
+    def __init__(self, existing=None):
+        self.existing = existing
+        self.calls = []
+
+    async def get_by_name(self, name):
+        return self.existing
+
     async def create_instance(self, payload):
         self.calls.append(payload)
         return SimpleNamespace(id=uuid4())
 
 
 class FakeSkillSvc:
-    def __init__(self): self.calls = []
+    def __init__(self):
+        self.calls = []
+        self.github_calls = []
+
     async def create_from_content(self, payload):
         self.calls.append(payload)
         return SimpleNamespace(id=uuid4())
 
+    async def create_from_github(self, payload):
+        self.github_calls.append(payload)
+        return SimpleNamespace(id=uuid4())
+
 
 class FakeSkillRepo:
-    def __init__(self, existing=None): self.existing = existing
-    async def get_by_name(self, name): return self.existing
+    def __init__(self, existing=None):
+        self.existing = existing
+
+    async def get_by_name(self, name):
+        return self.existing
 
 
 class FakeAgentSvc:
-    def __init__(self): self.calls = []
+    def __init__(self):
+        self.calls = []
+
     async def create_agent(self, payload):
         self.calls.append(payload)
         return SimpleNamespace(id=uuid4())
 
 
 class FakeAgentRepo:
-    def __init__(self, existing=None): self.existing = existing
-    async def get_agent_by_name(self, name): return self.existing
+    def __init__(self, existing=None):
+        self.existing = existing
+
+    async def get_agent_by_name(self, name):
+        return self.existing
 
 
 class FakeTriggerSvc:
-    def __init__(self): self.created = []; self.disabled = []
+    def __init__(self):
+        self.created = []
+        self.disabled = []
+
     async def create_trigger(self, domain):
         t = SimpleNamespace(id=uuid4(), name=domain.name)
         self.created.append(domain)
         return t
+
     async def disable_trigger(self, trigger_id):
         self.disabled.append(trigger_id)
         return True
 
 
 class FakeTriggerRepo:
-    def __init__(self, existing=None): self.existing = existing or []
-    async def list_all(self): return self.existing
+    def __init__(self, existing=None):
+        self.existing = existing or []
+
+    async def list_all(self):
+        return self.existing
 
 
 class FakeGovernanceSvc:
-    def __init__(self, existing=None): self.existing = existing or []; self.created = []
-    async def list_rules(self, **kwargs): return self.existing
-    async def create_rule(self, *, rule, subject_id):
-        self.created.append((rule, subject_id))
+    def __init__(self, existing=None):
+        self.existing = existing or []
+        self.created = []
+
+    async def list_rules(self, **kwargs):
+        return self.existing
+
+    async def create_rule(self, *, rule):
+        self.created.append(rule)
         return SimpleNamespace(id=uuid4())
 
 
@@ -127,9 +165,12 @@ policies:
 """
 
 
-FULL_WITH_POLICY = FULL + """policies:
+FULL_WITH_POLICY = (
+    FULL
+    + """policies:
   - {key: cap, subject: workspace, target: spend, effect: cap, params: {amount_usd: 50}}
 """
+)
 
 
 async def test_a_member_installing_policies_is_refused_before_anything_is_written():
@@ -195,12 +236,12 @@ async def test_policies_install_on_workspace_and_agent():
     gov = deps["governance_service"]
     assert len(gov.created) == 2
     # workspace cap bound to workspace id; agent deny bound to the created agent id
-    subjects = {str(r.subject_type): sid for r, sid in gov.created}
+    subjects = {str(r.subject_type): r.subject_id for r in gov.created}
     assert subjects["workspace"] == "w"
     # The human-readable reason is reported back, never written into params: the
     # typed param models forbid extras, so folding it in makes the rule fail the
     # enforceability check that guards this path.
-    deny_rule = next(r for r, _ in gov.created if r.effect.value == "deny")
+    deny_rule = next(r for r in gov.created if r.effect.value == "deny")
     assert "message" not in deny_rule.params
     deny_entity = next(e for e in res.entities if e.key == "deny")
     assert "no email" in deny_entity.detail
@@ -238,7 +279,9 @@ async def test_unenforceable_policy_does_not_block_the_rest_of_the_install():
 
 
 async def test_policy_idempotent_when_rule_exists():
-    inst, deps = _installer(governance_service=FakeGovernanceSvc(existing=[SimpleNamespace(id=uuid4())]))
+    inst, deps = _installer(
+        governance_service=FakeGovernanceSvc(existing=[SimpleNamespace(id=uuid4())])
+    )
     res = await inst.install(parse_bundle(POLICIES), {})
     actions = {(e.kind, e.key): e.action for e in res.entities}
     assert actions[("policy", "cap")] == InstallAction.REUSED
@@ -415,3 +458,261 @@ agents:
         ("code", "agentarea/shell"),
         ("code", "agentarea/files"),
     ]
+
+
+async def test_exported_workspace_bundle_installs_agent_skill_and_disabled_triggers(
+    monkeypatch,
+):
+    source_workspace_id = "source"
+    source_context = UserContext(
+        user_id="source-user",
+        workspace_id=source_workspace_id,
+        admin_workspaces=[source_workspace_id],
+    )
+    skill = SimpleNamespace(
+        id=uuid4(),
+        workspace_id=source_workspace_id,
+        registry_item_id=None,
+        is_catalog=False,
+        slug="daily-skill",
+        name="Daily Skill",
+        description="",
+        content="# Daily Skill",
+        source_type="content",
+        source_url=None,
+    )
+    agent = SimpleNamespace(
+        id=uuid4(),
+        workspace_id=source_workspace_id,
+        registry_item_id=None,
+        is_catalog=False,
+        slug="daily-agent",
+        name="Daily Agent",
+        description="",
+        instruction="Summarize the workspace.",
+        model_id="gpt-4o",
+        tools=[{"type": "code", "name": "agentarea/shell"}],
+        skills=[skill],
+        planning=None,
+        a2ui_enabled=None,
+    )
+    cron = SimpleNamespace(
+        id=uuid4(),
+        name="nightly-summary",
+        trigger_type="cron",
+        agent_id=agent.id,
+        cron_expression="0 0 * * *",
+        timezone="UTC",
+        task_parameters={"text": "Prepare the nightly summary."},
+        is_active=False,
+        conditions={},
+    )
+    webhook = SimpleNamespace(
+        id=uuid4(),
+        name="incoming-events",
+        trigger_type="webhook",
+        webhook_type="generic",
+        webhook_id="source-webhook-id-must-not-export",
+        agent_id=agent.id,
+        task_parameters={"text": "Process the inbound event."},
+        is_active=False,
+        conditions={},
+        allowed_methods=["POST"],
+        validation_rules={},
+        webhook_config=None,
+        event_types=[],
+    )
+    agent_service = SimpleNamespace(
+        list=AsyncMock(return_value=[agent]),
+        get_with_skills=AsyncMock(return_value=agent),
+    )
+    skill_service = SimpleNamespace(list=AsyncMock(return_value=[skill]))
+    trigger_repository = SimpleNamespace(list_all=AsyncMock(return_value=[cron, webhook]))
+    monkeypatch.setattr(
+        workspace_export_service,
+        "load_workspace",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                id=source_workspace_id,
+                name="Source workspace",
+                slug="source-workspace",
+            )
+        ),
+        raising=False,
+    )
+
+    export_service = WorkspaceExportService(
+        agent_service=agent_service,
+        repository_factory=SimpleNamespace(user_context=source_context),
+        skill_service=skill_service,
+        trigger_repository=trigger_repository,
+    )
+    yaml_text = await export_service.export_workspace()
+    package = parse_bundle(yaml_text)
+    preview = await BundleAnalyzer().analyze(package)
+
+    assert preview.installable
+    assert preview.issues == []
+    assert package.name == "source-workspace"
+    assert package.display_name == "Source workspace"
+    assert package.agents[0].skills == [package.skills[0].key]
+    assert package.agents[0].toolsets == ["agentarea/shell"]
+
+    model_setup = next(field for field in package.setup if field.label == "Model for Daily Agent")
+    assert package.agents[0].model == f"${{setup.{model_setup.key}}}"
+    assert model_setup.type.value == "string"
+    assert len(package.automations) == 1
+    assert package.automations[0].enabled is False
+    assert len(package.channels) == 1
+    assert package.channels[0].type == "generic"
+    assert package.channels[0].enabled is False
+    assert "source-webhook-id-must-not-export" not in yaml_text
+
+    target_context = UserContext(
+        user_id="target-user",
+        workspace_id="target",
+        admin_workspaces=["target"],
+    )
+    installer, deps = _installer(user_context=target_context)
+    result = await installer.install(package, {model_setup.key: "gpt-4o"})
+
+    assert {entity.action for entity in result.entities} == {InstallAction.CREATED}
+    assert len(deps["skill_service"].calls) == 1
+    assert deps["agent_service"].calls[0].model_id == "gpt-4o"
+    assert len(deps["agent_service"].calls) == 1
+    assert len(deps["trigger_service"].created) == 2
+    created = {
+        getattr(trigger.trigger_type, "value", trigger.trigger_type): trigger
+        for trigger in deps["trigger_service"].created
+    }
+    assert created["cron"].task_parameters == {"text": "Prepare the nightly summary."}
+    assert created["cron"].cron_expression == "0 0 * * *"
+    assert created["cron"].timezone == "UTC"
+    assert created["webhook"].task_parameters == {"text": "Process the inbound event."}
+    assert len(deps["trigger_service"].disabled) == 2
+
+
+async def test_exported_workspace_round_trips_a_uuid_referenced_mcp_with_a_credentialed_arg(
+    monkeypatch,
+):
+    source_context = UserContext(
+        user_id="source-user", workspace_id="source", admin_workspaces=["source"]
+    )
+    instance = SimpleNamespace(
+        id=uuid4(),
+        workspace_id="source",
+        registry_item_id=None,
+        is_catalog=False,
+        name="Postgres",
+        server_spec_id=str(uuid4()),
+        json_spec={},
+        get_configured_env_vars=lambda: [],
+    )
+    agent = SimpleNamespace(
+        id=uuid4(),
+        workspace_id="source",
+        registry_item_id=None,
+        is_catalog=False,
+        name="Analyst",
+        instruction="Answer from the database.",
+        # The webapp attaches an MCP by instance id, not by name.
+        tools=[{"type": "mcp", "name": str(instance.id)}],
+        skills=[],
+    )
+    mcp_instance_service = SimpleNamespace(
+        list=AsyncMock(return_value=[instance]),
+        get_transport_spec_for_instance=AsyncMock(
+            return_value={
+                "type": "command",
+                "command": "npx",
+                "args": [
+                    "-y",
+                    "@modelcontextprotocol/server-postgres",
+                    "postgresql://app:SOURCE_PASSWORD@db.source:5432/app",  # pragma: allowlist secret
+                ],
+                "environment": {"PGAPPNAME": "agentarea"},
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        workspace_export_service,
+        "load_workspace",
+        AsyncMock(return_value=SimpleNamespace(id="source", name="Source", slug="source")),
+        raising=False,
+    )
+    export_service = WorkspaceExportService(
+        agent_service=SimpleNamespace(
+            list=AsyncMock(return_value=[agent]),
+            get_with_skills=AsyncMock(return_value=agent),
+        ),
+        repository_factory=SimpleNamespace(user_context=source_context),
+        mcp_instance_service=mcp_instance_service,
+    )
+
+    yaml_text = await export_service.export_workspace()
+    package = parse_bundle(yaml_text)
+    preview = await BundleAnalyzer().analyze(package)
+
+    assert "SOURCE_PASSWORD" not in yaml_text
+    assert preview.installable
+    assert preview.issues == []
+    assert package.agents[0].mcps == [package.mcps[0].key]
+
+    (dsn_key,) = setup_refs(package.mcps[0].json_spec["args"][2])
+    model_key = next(f.key for f in package.setup if f.label == "Model for Analyst")
+    target_dsn = "postgresql://app:TARGET_PASSWORD@db.target:5432/app"  # pragma: allowlist secret
+    installer, deps = _installer(
+        user_context=UserContext(user_id="t", workspace_id="target", admin_workspaces=["target"])
+    )
+    result = await installer.install(package, {dsn_key: target_dsn, model_key: "gpt-4o"})
+
+    assert {entity.action for entity in result.entities} == {InstallAction.CREATED}
+    spec = deps["mcp_server_service"].calls[0]
+    assert spec.cmd == ["npx", "-y", "@modelcontextprotocol/server-postgres", target_dsn]
+    assert {"name": "PGAPPNAME", "isSecret": False} in [
+        {"name": entry["name"], "isSecret": entry["isSecret"]} for entry in spec.env_schema
+    ]
+    created_instance = deps["mcp_instance_service"].calls[0]
+    assert created_instance.json_spec["environment"] == {"PGAPPNAME": "agentarea"}
+    tools = deps["agent_service"].calls[0].tools
+    assert [(tool.type, tool.name) for tool in tools] == [("mcp", "Postgres")]
+
+
+async def test_a_json_spec_reference_to_an_undeclared_setup_field_blocks_install():
+    package = parse_bundle(
+        """
+schema_version: "0.1.0"
+name: p
+mcps:
+  - key: db
+    name: DB
+    json_spec: {type: command, command: npx, args: ["-y", "pg", "${setup.missing}"]}
+"""
+    )
+
+    preview = await BundleAnalyzer().analyze(package)
+
+    assert not preview.installable
+    assert "missing" in preview.issues[0].message
+
+
+async def test_github_skill_is_imported_from_its_repository():
+    package = parse_bundle(
+        """
+schema_version: "0.1.0"
+name: p
+skills:
+  - {key: review, name: Review, source_type: github, source_url: "https://github.com/o/r/tree/main/review"}
+agents: [{key: a, name: A, model: gpt-4o, skills: [review]}]
+"""
+    )
+    installer, deps = _installer()
+
+    result = await installer.install(package, {})
+
+    actions = {(e.kind, e.key): e.action for e in result.entities}
+    assert actions[("skill", "review")] == InstallAction.CREATED
+    (call,) = deps["skill_service"].github_calls
+    assert call.github_url == "https://github.com/o/r/tree/main/review"
+    assert call.name == "Review"
+    assert len(deps["agent_service"].calls[0].skill_ids) == 1

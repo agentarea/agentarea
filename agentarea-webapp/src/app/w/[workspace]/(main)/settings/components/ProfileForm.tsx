@@ -108,7 +108,7 @@ export default function ProfileForm({
         Node: { Input: ProfileInput },
       }}
     >
-      <div className="ory-elements space-y-6">
+      <div className="ory-elements ory-app-theme space-y-6">
         <SettingsMessages />
         <OrySettingsCard />
       </div>

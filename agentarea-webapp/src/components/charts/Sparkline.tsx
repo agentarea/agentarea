@@ -113,7 +113,12 @@ export function Sparkline({
       aria-hidden="true"
     >
       {areaD && (
-        <path d={areaD} style={{ fill }} fillOpacity={fillOpacity} stroke="none" />
+        <path
+          d={areaD}
+          style={{ fill }}
+          fillOpacity={fillOpacity}
+          stroke="none"
+        />
       )}
       <path
         d={d}
@@ -124,7 +129,9 @@ export function Sparkline({
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
       />
-      {showDot && <circle cx={last.x} cy={last.y} r={2} style={{ fill: stroke }} />}
+      {showDot && (
+        <circle cx={last.x} cy={last.y} r={2} style={{ fill: stroke }} />
+      )}
     </svg>
   );
 }
@@ -160,7 +167,9 @@ export function DeltaBadge({
 }) {
   if (pct === null || direction === "flat") {
     return (
-      <span className={cn("text-xs text-muted-foreground tabular-nums", className)}>
+      <span
+        className={cn("text-xs text-muted-foreground tabular-nums", className)}
+      >
         —
       </span>
     );
@@ -174,7 +183,7 @@ export function DeltaBadge({
       className={cn(
         "inline-flex items-center gap-0.5 tabular-nums text-xs font-medium",
         isGood
-          ? "text-emerald-600 dark:text-emerald-400"
+          ? "text-emerald-700 dark:text-emerald-400"
           : "text-red-600 dark:text-red-400",
         className
       )}

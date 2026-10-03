@@ -59,9 +59,13 @@ interface PolicyEditorPageDataProps {
 export async function PolicyEditorPageData({
   policyId,
 }: PolicyEditorPageDataProps) {
-  const title = policyId ? "Edit policy rule" : "New policy rule";
+  const t = await getTranslations("PoliciesPage.editor");
+  const title = policyId ? t("titles.edit") : t("titles.newPolicy");
   const header = {
-    breadcrumb: [{ label: "Policies", href: "/policies" }, { label: title }],
+    breadcrumb: [
+      { label: t("breadcrumbPolicies"), href: "/policies" },
+      { label: title },
+    ],
   };
 
   const { canAdminister } = await getViewerCapabilities();
@@ -112,7 +116,6 @@ export async function PolicyEditorPageData({
   if (policiesRes.error) {
     console.error("Failed to fetch policies:", policiesRes.error);
     if (policyId) {
-      const t = await getTranslations("PoliciesPage.editor");
       return (
         <ContentBlock header={header}>
           <div className="main-content">

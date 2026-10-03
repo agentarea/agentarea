@@ -4,8 +4,9 @@ Each MCP instance gets a stable governed endpoint:
 
     POST/GET/DELETE  /v1/mcp/{instance_id}/mcp
 
-The proxy resolves the instance, determines the upstream URL, injects
-outbound auth headers (OAuth2 bearer with auto-refresh, API key, etc.), and
+The proxy resolves the instance, determines the upstream URL, injects the
+instance's own headers (secret ones from the secret store) and outbound auth
+headers (OAuth2 bearer with auto-refresh, API key, etc.), and
 streams the request/response transparently. AgentArea owns access control
 (workspace scoping today; access-control next) and audit centrally; downstream MCP
 servers see only governed traffic.
@@ -39,7 +40,7 @@ from agentarea_common.auth.dependencies import (
     bind_request_workspace,
     binds_workspace,
 )
-from agentarea_common.auth.route_authz import requires, unrestricted
+from agentarea_common.auth.route_authz import requires
 from agentarea_common.auth.tool_authorization import decide_tool_policy
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.base.tenant_scope import unscoped
@@ -88,25 +89,31 @@ _HOP_BY_HOP = frozenset(
 )
 
 
+# The upstream is member-supplied: it receives the MCP protocol headers
+# (``Mcp-*`` plus the content negotiation and resume headers the transport uses)
+# and nothing else of the caller's -- not cookies, not forwarding headers, not
+# the caller's own auth (we inject the instance's).
+_FORWARDED_REQUEST_HEADERS = frozenset({"accept", "content-type", "last-event-id"})
+
+
 def _filter_inbound_headers(headers) -> dict[str, str]:
-    """Headers we forward upstream (drop hop-by-hop, host, our own auth)."""
-    out: dict[str, str] = {}
-    for k, v in headers.items():
-        lk = k.lower()
-        if lk in _HOP_BY_HOP:
-            continue
-        # Don't forward the user's auth to upstream — we inject our own.
-        if lk == "authorization":
-            continue
-        out[k] = v
-    return out
+    """The MCP protocol headers of the caller's request, for the upstream."""
+    return {
+        k: v
+        for k, v in headers.items()
+        if k.lower() in _FORWARDED_REQUEST_HEADERS or k.lower().startswith("mcp-")
+    }
 
 
 def _filter_outbound_headers(headers) -> dict[str, str]:
-    """Headers we forward back to the client (drop hop-by-hop)."""
+    """Upstream response headers for the client, minus hop-by-hop and cookies.
+
+    An upstream's ``Set-Cookie`` would be replayed on the API origin.
+    """
     out: dict[str, str] = {}
     for k, v in headers.items():
-        if k.lower() in _HOP_BY_HOP:
+        lk = k.lower()
+        if lk in _HOP_BY_HOP or lk == "set-cookie":
             continue
         out[k] = v
     return out
@@ -383,7 +390,7 @@ async def bind_mcp_instance_workspace(
     request: Request,
     instance_id: str,
     principal: PrincipalDep,
-    db_session: AsyncSession = Depends(get_read_db_session),
+    db_session: AsyncSession = Depends(get_read_db_session, scope="function"),
 ) -> None:
     """Act in the workspace of the instance the URL names.
 
@@ -410,7 +417,7 @@ async def bind_mcp_instance_workspace(
 @router.get(
     "/{instance_id}/mcp",
     operation_id="proxy_instance_v1_mcp__instance_id__mcp_get",
-    dependencies=[unrestricted("proxies to an MCP instance the caller's workspace already owns")],
+    dependencies=[requires("use", "mcp_instance", id_param="instance_id")],
 )
 @router.post(
     "/{instance_id}/mcp",
@@ -468,6 +475,11 @@ async def proxy_instance(
     if pinned_host:
         # Connect to the pinned IP but present the original hostname upstream.
         outbound_headers.setdefault("Host", pinned_host)
+    try:
+        outbound_headers.update(await instance_service.outbound_headers(instance))
+    except Exception as exc:
+        logger.exception("Failed to build outbound headers for instance %s", instance_id)
+        raise HTTPException(status_code=502, detail="Upstream auth failed") from exc
     if instance.auth_config_id:
         auth_repo = MCPAuthConfigRepository(db_session, user_context)
         auth_config = await auth_repo.get_by_id(instance.auth_config_id)

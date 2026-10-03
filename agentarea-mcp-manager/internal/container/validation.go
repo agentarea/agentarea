@@ -52,6 +52,12 @@ func (v *ContainerValidator) ValidateContainerImage(ctx context.Context, imageNa
 		Warnings: []string{},
 	}
 
+	if err := ValidateImageReference(imageName); err != nil {
+		result.Errors = append(result.Errors, err.Error())
+		result.Valid = false
+		return result, nil
+	}
+
 	// Check if image exists locally
 	exists, err := v.imageExistsLocally(ctx, imageName)
 	if err != nil {
@@ -326,8 +332,12 @@ func (v *ContainerValidator) validateJSONSpec(jsonSpec map[string]interface{}) e
 
 	default:
 		// Docker type (or unspecified): needs "image" and "port"
-		if image, ok := jsonSpec["image"].(string); !ok || image == "" {
+		image, ok := jsonSpec["image"].(string)
+		if !ok || image == "" {
 			return fmt.Errorf("image field must be a non-empty string")
+		}
+		if err := ValidateImageReference(image); err != nil {
+			return err
 		}
 
 		switch port := jsonSpec["port"].(type) {

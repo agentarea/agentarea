@@ -152,7 +152,7 @@ export default async function ProvidersData({
     <div className="space-y-8">
       {showsPlatformSection && (
         <div>
-          <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+          <h4 className="mb-3 text-xs uppercase text-muted-foreground">
             {t("platformProviderConfigsSection")} (
             {filteredPlatformConfigs.length})
           </h4>
@@ -168,7 +168,7 @@ export default async function ProvidersData({
           {/* The Connected tab already names this list; a heading only earns
               its place to tell it apart from the platform section above. */}
           {showsPlatformSection && (
-            <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+            <h4 className="mb-3 text-xs uppercase text-muted-foreground">
               {t("providerConfigsSection")} ({filteredOwnConfigs.length})
             </h4>
           )}

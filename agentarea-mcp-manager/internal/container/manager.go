@@ -41,6 +41,26 @@ type Manager struct {
 	secretResolver  SecretResolverInterface // Optional: resolves secrets from encrypted_secrets table
 }
 
+// StartFailureError carries a safe workload-start classification across the
+// backend boundary. The underlying cause is retained for programmatic
+// inspection, but never included in the message returned to callers.
+type StartFailureError struct {
+	reason string
+	cause  error
+}
+
+func (e *StartFailureError) Error() string {
+	return "workload startup failed: " + e.reason
+}
+
+func (e *StartFailureError) Unwrap() error {
+	return e.cause
+}
+
+func (e *StartFailureError) FailureReason() string {
+	return e.reason
+}
+
 // NewManager creates a new container manager
 func NewManager(cfg *config.Config, logger *slog.Logger) *Manager {
 	healthChecker := NewHealthChecker(cfg, logger)
@@ -165,6 +185,12 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
+	// The image lands in `docker run` argv in the flag position; anything that
+	// is not a plain reference would be parsed as a runtime flag.
+	if err := ValidateImageReference(req.Image); err != nil {
+		return nil, err
+	}
+
 	// Check if container already exists
 	if existing, exists := m.containers[req.ServiceName]; exists {
 		if err := m.reclaimStoppedRecord(ctx, existing, req.ServiceName); err != nil {
@@ -245,21 +271,19 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 	// Wait for container to be running
 	if err := m.waitForContainer(ctx, container.ID); err != nil {
 		container.Status = models.StatusError
-		// No caller ever receives a handle to this container, and it was never
-		// recorded, so nothing can reclaim it later: it would sit dead on the
-		// host holding its name and its disk, unknown to the control plane.
-		// What it printed is the only record of why it stopped, so that is kept
-		// before the corpse goes.
+		// No caller receives a handle to a failed start, so remove its container
+		// before returning a classified failure.
+		reason, diagnostic := m.startFailureDiagnostic(ctx, container)
 		m.logger.Error("Container exited before it could serve",
 			slog.String("container", containerName),
 			slog.String("id", container.ID),
-			slog.String("diagnostic", m.startFailureDiagnostic(ctx, container)))
+			slog.String("diagnostic", diagnostic))
 		if reapErr := m.removeContainerByID(ctx, container.ID); reapErr != nil {
 			m.logger.Warn("Could not remove the container that failed to start",
 				slog.String("container", containerName),
 				slog.String("error", reapErr.Error()))
 		}
-		return nil, fmt.Errorf("container failed to start: %w", err)
+		return nil, &StartFailureError{reason: reason, cause: err}
 	}
 
 	container.Status = models.StatusRunning
@@ -896,27 +920,56 @@ func parseMemoryLimit(value string) (int64, error) {
 	return amount * multiplier, nil
 }
 
-// startFailureDiagnostic says why a container is gone without reprinting what it
-// said.
-//
-// Its own output is the most useful thing here and the one thing that cannot be
-// logged by default: it is third-party code that held credentials. Those arrive
-// in plain environment as often as through the secret store, and a process can
-// print a token it fetched after it started, which nothing derived from the spec
-// would recognise. The normal path therefore records identifiers and the
-// runtime's classification; an operator who needs the text turns it on for one
-// host, knowing what lands in the log.
-func (m *Manager) startFailureDiagnostic(ctx context.Context, container *models.Container) string {
-	if !m.config.Container.LogWorkloadOutput {
-		return "workload output withheld; set LOG_WORKLOAD_OUTPUT=true on this host to include it"
-	}
+// startFailureDiagnostic classifies a workload failure without returning
+// third-party output to the caller. Raw output is only added to the host log
+// when its explicit diagnostic switch is enabled.
+func (m *Manager) startFailureDiagnostic(ctx context.Context, container *models.Container) (string, string) {
+	evidenceCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
 
-	output, err := exec.CommandContext(ctx, m.config.Container.Runtime, "logs", "--tail", "20", container.ID).CombinedOutput()
-	trimmed := strings.TrimSpace(string(output))
-	if err != nil && trimmed == "" {
-		return "no output could be read: " + err.Error()
+	exitOutput, exitErr := exec.CommandContext(
+		evidenceCtx,
+		m.config.Container.Runtime,
+		"inspect",
+		container.ID,
+		"--format",
+		"{{.State.ExitCode}}",
+	).Output()
+	exitCode, parseErr := strconv.Atoi(strings.TrimSpace(string(exitOutput)))
+	hasExitCode := exitErr == nil && parseErr == nil
+
+	output, _ := exec.CommandContext(
+		evidenceCtx,
+		m.config.Container.Runtime,
+		"logs",
+		"--tail",
+		"20",
+		container.ID,
+	).CombinedOutput()
+	workloadOutput := strings.TrimSpace(string(output))
+	reason := classifyStartupFailure(exitCode, hasExitCode, workloadOutput)
+	if m.config.Container.LogWorkloadOutput && workloadOutput != "" {
+		return reason, reason + "; workload output: " + redactEnvironment(workloadOutput, container.Environment)
 	}
-	return redactEnvironment(trimmed, container.Environment)
+	return reason, reason + "; workload output withheld"
+}
+
+func classifyStartupFailure(exitCode int, hasExitCode bool, output string) string {
+	lower := strings.ToLower(output)
+	if strings.Contains(lower, "could not determine executable to run") ||
+		(strings.Contains(lower, "executable named") && strings.Contains(lower, "is not provided by package")) {
+		return "package has no executable"
+	}
+	if strings.Contains(lower, "importerror: cannot import name") {
+		return "workload failed to import a dependency during startup"
+	}
+	if strings.Contains(lower, "[mcp-base] the stdio server stopped before it initialized") {
+		return "workload failed during MCP server initialization"
+	}
+	if hasExitCode && exitCode != 0 {
+		return fmt.Sprintf("workload exited with code %d during startup", exitCode)
+	}
+	return "workload failed during startup"
 }
 
 // redactEnvironment removes the values this container was given from text about
@@ -1333,23 +1386,22 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 	// Wait for container to be running
 	if err := m.waitForContainer(ctx, container.ID); err != nil {
 		container.Status = models.StatusError
-
-		// Publish failed status
-		errorMsg := fmt.Sprintf("Container failed to start: %v", err)
-		if publishErr := m.eventPublisher.PublishFailed(ctx, instanceID, name, errorMsg); publishErr != nil {
+		reason, diagnostic := m.startFailureDiagnostic(ctx, container)
+		if publishErr := m.eventPublisher.PublishFailed(
+			ctx,
+			instanceID,
+			name,
+			"Container failed to start: "+reason,
+		); publishErr != nil {
 			m.logger.Warn("Failed to publish failed status",
 				slog.String("instance_id", instanceID),
 				slog.String("error", publishErr.Error()))
 		}
 
-		// Same reclaim as the direct path, for the same reason: the caller gets an
-		// error and no handle, so nothing else can remove this container or forget
-		// the record. Left in place, the corpse holds the name and the error record
-		// answers every retry, which made a single failed start permanent.
 		m.logger.Error("Container exited before it could serve",
 			slog.String("container", containerName),
 			slog.String("instance_id", instanceID),
-			slog.String("diagnostic", m.startFailureDiagnostic(ctx, container)))
+			slog.String("diagnostic", diagnostic))
 		if reapErr := m.removeContainerByID(ctx, container.ID); reapErr != nil {
 			m.logger.Warn("Could not remove the container that failed to start",
 				slog.String("container", containerName),
@@ -1357,7 +1409,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		}
 		delete(m.containers, name)
 
-		return fmt.Errorf("container failed to start: %w", err)
+		return &StartFailureError{reason: reason, cause: err}
 	}
 
 	// Update final status — Traefik discovers the container via labels

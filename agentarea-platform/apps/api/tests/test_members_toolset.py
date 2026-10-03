@@ -10,6 +10,7 @@ import json
 from contextlib import asynccontextmanager
 from datetime import datetime
 from types import SimpleNamespace
+from typing import ClassVar
 from uuid import uuid4
 
 import pytest
@@ -94,6 +95,7 @@ class FakeInvitationService:
         if self.raise_on_revoke:
             raise InvitationNotFound(str(invitation_id))
         self.revoked.append((workspace_id, invitation_id))
+        return SimpleNamespace(id=invitation_id, email="new@example.com", status="revoked")
 
 
 JOINED_AT = datetime(2026, 3, 2, 9, 30)
@@ -142,13 +144,29 @@ class FakeInvitationMailer:
         return self.outcome
 
 
+class FakeAudit:
+    """Records what the toolset sends to the audit trail."""
+
+    calls: ClassVar[list[tuple]] = []
+
+    def __init__(self, session, user_context) -> None:
+        self.user_context = user_context
+
+    async def record(self, action, resource_type, resource_id=None, **fields):
+        FakeAudit.calls.append(
+            (self.user_context.user_id, action, resource_type, str(resource_id), fields)
+        )
+
+
 @pytest.fixture
 def harness(monkeypatch):
     service = FakeInvitationService()
     memberships = FakeMembershipService()
     directory = FakeDirectory({})
     mailer = FakeInvitationMailer()
+    FakeAudit.calls = []
     monkeypatch.setattr(members_toolset, "deliver_invitation_for_workspace", mailer)
+    monkeypatch.setattr(members_toolset, "AuditService", FakeAudit)
 
     @asynccontextmanager
     async def fake_context():
@@ -161,7 +179,11 @@ def harness(monkeypatch):
     monkeypatch.setattr(members_toolset, "_build_membership_service", lambda _session: memberships)
     monkeypatch.setattr(members_toolset, "get_identity_directory", lambda: directory)
     return SimpleNamespace(
-        service=service, memberships=memberships, directory=directory, mailer=mailer
+        service=service,
+        memberships=memberships,
+        directory=directory,
+        mailer=mailer,
+        audit=FakeAudit.calls,
     )
 
 
@@ -222,6 +244,10 @@ async def test_invite_returns_the_token_once(harness):
             "expires_in_days": 7,
         }
     ]
+    [(actor, action, resource_type, _, fields)] = harness.audit
+    assert (actor, action, resource_type) == ("user-1", "member.invite", "invitation")
+    assert fields["event_metadata"]["resource_name"] == "new@example.com"
+    assert RETURNED_ONCE not in str(harness.audit)
 
 
 async def test_invite_omits_expiry_when_not_given(harness):
@@ -254,6 +280,9 @@ async def test_remove_revokes_membership_in_the_callers_workspace(harness):
     await MembersToolset().remove(user_id="user-2")
 
     assert harness.memberships.calls == [("remove", "ws-1", "user-2", "user-1")]
+    assert [(a, act, rid) for a, act, _, rid, _ in harness.audit] == [
+        ("user-1", "member.remove", "user-2")
+    ]
 
 
 async def test_remove_reports_a_finished_removal(harness):

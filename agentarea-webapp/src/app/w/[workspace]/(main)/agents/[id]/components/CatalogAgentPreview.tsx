@@ -6,7 +6,7 @@ import {
 } from "@/lib/agent-identity";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { ProviderIcon } from "@/components/ui/provider-icon";
-import type { Agent } from "@/types/agent";
+import { agentSkillViews, type Agent } from "@/types/agent";
 import { InstallAgentButton } from "./InstallAgentButton";
 
 /**
@@ -33,10 +33,14 @@ export function CatalogAgentPreview({
   const providerName = agent.model_info?.provider_name || null;
   const providerIconUrl = agent.model_info?.provider_icon_url || null;
 
-  const skills = agent.skills ?? [];
-  const mcpConfigs = agent.tools_config?.mcp_server_configs ?? [];
-  const openapiConfigs = agent.tools_config?.openapi_configs ?? [];
-  const connectionsCount = mcpConfigs.length + openapiConfigs.length;
+  const skills = agentSkillViews(agent.skills);
+  let mcpCount = 0;
+  let openapiCount = 0;
+  for (const tool of agent.tools ?? []) {
+    if (tool.type === "mcp") mcpCount += 1;
+    else if (tool.type === "openapi") openapiCount += 1;
+  }
+  const connectionsCount = mcpCount + openapiCount;
 
   return (
     <div className="mx-auto w-full max-w-[1180px]">
@@ -52,9 +56,9 @@ export function CatalogAgentPreview({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-xl font-semibold tracking-tight">
+            <h2 className="text-xl font-semibold tracking-tight">
               {agent.name}
-            </h1>
+            </h2>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-0.5 text-[11.5px] font-semibold text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
               <Sparkles className="h-3 w-3" />
               Catalog template
@@ -121,7 +125,7 @@ export function CatalogAgentPreview({
             <EmptyRow text="No connections required." />
           ) : (
             <div className="px-[15px] py-3 text-[12.5px] text-foreground/80">
-              {mcpConfigs.length} MCP · {openapiConfigs.length} API
+              {mcpCount} MCP · {openapiCount} API
             </div>
           )}
         </Card>

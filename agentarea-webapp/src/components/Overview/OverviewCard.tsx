@@ -156,7 +156,7 @@ export function GlanceRow({
       >
         <div className="min-w-0 flex-1">
           <div className="truncate text-[12.5px] font-medium">{title}</div>
-          <div className="mt-px truncate text-[11px] text-muted-foreground/80">
+          <div className="mt-px truncate text-[11px] text-muted-foreground">
             {sub}
           </div>
         </div>
@@ -187,7 +187,7 @@ export function FactRow({
       <div className="min-w-0 flex-1">
         <div className="truncate text-[12.5px] font-medium">{title}</div>
         {sub != null && (
-          <div className="mt-px truncate text-[11px] text-muted-foreground/80">
+          <div className="mt-px truncate text-[11px] text-muted-foreground">
             {sub}
           </div>
         )}
@@ -319,7 +319,7 @@ export function Stat({
         className={cn(
           "mt-2 truncate text-[11px]",
           subTone === "muted"
-            ? "text-muted-foreground/70"
+            ? "text-muted-foreground"
             : subTone === "down"
               ? "font-medium text-[var(--status-danger)]"
               : "font-medium text-foreground/70"

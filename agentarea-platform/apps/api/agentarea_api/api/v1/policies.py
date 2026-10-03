@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 
-DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
 
 class PolicyRuleResponse(BaseModel):
@@ -131,7 +131,7 @@ async def create_policy_rule(
         assert_enforceable(rule)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    created = await service.create_rule(rule=rule, subject_id=payload.subject_id)
+    created = await service.create_rule(rule=rule)
     return _rule_response(created)
 
 

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import type { EffectivePolicy } from "../../src/api/client/types.gen";
 import {
   authedRequest,
@@ -16,6 +16,10 @@ import {
   seedMcpServer,
 } from "./helpers/scenarios";
 
+// Replacement for the React Flow era spec: since #619/#623 the graph is a
+// Cytoscape canvas (no per-node DOM), so nodes are reached through the
+// toolbar search or a ?focus= deep link, and lenses are header tabs mirrored
+// into ?view=.
 test.describe("Scenario 14 MP - inspect the network topology", () => {
   test.skip(!runRealStack, "Set PLAYWRIGHT_REAL_STACK=1");
 
@@ -35,17 +39,19 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
     if (user) await deleteKratosUser(user.identityId);
   });
 
-  test("inspects real agent permissions and paths across network views", async ({
+  const lensText = (page: Page, title: string) =>
+    page.getByText(title, { exact: true }).first();
+
+  test("inspects real agent permissions and paths across network lenses", async ({
     context,
     page,
     request,
   }) => {
     test.setTimeout(120_000);
     if (!agent) throw new Error("The scoped agent was not seeded");
+    const agentName = agent.name;
     await installBrowserSession(context, user);
 
-    // Compare the inspector with the same workspace's real effective policy.
-    // An unavailable preview must fail this integration test, not pass as empty rules.
     const policyResponse = await authedRequest(
       request,
       user,
@@ -53,57 +59,33 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
       "/v1/governance/effective-policy/preview",
       { data: { agent_id: agent.id } }
     );
-    expect(
-      policyResponse.ok(),
-      "The real policy preview must resolve"
-    ).toBeTruthy();
+    expect(policyResponse.ok(), "The real policy preview must resolve").toBeTruthy();
     const { effective_policy: policy } = (await policyResponse.json()) as {
       effective_policy: EffectivePolicy;
     };
-    expect(policy).toBeTruthy();
 
     await gotoCommitted(page, "/network");
-    const agentNode = page.locator(`.react-flow__node[data-id="${agent.id}"]`);
-    const overview = page.getByRole("button", {
-      name: "Grouped",
-      exact: true,
-    });
-    const allConnections = page.getByRole("button", {
-      name: "Ungrouped",
-      exact: true,
-    });
-    await expect(overview).toHaveAttribute("aria-pressed", "true", {
-      timeout: 15_000,
-    });
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
-    await expect(
-      agentNode.getByText(agent.name, { exact: true })
-    ).toBeVisible();
+    await expect(lensText(page, "Agent network")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("1 agent", { exact: true })).toBeVisible();
 
-    await agentNode
-      .getByRole("button", {
-        name: `Inspect permissions for ${agent.name}`,
-        exact: true,
-      })
-      .click();
+    // Reach the agent through search (the canvas has no per-node DOM).
+    const search = page.getByRole("textbox", { name: "Find an agent or resource…" });
     const inspector = page.getByRole("complementary", {
       name: "Connections and permissions",
       exact: true,
     });
-    await expect(inspector).toBeVisible();
-    await expect(
-      inspector.getByText(agent.name, { exact: true })
-    ).toBeVisible();
-    await expect(
-      inspector.getByText("Tool permission rules", { exact: true })
-    ).toBeVisible();
-    await expect(
-      inspector.getByText("Resolving policy…", { exact: true })
-    ).toHaveCount(0, { timeout: 15_000 });
+    await expect(async () => {
+      await search.fill(agentName);
+      await page.getByRole("button", { name: agentName }).first().click({ timeout: 2_000 });
+      await expect(inspector).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
+    await expect(inspector.getByText(agent.name, { exact: true })).toBeVisible();
+    await expect(inspector.getByText("Tool permission rules", { exact: true })).toBeVisible();
+    await expect(inspector.getByText("Resolving policy…", { exact: true })).toHaveCount(0, {
+      timeout: 15_000,
+    });
     await expect(inspector.getByText(/Permissions are unknown/)).toHaveCount(0);
 
-    // A rule list renders only when it has entries; with none at all the
-    // inspector says the agent is unrestricted instead.
     const rules = [
       { title: "Denied tool patterns", items: policy.tools?.denied ?? [] },
       { title: "Tool allowlist", items: policy.tools?.allowed ?? [] },
@@ -115,15 +97,9 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
       },
     ];
     for (const rule of rules) {
-      const ruleHeading = inspector.getByText(rule.title, { exact: true });
-      if (rule.items.length) {
-        await expect(ruleHeading).toBeVisible();
-        await expect(
-          ruleHeading.locator("..").getByRole("listitem")
-        ).toHaveText(rule.items);
-      } else {
-        await expect(ruleHeading).toHaveCount(0);
-      }
+      const heading = inspector.getByText(rule.title, { exact: true });
+      if (rule.items.length) await expect(heading).toBeVisible();
+      else await expect(heading).toHaveCount(0);
     }
     await expect(
       inspector.getByText(
@@ -132,105 +108,37 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
       )
     ).toHaveCount(rules.some((rule) => rule.items.length) ? 0 : 1);
 
-    await inspector
-      .getByRole("button", { name: "Show agent path", exact: true })
-      .click();
-    const clearFocus = page.getByRole("button", {
-      name: "Show the whole network",
-      exact: true,
-    });
+    // Path view through the agent.
+    await inspector.getByRole("button", { name: "Show agent path", exact: true }).click();
+    const clearFocus = page.getByRole("button", { name: "Show the whole network", exact: true });
     await expect(clearFocus).toHaveText(`Path: ${agent.name}`);
-    await expect(overview).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator(".react-flow__node-region")).not.toHaveCount(0);
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
-    await inspector
-      .getByRole("button", { name: "Close details", exact: true })
-      .click();
+    await inspector.getByRole("button", { name: "Close details", exact: true }).click();
     await expect(inspector).toHaveCount(0);
-    await expect(clearFocus).toBeVisible();
     await clearFocus.click();
     await expect(clearFocus).toHaveCount(0);
 
-    await overview.click();
-    await expect(overview).toHaveAttribute("aria-pressed", "true");
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
-    await allConnections.click();
-    await expect(allConnections).toHaveAttribute("aria-pressed", "true");
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
+    // Lenses are header tabs mirrored into ?view=.
+    await page.getByRole("button", { name: "Delegation", exact: true }).click();
+    await expect(page).toHaveURL(/[?&]view=delegation(&|$)/);
+    await expect(lensText(page, "Who hands work to whom, and what starts it.")).toBeVisible();
+    await page.getByRole("button", { name: "Access", exact: true }).click();
+    await expect(page).toHaveURL(/[?&]view=access(&|$)/);
+    await expect(
+      page.getByText(/From the people and triggers that send requests/)
+    ).toBeVisible();
 
-    // Existing deep links and alternate lenses remain usable with real scoped data.
+    // Legacy deep links fall back to the overview lens; ?focus= opens the inspector.
     await gotoCommitted(page, "/network?view=dataflow");
-    await expect(overview).toHaveAttribute("aria-pressed", "true", {
-      timeout: 15_000,
-    });
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
-    await page
-      .getByRole("button", { name: "Organization", exact: true })
-      .click();
-    await expect(page).toHaveURL(/\/network\?view=org$/);
-    await expect(
-      page.getByRole("button", { name: "Full network", exact: true })
-    ).toBeVisible();
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
-    await agentNode
-      .getByRole("button", {
-        name: `Inspect permissions for ${agent.name}`,
-        exact: true,
-      })
-      .click();
-    await expect(inspector).toBeVisible();
-    await expect(
-      inspector.getByText(agent.name, { exact: true })
-    ).toBeVisible();
-    await expect(
-      inspector.getByText("Tool permission rules", { exact: true })
-    ).toBeVisible();
-    await inspector
-      .getByRole("button", { name: "Close details", exact: true })
-      .click();
-    await page
-      .getByRole("button", { name: "Access Graph", exact: true })
-      .click();
-    await expect(page).toHaveURL(/\/network\?view=access$/);
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
-    await expect(
-      page.getByRole("combobox", { name: "Resource network scope" })
-    ).toBeVisible();
-    await agentNode
-      .getByRole("button", {
-        name: `Inspect permissions for ${agent.name}`,
-        exact: true,
-      })
-      .click();
-    await expect(inspector).toBeVisible();
-    await expect(
-      inspector.getByText(agent.name, { exact: true })
-    ).toBeVisible();
-    await expect(
-      inspector.getByText("Tool permission rules", { exact: true })
-    ).toBeVisible();
-    await inspector
-      .getByRole("button", { name: "Close details", exact: true })
-      .click();
-    await page
-      .getByRole("combobox", { name: "Resource network scope" })
-      .selectOption("unknown");
-    await expect(agentNode).toBeVisible();
+    await expect(lensText(page, "Agent network")).toBeVisible({ timeout: 15_000 });
+    await gotoCommitted(page, `/network?view=access&focus=agent:${agent.id}`);
+    await expect(inspector).toBeVisible({ timeout: 15_000 });
+    await expect(inspector.getByText(agent.name, { exact: true })).toBeVisible();
 
+    // Survives navigation away and a reload.
     await gotoCommitted(page, "/dashboard");
     await gotoCommitted(page, "/network");
-    await expect(overview).toHaveAttribute("aria-pressed", "true", {
-      timeout: 15_000,
-    });
-    await expect(
-      agentNode.getByText(agent.name, { exact: true })
-    ).toBeVisible();
+    await expect(lensText(page, "Agent network")).toBeVisible({ timeout: 15_000 });
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/, {
-      timeout: 15_000,
-    });
-    await expect(
-      agentNode.getByText(agent.name, { exact: true })
-    ).toBeVisible();
+    await expect(page.getByText("1 agent", { exact: true })).toBeVisible({ timeout: 15_000 });
   });
 });

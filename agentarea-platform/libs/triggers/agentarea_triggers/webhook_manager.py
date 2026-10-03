@@ -131,11 +131,6 @@ class WebhookManager(ABC):
         pass
 
     @abstractmethod
-    async def apply_rate_limiting(self, webhook_id: str) -> bool:
-        """Apply rate limiting to webhook requests."""
-        pass
-
-    @abstractmethod
     async def get_webhook_response(
         self, success: bool, error_message: str | None = None
     ) -> dict[str, Any]:
@@ -537,22 +532,6 @@ class DefaultWebhookManager(WebhookManager):
                 original_error=str(e),
             ) from e
 
-    async def apply_rate_limiting(self, webhook_id: str) -> bool:
-        """Rate limiting is handled at infrastructure layer.
-
-        This method is kept for interface compatibility but always returns True
-        since rate limiting is now handled by ingress/load balancer/API gateway.
-
-        Args:
-            webhook_id: The webhook ID (unused)
-
-        Returns:
-            Always True - rate limiting handled at infrastructure layer
-        """
-        # Rate limiting moved to infrastructure layer (ingress/load balancer/API gateway)
-        # This provides better performance and prevents application-level bottlenecks
-        return True
-
     async def get_webhook_response(
         self, success: bool, error_message: str | None = None
     ) -> dict[str, Any]:
@@ -695,8 +674,13 @@ class DefaultWebhookManager(WebhookManager):
         elif webhook_type == WebhookType.TEAMS:
             return await self._parse_teams_webhook(request_data, base_data)
         else:
-            # Generic webhook - just include raw body
-            return {**base_data, "body": request_data.body, "raw_data": request_data.body}
+            # Generic webhook: the raw body, plus its ``text`` lifted to where
+            # resolve_task_query reads a run's instruction from.
+            parsed = {**base_data, "body": request_data.body, "raw_data": request_data.body}
+            body = request_data.body
+            if isinstance(body, dict) and isinstance(body.get("text"), str):
+                parsed["text"] = body["text"]
+            return parsed
 
     async def _parse_generic_mapping_webhook(
         self, request_data: WebhookRequestData, base_data: dict[str, Any], mapping: dict[str, str]

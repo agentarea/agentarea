@@ -1,6 +1,6 @@
 "use client";
+import { useLocale, useTranslations } from "next-intl";
 
-import { useLocale } from "next-intl";
 import {
   Select,
   SelectContent,
@@ -11,6 +11,7 @@ import {
 
 export default function LanguageSelect() {
   const locale = useLocale() as "en" | "ru";
+  const t = useTranslations("SettingsPage.preferences");
 
   const onSelectChange = (value: string) => {
     const newLocale = value as "en" | "ru";
@@ -20,7 +21,7 @@ export default function LanguageSelect() {
 
   return (
     <Select value={locale} onValueChange={onSelectChange}>
-      <SelectTrigger className="w-[140px]">
+      <SelectTrigger className="w-[140px]" aria-label={t("language")}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

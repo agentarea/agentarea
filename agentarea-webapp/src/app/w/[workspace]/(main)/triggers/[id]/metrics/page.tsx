@@ -1,6 +1,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { Clock, Gauge, Hash, Wallet } from "lucide-react";
 import type { ExecutionMetricsResponse } from "@/api/client/types.gen";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { Stat, StatStrip } from "@/components/Overview/OverviewCard";
 import { getTriggerMetrics } from "@/lib/api";
 import { getPricingCurrency } from "@/lib/api-dashboard";
@@ -29,12 +30,16 @@ export default async function TriggerMetricsPage({ params }: Props) {
 
   if (error || !data) {
     return (
-      <div className="flex h-64 items-center justify-center text-destructive">
-        {t("metricsLoadFailed")}
-      </div>
+      <RetryEmptyState
+        title={t("metricsLoadFailed")}
+        iconsType="triggers"
+        additionAction={{
+          label: t("overview"),
+          href: `/triggers/${id}`,
+        }}
+      />
     );
   }
-
   const metrics = data as ExecutionMetricsResponse;
   const total = metrics.total_executions ?? 0;
   // The API reports percentages, not fractions.
@@ -66,13 +71,23 @@ export default async function TriggerMetricsPage({ params }: Props) {
           value={total}
           bar={null}
           sub={
-            failed > 0
-              ? t("failedRuns", { count: failed })
-              : t("periodHours", {
-                  hours: metrics.period_hours ?? WINDOW_HOURS,
-                })
+            failed > 0 ? (
+              <div className="grid min-w-0">
+                <span className="truncate">
+                  {t("failedRuns", { count: failed })}
+                </span>
+                <span className="truncate font-normal text-muted-foreground">
+                  {t("periodHours", {
+                    hours: metrics.period_hours ?? WINDOW_HOURS,
+                  })}
+                </span>
+              </div>
+            ) : (
+              t("periodHours", {
+                hours: metrics.period_hours ?? WINDOW_HOURS,
+              })
+            )
           }
-          subTone={failed > 0 ? "down" : "muted"}
         />
         <Stat
           icon={<Clock />}

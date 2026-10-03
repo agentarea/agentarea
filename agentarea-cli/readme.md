@@ -26,11 +26,10 @@ npm start
 ## Quick Start
 
 ```bash
-$ agentarea-cli
+$ agentarea login --api-url=http://localhost:8000
+# Opens the browser to sign in (OAuth + PKCE)
 
-# First time: You'll be prompted to login
-[?] Email: your.email@example.com
-[?] Password: ••••••••
+$ agentarea-cli
 
 # Then: Select an agent and submit a task
 [?] Select agent: Agent-1 (online)
@@ -48,9 +47,12 @@ Processing: 50%
 ### Login
 
 ```bash
-$ agentarea-cli
-# Prompts for email and password
+$ agentarea login --api-url=http://localhost:8000
+# Signs in through the browser (OAuth + PKCE)
 # Token stored securely in OS keychain
+
+$ agentarea logout
+# Clears the stored session
 ```
 
 ### List Agents
@@ -125,7 +127,6 @@ source/
 ├── components/          # Ink UI components
 ├── services/            # API clients and business logic
 ├── hooks/               # React hooks for state management
-├── context/             # React context providers
 ├── utils/               # Utility functions
 └── types/               # TypeScript type definitions
 ```
@@ -136,9 +137,9 @@ The CLI expects the following API endpoints:
 
 ### Authentication
 
-- `POST /auth/login` - Login with credentials
-- `POST /auth/refresh` - Refresh access token
-- `POST /auth/logout` - Logout and invalidate token
+`agentarea login` uses the API's OAuth authorization server
+(`/.well-known/oauth-authorization-server`): PKCE sign-in in the browser, and
+the token endpoint to refresh an expiring access token.
 
 ### Agents
 

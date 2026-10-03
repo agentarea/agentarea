@@ -24,7 +24,7 @@ import type {
   InstalledEntity,
   SetupField as ApiSetupField,
 } from "@/api/client/types.gen";
-import type { SetupField } from "@/app/w/[workspace]/(main)/bundles/types";
+import type { SetupFieldView } from "@/app/w/[workspace]/(main)/bundles/types";
 import { analyzeBundleAction, installBundleAction } from "./actions";
 
 type WizardStep = "source" | "review" | "result";
@@ -131,7 +131,7 @@ function groupInstalledByKind(entities: InstalledEntity[]): Map<EntityKind, Inst
 }
 
 function hasRequiredEmpty(
-  schema: SetupField[],
+  schema: SetupFieldView[],
   values: Record<string, string | number | boolean>
 ): boolean {
   return schema.some((field) => {
@@ -151,7 +151,7 @@ function isSetupValue(value: unknown): value is string | number | boolean {
   );
 }
 
-function setupFields(fields: ApiSetupField[] | undefined): SetupField[] {
+function setupFields(fields: ApiSetupField[] | undefined): SetupFieldView[] {
   return (fields ?? []).map((field) => ({
     key: field.key,
     label: field.label,

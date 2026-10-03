@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,9 +11,10 @@ interface ThemeToggleProps {
 }
 
 export function ThemeToggle({ className }: ThemeToggleProps) {
+  const t = useTranslations("Common");
   const [mounted, setMounted] = useState(false);
-  const { theme, setTheme } = useTheme();
-  const isDark = theme === "dark";
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   useEffect(() => {
     setMounted(true);
@@ -24,20 +26,25 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
   }
 
   return (
-    <div
+    <button
+      type="button"
+      aria-label={t(isDark ? "switchToLightTheme" : "switchToDarkTheme")}
       className={cn(
-        "flex h-8 w-16 cursor-pointer rounded-full p-1 transition-all duration-300",
-        isDark
-          ? "border border-zinc-800 bg-zinc-950"
-          : "border border-zinc-200 bg-white",
+        "flex h-8 w-16 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-[767px]:h-11",
         className
       )}
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      role="button"
-      tabIndex={-1}
     >
-      <div className="flex w-full items-center justify-between">
-        <div
+      <span
+        aria-hidden="true"
+        className={cn(
+          "flex h-8 w-16 items-center justify-between rounded-full p-1 transition-colors duration-300",
+          isDark
+            ? "border border-zinc-800 bg-zinc-950"
+            : "border border-zinc-200 bg-white"
+        )}
+      >
+        <span
           className={cn(
             "flex h-6 w-6 items-center justify-center rounded-full transition-transform duration-300",
             isDark
@@ -50,8 +57,8 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
           ) : (
             <Sun className="h-4 w-4 text-gray-700" strokeWidth={1.5} />
           )}
-        </div>
-        <div
+        </span>
+        <span
           className={cn(
             "flex h-6 w-6 items-center justify-center rounded-full transition-transform duration-300",
             isDark ? "bg-transparent" : "-translate-x-8 transform"
@@ -62,8 +69,8 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
           ) : (
             <Moon className="h-4 w-4 text-black" strokeWidth={1.5} />
           )}
-        </div>
-      </div>
-    </div>
+        </span>
+      </span>
+    </button>
   );
 }

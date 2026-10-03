@@ -19,7 +19,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
       <div className="block h-full">
         <Card
           className={cn(
-            "group relative flex h-full cursor-pointer flex-col justify-between overflow-hidden p-0 transition-all duration-300",
+            "group relative flex h-full cursor-pointer flex-col justify-between overflow-hidden p-0 transition-[box-shadow,border-color,background-color,transform] duration-300",
             "border border-zinc-200 dark:border-zinc-800",
             "bg-white dark:bg-zinc-900",
             "hover:shadow-lg hover:shadow-zinc-200/50 dark:hover:shadow-zinc-950/50",

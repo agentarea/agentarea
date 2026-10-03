@@ -89,3 +89,34 @@ export function getCurrencySymbol(
   }).formatToParts(0);
   return parts.find((part) => part.type === "currency")?.value ?? currency;
 }
+
+const MONEY_INPUT_PATTERN = /^([+-]?)(\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+const NONZERO_DIGIT_PATTERN = /[1-9]/;
+
+export function parseMoneyInput(value: string): string | null {
+  const trimmed = value.trim();
+  return MONEY_INPUT_PATTERN.test(trimmed) ? trimmed : null;
+}
+
+export function isPositiveMoneyInput(value: string): boolean {
+  const parsed = parseMoneyInput(value);
+  if (parsed === null) return false;
+  const match = MONEY_INPUT_PATTERN.exec(parsed);
+  return (
+    match !== null &&
+    match[1] !== "-" &&
+    NONZERO_DIGIT_PATTERN.test(match[2])
+  );
+}
+
+/** True for a well-formed amount below zero; "-0" is not negative. */
+export function isNegativeMoneyInput(value: string): boolean {
+  const parsed = parseMoneyInput(value);
+  if (parsed === null) return false;
+  const match = MONEY_INPUT_PATTERN.exec(parsed);
+  return (
+    match !== null &&
+    match[1] === "-" &&
+    NONZERO_DIGIT_PATTERN.test(match[2])
+  );
+}

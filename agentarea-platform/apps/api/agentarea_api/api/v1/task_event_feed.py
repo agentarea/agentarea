@@ -21,6 +21,7 @@ from agentarea_common.config import get_settings
 from agentarea_common.events.adapters.redis_streams import RedisStreamsEventStream
 from agentarea_common.events.contract import LLM_CHUNK
 from agentarea_common.events.task_stream import TaskEventEnvelope, iter_task_event_feed
+from agentarea_common.utils.types import utc_isoformat
 from agentarea_tasks.domain.models import TaskEvent
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
 
@@ -35,7 +36,7 @@ def _envelope(event: TaskEvent) -> TaskEventEnvelope:
     return TaskEventEnvelope(
         event_type=event.event_type,
         event_id=str(event.id),
-        timestamp=event.timestamp.isoformat(),
+        timestamp=utc_isoformat(event.timestamp),
         data=dict(event.data or {}),
     )
 

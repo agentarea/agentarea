@@ -39,6 +39,14 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
     #: ``resource:<id>`` tuples so its creator can reach it afterwards.
     __graph_resource__ = True
 
+    @property
+    def is_catalog(self) -> bool:
+        return bool(getattr(self, "_is_catalog", False))
+
+    @is_catalog.setter
+    def is_catalog(self, value: bool) -> None:
+        object.__setattr__(self, "_is_catalog", value)
+
     name: Mapped[str] = mapped_column(String, nullable=False)
     slug: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     description: Mapped[str] = mapped_column(String, nullable=False)

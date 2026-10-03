@@ -17,12 +17,17 @@ export default async function AddProviderButton() {
 
   if (canAdminister) {
     return (
-      <Link href="/models/create">
-        <Button className="shrink-0" size="xs" data-test="new-config-button">
+      <Button
+        asChild
+        className="shrink-0 min-h-11 md:min-h-6"
+        size="xs"
+        data-test="new-config-button"
+      >
+        <Link href="/models/create">
           <Settings />
           {t("createButton")}
-        </Button>
-      </Link>
+        </Link>
+      </Button>
     );
   }
 

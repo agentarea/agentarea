@@ -69,7 +69,7 @@ async def get_event_broker() -> EventBroker:
 
 
 # Common database dependency
-DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
 # Common event broker dependency
 EventBrokerDep = Annotated[EventBroker, Depends(get_event_broker)]
@@ -290,12 +290,12 @@ async def get_workspace_export_service(
     mcp_instance_service: Annotated[
         "MCPServerInstanceService", Depends(get_mcp_server_instance_service)
     ],
-    provider_service: Annotated["ProviderService", Depends(get_provider_service)],
     skill_service: Annotated["SkillService", Depends(get_skill_service)],
 ) -> WorkspaceExportService:
     """Get a WorkspaceExportService instance for the current request."""
     from agentarea_common.auth.authorization import AuthorizationService
     from agentarea_common.di.container import resolve
+    from agentarea_triggers.infrastructure.repository import TriggerRepository
 
     authz = resolve(AuthorizationService)
     agent_service = AgentService(repository_factory, event_broker, authorization_service=authz)
@@ -303,8 +303,8 @@ async def get_workspace_export_service(
         agent_service=agent_service,
         repository_factory=repository_factory,
         mcp_instance_service=mcp_instance_service,
-        provider_service=provider_service,
         skill_service=skill_service,
+        trigger_repository=repository_factory.create_repository(TriggerRepository),
     )
 
 

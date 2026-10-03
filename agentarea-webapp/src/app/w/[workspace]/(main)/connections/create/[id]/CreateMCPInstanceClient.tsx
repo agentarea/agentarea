@@ -70,54 +70,117 @@ interface ValidationResult {
 // Tags that describe the connection transport, not a functional category.
 const TRANSPORT_TAGS = new Set(["url", "docker", "command", "remote", "mcp"]);
 
-interface McpJsonSpec {
-  icons?: Array<{ src: string }>;
-  title?: string;
-  version?: string;
-  remotes?: Array<{ headers?: FieldSpec[] }>;
-  repository?: { url?: string; source?: string };
-  websiteUrl?: string;
-  available_tools?: unknown[];
-  /** Auth methods cached on the spec by a previous probe. */
-  auth_methods?: string[];
+function getSpec(server: MCPServer): Record<string, unknown> {
+  return server.json_spec ?? {};
 }
 
-function getSpec(server: MCPServer): McpJsonSpec {
-  return (server.json_spec ?? {}) as unknown as McpJsonSpec;
+function parseFieldSpecs(value: unknown): FieldSpec[] {
+  if (!Array.isArray(value)) return [];
+
+  const fields: FieldSpec[] = [];
+  for (const candidate of value) {
+    const entry: unknown = candidate;
+    if (
+      typeof entry !== "object" ||
+      entry === null ||
+      Array.isArray(entry) ||
+      !("name" in entry) ||
+      typeof entry.name !== "string"
+    ) {
+      continue;
+    }
+
+    const field: FieldSpec = { name: entry.name };
+    if ("description" in entry && typeof entry.description === "string") {
+      field.description = entry.description;
+    }
+    if ("isRequired" in entry && typeof entry.isRequired === "boolean") {
+      field.isRequired = entry.isRequired;
+    }
+    if ("isSecret" in entry && typeof entry.isSecret === "boolean") { // pragma: allowlist secret
+      field.isSecret = entry.isSecret;
+    }
+    if ("default" in entry && typeof entry.default === "string") {
+      field.default = entry.default;
+    }
+    if ("placeholder" in entry && typeof entry.placeholder === "string") {
+      field.placeholder = entry.placeholder;
+    }
+    if ("choices" in entry && Array.isArray(entry.choices)) {
+      field.choices = entry.choices.filter(
+        (choice: unknown): choice is string => typeof choice === "string"
+      );
+    }
+    fields.push(field);
+  }
+  return fields;
 }
 
 function getIcon(server: MCPServer): string | null {
-  return getSpec(server).icons?.[0]?.src ?? null;
+  const icons = getSpec(server).icons;
+  if (!Array.isArray(icons)) return null;
+  const icon: unknown = icons[0];
+  return typeof icon === "object" &&
+    icon !== null &&
+    !Array.isArray(icon) &&
+    "src" in icon &&
+    typeof icon.src === "string"
+    ? icon.src
+    : null;
 }
 
 function getTitle(server: MCPServer): string {
-  return getSpec(server).title || server.name;
+  const title = getSpec(server).title;
+  return typeof title === "string" && title ? title : server.name;
 }
 
 function getRemoteHeaders(server: MCPServer): FieldSpec[] {
-  return (
-    getSpec(server).remotes?.[0]?.headers ||
-    (server.env_schema as unknown as FieldSpec[] | undefined)?.filter(
-      (e) => e.name
-    ) ||
-    []
-  );
+  const remotes = getSpec(server).remotes;
+  if (Array.isArray(remotes)) {
+    const remote: unknown = remotes[0];
+    if (
+      typeof remote === "object" &&
+      remote !== null &&
+      !Array.isArray(remote) &&
+      "headers" in remote &&
+      Array.isArray(remote.headers)
+    ) {
+      return parseFieldSpecs(remote.headers);
+    }
+  }
+  return parseFieldSpecs(server.env_schema);
 }
 
 function getRepoUrl(server: MCPServer): string | null {
-  return getSpec(server).repository?.url ?? null;
+  const repository = getSpec(server).repository;
+  return typeof repository === "object" &&
+    repository !== null &&
+    !Array.isArray(repository) &&
+    "url" in repository &&
+    typeof repository.url === "string"
+    ? repository.url
+    : null;
 }
 
 function getWebsiteUrl(server: MCPServer): string | null {
-  return getSpec(server).websiteUrl ?? null;
+  const websiteUrl = getSpec(server).websiteUrl;
+  return typeof websiteUrl === "string" ? websiteUrl : null;
 }
 
 function getRepoSource(server: MCPServer): string | null {
-  return getSpec(server).repository?.source ?? null;
+  const repository = getSpec(server).repository;
+  return typeof repository === "object" &&
+    repository !== null &&
+    !Array.isArray(repository) &&
+    "source" in repository &&
+    typeof repository.source === "string"
+    ? repository.source
+    : null;
 }
 
 function getVersion(server: MCPServer): string | null {
-  return server.version || getSpec(server).version || null;
+  const version = getSpec(server).version;
+  return server.version || (typeof version === "string" ? version : null);
 }
 
 function getCategories(server: MCPServer): string[] {
@@ -131,6 +194,15 @@ function getCategories(server: MCPServer): string[] {
 function getToolCount(server: MCPServer): number {
   const tools = getSpec(server).available_tools;
   return Array.isArray(tools) ? tools.length : 0;
+}
+
+function getAuthMethods(server: MCPServer): string[] {
+  const methods = getSpec(server).auth_methods;
+  return Array.isArray(methods)
+    ? methods.filter(
+        (method: unknown): method is string => typeof method === "string"
+      )
+    : [];
 }
 
 // --- small identity building blocks -----------------------------------------
@@ -200,7 +272,7 @@ function SpecHeader({
 
       <div className="min-w-0 flex-1 pt-0.5">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+          <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
           {version && (
             <span className="font-mono text-[11px] text-muted-foreground">
               v{version.replace(/^v/, "")}
@@ -249,7 +321,7 @@ function SpecHeader({
 function EncryptionNote() {
   const t = useTranslations("MCPServersPage.createInstance.connect");
   return (
-    <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground/60">
+    <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
       <Lock className="h-3.5 w-3.5" />
       {t("encryptionNote")}
     </div>
@@ -275,9 +347,9 @@ const DEFAULT_CREDENTIAL_FIELD: FieldSpec = {
 const CREDENTIAL_ENV_NAMES = new Set(["AUTHORIZATION", "API_KEY", "TOKEN"]);
 
 function credentialFieldsFromSpec(server: MCPServer): FieldSpec[] {
-  const named = ((server.env_schema ?? []) as unknown as FieldSpec[])
-    .filter((e) => e.name && CREDENTIAL_ENV_NAMES.has(e.name.toUpperCase()))
-    .map<FieldSpec>((e) => ({ ...e, isSecret: true }));
+  const named = parseFieldSpecs(server.env_schema)
+    .filter((field) => CREDENTIAL_ENV_NAMES.has(field.name.toUpperCase()))
+    .map((field) => ({ ...field, isSecret: true }));
   return named.length > 0 ? named : [DEFAULT_CREDENTIAL_FIELD];
 }
 
@@ -301,7 +373,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
   const remoteHeaders = getRemoteHeaders(server);
   const hasFields = remoteHeaders.length > 0;
   const endpointUrl = server.remote_url || "";
-  const cachedMethods = getSpec(server).auth_methods;
+  const cachedMethods = getAuthMethods(server);
 
   const defaultFieldValues: Record<string, string> = {};
   for (const h of remoteHeaders) {
@@ -317,7 +389,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
 
   const [authMode, setAuthMode] = useState<AuthMode>(() => {
     if (hasFields) return "fields";
-    if (Array.isArray(cachedMethods) && cachedMethods.length > 0) {
+    if (cachedMethods.length > 0) {
       return modeFromMethods(cachedMethods);
     }
     return "loading";
@@ -550,7 +622,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
             autoComplete="off"
             {...register("instanceName", { required: true })}
           />
-          <p className="text-xs text-muted-foreground/60">{t("nameHint")}</p>
+          <p className="text-xs text-muted-foreground">{t("nameHint")}</p>
         </div>
 
         {/* Error */}

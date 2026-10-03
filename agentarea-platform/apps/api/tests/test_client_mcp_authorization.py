@@ -121,6 +121,10 @@ async def test_client_endpoint_binds_context_to_clients_workspace():
             "agentarea_api.api.v1.client_mcp._authorize_client_access",
             new=AsyncMock(),
         ),
+        patch(
+            "agentarea_api.api.v1.client_mcp._effective_tool_policy",
+            new=AsyncMock(return_value={}),
+        ),
     ):
         scope = await _resolve_client_scope(CLIENT_ID)
 

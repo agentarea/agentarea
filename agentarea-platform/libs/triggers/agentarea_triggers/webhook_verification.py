@@ -12,7 +12,8 @@ import json
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from .channels.secret_reader import SecretReader
@@ -314,6 +315,24 @@ class StripeSignatureVerifier(SignatureVerifier):
         return ["stripe-signature"]
 
 
+class TelegramSecretTokenVerifier(SignatureVerifier):
+    """Telegram echoes the ``secret_token`` given to ``setWebhook`` in a header.
+
+    Telegram does not sign the body; the token it repeats on every update is
+    the only proof a request came from Telegram for this bot.
+    """
+
+    def verify(self, headers: dict[str, str], body: bytes | str, secret: str) -> bool:
+        token = headers.get("x-telegram-bot-api-secret-token", "")
+        if not token:
+            logger.warning("Missing Telegram secret token header")
+            return False
+        return hmac.compare_digest(token.encode("utf-8"), secret.encode("utf-8"))
+
+    def get_required_headers(self) -> list[str]:
+        return ["x-telegram-bot-api-secret-token"]
+
+
 # Registry mapping WebhookType to its signature verifier
 VERIFIER_REGISTRY: dict[str, type[SignatureVerifier]] = {
     "slack": SlackSignatureVerifier,
@@ -321,9 +340,14 @@ VERIFIER_REGISTRY: dict[str, type[SignatureVerifier]] = {
     "discord": DiscordSignatureVerifier,
     "linear": LinearSignatureVerifier,
     "stripe": StripeSignatureVerifier,
-    # telegram uses bot token validation at a different level
+    "telegram": TelegramSecretTokenVerifier,
     # generic uses configurable HMAC
 }
+
+#: Types whose triggers created before verification existed carry no secret.
+#: They keep being accepted (with a warning) instead of going dark on upgrade;
+#: every trigger created or re-registered now has one and is verified.
+LEGACY_UNSIGNED_TYPES: frozenset[str] = frozenset({"telegram"})
 
 # Credential key names used for each channel's signing secret
 SIGNING_SECRET_KEYS: dict[str, str] = {
@@ -334,6 +358,7 @@ SIGNING_SECRET_KEYS: dict[str, str] = {
     "stripe": "signing_secret",
     "generic": "signing_secret",
     "email": "signing_secret",
+    "telegram": "secret_token",
 }
 
 
@@ -376,6 +401,40 @@ def keep_stored_secret_fields(
         if key not in merged or merged[key] == REDACTED_SECRET:
             merged[key] = (stored or {})[key]
     return merged
+
+
+class SigningSecretUnavailableError(Exception):
+    """A trigger's stored channel credentials exist but could not be read.
+
+    Distinct from "no secret configured": that one means verification is not
+    enabled, this one means it is and the secret cannot be checked against, so
+    the request must be refused rather than waved through unsigned.
+    """
+
+
+@dataclass(frozen=True)
+class GenericSignatureScheme:
+    """How a sender signs a generic webhook: ``header: prefix + hex(HMAC(secret, raw body))``."""
+
+    header: str
+    algorithm: str
+    prefix: str
+
+
+def generic_signature_scheme(validation_rules: dict | None) -> GenericSignatureScheme:
+    """The HMAC scheme a generic webhook is verified with.
+
+    Header name, digest and prefix are configurable through ``validation_rules``
+    because providers that share plain HMAC still disagree on all three; this
+    is the one place the defaults live, for the verifier and for the docs the
+    UI shows next to the secret.
+    """
+    rules = validation_rules or {}
+    return GenericSignatureScheme(
+        header=rules.get("signature_header", "X-Webhook-Signature"),
+        algorithm=rules.get("signature_algorithm", "sha256"),
+        prefix=rules.get("signature_prefix", ""),
+    )
 
 
 def get_verifier(webhook_type: str) -> SignatureVerifier | None:
@@ -421,6 +480,11 @@ async def resolve_signing_secret(
     place. Callers with nothing real to pass (tests) must construct a fake
     reader explicitly. Returns None when no secret is configured anywhere
     (signature verification not enabled for this trigger).
+
+    Raises ``SigningSecretUnavailableError`` when the store cannot answer or
+    holds something that is not a credentials object: that is not "no secret",
+    and treating it as one would accept unsigned requests whenever the secret
+    backend is degraded.
     """
     key = SIGNING_SECRET_KEYS.get(webhook_type)
     if not key:
@@ -443,7 +507,7 @@ async def resolve_signing_secret(
             webhook_type,
             trigger_id,
         )
-        return None
+        raise SigningSecretUnavailableError(webhook_type) from None
     if not raw:
         return None
     try:
@@ -455,11 +519,50 @@ async def resolve_signing_secret(
             trigger_id,
             exc_info=True,
         )
-        return None
+        raise SigningSecretUnavailableError(webhook_type) from None
     if not isinstance(credentials, dict):
-        return None
+        logger.warning(
+            "Stored channel credentials for webhook_type=%s trigger_id=%s are not an object",
+            webhook_type,
+            trigger_id,
+        )
+        raise SigningSecretUnavailableError(webhook_type)
     value = credentials.get(key)
     return str(value) if value else None
+
+
+#: What stands between a trigger's public webhook URL and anyone who learns it.
+#: ``signed`` -- every request must carry a valid signature or token (a type
+#: with a registered scheme is refused outright while its secret is missing).
+#: ``unsigned`` -- the type can be signed but this trigger has no secret, so
+#: any request is accepted. ``unsupported`` -- the platform implements no
+#: verification for this provider (Gmail Pub/Sub push, Teams Bot Framework);
+#: any request is accepted and no setting changes that.
+WebhookSigning = Literal["signed", "unsigned", "unsupported"]
+
+
+async def webhook_signing_status(
+    webhook_type: str | None,
+    validation_rules: dict | None,
+    webhook_config: dict | None,
+    secret_reader: SecretReader,
+    trigger_id: Any,
+) -> WebhookSigning:
+    """Whether ``verify_webhook_signature`` will demand proof for this trigger.
+
+    Follows the same branches as the verifier, so the label shown to a person
+    cannot drift from what the endpoint enforces. Raises
+    ``SigningSecretUnavailableError`` like ``resolve_signing_secret``.
+    """
+    wt = (webhook_type or "generic").lower()
+    if wt not in SIGNING_SECRET_KEYS:
+        return "unsupported"
+    if wt in VERIFIER_REGISTRY and wt not in LEGACY_UNSIGNED_TYPES:
+        return "signed"
+    secret = await resolve_signing_secret(
+        wt, validation_rules, webhook_config, secret_reader, trigger_id
+    )
+    return "signed" if secret else "unsigned"
 
 
 async def verify_webhook_signature(
@@ -479,7 +582,8 @@ async def verify_webhook_signature(
                  (bad signature, missing headers, or no raw body to verify),
                  OR the webhook type has a registered signature scheme
                  (``VERIFIER_REGISTRY``) and no secret resolves at all — such
-                 a trigger is fail-closed rather than treated as unsigned.
+                 a trigger is fail-closed rather than treated as unsigned —
+                 OR the stored secret could not be read.
         None  -- no signing secret configured and no verification scheme is
                  expected for this type: signature verification is not
                  enabled, caller may proceed.
@@ -492,10 +596,27 @@ async def verify_webhook_signature(
     must pass the unparsed bytes, never a re-serialized dict.
     """
     wt = (webhook_type or "generic").lower()
-    secret = await resolve_signing_secret(
-        wt, validation_rules, webhook_config, secret_reader, trigger_id
-    )
+    try:
+        secret = await resolve_signing_secret(
+            wt, validation_rules, webhook_config, secret_reader, trigger_id
+        )
+    except SigningSecretUnavailableError:
+        logger.warning(
+            "webhook_type=%s trigger_id=%s: signing secret could not be read; rejecting "
+            "request (fail closed)",
+            wt,
+            trigger_id,
+        )
+        return False
     if not secret:
+        if wt in LEGACY_UNSIGNED_TYPES:
+            logger.warning(
+                "webhook_type=%s trigger_id=%s has no secret token; accepting a legacy "
+                "unsigned webhook. Re-save the trigger to register one.",
+                wt,
+                trigger_id,
+            )
+            return None
         if wt in VERIFIER_REGISTRY:
             logger.warning(
                 "webhook_type=%s has a registered signature scheme but no signing "
@@ -516,13 +637,9 @@ async def verify_webhook_signature(
         # No channel-specific scheme for this type. A secret was configured, so
         # verification is enabled and must actually run — skipping it here would
         # leave a deployment that believes it signed its webhooks unprotected.
-        # Header name, digest and prefix are configurable because providers that
-        # share plain HMAC still disagree on all three.
-        rules = validation_rules or {}
+        scheme = generic_signature_scheme(validation_rules)
         verifier: SignatureVerifier = GenericHMACVerifier(
-            header_name=rules.get("signature_header", "x-webhook-signature"),
-            algorithm=rules.get("signature_algorithm", "sha256"),
-            prefix=rules.get("signature_prefix", ""),
+            header_name=scheme.header, algorithm=scheme.algorithm, prefix=scheme.prefix
         )
     else:
         verifier = resolved

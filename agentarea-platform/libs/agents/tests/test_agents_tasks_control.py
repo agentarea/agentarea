@@ -32,6 +32,8 @@ class TestAgentTaskControl:
     def mock_workflow_service(self):
         """Mock temporal workflow service."""
         service = AsyncMock(spec=TemporalWorkflowService)
+        # No live workflow state: the run is not paused unless a test says so.
+        service.get_live_state.return_value = None
         return service
 
     @pytest.fixture
@@ -216,12 +218,14 @@ class TestAgentTaskControl:
         mock_agent,
         test_user_context,
     ):
-        """Test pause task when task is already paused."""
-        # Setup mocks
+        """A run holding a signal-based pause is refused a second pause.
+
+        Temporal keeps reporting "running" while the workflow waits on the pause;
+        the pause itself is in the workflow's live state.
+        """
         mock_agent_service.get.return_value = mock_agent
-        mock_workflow_service.get_workflow_status.return_value = {
-            "status": "paused",
-        }
+        mock_workflow_service.get_workflow_status.return_value = {"status": "running"}
+        mock_workflow_service.get_live_state.return_value = {"paused": True}
 
         # Call the endpoint and expect exception
         with pytest.raises(HTTPException) as exc_info:
@@ -236,6 +240,7 @@ class TestAgentTaskControl:
 
         assert exc_info.value.status_code == 400
         assert exc_info.value.detail == "Task is already paused"
+        mock_workflow_service.pause_task.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_pause_agent_task_pause_fails(

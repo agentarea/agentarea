@@ -11,7 +11,8 @@ from .repository_factory import RepositoryFactory
 
 
 async def get_repository_factory(
-    session: Annotated[AsyncSession, Depends(get_db_session)], user_context: UserContextDep
+    session: Annotated[AsyncSession, Depends(get_db_session, scope="function")],
+    user_context: UserContextDep,
 ) -> RepositoryFactory:
     """FastAPI dependency to get repository factory with user context.
 
@@ -40,7 +41,8 @@ RepositoryFactoryDep = Annotated[RepositoryFactory, Depends(get_repository_facto
 
 
 async def get_read_repository_factory(
-    session: Annotated[AsyncSession, Depends(get_read_db_session)], user_context: UserContextDep
+    session: Annotated[AsyncSession, Depends(get_read_db_session, scope="function")],
+    user_context: UserContextDep,
 ) -> RepositoryFactory:
     """FastAPI dependency for read-only repository factory (AUTOCOMMIT, no transactions)."""
     return RepositoryFactory(session, user_context)

@@ -119,6 +119,7 @@ async def test_list_skills_returns_metadata_only(async_client, mock_skill_servic
     assert len(data["items"]) == 2
     first = data["items"][0]
     second = data["items"][1]
+    assert first["created_at"].endswith("Z")
     assert first["name"] == "Test Skill"
     assert first["slug"] == "test-skill"
     assert first["description"] == "Test Description"

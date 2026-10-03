@@ -9,7 +9,7 @@ related:
   - /self-host/configuration
   - /self-host/secrets-backends
   - /self-host/troubleshooting
-last_updated: 2026-07-29
+last_updated: 2026-10-03
 ---
 
 Use Compose when the whole platform fits on one host and you do not need
@@ -19,6 +19,15 @@ system and the one the repository exercises most. Use
 of anything, or when you want MCP server instances and agent sandboxes confined
 by a RuntimeClass — the Compose stack drives MCP containers through the host
 Docker socket, which offers no kernel isolation.
+
+<Warning>
+Compose is a single-tenant deployment. Every workspace's agent code runs in one
+shared `sandbox-executor` container on the host kernel
+(`SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT`), and MCP
+containers share the host Docker daemon. Do not open sign-up to people you do
+not trust on a Compose install; run untrusted, multi-tenant workloads on
+Kubernetes with a gVisor RuntimeClass.
+</Warning>
 
 Two Compose files sit at the repository root:
 
@@ -110,6 +119,10 @@ This guide covers `docker-compose.yaml`.
     | MCP Manager | http://localhost:7999 |
     | Kratos public API | http://localhost:4433 |
 
+    Compose exposes Kratos directly and does not install a reverse proxy. Before
+    exposing the host, place Kratos behind an operator-managed proxy and rate-limit
+    `/self-service/*` by client IP.
+
     The Compose file publishes no ports for PostgreSQL, Valkey, RustFS, Temporal, or
     the event service. They are reachable only on the Compose networks.
   </Step>
@@ -182,6 +195,19 @@ recorded the current head without replaying migrations.
     the Compose file mounts `./data/postgres` at `/var/lib/postgresql` , not at
     the legacy `/var/lib/postgresql/data` . A data directory laid out for the
     old mount point will not start under this file.
+  </Accordion>
+  <Accordion title="A model served on this machine or the LAN is refused with `not an allowed address`">
+    The API and the worker refuse every private and loopback destination a
+    member sets, LLM provider endpoints included, unless
+    `OUTBOUND_PRIVATE_ALLOWLIST` names it. For Ollama, LM Studio or vLLM on the
+    Docker host, set it in `.env` and recreate `app` and `agentarea-worker`:
+
+    ```bash
+    OUTBOUND_PRIVATE_ALLOWLIST=localhost,host.docker.internal
+    ```
+
+    For a LAN machine, list its hostname or address (`192.168.1.50/32`). See
+    [configuration](/self-host/configuration#outbound-destinations-backend-and-worker).
   </Accordion>
   <Accordion title="Tasks stay queued and never execute">
     `agentarea-worker` waits for `temporal` to pass its health check, which has

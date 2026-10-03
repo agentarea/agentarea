@@ -1,6 +1,6 @@
 """Running a capability tool through its activity, with governance verdicts."""
 
-from typing import Any
+from typing import Any, cast
 
 from temporalio import workflow
 from temporalio.exceptions import ActivityError, ApplicationError
@@ -68,7 +68,8 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
             tool_args = {}
 
         # Single policy enforcement point (allow / deny / require-approval).
-        if not await self._gate_tool_call(tool_call):
+        allowed, policy_approval_granted = await self._gate_tool_call(tool_call)
+        if not allowed:
             return
 
         # Publish tool call started event (only after approval if required)
@@ -113,6 +114,9 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
                 cost_used=self.budget_tracker.cost if self.budget_tracker else None,
                 tokens_used=self.state.tokens_used,
                 service_cost_used=self.state.service_cost_used,
+                policy_approval_granted=policy_approval_granted,
+                openapi_operation_tools=self.state.agent_config.get("openapi_operation_tools")
+                or {},
             )
 
             result_obj = await self._execute_governed_tool(
@@ -123,9 +127,10 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
 
             # Normalize result to a dict for robust access
             result_dict: dict[str, Any]
-            if hasattr(result_obj, "model_dump") and callable(result_obj.model_dump):
+            model_dump = getattr(result_obj, "model_dump", None)
+            if callable(model_dump):
                 try:
-                    result_dict = result_obj.model_dump()  # type: ignore[attr-defined]
+                    result_dict = cast(dict[str, Any], model_dump())
                 except Exception:
                     result_dict = {}
             elif isinstance(result_obj, dict):

@@ -64,13 +64,35 @@ class _EventService:
         )
 
 
+class _Audit:
+    """Audit trail keyed by event id, as the real insert-once table is."""
+
+    def __init__(self) -> None:
+        self.rows: dict[UUID, dict] = {}
+
+    async def record_once(self, event_id, action, resource_type, resource_id=None, **fields):
+        if event_id in self.rows:
+            return False
+        self.rows[event_id] = {
+            "action": action,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            **fields,
+        }
+        return True
+
+
 class _Container:
-    def __init__(self, service: _EventService, session: _Session) -> None:
+    def __init__(self, service: _EventService, session: _Session, audit: _Audit) -> None:
         self._service = service
         self._session = session
+        self._audit = audit
 
     async def get_task_event_service(self, user_context):
         return self._service, self._session
+
+    async def get_audit_service(self, user_context):
+        return self._audit, self._session
 
 
 class _Broker:
@@ -116,13 +138,16 @@ def _activity(
     session: _Session,
     broker: _Broker | None,
     channels: bool = False,
+    audit: _Audit | None = None,
 ):
     dependencies = SimpleNamespace(
         event_broker=SimpleNamespace(publish=AsyncMock()),
         broker_client=broker,
         channel_delivery_settings=SimpleNamespace(OUTBOUND_STREAM=_OUTBOUND) if channels else None,
     )
-    [activity_fn] = make_events_activities(dependencies, _Container(service, session))
+    [activity_fn] = make_events_activities(
+        dependencies, _Container(service, session, audit or _Audit())
+    )
     return activity_fn, dependencies
 
 
@@ -253,3 +278,104 @@ async def test_an_outbound_stream_failure_fails_the_activity(monkeypatch):
 
     with pytest.raises(ConnectionError, match="outbound stream down"):
         await publish(_request(_event(str(uuid4()), "task.completed", channel_origin=origin)))
+
+
+def _tool_event(task_id: str, agent_id: str, event_type: str, **data) -> dict:
+    return _event(task_id, event_type, agent_id=agent_id, tool_call_id="call-1", **data)
+
+
+async def test_tool_call_outcomes_reach_the_audit_trail_without_argument_values():
+    log: list = []
+    audit = _Audit()
+    publish, _ = _activity(
+        service=_EventService(log), session=_Session(log), broker=_Broker(log), audit=audit
+    )
+    task_id, agent_id = str(uuid4()), str(uuid4())
+    allowed = _tool_event(
+        task_id, agent_id, "tool.call", tool_name="shell", arguments={"token": "sk-secret"}
+    )
+    denied = _tool_event(
+        task_id,
+        agent_id,
+        "tool.result",
+        tool_name="rm",
+        success=False,
+        denied_by_policy=True,
+        error="Tool call denied by policy: not permitted by policy",
+    )
+    gated = _tool_event(
+        task_id,
+        agent_id,
+        "approval.request",
+        tool_name="deploy",
+        escalation_id="esc-1",
+        arguments={"env": "prod"},
+        message="Tool 'deploy' requires human approval",
+    )
+    decided = _tool_event(
+        task_id,
+        agent_id,
+        "approval.response",
+        tool_name="deploy",
+        escalation_id="esc-1",
+        approved=False,
+        approved_by="approver-1",
+        comment="not today",
+    )
+    ran = _tool_event(task_id, agent_id, "tool.result", tool_name="shell", success=True)
+
+    await publish(_request(allowed, denied, gated, decided, ran))
+
+    rows = {str(event_id): row for event_id, row in audit.rows.items()}
+    assert {event_id: row["action"] for event_id, row in rows.items()} == {
+        allowed["event_id"]: "tool.call.allowed",
+        denied["event_id"]: "tool.call.denied",
+        gated["event_id"]: "tool.call.approval_required",
+        decided["event_id"]: "approval.denied",
+    }
+    for event_id in (allowed["event_id"], denied["event_id"], gated["event_id"]):
+        row = rows[event_id]
+        assert (row["actor_type"], row["actor_id"]) == ("agent", agent_id)
+        assert (row["resource_type"], row["resource_id"]) == ("task", task_id)
+        assert row["event_metadata"]["requested_by"] == _USER
+    assert rows[allowed["event_id"]]["event_metadata"]["argument_keys"] == ["token"]
+    assert "sk-secret" not in json.dumps(list(rows.values()))
+    assert rows[denied["event_id"]]["event_metadata"]["reason"].endswith("not permitted by policy")
+    decision = rows[decided["event_id"]]
+    assert (decision["actor_type"], decision["actor_id"]) == ("user", "approver-1")
+    assert decision["event_metadata"]["decision"] == "denied"
+    assert decision["event_metadata"]["comment"] == "not today"
+
+
+async def test_a_retried_batch_does_not_audit_a_tool_call_twice():
+    audit = _Audit()
+    task_id, agent_id = str(uuid4()), str(uuid4())
+    batch = _request(_tool_event(task_id, agent_id, "tool.call", tool_name="shell"))
+
+    for _ in range(2):
+        log: list = []
+        publish, _ = _activity(
+            service=_EventService(log), session=_Session(log), broker=_Broker(log), audit=audit
+        )
+        await publish(batch)
+
+    assert [row["action"] for row in audit.rows.values()] == ["tool.call.allowed"]
+
+
+async def test_a_decision_less_approval_response_is_not_a_second_decision():
+    """Pre-patch denials emitted a second approval.response carrying no decision."""
+    log: list = []
+    audit = _Audit()
+    publish, _ = _activity(
+        service=_EventService(log), session=_Session(log), broker=_Broker(log), audit=audit
+    )
+
+    await publish(
+        _request(
+            _tool_event(
+                str(uuid4()), str(uuid4()), "approval.response", tool_name="x", comment="no"
+            )
+        )
+    )
+
+    assert audit.rows == {}

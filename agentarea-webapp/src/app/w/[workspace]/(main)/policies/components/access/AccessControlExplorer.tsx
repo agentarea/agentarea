@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { Grid2x2, Plus, Share2, Zap } from "lucide-react";
+import { Plus, Share2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   AccessControlGraph,
@@ -19,7 +19,6 @@ import {
 import { layoutGraph } from "./graph-layout";
 import styles from "./access-control.module.css";
 
-type ViewMode = "matrix" | "relationships";
 type ResourceKind = "collection" | "mcp" | "agent";
 
 interface ResolveOption {
@@ -61,7 +60,6 @@ export default function AccessControlExplorer({
   collections,
 }: AccessControlExplorerProps) {
   const router = useWorkspaceRouter();
-  const [view, setView] = useState<ViewMode>("relationships");
 
   const agents = useMemo(
     () => graph.nodes.filter((n) => n.kind === "agent"),
@@ -261,31 +259,6 @@ export default function AccessControlExplorer({
   return (
     <div className={styles.explorer}>
       <div className={styles.tbar}>
-        <div className={styles.seg} role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "matrix"}
-            className={cn(styles.segBtn, view === "matrix" && styles.segBtnOn)}
-            onClick={() => setView("matrix")}
-          >
-            <Grid2x2 className="h-3.5 w-3.5 opacity-75" />
-            Matrix
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "relationships"}
-            className={cn(
-              styles.segBtn,
-              view === "relationships" && styles.segBtnOn
-            )}
-            onClick={() => setView("relationships")}
-          >
-            <Share2 className="h-3.5 w-3.5 opacity-75" />
-            Relationships
-          </button>
-        </div>
         <div className={styles.spacer} />
         <div className={styles.headline}>
           <b>{graph.stats.governed_skill_count.toLocaleString()}</b> skills
@@ -294,21 +267,6 @@ export default function AccessControlExplorer({
         </div>
       </div>
 
-      {view === "matrix" ? (
-        <div className={styles.body} style={{ display: "block" }}>
-          <div className={styles.emptyPane}>
-            <div>
-              <Grid2x2
-                className="mx-auto mb-3 h-8 w-8"
-                style={{ color: "var(--access-muted2)" }}
-              />
-              <div style={{ fontWeight: 600, color: "hsl(var(--foreground))" }}>
-                Matrix view coming soon
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
         <div className={styles.body}>
           <GraphPane
             layout={layout}
@@ -475,7 +433,6 @@ export default function AccessControlExplorer({
             </div>
           </aside>
         </div>
-      )}
     </div>
   );
 }

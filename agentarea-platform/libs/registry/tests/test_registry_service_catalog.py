@@ -100,6 +100,10 @@ class TestParseMCPServers:
                                 "registryType": "pypi",
                                 "identifier": "telegram-mcp",
                                 "name": "telegram-mcp",
+                                "runtimeHint": "uvx",
+                                "runtimeArguments": [
+                                    {"type": "positional", "value": "telegram-mcp"}
+                                ],
                                 "version": "0.6.3",
                                 "environmentVariables": [
                                     {"name": "TELEGRAM_API_ID", "required": True, "isSecret": True},
@@ -213,9 +217,113 @@ class TestParseMCPServers:
         assert items[0]["name"] == "Telegram"
         assert items[0]["external_id"] == "ai.agentarea.catalog/telegram/command"
         assert spec["connection_type"] == "command"
-        assert spec["command"] == "uvx"
-        assert spec["args"] == ["telegram-mcp"]
+        assert spec["args"] == ["--from", "telegram-mcp==0.6.3", "telegram-mcp"]
         assert spec["transport"] == "stdio"
+
+    def test_command_entrypoint_is_pinned_and_can_differ_from_package_name(self):
+        data = {
+            "servers": [
+                {
+                    "server": {
+                        "name": "io.example/different-entrypoint",
+                        "packages": [
+                            {
+                                "registryType": "pypi",
+                                "identifier": "distribution-name",
+                                "version": "2.4.1",
+                                "runtimeHint": "uvx",
+                                "runtimeArguments": [
+                                    {"type": "positional", "value": "--prerelease=allow"},
+                                    {"type": "positional", "value": "different-entrypoint"},
+                                ],
+                                "packageArguments": [
+                                    {"type": "named", "name": "--region", "default": "east"}
+                                ],
+                            }
+                        ],
+                    }
+                }
+            ]
+        }
+
+        items = RegistryService._parse_mcp_servers(data)
+
+        assert items[0]["spec"]["command"] == "uvx"
+        assert items[0]["spec"]["args"] == [
+            "--prerelease=allow",
+            "--from",
+            "distribution-name==2.4.1",
+            "different-entrypoint",
+            "--region=east",
+        ]
+
+    def test_command_without_named_entrypoint_runs_the_pinned_default_bin(self):
+        """The official registry almost never names an executable: hiding those
+        dropped every npm and PyPI server from sync."""
+        data = {
+            "servers": [
+                {
+                    "server": {
+                        "name": "io.example/python-default-bin",
+                        "version": "2.4.1",
+                        "packages": [
+                            {
+                                "registryType": "pypi",
+                                "identifier": "distribution-name",
+                                "version": "2.4.1",
+                            }
+                        ],
+                    }
+                },
+                {
+                    "server": {
+                        "name": "io.example/node-default-bin",
+                        "version": "1.0.3",
+                        "packages": [
+                            {
+                                "registryType": "npm",
+                                "identifier": "@acme/mcp-server",
+                                "version": "1.0.3",
+                                "packageArguments": [
+                                    {"type": "named", "name": "--mode", "value": "stdio"}
+                                ],
+                            }
+                        ],
+                    }
+                },
+            ]
+        }
+
+        commands = [
+            (item["spec"]["command"], item["spec"]["args"])
+            for item in RegistryService._parse_mcp_servers(data)
+        ]
+
+        assert commands == [
+            ("uvx", ["distribution-name@2.4.1"]),
+            ("npx", ["-y", "@acme/mcp-server@1.0.3", "--mode=stdio"]),
+        ]
+
+    def test_command_with_an_unresolved_required_argument_is_hidden(self):
+        data = {
+            "servers": [
+                {
+                    "server": {
+                        "name": "io.example/unrunnable",
+                        "packages": [
+                            {
+                                "registryType": "npm",
+                                "identifier": "needs-a-path",
+                                "version": "2.4.1",
+                                "packageArguments": [{"type": "positional", "isRequired": True}],
+                            }
+                        ],
+                    }
+                }
+            ]
+        }
+
+        assert RegistryService._parse_mcp_servers(data) == []
 
     def test_env_schema_preserved_for_ui_and_secret_routing(self):
         items = RegistryService._parse_mcp_servers(self._telegram_entry())
@@ -231,6 +339,7 @@ class TestParseMCPServers:
         # Credentials route through the secret manager (isSecret) and are required.
         by_name = {e["name"]: e for e in env_schema}
         assert by_name["TELEGRAM_SESSION_STRING"]["isSecret"] is True
+        assert by_name["TELEGRAM_SESSION_STRING"]["isRequired"] is True
         assert by_name["TELEGRAM_SESSION_STRING"]["required"] is True
         # Read-only by default, user-overridable, not a secret.
         assert by_name["TELEGRAM_EXPOSED_TOOLS"]["default"] == "read-only"

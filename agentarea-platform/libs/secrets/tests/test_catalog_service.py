@@ -88,24 +88,78 @@ class TestCreate:
     async def test_rejects_a_name_reserved_for_the_platform(self, session: AsyncSession) -> None:
         catalog = _catalog(session)
         with pytest.raises(ReservedSecretNameError):
-            await catalog.create_user_secret(
-                f"provider_config_{uuid.uuid4()}", "stolen", None
-            )
+            await catalog.create_user_secret(f"provider_config_{uuid.uuid4()}", "stolen", None)
 
     async def test_rejects_a_malformed_name(self, session: AsyncSession) -> None:
         catalog = _catalog(session)
         with pytest.raises(SecretNameError):
             await catalog.create_user_secret("Has Spaces", "v", None)
 
-    async def test_rejects_a_duplicate_rather_than_overwriting(
-        self, session: AsyncSession
-    ) -> None:
+    async def test_rejects_a_duplicate_rather_than_overwriting(self, session: AsyncSession) -> None:
         # set_secret would have updated the existing row, so a caller asking to
         # create would silently replace a value something else is resolving.
         catalog = _catalog(session)
         await catalog.create_user_secret("dupe-key", "first-value-here", None)
         with pytest.raises(DuplicateSecretNameError):
             await catalog.create_user_secret("dupe-key", "second-value-here", None)
+
+
+class TestAuditTrail:
+    """Every change to a user's secret is audited by name, never by value.
+
+    Rows are told apart by the secret's id rather than cleaned up: the
+    migrated schema refuses DELETE on audit_events.
+    """
+
+    async def _trail(self, session: AsyncSession, secret_id: uuid.UUID) -> list[dict]:
+        rows = await session.execute(
+            text(
+                "SELECT action, actor_id, changes, event_metadata FROM audit_events "
+                "WHERE resource_type = 'secret' AND resource_id = :id ORDER BY created_at"
+            ),
+            {"id": str(secret_id)},
+        )
+        return [dict(row._mapping) for row in rows]
+
+    async def test_create_rotate_describe_and_delete_are_audited(
+        self, session: AsyncSession
+    ) -> None:
+        catalog = _catalog(session)
+        name = f"audited-{uuid.uuid4().hex[:8]}"
+        secret = await catalog.create_user_secret(name, "sk-first-value-1234", None)
+        await catalog.rotate_user_secret(secret.id, "sk-second-value-5678")
+        await catalog.update_description(secret.id, "For the billing agent")
+        await catalog.delete_user_secret(secret.id)
+
+        trail = await self._trail(session, secret.id)
+
+        assert [row["action"] for row in trail] == [
+            "secret.create",
+            "secret.rotate",
+            "secret.update",
+            "secret.delete",
+        ]
+        assert {row["actor_id"] for row in trail} == {"tester"}
+        assert {row["event_metadata"]["resource_name"] for row in trail} == {name}
+        assert trail[2]["changes"] == [
+            {"field": "description", "before": None, "after": "For the billing agent"}
+        ]
+        recorded = str(trail)
+        assert "sk-first-value-1234" not in recorded
+        assert "sk-second-value-5678" not in recorded
+
+    async def test_a_refused_delete_leaves_no_delete_entry(self, session: AsyncSession) -> None:
+        catalog = _catalog(session)
+        secret = await catalog.create_user_secret(
+            f"in-use-{uuid.uuid4().hex[:8]}", "sk-in-use-value-1", None
+        )
+        secret_id = secret.id
+        await catalog.add_reference(secret_id, "agent", str(uuid.uuid4()), "api_key")
+
+        with pytest.raises(SecretInUseError):
+            await catalog.delete_user_secret(secret_id)
+
+        assert [row["action"] for row in await self._trail(session, secret_id)] == ["secret.create"]
 
 
 class TestManagedSecretsAreOffLimits:
@@ -297,9 +351,7 @@ class TestSelectingASecretForUse:
 
 
 class TestWorkspaceIsolation:
-    async def test_another_workspace_cannot_see_or_touch_it(
-        self, session: AsyncSession
-    ) -> None:
+    async def test_another_workspace_cannot_see_or_touch_it(self, session: AsyncSession) -> None:
         mine = await _catalog(session).create_user_secret("shared-name", "my-value-1234", None)
 
         theirs = _catalog(session, OTHER_WORKSPACE)
@@ -316,9 +368,7 @@ class TestWorkspaceIsolation:
 
 
 class TestDeleteGuard:
-    async def test_refuses_while_a_consumer_still_points_at_it(
-        self, session: AsyncSession
-    ) -> None:
+    async def test_refuses_while_a_consumer_still_points_at_it(self, session: AsyncSession) -> None:
         catalog = _catalog(session)
         secret = await catalog.create_user_secret("in-use-key", "value-goes-here", None)
         consumer_id = str(uuid.uuid4())

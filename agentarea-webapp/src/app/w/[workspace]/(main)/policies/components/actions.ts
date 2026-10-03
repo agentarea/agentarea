@@ -1,4 +1,5 @@
 "use server";
+import { getTranslations } from "next-intl/server";
 
 import type {
   PolicyRuleCreateRequest,
@@ -12,6 +13,10 @@ import {
   zUpdatePolicyRuleV1PoliciesRuleIdPatchResponse,
 } from "@/api/client/zod.gen";
 import { createPolicy, deletePolicy, updatePolicy } from "@/lib/api";
+
+type PolicyActionResult =
+  | { ok: true; data: PolicyRuleResponse }
+  | { ok: false; error: string };
 
 function errorMessage(error: unknown, fallback: string): string {
   if (!error) return fallback;
@@ -35,35 +40,44 @@ function errorMessage(error: unknown, fallback: string): string {
 
 export async function createPolicyRuleAction(
   input: PolicyRuleCreateRequest
-): Promise<PolicyRuleResponse> {
+): Promise<PolicyActionResult> {
   const body = zCreatePolicyRuleV1PoliciesPostBody.parse(input);
   const { data, error } = await createPolicy(body);
 
   if (error || !data) {
-    throw new Error(errorMessage(error, "Save failed"));
+    const t = await getTranslations("PoliciesPage.editor");
+    return { ok: false, error: errorMessage(error, t("actions.saveFailed")) };
   }
 
-  return zCreatePolicyRuleV1PoliciesPostResponse.parse(data);
+  return {
+    ok: true,
+    data: zCreatePolicyRuleV1PoliciesPostResponse.parse(data),
+  };
 }
 
 export async function updatePolicyRuleAction(
   id: string,
   input: PolicyRuleUpdateRequest
-): Promise<PolicyRuleResponse> {
+): Promise<PolicyActionResult> {
   const body = zUpdatePolicyRuleV1PoliciesRuleIdPatchBody.parse(input);
   const { data, error } = await updatePolicy(id, body);
 
   if (error || !data) {
-    throw new Error(errorMessage(error, "Save failed"));
+    const t = await getTranslations("PoliciesPage.editor");
+    return { ok: false, error: errorMessage(error, t("actions.saveFailed")) };
   }
 
-  return zUpdatePolicyRuleV1PoliciesRuleIdPatchResponse.parse(data);
+  return {
+    ok: true,
+    data: zUpdatePolicyRuleV1PoliciesRuleIdPatchResponse.parse(data),
+  };
 }
 
 export async function deletePolicyRuleAction(id: string): Promise<void> {
   const { error } = await deletePolicy(id);
 
   if (error) {
-    throw new Error(errorMessage(error, "Delete failed"));
+    const t = await getTranslations("PoliciesPage.editor");
+    throw new Error(errorMessage(error, t("actions.deleteFailed")));
   }
 }
