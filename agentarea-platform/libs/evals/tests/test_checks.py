@@ -65,3 +65,17 @@ def test_validate_rejects_unknown_types_and_missing_fields():
 
 def test_validate_returns_normalized_checks():
     assert validate_checks([{"type": "max_cost", "usd": "0.5"}]) == [{"type": "max_cost", "usd": 0.5}]
+
+
+@pytest.mark.parametrize(
+    ("check", "detail"),
+    [
+        ({"type": "response_contains", "text": "London"}, '"London" not found'),
+        ({"type": "response_contains", "text": "paris"}, 'found: "…France is Paris."'),
+        ({"type": "response_not_contains", "text": "France"}, 'found: "…capital of France is Paris."'),
+        ({"type": "response_matches", "pattern": r"Ber\w+"}, "no match"),
+    ],
+)
+def test_response_checks_say_what_they_saw(check, detail):
+    _, results = run_checks([check], outcome())
+    assert results[-1]["detail"] == detail

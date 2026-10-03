@@ -65,8 +65,29 @@ def validate_checks(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return normalized
 
 
-def _contains(haystack: str, needle: str, case_sensitive: bool) -> bool:
-    return needle in haystack if case_sensitive else needle.lower() in haystack.lower()
+def _find(haystack: str, needle: str, case_sensitive: bool) -> int:
+    return haystack.find(needle) if case_sensitive else haystack.lower().find(needle.lower())
+
+
+def _excerpt(text: str, start: int, end: int, pad: int = 12) -> str:
+    left = max(0, start - pad)
+    if left > 0 and text[left - 1] != " ":
+        space = text.find(" ", left, start)
+        left = space + 1 if space != -1 else left
+    right = min(len(text), end + pad)
+    if right < len(text) and text[right] != " ":
+        space = text.rfind(" ", end, right)
+        right = space if space != -1 else right
+    prefix = "…" if left > 0 else ""
+    suffix = "…" if right < len(text) else ""
+    return f'found: "{prefix}{text[left:right]}{suffix}"'
+
+
+def _text_detail(response: str, needle: str, case_sensitive: bool) -> tuple[bool, str]:
+    at = _find(response, needle, case_sensitive)
+    if at == -1:
+        return False, f'"{needle}" not found'
+    return True, _excerpt(response, at, at + len(needle))
 
 
 def _evaluate(check: dict[str, Any], outcome: TrialOutcome) -> tuple[bool, str]:
@@ -75,12 +96,16 @@ def _evaluate(check: dict[str, Any], outcome: TrialOutcome) -> tuple[bool, str]:
     if kind == "status_is":
         return outcome.status == check["status"], outcome.status
     if kind == "response_contains":
-        return _contains(outcome.response, check["text"], case_sensitive), "response checked"
+        return _text_detail(outcome.response, check["text"], case_sensitive)
     if kind == "response_not_contains":
-        return not _contains(outcome.response, check["text"], case_sensitive), "response checked"
+        found, detail = _text_detail(outcome.response, check["text"], case_sensitive)
+        return not found, detail
     if kind == "response_matches":
         flags = 0 if case_sensitive else re.IGNORECASE
-        return re.search(check["pattern"], outcome.response, flags) is not None, "response checked"
+        match = re.search(check["pattern"], outcome.response, flags)
+        if match is None:
+            return False, "no match"
+        return True, _excerpt(outcome.response, match.start(), match.end())
     if kind == "tool_called":
         return check["tool"] in outcome.tools_called, ", ".join(outcome.tools_called) or "no tools"
     if kind == "tool_not_called":
