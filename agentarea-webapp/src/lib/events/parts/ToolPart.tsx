@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Check, ChevronRight, Copy } from "lucide-react";
 import { MessageMarkdown } from "@/components/Chat/MessageMarkdown";
 import {
@@ -111,6 +112,7 @@ export const ToolPart: React.FC<{
   onInspect?: () => void;
   suppressUnavailableDetails?: boolean;
 }> = ({ part, onInspect, suppressUnavailableDetails = false }) => {
+  const t = useTranslations("ToolPart");
   const data = part.data;
   const toolName =
     (typeof data.tool_name === "string" && data.tool_name) ||
@@ -146,6 +148,14 @@ export const ToolPart: React.FC<{
   const failed = !inFlight && (explicitFailure || errorAvailable);
   const succeeded =
     !inFlight && !failed && (exitCode === 0 || data.success === true);
+  // A call refused by policy or by an approver did what governance intended:
+  // it is shown as blocked, not as a tool that broke.
+  const denialLabel =
+    data.denied_by_policy === true
+      ? t("blockedByPolicy")
+      : data.denied_by_human === true
+        ? t("rejectedByApprover")
+        : null;
   const displayArgs = stripUnavailableToolValues(args);
   const displayArgsRecord =
     displayArgs && typeof displayArgs === "object"
@@ -247,21 +257,27 @@ export const ToolPart: React.FC<{
     .join("\n\n");
   const completionLabel = inFlight
     ? "Running"
-    : failed
-      ? "Failed"
-      : succeeded
-        ? "Success"
-        : "Completed";
+    : denialLabel
+      ? denialLabel
+      : failed
+        ? "Failed"
+        : succeeded
+          ? "Success"
+          : "Completed";
   const statusKind: StatusKind = inFlight
     ? "running"
-    : failed
-      ? "failed"
-      : "done";
+    : denialLabel
+      ? "cancelled"
+      : failed
+        ? "failed"
+        : "done";
   const statusLabel = inFlight
     ? `${text} · running`
-    : failed
-      ? `${text} · failed`
-      : `${text} · done`;
+    : denialLabel
+      ? `${text} · ${denialLabel}`
+      : failed
+        ? `${text} · failed`
+        : `${text} · done`;
 
   return (
     <div className="flex min-w-0 flex-col gap-1 text-[13px] leading-[21px]">
@@ -315,13 +331,23 @@ export const ToolPart: React.FC<{
                 {serviceName}
               </span>
             ) : null}
-            {(inFlight || failed) && (
+            {denialLabel ? (
               <StatusIndicator
-                kind={statusKind}
+                kind="cancelled"
                 size="sm"
-                aria-label={statusLabel}
-                title={statusLabel}
-              />
+                className="shrink-0 text-[12px] text-muted-foreground"
+              >
+                {denialLabel}
+              </StatusIndicator>
+            ) : (
+              (inFlight || failed) && (
+                <StatusIndicator
+                  kind={statusKind}
+                  size="sm"
+                  aria-label={statusLabel}
+                  title={statusLabel}
+                />
+              )
             )}
             <ChevronRight
               aria-hidden
@@ -381,7 +407,13 @@ export const ToolPart: React.FC<{
               </div>
             )}
             {error && (
-              <pre className="max-h-48 overflow-auto whitespace-pre border-t border-border/70 bg-background/70 px-3 py-2 font-mono text-[12px] leading-5 text-red-600 dark:text-red-400">
+              <pre
+                className={
+                  denialLabel
+                    ? "max-h-48 overflow-auto whitespace-pre border-t border-border/70 bg-background/70 px-3 py-2 font-mono text-[12px] leading-5 text-muted-foreground"
+                    : "max-h-48 overflow-auto whitespace-pre border-t border-border/70 bg-background/70 px-3 py-2 font-mono text-[12px] leading-5 text-red-600 dark:text-red-400"
+                }
+              >
                 {error}
               </pre>
             )}
@@ -441,8 +473,8 @@ export const ToolPart: React.FC<{
               </span>
             )}
             {!inFlight && failed && (
-              <StatusIndicator kind="failed" size="sm">
-                Failed
+              <StatusIndicator kind={statusKind} size="sm">
+                {denialLabel ?? "Failed"}
               </StatusIndicator>
             )}
             {inFlight && (

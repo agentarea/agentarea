@@ -233,8 +233,12 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
       throughput7d: sum(completedValues.slice(-7)) / 7,
       throughputPrev: sum(completedValues.slice(-14, -7)) / 7,
       maxDaily: Math.max(...completedValues, 0),
-      costMtd: overview?.cost_mtd_usd ?? 0,
-      cap: settings?.monthly_cap_usd ?? null,
+      // Money arrives as decimal strings; the view formats numbers.
+      costMtd: Number(overview?.cost_mtd_usd ?? 0),
+      cap:
+        settings?.monthly_cap_usd == null
+          ? null
+          : Number(settings.monthly_cap_usd),
       doneToday: overview?.tasks_done_today ?? 0,
       failedToday: overview?.tasks_failed_today ?? 0,
     },

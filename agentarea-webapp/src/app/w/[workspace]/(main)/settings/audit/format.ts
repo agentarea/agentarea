@@ -1,8 +1,27 @@
+const CREATE_COLOR =
+  "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400";
+const UPDATE_COLOR =
+  "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
+const DELETE_COLOR =
+  "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
+const ATTENTION_COLOR =
+  "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
+
 const ACTION_COLORS: Record<string, string> = {
-  create:
-    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
-  update: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  delete: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  create: CREATE_COLOR,
+  invite: CREATE_COLOR,
+  grant: CREATE_COLOR,
+  allowed: CREATE_COLOR,
+  approved: CREATE_COLOR,
+  update: UPDATE_COLOR,
+  rotate: UPDATE_COLOR,
+  set_enabled: UPDATE_COLOR,
+  delete: DELETE_COLOR,
+  remove: DELETE_COLOR,
+  revoke: DELETE_COLOR,
+  invitation_revoke: DELETE_COLOR,
+  denied: DELETE_COLOR,
+  approval_required: ATTENTION_COLOR,
 };
 
 export function auditVerb(action: string): string {

@@ -32,7 +32,6 @@ export type MCPServerFormValues = {
     secret: boolean;
   }>;
   tags?: string;
-  isPublic: boolean;
   authConfigId?: string | null;
 };
 
@@ -52,7 +51,6 @@ export interface MCPServerFormState {
       value?: string[];
     }>;
     tags?: string[];
-    isPublic?: string[];
     members?: string[];
     _form?: string[];
   };
@@ -70,7 +68,6 @@ export interface MCPServerFormState {
       value: string;
     }>;
     tags: string[];
-    isPublic: boolean;
   };
 }
 
@@ -127,7 +124,6 @@ function fieldValues(
     endpointUrl: input.endpointUrl,
     headers: input.headers || [],
     tags: input.tags ? [input.tags] : [],
-    isPublic: input.isPublic,
   };
 }
 
@@ -146,7 +142,6 @@ function toServerConnectionCreate(
       docker_image_url: input.dockerImageUrl ?? "",
       version: input.version || "1.0.0",
       tags,
-      is_public: input.isPublic,
       env_schema: envSchema,
       json_spec: {
         type: "docker",
@@ -162,7 +157,6 @@ function toServerConnectionCreate(
       description: input.description,
       version: input.version || "1.0.0",
       tags,
-      is_public: input.isPublic,
       env_schema: envSchema,
       cmd: [input.command ?? "", ...argsArray],
       json_spec: {
@@ -185,7 +179,6 @@ function toServerConnectionCreate(
       remote_url: input.endpointUrl ?? "",
       version: input.version || "1.0.0",
       tags,
-      is_public: input.isPublic,
       // Headers carry no per-field secret toggle in the form; default them to
       // secret so auth headers (Authorization, X-Api-Key, …) never land in
       // plaintext. We don't guess by name.

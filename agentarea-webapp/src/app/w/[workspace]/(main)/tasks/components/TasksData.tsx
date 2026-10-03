@@ -1,18 +1,18 @@
 import { getTranslations } from "next-intl/server";
+import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
 import EmptyState from "@/components/EmptyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
+import OffsetPagination from "@/components/OffsetPagination";
 import {
   getAllTasks,
   listTriggerCatalog,
   resolvePrincipals,
   type TaskWithAgent,
 } from "@/lib/api";
-import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
 import { pageHref, pageWindow, takePage } from "@/lib/offsetPage";
 import { getTaskSource } from "@/lib/taskSource";
 import type { TaskStatusValue } from "@/lib/taskStatusFilter";
 import TasksList from "./TasksList";
-import TasksPagination from "./TasksPagination";
 
 const TASKS_PAGE_SIZE = 50;
 
@@ -165,7 +165,8 @@ export async function TasksData({
         catalog={catalog}
         searchParams={searchParams}
       />
-      <TasksPagination
+      <OffsetPagination
+        path="/tasks"
         page={page}
         hasNext={hasNext}
         searchParams={searchParams}

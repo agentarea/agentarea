@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Shield } from "lucide-react";
+import type { Blockers } from "@/api/client";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { BoardSectionHeader } from "@/components/board";
 import EmptyState from "@/components/EmptyState";
@@ -8,7 +9,6 @@ import { CollapsibleGroup } from "@/components/ui/group-header";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import Link from "@/components/WorkspaceLink";
-import type { DashboardData } from "@/lib/api-dashboard";
 import { formatMoney } from "@/lib/money";
 import { formatRelTime } from "./relTime";
 
@@ -16,7 +16,8 @@ type BlockerRow = {
   key: string;
   question: string;
   agentId: string;
-  agentName: string;
+  /** Null when the agent no longer resolves. */
+  agentName: string | null | undefined;
   ago: string;
   href: string;
 };
@@ -31,7 +32,7 @@ export function BlockersPanel({
   blockers,
   currency,
 }: {
-  blockers: DashboardData["blockers"];
+  blockers: Blockers;
   currency: string | null;
 }) {
   const t = useTranslations("DashboardPage");
@@ -59,6 +60,38 @@ export function BlockersPanel({
       })),
     },
     {
+      label: t("awaitingContinuation"),
+      icon: (
+        <StatusIndicator
+          kind="attention"
+          size="sm"
+          aria-label={t("awaitingContinuation")}
+        />
+      ),
+      rows: blockers.awaiting_continuation.map((b) => ({
+        key: b.task_id,
+        question: b.description,
+        agentId: b.agent_id,
+        agentName: b.agent_name,
+        ago: ago(b.created_at),
+        href: `/tasks/${b.task_id}`,
+      })),
+    },
+    {
+      label: t("blocked"),
+      icon: (
+        <StatusIndicator kind="attention" size="sm" aria-label={t("blocked")} />
+      ),
+      rows: blockers.blocked_24h.map((b) => ({
+        key: b.task_id,
+        question: b.error?.split("\n")[0] || b.description || t("taskBlocked"),
+        agentId: b.agent_id,
+        agentName: b.agent_name,
+        ago: ago(b.occurred_at),
+        href: `/tasks/${b.task_id}`,
+      })),
+    },
+    {
       label: t("walletExhausted"),
       icon: (
         <StatusIndicator
@@ -70,7 +103,7 @@ export function BlockersPanel({
       rows: blockers.wallet_exhausted.map((b) => ({
         key: b.agent_id,
         question: t("budgetExhausted", {
-          amount: formatMoney(b.budget_usd, currency, locale),
+          amount: formatMoney(Number(b.budget_usd), currency, locale),
           period: b.period,
         }),
         agentId: b.agent_id,
@@ -140,14 +173,18 @@ export function BlockersPanel({
                         {r.question}
                       </span>
                       <span className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground">
-                        <AgentAvatar
-                          agent={{ id: r.agentId, name: r.agentName }}
-                          size="xs"
-                        />
-                        <span className="truncate font-medium">
-                          {r.agentName}
-                        </span>
-                        <span className="h-[2.5px] w-[2.5px] shrink-0 rounded-full bg-muted-foreground/60" />
+                        {r.agentName && (
+                          <>
+                            <AgentAvatar
+                              agent={{ id: r.agentId, name: r.agentName }}
+                              size="xs"
+                            />
+                            <span className="truncate font-medium">
+                              {r.agentName}
+                            </span>
+                            <span className="h-[2.5px] w-[2.5px] shrink-0 rounded-full bg-muted-foreground/60" />
+                          </>
+                        )}
                         <span className="shrink-0 font-mono">{r.ago}</span>
                       </span>
                     </div>

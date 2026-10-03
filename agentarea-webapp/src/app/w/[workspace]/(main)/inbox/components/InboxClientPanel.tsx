@@ -1,14 +1,8 @@
 "use client";
 
 import { useFormatter, useLocale, useNow, useTranslations } from "next-intl";
-import {
-  Check,
-  ChevronRight,
-  Clock,
-  ExternalLink,
-  Wallet,
-  X,
-} from "lucide-react";
+import { ChevronRight, Clock, ExternalLink, Wallet, X } from "lucide-react";
+import type { ApprovalDecisionResult } from "@/components/Approvals/ApprovalDecisionCard";
 import {
   fmtCost,
   formatRelative,
@@ -23,13 +17,17 @@ import { Button } from "@/components/ui/button";
 import Link from "@/components/WorkspaceLink";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { EscalationArguments } from "./EscalationArguments";
 import { extractInboxResult } from "./inboxResult";
 import { InboxResultMessage } from "./InboxResultMessage";
 
 interface InboxClientPanelProps {
   task: InboxTask | null;
-  onResolve: (task: InboxTask, approved: boolean) => void;
+  onResolve: (
+    task: InboxTask,
+    approved: boolean,
+    comment: string,
+    escalationId: string
+  ) => Promise<ApprovalDecisionResult>;
   onClose: () => void;
 }
 
@@ -150,38 +148,6 @@ export function InboxClientPanel({
         </div>
       </header>
 
-      {pend && (
-        <div className="shrink-0 border-b border-orange-500/25 bg-orange-500/10 px-5 py-2.5 text-sm leading-relaxed text-foreground/85 sm:px-6">
-          <div className="flex items-start gap-2.5">
-            <StatusIndicator
-              kind="attention"
-              size="sm"
-              className="mt-0.5"
-              aria-label={t("detail.outputPending")}
-              title={t("detail.outputPending")}
-            />
-            <div className="min-w-0 flex-1">
-              <p>
-                {t.rich("detail.willRun", {
-                  tool:
-                    task.escalation_tool_name || t("detail.requestedAction"),
-                  b: (chunks) => (
-                    <b className="font-semibold text-foreground">{chunks}</b>
-                  ),
-                })}
-              </p>
-              {task.escalation_id && (
-                <EscalationArguments
-                  agentId={task.agent_id}
-                  taskId={String(task.id)}
-                  escalationId={task.escalation_id}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Same transcript and composer as /tasks/[id]: read what happened and
           answer without leaving the inbox. Keyed so switching tasks resets the
           event stream instead of folding two tasks into one conversation. */}
@@ -199,29 +165,11 @@ export function InboxClientPanel({
           currentStatus={status}
           fallback={resultFallback}
           onRefresh={() => router.refresh()}
+          onDecideApproval={(escalationId, approved, comment) =>
+            onResolve(task, approved, comment, escalationId)
+          }
         />
       </div>
-
-      {pend && (
-        <footer className="shrink-0 border-t border-border bg-background px-5 py-3.5 sm:px-6">
-          <div className="flex gap-2.5 sm:justify-end">
-            <button
-              onClick={() => onResolve(task, false)}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-4 text-[13px] font-semibold text-red-600 transition hover:border-red-500 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-none"
-            >
-              <X size={16} strokeWidth={2} aria-hidden />
-              {t("reject")}
-            </button>
-            <button
-              onClick={() => onResolve(task, true)}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-[13px] font-semibold text-white shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-none"
-            >
-              <Check size={16} strokeWidth={2.2} aria-hidden />
-              {t("approve")}
-            </button>
-          </div>
-        </footer>
-      )}
     </div>
   );
 }

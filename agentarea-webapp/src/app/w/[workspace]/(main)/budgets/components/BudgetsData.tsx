@@ -42,7 +42,9 @@ export async function BudgetsData() {
       ? apiErrorMessage(settingsResult, t("settingsLoadFailed"))
       : null;
 
-  const cap = settings?.monthly_cap_usd ?? data.spend.cap_usd;
+  // Money arrives as decimal strings; the budget views take numbers.
+  const amount = (v: string | null) => (v == null ? null : Number(v));
+  const cap = amount(settings?.monthly_cap_usd ?? data.spend.cap_usd);
   const currency = pricing.ok ? pricing.currency : null;
 
   return (
@@ -57,8 +59,8 @@ export async function BudgetsData() {
       }
       outlook={
         <MonthOutlook
-          today={data.spend.today_usd}
-          projected={data.spend.projected_eom_usd}
+          today={Number(data.spend.today_usd)}
+          projected={amount(data.spend.projected_eom_usd)}
           cap={cap}
           runRateDays={data.daily_spend?.length ?? 30}
           currency={currency}
@@ -67,7 +69,7 @@ export async function BudgetsData() {
       capCard={
         <BudgetCapPanel
           initialCap={cap}
-          mtdSpend={data.spend.mtd_usd}
+          mtdSpend={Number(data.spend.mtd_usd)}
           settingsError={settingsError}
         />
       }

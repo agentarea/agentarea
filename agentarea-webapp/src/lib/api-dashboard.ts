@@ -1,122 +1,15 @@
 // Dashboard-specific fetcher for server-only callers.
 
 import "server-only";
+import type {
+  AgentOverviewResponse,
+  DashboardResponse,
+  WorkspaceSettingsResponse,
+} from "@/api/client";
 import { env } from "@/env";
 import { getAuthToken } from "./getAuthToken";
 import { getRequestWorkspaceSlug } from "./workspace-context";
 import { fillWorkspace } from "./workspace-url";
-
-export type DashboardSpend = {
-  today_usd: number;
-  mtd_usd: number;
-  cap_usd: number | null;
-  pct_of_cap: number | null;
-  projected_eom_usd: number | null;
-  projection_method: string;
-};
-
-export type DashboardHitlBlocker = {
-  task_id: string;
-  agent_id: string;
-  agent_name: string;
-  description: string;
-  created_at: string;
-};
-
-export type DashboardWalletExhausted = {
-  agent_id: string;
-  agent_name: string;
-  budget_usd: number;
-  period: string;
-};
-
-export type DashboardFailedTask = {
-  task_id: string;
-  agent_id: string;
-  agent_name: string;
-  error: string | null;
-  occurred_at: string;
-};
-
-export type DashboardTask = {
-  task_id: string;
-  agent_id: string;
-  agent_name: string | null;
-  title: string;
-  status: string;
-  started_at: string | null;
-  finished_at: string | null;
-  cost_usd: number | null;
-};
-
-export type ScheduledRun = {
-  fires_at: string;
-  trigger_id: string;
-  agent_id: string;
-  agent_name: string | null;
-  title: string;
-};
-
-export type FrequentSchedule = {
-  trigger_id: string;
-  agent_id: string;
-  agent_name: string | null;
-  title: string;
-  cron_expression: string;
-  runs_per_day: number;
-  next_run_at: string;
-};
-
-export type DashboardSchedule = {
-  horizon_days: number;
-  runs: ScheduledRun[];
-  frequent: FrequentSchedule[];
-};
-
-export type DailySpendPoint = { date: string; usd: number };
-export type DailyTaskCounts = {
-  date: string;
-  completed: number;
-  failed: number;
-  input_required: number;
-};
-
-export type DashboardData = {
-  spend: DashboardSpend;
-  blockers: {
-    hitl: DashboardHitlBlocker[];
-    wallet_exhausted: DashboardWalletExhausted[];
-    failed_24h: DashboardFailedTask[];
-  };
-  active_tasks: DashboardTask[];
-  recent_tasks: DashboardTask[];
-  schedule: DashboardSchedule;
-  daily_spend: DailySpendPoint[];
-};
-
-export type AgentUpcomingItem = {
-  fires_at: string;
-  kind: "trigger" | "pending_task" | "running_task";
-  title: string;
-  trigger_id: string | null;
-  task_id: string | null;
-  cron_expression: string | null;
-};
-
-export type AgentOverviewData = {
-  cost_today_usd: number;
-  cost_mtd_usd: number;
-  tasks_done_today: number;
-  tasks_failed_today: number;
-  last_activity_at: string | null;
-  daily_spend: DailySpendPoint[];
-  daily_tasks: DailyTaskCounts[];
-  upcoming: AgentUpcomingItem[];
-};
-
-export type WorkspaceSettings = {
-  monthly_cap_usd: number | null;
-};
 
 async function authedFetch(path: string, init?: RequestInit) {
   const token = await getAuthToken();
@@ -166,24 +59,29 @@ async function request<T>(
 }
 
 export function getDashboard() {
-  return request<DashboardData>("/v1/workspaces/{workspace}/dashboard");
+  return request<DashboardResponse>("/v1/workspaces/{workspace}/dashboard");
 }
 
 export function getWorkspaceSettings() {
-  return request<WorkspaceSettings>("/v1/workspaces/{workspace}/settings");
+  return request<WorkspaceSettingsResponse>(
+    "/v1/workspaces/{workspace}/settings"
+  );
 }
 
 export function getAgentOverview(agentId: string) {
-  return request<AgentOverviewData>(
+  return request<AgentOverviewResponse>(
     `/v1/workspaces/{workspace}/agents/${encodeURIComponent(agentId)}/overview`
   );
 }
 
 export function updateWorkspaceSettings(monthly_cap_usd: number | null) {
-  return request<WorkspaceSettings>("/v1/workspaces/{workspace}/settings", {
-    method: "PUT",
-    body: JSON.stringify({ monthly_cap_usd }),
-  });
+  return request<WorkspaceSettingsResponse>(
+    "/v1/workspaces/{workspace}/settings",
+    {
+      method: "PUT",
+      body: JSON.stringify({ monthly_cap_usd }),
+    }
+  );
 }
 
 /**

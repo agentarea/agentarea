@@ -1218,6 +1218,15 @@ export const runTriggerNow = async (triggerId: string) => {
   return withStatus(result);
 };
 
+export const rotateTriggerSigningSecret = async (triggerId: string) => {
+  const result =
+    await sdk.rotateSigningSecretV1TriggersTriggerIdSigningSecretPost({
+      client: serverClient,
+      path: { trigger_id: triggerId },
+    });
+  return withStatus(result);
+};
+
 export const getTriggerStatus = async (triggerId: string) => {
   const { data, error } =
     await sdk.getTriggerStatusV1TriggersTriggerIdStatusGet({
@@ -2064,39 +2073,6 @@ export const listAuditLogs = async (params?: {
 };
 
 // Convenience helpers built on top of the generated API
-interface TaskEventRecord {
-  id: string;
-  event_type: string;
-  timestamp: string;
-  data?: { content?: string; result?: string } | null;
-}
-
-export const getAgentTaskMessages = async (agentId: string, taskId: string) => {
-  // Build message history from task events
-  const { data: events, error } = await getAgentTaskEvents(agentId, taskId, {
-    page_size: 100,
-  });
-  if (error || !events) {
-    return { data: [], error };
-  }
-
-  const eventList = (events as { events: TaskEventRecord[] }).events;
-  const messages = eventList
-    .filter((event) =>
-      ["LLMCallCompleted", "ToolCallCompleted", "WorkflowCompleted"].includes(
-        event.event_type
-      )
-    )
-    .map((event) => ({
-      id: event.id,
-      content: event.data?.content || event.data?.result || "",
-      role: event.event_type === "LLMCallCompleted" ? "assistant" : "system",
-      timestamp: event.timestamp,
-    }));
-
-  return { data: messages, error: null };
-};
-
 // Uses the global /v1/tasks/ endpoint which returns total_cost and agent_name
 export const listProviderConfigsWithModelInstances = async (params?: {
   provider_spec_id?: string;
@@ -2274,6 +2250,15 @@ export const deleteSecret = async (secretId: string) => {
 
 export const getNetworkPeopleAccess = async () => {
   const result = await sdk.getNetworkPeopleAccessV1NetworkPeopleAccessGet({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
+// The bundle YAML is served as text/plain, so the generated client returns it
+// as a string. Admin-only: a member gets 403.
+export const exportWorkspaceConfig = async () => {
+  const result = await sdk.exportWorkspaceConfigV1ExportGet({
     client: serverClient,
   });
   return withStatus(result);

@@ -108,3 +108,15 @@ export function isPositiveMoneyInput(value: string): boolean {
     NONZERO_DIGIT_PATTERN.test(match[2])
   );
 }
+
+/** True for a well-formed amount below zero; "-0" is not negative. */
+export function isNegativeMoneyInput(value: string): boolean {
+  const parsed = parseMoneyInput(value);
+  if (parsed === null) return false;
+  const match = MONEY_INPUT_PATTERN.exec(parsed);
+  return (
+    match !== null &&
+    match[1] === "-" &&
+    NONZERO_DIGIT_PATTERN.test(match[2])
+  );
+}

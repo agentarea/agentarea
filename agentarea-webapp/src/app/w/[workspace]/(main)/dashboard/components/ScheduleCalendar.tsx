@@ -3,15 +3,11 @@
 import { useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { CalendarDays, Repeat } from "lucide-react";
+import type { FrequentSchedule, Schedule, ScheduledRun } from "@/api/client";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { BoardSectionHeader } from "@/components/board";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "@/components/WorkspaceLink";
-import type {
-  DashboardSchedule,
-  FrequentSchedule,
-  ScheduledRun,
-} from "@/lib/api-dashboard";
 import { cn } from "@/lib/utils";
 import { buildCalendarWeeks, dayKey, type CalendarDay } from "./calendar";
 
@@ -31,18 +27,23 @@ function useIsClient() {
 function RunChip({
   run,
   time,
+  date,
   withAgent = false,
 }: {
   run: ScheduledRun;
   time: (iso: string) => string;
+  /** The run's full date: the chip alone shows only the time. */
+  date: string;
   /** The grid cell is too narrow for the avatar; the tooltip names the agent. */
   withAgent?: boolean;
 }) {
+  const name = run.agent_name ? `${run.title} · ${run.agent_name}` : run.title;
   return (
     <Link
       href={`/triggers/${run.trigger_id}`}
       className="flex min-w-0 items-center gap-1.5 rounded-md border border-zinc-200 bg-background px-1.5 py-0.5 text-[11.5px] leading-[18px] transition-colors hover:bg-muted dark:border-zinc-700"
-      title={run.agent_name ? `${run.title} · ${run.agent_name}` : run.title}
+      title={name}
+      aria-label={`${date} ${time(run.fires_at)} ${name}`}
     >
       {withAgent && (
         <AgentAvatar
@@ -60,18 +61,31 @@ function RunChip({
   );
 }
 
-function FrequentChip({ item }: { item: FrequentSchedule }) {
+function FrequentChip({
+  item,
+  firstDate,
+}: {
+  item: FrequentSchedule;
+  /** The day of the next run, in the viewer's zone; null until hydrated. */
+  firstDate: string | null;
+}) {
   const t = useTranslations("DashboardPage");
+  const perDay = t("perDay", { count: item.runs_per_day });
+  const from = firstDate ? t("fromDate", { date: firstDate }) : null;
+  const name = item.agent_name
+    ? `${item.title} · ${item.agent_name}`
+    : item.title;
   return (
     <Link
       href={`/triggers/${item.trigger_id}`}
       className="flex min-w-0 items-center gap-1.5 rounded-md border border-dashed border-zinc-300 px-2 py-1 text-[11.5px] transition-colors hover:bg-muted dark:border-zinc-600"
+      title={name}
+      aria-label={[name, perDay, from].filter(Boolean).join(", ")}
     >
       <Repeat className="h-3 w-3 shrink-0 text-muted-foreground" />
       <span className="truncate font-medium text-foreground">{item.title}</span>
-      <span className="shrink-0 font-mono text-muted-foreground">
-        {t("perDay", { count: item.runs_per_day })}
-      </span>
+      <span className="shrink-0 font-mono text-muted-foreground">{perDay}</span>
+      {from && <span className="shrink-0 text-muted-foreground">{from}</span>}
     </Link>
   );
 }
@@ -79,11 +93,14 @@ function FrequentChip({ item }: { item: FrequentSchedule }) {
 function DayCell({
   day,
   time,
+  dayLabel,
 }: {
   day: CalendarDay<ScheduledRun>;
   time: (iso: string) => string;
+  dayLabel: (d: Date) => string;
 }) {
   const t = useTranslations("DashboardPage");
+  const date = dayLabel(day.date);
   const shown = day.items.slice(0, MAX_CHIPS_PER_DAY);
   const hidden = day.items.length - shown.length;
   return (
@@ -95,6 +112,7 @@ function DayCell({
     >
       <div className="flex items-center justify-between px-0.5">
         <span
+          aria-hidden
           className={cn(
             "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[12px] font-semibold tabular-nums",
             day.isToday && "bg-foreground text-background",
@@ -103,9 +121,13 @@ function DayCell({
         >
           {day.date.getDate()}
         </span>
+        <span className="sr-only">{date}</span>
         {day.items.length > 0 && (
           <span className="text-[11px] tabular-nums text-muted-foreground">
-            {day.items.length}
+            <span aria-hidden>{day.items.length}</span>
+            <span className="sr-only">
+              {t("runCount", { count: day.items.length })}
+            </span>
           </span>
         )}
       </div>
@@ -114,6 +136,7 @@ function DayCell({
           key={`${run.trigger_id}-${run.fires_at}`}
           run={run}
           time={time}
+          date={date}
         />
       ))}
       {hidden > 0 && (
@@ -125,11 +148,7 @@ function DayCell({
   );
 }
 
-export function ScheduleCalendar({
-  schedule,
-}: {
-  schedule: DashboardSchedule;
-}) {
+export function ScheduleCalendar({ schedule }: { schedule: Schedule }) {
   const t = useTranslations("DashboardPage");
   const locale = useLocale();
   const isClient = useIsClient();
@@ -172,7 +191,13 @@ export function ScheduleCalendar({
               {t("throughoutTheDay")}
             </span>
             {schedule.frequent.map((item) => (
-              <FrequentChip key={item.trigger_id} item={item} />
+              <FrequentChip
+                key={item.trigger_id}
+                item={item}
+                firstDate={
+                  isClient ? dayFmt.format(new Date(item.next_run_at)) : null
+                }
+              />
             ))}
           </div>
         )}
@@ -198,7 +223,7 @@ function CalendarBody({
   weekday,
   dayLabel,
 }: {
-  schedule: DashboardSchedule;
+  schedule: Schedule;
   time: (iso: string) => string;
   weekday: (d: Date) => string;
   dayLabel: (d: Date) => string;
@@ -232,7 +257,12 @@ function CalendarBody({
           }}
         >
           {weeks.flat().map((day) => (
-            <DayCell key={dayKey(day.date)} day={day} time={time} />
+            <DayCell
+              key={dayKey(day.date)}
+              day={day}
+              time={time}
+              dayLabel={dayLabel}
+            />
           ))}
         </div>
       </div>
@@ -252,6 +282,7 @@ function CalendarBody({
                   key={`${run.trigger_id}-${run.fires_at}`}
                   run={run}
                   time={time}
+                  date={dayLabel(day.date)}
                   withAgent
                 />
               ))}

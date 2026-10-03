@@ -88,7 +88,7 @@ export default function ContentBlock({
                             {index === header.breadcrumb.length - 1 ? (
                               <h1
                                 aria-current="page"
-                                className="block min-w-0 truncate font-semibold text-foreground"
+                                className="block min-w-0 truncate text-[length:inherit] font-semibold leading-[inherit] text-foreground"
                               >
                                 {item.label}
                               </h1>

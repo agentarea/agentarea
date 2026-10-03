@@ -13,16 +13,12 @@ import { formatTriggerCost } from "../../components/triggerDisplay";
 
 interface ExecutionsTableProps {
   executions: TriggerExecutionResponse[];
-  triggerId: string;
-  currentPage: number;
   /** Principal id -> display name, resolved by the page via GET /v1/principals. */
   principalNames?: Record<string, string>;
 }
 
 export default function ExecutionsTable({
   executions,
-  triggerId: _triggerId,
-  currentPage: _currentPage,
   principalNames = {},
 }: ExecutionsTableProps) {
   const t = useTranslations("TriggersPage.detail");

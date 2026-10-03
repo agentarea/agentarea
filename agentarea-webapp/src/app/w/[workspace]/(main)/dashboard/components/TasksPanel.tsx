@@ -1,16 +1,16 @@
 import { useLocale, useTranslations } from "next-intl";
 import { ArrowUpRight, ListChecks } from "lucide-react";
+import type { DashboardTask } from "@/api/client";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { BoardSectionHeader } from "@/components/board";
 import EmptyState from "@/components/EmptyState";
+import { TaskStatus } from "@/components/TaskStatus";
 import { Button } from "@/components/ui/button";
 import { CollapsibleGroup } from "@/components/ui/group-header";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import Link from "@/components/WorkspaceLink";
-import type { DashboardTask } from "@/lib/api-dashboard";
 import { formatMoney } from "@/lib/money";
-import { getTaskStatusPresentation } from "@/lib/status";
 import { formatRelTime } from "./relTime";
 
 function Dot() {
@@ -29,23 +29,23 @@ export function TasksPanel({
   currency: string | null;
 }) {
   const t = useTranslations("DashboardPage");
-  const tStatus = useTranslations("TasksPage.status");
   const locale = useLocale();
 
   const row = (task: DashboardTask, when: string | null) => {
-    const status = getTaskStatusPresentation(task.status);
-    const label = status.labelKey ? tStatus(status.labelKey) : status.label;
     return (
-      <Link key={task.task_id} href={`/tasks/${task.task_id}`} className="block">
+      <Link
+        key={task.task_id}
+        href={`/tasks/${task.task_id}`}
+        className="block"
+      >
         <InteractiveListRow
           className="px-6 py-2.5"
           contentClassName="items-start"
           start={
-            <StatusIndicator
-              kind={status.kind}
+            <TaskStatus
+              status={task.status}
               size="sm"
-              aria-label={label}
-              title={label}
+              caption="never"
               className="mt-[3px]"
             />
           }
@@ -74,7 +74,7 @@ export function TasksPanel({
                 <>
                   <Dot />
                   <span className="shrink-0 font-mono">
-                    {formatMoney(task.cost_usd, currency, locale)}
+                    {formatMoney(Number(task.cost_usd), currency, locale)}
                   </span>
                 </>
               )}

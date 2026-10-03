@@ -27,6 +27,7 @@ import {
 } from "@/lib/mcp/resolveMcpRef";
 import {
   getCurrencySymbol,
+  isNegativeMoneyInput,
   isPositiveMoneyInput,
   parseMoneyInput,
 } from "@/lib/money";
@@ -75,7 +76,6 @@ const EDITABLE_EFFECTS: PolicyEffect[] = ["cap", "deny", "approval", "safety"];
 type CapKind = "spend" | "service" | "tokens";
 type ScopeMode = "workspace" | "agents";
 type PolicyPeriod = "month" | "run";
-type ConditionOperator = "equals" | "not_equals" | "contains" | "exists";
 
 interface OpenAPIConnectionOption {
   id: string;
@@ -135,9 +135,6 @@ interface FormState {
   maxTokensPerCall: string;
   // deny / approval tools
   tools: string[];
-  conditionParam: string;
-  conditionOperator: ConditionOperator;
-  conditionValue: string;
   // approval
   approvers: string[];
   // safety
@@ -159,9 +156,6 @@ const EMPTY_FORM: FormState = {
   maxTokens: "",
   maxTokensPerCall: "",
   tools: [],
-  conditionParam: "",
-  conditionOperator: "equals",
-  conditionValue: "",
   approvers: [],
   promptInjection: true,
   outputSanitizer: false,
@@ -183,9 +177,9 @@ function newDraft(id: string, effect: PolicyEffect = "cap"): PolicyDraft {
   };
 }
 
-// Loosely validate ReBAC subject refs (user:<id> | group:<id>#member, etc.).
-const SUBJECT_REF_RE = /^[a-zA-Z]+:[^\s]+/;
-
+// Approvers the engine resolves: only a direct workspace user ("user:<id>")
+// ever grants approval, so the backend rejects role/group/userset refs (#198).
+const USER_APPROVER_RE = /^user:[^\s#]+$/;
 
 function parseInt2(value: string): number | null {
   const trimmed = value.trim();
@@ -199,46 +193,6 @@ function str(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number") return String(value);
   return "";
-}
-
-function parseCondition(condition: string | null | undefined): {
-  param: string;
-  operator: ConditionOperator;
-  value: string;
-} | null {
-  if (!condition) return null;
-  const match = condition.match(
-    /^args\.([a-zA-Z0-9_.-]+)\s*(==|!=|contains|exists)\s*(?:"([^"]*)"|(.+))?$/
-  );
-  if (!match) return null;
-  const op = match[2];
-  return {
-    param: match[1],
-    operator:
-      op === "!="
-        ? "not_equals"
-        : op === "contains"
-          ? "contains"
-          : op === "exists"
-            ? "exists"
-            : "equals",
-    value: match[3] ?? match[4] ?? "",
-  };
-}
-
-function buildCondition(form: FormState): string | null {
-  const param = form.conditionParam.trim();
-  if (!param) return null;
-  if (form.conditionOperator === "exists") return `args.${param} exists`;
-  const value = form.conditionValue.trim();
-  if (!value) return null;
-  const operator =
-    form.conditionOperator === "not_equals"
-      ? "!="
-      : form.conditionOperator === "contains"
-        ? "contains"
-        : "==";
-  return `args.${param} ${operator} ${JSON.stringify(value)}`;
 }
 
 function schemaParameterKeys(schema: unknown): string[] {
@@ -278,16 +232,10 @@ function memberLabel(member: MemberOption): string {
 }
 
 function approverLabel(ref: string, members: MemberOption[]): string {
-  if (ref.startsWith("user:")) {
-    const userId = ref.slice("user:".length);
-    const member = members.find((item) => item.user_id === userId);
-    return member ? memberLabel(member) : ref;
-  }
-  if (ref.startsWith("role:")) return ref.slice("role:".length);
-  if (ref.startsWith("group:")) {
-    return ref.slice("group:".length).replace("#member", "");
-  }
-  return ref;
+  if (!ref.startsWith("user:")) return ref;
+  const userId = ref.slice("user:".length);
+  const member = members.find((item) => item.user_id === userId);
+  return member ? memberLabel(member) : ref;
 }
 
 function addToolOption(
@@ -470,13 +418,6 @@ function policyToForm(policy: Policy): {
     form.outputSanitizer = Boolean(p.output_sanitizer);
   }
 
-  const condition = parseCondition(policy.condition);
-  if (condition) {
-    form.conditionParam = condition.param;
-    form.conditionOperator = condition.operator;
-    form.conditionValue = condition.value;
-  }
-
   return { effect: policy.effect, form };
 }
 
@@ -486,15 +427,16 @@ interface RuleBody {
   target: string;
   effect: PolicyEffect;
   params: Record<string, unknown>;
-  condition?: string | null;
 }
 type RuleBuildError =
   | "tokenBudgetRequired"
   | "amountInvalid"
   | "amountMustBePositive"
+  | "amountMustNotBeNegative"
   | "atLeastOneToolRequired"
   | "toolRequired"
-  | "safetyCheckRequired";
+  | "safetyCheckRequired"
+  | "approverUnsupported";
 
 // Build the rule bodies the form describes. Returns an error code instead
 // when the form is incomplete.
@@ -515,7 +457,12 @@ function buildRuleBodies(
     }
     const amount = parseMoneyInput(form.amountUsd);
     if (amount === null) return { error: "amountInvalid" };
-    if (!isPositiveMoneyInput(amount))
+    // A $0 monthly cap is valid (it freezes spend); per-run and service caps
+    // must allow something, matching the governance rule schema.
+    const zeroAllowed = form.capKind === "spend" && form.period !== "run";
+    if (zeroAllowed && isNegativeMoneyInput(amount))
+      return { error: "amountMustNotBeNegative" };
+    if (!zeroAllowed && !isPositiveMoneyInput(amount))
       return { error: "amountMustBePositive" };
     if (form.capKind === "service")
       return {
@@ -534,28 +481,26 @@ function buildRuleBodies(
 
   if (effect === "deny") {
     if (form.tools.length === 0) return { error: "atLeastOneToolRequired" };
-    const condition = buildCondition(form);
     return {
       bodies: form.tools.map((tool) => ({
         target: `tool:${tool}`,
         effect,
         params: {},
-        condition,
       })),
     };
   }
 
   if (effect === "approval") {
+    if (form.tools.length === 0) return { error: "toolRequired" };
+    if (form.approvers.some((ref) => !USER_APPROVER_RE.test(ref)))
+      return { error: "approverUnsupported" };
     const params: Record<string, unknown> = {};
     if (form.approvers.length > 0) params.approvers = form.approvers;
-    if (form.tools.length === 0) return { error: "toolRequired" };
-    const condition = buildCondition(form);
     return {
       bodies: form.tools.map((tool) => ({
         target: `tool:${tool}`,
         effect,
         params,
-        condition,
       })),
     };
   }
@@ -631,29 +576,19 @@ function TagInput({
   values,
   onChange,
   placeholder,
-  validate,
-  invalidHint,
 }: {
   values: string[];
   onChange: (next: string[]) => void;
   placeholder: string;
-  validate?: (value: string) => boolean;
-  invalidHint?: string;
 }) {
   const t = useTranslations("PoliciesPage.editor");
   const [draft, setDraft] = useState("");
-  const [hint, setHint] = useState<string | null>(null);
 
   const add = () => {
     const value = draft.trim();
     if (!value) return;
-    if (validate && !validate(value)) {
-      setHint(invalidHint ?? t("tagInput.invalidValue"));
-      return;
-    }
     if (!values.includes(value)) onChange([...values, value]);
     setDraft("");
-    setHint(null);
   };
 
   return (
@@ -681,10 +616,7 @@ function TagInput({
       <div className="flex gap-2">
         <Input
           value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            setHint(null);
-          }}
+          onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -697,7 +629,6 @@ function TagInput({
           {t("tagInput.add")}
         </Button>
       </div>
-      {hint && <p className="text-xs text-destructive">{hint}</p>}
     </div>
   );
 }
@@ -857,92 +788,6 @@ function ToolSelector({
   );
 }
 
-function ToolConditionBuilder({
-  paramOptions,
-  form,
-  update,
-}: {
-  paramOptions: string[];
-  form: FormState;
-  update: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
-}) {
-  const t = useTranslations("PoliciesPage.editor");
-  const hasCondition = Boolean(form.conditionParam.trim());
-
-  return (
-    <div className="border-t border-border/60 pt-3">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <Label className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-          {t("condition.parameterGuard")}
-        </Label>
-        {hasCondition && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              update("conditionParam", "");
-              update("conditionValue", "");
-            }}
-          >
-            {t("condition.clear")}
-          </Button>
-        )}
-      </div>
-      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px_minmax(0,1fr)]">
-        <Select
-          value={form.conditionParam || "__none"}
-          onValueChange={(value) =>
-            update("conditionParam", value === "__none" ? "" : value)
-          }
-        >
-          <SelectTrigger>
-            <SelectValue placeholder={t("condition.parameterPlaceholder")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none">
-              {t("condition.anyParameter")}
-            </SelectItem>
-            {paramOptions.map((param) => (
-              <SelectItem key={param} value={param}>
-                {param}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={form.conditionOperator}
-          onValueChange={(value) =>
-            update("conditionOperator", value as ConditionOperator)
-          }
-          disabled={!hasCondition}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="equals">{t("condition.equals")}</SelectItem>
-            <SelectItem value="not_equals">
-              {t("condition.notEquals")}
-            </SelectItem>
-            <SelectItem value="contains">{t("condition.contains")}</SelectItem>
-            <SelectItem value="exists">{t("condition.exists")}</SelectItem>
-          </SelectContent>
-        </Select>
-        <Input
-          value={form.conditionValue}
-          disabled={!hasCondition || form.conditionOperator === "exists"}
-          onChange={(event) => update("conditionValue", event.target.value)}
-          placeholder={t("condition.valuePlaceholder")}
-        />
-      </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        {t("condition.help")}
-      </p>
-    </div>
-  );
-}
-
 function ApproverSelector({
   members,
   values,
@@ -953,8 +798,6 @@ function ApproverSelector({
   onChange: (next: string[]) => void;
 }) {
   const t = useTranslations("PoliciesPage.editor");
-  const [subjectKind, setSubjectKind] = useState<"role" | "group">("role");
-  const [subjectName, setSubjectName] = useState("");
 
   const toggle = (ref: string) => {
     if (values.includes(ref)) {
@@ -964,49 +807,46 @@ function ApproverSelector({
     }
   };
 
-  const addStructuredSubject = () => {
-    const name = subjectName.trim();
-    if (!name) return;
-    const ref =
-      subjectKind === "role" ? `role:${name}` : `group:${name}#member`;
-    if (!values.includes(ref)) onChange([...values, ref]);
-    setSubjectName("");
-  };
-
-  const memberRefs = new Set(members.map((member) => `user:${member.user_id}`));
-  const customValues = values.filter(
-    (value) =>
-      !memberRefs.has(value) &&
-      !value.startsWith("role:") &&
-      !value.startsWith("group:")
-  );
+  const unsupportedCount = values.filter(
+    (ref) => !USER_APPROVER_RE.test(ref)
+  ).length;
 
   return (
     <div className="space-y-3">
       {values.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {values.map((ref) => (
-            <span
-              key={ref}
-              className="inline-flex items-center gap-1 border border-border/70 bg-muted/30 px-2 py-0.5 text-xs"
-            >
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                {ref.split(":")[0]}
-              </span>
-              {approverLabel(ref, members)}
-              <button
-                type="button"
-                aria-label={t("tagInput.removeValue", { value: ref })}
-                onClick={() =>
-                  onChange(values.filter((value) => value !== ref))
-                }
-                className="text-muted-foreground hover:text-foreground"
+          {values.map((ref) => {
+            const unsupported = !USER_APPROVER_RE.test(ref);
+            return (
+              <span
+                key={ref}
+                className={cn(
+                  "inline-flex items-center gap-1 border px-2 py-0.5 text-xs",
+                  unsupported
+                    ? "border-destructive/50 bg-destructive/10 text-destructive"
+                    : "border-border/70 bg-muted/30"
+                )}
               >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
+                {approverLabel(ref, members)}
+                <button
+                  type="button"
+                  aria-label={t("tagInput.removeValue", { value: ref })}
+                  onClick={() =>
+                    onChange(values.filter((value) => value !== ref))
+                  }
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            );
+          })}
         </div>
+      )}
+      {unsupportedCount > 0 && (
+        <p className="text-xs text-destructive">
+          {t("approvers.unsupportedHint", { count: unsupportedCount })}
+        </p>
       )}
 
       <div className="grid gap-2 md:grid-cols-2">
@@ -1052,71 +892,6 @@ function ApproverSelector({
           );
         })}
       </div>
-
-      <div className="border-t border-border/60 pt-3">
-        <Label className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-          {t("approvers.roleOrGroup")}
-        </Label>
-        <div className="mt-2 grid gap-2 sm:grid-cols-[160px_minmax(0,1fr)_auto]">
-          <Select
-            value={subjectKind}
-            onValueChange={(value) => setSubjectKind(value as "role" | "group")}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="role">{t("approvers.role")}</SelectItem>
-              <SelectItem value="group">
-                {t("approvers.groupMembers")}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <Input
-            value={subjectName}
-            onChange={(event) => setSubjectName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addStructuredSubject();
-              }
-            }}
-            placeholder={
-              subjectKind === "role"
-                ? t("approvers.rolePlaceholder")
-                : t("approvers.groupPlaceholder")
-            }
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={addStructuredSubject}
-          >
-            {t("tagInput.add")}
-          </Button>
-        </div>
-      </div>
-
-      <details className="border-t border-border/60 pt-3">
-        <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-          {t("approvers.advancedSubjectRef")}
-        </summary>
-        <div className="mt-3">
-          <TagInput
-            values={customValues}
-            onChange={(nextCustom) => {
-              const standardValues = values.filter(
-                (value) => !customValues.includes(value)
-              );
-              onChange([...standardValues, ...nextCustom]);
-            }}
-            placeholder={t("approvers.subjectRefPlaceholder")}
-            validate={(value) => SUBJECT_REF_RE.test(value)}
-            invalidHint={t("approvers.subjectRefInvalidHint")}
-          />
-        </div>
-      </details>
     </div>
   );
 }
@@ -1285,11 +1060,15 @@ export default function PolicyEditor({
         ? t("validation.amountInvalid")
         : error === "amountMustBePositive"
           ? t("validation.amountMustBePositive")
+          : error === "amountMustNotBeNegative"
+            ? t("validation.amountMustNotBeNegative")
           : error === "atLeastOneToolRequired"
             ? t("validation.atLeastOneToolRequired")
             : error === "toolRequired"
               ? t("validation.toolRequired")
-              : t("validation.safetyCheckRequired");
+              : error === "approverUnsupported"
+                ? t("validation.approverUnsupported")
+                : t("validation.safetyCheckRequired");
   const currencySymbol = useMemo(
     () => getCurrencySymbol(currency, locale),
     [currency, locale]
@@ -1348,19 +1127,6 @@ export default function PolicyEditor({
         openapiConnections
       ),
     [affectedAgents, mcpInstances, mcpServers, openapiConnections]
-  );
-
-  const selectedToolOptions = useMemo(
-    () => toolCatalog.filter((tool) => form.tools.includes(tool.id)),
-    [form.tools, toolCatalog]
-  );
-
-  const selectedToolParameterOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(selectedToolOptions.flatMap((tool) => tool.parameterKeys))
-      ).sort(),
-    [selectedToolOptions]
   );
 
   // Reset form whenever the route opens for a target.
@@ -1507,7 +1273,9 @@ export default function PolicyEditor({
           target: body.target,
           effect: body.effect,
           params: body.params,
-          condition: body.condition ?? null,
+          // Conditions are not evaluated (the compiler applies the rule to
+          // every call), so an edit clears any stored one to match runtime.
+          condition: null,
           enabled: activeDraft.form.enabled,
         });
         if (!result.ok) {
@@ -1527,7 +1295,6 @@ export default function PolicyEditor({
                   target: body.target,
                   effect: body.effect,
                   params: body.params,
-                  condition: body.condition ?? null,
                   enabled: item.draft.form.enabled,
                 });
                 if (!result.ok) {
@@ -1626,10 +1393,6 @@ export default function PolicyEditor({
     { label: t("summary.selected"), value: effectLabel(effect) },
     { label: t("summary.target"), value: previewTarget(effect, form) },
     { label: t("summary.params"), value: previewParams(effect, form) },
-    {
-      label: t("summary.guard"),
-      value: buildCondition(form) ?? t("summary.none"),
-    },
     {
       label: t("summary.rules"),
       value:
@@ -1964,13 +1727,9 @@ export default function PolicyEditor({
                   onChange={(next) => update("tools", next)}
                   emptyText={t("tools.noToolsAttached")}
                 />
-                {form.tools.length > 0 && (
-                  <ToolConditionBuilder
-                    paramOptions={selectedToolParameterOptions}
-                    form={form}
-                    update={update}
-                  />
-                )}
+                <p className="text-xs text-muted-foreground">
+                  {t("tools.everyCallHint")}
+                </p>
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <LinkIcon className="h-3 w-3" />
                   {t("scope.toolAccessManaged")}{" "}
@@ -1997,13 +1756,9 @@ export default function PolicyEditor({
                     onChange={(next) => update("tools", next)}
                     emptyText={t("tools.noToolsAttached")}
                   />
-                  {form.tools.length > 0 && (
-                    <ToolConditionBuilder
-                      paramOptions={selectedToolParameterOptions}
-                      form={form}
-                      update={update}
-                    />
-                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {t("tools.everyCallHint")}
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>{t("approvers.label")}</Label>

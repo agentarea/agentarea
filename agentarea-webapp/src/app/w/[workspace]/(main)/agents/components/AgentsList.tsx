@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
-import AgentModelBadge from "./AgentModelBadge";
+import ModelBadge from "@/components/ui/model-badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { cn } from "@/lib/utils";
 import { agentPath, type Agent, type ModelInfo } from "@/types";
@@ -38,7 +38,7 @@ export default async function AgentsList({
       </span>
     ),
     model_info: (value: ModelInfo | null | undefined) => (
-      <AgentModelBadge
+      <ModelBadge
         providerName={value?.provider_name}
         iconUrl={value?.provider_icon_url}
         modelDisplayName={value?.model_display_name}

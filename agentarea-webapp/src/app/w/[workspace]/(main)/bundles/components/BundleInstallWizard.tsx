@@ -909,11 +909,11 @@ export function BundleInstallWizard({
                 disabled={blockIssues.length > 0 || missingRequired.length > 0}
               >
                 {agents.some((a) => !agentOff.has(a.key))
-                  ? "Start"
-                  : "Install bundle"}
+                  ? t("start")
+                  : t("installBundle")}
               </StartAgentButton>
               <Button variant="ghost" size="sm" onClick={onBack}>
-                Cancel
+                {tCommon("cancel")}
               </Button>
             </div>
           </div>

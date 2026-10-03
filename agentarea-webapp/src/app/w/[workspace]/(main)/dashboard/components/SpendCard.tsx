@@ -1,9 +1,9 @@
 import { useLocale, useTranslations } from "next-intl";
 import { Wallet } from "lucide-react";
+import type { DailySpendPoint, SpendCard as SpendCardData } from "@/api/client";
 import { BoardSectionHeader } from "@/components/board";
 import { computeDelta, DeltaBadge } from "@/components/charts/Sparkline";
 import { SpendTrendChart } from "@/components/charts/SpendTrendChart";
-import type { DailySpendPoint, DashboardSpend } from "@/lib/api-dashboard";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
@@ -25,19 +25,26 @@ export function SpendCard({
   currency,
   compact = false,
 }: {
-  spend: DashboardSpend;
+  spend: SpendCardData;
   trend: DailySpendPoint[];
   currency: string | null;
   compact?: boolean;
 }) {
   const t = useTranslations("DashboardPage");
   const locale = useLocale();
-  const fmt = (v: number) => formatMoney(v, currency, locale);
+  // Money arrives as decimal strings; numbers are only for display and charts.
+  const fmt = (v: string) => formatMoney(Number(v), currency, locale);
   const hasCap = spend.cap_usd !== null;
   const pct = spend.pct_of_cap ?? 0;
 
-  const trendValues = (trend ?? []).map((p) => p.usd);
-  const delta = computeDelta(trendValues, 1);
+  const trendPoints = (trend ?? []).map((p) => ({
+    date: p.date,
+    usd: Number(p.usd),
+  }));
+  const delta = computeDelta(
+    trendPoints.map((p) => p.usd),
+    1
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -93,7 +100,7 @@ export function SpendCard({
               >
                 {t("budgetUsage", {
                   pct: pct.toFixed(0),
-                  cap: fmt(spend.cap_usd ?? 0),
+                  cap: fmt(spend.cap_usd ?? "0"),
                 })}
               </div>
               <div
@@ -119,7 +126,7 @@ export function SpendCard({
         )}
       >
         <SpendTrendChart
-          data={trend}
+          data={trendPoints}
           height={compact ? 188 : 190}
           locale={locale}
           currency={currency}

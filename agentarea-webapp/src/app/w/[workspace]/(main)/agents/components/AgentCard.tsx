@@ -1,7 +1,7 @@
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { Card } from "@/components/ui/card";
 import { HoverLink } from "@/components/ui/hover-link";
-import AgentModelBadge from "./AgentModelBadge";
+import ModelBadge from "@/components/ui/model-badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import Link from "@/components/WorkspaceLink";
 import { cn } from "@/lib/utils";
@@ -70,7 +70,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
                       )}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                    <AgentModelBadge
+                    <ModelBadge
                       providerName={agent.model_info?.provider_name}
                       iconUrl={agent.model_info?.provider_icon_url}
                       modelDisplayName={agent.model_info?.model_display_name}

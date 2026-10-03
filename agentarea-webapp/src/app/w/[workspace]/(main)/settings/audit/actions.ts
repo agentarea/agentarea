@@ -65,16 +65,18 @@ type ResourceEntry = {
   href: string | null;
 };
 
-export async function fetchAuditLogs(params?: {
+export interface AuditLogFilters {
   action?: string;
   resource_type?: string;
   actor_id?: string;
   resource_id?: string;
   since?: string;
   until?: string;
-  cursor?: string;
-  limit?: number;
-}): Promise<
+}
+
+export async function fetchAuditLogs(
+  params?: AuditLogFilters & { cursor?: string; limit?: number }
+): Promise<
   { data: AuditLogResponse; error: null } | { data: null; error: string }
 > {
   const result = await listAuditLogs(params);
@@ -91,6 +93,81 @@ export async function fetchAuditLogs(params?: {
   const events = await enrichAuditEvents(raw.events);
 
   return { data: { ...raw, events }, error: null };
+}
+
+/** Pages an export reads at most: 50 pages of 100, newest first. */
+const EXPORT_PAGE_LIMIT = 50;
+const EXPORT_PAGE_SIZE = 100;
+
+/**
+ * Every event matching ``filters``, for a CSV export, unenriched: the file
+ * carries ids, which stay meaningful after the named thing is gone.
+ * ``truncated`` says the cap was reached before the oldest match.
+ */
+export async function exportAuditLogs(
+  filters: AuditLogFilters
+): Promise<
+  | { data: { events: AuditEventResponse[]; truncated: boolean }; error: null }
+  | { data: null; error: string }
+> {
+  const events: AuditEventResponse[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < EXPORT_PAGE_LIMIT; page++) {
+    const result = await listAuditLogs({
+      ...filters,
+      cursor,
+      limit: EXPORT_PAGE_SIZE,
+    });
+    if (result.error || !result.data) {
+      console.error("Failed to export audit logs", result.status, result.error);
+      return {
+        data: null,
+        error: apiErrorMessage(result, "Failed to export audit logs"),
+      };
+    }
+    events.push(...result.data.events);
+    if (result.data.events.length < EXPORT_PAGE_SIZE) {
+      return { data: { events, truncated: false }, error: null };
+    }
+    cursor = result.data.next_cursor ?? undefined;
+  }
+  return { data: { events, truncated: true }, error: null };
+}
+
+export interface AuditActorOption {
+  value: string;
+  label: string;
+  kind: "user" | "agent";
+}
+
+/** People and agents of the workspace, for the actor filter. */
+export async function listAuditActorOptions(): Promise<AuditActorOption[]> {
+  const [members, agents] = await Promise.all([
+    fetchData(listWorkspaceMembers()),
+    fetchData(listAgents()),
+  ]);
+  const options: AuditActorOption[] = [];
+  for (const member of asArray<ResourceRecord>(members)) {
+    const id = getString(member.user_id);
+    if (id) {
+      options.push({
+        value: id,
+        label: getActorName(member) ?? id,
+        kind: "user",
+      });
+    }
+  }
+  for (const agent of asArray<ResourceRecord>(agents)) {
+    const id = getString(agent.id);
+    if (id) {
+      options.push({
+        value: id,
+        label: getResourceName(agent) ?? id,
+        kind: "agent",
+      });
+    }
+  }
+  return options;
 }
 
 async function enrichAuditEvents(events: AuditEvent[]): Promise<AuditEvent[]> {
@@ -370,8 +447,13 @@ function resolveResource(
     };
   }
 
+  // A deleted secret, a revoked key or a removed member is no longer listed;
+  // the name recorded with the event still says which one it was.
+  const recordedName = getString(event.event_metadata?.resource_name);
   return {
-    label: fallbackResourceLabel(event.resource_type, event.resource_id),
+    label:
+      recordedName ??
+      fallbackResourceLabel(event.resource_type, event.resource_id),
     type_label: typeLabel,
     href: fallbackResourceHref(event.resource_type, event.resource_id),
     found: false,
@@ -427,6 +509,8 @@ function fallbackResourceHref(type: string, id: string | null): string | null {
     if (type === "mcp_server" || type === "mcp_instance") return "/connections";
     if (type === "governance_policy" || type === "policy") return "/policies";
     if (type === "api_key") return "/settings/api-keys";
+    if (type === "secret") return "/secrets";
+    if (type === "member" || type === "invitation") return "/members";
     return null;
   }
 
@@ -454,6 +538,11 @@ function fallbackResourceHref(type: string, id: string | null): string | null {
       return `/models/edit/${id}`;
     case "api_key":
       return "/settings/api-keys";
+    case "secret":
+      return "/secrets";
+    case "member":
+    case "invitation":
+      return "/members";
     default:
       return null;
   }
@@ -473,6 +562,11 @@ function resourceTypeLabel(type: string) {
     openapi_connection: "OpenAPI connection",
     provider_config: "Provider config",
     api_key: "API key",
+    secret: "Secret",  // pragma: allowlist secret
+    member: "Member",
+    invitation: "Invitation",
+    access_grant: "Access",
+    client: "Harness",
   };
   return labels[type] ?? titleize(type);
 }

@@ -176,7 +176,11 @@ export function getTaskStatusPresentation(status: string): StatusPresentation {
     case "waiting_for_approval":
     case "waiting_for_continuation":
     case "blocked":
-      return { label: "Needs action", labelKey: "needsAction", kind: "attention" };
+      return {
+        label: "Needs action",
+        labelKey: "needsAction",
+        kind: "attention",
+      };
     case "failed":
       return { label: "Failed", labelKey: "failed", kind: "failed" };
     case "error":
@@ -229,6 +233,29 @@ export function getTriggerStatusPresentation(
     case "error":
     case "failed":
       return { label: "Error", kind: "failed" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
+
+/**
+ * What protects a webhook URL. Only "signed" is a healthy state: the other two
+ * accept a request from anyone who knows the URL.
+ */
+export function getWebhookSigningPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "signed":
+      return { label: "Signed", labelKey: "signed", kind: "active" };
+    case "unsigned":
+      return { label: "Unsigned", labelKey: "unsigned", kind: "attention" };
+    case "unsupported":
+      return {
+        label: "Not verified",
+        labelKey: "unsupported",
+        kind: "attention",
+      };
     default:
       return fallbackStatusPresentation(status);
   }

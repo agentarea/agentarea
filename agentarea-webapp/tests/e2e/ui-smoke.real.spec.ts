@@ -58,10 +58,7 @@ const ROUTES = [
   "/connections/add-openapi",
   "/models/create",
   "/models/specs",
-  "/tasks/showcase",
-  "/tasks/concept",
   // Bundles
-  "/bundles/catalog",
   "/bundles/import",
   // Legacy redirect into /models
   "/admin/provider-configs",

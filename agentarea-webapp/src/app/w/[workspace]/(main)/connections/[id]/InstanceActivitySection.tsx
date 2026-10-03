@@ -9,6 +9,7 @@ import {
   fetchAuditLogs,
   type AuditEvent,
 } from "@/app/w/[workspace]/(main)/settings/audit/actions";
+import { AuditChangeList } from "@/app/w/[workspace]/(main)/settings/audit/AuditChangeList";
 import {
   auditActionColor,
   formatAuditTime,
@@ -123,21 +124,10 @@ export function InstanceActivitySection({ instanceId }: { instanceId: string }) 
                   </span>
                 </button>
                 {isExpanded && hasChanges && (
-                  <div className="space-y-1 border-t bg-muted/20 px-3 py-2 pl-10">
-                    {event.changes?.map((change, i) => (
-                      <div key={i} className="font-mono text-xs">
-                        <span className="text-muted-foreground">
-                          {String(change.field ?? "unknown")}:
-                        </span>{" "}
-                        <span className="text-red-500 line-through">
-                          {String(change.before ?? "null")}
-                        </span>{" "}
-                        <span className="text-emerald-600">
-                          {String(change.after ?? "null")}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <AuditChangeList
+                    changes={event.changes}
+                    className="space-y-1 border-t bg-muted/20 px-3 py-2 pl-10"
+                  />
                 )}
               </div>
             );

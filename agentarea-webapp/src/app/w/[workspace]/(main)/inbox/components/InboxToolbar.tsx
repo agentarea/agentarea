@@ -5,6 +5,7 @@ import {
   CircleAlert,
   CircleCheck,
   CircleX,
+  History,
   Inbox,
   MessageCircleQuestion,
 } from "lucide-react";
@@ -28,6 +29,7 @@ const FILTER_ICON: Record<FilterValue, LucideIcon> = {
   input: MessageCircleQuestion,
   completed: CircleCheck,
   failed: CircleX,
+  decided: History,
 };
 
 // The subtle (grey) pill: this filters the task list rather than navigating

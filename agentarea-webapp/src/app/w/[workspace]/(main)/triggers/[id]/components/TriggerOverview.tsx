@@ -98,6 +98,10 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
           url: webhookEndpoint,
           methods: trigger.allowed_methods ?? [],
           events: trigger.event_types ?? [],
+          signing: trigger.webhook_signing ?? null,
+          // The API describes a signing scheme only for webhooks whose secret
+          // the platform generates, i.e. the ones that can be rotated here.
+          rotatable: Boolean(trigger.signature_scheme),
         },
     failure: {
       consecutive: trigger.consecutive_failures,

@@ -8,20 +8,24 @@ import {
   useState,
 } from "react";
 import { useTranslations } from "next-intl";
-import { apiErrorMessage, formatApiError, isApiNotFound } from "@/lib/api-errors";
+import type { TaskSummary } from "@/api/client/types.gen";
+import {
+  apiErrorMessage,
+  formatApiError,
+  isApiNotFound,
+} from "@/lib/api-errors";
 import {
   getAgentTaskStatusAction as getAgentTaskStatus,
   getTaskAction as getTask,
 } from "@/lib/server-actions";
-import {
-  getTaskPolicySnapshotAction as getTaskPolicySnapshot,
-  getTaskSummaryAction as getTaskSummary,
-} from "./actions";
-import type { TaskSummary } from "@/api/client/types.gen";
 import type {
   EffectivePolicy,
   EffectivePolicyResponse,
 } from "@/types/policies";
+import {
+  getTaskPolicySnapshotAction as getTaskPolicySnapshot,
+  getTaskSummaryAction as getTaskSummary,
+} from "./actions";
 
 interface TaskData {
   id: string;
@@ -42,6 +46,8 @@ interface TaskStatus {
   execution_id?: string;
   status?: string;
   execution_status?: string;
+  /** The workflow holds a signal-based pause; status stays "running" meanwhile. */
+  paused?: boolean;
   start_time?: string;
   end_time?: string;
   execution_time?: string;
@@ -63,6 +69,12 @@ interface TaskContextType {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  /**
+   * The status the open conversation's event stream reports, published by the
+   * overview page; null on tabs without a live stream.
+   */
+  liveStatus: string | null;
+  setLiveStatus: (status: string | null) => void;
 }
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
@@ -116,6 +128,7 @@ export function TaskProvider({
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!initialTask && !initialError);
   const [error, setError] = useState<string | null>(initialError ?? null);
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
 
   const loadTask = useCallback(async () => {
     if (!taskId) {
@@ -243,6 +256,8 @@ export function TaskProvider({
         loading,
         error,
         refresh: loadTask,
+        liveStatus,
+        setLiveStatus,
       }}
     >
       {children}

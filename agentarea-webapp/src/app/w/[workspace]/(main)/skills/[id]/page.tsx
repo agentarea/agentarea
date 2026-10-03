@@ -15,7 +15,7 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
-import { Streamdown } from "streamdown";
+import { type Components, Streamdown } from "streamdown";
 import ContentBlock from "@/components/ContentBlock";
 import DeleteButton from "@/components/DeleteButton";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
@@ -54,6 +54,16 @@ import {
   removeSkillMemberAction as removeSkillMember,
   updateSkillAction as updateSkill,
 } from "@/lib/server-actions";
+
+// The page title is the document's only h1, so SKILL.md headings render one
+// level below it.
+const skillMarkdownComponents: Components = {
+  h1: "h2",
+  h2: "h3",
+  h3: "h4",
+  h4: "h5",
+  h5: "h6",
+};
 
 // Parse YAML frontmatter from markdown
 function parseFrontmatter(content: string): {
@@ -647,8 +657,10 @@ export default function SkillDetailPage() {
                       </Section>
                     )}
 
-                    <div className="prose prose-sm dark:prose-invert max-w-none pb-10 prose-headings:font-semibold prose-headings:tracking-tight prose-h1:text-xl prose-h1:mt-6 prose-h1:mb-2 prose-h2:text-lg prose-h2:mt-5 prose-h2:mb-2 prose-h3:text-base prose-h3:mt-4 prose-h3:mb-1.5 prose-p:leading-relaxed prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-pre:bg-muted prose-pre:border prose-pre:border-border/70 prose-pre:rounded-md prose-pre:p-4 prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
-                      <Streamdown>{parsed?.body || fileContent}</Streamdown>
+                    <div className="prose prose-sm dark:prose-invert max-w-none pb-10 prose-headings:font-semibold prose-headings:tracking-tight prose-h2:text-xl prose-h2:mt-6 prose-h2:mb-2 prose-h3:text-lg prose-h3:mt-5 prose-h3:mb-2 prose-h4:text-base prose-h4:mt-4 prose-h4:mb-1.5 prose-p:leading-relaxed prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-pre:bg-muted prose-pre:border prose-pre:border-border/70 prose-pre:rounded-md prose-pre:p-4 prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
+                      <Streamdown components={skillMarkdownComponents}>
+                        {parsed?.body || fileContent}
+                      </Streamdown>
                     </div>
                   </div>
                 )}

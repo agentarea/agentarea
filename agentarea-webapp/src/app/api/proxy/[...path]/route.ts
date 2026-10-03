@@ -24,6 +24,16 @@ async function handleRequest(
 ) {
   try {
     const { path } = await params;
+    // Only the versioned API is proxied. Anything else on the backend origin
+    // (e.g. the OAuth authorization endpoint, which redirects to wherever its
+    // query says) would be served from the webapp's own origin through here.
+    // Dot segments are refused because URL resolution would climb out of /v1.
+    if (
+      path[0] !== "v1" ||
+      path.some((segment) => segment === "." || segment === "..")
+    ) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const pathString = path.join("/");
 
     // Get authentication token from cookies (server-side)
@@ -69,6 +79,12 @@ async function handleRequest(
       headers,
       body,
     });
+
+    // A null-body status (e.g. 204 from a DELETE) cannot carry the re-serialized
+    // JSON below: Response construction throws and the caller saw a 500.
+    if ([204, 205, 304].includes(response.status)) {
+      return new NextResponse(null, { status: response.status });
+    }
 
     // Non-JSON responses (file streaming, images, PDFs, etc.): forward the
     // body and the safe response headers so the browser can render them.

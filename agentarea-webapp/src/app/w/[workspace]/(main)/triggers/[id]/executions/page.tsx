@@ -1,8 +1,12 @@
 import { getTranslations } from "next-intl/server";
 import type { ExecutionHistoryResponse } from "@/api/client/types.gen";
-import { getTriggerExecutions, resolvePrincipals } from "@/lib/api";
-import ExecutionsTable from "./ExecutionsTable";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
+import OffsetPagination from "@/components/OffsetPagination";
+import { getTriggerExecutions, resolvePrincipals } from "@/lib/api";
+import { pageHref, parsePageParam } from "@/lib/offsetPage";
+import ExecutionsTable from "./ExecutionsTable";
+
+const EXECUTIONS_PAGE_SIZE = 20;
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -17,14 +21,24 @@ export default async function TriggerExecutionsPage({
   const resolvedSearchParams = await searchParams;
   const t = await getTranslations("TriggersPage.detail");
 
-  const page =
-    typeof resolvedSearchParams.page === "string"
-      ? parseInt(resolvedSearchParams.page, 10)
-      : 1;
+  const path = `/triggers/${id}/executions`;
+  const page = parsePageParam(resolvedSearchParams.page);
+  if (page === null) {
+    return (
+      <RetryEmptyState
+        title={t("noExecutionsOnPage")}
+        iconsType="triggers"
+        additionAction={{
+          label: t("firstPage"),
+          href: pageHref(path, resolvedSearchParams, 1),
+        }}
+      />
+    );
+  }
 
   const { data, error } = await getTriggerExecutions(id, {
     page,
-    page_size: 20,
+    page_size: EXECUTIONS_PAGE_SIZE,
   });
 
   if (error || !data) {
@@ -39,9 +53,9 @@ export default async function TriggerExecutionsPage({
       />
     );
   }
-  const executions = (data as ExecutionHistoryResponse).executions;
+  const { executions, has_next: hasNext } = data as ExecutionHistoryResponse;
 
-  if (executions.length === 0) {
+  if (executions.length === 0 && page === 1) {
     return (
       <div className="flex h-64 flex-col items-center justify-center text-center p-6">
         <p className="text-lg font-medium text-muted-foreground">
@@ -51,6 +65,20 @@ export default async function TriggerExecutionsPage({
           {t("noExecutionsDescription")}
         </p>
       </div>
+    );
+  }
+
+  // Past the last page, e.g. from a stale link after history was trimmed.
+  if (executions.length === 0) {
+    return (
+      <RetryEmptyState
+        title={t("noExecutionsOnPage")}
+        iconsType="triggers"
+        additionAction={{
+          label: t("firstPage"),
+          href: pageHref(path, resolvedSearchParams, 1),
+        }}
+      />
     );
   }
 
@@ -73,9 +101,13 @@ export default async function TriggerExecutionsPage({
     <div className="p-6">
       <ExecutionsTable
         executions={executions}
-        triggerId={id}
-        currentPage={page}
         principalNames={principalNames}
+      />
+      <OffsetPagination
+        path={path}
+        page={page}
+        hasNext={hasNext}
+        searchParams={resolvedSearchParams}
       />
     </div>
   );

@@ -4,10 +4,12 @@ import {
   FilePlus2,
   Globe,
   KeyRound,
+  MailPlus,
   Pencil,
   ShieldCheck,
   Trash2,
   UserRound,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
@@ -33,6 +35,9 @@ const RESOURCE_ICONS: Record<string, LucideIcon> = {
   api_key: KeyRound,
   client: ENTITY_ICONS.client,
   secret: KeyRound,
+  member: Users,
+  invitation: MailPlus,
+  access_grant: ShieldCheck,
 };
 
 export function auditResourceIcon(type: string): LucideIcon | null {
