@@ -1,5 +1,6 @@
 import pytest
-from agentarea_evals.outcomes.classify import Outcome, classify
+from agentarea_evals.outcomes.classify import KNOWN_STATUSES, Outcome, classify
+from agentarea_tasks.domain.statuses import TASK_STATUSES
 
 
 @pytest.mark.parametrize(
@@ -32,6 +33,11 @@ def test_a_rating_on_a_run_still_in_progress_does_not_settle_it():
     assert classify("running", ratings=["bad"]) is Outcome.PENDING
 
 
-def test_an_unknown_status_is_refused():
-    with pytest.raises(ValueError, match="mystery"):
-        classify("mystery", ratings=[])
+@pytest.mark.parametrize("status", sorted(TASK_STATUSES))
+def test_every_stored_status_is_classified_on_purpose(status):
+    assert status in KNOWN_STATUSES
+
+
+def test_an_unknown_status_waits_instead_of_breaking_the_read(caplog):
+    assert classify("mystery", ratings=[]) is Outcome.PENDING
+    assert "mystery" in caplog.text

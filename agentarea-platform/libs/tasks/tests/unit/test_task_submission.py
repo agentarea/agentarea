@@ -160,6 +160,28 @@ async def test_submit_task_preserves_caller_provided_id_metadata_and_parameters(
 
 
 @pytest.mark.asyncio
+async def test_submit_task_drops_evaluation_markers_a_caller_sent():
+    """Only the platform starts evaluation runs; a caller cannot claim to be one."""
+    service, mocks = _make_service()
+    task = _build_task(
+        metadata={
+            "task_source": "a2a_protocol",
+            "run_mode": "evaluation",
+            "evaluation": {"stubs": {"send_email": {"ok": True}}},
+            "experiment_arm": "candidate",
+        },
+    )
+
+    await service.submit_task(task)
+
+    metadata = mocks["task_manager"].submit_task.await_args.args[0].metadata
+    assert metadata["task_source"] == "a2a_protocol"
+    assert "run_mode" not in metadata
+    assert "evaluation" not in metadata
+    assert metadata.get("experiment_arm") != "candidate"
+
+
+@pytest.mark.asyncio
 async def test_create_and_execute_sets_default_metadata():
     """REST callers rely on metadata.created_via, agent_name, requires_human_approval defaults."""
     service, mocks = _make_service()

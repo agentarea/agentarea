@@ -1,9 +1,14 @@
-"""A person's verdict on a run. People only: an API key cannot rate."""
+"""A person's verdict on a run.
+
+People only: an API key cannot rate. Ratings steer experiments, so only the
+person who started the run or someone who may edit its agent rates it.
+"""
 
 from uuid import UUID
 
 from agentarea_common.auth.context import UserPrincipal
 from agentarea_common.auth.dependencies import UserContextDep, get_principal
+from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config.database import get_db_session
 from agentarea_evals.feedback.service import FeedbackService, UnknownRunError
@@ -39,10 +44,14 @@ async def rate_run(
     """
     if principal.api_key_id is not None:
         raise HTTPException(status_code=403, detail="Runs are rated by people; sign in to rate")
+    service = FeedbackService(session, user_context)
     try:
-        feedback = await FeedbackService(session, user_context).rate(
-            task_id, payload.rating, comment=payload.comment, event_id=payload.event_id
-        )
+        run = await service.run(task_id)
     except UnknownRunError as error:
         raise HTTPException(status_code=404, detail="Run not found") from error
+    if run.created_by != user_context.user_id:
+        await require_permission("edit", "agent", str(run.agent_id), user_context.user_id)
+    feedback = await service.rate(
+        task_id, payload.rating, comment=payload.comment, event_id=payload.event_id
+    )
     return FeedbackResponse.build(feedback)

@@ -10,7 +10,8 @@ from agentarea_agents.serving.revision_service import (
 )
 from agentarea_agents.serving.revision_spec import RevisionSpec, diff_specs
 from agentarea_api.api.deps.services import get_agent_service, get_read_agent_service
-from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.context import UserPrincipal
+from agentarea_common.auth.dependencies import UserContextDep, get_principal
 from agentarea_common.auth.route_authz import enforced_in_handler
 from agentarea_common.config.database import get_db_session
 from agentarea_common.exceptions.errors import NotFoundError
@@ -24,7 +25,7 @@ from agentarea_evals.schemas import (
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ._serving_common import load_agent
+from ._serving_common import load_agent, require_person_to_widen
 
 router = APIRouter(prefix="/agents/{agent_id}/revisions", tags=["agent-revisions"])
 
@@ -105,6 +106,7 @@ async def create_candidate(
     agent_id: str,
     payload: RevisionCreate,
     user_context: UserContextDep,
+    principal: UserPrincipal = Depends(get_principal),
     agent_service: AgentService = Depends(get_agent_service),
 ):
     """Propose a candidate revision. What serves does not change until it is activated."""
@@ -116,7 +118,7 @@ async def create_candidate(
             message=payload.message,
             rationale=payload.rationale,
             evidence=payload.evidence,
-            origin="user",
+            origin="api_key" if principal.api_key_id else "user",
         )
     except UnchangedRevisionError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
@@ -130,10 +132,12 @@ async def activate_revision(
     agent_id: str,
     revision_id: UUID,
     user_context: UserContextDep,
+    principal: UserPrincipal = Depends(get_principal),
     agent_service: AgentService = Depends(get_agent_service),
 ):
     """Serve this revision: promote a candidate, or roll back to an earlier one."""
     agent = await load_agent(agent_service, agent_id, user_context, "edit")
+    await require_person_to_widen(agent_service, agent, revision_id, principal)
     try:
         revision = await agent_service.activate_revision(agent.id, revision_id)
     except (RevisionNotFoundError, NotFoundError) as error:

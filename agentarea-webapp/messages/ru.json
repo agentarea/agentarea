@@ -2833,6 +2833,7 @@
       "passedOfTotal": "{passed}/{total}",
       "resultPassed": "Пройдено: ни один кейс не регрессировал",
       "resultRegressed": "Не пройдено: регрессий — {count}",
+      "resultInconclusive": "Нет вывода: {count, plural, =0 {кандидат не прошёл ни одного кейса} one {# прогон не завершился} few {# прогона не завершились} many {# прогонов не завершились} other {# прогона не завершились}}",
       "resultAllPassed": "Пройдено: все кейсы прошли",
       "resultFailing": "Не пройдено: не прошли кейсов — {count}",
       "resultImproved": "улучшилось кейсов — {count}",
@@ -2895,7 +2896,10 @@
         "stale": "сменилась обслуживающая версия",
         "auto": "автоматически",
         "accepted": "принят",
-        "rejected": "отклонён"
+        "rejected": "отклонён",
+        "promotion_failed": "продвижение не удалось",
+        "monitor_failed": "монитор упал",
+        "monitor_not_started": "монитор не запустился"
       }
     },
     "feedback": {

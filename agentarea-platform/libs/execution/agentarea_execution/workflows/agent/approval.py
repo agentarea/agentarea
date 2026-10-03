@@ -3,6 +3,7 @@
 from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
+    from ...evaluation_mode import evaluation_context
     from ..helpers import (
         ToolAction,
         approvers_for_tool,
@@ -273,7 +274,7 @@ class ToolApprovalMixin(BudgetMixin):
             await self._deny_tool_call(tool_call, tool_name, "not permitted by policy")
             return False
         if decision is ToolAction.REQUIRE_APPROVAL:
-            if (self._workflow_metadata or {}).get("evaluation"):
+            if evaluation_context(self._workflow_metadata) is not None:
                 # Nobody answers approvals in an evaluation run. Its tool calls
                 # cannot act outside the run (see evaluation_mode), and the
                 # person who started the run allowed what does execute.

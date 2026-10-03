@@ -6434,9 +6434,9 @@ export type RevisionCreate = {
   /**
    * Tools
    */
-  tools?: Array<{
-    [key: string]: unknown;
-  }> | null;
+  tools?: Array<
+    CodeToolConfig | McpToolConfigInput | AgentToolConfig | OpenApiToolConfig
+  > | null;
 };
 
 /**

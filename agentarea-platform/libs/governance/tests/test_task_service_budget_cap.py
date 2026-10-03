@@ -56,6 +56,8 @@ def _make_service(
 
     service = TaskService(mock_factory, mock_event_broker, mock_task_manager)
     service.task_repository = mock_task_repo
+    # Run pinning reads revisions and experiments from a real session.
+    service._pin_run = AsyncMock(return_value=None)
     return service
 
 

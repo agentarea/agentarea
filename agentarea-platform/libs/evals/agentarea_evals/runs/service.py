@@ -271,7 +271,7 @@ class EvalRunService:
         """Score the run. A stopped run keeps its status; its finished trials still count."""
         run = await self._require_run(run_id)
         verdicts = [
-            TrialVerdict(t.case_id, t.arm, t.passed)
+            TrialVerdict(t.case_id, t.arm, t.passed, errored=t.status == TRIAL_ERROR)
             for t in await self.trials(run_id)
             if t.status != TRIAL_SKIPPED
         ]
@@ -284,12 +284,13 @@ class EvalRunService:
         await self.session.commit()
         return run
 
-    async def offline_passed(self, candidate_revision_id: UUID) -> bool:
-        """Whether the latest completed run of this candidate found no regression."""
+    async def offline_passed(self, candidate_revision_id: UUID, baseline_revision_id: UUID) -> bool:
+        """Whether the latest completed run of this candidate against this baseline passed."""
         result = await self.session.execute(
             select(EvalRun)
             .where(
                 EvalRun.candidate_revision_id == candidate_revision_id,
+                EvalRun.baseline_revision_id == baseline_revision_id,
                 EvalRun.status == RUN_COMPLETED,
                 EvalRun.workspace_id == self.user_context.workspace_id,
             )

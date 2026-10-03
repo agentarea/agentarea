@@ -1,5 +1,6 @@
 """Activities behind the eval workflows. They run on the existing worker."""
 
+from contextlib import suppress
 from typing import Any
 from uuid import UUID
 
@@ -9,7 +10,7 @@ from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.config import get_database
 from temporalio import activity
 
-from agentarea_evals.experiments.service import ExperimentService
+from agentarea_evals.experiments.service import ExperimentError, ExperimentService
 from agentarea_evals.outcomes.classify import Outcome, classify
 from agentarea_evals.runs.outcome import task_status, trial_outcome
 from agentarea_evals.runs.service import EvalRunService
@@ -19,6 +20,7 @@ from agentarea_evals.runs.workflow_models import (
     FINALIZE_RUN,
     POLL_TRIAL,
     START_TRIAL,
+    STOP_EXPERIMENT,
     ClaimRequest,
     ExperimentRequest,
     ExperimentState,
@@ -26,6 +28,7 @@ from agentarea_evals.runs.workflow_models import (
     PollResult,
     RunRequest,
     StartedTrial,
+    StopExperimentRequest,
     TrialRequest,
 )
 
@@ -150,4 +153,28 @@ def make_eval_activities(dependencies: Any) -> list[Any]:
             await experiments.evaluate(experiment)
             return ExperimentState(running=experiment.status == "running")
 
-    return [claim_trials, start_trial, poll_trial, finalize_run, evaluate_experiment]
+    @activity.defn(name=STOP_EXPERIMENT)
+    async def stop_experiment(request: StopExperimentRequest) -> None:
+        context = _context(request.user_context_data)
+        async with _session() as session:
+            agents = _agent_service(session, context)
+            experiments = ExperimentService(
+                session,
+                context,
+                activate=agents.activate_revision,
+                offline_passed=EvalRunService(session, context).offline_passed,
+            )
+            experiment = await experiments.get(UUID(request.agent_id), UUID(request.experiment_id))
+            if experiment is None:
+                return
+            with suppress(ExperimentError):
+                await experiments.stop(experiment, reason=request.reason)
+
+    return [
+        claim_trials,
+        start_trial,
+        poll_trial,
+        finalize_run,
+        evaluate_experiment,
+        stop_experiment,
+    ]

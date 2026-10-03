@@ -179,7 +179,8 @@ async def test_offline_pass_is_the_latest_finished_run_for_a_candidate(session, 
     )
     _, suite = await _suite_with_cases(session, context, count=1)
     service = EvalRunService(session, context)
-    assert await service.offline_passed(candidate.id) is False
+    baseline = agent.current_revision_id
+    assert await service.offline_passed(candidate.id, baseline) is False
 
     run = await service.create_run(suite.id, agent, baseline_revision_id=None,
                                    candidate_revision_id=candidate.id, trials=1, concurrency=1,
@@ -188,5 +189,6 @@ async def test_offline_pass_is_the_latest_finished_run_for_a_candidate(session, 
         await service.record_outcome(trial.id, TrialOutcome(status="completed", response="answer"))
     await service.finalize(run.id)
 
-    assert await service.offline_passed(candidate.id) is True
-    assert uuid4() != candidate.id
+    assert await service.offline_passed(candidate.id, baseline) is True
+    # Evidence against another baseline does not stand for this control.
+    assert await service.offline_passed(candidate.id, uuid4()) is False

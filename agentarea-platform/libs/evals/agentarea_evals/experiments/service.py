@@ -1,6 +1,8 @@
 """Start, evaluate and end traffic experiments between two revisions of an agent."""
 
+import logging
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -17,6 +19,7 @@ from agentarea_agents.serving.models import (
 from agentarea_agents.serving.pinning import running_experiment
 from agentarea_agents.serving.revision_service import RevisionService
 from agentarea_common.auth.context import UserContext
+from agentarea_common.exceptions.errors import NotFoundError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,9 +28,11 @@ from agentarea_evals.decisions.engine import ArmStats, Decision, ExperimentPolic
 from agentarea_evals.outcomes.stats import OutcomeStats
 
 Activate = Callable[[UUID, UUID], Awaitable[Any]]
-OfflineGate = Callable[[UUID], Awaitable[bool]]
+OfflineGate = Callable[[UUID, UUID], Awaitable[bool]]
 
 _NO_RUNS = ArmStats(successes=0, failures=0)
+
+logger = logging.getLogger(__name__)
 
 
 class ExperimentError(ValueError):
@@ -36,7 +41,8 @@ class ExperimentError(ValueError):
 
 class ExperimentService:
     """``activate`` serves a revision with the agent service's side effects;
-    ``offline_passed`` says whether a candidate passed an offline evaluation.
+    ``offline_passed(candidate, baseline)`` says whether a candidate passed an offline
+    evaluation against that baseline.
     """
 
     def __init__(
@@ -117,7 +123,9 @@ class ExperimentService:
         self, experiment: AgentExperiment, *, now: datetime | None = None
     ) -> Decision | None:
         """Decide the experiment's next step from its runs so far and apply it."""
+        experiment = await self._lock(experiment)
         if experiment.status != EXPERIMENT_RUNNING:
+            await self.session.commit()
             return None
         now = now or datetime.now(UTC)
         policy = ExperimentPolicy.from_dict(experiment.policy)
@@ -131,7 +139,7 @@ class ExperimentService:
             candidate=candidate,
             candidate_runs_at_step=candidate_at_step.runs,
             elapsed=now - experiment.started_at,
-            offline_passed=await self.offline_passed(experiment.candidate_revision_id),
+            offline_passed=await self.offline_gate(experiment),
         )
 
         if decision.action == "ramp" and decision.exposure is not None:
@@ -142,8 +150,16 @@ class ExperimentService:
         elif decision.action == "stop":
             self._finish(experiment, EXPERIMENT_STOPPED, decision.reason, now)
         elif decision.action == "promote":
-            await self.activate(experiment.agent_id, experiment.candidate_revision_id)
-            self._finish(experiment, EXPERIMENT_PROMOTED, "auto", now)
+            try:
+                await self.activate(experiment.agent_id, experiment.candidate_revision_id)
+            except (PermissionError, LookupError, ValueError, NotFoundError):
+                logger.warning(
+                    "experiment %s could not promote its candidate", experiment.id, exc_info=True
+                )
+                decision = replace(decision, action="stop", reason="promotion_failed")
+                self._finish(experiment, EXPERIMENT_STOPPED, decision.reason, now)
+            else:
+                self._finish(experiment, EXPERIMENT_PROMOTED, "auto", now)
 
         last_action = experiment.decisions[-1]["action"] if experiment.decisions else None
         if decision.action != "continue" and not (
@@ -155,15 +171,35 @@ class ExperimentService:
         return decision
 
     async def stop(self, experiment: AgentExperiment, *, reason: str = "manual") -> None:
+        experiment = await self._lock(experiment)
         self._require_running(experiment)
         self._finish(experiment, EXPERIMENT_STOPPED, reason, datetime.now(UTC))
         await self.session.commit()
 
     async def promote(self, experiment: AgentExperiment) -> None:
+        experiment = await self._lock(experiment)
         self._require_running(experiment)
         await self.activate(experiment.agent_id, experiment.candidate_revision_id)
         self._finish(experiment, EXPERIMENT_PROMOTED, "manual", datetime.now(UTC))
         await self.session.commit()
+
+    async def offline_gate(self, experiment: AgentExperiment) -> bool:
+        return await self.offline_passed(
+            experiment.candidate_revision_id, experiment.control_revision_id
+        )
+
+    async def _lock(self, experiment: AgentExperiment) -> AgentExperiment:
+        """Re-read the row under a lock, so a concurrent stop or promote is seen."""
+        result = await self.session.execute(
+            select(AgentExperiment)
+            .where(
+                AgentExperiment.id == experiment.id,
+                AgentExperiment.workspace_id == self.user_context.workspace_id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return result.scalar_one()
 
     async def arm_stats(self, experiment: AgentExperiment) -> tuple[ArmStats, ArmStats]:
         return await self._arms(experiment)

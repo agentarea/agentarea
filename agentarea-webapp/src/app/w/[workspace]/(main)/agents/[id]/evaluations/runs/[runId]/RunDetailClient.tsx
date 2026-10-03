@@ -129,15 +129,20 @@ export default function RunDetailClient({
     regressions?: string[];
     improvements?: string[];
     failing_cases?: string[];
+    errored_trials?: number;
   };
   const passed = summary.passed;
   const improved = summary.improvements?.length ?? 0;
   const verdict = run.candidate_revision_id
     ? passed
       ? t("evaluations.resultPassed")
-      : t("evaluations.resultRegressed", {
-          count: summary.regressions?.length ?? 0,
-        })
+      : summary.regressions?.length
+        ? t("evaluations.resultRegressed", {
+            count: summary.regressions.length,
+          })
+        : t("evaluations.resultInconclusive", {
+            count: summary.errored_trials ?? 0,
+          })
     : passed
       ? t("evaluations.resultAllPassed")
       : t("evaluations.resultFailing", {

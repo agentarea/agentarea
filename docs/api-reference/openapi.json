@@ -11094,8 +11094,29 @@
             "anyOf": [
               {
                 "items": {
-                  "additionalProperties": true,
-                  "type": "object"
+                  "discriminator": {
+                    "mapping": {
+                      "agent": "#/components/schemas/AgentToolConfig",
+                      "code": "#/components/schemas/CodeToolConfig",
+                      "mcp": "#/components/schemas/McpToolConfig-Input",
+                      "openapi": "#/components/schemas/OpenApiToolConfig"
+                    },
+                    "propertyName": "type"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CodeToolConfig"
+                    },
+                    {
+                      "$ref": "#/components/schemas/McpToolConfig-Input"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AgentToolConfig"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OpenApiToolConfig"
+                    }
+                  ]
                 },
                 "type": "array"
               },

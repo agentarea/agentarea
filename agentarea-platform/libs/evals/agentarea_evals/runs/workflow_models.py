@@ -9,6 +9,7 @@ START_TRIAL = "eval_start_trial"
 POLL_TRIAL = "eval_poll_trial"
 FINALIZE_RUN = "eval_finalize_run"
 EVALUATE_EXPERIMENT = "eval_evaluate_experiment"
+STOP_EXPERIMENT = "eval_stop_experiment"
 
 
 class EvalRunInput(BaseModel):
@@ -69,3 +70,10 @@ class ExperimentRequest(BaseModel):
 
 class ExperimentState(BaseModel):
     running: bool
+
+
+class StopExperimentRequest(BaseModel):
+    agent_id: str
+    experiment_id: str
+    user_context_data: dict[str, Any]
+    reason: str

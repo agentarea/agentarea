@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
+from agentarea_agents.schemas.import_export import ToolConfig
 from agentarea_agents.serving.models import AgentExperiment, AgentRevision
 from pydantic import BaseModel, Field
 
@@ -56,7 +57,7 @@ class RevisionCreate(BaseModel):
 
     instruction: str | None = None
     model_id: str | None = None
-    tools: list[dict[str, Any]] | None = None
+    tools: list[ToolConfig] | None = None
     skill_ids: list[UUID] | None = None
     planning: bool | None = None
     a2ui_enabled: bool | None = None
@@ -66,7 +67,10 @@ class RevisionCreate(BaseModel):
 
     def patch(self) -> dict[str, Any]:
         fields = ("instruction", "model_id", "tools", "skill_ids", "planning", "a2ui_enabled")
-        return {name: getattr(self, name) for name in fields if name in self.model_fields_set}
+        patch = {name: getattr(self, name) for name in fields if name in self.model_fields_set}
+        if self.tools is not None and "tools" in patch:
+            patch["tools"] = [tool.model_dump(exclude_none=True) for tool in self.tools]
+        return patch
 
 
 class FieldChange(BaseModel):

@@ -1,5 +1,6 @@
 """Evaluation suites and cases (workspace resources) and suite runs against an agent."""
 
+import logging
 from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
@@ -23,7 +24,9 @@ from agentarea_evals.suites.service import SuiteError, SuiteService
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ._serving_common import context_data, load_agent, start_workflow
+from ._serving_common import context_data, load_agent, require_workflow_engine, start_workflow
+
+logger = logging.getLogger(__name__)
 
 suites_router = APIRouter(prefix="/eval-suites", tags=["evals"])
 runs_router = APIRouter(prefix="/agents/{agent_id}/eval-runs", tags=["evals"])
@@ -223,8 +226,10 @@ async def start_run(
 ):
     """Run a suite against the agent's serving revision, or a baseline and a candidate."""
     agent = await load_agent(agent_service, agent_id, user_context, "edit")
+    require_workflow_engine()
+    runs = EvalRunService(session, user_context)
     try:
-        run = await EvalRunService(session, user_context).create_run(
+        run = await runs.create_run(
             payload.suite_id,
             agent,
             baseline_revision_id=payload.baseline_revision_id,
@@ -236,15 +241,22 @@ async def start_run(
         )
     except EvalRunError as error:
         raise _suite_error(error) from error
-    workflow_id = await start_workflow(
-        "EvalRunWorkflow",
-        f"eval-run-{run.id}",
-        {
-            "run_id": str(run.id),
-            "user_context_data": context_data(user_context),
-            "concurrency": run.concurrency,
-        },
-    )
+    try:
+        workflow_id = await start_workflow(
+            "EvalRunWorkflow",
+            f"eval-run-{run.id}",
+            {
+                "run_id": str(run.id),
+                "user_context_data": context_data(user_context),
+                "concurrency": run.concurrency,
+            },
+        )
+    except Exception as error:
+        logger.error("eval run %s workflow did not start", run.id, exc_info=True)
+        await runs.stop(run.id, reason="workflow did not start")
+        raise HTTPException(
+            status_code=503, detail="The evaluation could not start; nothing ran"
+        ) from error
     run.workflow_id = workflow_id
     await session.commit()
     return EvalRunResponse.build(run)

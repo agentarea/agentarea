@@ -1,7 +1,10 @@
 """What a finished run counts as when revisions are compared."""
 
+import logging
 from collections.abc import Iterable
 from enum import StrEnum
+
+logger = logging.getLogger(__name__)
 
 
 class Outcome(StrEnum):
@@ -23,12 +26,16 @@ _PENDING = {
     "scheduled",
     "preparing",
     "running",
+    "working",
     "routed",
     "blocked",
     "paused",
     "waiting_for_input",
     "waiting_for_approval",
 }
+
+
+KNOWN_STATUSES = _SUCCESS | _FAILURE | _EXCLUDED | _PENDING
 
 
 def classify(status: str, ratings: Iterable[str]) -> Outcome:
@@ -44,4 +51,6 @@ def classify(status: str, ratings: Iterable[str]) -> Outcome:
         return Outcome.FAILURE
     if status in _SUCCESS:
         return Outcome.FAILURE if "bad" in set(ratings) else Outcome.SUCCESS
-    raise ValueError(f"unknown task status {status!r}")
+    # A read must not break on one row; the run waits until someone classifies its status.
+    logger.warning("unknown task status %r counted as pending", status)
+    return Outcome.PENDING

@@ -7,6 +7,7 @@ from datetime import timedelta
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
+from temporalio.exceptions import ActivityError
 
 with workflow.unsafe.imports_passed_through():
     from agentarea_evals.runs.workflow_models import (
@@ -15,6 +16,7 @@ with workflow.unsafe.imports_passed_through():
         FINALIZE_RUN,
         POLL_TRIAL,
         START_TRIAL,
+        STOP_EXPERIMENT,
         ClaimRequest,
         EvalRunInput,
         ExperimentMonitorInput,
@@ -24,6 +26,7 @@ with workflow.unsafe.imports_passed_through():
         PollResult,
         RunRequest,
         StartedTrial,
+        StopExperimentRequest,
         TrialRequest,
     )
 
@@ -93,17 +96,32 @@ class ExperimentMonitorWorkflow:
     async def run(self, request: ExperimentMonitorInput) -> None:
         for _ in range(request.evaluations_before_continue_as_new):
             await workflow.sleep(timedelta(seconds=request.interval_seconds))
-            state = await workflow.execute_activity(
-                EVALUATE_EXPERIMENT,
-                ExperimentRequest(
-                    agent_id=request.agent_id,
-                    experiment_id=request.experiment_id,
-                    user_context_data=request.user_context_data,
-                ),
-                result_type=ExperimentState,
-                start_to_close_timeout=_ACTIVITY_TIMEOUT,
-                retry_policy=_RETRY,
-            )
+            try:
+                state = await workflow.execute_activity(
+                    EVALUATE_EXPERIMENT,
+                    ExperimentRequest(
+                        agent_id=request.agent_id,
+                        experiment_id=request.experiment_id,
+                        user_context_data=request.user_context_data,
+                    ),
+                    result_type=ExperimentState,
+                    start_to_close_timeout=_ACTIVITY_TIMEOUT,
+                    retry_policy=_RETRY,
+                )
+            except ActivityError:
+                # Traffic must not keep splitting with nobody watching it.
+                await workflow.execute_activity(
+                    STOP_EXPERIMENT,
+                    StopExperimentRequest(
+                        agent_id=request.agent_id,
+                        experiment_id=request.experiment_id,
+                        user_context_data=request.user_context_data,
+                        reason="monitor_failed",
+                    ),
+                    start_to_close_timeout=_ACTIVITY_TIMEOUT,
+                    retry_policy=RetryPolicy(maximum_attempts=0),
+                )
+                return
             if not state.running:
                 return
         workflow.continue_as_new(request)

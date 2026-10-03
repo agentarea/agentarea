@@ -6,6 +6,8 @@ Set EVALS_TEST_DATABASE_URL (``make check-db`` does).
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import update
+from agentarea_agents.serving.models import AgentExperiment
 from agentarea_agents.serving.revision_service import RevisionService
 from agentarea_evals.decisions.engine import ExperimentPolicy
 from agentarea_evals.experiments.service import ExperimentError, ExperimentService
@@ -37,7 +39,7 @@ async def _setup(session, context, *, offline_passed=True):
     activations = Activations(session, context)
     activations.agents[agent.id] = agent
     service = ExperimentService(
-        session, context, activate=activations, offline_passed=lambda _r: _offline(offline_passed)
+        session, context, activate=activations, offline_passed=lambda _c, _b: _offline(offline_passed)
     )
     return agent, control, candidate, service, activations
 
@@ -177,3 +179,43 @@ async def test_an_expired_experiment_stops_inconclusive(session, context):
 
     assert decision.reason == "inconclusive"
     assert experiment.status == "stopped"
+
+
+async def test_a_promotion_that_cannot_happen_stops_the_experiment(session, context):
+    agent, control, candidate, service, _ = await _setup(session, context)
+
+    async def refuse(_agent_id, _revision_id):
+        raise PermissionError("the starter can no longer modify this agent")
+
+    service.activate = refuse
+    experiment = await service.start(
+        agent, candidate.id, ExperimentPolicy(auto_promote=True, steps=(50,))
+    )
+    await make_tasks(session, context, agent, count=200, status="completed",
+                     revision_id=control.id, experiment_id=experiment.id)
+    await make_tasks(session, context, agent, count=200, status="completed",
+                     revision_id=candidate.id, experiment_id=experiment.id)
+
+    decision = await service.evaluate(experiment)
+
+    assert decision.action == "stop"
+    assert experiment.status == "stopped"
+    assert experiment.stop_reason == "promotion_failed"
+    assert agent.current_revision_id == control.id
+
+
+async def test_a_stop_that_lands_first_wins_over_a_stale_copy(session, context):
+    agent, _, candidate, service, activations = await _setup(session, context)
+    experiment = await service.start(agent, candidate.id, ExperimentPolicy(auto_promote=False))
+    # Another session stops it; this copy still says running.
+    await session.execute(
+        update(AgentExperiment)
+        .where(AgentExperiment.id == experiment.id)
+        .values(status="stopped", stop_reason="manual")
+        .execution_options(synchronize_session=False)
+    )
+    assert experiment.status == "running"
+
+    with pytest.raises(ExperimentError, match="running"):
+        await service.promote(experiment)
+    assert activations.calls == []

@@ -190,21 +190,28 @@ def make_tools_activities(
                 else (),
             )
         )
-        if decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL:
-            return _deny_tool_result(
-                request.tool_name,
-                f"{decision.reason}; approval must be resolved before activity execution",
-            )
-        if not decision.allowed:
+        needs_approval = decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL
+        if not decision.allowed and not needs_approval:
             return _deny_tool_result(request.tool_name, decision.reason)
         evaluation = evaluation_decision(
             request.tool_name,
             request.tool_args,
             request.metadata,
             is_mcp=request.mcp_route is not None,
+            code_tools=[
+                str(tool.get("name"))
+                for tool in request.tools or []
+                if isinstance(tool, dict) and tool.get("type") == "code" and tool.get("name")
+            ],
         )
         if evaluation is not None and not evaluation.execute:
             return _evaluation_result(evaluation)
+        # Nobody answers an evaluation run; only reads and consented sandbox calls get here.
+        if needs_approval and evaluation is None:
+            return _deny_tool_result(
+                request.tool_name,
+                f"{decision.reason}; approval must be resolved before activity execution",
+            )
 
         user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:

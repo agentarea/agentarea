@@ -2833,6 +2833,7 @@
       "passedOfTotal": "{passed}/{total}",
       "resultPassed": "Passed: no case regressed",
       "resultRegressed": "Failed: {count, plural, one {# case} other {# cases}} regressed",
+      "resultInconclusive": "Inconclusive: {count, plural, =0 {the candidate passed no case} one {# trial did not finish} other {# trials did not finish}}",
       "resultAllPassed": "Passed: every case passed",
       "resultFailing": "Failed: {count, plural, one {# case} other {# cases}} failing",
       "resultImproved": "{count, plural, one {# case} other {# cases}} improved",
@@ -2895,7 +2896,10 @@
         "stale": "the serving version changed",
         "auto": "automatic",
         "accepted": "accepted",
-        "rejected": "rejected"
+        "rejected": "rejected",
+        "promotion_failed": "promotion failed",
+        "monitor_failed": "its monitor failed",
+        "monitor_not_started": "its monitor did not start"
       }
     },
     "feedback": {

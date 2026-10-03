@@ -43,3 +43,24 @@ def test_unfinished_trials_count_as_not_passed():
     trials = [TrialVerdict(a, "baseline", None)]
 
     assert summarize(trials, has_candidate=False)["passed"] is False
+
+
+def test_a_run_where_trials_errored_is_inconclusive_not_passed():
+    a = uuid4()
+    trials = [
+        TrialVerdict(a, "baseline", False, errored=True),
+        TrialVerdict(a, "candidate", False, errored=True),
+    ]
+
+    summary = summarize(trials, has_candidate=True)
+
+    assert summary["regressions"] == []
+    assert summary["errored_trials"] == 2
+    assert summary["passed"] is False
+
+
+def test_a_candidate_that_passes_nothing_does_not_pass():
+    a = uuid4()
+    trials = [TrialVerdict(a, "baseline", False), TrialVerdict(a, "candidate", False)]
+
+    assert summarize(trials, has_candidate=True)["passed"] is False

@@ -1,4 +1,4 @@
-from agentarea_execution.evaluation_mode import evaluation_decision
+from agentarea_execution.evaluation_mode import evaluation_context, evaluation_decision
 
 TOOLSETS = {
     "agents": (None, {"list": "read", "update": "write"}),
@@ -15,9 +15,17 @@ def meta(**evaluation):
     return {"evaluation": {"run_id": "r", **evaluation}}
 
 
-def decide(name, args=None, metadata=None, is_mcp=False):
+CONFIGURED = ("agentarea/agents", "agentarea/shell", "agentarea/files")
+
+
+def decide(name, args=None, metadata=None, is_mcp=False, code_tools=CONFIGURED):
     return evaluation_decision(
-        name, args or {}, meta() if metadata is None else metadata, is_mcp=is_mcp, lookup=lookup
+        name,
+        args or {},
+        meta() if metadata is None else metadata,
+        is_mcp=is_mcp,
+        code_tools=code_tools,
+        lookup=lookup,
     )
 
 
@@ -64,3 +72,16 @@ def test_sandbox_tools_run_only_when_the_run_allowed_the_sandbox():
 
 def test_an_unknown_tool_is_not_executed():
     assert not decide("mystery", metadata=meta(sandbox_allowed=True)).execute
+
+
+def test_a_tool_that_only_shares_a_toolset_name_is_not_executed():
+    # An OpenAPI operation called "agents" is not the platform toolset.
+    assert not decide("agents", {"action": "list"}, code_tools=()).execute
+
+
+def test_any_evaluation_marker_counts_and_fails_closed():
+    assert evaluation_context({"evaluation": True}) == {}
+    assert evaluation_context({"evaluation": {"stubs": {}}}) == {"stubs": {}}
+    assert evaluation_context({"evaluation": None}) is None
+    assert evaluation_context({}) is None
+    assert not decide("agents", {"action": "update"}, metadata={"evaluation": True}).execute

@@ -1,12 +1,13 @@
 """Traffic experiments: split runs between the serving revision and a candidate."""
 
+import logging
 from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.serving.models import AgentExperiment
 from agentarea_api.api.deps.services import get_agent_service, get_read_agent_service
-from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.context import UserContext, UserPrincipal
+from agentarea_common.auth.dependencies import UserContextDep, get_principal
 from agentarea_common.auth.route_authz import enforced_in_handler
 from agentarea_common.config.database import get_db_session
 from agentarea_evals.experiments.service import ExperimentError, ExperimentService
@@ -15,7 +16,15 @@ from agentarea_evals.schemas import DecisionResponse, ExperimentCreate, Experime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ._serving_common import context_data, load_agent, start_workflow
+from ._serving_common import (
+    context_data,
+    load_agent,
+    require_person_to_widen,
+    require_workflow_engine,
+    start_workflow,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents/{agent_id}/experiments", tags=["agent-experiments"])
 
@@ -41,7 +50,7 @@ async def _response(service: ExperimentService, experiment: AgentExperiment) -> 
         experiment,
         control=control,
         candidate=candidate,
-        offline_passed=await service.offline_passed(experiment.candidate_revision_id),
+        offline_passed=await service.offline_gate(experiment),
     )
 
 
@@ -71,25 +80,39 @@ async def start_experiment(
     agent_id: str,
     payload: ExperimentCreate,
     user_context: UserContextDep,
+    principal: UserPrincipal = Depends(get_principal),
     session: AsyncSession = Depends(get_db_session),
     agent_service: AgentService = Depends(get_agent_service),
 ):
     """Start splitting runs; the candidate begins at the policy's first step."""
     agent = await load_agent(agent_service, agent_id, user_context, "edit")
+    if payload.auto_promote:
+        await require_person_to_widen(
+            agent_service, agent, payload.candidate_revision_id, principal
+        )
+    require_workflow_engine()
     service = _service(session, user_context, agent_service)
     try:
         experiment = await service.start(agent, payload.candidate_revision_id, payload.policy())
     except (ExperimentError, ValueError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
-    await start_workflow(
-        "ExperimentMonitorWorkflow",
-        f"experiment-monitor-{experiment.id}",
-        {
-            "agent_id": str(agent.id),
-            "experiment_id": str(experiment.id),
-            "user_context_data": context_data(user_context),
-        },
-    )
+    try:
+        await start_workflow(
+            "ExperimentMonitorWorkflow",
+            f"experiment-monitor-{experiment.id}",
+            {
+                "agent_id": str(agent.id),
+                "experiment_id": str(experiment.id),
+                "user_context_data": context_data(user_context),
+            },
+        )
+    except Exception as error:
+        # An experiment nobody monitors must not split traffic.
+        logger.error("experiment %s monitor did not start", experiment.id, exc_info=True)
+        await service.stop(experiment, reason="monitor_not_started")
+        raise HTTPException(
+            status_code=503, detail="The experiment monitor could not start; nothing was routed"
+        ) from error
     return await _response(service, experiment)
 
 

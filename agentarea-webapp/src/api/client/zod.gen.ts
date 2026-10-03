@@ -2523,7 +2523,16 @@ export const zRevisionCreate = z.object({
   planning: z.boolean().nullish(),
   rationale: z.string().max(4000).nullish(),
   skill_ids: z.array(z.string().uuid()).nullish(),
-  tools: z.array(z.record(z.unknown())).nullish(),
+  tools: z
+    .array(
+      z.union([
+        zCodeToolConfig,
+        zMcpToolConfigInput,
+        zAgentToolConfig,
+        zOpenApiToolConfig,
+      ])
+    )
+    .nullish(),
 });
 
 /**

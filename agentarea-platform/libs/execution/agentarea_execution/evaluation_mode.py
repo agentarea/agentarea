@@ -9,7 +9,7 @@ hints are the server's claim, not something the platform verified.
 """
 
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,6 +33,18 @@ def code_toolsets() -> Toolsets:
         )
         for namespace, meta in get_code_tools_metadata().items()
     }
+
+
+def evaluation_context(metadata: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The run's evaluation settings, or ``None`` for an ordinary run.
+
+    Any set marker makes the run an evaluation; one that is not a mapping
+    carries no stubs and no sandbox consent, so it fails closed.
+    """
+    marker = (metadata or {}).get("evaluation")
+    if not marker:
+        return None
+    return marker if isinstance(marker, dict) else {}
 
 
 def _classify(
@@ -69,17 +81,24 @@ def evaluation_decision(
     metadata: dict[str, Any] | None,
     *,
     is_mcp: bool,
+    code_tools: Collection[str],
     lookup: ToolsetLookup = code_toolsets,
 ) -> EvaluationDecision | None:
-    """``None`` for an ordinary run; otherwise whether and how the call runs."""
-    evaluation = (metadata or {}).get("evaluation")
-    if not isinstance(evaluation, dict):
+    """``None`` for an ordinary run; otherwise whether and how the call runs.
+
+    Only the run's configured code toolsets (``agentarea/<name>``) are classified;
+    any other tool that shares a toolset's name is not one of them.
+    """
+    evaluation = evaluation_context(metadata)
+    if evaluation is None:
         return None
     stubs = evaluation.get("stubs") or {}
     if tool_name in stubs:
         return EvaluationDecision(execute=False, stubbed=True, result=stubs[tool_name])
     if not is_mcp:
-        group, effect = _classify(tool_name, tool_args or {}, lookup())
+        configured = {name.rsplit("/", 1)[-1] for name in code_tools}
+        toolsets = {name: entry for name, entry in lookup().items() if name in configured}
+        group, effect = _classify(tool_name, tool_args or {}, toolsets)
         if effect == "read":
             return EvaluationDecision(execute=True)
         if group == _SANDBOX_GROUP and effect and evaluation.get("sandbox_allowed") is True:

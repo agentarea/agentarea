@@ -85,6 +85,10 @@ def _task_resource_selection_key(parameters: dict[str, Any] | None) -> tuple | N
 _RUN_OVERRIDE_KEYS = ("model_override", "mcps", "mcp", "mcp_servers", "skills")
 
 
+# Set only by the platform: an evaluation run, and the experiment arm a run was assigned.
+_PLATFORM_ONLY_METADATA = frozenset({"run_mode", "evaluation", "experiment_arm"})
+
+
 def _has_run_overrides(parameters: dict[str, Any] | None) -> bool:
     return any((parameters or {}).get(key) for key in _RUN_OVERRIDE_KEYS)
 
@@ -461,7 +465,11 @@ class TaskService(BaseTaskService):
         - ``metadata.created_via="api"`` if not set
         - ``requires_human_approval=False``
         """
-        meta = task.metadata or {}
+        meta = {
+            key: value
+            for key, value in (task.metadata or {}).items()
+            if key not in _PLATFORM_ONLY_METADATA
+        }
         return await self.create_and_execute_task_with_workflow(
             agent_id=task.agent_id,
             description=task.description or task.query,

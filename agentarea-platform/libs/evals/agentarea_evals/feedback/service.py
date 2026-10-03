@@ -23,11 +23,7 @@ class FeedbackService:
         self.session = session
         self.user_context = user_context
 
-    async def rate(
-        self, task_id: UUID, rating: str, *, comment: str | None, event_id: str | None
-    ) -> RunFeedback:
-        if rating not in RATINGS:
-            raise ValueError(f"rating must be one of {RATINGS}, got {rating!r}")
+    async def run(self, task_id: UUID) -> TaskORM:
         task = (
             await self.session.execute(
                 select(TaskORM).where(
@@ -37,6 +33,14 @@ class FeedbackService:
         ).scalar_one_or_none()
         if task is None:
             raise UnknownRunError(f"run {task_id} not found")
+        return task
+
+    async def rate(
+        self, task_id: UUID, rating: str, *, comment: str | None, event_id: str | None
+    ) -> RunFeedback:
+        if rating not in RATINGS:
+            raise ValueError(f"rating must be one of {RATINGS}, got {rating!r}")
+        task = await self.run(task_id)
 
         existing = (
             await self.session.execute(

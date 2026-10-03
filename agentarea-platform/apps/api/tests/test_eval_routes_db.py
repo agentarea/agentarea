@@ -28,6 +28,8 @@ from agentarea_evals.schemas import (
     SuiteCreate,
 )
 from agentarea_tasks.infrastructure.orm import TaskORM
+
+PERSON = UserPrincipal(user_id="person-1")
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -107,11 +109,13 @@ async def test_candidate_diff_and_activation_through_the_routes(session, context
 
     candidate = await agent_revisions.create_candidate(
         str(agent.id), RevisionCreate(instruction="Help briefly.", message="shorter"),
-        context, service,
+        context, PERSON, service,
     )
     listed = await agent_revisions.list_revisions(agent.slug, context, service)
     diff = await agent_revisions.diff_revision(str(agent.id), candidate.id, context, None, service)
-    activated = await agent_revisions.activate_revision(str(agent.id), candidate.id, context, service)
+    activated = await agent_revisions.activate_revision(
+        str(agent.id), candidate.id, context, PERSON, service
+    )
 
     assert [r.number for r in listed] == [2, 1]
     assert listed[0].status == "candidate" and not listed[0].stale
@@ -124,7 +128,8 @@ async def test_an_unchanged_candidate_is_a_conflict(session, context):
 
     with pytest.raises(HTTPException) as error:
         await agent_revisions.create_candidate(
-            str(agent.id), RevisionCreate(instruction="Help."), context, _agents(session, context)
+            str(agent.id), RevisionCreate(instruction="Help."), context, PERSON,
+            _agents(session, context),
         )
 
     assert error.value.status_code == 409
@@ -134,7 +139,7 @@ async def test_eval_run_and_experiment_start_their_workflows(session, context, s
     agent = await _agent(session, context)
     service = _agents(session, context)
     candidate = await agent_revisions.create_candidate(
-        str(agent.id), RevisionCreate(instruction="Help briefly."), context, service
+        str(agent.id), RevisionCreate(instruction="Help briefly."), context, PERSON, service
     )
     suite = await evals.create_suite(SuiteCreate(name="smoke"), context, session)
     await evals.add_case(
@@ -152,7 +157,7 @@ async def test_eval_run_and_experiment_start_their_workflows(session, context, s
     experiment = await agent_experiments.start_experiment(
         str(agent.id),
         ExperimentCreate(candidate_revision_id=candidate.id, auto_promote=True),
-        context, session, service,
+        context, PERSON, session, service,
     )
     detail = await evals.get_run(str(agent.id), run.id, context, session, service)
 
@@ -183,3 +188,90 @@ async def test_feedback_is_for_people_only(session, context):
     assert refused.value.status_code == 403
     assert rated.rating == "bad"
     assert [f.comment for f in await run_feedback.list_feedback(task.id, context, session)] == ["wrong"]
+
+
+async def test_only_the_runs_starter_or_an_agent_editor_rates_it(session, context, monkeypatch):
+    agent = await _agent(session, context)
+    task = TaskORM(
+        agent_id=agent.id, description="x", parameters={}, status="completed",
+        task_metadata={}, workspace_id=context.workspace_id, created_by="someone-else",
+    )
+    session.add(task)
+    await session.commit()
+    checked = []
+
+    async def deny(action, resource_type, resource_id, user_id):
+        checked.append((action, resource_type, resource_id, user_id))
+        raise HTTPException(status_code=403, detail="no")
+
+    monkeypatch.setattr(run_feedback, "require_permission", deny)
+
+    with pytest.raises(HTTPException) as refused:
+        await run_feedback.rate_run(
+            task.id, FeedbackCreate(rating="bad"), context,
+            UserPrincipal(user_id=context.user_id), session,
+        )
+
+    assert refused.value.status_code == 403
+    assert checked == [("edit", "agent", str(agent.id), context.user_id)]
+
+
+async def test_an_experiment_whose_monitor_cannot_start_routes_nothing(
+    session, context, monkeypatch
+):
+    agent = await _agent(session, context)
+    service = _agents(session, context)
+    candidate = await agent_revisions.create_candidate(
+        str(agent.id), RevisionCreate(instruction="Help briefly."), context, PERSON, service
+    )
+
+    async def broken_start(*_args):
+        raise RuntimeError("temporal is down")
+
+    monkeypatch.setattr(agent_experiments, "start_workflow", broken_start)
+
+    with pytest.raises(HTTPException) as failed:
+        await agent_experiments.start_experiment(
+            str(agent.id),
+            ExperimentCreate(candidate_revision_id=candidate.id, auto_promote=True),
+            context, PERSON, session, service,
+        )
+    listed = await agent_experiments.list_experiments(str(agent.id), context, session, service)
+
+    assert failed.value.status_code == 503
+    assert [(e.status, e.stop_reason) for e in listed] == [("stopped", "monitor_not_started")]
+
+
+async def test_an_api_key_cannot_serve_a_candidate_that_widens_the_agent(session, context):
+    agent = await _agent(session, context)
+    service = _agents(session, context)
+    integration = UserPrincipal(user_id=context.user_id, api_key_id="key-1")
+    wider = await agent_revisions.create_candidate(
+        str(agent.id), RevisionCreate(planning=True), context, integration, service
+    )
+    narrower = await agent_revisions.create_candidate(
+        str(agent.id), RevisionCreate(instruction="Help briefly."), context, integration, service
+    )
+
+    with pytest.raises(HTTPException) as refused:
+        await agent_revisions.activate_revision(
+            str(agent.id), wider.id, context, integration, service
+        )
+    with pytest.raises(HTTPException) as no_auto:
+        await agent_experiments.start_experiment(
+            str(agent.id), ExperimentCreate(candidate_revision_id=wider.id, auto_promote=True),
+            context, integration, session, service,
+        )
+    served = await agent_revisions.activate_revision(
+        str(agent.id), narrower.id, context, integration, service
+    )
+
+    assert wider.origin == "api_key"
+    assert refused.value.status_code == 403
+    assert no_auto.value.status_code == 403
+    assert served.current
+
+
+def test_a_candidate_tool_is_validated_like_an_agent_tool():
+    with pytest.raises(ValueError):
+        RevisionCreate(tools=[{"type": "nonsense"}])
