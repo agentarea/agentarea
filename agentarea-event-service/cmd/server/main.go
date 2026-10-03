@@ -42,6 +42,11 @@ func main() {
 		"port", cfg.Port,
 	)
 
+	if cfg.DatabaseURL == "" {
+		slog.Error("database is not configured: set AGENTAREA_DB_HOST, AGENTAREA_DB_NAME, AGENTAREA_DB_USER and AGENTAREA_DB_PASSWORD")
+		os.Exit(1)
+	}
+
 	// Connect to PostgreSQL
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {

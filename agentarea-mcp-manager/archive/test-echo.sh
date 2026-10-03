@@ -21,14 +21,14 @@ print_error() {
 }
 
 # API base URLs
-MCP_MANAGER_URL="http://localhost/api/mcp"
+AGENTAREA_MCP_MANAGER_URL="http://localhost/api/mcp"
 ECHO_SERVICE_URL="http://localhost/mcp/echo-test"
 
 print_status "Testing AgentArea MCP Infrastructure with Echo Server..."
 
 # Test 1: Check MCP Manager health
 print_status "1. Testing MCP Manager health..."
-if curl -f -s "$MCP_MANAGER_URL/health" > /dev/null; then
+if curl -f -s "$AGENTAREA_MCP_MANAGER_URL/health" > /dev/null; then
     print_success "MCP Manager is healthy"
 else
     print_error "MCP Manager is not responding"
@@ -42,13 +42,13 @@ CONTAINER_CONFIG='{
   "port": 8000,
   "environment": {
     "MCP_SERVICE_NAME": "echo-test",
-    "LOG_LEVEL": "INFO"
+    "AGENTAREA_LOG_LEVEL": "INFO"
   },
   "memory_limit": "256m",
   "cpu_limit": "0.5"
 }'
 
-RESPONSE=$(curl -s -X POST "$MCP_MANAGER_URL/containers/echo-test/start" \
+RESPONSE=$(curl -s -X POST "$AGENTAREA_MCP_MANAGER_URL/containers/echo-test/start" \
   -H "Content-Type: application/json" \
   -d "$CONTAINER_CONFIG")
 
@@ -87,7 +87,7 @@ if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
     
     # Show container logs for debugging
     print_status "Container logs:"
-    curl -s "$MCP_MANAGER_URL/containers/echo-test/logs" | head -20
+    curl -s "$AGENTAREA_MCP_MANAGER_URL/containers/echo-test/logs" | head -20
     exit 1
 fi
 
@@ -129,7 +129,7 @@ fi
 
 # Test 6: Check container status via MCP Manager
 print_status "7. Checking container status..."
-STATUS_RESPONSE=$(curl -s "$MCP_MANAGER_URL/containers/echo-test/status")
+STATUS_RESPONSE=$(curl -s "$AGENTAREA_MCP_MANAGER_URL/containers/echo-test/status")
 if echo "$STATUS_RESPONSE" | grep -q "running"; then
     print_success "Container status check passed"
 else
@@ -139,7 +139,7 @@ fi
 
 # Test 7: List all containers
 print_status "8. Listing all containers..."
-LIST_RESPONSE=$(curl -s "$MCP_MANAGER_URL/containers")
+LIST_RESPONSE=$(curl -s "$AGENTAREA_MCP_MANAGER_URL/containers")
 if echo "$LIST_RESPONSE" | grep -q "echo-test"; then
     print_success "Container listing passed"
 else
@@ -156,10 +156,10 @@ echo "  • MCP Capabilities: $ECHO_SERVICE_URL/mcp/capabilities"
 echo "  • Service Info: $ECHO_SERVICE_URL/info"
 
 print_status "MCP Manager endpoints:"
-echo "  • Health: $MCP_MANAGER_URL/health"
-echo "  • Containers: $MCP_MANAGER_URL/containers"
-echo "  • Container Status: $MCP_MANAGER_URL/containers/echo-test/status"
-echo "  • Container Logs: $MCP_MANAGER_URL/containers/echo-test/logs"
+echo "  • Health: $AGENTAREA_MCP_MANAGER_URL/health"
+echo "  • Containers: $AGENTAREA_MCP_MANAGER_URL/containers"
+echo "  • Container Status: $AGENTAREA_MCP_MANAGER_URL/containers/echo-test/status"
+echo "  • Container Logs: $AGENTAREA_MCP_MANAGER_URL/containers/echo-test/logs"
 
 print_status "To stop the echo container:"
-echo "  curl -X POST $MCP_MANAGER_URL/containers/echo-test/stop" 
+echo "  curl -X POST $AGENTAREA_MCP_MANAGER_URL/containers/echo-test/stop" 

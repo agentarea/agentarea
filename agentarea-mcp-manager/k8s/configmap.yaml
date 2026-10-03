@@ -9,19 +9,19 @@ metadata:
 data:
   # Server configuration
   SERVER_HOST: "0.0.0.0"
-  SERVER_PORT: "8000"
+  PORT: "8000"
   
   # Backend configuration - force Kubernetes mode
   BACKEND_ENVIRONMENT: "kubernetes"
   
   # Kubernetes configuration
-  KUBERNETES_ENABLED: "true"
-  KUBERNETES_NAMESPACE: "default"
-  KUBERNETES_DOMAIN: "mcp.local"
-  KUBERNETES_INGRESS_CLASS: "nginx"
+  AGENTAREA_K8S_ENABLED: "true"
+  AGENTAREA_K8S_NAMESPACE: "default"
+  AGENTAREA_K8S_DOMAIN: "mcp.local"
+  AGENTAREA_K8S_INGRESS_CLASS: "nginx"
   
   # Logging
-  LOG_LEVEL: "DEBUG"
+  AGENTAREA_LOG_LEVEL: "DEBUG"
   LOG_FORMAT: "json"
   
   # CORS for testing

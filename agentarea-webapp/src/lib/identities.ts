@@ -1,6 +1,6 @@
 import "server-only";
 import { env } from "@/env";
-import { KRATOS_WHOAMI_TIMEOUT_MS } from "@/lib/server-timeouts";
+import { AGENTAREA_AUTH_WHOAMI_TIMEOUT } from "@/lib/server-timeouts";
 
 /** Profile details the identity provider knows about a user. */
 export interface IdentityProfile {
@@ -46,10 +46,10 @@ async function fetchIdentity(
   fetchImpl: typeof fetch
 ): Promise<IdentityProfile | null> {
   const response = await fetchImpl(
-    `${env.ORY_ADMIN_URL}/admin/identities/${encodeURIComponent(id)}`,
+    `${env.AGENTAREA_AUTH_KRATOS_ADMIN_URL}/admin/identities/${encodeURIComponent(id)}`,
     {
       headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(KRATOS_WHOAMI_TIMEOUT_MS),
+      signal: AbortSignal.timeout(AGENTAREA_AUTH_WHOAMI_TIMEOUT),
       cache: "no-store",
     }
   );
@@ -73,7 +73,7 @@ export async function resolveIdentityProfiles(
   const profiles = new Map<string, IdentityProfile>();
   // Deployments without an admin URL (or a deliberately unset one) just show
   // members by id; that's a configuration choice, not an error to log.
-  if (!env.ORY_ADMIN_URL) return profiles;
+  if (!env.AGENTAREA_AUTH_KRATOS_ADMIN_URL) return profiles;
   const unique = Array.from(new Set(ids.filter(Boolean)));
   if (unique.length === 0) return profiles;
 

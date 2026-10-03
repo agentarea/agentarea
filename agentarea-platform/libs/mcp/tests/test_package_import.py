@@ -68,8 +68,8 @@ class _Session:
 
 
 class _Settings:
-    MCP_MANAGER_URL = "http://manager"
-    MCP_CLIENT_TIMEOUT = 30
+    MANAGER_URL = "http://manager"
+    TIMEOUT = 30
 
     @staticmethod
     def manager_retire_url(instance_id):

@@ -24,7 +24,7 @@ from agentarea_api.api.v1.workspaces import (
 
 
 def _describe(workspace: WorkspaceResponse) -> dict:
-    api_base = get_settings().app.API_BASE_URL.rstrip("/")
+    api_base = get_settings().app.API_URL.rstrip("/")
     return {**workspace.model_dump(), "mcp_url": f"{api_base}/mcp/w/{workspace.slug}"}
 
 

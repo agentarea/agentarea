@@ -38,7 +38,7 @@ check-frontend: ## Webapp (lint, types, tests, client drift, build) + CLI
 	pnpm -C agentarea-webapp run check:integration
 	pnpm -C agentarea-cli run check
 
-check-db: ## Migrations roundtrip + schema-backed suites (needs POSTGRES_*; see db-test-up)
+check-db: ## Migrations roundtrip + schema-backed suites (needs AGENTAREA_DB_*; see db-test-up)
 	$(MAKE) -C agentarea-platform check-db
 
 check-jwks-perms: ## Kratos JWKS stays container-readable, config/auth host-private (#481)
@@ -57,7 +57,7 @@ db-test-up: ## Start a throwaway Postgres (tmpfs) for check-db and print its env
 		sleep 1; \
 	done; \
 	docker exec $(DB_TEST_CONTAINER) pg_isready -U postgres -d agentarea_test >/dev/null || { echo "Postgres did not become ready" >&2; exit 1; }
-	@echo "export POSTGRES_HOST=localhost POSTGRES_PORT=$(DB_TEST_PORT) POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres POSTGRES_DB=agentarea_test"
+	@echo "export AGENTAREA_DB_HOST=localhost AGENTAREA_DB_PORT=$(DB_TEST_PORT) AGENTAREA_DB_USER=postgres AGENTAREA_DB_PASSWORD=postgres AGENTAREA_DB_NAME=agentarea_test"
 
 db-test-down: ## Remove the check-db Postgres
 	docker rm -f $(DB_TEST_CONTAINER)

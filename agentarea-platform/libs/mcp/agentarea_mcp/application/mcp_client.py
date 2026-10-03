@@ -134,7 +134,9 @@ def shared_era_verdict_store() -> RedisEraVerdictStore | None:
         from agentarea_common.config import get_settings
 
         settings = get_settings()
-        redis_url = getattr(settings.broker, "REDIS_URL", None) or settings.mcp.REDIS_URL
+        # Only the broker carries the Redis URL now; MCPSettings used to declare a
+        # second copy of it. KafkaSettings has no REDIS_URL, hence the getattr.
+        redis_url = getattr(settings.broker, "REDIS_URL", None)
         if not redis_url:
             return None
         _shared_store = RedisEraVerdictStore(redis_url)

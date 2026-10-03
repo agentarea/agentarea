@@ -1,21 +1,31 @@
 """Observability configuration."""
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import SettingsConfigDict
+
+from .base import BaseAppSettings
 
 
-class ObservabilitySettings(BaseSettings):
-    """OpenTelemetry and Prometheus configuration.
+class ObservabilitySettings(BaseAppSettings):
+    """OpenTelemetry tracing.
 
-    The OpenTelemetry SDK reads standard OTEL_* variables itself. OTEL_ENABLED
-    is AgentArea's explicit process-level gate for installing instrumentation.
-    METRICS_ENABLED serves Prometheus metrics on METRICS_PORT, a listener of its
-    own so that the public API port never answers ``/metrics``.
+    AGENTAREA_OTEL_ENABLED is our process-level gate for installing
+    instrumentation. Everything else is the OpenTelemetry spec's own OTEL_*
+    variables, which keep their names and are read where they are used.
     """
 
-    OTEL_ENABLED: bool = False
-    OTEL_SERVICE_NAME: str = ""
-    OTEL_EXPORTER_OTLP_PROTOCOL: str = "grpc"
-    METRICS_ENABLED: bool = False
-    METRICS_PORT: int = 9090
+    model_config = SettingsConfigDict(env_prefix="AGENTAREA_OTEL_")
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    ENABLED: bool = False
+
+
+class MetricsSettings(BaseAppSettings):
+    """Prometheus metrics.
+
+    Served on a listener of their own so the public API port never answers
+    ``/metrics``.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="AGENTAREA_METRICS_")
+
+    ENABLED: bool = False
+    PORT: int = 9090

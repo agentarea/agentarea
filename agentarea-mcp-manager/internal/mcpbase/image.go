@@ -13,13 +13,13 @@ import "os"
 // server has initialized.
 const Port = 8080
 
-// DefaultImage is used when MCP_BASE_IMAGE is unset. Deployments pin a
-// version through MCP_BASE_IMAGE (chart value mcpManager.mcpBase.image).
+// DefaultImage is used when AGENTAREA_MCP_BASE_IMAGE is unset. Deployments pin a
+// version through AGENTAREA_MCP_BASE_IMAGE (chart value mcpManager.mcpBase.image).
 const DefaultImage = "agentarea/agentarea-mcp-base:latest"
 
 // Image returns the configured mcp-base image reference.
 func Image() string {
-	if image := os.Getenv("MCP_BASE_IMAGE"); image != "" {
+	if image := os.Getenv("AGENTAREA_MCP_BASE_IMAGE"); image != "" {
 		return image
 	}
 	return DefaultImage

@@ -39,12 +39,12 @@ logger = logging.getLogger(__name__)
 def get_channel_webhook_service() -> ChannelWebhookService:
     """Composition root for inbound webhook registration.
 
-    Reads the reachable ingress base (TELEGRAM_WEBHOOK_BASE_URL if set, else
-    API_BASE_URL) and hands the endpoints a service that knows nothing about any
-    specific channel — that lives behind the WebhookRegistrar registry.
+    Reads the reachable ingress base (AGENTAREA_TELEGRAM_WEBHOOK_URL if set, else
+    AGENTAREA_API_URL) and hands the endpoints a service that knows nothing about
+    any specific channel — that lives behind the WebhookRegistrar registry.
     """
     settings = get_app_settings()
-    base = getattr(settings, "TELEGRAM_WEBHOOK_BASE_URL", "") or settings.API_BASE_URL
+    base = settings.TELEGRAM_WEBHOOK_URL or settings.API_URL
     return ChannelWebhookService(base)
 
 

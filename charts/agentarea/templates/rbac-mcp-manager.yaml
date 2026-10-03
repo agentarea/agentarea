@@ -2,7 +2,7 @@
 # Namespaced Role, not a ClusterRole: the manager and the sandbox runner
 # (internal/backends.KubernetesBackend, internal/warmpool) only ever create,
 # read, update or delete resources in the release namespace named by
-# KUBERNETES_NAMESPACE (agentarea.mcpManager.envs -> .Release.Namespace).
+# AGENTAREA_K8S_NAMESPACE (agentarea.mcpManager.envs -> .Release.Namespace).
 # Verbs below are the ones the Go code actually calls, not the full CRUD
 # matrix: no list/watch on Services or Secrets (never listed), no update on
 # Services (never updated), no cluster-wide reach into other namespaces'

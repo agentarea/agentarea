@@ -553,7 +553,6 @@ class TestTemporalWorkflowOutcomeStatus:
         client.get_workflow_handle.return_value = handle
 
         orchestrator = TemporalWorkflowOrchestrator(
-            temporal_address="localhost:7233",
             task_queue="test-queue",
             max_concurrent_activities=1,
             max_concurrent_workflows=1,
@@ -676,7 +675,6 @@ class TestSendWorkflowCommandDelivery:
         )
 
         return TemporalWorkflowOrchestrator(
-            temporal_address="localhost:7233",
             task_queue="test-queue",
             max_concurrent_activities=1,
             max_concurrent_workflows=1,

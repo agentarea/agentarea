@@ -38,36 +38,36 @@ spec:
             configMapKeyRef:
               name: mcp-manager-config
               key: SERVER_HOST
-        - name: SERVER_PORT
+        - name: PORT
           valueFrom:
             configMapKeyRef:
               name: mcp-manager-config
-              key: SERVER_PORT
+              key: PORT
         - name: BACKEND_ENVIRONMENT
           valueFrom:
             configMapKeyRef:
               name: mcp-manager-config
               key: BACKEND_ENVIRONMENT
-        - name: KUBERNETES_ENABLED
+        - name: AGENTAREA_K8S_ENABLED
           valueFrom:
             configMapKeyRef:
               name: mcp-manager-config
-              key: KUBERNETES_ENABLED
-        - name: KUBERNETES_NAMESPACE
+              key: AGENTAREA_K8S_ENABLED
+        - name: AGENTAREA_K8S_NAMESPACE
           valueFrom:
             configMapKeyRef:
               name: mcp-manager-config
-              key: KUBERNETES_NAMESPACE
-        - name: KUBERNETES_DOMAIN
+              key: AGENTAREA_K8S_NAMESPACE
+        - name: AGENTAREA_K8S_DOMAIN
           valueFrom:
             configMapKeyRef:
               name: mcp-manager-config
-              key: KUBERNETES_DOMAIN
-        - name: LOG_LEVEL
+              key: AGENTAREA_K8S_DOMAIN
+        - name: AGENTAREA_LOG_LEVEL
           valueFrom:
             configMapKeyRef:
               name: mcp-manager-config
-              key: LOG_LEVEL
+              key: AGENTAREA_LOG_LEVEL
         - name: LOG_FORMAT
           valueFrom:
             configMapKeyRef:

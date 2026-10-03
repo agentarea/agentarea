@@ -401,7 +401,7 @@ async def discover_models_preview(
     provider_spec_id = str(provider_spec.id)
 
     discovery_service = ModelDiscoveryService(
-        allow_private_endpoints=get_settings().mcp.ALLOW_PRIVATE_URLS,
+        allow_private_endpoints=get_settings().http.ALLOW_PRIVATE,
     )
     discovered = await discovery_service.discover(
         provider_key=data.provider_key,

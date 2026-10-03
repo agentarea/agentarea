@@ -33,7 +33,7 @@ class TestDatabaseSecretManager:
         env_key = Fernet.generate_key().decode("utf-8")
 
         with (
-            patch.dict("os.environ", {"SECRET_MANAGER_ENCRYPTION_KEY": env_key}),
+            patch.dict("os.environ", {"AGENTAREA_SECRET_ENCRYPTION_KEY": env_key}),
             pytest.raises(ValueError, match="Encryption key is required"),
         ):
             DatabaseSecretManager(
@@ -230,7 +230,7 @@ class TestDatabaseSecretManager:
     async def test_has_secret_does_not_decrypt(self, mock_db_session, test_user_context):
         """A value this key cannot open is still a value that exists.
 
-        A rotated ``SECRET_MANAGER_ENCRYPTION_KEY`` leaves rows behind that no
+        A rotated ``AGENTAREA_SECRET_ENCRYPTION_KEY`` leaves rows behind that no
         longer decrypt. Callers that only want to know whether a credential is
         configured must get an answer, not the read failure.
         """

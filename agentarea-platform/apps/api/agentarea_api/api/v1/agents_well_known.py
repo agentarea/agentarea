@@ -86,7 +86,7 @@ async def get_agent_a2a_info(
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
-        base_url = get_settings().app.API_BASE_URL.rstrip("/")
+        base_url = get_settings().app.API_URL.rstrip("/")
 
         return {
             "protocol": "A2A",
@@ -158,7 +158,7 @@ async def get_agent_well_known_index(
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
-        base_url = get_settings().app.API_BASE_URL.rstrip("/")
+        base_url = get_settings().app.API_URL.rstrip("/")
 
         return {
             "message": f"A2A Protocol Well-Known Endpoints for {agent.name}",

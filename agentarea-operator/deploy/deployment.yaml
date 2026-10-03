@@ -20,28 +20,26 @@ spec:
         - name: operator
           image: "10.109.26.228:5000/agentarea/agentarea-operator:latest"
           imagePullPolicy: Always
-          command: ["sh", "-c"]
-          args:
-            - |
-              export DATABASE_URL="postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require"
-              exec kopf run handler.py --verbose
+          command: ["kopf", "run", "handler.py", "--verbose"]
           env:
-            - name: POSTGRES_USER
+            - name: AGENTAREA_DB_USER
               valueFrom:
                 secretKeyRef:
                   name: agentarea-postgresql-secret
                   key: username
-            - name: POSTGRES_PASSWORD
+            - name: AGENTAREA_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: agentarea-postgresql-secret
                   key: password
-            - name: POSTGRES_HOST
+            - name: AGENTAREA_DB_HOST
               value: "ep-crimson-bread-aii6jbt8-pooler.c-4.us-east-1.aws.neon.tech"
-            - name: POSTGRES_PORT
+            - name: AGENTAREA_DB_PORT
               value: "5432"
-            - name: POSTGRES_DB
+            - name: AGENTAREA_DB_NAME
               value: "neondb"
+            - name: AGENTAREA_DB_SSLMODE
+              value: "require"
           resources:
             requests:
               cpu: 50m

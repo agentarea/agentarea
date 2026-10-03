@@ -7,7 +7,7 @@ const { getAuthToken, getRequestWorkspaceSlug } = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/env", () => ({ env: { API_URL: "https://api.example.test" } }));
+vi.mock("@/env", () => ({ env: { AGENTAREA_API_URL: "https://api.example.test" } }));
 vi.mock("@/lib/getAuthToken", () => ({ getAuthToken }));
 vi.mock("./getAuthToken", () => ({ getAuthToken }));
 vi.mock("@/lib/workspace-context", () => ({ getRequestWorkspaceSlug }));

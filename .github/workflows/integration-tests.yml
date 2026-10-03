@@ -14,17 +14,17 @@ permissions:
   contents: read
 
 env:
-  # The app's DatabaseSettings builds the URL from POSTGRES_* (default host "db"),
-  # NOT from DATABASE_URL -- so these must be set explicitly or migrations resolve
-  # host "db" and fail. Likewise the workflow client reads WORKFLOW__TEMPORAL_SERVER_URL.
-  POSTGRES_HOST: localhost
-  POSTGRES_PORT: "5432"
-  POSTGRES_USER: postgres
-  POSTGRES_PASSWORD: postgres
-  POSTGRES_DB: agentarea_test
-  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentarea_test
-  REDIS_URL: redis://localhost:6379/0
-  WORKFLOW__TEMPORAL_SERVER_URL: localhost:7233
+  # Every service builds its connection from AGENTAREA_DB_* (default host
+  # "db"), so these must be set explicitly or migrations resolve host "db" and
+  # fail. Likewise the workflow client reads
+  # TEMPORAL_ADDRESS.
+  AGENTAREA_DB_HOST: localhost
+  AGENTAREA_DB_PORT: "5432"
+  AGENTAREA_DB_USER: postgres
+  AGENTAREA_DB_PASSWORD: postgres
+  AGENTAREA_DB_NAME: agentarea_test
+  AGENTAREA_REDIS_URL: redis://localhost:6379/0
+  TEMPORAL_ADDRESS: localhost:7233
   TEMPORAL_HOST: localhost:7233
   AGENTAREA_DB_TENANT_SCOPE: enforce
 
@@ -272,7 +272,7 @@ jobs:
         # example alone leaves the stack unable to start.
         #
         # --force is load-bearing: a plain run sees the example's empty
-        # `KRATOS_JWKS_B64=` line, concludes the secrets are already present,
+        # `AGENTAREA_AUTH_JWKS_B64=` line, concludes the secrets are already present,
         # and exits without writing any.
         run: |
           cp .env.example .env
@@ -281,8 +281,8 @@ jobs:
           # empty key; gen-dev-secrets leaves it alone on purpose (rotating it
           # would orphan every stored secret), so this throwaway stack gets one.
           key=$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')
-          sed -i "s|^SECRET_MANAGER_ENCRYPTION_KEY=.*|SECRET_MANAGER_ENCRYPTION_KEY=${key}|" .env
-          grep -q "^SECRET_MANAGER_ENCRYPTION_KEY=${key}$" .env
+          sed -i "s|^AGENTAREA_SECRET_ENCRYPTION_KEY=.*|AGENTAREA_SECRET_ENCRYPTION_KEY=${key}|" .env
+          grep -q "^AGENTAREA_SECRET_ENCRYPTION_KEY=${key}$" .env
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -388,9 +388,9 @@ jobs:
       - name: Run OpenAPI + stateful fuzz
         run: >-
           make -C agentarea-platform test-api-fuzz
-          API_URL=http://localhost:8000
-          KRATOS_ADMIN_URL=http://localhost:4434
-          KRATOS_PUBLIC_URL=http://localhost:4433
+          AGENTAREA_API_URL=http://localhost:8000
+          AGENTAREA_AUTH_KRATOS_ADMIN_URL=http://localhost:4434
+          AGENTAREA_AUTH_KRATOS_URL=http://localhost:4433
 
       - name: Stack logs (always)
         if: always()

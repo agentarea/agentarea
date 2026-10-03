@@ -2,7 +2,7 @@
 
 The CronJob gets the database and access-control env, not the worker's
 Temporal settings. Resolving the graph client once loaded every settings
-domain, so a job that never touches Temporal failed WorkflowSettings
+domain, so a job that never touches Temporal failed the Temporal settings
 validation: first per catalog item ("Skipping catalog item ... validation error
 for WorkflowSettings"), then, once the client was registered up front, the
 whole run.
@@ -19,15 +19,15 @@ from agentarea_common.rebac.ownership import resolve_graph_client
 @pytest.fixture
 def reconcile_job_env(monkeypatch):
     for name in (
-        "WORKFLOW__EXECUTION_ENGINE",
-        "WORKFLOW__TEMPORAL_SERVER_URL",
-        "WORKFLOW__TEMPORAL_NAMESPACE",
-        "WORKFLOW__TEMPORAL_TASK_QUEUE",
+        "AGENTAREA_TASK_EXECUTOR",
+        "TEMPORAL_ADDRESS",
+        "TEMPORAL_NAMESPACE",
+        "AGENTAREA_TEMPORAL_QUEUE",
     ):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
-    monkeypatch.setenv("ACCESS_CONTROL_OPENFGA_STORE_ID", "store-1")
-    monkeypatch.setenv("ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP", "false")
+    monkeypatch.setenv("AGENTAREA_AUTHZ_BACKEND", "openfga")
+    monkeypatch.setenv("AGENTAREA_AUTHZ_FGA_STORE_ID", "store-1")
+    monkeypatch.setenv("AGENTAREA_AUTHZ_FGA_BOOTSTRAP", "false")
     monkeypatch.setattr(get_container(), "_singletons", {})
     get_settings.cache_clear()
     yield

@@ -36,19 +36,17 @@ DEFAULT_TASK_QUEUE = "trigger-execution-queue"
 class TemporalScheduleManager:
     """Manages Temporal Schedules for cron triggers.
 
-    Can be initialized with either a pre-built Client or with
-    namespace/task_queue for lazy client creation.
+    Can be initialized with either a pre-built Client or with a task queue
+    for lazy client creation from Temporal's environment contract.
     """
 
     def __init__(
         self,
         temporal_client: Client | None = None,
         *,
-        namespace: str = "default",
         task_queue: str = DEFAULT_TASK_QUEUE,
     ):
         self.client = temporal_client
-        self._namespace = namespace
         self._task_queue = task_queue
         self._connected = temporal_client is not None
 
@@ -56,20 +54,16 @@ class TemporalScheduleManager:
         """Lazily connect to Temporal if not already connected."""
         if self._connected and self.client is not None:
             return self.client
-        from agentarea_common.config import get_settings
+        from agentarea_common.config import temporal_connect_config
 
-        settings = get_settings()
-        server_url = settings.workflow.TEMPORAL_SERVER_URL
-        if not server_url:
-            raise DependencyUnavailableError(
-                "TEMPORAL_SERVER_URL not configured",
-                dependency="temporal_client",
-            )
+        try:
+            connect_config = temporal_connect_config()
+        except RuntimeError as e:
+            raise DependencyUnavailableError(str(e), dependency="temporal_client") from e
         from temporalio.contrib.pydantic import pydantic_data_converter
 
         self.client = await Client.connect(
-            server_url,
-            namespace=self._namespace,
+            **connect_config,
             data_converter=pydantic_data_converter,
         )
         self._connected = True

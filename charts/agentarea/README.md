@@ -166,8 +166,8 @@ The following table lists configurable parameters of the chart and their default
 | global.security.containerSecurityContext.readOnlyRootFilesystem | bool | `true` |  |
 | global.security.containerSecurityContext.runAsNonRoot | bool | `true` |  |
 | global.security.containerSecurityContext.capabilities.drop[0] | string | `"ALL"` |  |
-| global.outbound.privateAllowlist | list | `[]` | Host globs and CIDRs a member-set URL may reach although they are private (OUTBOUND_PRIVATE_ALLOWLIST), e.g. ["ollama.ai.svc.cluster.local", "192.168.1.50/32"]. Empty refuses every private, loopback and link-local address, so an LLM provider served from the cluster or the LAN (Ollama, vLLM, LM Studio) fails until its host is listed. Name each endpoint: a wildcard such as "*.svc.cluster.local" or a cluster CIDR lets every member reach every in-cluster service, the platform's own included. |
-| global.outbound.allowPrivateUrls | bool | `false` | Admit every private address (ALLOW_PRIVATE_URLS). Single-tenant installs only; prefer privateAllowlist. |
+| global.outbound.privateAllowlist | list | `[]` | Host globs and CIDRs a member-set URL may reach although they are private (AGENTAREA_HTTP_PRIVATE_ALLOWLIST), e.g. ["ollama.ai.svc.cluster.local", "192.168.1.50/32"]. Empty refuses every private, loopback and link-local address, so an LLM provider served from the cluster or the LAN (Ollama, vLLM, LM Studio) fails until its host is listed. Name each endpoint: a wildcard such as "*.svc.cluster.local" or a cluster CIDR lets every member reach every in-cluster service, the platform's own included. |
+| global.outbound.allowPrivateUrls | bool | `false` | Admit every private address (AGENTAREA_HTTP_ALLOW_PRIVATE). Single-tenant installs only; prefer privateAllowlist. |
 | global.extraLabels | object | `{}` |  |
 | global.extraSelectorLabels | object | `{}` |  |
 | ingress.enabled | bool | `false` |  |
@@ -262,7 +262,7 @@ The following table lists configurable parameters of the chart and their default
 | worker.image.repository | string | `"agentarea/agentarea-worker"` |  |
 | worker.image.tag | string | `"latest"` |  |
 | worker.image.pullPolicy | string | `""` |  |
-| worker.healthPort | int | `8081` | Port of the worker's health endpoint, passed to the container as AGENTAREA_WF_HEALTH_PORT. /readyz answers 200 once the database, the authorization backend and Redis are reachable and every Temporal worker is polling; /livez answers 200 while the event loop responds. |
+| worker.healthPort | int | `8081` | Port of the worker's health endpoint, passed to the container as AGENTAREA_WORKER_HEALTH_PORT. /readyz answers 200 once the database, the authorization backend and Redis are reachable and every Temporal worker is polling; /livez answers 200 while the event loop responds. |
 | worker.minReadySeconds | int | `10` | Seconds a new pod must stay ready before it counts as available, so a pod that passes readiness and then crashes cannot retire an old replica. |
 | worker.shutdownTimeout | int | `120` | Seconds a stopping worker lets in-flight activities (model calls, tools, event writes) finish before it cancels them. A cancelled model call is paid for twice when it reruns on another replica. |
 | worker.terminationGracePeriodSeconds | int | `150` | Total budget the kubelet allows the worker before SIGKILL. Keep it above shutdownTimeout, or the drain is cut short. |
@@ -369,7 +369,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.warmPool.image.repository | string | `"agentarea/agentarea-mcp-runner"` |  |
 | mcpManager.warmPool.image.tag | string | `"latest"` |  |
 | mcpManager.warmPool.image.pullPolicy | string | `"IfNotPresent"` |  |
-| mcpManager.warmPool.idleTimeoutSeconds | int | `0` |  |
+| mcpManager.warmPool.idleTimeout | string | `"0s"` |  |
 | mcpManager.warmPool.size | int | `1` |  |
 | mcpManager.warmPool.logLevel | string | `"info"` |  |
 | mcpManager.warmPool.resources.limits.cpu | string | `"500m"` |  |

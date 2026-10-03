@@ -48,18 +48,14 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
     def __init__(
         self,
-        temporal_address: str,
         task_queue: str,
         max_concurrent_activities: int,
         max_concurrent_workflows: int,
     ):
         """Initialize with required configuration - no defaults allowed."""
-        if not temporal_address:
-            raise ValueError("temporal_address must be provided")
         if not task_queue:
             raise ValueError("task_queue must be provided")
 
-        self.temporal_address = temporal_address
         self.task_queue = task_queue
         self.max_concurrent_activities = max_concurrent_activities
         self.max_concurrent_workflows = max_concurrent_workflows
@@ -69,19 +65,20 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         """Get Temporal client, create if needed."""
         if self._client is None:
             try:
-                from agentarea_common.config import ObservabilitySettings
+                from agentarea_common.config import ObservabilitySettings, temporal_connect_config
                 from agentarea_common.observability import get_temporal_plugins, setup_otel
                 from temporalio.client import Client
                 from temporalio.contrib.pydantic import pydantic_data_converter
 
                 observability_settings = ObservabilitySettings()
                 setup_otel("agentarea-agents", observability_settings)
+                connect_config = temporal_connect_config()
                 self._client = await Client.connect(
-                    self.temporal_address,
+                    **connect_config,
                     data_converter=pydantic_data_converter,
                     plugins=get_temporal_plugins(observability_settings),
                 )
-                logger.info(f"Connected to Temporal at {self.temporal_address}")
+                logger.info(f"Connected to Temporal at {connect_config.get('target_host')}")
             except ImportError as e:
                 logger.exception(f"Temporal library not installed: {e}")
                 raise RuntimeError(

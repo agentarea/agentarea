@@ -103,11 +103,11 @@ RUSTFS_REGION=us-east-1
 DOCUMENTS_BUCKET=documents
 ARTIFACTS_BUCKET=artifacts
 
-SECRET_MANAGER_TYPE=database
-SECRET_MANAGER_ENCRYPTION_KEY=$secret_key
+AGENTAREA_SECRET_BACKEND=database
+AGENTAREA_SECRET_ENCRYPTION_KEY=$secret_key
 
 ORY_BROWSER_URL=http://localhost:4433
-API_BROWSER_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:8000
 
 SMTP_PROTOCOL=smtp
 SMTP_HOST=host.docker.internal
@@ -123,8 +123,8 @@ OIDC_GOOGLE_CLIENT_SECRET=
 OIDC_GITHUB_CLIENT_ID=
 OIDC_GITHUB_CLIENT_SECRET=
 
-KRATOS_ISSUER=http://localhost:4433
-KRATOS_AUDIENCE=agentarea-api
+AGENTAREA_AUTH_ISSUER=http://localhost:4433
+AGENTAREA_AUTH_AUDIENCE=agentarea-api
 EOF
     chmod 600 "$env_file"
     say "Created $env_file"

@@ -1,6 +1,7 @@
 """OpenTelemetry bootstrap."""
 
 import logging
+import os
 from threading import Lock
 
 from agentarea_common.config import ObservabilitySettings
@@ -18,38 +19,38 @@ def setup_otel(service_name: str, settings: ObservabilitySettings | None = None)
     idempotent per service name so API/worker startup can call it freely.
     """
     settings = settings or ObservabilitySettings()
-    if not settings.OTEL_ENABLED:
+    if not settings.ENABLED:
         return False
 
-    resolved_service_name = settings.OTEL_SERVICE_NAME or service_name
+    resolved_service_name = os.environ.get("OTEL_SERVICE_NAME") or service_name
 
     with _SETUP_LOCK:
         global _CONFIGURED_SERVICE
         if _CONFIGURED_SERVICE is not None:
             return True
 
-        _configure_tracing(resolved_service_name, settings)
+        _configure_tracing(resolved_service_name)
         _CONFIGURED_SERVICE = resolved_service_name
         logger.info("OpenTelemetry tracing enabled for %s", resolved_service_name)
         return True
 
 
-def _configure_tracing(service_name: str, settings: ObservabilitySettings) -> None:
+def _configure_tracing(service_name: str) -> None:
     """Install the tracer provider and OTLP span exporter."""
     from opentelemetry import trace
     from opentelemetry.sdk.resources import SERVICE_NAME, Resource
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-    exporter = _create_otlp_span_exporter(settings)
+    exporter = _create_otlp_span_exporter()
     provider = TracerProvider(resource=Resource.create({SERVICE_NAME: service_name}))
     provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
 
 
-def _create_otlp_span_exporter(settings: ObservabilitySettings):
+def _create_otlp_span_exporter():
     """Create an OTLP exporter matching OTEL_EXPORTER_OTLP_PROTOCOL."""
-    protocol = settings.OTEL_EXPORTER_OTLP_PROTOCOL.lower()
+    protocol = os.environ.get("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc").lower()
     if protocol == "http/protobuf":
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
     else:

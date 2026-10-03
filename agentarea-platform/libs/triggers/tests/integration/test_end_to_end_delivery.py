@@ -27,7 +27,7 @@ async def _origin_allowed(_channel_config: dict) -> bool:
     return True
 
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+AGENTAREA_REDIS_URL = os.getenv("AGENTAREA_REDIS_URL", "redis://localhost:6379")
 
 
 class CapturingTelegramAdapter:
@@ -71,8 +71,8 @@ async def pipeline():
     group = "delivery"
     dlq = f"e2e:outbound:dlq:{test_id}"
 
-    broker = RedisStreamsBroker(REDIS_URL)
-    dedup = DedupCache(REDIS_URL, prefix=f"e2e-dedup-{test_id}", ttl_seconds=60)
+    broker = RedisStreamsBroker(AGENTAREA_REDIS_URL)
+    dedup = DedupCache(AGENTAREA_REDIS_URL, prefix=f"e2e-dedup-{test_id}", ttl_seconds=60)
     try:
         await broker.ensure_group(stream, group, start="0")
     except Exception as exc:

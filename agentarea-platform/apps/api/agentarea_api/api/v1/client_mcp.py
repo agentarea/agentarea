@@ -97,7 +97,9 @@ def _tool_cache() -> RedisToolListCache:
 
         redis_url = getattr(get_settings().broker, "REDIS_URL", None)
         if not redis_url:
-            raise RuntimeError("The client MCP tool-list cache requires a Redis broker (REDIS_URL)")
+            raise RuntimeError(
+                "The client MCP tool-list cache requires a Redis broker (AGENTAREA_REDIS_URL)"
+            )
         _tool_list_cache = RedisToolListCache(redis_url)
     return _tool_list_cache
 

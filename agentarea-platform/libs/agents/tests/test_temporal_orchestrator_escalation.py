@@ -37,7 +37,6 @@ class _Handle:
 
 def _orchestrator(handle: _Handle) -> TemporalWorkflowOrchestrator:
     orchestrator = TemporalWorkflowOrchestrator(
-        temporal_address="localhost:7233",
         task_queue="test",
         max_concurrent_activities=1,
         max_concurrent_workflows=1,

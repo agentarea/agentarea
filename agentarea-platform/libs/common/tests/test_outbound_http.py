@@ -151,7 +151,7 @@ def fresh_settings():
 
 
 def test_the_allowlist_is_read_from_settings(monkeypatch, fresh_settings):
-    monkeypatch.setenv("OUTBOUND_PRIVATE_ALLOWLIST", " localhost , 10.43.0.0/16 ,")
+    monkeypatch.setenv("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", " localhost , 10.43.0.0/16 ,")
 
     policy = OutboundPolicy.from_env()
 
@@ -159,9 +159,9 @@ def test_the_allowlist_is_read_from_settings(monkeypatch, fresh_settings):
 
 
 def test_the_policy_comes_from_the_cached_settings(monkeypatch, fresh_settings):
-    monkeypatch.setenv("OUTBOUND_PRIVATE_ALLOWLIST", "localhost")
+    monkeypatch.setenv("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", "localhost")
     first = OutboundPolicy.from_env()
-    monkeypatch.setenv("OUTBOUND_PRIVATE_ALLOWLIST", "nas.lan")
+    monkeypatch.setenv("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", "nas.lan")
 
     assert OutboundPolicy.from_env() == first
 

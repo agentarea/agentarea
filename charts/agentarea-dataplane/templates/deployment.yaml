@@ -48,34 +48,33 @@ spec:
               containerPort: {{ .Values.dataPlane.port }}
           {{- end }}
           env:
-            - { name: MCP_MANAGER_MODE, value: dataplane }
-            - { name: MCP_DATAPLANE_ID, value: {{ .Values.dataPlane.id | quote }} }
-            - name: MCP_DATAPLANE_LISTEN_ADDR
+            - { name: AGENTAREA_MCP_MODE, value: dataplane }
+            - { name: AGENTAREA_MCP_DATAPLANE_ID, value: {{ .Values.dataPlane.id | quote }} }
+            - name: AGENTAREA_MCP_DATAPLANE_ADDR
               value: "{{ if $host.enabled }}{{ $host.bindAddress }}{{ end }}:{{ .Values.dataPlane.port }}"
-            - name: MCP_DATAPLANE_AUTH_TOKEN
+            - name: AGENTAREA_MCP_DATAPLANE_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "dataplane.tokenSecretName" . }}
                   key: {{ include "dataplane.tokenSecretKey" . }}
             # Declared, not detected.
-            - { name: BACKEND_TYPE, value: kubernetes }
-            - { name: KUBERNETES_ENABLED, value: "true" }
-            - { name: KUBERNETES_NAMESPACE, value: {{ $w.namespace | quote }} }
-            - { name: KUBERNETES_RUNTIME_CLASS, value: {{ $w.runtimeClassName | quote }} }
-            - { name: KUBERNETES_READ_ONLY_ROOT_FS, value: {{ $w.readOnlyRootFilesystem | toString | quote }} }
-            - { name: KUBERNETES_DEFAULT_CPU_REQUEST, value: {{ $w.resources.requests.cpu | quote }} }
-            - { name: KUBERNETES_DEFAULT_MEMORY_REQUEST, value: {{ $w.resources.requests.memory | quote }} }
-            - { name: KUBERNETES_DEFAULT_CPU_LIMIT, value: {{ $w.resources.limits.cpu | quote }} }
-            - { name: KUBERNETES_DEFAULT_MEMORY_LIMIT, value: {{ $w.resources.limits.memory | quote }} }
-            - { name: DEFAULT_ISOLATION_TIER, value: {{ $w.isolationTier | quote }} }
-            - { name: MAX_CONTAINERS, value: {{ $w.maxInstances | toString | quote }} }
+            - { name: AGENTAREA_MCP_BACKEND, value: kubernetes }
+            - { name: AGENTAREA_K8S_ENABLED, value: "true" }
+            - { name: AGENTAREA_K8S_NAMESPACE, value: {{ $w.namespace | quote }} }
+            - { name: AGENTAREA_K8S_RUNTIME_CLASS, value: {{ $w.runtimeClassName | quote }} }
+            - { name: AGENTAREA_K8S_READONLY_ROOT, value: {{ $w.readOnlyRootFilesystem | toString | quote }} }
+            - { name: AGENTAREA_K8S_CPU_REQUEST, value: {{ $w.resources.requests.cpu | quote }} }
+            - { name: AGENTAREA_K8S_MEMORY_REQUEST, value: {{ $w.resources.requests.memory | quote }} }
+            - { name: AGENTAREA_K8S_CPU_LIMIT, value: {{ $w.resources.limits.cpu | quote }} }
+            - { name: AGENTAREA_K8S_MEMORY_LIMIT, value: {{ $w.resources.limits.memory | quote }} }
+            - { name: AGENTAREA_MCP_ISOLATION, value: {{ $w.isolationTier | quote }} }
+            - { name: AGENTAREA_MCP_MAX_CONTAINERS, value: {{ $w.maxInstances | toString | quote }} }
             # A data plane has no Core API to sync against -- it is told what to run.
-            - { name: SKIP_INSTANCE_SYNC, value: "true" }
-            - { name: LOG_LEVEL, value: {{ .Values.dataPlane.logLevel | quote }} }
-            - { name: SANDBOX_TASK_LEASE_TTL, value: {{ .Values.sandboxPolicy.taskLeaseTTL | quote }} }
-            - { name: SANDBOX_TASK_IDLE_TTL, value: {{ .Values.sandboxPolicy.taskIdleTTL | quote }} }
-            - { name: SANDBOX_PROVIDER_PROVISIONING_TIMEOUT, value: {{ .Values.sandboxPolicy.providerProvisioningTimeout | quote }} }
-            - { name: SANDBOX_PROVIDER_SESSION_TTL, value: {{ .Values.sandboxPolicy.providerSessionTTL | quote }} }
+            - { name: AGENTAREA_LOG_LEVEL, value: {{ .Values.dataPlane.logLevel | quote }} }
+            - { name: AGENTAREA_SANDBOX_LEASE_TTL, value: {{ .Values.sandboxPolicy.taskLeaseTTL | quote }} }
+            - { name: AGENTAREA_SANDBOX_IDLE_TTL, value: {{ .Values.sandboxPolicy.taskIdleTTL | quote }} }
+            - { name: AGENTAREA_SANDBOX_PROVISION_TIMEOUT, value: {{ .Values.sandboxPolicy.providerProvisioningTimeout | quote }} }
+            - { name: AGENTAREA_SANDBOX_SESSION_TTL, value: {{ .Values.sandboxPolicy.providerSessionTTL | quote }} }
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

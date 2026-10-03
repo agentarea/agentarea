@@ -21,13 +21,13 @@ print_error() {
 }
 
 # API base URLs
-MCP_MANAGER_URL="http://localhost/api/mcp"
+AGENTAREA_MCP_MANAGER_URL="http://localhost/api/mcp"
 
 print_status "🚀 Testing AgentArea MCP Infrastructure with Simple MCP Servers..."
 
 # Test 1: Check MCP Manager health
 print_status "1. Testing MCP Manager health..."
-if curl -f -s "$MCP_MANAGER_URL/health" > /dev/null; then
+if curl -f -s "$AGENTAREA_MCP_MANAGER_URL/health" > /dev/null; then
     print_success "MCP Manager is healthy"
 else
     print_error "MCP Manager is not responding"
@@ -52,14 +52,14 @@ for i in {1..3}; do
       "port": 8000,
       "environment": {
         "MCP_SERVICE_NAME": "'$CONTAINER_NAME'",
-        "LOG_LEVEL": "INFO"
+        "AGENTAREA_LOG_LEVEL": "INFO"
       },
       "memory_limit": "256m",
       "cpu_limit": "0.5"
     }'
 
     print_status "Starting $CONTAINER_NAME..."
-    RESPONSE=$(curl -s -X POST "$MCP_MANAGER_URL/containers/$CONTAINER_NAME/start" \
+    RESPONSE=$(curl -s -X POST "$AGENTAREA_MCP_MANAGER_URL/containers/$CONTAINER_NAME/start" \
       -H "Content-Type: application/json" \
       -d "$CONTAINER_CONFIG")
 
@@ -194,7 +194,7 @@ fi
 print_status "8. Testing container management..."
 
 # List all containers
-LIST_CONTAINERS_RESPONSE=$(curl -s "$MCP_MANAGER_URL/containers")
+LIST_CONTAINERS_RESPONSE=$(curl -s "$AGENTAREA_MCP_MANAGER_URL/containers")
 CONTAINER_COUNT=$(echo "$LIST_CONTAINERS_RESPONSE" | grep -o "mcp-server-" | wc -l)
 
 if [ "$CONTAINER_COUNT" -eq 3 ]; then
@@ -204,7 +204,7 @@ else
 fi
 
 # Get status of one container
-STATUS_RESPONSE=$(curl -s "$MCP_MANAGER_URL/containers/mcp-server-1/status")
+STATUS_RESPONSE=$(curl -s "$AGENTAREA_MCP_MANAGER_URL/containers/mcp-server-1/status")
 if echo "$STATUS_RESPONSE" | grep -q "running"; then
     print_success "Container status check passed"
 else

@@ -6,7 +6,7 @@ Follows dependency inversion principle strictly.
 
 import logging
 
-from agentarea_common.config import WorkflowSettings, get_settings
+from agentarea_common.config import TemporalSettings, get_settings
 
 from ..application.execution_service import ExecutionService, WorkflowOrchestratorInterface
 from .workflow_factory import WorkflowFactory
@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 class DIContainer:
     """Dependency injection container for agent services."""
 
-    def __init__(self, workflow_settings: WorkflowSettings):
+    def __init__(self, workflow_settings: TemporalSettings):
         """Initialize container with injected configuration."""
         if not workflow_settings:
-            raise ValueError("WorkflowSettings must be provided - no defaults allowed")
+            raise ValueError("TemporalSettings must be provided - no defaults allowed")
 
         self._workflow_settings = workflow_settings
         self._workflow_factory: WorkflowFactory | None = None
@@ -53,28 +53,27 @@ class DIContainer:
 
 
 class _WorkflowConfigAdapter:
-    """Adapter to convert WorkflowSettings to WorkflowConfig protocol."""
+    """Adapter to convert TemporalSettings to WorkflowConfig protocol."""
 
-    def __init__(self, settings: WorkflowSettings):
+    def __init__(self, settings: TemporalSettings):
         # Map settings to protocol attributes
-        self.temporal_address: str = settings.TEMPORAL_SERVER_URL
-        self.task_queue: str = settings.TEMPORAL_TASK_QUEUE
-        self.max_concurrent_activities: int = settings.TEMPORAL_MAX_CONCURRENT_ACTIVITIES
-        self.max_concurrent_workflows: int = settings.TEMPORAL_MAX_CONCURRENT_WORKFLOWS
+        self.task_queue: str = settings.QUEUE
+        self.max_concurrent_activities: int = settings.MAX_ACTIVITIES
+        self.max_concurrent_workflows: int = settings.MAX_WORKFLOWS
 
 
 # Global DI container - initialized with proper config injection
 _di_container: DIContainer | None = None
 
 
-def initialize_di_container(workflow_settings: WorkflowSettings | None = None) -> None:
+def initialize_di_container(workflow_settings: TemporalSettings | None = None) -> None:
     """Initialize the global DI container with configuration."""
     global _di_container
 
     if workflow_settings is None:
         # Get from global config - still proper injection, just from global source
         settings = get_settings()
-        workflow_settings = settings.workflow
+        workflow_settings = settings.temporal
 
     _di_container = DIContainer(workflow_settings)
     logger.info("Initialized DI container with workflow settings")

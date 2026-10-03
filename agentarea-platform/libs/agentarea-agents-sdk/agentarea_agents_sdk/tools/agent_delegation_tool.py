@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # calls can legitimately need several minutes — so the old 120s abandoned
 # still-working sub-agents and forced the coordinator to fall back. Default to
 # a task-scale horizon; override via env for longer/shorter delegations.
-DELEGATION_POLL_TIMEOUT = float(os.getenv("AGENT_DELEGATION_POLL_TIMEOUT", "600"))
+DELEGATION_POLL_TIMEOUT = float(os.getenv("AGENTAREA_TASK_DELEGATION_TIMEOUT", "600"))
 DELEGATION_POLL_INTERVAL = 2.0
 
 

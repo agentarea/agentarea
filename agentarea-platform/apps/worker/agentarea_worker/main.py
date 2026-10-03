@@ -9,14 +9,19 @@ import asyncio
 import logging
 import signal
 import sys
-from datetime import timedelta
 from typing import Any
 
 import dotenv
 
 # Initialize DI container with proper config injection
 from agentarea_agents.infrastructure.di_container import initialize_di_container
-from agentarea_common.config import get_app_settings, get_settings
+from agentarea_common.config import (
+    RedisSettings,
+    Settings,
+    get_app_settings,
+    get_settings,
+    temporal_connect_config,
+)
 from agentarea_common.events.factory import create_event_broker
 from agentarea_common.logging import setup_logging
 from agentarea_common.observability import get_temporal_plugins, setup_otel
@@ -48,6 +53,23 @@ setup_logging(
 logger = logging.getLogger(__name__)
 
 
+def _redis_url(settings: Settings) -> str:
+    """The Redis URL the channel machinery needs, or a loud failure.
+
+    ``settings.broker`` is RedisSettings or KafkaSettings depending on
+    AGENTAREA_BROKER, and only the former carries a URL. Defaulting to
+    localhost here would let a misconfigured worker start and then fail
+    connecting, which is how it reported "Connect call failed" against
+    localhost while compose had handed it redis://valkey:6379.
+    """
+    if not isinstance(settings.broker, RedisSettings):
+        raise RuntimeError(
+            "Channel delivery requires the Redis broker; set AGENTAREA_BROKER=redis "
+            f"(current: {settings.broker.BROKER})"
+        )
+    return settings.broker.REDIS_URL
+
+
 def create_activity_dependencies() -> ActivityDependencies:
     """Create basic dependencies needed by activities.
 
@@ -71,8 +93,7 @@ def create_activity_dependencies() -> ActivityDependencies:
     # lossy pub/sub bridge.
     from agentarea_common.broker import RedisStreamsBroker
 
-    redis_url = getattr(settings.broker, "REDIS_URL", "redis://localhost:6379")
-    broker_client = RedisStreamsBroker(redis_url)
+    broker_client = RedisStreamsBroker(_redis_url(settings))
 
     return ActivityDependencies(
         settings=settings,
@@ -118,8 +139,7 @@ class AgentAreaWorker:
         settings = get_settings()
         setup_otel("agentarea-worker", settings.observability)
         self.client = await Client.connect(
-            settings.workflow.TEMPORAL_SERVER_URL,
-            namespace=settings.workflow.TEMPORAL_NAMESPACE,
+            **temporal_connect_config(),
             data_converter=pydantic_data_converter,
             plugins=get_temporal_plugins(settings.observability),
         )
@@ -149,7 +169,7 @@ class AgentAreaWorker:
         mcp_activities = make_mcp_activities(dependencies)
 
         # Initialize DI container for workflows
-        initialize_di_container(settings.workflow)
+        initialize_di_container(settings.temporal)
 
         # Discover extensions and wire permission service
         from agentarea_common.auth.authorization import AuthorizationService
@@ -174,37 +194,37 @@ class AgentAreaWorker:
         logger.info("Billing currency: %s", get_customer_pricing().currency())
 
         app_settings = get_app_settings()
-        mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
+        mode = DeploymentMode(app_settings.EDITION)
         register_singleton(FeatureService, FeatureService(mode=mode))
 
         openfga_client = None
-        if settings.access_control.ACCESS_CONTROL_BACKEND == "openfga":
+        if settings.access_control.BACKEND == "openfga":
             from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
             from agentarea_common.rebac.openfga_client import OpenFGAClient
 
-            if not settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN:
+            if not settings.openfga.API_TOKEN:
                 logger.warning(
-                    "ACCESS_CONTROL_OPENFGA_API_TOKEN is not set: OpenFGA calls are "
-                    "unauthenticated. Set ACCESS_CONTROL_OPENFGA_API_TOKEN and the "
+                    "AGENTAREA_AUTHZ_FGA_API_TOKEN is not set: OpenFGA calls are "
+                    "unauthenticated. Set AGENTAREA_AUTHZ_FGA_API_TOKEN and the "
                     "server's OPENFGA_AUTHN_PRESHARED_KEYS to require a bearer token."
                 )
             await bootstrap_openfga(settings.openfga)
             openfga_client = OpenFGAClient(
-                api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-                store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-                authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-                timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
-                api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
+                api_url=settings.openfga.URL,
+                store_id=settings.openfga.STORE_ID,
+                authorization_model_id=settings.openfga.MODEL_ID,
+                timeout_seconds=settings.openfga.TIMEOUT.total_seconds(),
+                api_token=settings.openfga.API_TOKEN or None,
             )
             register_singleton(OpenFGAClient, openfga_client)
 
         # PermissionService is a SELECTOR extension point: exactly one impl is
-        # active, and an EXPLICIT ACCESS_CONTROL_BACKEND must win over a merely
+        # active, and an EXPLICIT AGENTAREA_AUTHZ_BACKEND must win over a merely
         # installed "permissions" extension. (Previously the extension was checked
         # first and silently overrode the configured backend, so OpenFGA never
         # enforced.) The extension is a FALLBACK, used only when the operator did
         # not select a concrete backend. See AGENTS.md "Extension points".
-        backend = settings.access_control.ACCESS_CONTROL_BACKEND
+        backend = settings.access_control.BACKEND
         perm_factory = ExtensionRegistry.get_factory("permissions")
         if openfga_client is not None:
             from agentarea_common.auth.openfga_permission import OpenFGAPermissionService
@@ -216,22 +236,22 @@ class AgentAreaWorker:
             perm_impl = "extension:permissions"
         else:
             raise RuntimeError(
-                "No PermissionService is available: ACCESS_CONTROL_BACKEND="
+                "No PermissionService is available: AGENTAREA_AUTHZ_BACKEND="
                 f"{backend!r} selects no graph backend and no 'permissions' extension "
                 "is installed. Refusing to start rather than falling back to an "
                 "implementation that allows every check -- an authorization backend "
                 "that is merely absent must not read as permission granted. Set "
-                "ACCESS_CONTROL_BACKEND=openfga and point it at a running instance."
+                "AGENTAREA_AUTHZ_BACKEND=openfga and point it at a running instance."
             )
 
         if perm_factory and perm_impl != "extension:permissions":
             logger.warning(
-                "Ignoring registered 'permissions' extension: ACCESS_CONTROL_BACKEND=%s "
+                "Ignoring registered 'permissions' extension: AGENTAREA_AUTHZ_BACKEND=%s "
                 "selects %s explicitly. An extension cannot override an explicit backend.",
                 backend,
                 perm_impl,
             )
-        logger.info("PermissionService=%s (ACCESS_CONTROL_BACKEND=%s)", perm_impl, backend)
+        logger.info("PermissionService=%s (AGENTAREA_AUTHZ_BACKEND=%s)", perm_impl, backend)
 
         authz_factory = ExtensionRegistry.get_factory("authorization")
         if authz_factory:
@@ -252,19 +272,17 @@ class AgentAreaWorker:
 
         self.worker = Worker(
             self.client,
-            task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
+            task_queue=settings.temporal.QUEUE,
             workflows=[
                 AgentExecutionWorkflow,
             ],
             activities=activities + mcp_activities,
             interceptors=[GovernanceWorkerInterceptor(governance_pipeline)],
             workflow_runner=create_workflow_runner(),
-            max_concurrent_workflow_tasks=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,
-            max_concurrent_activities=settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,
-            max_cached_workflows=settings.workflow.TEMPORAL_MAX_CACHED_WORKFLOWS,
-            graceful_shutdown_timeout=timedelta(
-                seconds=settings.workflow.TEMPORAL_GRACEFUL_SHUTDOWN_SECONDS
-            ),
+            max_concurrent_workflow_tasks=settings.temporal.MAX_WORKFLOWS,
+            max_concurrent_activities=settings.temporal.MAX_ACTIVITIES,
+            max_cached_workflows=settings.temporal.MAX_CACHED,
+            graceful_shutdown_timeout=settings.temporal.SHUTDOWN_GRACE,
         )
 
         # Create trigger execution worker on the trigger-schedules queue
@@ -326,7 +344,7 @@ class AgentAreaWorker:
         from agentarea_triggers.channels.origin_guard import TriggerWorkspaceGuard
 
         settings = get_settings()
-        redis_url = getattr(settings.broker, "REDIS_URL", "redis://localhost:6379")
+        redis_url = _redis_url(settings)
         delivery_cfg = settings.channel_delivery
 
         # Broker comes from dependencies — same instance the activity uses
@@ -337,12 +355,12 @@ class AgentAreaWorker:
         self._dedup = DedupCache(
             redis_url,
             prefix="channel-delivery",
-            ttl_seconds=delivery_cfg.DEDUP_TTL_SECONDS,
+            ttl_seconds=int(delivery_cfg.DEDUP_TTL.total_seconds()),
         )
         self._inbound_dedup = DedupCache(
             redis_url,
             prefix="channel-inbound",
-            ttl_seconds=delivery_cfg.DEDUP_TTL_SECONDS,
+            ttl_seconds=int(delivery_cfg.DEDUP_TTL.total_seconds()),
         )
 
         # Inbound: event-service webhook/polling → Redis Streams → Python task execution
@@ -352,20 +370,20 @@ class AgentAreaWorker:
             event_broker=dependencies.event_broker,
             secret_manager_factory=dependencies.secret_manager_factory,
             workflow_executor=dependencies.workflow_executor,
-            stream=delivery_cfg.INBOUND_STREAM,
-            group=delivery_cfg.INBOUND_GROUP,
-            dlq_stream=delivery_cfg.INBOUND_DLQ,
-            block_ms=delivery_cfg.CONSUMER_BLOCK_MS,
-            batch_size=delivery_cfg.CONSUMER_BATCH_SIZE,
-            max_delivery_attempts=delivery_cfg.MAX_DELIVERY_ATTEMPTS,
+            stream=delivery_cfg.IN_STREAM,
+            group=delivery_cfg.IN_GROUP,
+            dlq_stream=delivery_cfg.IN_DLQ,
+            block_ms=int(delivery_cfg.BLOCK.total_seconds() * 1000),
+            batch_size=delivery_cfg.BATCH_SIZE,
+            max_delivery_attempts=delivery_cfg.MAX_ATTEMPTS,
         )
         self.inbound_autoclaimer = StreamAutoclaimer(
             broker=self._broker,
-            stream=delivery_cfg.INBOUND_STREAM,
-            group=delivery_cfg.INBOUND_GROUP,
+            stream=delivery_cfg.IN_STREAM,
+            group=delivery_cfg.IN_GROUP,
             consumer_id="inbound-autoclaimer",
-            min_idle_ms=delivery_cfg.AUTOCLAIM_MIN_IDLE_MS,
-            interval_seconds=delivery_cfg.AUTOCLAIM_INTERVAL_SECONDS,
+            min_idle_ms=int(delivery_cfg.AUTOCLAIM_IDLE.total_seconds() * 1000),
+            interval_seconds=delivery_cfg.AUTOCLAIM_EVERY.total_seconds(),
         )
 
         # Register adapters; they raise typed Retryable/Fatal errors that the
@@ -379,20 +397,20 @@ class AgentAreaWorker:
             dedup=self._dedup,
             adapter_resolver=get_adapter,
             origin_guard=TriggerWorkspaceGuard(get_database().async_session_factory),
-            stream=delivery_cfg.OUTBOUND_STREAM,
-            group=delivery_cfg.OUTBOUND_GROUP,
-            dlq_stream=delivery_cfg.OUTBOUND_DLQ,
-            block_ms=delivery_cfg.CONSUMER_BLOCK_MS,
-            batch_size=delivery_cfg.CONSUMER_BATCH_SIZE,
-            max_delivery_attempts=delivery_cfg.MAX_DELIVERY_ATTEMPTS,
+            stream=delivery_cfg.OUT_STREAM,
+            group=delivery_cfg.OUT_GROUP,
+            dlq_stream=delivery_cfg.OUT_DLQ,
+            block_ms=int(delivery_cfg.BLOCK.total_seconds() * 1000),
+            batch_size=delivery_cfg.BATCH_SIZE,
+            max_delivery_attempts=delivery_cfg.MAX_ATTEMPTS,
         )
         self.delivery_autoclaimer = StreamAutoclaimer(
             broker=self._broker,
-            stream=delivery_cfg.OUTBOUND_STREAM,
-            group=delivery_cfg.OUTBOUND_GROUP,
+            stream=delivery_cfg.OUT_STREAM,
+            group=delivery_cfg.OUT_GROUP,
             consumer_id="autoclaimer",
-            min_idle_ms=delivery_cfg.AUTOCLAIM_MIN_IDLE_MS,
-            interval_seconds=delivery_cfg.AUTOCLAIM_INTERVAL_SECONDS,
+            min_idle_ms=int(delivery_cfg.AUTOCLAIM_IDLE.total_seconds() * 1000),
+            interval_seconds=delivery_cfg.AUTOCLAIM_EVERY.total_seconds(),
         )
 
         # Transactional outbox relay: drains event_outbox rows (written in the

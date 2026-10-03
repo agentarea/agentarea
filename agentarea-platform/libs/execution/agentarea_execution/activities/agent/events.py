@@ -110,7 +110,7 @@ def make_events_activities(
                         str(stored.task_id),
                         parameters_of,
                         dependencies.broker_client,
-                        dependencies.channel_delivery_settings.OUTBOUND_STREAM,
+                        dependencies.channel_delivery_settings.OUT_STREAM,
                     )
         except Exception:
             logger.error(

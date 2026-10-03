@@ -26,7 +26,7 @@ def mock_s3_client():
 def mock_aws_settings():
     """Create mock AWS settings."""
     settings = MagicMock()
-    settings.ARTIFACTS_BUCKET_NAME = "test-bucket"
+    settings.ARTIFACTS_BUCKET = "test-bucket"
     return settings
 
 

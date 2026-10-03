@@ -8,7 +8,7 @@
  * logged-in" shell.
  */
 
-import { KRATOS_WHOAMI_TIMEOUT_MS } from "./server-timeouts";
+import { AGENTAREA_AUTH_WHOAMI_TIMEOUT } from "./server-timeouts";
 
 const PUBLIC_ROUTE_PREFIXES = ["/auth", "/error", "/404", "/500"];
 
@@ -87,7 +87,7 @@ async function fetchWhoami(
         // Bound the middleware gate: this runs before any route renders, so a
         // stalled Kratos here would block the first byte of every page. Fail
         // closed (treat as no session) rather than hang.
-        signal: AbortSignal.timeout(KRATOS_WHOAMI_TIMEOUT_MS),
+        signal: AbortSignal.timeout(AGENTAREA_AUTH_WHOAMI_TIMEOUT),
       }
     );
 

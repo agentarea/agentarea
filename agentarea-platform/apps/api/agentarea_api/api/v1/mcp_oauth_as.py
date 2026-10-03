@@ -27,14 +27,14 @@ import httpx
 from agentarea_agents_sdk.mcp_server.auth import WORKSPACE_REFERENCE_PATTERN
 from agentarea_api.api.rate_limit import limit_oauth_registration
 from agentarea_common.auth.route_authz import unrestricted
-from agentarea_common.config import get_settings
+from agentarea_common.config import get_auth_settings, get_settings
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 oauth_as_router = APIRouter(tags=["oauth-as"])
 
 # Conservative allowlist for the proxied /oauth2/{path} subpath. The host is
-# fixed to HYDRA_PUBLIC_URL, so the caller can only influence the path/query;
+# fixed to HYDRA_URL, so the caller can only influence the path/query;
 # restrict the path to OAuth2-style identifiers and forbid parent traversal so a
 # request cannot escape /oauth2/ on the Hydra host (partial-SSRF hardening).
 _SAFE_OAUTH2_SUBPATH = re.compile(r"^[A-Za-z0-9._~/-]+$")
@@ -59,7 +59,7 @@ def _is_safe_oauth2_subpath(path: str) -> bool:
 
 
 def _hydra_public_url() -> str:
-    return get_settings().mcp.HYDRA_PUBLIC_URL.rstrip("/")
+    return get_auth_settings().HYDRA_URL.rstrip("/")
 
 
 # Hydra's discovery document, fetched once and reused.
@@ -113,7 +113,7 @@ def _is_protected_resource(resource_path: str) -> bool:
 async def _protected_resource_metadata(resource_path: str) -> JSONResponse:
     """RFC 9728: advertise the authorization server that actually issues tokens."""
     settings = get_settings()
-    api_base = settings.app.API_BASE_URL.rstrip("/")
+    api_base = settings.app.API_URL.rstrip("/")
 
     # Hydra mints the tokens, so Hydra — not this API — is the authorization
     # server identity. Its issuer ends up in the token's `iss`, and clients that
@@ -157,7 +157,7 @@ async def _protected_resource_metadata(resource_path: str) -> JSONResponse:
             # be assembled field by field above — this is the resource half of
             # that fix. Sourced from the one setting that decides what this
             # server issues, so the two cannot drift apart.
-            "scopes_supported": settings.mcp.MCP_OAUTH_SCOPES.split(),
+            "scopes_supported": settings.mcp.OAUTH_SCOPES.split(),
             "bearer_methods_supported": ["header"],
         }
     )
@@ -205,7 +205,7 @@ async def oauth_authorization_server_metadata() -> JSONResponse:
     still get the Hydra endpoints, rewritten to point to our proxy paths.
     """
     settings = get_settings()
-    api_base = settings.app.API_BASE_URL.rstrip("/")
+    api_base = settings.app.API_URL.rstrip("/")
     hydra_url = _hydra_public_url()
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(5)) as client:
@@ -245,7 +245,7 @@ async def oauth_authorization_server_metadata() -> JSONResponse:
 
 # ---------------------------------------------------------------------------
 # Hydra OAuth2 proxy — forward oauth2/* and related paths to Hydra
-# This lets Cursor use our API_BASE_URL as the single AS URL for all ops.
+# This lets Cursor use our AGENTAREA_API_URL as the single AS URL for all ops.
 # ---------------------------------------------------------------------------
 
 
@@ -268,8 +268,7 @@ async def hydra_auth_redirect(request: Request) -> Response:
     """
     from fastapi.responses import RedirectResponse
 
-    settings = get_settings()
-    hydra_browser = settings.mcp.HYDRA_BROWSER_URL.rstrip("/")
+    hydra_browser = get_auth_settings().HYDRA_BROWSER_URL.rstrip("/")
     target = f"{hydra_browser}/oauth2/auth"
     if request.url.query:
         target = f"{target}?{request.url.query}"
@@ -310,14 +309,14 @@ async def hydra_dcr_proxy(request: Request) -> Response:
 
     We inject server-side defaults:
       - skip_consent: true — MCP clients accessing their own workspace don't need consent
-      - audience: [API_BASE_URL] — ensures issued JWTs have the correct audience for validation
+      - audience: [AGENTAREA_API_URL] — ensures issued JWTs have the correct audience for validation
       - grant_types / scope — so the client can refresh instead of re-authorizing
     """
     import json as _json
 
     settings = get_settings()
-    admin_url = settings.mcp.HYDRA_ADMIN_URL.rstrip("/")
-    api_base = settings.app.API_BASE_URL.rstrip("/")
+    admin_url = get_auth_settings().HYDRA_ADMIN_URL.rstrip("/")
+    api_base = settings.app.API_URL.rstrip("/")
 
     try:
         client_data = _json.loads(await request.body())
@@ -373,7 +372,7 @@ async def hydra_dcr_proxy(request: Request) -> Response:
     client_data["grant_types"] = granted
 
     # Cap the requested scope to what this authorization server issues.
-    allowed_scopes = set(settings.mcp.MCP_OAUTH_SCOPES.split())
+    allowed_scopes = set(settings.mcp.OAUTH_SCOPES.split())
     requested_scopes = set(str(client_data.get("scope", "")).split())
     granted_scopes = requested_scopes & allowed_scopes if requested_scopes else allowed_scopes
     if not granted_scopes:

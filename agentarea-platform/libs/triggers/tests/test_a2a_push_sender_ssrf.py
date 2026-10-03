@@ -27,8 +27,8 @@ async def test_push_targets_ignore_the_deployments_private_allowances(monkeypatc
     """A push URL is chosen by an A2A client, not a member: no allowlist, no opt-out."""
     from agentarea_common.config import get_settings
 
-    monkeypatch.setenv("ALLOW_PRIVATE_URLS", "true")
-    monkeypatch.setenv("OUTBOUND_PRIVATE_ALLOWLIST", "127.0.0.0/8")
+    monkeypatch.setenv("AGENTAREA_HTTP_ALLOW_PRIVATE", "true")
+    monkeypatch.setenv("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", "127.0.0.0/8")
     get_settings.cache_clear()
     try:
         send = make_a2a_webhook_sender(_Reader())
