@@ -147,6 +147,7 @@ class DelegationMixin(ToolApprovalMixin):
                 workspace_id=self.state.workspace_id,
                 parent_effective_policy=self.state.effective_policy,
                 run_budget_usd=run_budget_usd,
+                evaluation=(self._workflow_metadata or {}).get("evaluation"),
             )
             create_task_result: CreateDelegationTaskResult = await workflow.execute_activity(
                 Activities.CREATE_DELEGATION_TASK,
@@ -182,6 +183,11 @@ class DelegationMixin(ToolApprovalMixin):
                     "parent_execution_id": self.state.execution_id,
                     "parent_agent_id": self.state.agent_id,
                     "parent_task_id": self.state.task_id,
+                    **(
+                        {"evaluation": self._workflow_metadata["evaluation"]}
+                        if (self._workflow_metadata or {}).get("evaluation")
+                        else {}
+                    ),
                 },
                 effective_policy=create_task_result.effective_policy,
             )

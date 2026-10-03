@@ -97,6 +97,7 @@ def _real_task_service(*, supports_scheduling=True):
         policy_resolver=policy_resolver,
     )
     svc.create_task = AsyncMock(side_effect=lambda t: t)
+    svc._pin_run = AsyncMock(return_value=None)
     return svc, task_manager
 
 

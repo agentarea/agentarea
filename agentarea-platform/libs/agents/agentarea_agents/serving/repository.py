@@ -15,7 +15,9 @@ class AgentRevisionRepository(WorkspaceScopedRepository[AgentRevision]):
     async def get_for_agent(self, agent_id: UUID, revision_id: UUID) -> AgentRevision | None:
         result = await self.session.execute(
             select(AgentRevision).where(
-                AgentRevision.id == revision_id, AgentRevision.agent_id == agent_id
+                AgentRevision.id == revision_id,
+                AgentRevision.agent_id == agent_id,
+                self._get_workspace_filter(),
             )
         )
         return result.scalar_one_or_none()
@@ -23,13 +25,15 @@ class AgentRevisionRepository(WorkspaceScopedRepository[AgentRevision]):
     async def list_for_agent(self, agent_id: UUID) -> list[AgentRevision]:
         result = await self.session.execute(
             select(AgentRevision)
-            .where(AgentRevision.agent_id == agent_id)
+            .where(AgentRevision.agent_id == agent_id, self._get_workspace_filter())
             .order_by(AgentRevision.number.desc())
         )
         return list(result.scalars().all())
 
     async def next_number(self, agent_id: UUID) -> int:
         result = await self.session.execute(
-            select(func.max(AgentRevision.number)).where(AgentRevision.agent_id == agent_id)
+            select(func.max(AgentRevision.number)).where(
+                AgentRevision.agent_id == agent_id, self._get_workspace_filter()
+            )
         )
         return (result.scalar_one_or_none() or 0) + 1

@@ -273,6 +273,12 @@ class ToolApprovalMixin(BudgetMixin):
             await self._deny_tool_call(tool_call, tool_name, "not permitted by policy")
             return False
         if decision is ToolAction.REQUIRE_APPROVAL:
+            if (self._workflow_metadata or {}).get("evaluation"):
+                # Nobody answers approvals in an evaluation run. Its tool calls
+                # cannot act outside the run (see evaluation_mode), and the
+                # person who started the run allowed what does execute.
+                workflow.logger.info(f"Tool '{tool_name}' approval skipped in evaluation run")
+                return True
             return await self._require_tool_approval(tool_call, tool_name, tool_args)
         return True
 

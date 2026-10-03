@@ -2,6 +2,7 @@
 
 import functools
 import itertools
+import json
 import logging
 from collections.abc import Awaitable, Callable
 from decimal import Decimal
@@ -23,6 +24,7 @@ from agentarea_wallet.domain.enums import settlement_status
 from prometheus_client import Counter
 from temporalio import activity
 
+from ...evaluation_mode import NOT_EXECUTED, EvaluationDecision, evaluation_decision
 from ...interfaces import ActivityDependencies
 from ...models import MCPToolRequest, MCPToolResult, McpToolRoute
 from ..heartbeat import auto_heartbeater
@@ -69,6 +71,19 @@ def mcp_route_denial(tools: list[dict[str, Any]] | None, route: McpToolRoute) ->
     if enabled is not None and route.raw_name not in enabled:
         return "the tool is not enabled for this agent"
     return None
+
+
+def _evaluation_result(decision: EvaluationDecision) -> MCPToolResult:
+    if decision.stubbed:
+        result = decision.result
+        return MCPToolResult(
+            success=True,
+            result=result if isinstance(result, str) else json.dumps(result),
+            outcome="stubbed",
+        )
+    return MCPToolResult(
+        success=False, result=decision.reason, error=NOT_EXECUTED, outcome=NOT_EXECUTED
+    )
 
 
 def _deny_tool_result(tool_name: str, reason: str) -> MCPToolResult:
@@ -182,6 +197,11 @@ def make_tools_activities(
             )
         if not decision.allowed:
             return _deny_tool_result(request.tool_name, decision.reason)
+        evaluation = evaluation_decision(
+            request.tool_name, request.metadata, is_mcp=request.mcp_route is not None
+        )
+        if evaluation is not None and not evaluation.execute:
+            return _evaluation_result(evaluation)
 
         user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:

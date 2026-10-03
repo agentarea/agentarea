@@ -178,6 +178,17 @@ export const zArchivedFileResponse = z.object({
 });
 
 /**
+ * ArmResponse
+ */
+export const zArmResponse = z.object({
+  failure_rate: z.number().nullable(),
+  failures: z.number().int(),
+  mean_cost: z.number().nullable(),
+  runs: z.number().int(),
+  successes: z.number().int(),
+});
+
+/**
  * ArtifactEventResponse
  */
 export const zArtifactEventResponse = z.object({
@@ -388,6 +399,40 @@ export const zBundleSkill = z.object({
   name: z.string().min(1),
   source_type: z.enum(["content", "github"]).optional().default("content"),
   source_url: z.string().nullish(),
+});
+
+/**
+ * CaseCreate
+ */
+export const zCaseCreate = z.object({
+  checks: z.array(z.record(z.unknown())).max(50).optional(),
+  input: z.string().min(1),
+  name: z.string().min(1).max(200),
+  parameters: z.record(z.unknown()).optional(),
+  stubs: z.record(z.unknown()).optional(),
+});
+
+/**
+ * CaseFromTask
+ */
+export const zCaseFromTask = z.object({
+  name: z.string().max(200).nullish(),
+  task_id: z.string().uuid(),
+});
+
+/**
+ * CaseResponse
+ */
+export const zCaseResponse = z.object({
+  checks: z.array(z.record(z.unknown())),
+  created_at: z.string().datetime(),
+  id: z.string().uuid(),
+  input: z.string(),
+  name: z.string(),
+  parameters: z.record(z.unknown()),
+  source_task_id: z.string().uuid().nullable(),
+  stubs: z.record(z.unknown()),
+  suite_id: z.string().uuid(),
 });
 
 /**
@@ -678,6 +723,17 @@ export const zDailyTaskCounts = z.object({
 });
 
 /**
+ * DecisionResponse
+ */
+export const zDecisionResponse = z.object({
+  action: z.string(),
+  exposure: z.number().int().nullable(),
+  p_better: z.number().nullable(),
+  p_regression: z.number().nullable(),
+  reason: z.string(),
+});
+
+/**
  * DiscoverPreviewRequest
  */
 export const zDiscoverPreviewRequest = z.object({
@@ -714,6 +770,86 @@ export const zEscalationResolution = z.object({
   approved: z.boolean(),
   comment: z.string().optional().default(""),
   escalation_id: z.string(),
+});
+
+/**
+ * EvalRunCreate
+ */
+export const zEvalRunCreate = z.object({
+  allow_sandbox: z.boolean().optional().default(false),
+  baseline_revision_id: z.string().uuid().nullish(),
+  budget_usd: z.union([
+    z.number().gt(0),
+    z
+      .string()
+      .regex(
+        /^(?!^[-+.]*$)[+-]?0*(?:\d{0,8}|(?=[\d.]{1,13}0*$)\d{0,8}\.\d{0,4}0*$)/
+      ),
+  ]),
+  candidate_revision_id: z.string().uuid().nullish(),
+  concurrency: z.number().int().gte(1).lte(10).optional().default(3),
+  suite_id: z.string().uuid(),
+  trials: z.number().int().gte(1).lte(20).optional().default(3),
+});
+
+/**
+ * EvalRunResponse
+ */
+export const zEvalRunResponse = z.object({
+  agent_id: z.string().uuid(),
+  baseline_revision_id: z.string().uuid(),
+  budget_usd: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  candidate_revision_id: z.string().uuid().nullable(),
+  completed_at: z.string().datetime().nullable(),
+  concurrency: z.number().int(),
+  cost_usd: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  created_at: z.string().datetime(),
+  id: z.string().uuid(),
+  started_at: z.string().datetime().nullable(),
+  status: z.string(),
+  stop_reason: z.string().nullable(),
+  suite_id: z.string().uuid(),
+  summary: z.record(z.unknown()),
+  trials: z.number().int(),
+});
+
+/**
+ * EvalTrialResponse
+ */
+export const zEvalTrialResponse = z.object({
+  arm: z.string(),
+  attempt: z.number().int(),
+  case_id: z.string().uuid(),
+  check_results: z.array(z.record(z.unknown())),
+  cost_usd: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  error: z.string().nullable(),
+  id: z.string().uuid(),
+  passed: z.boolean().nullable(),
+  status: z.string(),
+  task_id: z.string().uuid().nullable(),
+});
+
+/**
+ * EvalRunDetail
+ */
+export const zEvalRunDetail = z.object({
+  agent_id: z.string().uuid(),
+  baseline_revision_id: z.string().uuid(),
+  budget_usd: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  candidate_revision_id: z.string().uuid().nullable(),
+  cases: z.array(zCaseResponse),
+  completed_at: z.string().datetime().nullable(),
+  concurrency: z.number().int(),
+  cost_usd: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  created_at: z.string().datetime(),
+  id: z.string().uuid(),
+  started_at: z.string().datetime().nullable(),
+  status: z.string(),
+  stop_reason: z.string().nullable(),
+  suite_id: z.string().uuid(),
+  summary: z.record(z.unknown()),
+  trials: z.number().int(),
+  trials_detail: z.array(zEvalTrialResponse),
 });
 
 /**
@@ -774,6 +910,38 @@ export const zExecutionTimelineResponse = z.object({
 });
 
 /**
+ * ExperimentCreate
+ */
+export const zExperimentCreate = z.object({
+  auto_promote: z.boolean(),
+  candidate_revision_id: z.string().uuid(),
+  max_duration_days: z.number().int().gte(1).lte(90).nullish(),
+  regression_margin: z.number().gt(0).lt(0.5).nullish(),
+  steps: z.array(z.number().int()).nullish(),
+});
+
+/**
+ * ExperimentResponse
+ */
+export const zExperimentResponse = z.object({
+  agent_id: z.string().uuid(),
+  candidate: zArmResponse,
+  candidate_revision_id: z.string().uuid(),
+  control: zArmResponse,
+  control_revision_id: z.string().uuid(),
+  decisions: z.array(z.record(z.unknown())),
+  ended_at: z.string().datetime().nullable(),
+  id: z.string().uuid(),
+  last_evaluated_at: z.string().datetime().nullable(),
+  offline_passed: z.boolean(),
+  policy: z.record(z.unknown()),
+  started_at: z.string().datetime(),
+  status: z.string(),
+  stop_reason: z.string().nullable(),
+  weights: z.record(z.number().int()),
+});
+
+/**
  * FailedTaskBlocker
  */
 export const zFailedTaskBlocker = z.object({
@@ -782,6 +950,37 @@ export const zFailedTaskBlocker = z.object({
   error: z.string().nullable(),
   occurred_at: z.string(),
   task_id: z.string().uuid(),
+});
+
+/**
+ * FeedbackCreate
+ */
+export const zFeedbackCreate = z.object({
+  comment: z.string().max(2000).nullish(),
+  event_id: z.string().max(255).nullish(),
+  rating: z.enum(["good", "bad"]),
+});
+
+/**
+ * FeedbackResponse
+ */
+export const zFeedbackResponse = z.object({
+  comment: z.string().nullable(),
+  created_at: z.string().datetime(),
+  created_by: z.string(),
+  event_id: z.string().nullable(),
+  id: z.string().uuid(),
+  rating: z.string(),
+  task_id: z.string().uuid(),
+});
+
+/**
+ * FieldChange
+ */
+export const zFieldChange = z.object({
+  after: z.unknown(),
+  before: z.unknown(),
+  field: z.string(),
 });
 
 /**
@@ -2311,6 +2510,64 @@ export const zRestoredFileResponse = z.object({
 });
 
 /**
+ * RevisionCreate
+ *
+ * A candidate: only the fields named here change; what serves does not.
+ */
+export const zRevisionCreate = z.object({
+  a2ui_enabled: z.boolean().nullish(),
+  evidence: z.array(z.record(z.unknown())).max(50).optional(),
+  instruction: z.string().nullish(),
+  message: z.string().max(500).nullish(),
+  model_id: z.string().nullish(),
+  planning: z.boolean().nullish(),
+  rationale: z.string().max(4000).nullish(),
+  skill_ids: z.array(z.string().uuid()).nullish(),
+  tools: z.array(z.record(z.unknown())).nullish(),
+});
+
+/**
+ * RevisionOutcomeResponse
+ */
+export const zRevisionOutcomeResponse = z.object({
+  cost_total: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  excluded: z.number().int(),
+  failures: z.number().int(),
+  mean_cost: z
+    .string()
+    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
+    .nullable(),
+  mean_duration_ms: z.number().nullable(),
+  number: z.number().int().nullable(),
+  pending: z.number().int(),
+  revision_id: z.string().uuid(),
+  runs: z.number().int(),
+  success_rate: z.number().nullable(),
+  successes: z.number().int(),
+});
+
+/**
+ * RevisionResponse
+ */
+export const zRevisionResponse = z.object({
+  agent_id: z.string().uuid(),
+  config_hash: z.string(),
+  created_at: z.string().datetime(),
+  created_by: z.string(),
+  current: z.boolean(),
+  evidence: z.array(z.record(z.unknown())),
+  id: z.string().uuid(),
+  message: z.string().nullable(),
+  number: z.number().int(),
+  origin: z.string(),
+  parent_revision_id: z.string().uuid().nullable(),
+  rationale: z.string().nullable(),
+  spec: z.record(z.unknown()),
+  stale: z.boolean(),
+  status: z.string(),
+});
+
+/**
  * RunExecutionConfig
  *
  * Caller-requested execution ceiling; governance may only tighten it.
@@ -2734,6 +2991,25 @@ export const zRelationshipWriteRequest = z.object({
   relation: z.string(),
   subject_id: z.string().nullish(),
   subject_set: zSubjectSetBody.nullish(),
+});
+
+/**
+ * SuiteCreate
+ */
+export const zSuiteCreate = z.object({
+  description: z.string().max(4000).nullish(),
+  name: z.string().min(1).max(200),
+});
+
+/**
+ * SuiteResponse
+ */
+export const zSuiteResponse = z.object({
+  case_count: z.number().int(),
+  created_at: z.string().datetime(),
+  description: z.string().nullable(),
+  id: z.string().uuid(),
+  name: z.string(),
 });
 
 /**
@@ -3902,6 +4178,125 @@ export const zUpdateAgentV1AgentsAgentIdPatchPath = z.object({
  */
 export const zUpdateAgentV1AgentsAgentIdPatchResponse = zAgentResponse;
 
+export const zListRunsV1AgentsAgentIdEvalRunsGetPath = z.object({
+  agent_id: z.string(),
+});
+
+/**
+ * Response List Runs V1 Agents  Agent Id  Eval Runs Get
+ *
+ * Successful Response
+ */
+export const zListRunsV1AgentsAgentIdEvalRunsGetResponse =
+  z.array(zEvalRunResponse);
+
+export const zStartRunV1AgentsAgentIdEvalRunsPostBody = zEvalRunCreate;
+
+export const zStartRunV1AgentsAgentIdEvalRunsPostPath = z.object({
+  agent_id: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zStartRunV1AgentsAgentIdEvalRunsPostResponse = zEvalRunResponse;
+
+export const zGetRunV1AgentsAgentIdEvalRunsRunIdGetPath = z.object({
+  agent_id: z.string(),
+  run_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zGetRunV1AgentsAgentIdEvalRunsRunIdGetResponse = zEvalRunDetail;
+
+export const zStopRunV1AgentsAgentIdEvalRunsRunIdStopPostPath = z.object({
+  agent_id: z.string(),
+  run_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zStopRunV1AgentsAgentIdEvalRunsRunIdStopPostResponse =
+  zEvalRunResponse;
+
+export const zListExperimentsV1AgentsAgentIdExperimentsGetPath = z.object({
+  agent_id: z.string(),
+});
+
+/**
+ * Response List Experiments V1 Agents  Agent Id  Experiments Get
+ *
+ * Successful Response
+ */
+export const zListExperimentsV1AgentsAgentIdExperimentsGetResponse =
+  z.array(zExperimentResponse);
+
+export const zStartExperimentV1AgentsAgentIdExperimentsPostBody =
+  zExperimentCreate;
+
+export const zStartExperimentV1AgentsAgentIdExperimentsPostPath = z.object({
+  agent_id: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zStartExperimentV1AgentsAgentIdExperimentsPostResponse =
+  zExperimentResponse;
+
+export const zGetExperimentV1AgentsAgentIdExperimentsExperimentIdGetPath =
+  z.object({
+    agent_id: z.string(),
+    experiment_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zGetExperimentV1AgentsAgentIdExperimentsExperimentIdGetResponse =
+  zExperimentResponse;
+
+export const zEvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostPath =
+  z.object({
+    agent_id: z.string(),
+    experiment_id: z.string().uuid(),
+  });
+
+/**
+ * Response Evaluate Experiment V1 Agents  Agent Id  Experiments  Experiment Id  Evaluate Post
+ *
+ * Successful Response
+ */
+export const zEvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostResponse =
+  zDecisionResponse.nullable();
+
+export const zPromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostPath =
+  z.object({
+    agent_id: z.string(),
+    experiment_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zPromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostResponse =
+  zExperimentResponse;
+
+export const zStopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostPath =
+  z.object({
+    agent_id: z.string(),
+    experiment_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zStopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostResponse =
+  zExperimentResponse;
+
 export const zInstallAgentV1AgentsAgentIdInstallPostPath = z.object({
   agent_id: z.string(),
 });
@@ -3920,6 +4315,85 @@ export const zGetAgentOverviewV1AgentsAgentIdOverviewGetPath = z.object({
  */
 export const zGetAgentOverviewV1AgentsAgentIdOverviewGetResponse =
   zAgentOverviewResponse;
+
+export const zListRevisionsV1AgentsAgentIdRevisionsGetPath = z.object({
+  agent_id: z.string(),
+});
+
+/**
+ * Response List Revisions V1 Agents  Agent Id  Revisions Get
+ *
+ * Successful Response
+ */
+export const zListRevisionsV1AgentsAgentIdRevisionsGetResponse =
+  z.array(zRevisionResponse);
+
+export const zCreateCandidateV1AgentsAgentIdRevisionsPostBody = zRevisionCreate;
+
+export const zCreateCandidateV1AgentsAgentIdRevisionsPostPath = z.object({
+  agent_id: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zCreateCandidateV1AgentsAgentIdRevisionsPostResponse =
+  zRevisionResponse;
+
+export const zRevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetPath =
+  z.object({
+    agent_id: z.string(),
+  });
+
+/**
+ * Response Revision Outcomes V1 Agents  Agent Id  Revisions Outcomes Get
+ *
+ * Successful Response
+ */
+export const zRevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetResponse =
+  z.array(zRevisionOutcomeResponse);
+
+export const zGetRevisionV1AgentsAgentIdRevisionsRevisionIdGetPath = z.object({
+  agent_id: z.string(),
+  revision_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zGetRevisionV1AgentsAgentIdRevisionsRevisionIdGetResponse =
+  zRevisionResponse;
+
+export const zActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostPath =
+  z.object({
+    agent_id: z.string(),
+    revision_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostResponse =
+  zRevisionResponse;
+
+export const zDiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetPath =
+  z.object({
+    agent_id: z.string(),
+    revision_id: z.string().uuid(),
+  });
+
+export const zDiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetQuery =
+  z.object({
+    against: z.string().uuid().nullish(),
+  });
+
+/**
+ * Response Diff Revision V1 Agents  Agent Id  Revisions  Revision Id  Diff Get
+ *
+ * Successful Response
+ */
+export const zDiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetResponse =
+  z.array(zFieldChange);
 
 export const zListAgentTasksV1AgentsAgentIdTasksGetPath = z.object({
   agent_id: z.string().uuid(),
@@ -4473,6 +4947,109 @@ export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutRespon
  * Successful Response
  */
 export const zGetDashboardV1DashboardGetResponse = zDashboardResponse;
+
+/**
+ * Response List Suites V1 Eval Suites Get
+ *
+ * Successful Response
+ */
+export const zListSuitesV1EvalSuitesGetResponse = z.array(zSuiteResponse);
+
+export const zCreateSuiteV1EvalSuitesPostBody = zSuiteCreate;
+
+/**
+ * Successful Response
+ */
+export const zCreateSuiteV1EvalSuitesPostResponse = zSuiteResponse;
+
+export const zDeleteSuiteV1EvalSuitesSuiteIdDeletePath = z.object({
+  suite_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zDeleteSuiteV1EvalSuitesSuiteIdDeleteResponse = z.void();
+
+export const zGetSuiteV1EvalSuitesSuiteIdGetPath = z.object({
+  suite_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zGetSuiteV1EvalSuitesSuiteIdGetResponse = zSuiteResponse;
+
+export const zUpdateSuiteV1EvalSuitesSuiteIdPatchBody = zSuiteCreate;
+
+export const zUpdateSuiteV1EvalSuitesSuiteIdPatchPath = z.object({
+  suite_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zUpdateSuiteV1EvalSuitesSuiteIdPatchResponse = zSuiteResponse;
+
+export const zListCasesV1EvalSuitesSuiteIdCasesGetPath = z.object({
+  suite_id: z.string().uuid(),
+});
+
+/**
+ * Response List Cases V1 Eval Suites  Suite Id  Cases Get
+ *
+ * Successful Response
+ */
+export const zListCasesV1EvalSuitesSuiteIdCasesGetResponse =
+  z.array(zCaseResponse);
+
+export const zAddCaseV1EvalSuitesSuiteIdCasesPostBody = zCaseCreate;
+
+export const zAddCaseV1EvalSuitesSuiteIdCasesPostPath = z.object({
+  suite_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zAddCaseV1EvalSuitesSuiteIdCasesPostResponse = zCaseResponse;
+
+export const zAddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostBody =
+  zCaseFromTask;
+
+export const zAddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostPath =
+  z.object({
+    suite_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zAddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostResponse =
+  zCaseResponse;
+
+export const zDeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeletePath = z.object({
+  suite_id: z.string().uuid(),
+  case_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zDeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteResponse = z.void();
+
+export const zUpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchBody = zCaseCreate;
+
+export const zUpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchPath = z.object({
+  suite_id: z.string().uuid(),
+  case_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zUpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchResponse =
+  zCaseResponse;
 
 /**
  * Successful Response
@@ -6074,6 +6651,29 @@ export const zContinueTaskExecutionV1TasksTaskIdContinuePostBody =
 export const zContinueTaskExecutionV1TasksTaskIdContinuePostPath = z.object({
   task_id: z.string().uuid(),
 });
+
+export const zListFeedbackV1TasksTaskIdFeedbackGetPath = z.object({
+  task_id: z.string().uuid(),
+});
+
+/**
+ * Response List Feedback V1 Tasks  Task Id  Feedback Get
+ *
+ * Successful Response
+ */
+export const zListFeedbackV1TasksTaskIdFeedbackGetResponse =
+  z.array(zFeedbackResponse);
+
+export const zRateRunV1TasksTaskIdFeedbackPutBody = zFeedbackCreate;
+
+export const zRateRunV1TasksTaskIdFeedbackPutPath = z.object({
+  task_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zRateRunV1TasksTaskIdFeedbackPutResponse = zFeedbackResponse;
 
 export const zListTriggersV1TriggersGetQuery = z.object({
   agent_id: z.string().uuid().nullish(),

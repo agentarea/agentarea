@@ -104,6 +104,7 @@ def _real_task_service(agent):
     )
     # Short-circuit persistence (audit decorator + DB) — we test the route + guard.
     svc.create_task = AsyncMock(side_effect=lambda t: t)
+    svc._pin_run = AsyncMock(return_value=None)
     return svc, task_manager
 
 

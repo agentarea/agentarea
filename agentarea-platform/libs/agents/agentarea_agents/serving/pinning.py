@@ -26,10 +26,14 @@ class RunPin:
     arm: str | None = None
 
 
-async def running_experiment(session: AsyncSession, agent_id: UUID) -> AgentExperiment | None:
+async def running_experiment(
+    session: AsyncSession, user_context: UserContext, agent_id: UUID
+) -> AgentExperiment | None:
     result = await session.execute(
         select(AgentExperiment).where(
-            AgentExperiment.agent_id == agent_id, AgentExperiment.status == EXPERIMENT_RUNNING
+            AgentExperiment.agent_id == agent_id,
+            AgentExperiment.status == EXPERIMENT_RUNNING,
+            AgentExperiment.workspace_id == user_context.workspace_id,
         )
     )
     return result.scalar_one_or_none()
@@ -38,11 +42,12 @@ async def running_experiment(session: AsyncSession, agent_id: UUID) -> AgentExpe
 class RunPinner:
     def __init__(self, session: AsyncSession, user_context: UserContext):
         self.session = session
+        self.user_context = user_context
         self.revisions = RevisionService(session, user_context)
 
     async def pin(self, agent: Agent, task_id: UUID) -> RunPin:
         current = await self.revisions.ensure_current(agent, origin="detected")
-        experiment = await running_experiment(self.session, agent.id)
+        experiment = await running_experiment(self.session, self.user_context, agent.id)
         if experiment is None:
             return RunPin(revision_id=current.id)
 

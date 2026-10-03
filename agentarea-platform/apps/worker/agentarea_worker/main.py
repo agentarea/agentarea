@@ -21,6 +21,8 @@ from agentarea_common.events.factory import create_event_broker
 from agentarea_common.logging import setup_logging
 from agentarea_common.observability import get_temporal_plugins, setup_otel
 from agentarea_common.workflow.sandbox import create_workflow_runner
+from agentarea_evals.activities import make_eval_activities
+from agentarea_evals.runs.workflow import EvalRunWorkflow, ExperimentMonitorWorkflow
 from agentarea_execution import create_activities_for_worker
 from agentarea_execution.interfaces import ActivityDependencies
 
@@ -147,6 +149,7 @@ class AgentAreaWorker:
 
         activities = create_activities_for_worker(dependencies)
         mcp_activities = make_mcp_activities(dependencies)
+        eval_activities = make_eval_activities(dependencies)
 
         # Initialize DI container for workflows
         initialize_di_container(settings.workflow)
@@ -255,8 +258,10 @@ class AgentAreaWorker:
             task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
             workflows=[
                 AgentExecutionWorkflow,
+                EvalRunWorkflow,
+                ExperimentMonitorWorkflow,
             ],
-            activities=activities + mcp_activities,
+            activities=activities + mcp_activities + eval_activities,
             interceptors=[GovernanceWorkerInterceptor(governance_pipeline)],
             workflow_runner=create_workflow_runner(),
             max_concurrent_workflow_tasks=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,

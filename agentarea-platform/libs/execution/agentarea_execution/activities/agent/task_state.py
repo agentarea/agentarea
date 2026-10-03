@@ -211,6 +211,11 @@ def make_task_state_activities(
                         "created_via": "agent_delegation",
                         "parent_agent_id": request.parent_agent_id,
                         "parent_task_id": request.parent_task_id,
+                        **(
+                            {"run_mode": "evaluation", "evaluation": request.evaluation}
+                            if request.evaluation
+                            else {}
+                        ),
                     },
                     task_policy=PolicyDocument(
                         budget=BudgetPolicy(

@@ -12,7 +12,12 @@ Revises: 20261003_1100_merge_heads
 Create Date: 2026-10-03 12:00:00.000000
 """
 
+import hashlib
+import json
+import uuid
 from collections.abc import Sequence
+from datetime import datetime
+from typing import Any
 
 import sqlalchemy as sa
 from alembic import op
@@ -22,6 +27,74 @@ revision: str = "20261003_1200_agent_revisions"
 down_revision: str | None = "20261003_1100_merge_heads"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+
+
+# A frozen copy of compute_agent_config_hash (v3) as of this migration, so the
+# backfilled revisions hash exactly like the ones the service records later.
+_HASH_VERSION = "v3"
+_HASHED_FIELDS = ("instruction", "model_id", "tools", "planning", "a2ui_enabled")
+
+
+def _canonical(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _canonical(value[k]) for k in sorted(value)}
+    if isinstance(value, list):
+        return sorted((_canonical(v) for v in value), key=lambda v: json.dumps(v, sort_keys=True))
+    return value
+
+
+def _config_hash(spec: dict[str, Any]) -> str:
+    payload = {field: _canonical(spec.get(field)) for field in _HASHED_FIELDS}
+    payload["skill_ids"] = sorted(str(s) for s in spec["skill_ids"])
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return f"{_HASH_VERSION}:{hashlib.sha256(encoded).hexdigest()}"
+
+
+def _backfill() -> None:
+    """One revision per existing agent, from its current row; history is not rebuilt."""
+    bind = op.get_bind()
+    skills: dict[Any, list[str]] = {}
+    for agent_id, skill_id in bind.execute(sa.text("SELECT agent_id, skill_id FROM agent_skills")):
+        skills.setdefault(agent_id, []).append(str(skill_id))
+    agents = bind.execute(
+        sa.text(
+            "SELECT id, instruction, model_id, tools, planning, a2ui_enabled, workspace_id, "
+            "created_by FROM agents"
+        )
+    ).fetchall()
+    now = datetime.now()
+    for row in agents:
+        tools = json.loads(row.tools) if isinstance(row.tools, str) else row.tools
+        spec = {
+            "instruction": row.instruction,
+            "model_id": row.model_id,
+            "tools": [t for t in tools if isinstance(t, dict)] if isinstance(tools, list) else [],
+            "skill_ids": sorted(skills.get(row.id, [])),
+            "planning": row.planning,
+            "a2ui_enabled": row.a2ui_enabled,
+        }
+        revision_id = uuid.uuid4()
+        bind.execute(
+            sa.text(
+                "INSERT INTO agent_revisions (id, agent_id, number, parent_revision_id, spec, "
+                "config_hash, status, origin, evidence, workspace_id, created_by, created_at, "
+                "updated_at) VALUES (:id, :agent_id, 1, NULL, CAST(:spec AS jsonb), :hash, "
+                "'active', 'migration', '[]'::jsonb, :workspace_id, :created_by, :now, :now)"
+            ),
+            {
+                "id": revision_id,
+                "agent_id": row.id,
+                "spec": json.dumps(spec),
+                "hash": _config_hash(spec),
+                "workspace_id": row.workspace_id,
+                "created_by": row.created_by,
+                "now": now,
+            },
+        )
+        bind.execute(
+            sa.text("UPDATE agents SET current_revision_id = :rid WHERE id = :aid"),
+            {"rid": revision_id, "aid": row.id},
+        )
 
 
 def upgrade() -> None:
@@ -58,6 +131,7 @@ def upgrade() -> None:
     op.add_column(
         "agents", sa.Column("current_revision_id", postgresql.UUID(as_uuid=True), nullable=True)
     )
+    _backfill()
 
     op.create_table(
         "agent_experiments",

@@ -666,6 +666,32 @@ export type ArchivedFileResponse = {
 };
 
 /**
+ * ArmResponse
+ */
+export type ArmResponse = {
+  /**
+   * Failure Rate
+   */
+  failure_rate: number | null;
+  /**
+   * Failures
+   */
+  failures: number;
+  /**
+   * Mean Cost
+   */
+  mean_cost: number | null;
+  /**
+   * Runs
+   */
+  runs: number;
+  /**
+   * Successes
+   */
+  successes: number;
+};
+
+/**
  * ArtifactEventResponse
  */
 export type ArtifactEventResponse = {
@@ -1289,6 +1315,100 @@ export type BundleSkill = {
    * Repo URL for source_type=github.
    */
   source_url?: string | null;
+};
+
+/**
+ * CaseCreate
+ */
+export type CaseCreate = {
+  /**
+   * Checks
+   */
+  checks?: Array<{
+    [key: string]: unknown;
+  }>;
+  /**
+   * Input
+   */
+  input: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Parameters
+   */
+  parameters?: {
+    [key: string]: unknown;
+  };
+  /**
+   * Stubs
+   */
+  stubs?: {
+    [key: string]: unknown;
+  };
+};
+
+/**
+ * CaseFromTask
+ */
+export type CaseFromTask = {
+  /**
+   * Name
+   */
+  name?: string | null;
+  /**
+   * Task Id
+   */
+  task_id: string;
+};
+
+/**
+ * CaseResponse
+ */
+export type CaseResponse = {
+  /**
+   * Checks
+   */
+  checks: Array<{
+    [key: string]: unknown;
+  }>;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Input
+   */
+  input: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Parameters
+   */
+  parameters: {
+    [key: string]: unknown;
+  };
+  /**
+   * Source Task Id
+   */
+  source_task_id: string | null;
+  /**
+   * Stubs
+   */
+  stubs: {
+    [key: string]: unknown;
+  };
+  /**
+   * Suite Id
+   */
+  suite_id: string;
 };
 
 /**
@@ -1938,6 +2058,32 @@ export type DashboardResponse = {
 };
 
 /**
+ * DecisionResponse
+ */
+export type DecisionResponse = {
+  /**
+   * Action
+   */
+  action: string;
+  /**
+   * Exposure
+   */
+  exposure: number | null;
+  /**
+   * P Better
+   */
+  p_better: number | null;
+  /**
+   * P Regression
+   */
+  p_regression: number | null;
+  /**
+   * Reason
+   */
+  reason: string;
+};
+
+/**
  * DiscoverPreviewModelResponse
  */
 export type DiscoverPreviewModelResponse = {
@@ -2182,6 +2328,232 @@ export type EscalationResolution = {
 };
 
 /**
+ * EvalRunCreate
+ */
+export type EvalRunCreate = {
+  /**
+   * Allow Sandbox
+   */
+  allow_sandbox?: boolean;
+  /**
+   * Baseline Revision Id
+   */
+  baseline_revision_id?: string | null;
+  /**
+   * Budget Usd
+   */
+  budget_usd: number | string;
+  /**
+   * Candidate Revision Id
+   */
+  candidate_revision_id?: string | null;
+  /**
+   * Concurrency
+   */
+  concurrency?: number;
+  /**
+   * Suite Id
+   */
+  suite_id: string;
+  /**
+   * Trials
+   */
+  trials?: number;
+};
+
+/**
+ * EvalRunDetail
+ */
+export type EvalRunDetail = {
+  /**
+   * Agent Id
+   */
+  agent_id: string;
+  /**
+   * Baseline Revision Id
+   */
+  baseline_revision_id: string;
+  /**
+   * Budget Usd
+   */
+  budget_usd: string;
+  /**
+   * Candidate Revision Id
+   */
+  candidate_revision_id: string | null;
+  /**
+   * Cases
+   */
+  cases: Array<CaseResponse>;
+  /**
+   * Completed At
+   */
+  completed_at: string | null;
+  /**
+   * Concurrency
+   */
+  concurrency: number;
+  /**
+   * Cost Usd
+   */
+  cost_usd: string;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Started At
+   */
+  started_at: string | null;
+  /**
+   * Status
+   */
+  status: string;
+  /**
+   * Stop Reason
+   */
+  stop_reason: string | null;
+  /**
+   * Suite Id
+   */
+  suite_id: string;
+  /**
+   * Summary
+   */
+  summary: {
+    [key: string]: unknown;
+  };
+  /**
+   * Trials
+   */
+  trials: number;
+  /**
+   * Trials Detail
+   */
+  trials_detail: Array<EvalTrialResponse>;
+};
+
+/**
+ * EvalRunResponse
+ */
+export type EvalRunResponse = {
+  /**
+   * Agent Id
+   */
+  agent_id: string;
+  /**
+   * Baseline Revision Id
+   */
+  baseline_revision_id: string;
+  /**
+   * Budget Usd
+   */
+  budget_usd: string;
+  /**
+   * Candidate Revision Id
+   */
+  candidate_revision_id: string | null;
+  /**
+   * Completed At
+   */
+  completed_at: string | null;
+  /**
+   * Concurrency
+   */
+  concurrency: number;
+  /**
+   * Cost Usd
+   */
+  cost_usd: string;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Started At
+   */
+  started_at: string | null;
+  /**
+   * Status
+   */
+  status: string;
+  /**
+   * Stop Reason
+   */
+  stop_reason: string | null;
+  /**
+   * Suite Id
+   */
+  suite_id: string;
+  /**
+   * Summary
+   */
+  summary: {
+    [key: string]: unknown;
+  };
+  /**
+   * Trials
+   */
+  trials: number;
+};
+
+/**
+ * EvalTrialResponse
+ */
+export type EvalTrialResponse = {
+  /**
+   * Arm
+   */
+  arm: string;
+  /**
+   * Attempt
+   */
+  attempt: number;
+  /**
+   * Case Id
+   */
+  case_id: string;
+  /**
+   * Check Results
+   */
+  check_results: Array<{
+    [key: string]: unknown;
+  }>;
+  /**
+   * Cost Usd
+   */
+  cost_usd: string;
+  /**
+   * Error
+   */
+  error: string | null;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Passed
+   */
+  passed: boolean | null;
+  /**
+   * Status
+   */
+  status: string;
+  /**
+   * Task Id
+   */
+  task_id: string | null;
+};
+
+/**
  * ExecutionCorrelationResponse
  *
  * Response model for execution correlation data.
@@ -2358,6 +2730,98 @@ export type ExecutionTimelineResponse = {
 };
 
 /**
+ * ExperimentCreate
+ */
+export type ExperimentCreate = {
+  /**
+   * Auto Promote
+   */
+  auto_promote: boolean;
+  /**
+   * Candidate Revision Id
+   */
+  candidate_revision_id: string;
+  /**
+   * Max Duration Days
+   */
+  max_duration_days?: number | null;
+  /**
+   * Regression Margin
+   */
+  regression_margin?: number | null;
+  /**
+   * Steps
+   */
+  steps?: Array<number> | null;
+};
+
+/**
+ * ExperimentResponse
+ */
+export type ExperimentResponse = {
+  /**
+   * Agent Id
+   */
+  agent_id: string;
+  candidate: ArmResponse;
+  /**
+   * Candidate Revision Id
+   */
+  candidate_revision_id: string;
+  control: ArmResponse;
+  /**
+   * Control Revision Id
+   */
+  control_revision_id: string;
+  /**
+   * Decisions
+   */
+  decisions: Array<{
+    [key: string]: unknown;
+  }>;
+  /**
+   * Ended At
+   */
+  ended_at: string | null;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Last Evaluated At
+   */
+  last_evaluated_at: string | null;
+  /**
+   * Offline Passed
+   */
+  offline_passed: boolean;
+  /**
+   * Policy
+   */
+  policy: {
+    [key: string]: unknown;
+  };
+  /**
+   * Started At
+   */
+  started_at: string;
+  /**
+   * Status
+   */
+  status: string;
+  /**
+   * Stop Reason
+   */
+  stop_reason: string | null;
+  /**
+   * Weights
+   */
+  weights: {
+    [key: string]: number;
+  };
+};
+
+/**
  * FailedTaskBlocker
  */
 export type FailedTaskBlocker = {
@@ -2381,6 +2845,76 @@ export type FailedTaskBlocker = {
    * Task Id
    */
   task_id: string;
+};
+
+/**
+ * FeedbackCreate
+ */
+export type FeedbackCreate = {
+  /**
+   * Comment
+   */
+  comment?: string | null;
+  /**
+   * Event Id
+   */
+  event_id?: string | null;
+  /**
+   * Rating
+   */
+  rating: "good" | "bad";
+};
+
+/**
+ * FeedbackResponse
+ */
+export type FeedbackResponse = {
+  /**
+   * Comment
+   */
+  comment: string | null;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Created By
+   */
+  created_by: string;
+  /**
+   * Event Id
+   */
+  event_id: string | null;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Rating
+   */
+  rating: string;
+  /**
+   * Task Id
+   */
+  task_id: string;
+};
+
+/**
+ * FieldChange
+ */
+export type FieldChange = {
+  /**
+   * After
+   */
+  after: unknown;
+  /**
+   * Before
+   */
+  before: unknown;
+  /**
+   * Field
+   */
+  field: string;
 };
 
 /**
@@ -5858,6 +6392,174 @@ export type RestoredFileResponse = {
 };
 
 /**
+ * RevisionCreate
+ *
+ * A candidate: only the fields named here change; what serves does not.
+ */
+export type RevisionCreate = {
+  /**
+   * A2Ui Enabled
+   */
+  a2ui_enabled?: boolean | null;
+  /**
+   * Evidence
+   */
+  evidence?: Array<{
+    [key: string]: unknown;
+  }>;
+  /**
+   * Instruction
+   */
+  instruction?: string | null;
+  /**
+   * Message
+   */
+  message?: string | null;
+  /**
+   * Model Id
+   */
+  model_id?: string | null;
+  /**
+   * Planning
+   */
+  planning?: boolean | null;
+  /**
+   * Rationale
+   */
+  rationale?: string | null;
+  /**
+   * Skill Ids
+   */
+  skill_ids?: Array<string> | null;
+  /**
+   * Tools
+   */
+  tools?: Array<{
+    [key: string]: unknown;
+  }> | null;
+};
+
+/**
+ * RevisionOutcomeResponse
+ */
+export type RevisionOutcomeResponse = {
+  /**
+   * Cost Total
+   */
+  cost_total: string;
+  /**
+   * Excluded
+   */
+  excluded: number;
+  /**
+   * Failures
+   */
+  failures: number;
+  /**
+   * Mean Cost
+   */
+  mean_cost: string | null;
+  /**
+   * Mean Duration Ms
+   */
+  mean_duration_ms: number | null;
+  /**
+   * Number
+   */
+  number: number | null;
+  /**
+   * Pending
+   */
+  pending: number;
+  /**
+   * Revision Id
+   */
+  revision_id: string;
+  /**
+   * Runs
+   */
+  runs: number;
+  /**
+   * Success Rate
+   */
+  success_rate: number | null;
+  /**
+   * Successes
+   */
+  successes: number;
+};
+
+/**
+ * RevisionResponse
+ */
+export type RevisionResponse = {
+  /**
+   * Agent Id
+   */
+  agent_id: string;
+  /**
+   * Config Hash
+   */
+  config_hash: string;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Created By
+   */
+  created_by: string;
+  /**
+   * Current
+   */
+  current: boolean;
+  /**
+   * Evidence
+   */
+  evidence: Array<{
+    [key: string]: unknown;
+  }>;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Message
+   */
+  message: string | null;
+  /**
+   * Number
+   */
+  number: number;
+  /**
+   * Origin
+   */
+  origin: string;
+  /**
+   * Parent Revision Id
+   */
+  parent_revision_id: string | null;
+  /**
+   * Rationale
+   */
+  rationale: string | null;
+  /**
+   * Spec
+   */
+  spec: {
+    [key: string]: unknown;
+  };
+  /**
+   * Stale
+   */
+  stale: boolean;
+  /**
+   * Status
+   */
+  status: string;
+};
+
+/**
  * RunExecutionConfig
  *
  * Caller-requested execution ceiling; governance may only tighten it.
@@ -6566,6 +7268,46 @@ export type SubjectSetBody = {
    * Relation
    */
   relation: string;
+};
+
+/**
+ * SuiteCreate
+ */
+export type SuiteCreate = {
+  /**
+   * Description
+   */
+  description?: string | null;
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * SuiteResponse
+ */
+export type SuiteResponse = {
+  /**
+   * Case Count
+   */
+  case_count: number;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Description
+   */
+  description: string | null;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Name
+   */
+  name: string;
 };
 
 /**
@@ -9536,6 +10278,364 @@ export type UpdateAgentV1AgentsAgentIdPatchResponses = {
 export type UpdateAgentV1AgentsAgentIdPatchResponse =
   UpdateAgentV1AgentsAgentIdPatchResponses[keyof UpdateAgentV1AgentsAgentIdPatchResponses];
 
+export type ListRunsV1AgentsAgentIdEvalRunsGetData = {
+  body?: never;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/agents/{agent_id}/eval-runs";
+};
+
+export type ListRunsV1AgentsAgentIdEvalRunsGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListRunsV1AgentsAgentIdEvalRunsGetError =
+  ListRunsV1AgentsAgentIdEvalRunsGetErrors[keyof ListRunsV1AgentsAgentIdEvalRunsGetErrors];
+
+export type ListRunsV1AgentsAgentIdEvalRunsGetResponses = {
+  /**
+   * Response List Runs V1 Agents  Agent Id  Eval Runs Get
+   *
+   * Successful Response
+   */
+  200: Array<EvalRunResponse>;
+};
+
+export type ListRunsV1AgentsAgentIdEvalRunsGetResponse =
+  ListRunsV1AgentsAgentIdEvalRunsGetResponses[keyof ListRunsV1AgentsAgentIdEvalRunsGetResponses];
+
+export type StartRunV1AgentsAgentIdEvalRunsPostData = {
+  body: EvalRunCreate;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/agents/{agent_id}/eval-runs";
+};
+
+export type StartRunV1AgentsAgentIdEvalRunsPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type StartRunV1AgentsAgentIdEvalRunsPostError =
+  StartRunV1AgentsAgentIdEvalRunsPostErrors[keyof StartRunV1AgentsAgentIdEvalRunsPostErrors];
+
+export type StartRunV1AgentsAgentIdEvalRunsPostResponses = {
+  /**
+   * Successful Response
+   */
+  201: EvalRunResponse;
+};
+
+export type StartRunV1AgentsAgentIdEvalRunsPostResponse =
+  StartRunV1AgentsAgentIdEvalRunsPostResponses[keyof StartRunV1AgentsAgentIdEvalRunsPostResponses];
+
+export type GetRunV1AgentsAgentIdEvalRunsRunIdGetData = {
+  body?: never;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Run Id
+     */
+    run_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/agents/{agent_id}/eval-runs/{run_id}";
+};
+
+export type GetRunV1AgentsAgentIdEvalRunsRunIdGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetRunV1AgentsAgentIdEvalRunsRunIdGetError =
+  GetRunV1AgentsAgentIdEvalRunsRunIdGetErrors[keyof GetRunV1AgentsAgentIdEvalRunsRunIdGetErrors];
+
+export type GetRunV1AgentsAgentIdEvalRunsRunIdGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: EvalRunDetail;
+};
+
+export type GetRunV1AgentsAgentIdEvalRunsRunIdGetResponse =
+  GetRunV1AgentsAgentIdEvalRunsRunIdGetResponses[keyof GetRunV1AgentsAgentIdEvalRunsRunIdGetResponses];
+
+export type StopRunV1AgentsAgentIdEvalRunsRunIdStopPostData = {
+  body?: never;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Run Id
+     */
+    run_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/agents/{agent_id}/eval-runs/{run_id}/stop";
+};
+
+export type StopRunV1AgentsAgentIdEvalRunsRunIdStopPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type StopRunV1AgentsAgentIdEvalRunsRunIdStopPostError =
+  StopRunV1AgentsAgentIdEvalRunsRunIdStopPostErrors[keyof StopRunV1AgentsAgentIdEvalRunsRunIdStopPostErrors];
+
+export type StopRunV1AgentsAgentIdEvalRunsRunIdStopPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: EvalRunResponse;
+};
+
+export type StopRunV1AgentsAgentIdEvalRunsRunIdStopPostResponse =
+  StopRunV1AgentsAgentIdEvalRunsRunIdStopPostResponses[keyof StopRunV1AgentsAgentIdEvalRunsRunIdStopPostResponses];
+
+export type ListExperimentsV1AgentsAgentIdExperimentsGetData = {
+  body?: never;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/agents/{agent_id}/experiments";
+};
+
+export type ListExperimentsV1AgentsAgentIdExperimentsGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListExperimentsV1AgentsAgentIdExperimentsGetError =
+  ListExperimentsV1AgentsAgentIdExperimentsGetErrors[keyof ListExperimentsV1AgentsAgentIdExperimentsGetErrors];
+
+export type ListExperimentsV1AgentsAgentIdExperimentsGetResponses = {
+  /**
+   * Response List Experiments V1 Agents  Agent Id  Experiments Get
+   *
+   * Successful Response
+   */
+  200: Array<ExperimentResponse>;
+};
+
+export type ListExperimentsV1AgentsAgentIdExperimentsGetResponse =
+  ListExperimentsV1AgentsAgentIdExperimentsGetResponses[keyof ListExperimentsV1AgentsAgentIdExperimentsGetResponses];
+
+export type StartExperimentV1AgentsAgentIdExperimentsPostData = {
+  body: ExperimentCreate;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/agents/{agent_id}/experiments";
+};
+
+export type StartExperimentV1AgentsAgentIdExperimentsPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type StartExperimentV1AgentsAgentIdExperimentsPostError =
+  StartExperimentV1AgentsAgentIdExperimentsPostErrors[keyof StartExperimentV1AgentsAgentIdExperimentsPostErrors];
+
+export type StartExperimentV1AgentsAgentIdExperimentsPostResponses = {
+  /**
+   * Successful Response
+   */
+  201: ExperimentResponse;
+};
+
+export type StartExperimentV1AgentsAgentIdExperimentsPostResponse =
+  StartExperimentV1AgentsAgentIdExperimentsPostResponses[keyof StartExperimentV1AgentsAgentIdExperimentsPostResponses];
+
+export type GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetData = {
+  body?: never;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Experiment Id
+     */
+    experiment_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/agents/{agent_id}/experiments/{experiment_id}";
+};
+
+export type GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetError =
+  GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetErrors[keyof GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetErrors];
+
+export type GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: ExperimentResponse;
+};
+
+export type GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetResponse =
+  GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetResponses[keyof GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetResponses];
+
+export type EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostData =
+  {
+    body?: never;
+    path: {
+      /**
+       * Agent Id
+       */
+      agent_id: string;
+      /**
+       * Experiment Id
+       */
+      experiment_id: string;
+    };
+    query?: never;
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/experiments/{experiment_id}/evaluate";
+  };
+
+export type EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostError =
+  EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostErrors[keyof EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostErrors];
+
+export type EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostResponses =
+  {
+    /**
+     * Response Evaluate Experiment V1 Agents  Agent Id  Experiments  Experiment Id  Evaluate Post
+     *
+     * Successful Response
+     */
+    200: DecisionResponse | null;
+  };
+
+export type EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostResponse =
+  EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostResponses[keyof EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostResponses];
+
+export type PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostData =
+  {
+    body?: never;
+    path: {
+      /**
+       * Agent Id
+       */
+      agent_id: string;
+      /**
+       * Experiment Id
+       */
+      experiment_id: string;
+    };
+    query?: never;
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/experiments/{experiment_id}/promote";
+  };
+
+export type PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostError =
+  PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostErrors[keyof PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostErrors];
+
+export type PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostResponses =
+  {
+    /**
+     * Successful Response
+     */
+    200: ExperimentResponse;
+  };
+
+export type PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostResponse =
+  PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostResponses[keyof PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostResponses];
+
+export type StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostData = {
+  body?: never;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Experiment Id
+     */
+    experiment_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/agents/{agent_id}/experiments/{experiment_id}/stop";
+};
+
+export type StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostError =
+  StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostErrors[keyof StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostErrors];
+
+export type StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostResponses =
+  {
+    /**
+     * Successful Response
+     */
+    200: ExperimentResponse;
+  };
+
+export type StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostResponse =
+  StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostResponses[keyof StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostResponses];
+
 export type InstallAgentV1AgentsAgentIdInstallPostData = {
   body?: never;
   path: {
@@ -9599,6 +10699,226 @@ export type GetAgentOverviewV1AgentsAgentIdOverviewGetResponses = {
 
 export type GetAgentOverviewV1AgentsAgentIdOverviewGetResponse =
   GetAgentOverviewV1AgentsAgentIdOverviewGetResponses[keyof GetAgentOverviewV1AgentsAgentIdOverviewGetResponses];
+
+export type ListRevisionsV1AgentsAgentIdRevisionsGetData = {
+  body?: never;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/agents/{agent_id}/revisions";
+};
+
+export type ListRevisionsV1AgentsAgentIdRevisionsGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListRevisionsV1AgentsAgentIdRevisionsGetError =
+  ListRevisionsV1AgentsAgentIdRevisionsGetErrors[keyof ListRevisionsV1AgentsAgentIdRevisionsGetErrors];
+
+export type ListRevisionsV1AgentsAgentIdRevisionsGetResponses = {
+  /**
+   * Response List Revisions V1 Agents  Agent Id  Revisions Get
+   *
+   * Successful Response
+   */
+  200: Array<RevisionResponse>;
+};
+
+export type ListRevisionsV1AgentsAgentIdRevisionsGetResponse =
+  ListRevisionsV1AgentsAgentIdRevisionsGetResponses[keyof ListRevisionsV1AgentsAgentIdRevisionsGetResponses];
+
+export type CreateCandidateV1AgentsAgentIdRevisionsPostData = {
+  body: RevisionCreate;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/agents/{agent_id}/revisions";
+};
+
+export type CreateCandidateV1AgentsAgentIdRevisionsPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreateCandidateV1AgentsAgentIdRevisionsPostError =
+  CreateCandidateV1AgentsAgentIdRevisionsPostErrors[keyof CreateCandidateV1AgentsAgentIdRevisionsPostErrors];
+
+export type CreateCandidateV1AgentsAgentIdRevisionsPostResponses = {
+  /**
+   * Successful Response
+   */
+  201: RevisionResponse;
+};
+
+export type CreateCandidateV1AgentsAgentIdRevisionsPostResponse =
+  CreateCandidateV1AgentsAgentIdRevisionsPostResponses[keyof CreateCandidateV1AgentsAgentIdRevisionsPostResponses];
+
+export type RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetData = {
+  body?: never;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/agents/{agent_id}/revisions/outcomes";
+};
+
+export type RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetError =
+  RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetErrors[keyof RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetErrors];
+
+export type RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetResponses = {
+  /**
+   * Response Revision Outcomes V1 Agents  Agent Id  Revisions Outcomes Get
+   *
+   * Successful Response
+   */
+  200: Array<RevisionOutcomeResponse>;
+};
+
+export type RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetResponse =
+  RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetResponses[keyof RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetResponses];
+
+export type GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetData = {
+  body?: never;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Revision Id
+     */
+    revision_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/agents/{agent_id}/revisions/{revision_id}";
+};
+
+export type GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetError =
+  GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetErrors[keyof GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetErrors];
+
+export type GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: RevisionResponse;
+};
+
+export type GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetResponse =
+  GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetResponses[keyof GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetResponses];
+
+export type ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostData =
+  {
+    body?: never;
+    path: {
+      /**
+       * Agent Id
+       */
+      agent_id: string;
+      /**
+       * Revision Id
+       */
+      revision_id: string;
+    };
+    query?: never;
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/revisions/{revision_id}/activate";
+  };
+
+export type ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostError =
+  ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostErrors[keyof ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostErrors];
+
+export type ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostResponses =
+  {
+    /**
+     * Successful Response
+     */
+    200: RevisionResponse;
+  };
+
+export type ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostResponse =
+  ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostResponses[keyof ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostResponses];
+
+export type DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetData = {
+  body?: never;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Revision Id
+     */
+    revision_id: string;
+  };
+  query?: {
+    /**
+     * Against
+     *
+     * Defaults to the serving revision
+     */
+    against?: string | null;
+  };
+  url: "/v1/workspaces/{workspace}/agents/{agent_id}/revisions/{revision_id}/diff";
+};
+
+export type DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetError =
+  DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetErrors[keyof DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetErrors];
+
+export type DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetResponses = {
+  /**
+   * Response Diff Revision V1 Agents  Agent Id  Revisions  Revision Id  Diff Get
+   *
+   * Successful Response
+   */
+  200: Array<FieldChange>;
+};
+
+export type DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetResponse =
+  DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetResponses[keyof DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetResponses];
 
 export type ListAgentTasksV1AgentsAgentIdTasksGetData = {
   body?: never;
@@ -11432,6 +12752,328 @@ export type GetDashboardV1DashboardGetResponses = {
 
 export type GetDashboardV1DashboardGetResponse =
   GetDashboardV1DashboardGetResponses[keyof GetDashboardV1DashboardGetResponses];
+
+export type ListSuitesV1EvalSuitesGetData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/v1/workspaces/{workspace}/eval-suites";
+};
+
+export type ListSuitesV1EvalSuitesGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListSuitesV1EvalSuitesGetError =
+  ListSuitesV1EvalSuitesGetErrors[keyof ListSuitesV1EvalSuitesGetErrors];
+
+export type ListSuitesV1EvalSuitesGetResponses = {
+  /**
+   * Response List Suites V1 Eval Suites Get
+   *
+   * Successful Response
+   */
+  200: Array<SuiteResponse>;
+};
+
+export type ListSuitesV1EvalSuitesGetResponse =
+  ListSuitesV1EvalSuitesGetResponses[keyof ListSuitesV1EvalSuitesGetResponses];
+
+export type CreateSuiteV1EvalSuitesPostData = {
+  body: SuiteCreate;
+  path?: never;
+  query?: never;
+  url: "/v1/workspaces/{workspace}/eval-suites";
+};
+
+export type CreateSuiteV1EvalSuitesPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreateSuiteV1EvalSuitesPostError =
+  CreateSuiteV1EvalSuitesPostErrors[keyof CreateSuiteV1EvalSuitesPostErrors];
+
+export type CreateSuiteV1EvalSuitesPostResponses = {
+  /**
+   * Successful Response
+   */
+  201: SuiteResponse;
+};
+
+export type CreateSuiteV1EvalSuitesPostResponse =
+  CreateSuiteV1EvalSuitesPostResponses[keyof CreateSuiteV1EvalSuitesPostResponses];
+
+export type DeleteSuiteV1EvalSuitesSuiteIdDeleteData = {
+  body?: never;
+  path: {
+    /**
+     * Suite Id
+     */
+    suite_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}";
+};
+
+export type DeleteSuiteV1EvalSuitesSuiteIdDeleteErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteSuiteV1EvalSuitesSuiteIdDeleteError =
+  DeleteSuiteV1EvalSuitesSuiteIdDeleteErrors[keyof DeleteSuiteV1EvalSuitesSuiteIdDeleteErrors];
+
+export type DeleteSuiteV1EvalSuitesSuiteIdDeleteResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteSuiteV1EvalSuitesSuiteIdDeleteResponse =
+  DeleteSuiteV1EvalSuitesSuiteIdDeleteResponses[keyof DeleteSuiteV1EvalSuitesSuiteIdDeleteResponses];
+
+export type GetSuiteV1EvalSuitesSuiteIdGetData = {
+  body?: never;
+  path: {
+    /**
+     * Suite Id
+     */
+    suite_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}";
+};
+
+export type GetSuiteV1EvalSuitesSuiteIdGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetSuiteV1EvalSuitesSuiteIdGetError =
+  GetSuiteV1EvalSuitesSuiteIdGetErrors[keyof GetSuiteV1EvalSuitesSuiteIdGetErrors];
+
+export type GetSuiteV1EvalSuitesSuiteIdGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: SuiteResponse;
+};
+
+export type GetSuiteV1EvalSuitesSuiteIdGetResponse =
+  GetSuiteV1EvalSuitesSuiteIdGetResponses[keyof GetSuiteV1EvalSuitesSuiteIdGetResponses];
+
+export type UpdateSuiteV1EvalSuitesSuiteIdPatchData = {
+  body: SuiteCreate;
+  path: {
+    /**
+     * Suite Id
+     */
+    suite_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}";
+};
+
+export type UpdateSuiteV1EvalSuitesSuiteIdPatchErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateSuiteV1EvalSuitesSuiteIdPatchError =
+  UpdateSuiteV1EvalSuitesSuiteIdPatchErrors[keyof UpdateSuiteV1EvalSuitesSuiteIdPatchErrors];
+
+export type UpdateSuiteV1EvalSuitesSuiteIdPatchResponses = {
+  /**
+   * Successful Response
+   */
+  200: SuiteResponse;
+};
+
+export type UpdateSuiteV1EvalSuitesSuiteIdPatchResponse =
+  UpdateSuiteV1EvalSuitesSuiteIdPatchResponses[keyof UpdateSuiteV1EvalSuitesSuiteIdPatchResponses];
+
+export type ListCasesV1EvalSuitesSuiteIdCasesGetData = {
+  body?: never;
+  path: {
+    /**
+     * Suite Id
+     */
+    suite_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}/cases";
+};
+
+export type ListCasesV1EvalSuitesSuiteIdCasesGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListCasesV1EvalSuitesSuiteIdCasesGetError =
+  ListCasesV1EvalSuitesSuiteIdCasesGetErrors[keyof ListCasesV1EvalSuitesSuiteIdCasesGetErrors];
+
+export type ListCasesV1EvalSuitesSuiteIdCasesGetResponses = {
+  /**
+   * Response List Cases V1 Eval Suites  Suite Id  Cases Get
+   *
+   * Successful Response
+   */
+  200: Array<CaseResponse>;
+};
+
+export type ListCasesV1EvalSuitesSuiteIdCasesGetResponse =
+  ListCasesV1EvalSuitesSuiteIdCasesGetResponses[keyof ListCasesV1EvalSuitesSuiteIdCasesGetResponses];
+
+export type AddCaseV1EvalSuitesSuiteIdCasesPostData = {
+  body: CaseCreate;
+  path: {
+    /**
+     * Suite Id
+     */
+    suite_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}/cases";
+};
+
+export type AddCaseV1EvalSuitesSuiteIdCasesPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type AddCaseV1EvalSuitesSuiteIdCasesPostError =
+  AddCaseV1EvalSuitesSuiteIdCasesPostErrors[keyof AddCaseV1EvalSuitesSuiteIdCasesPostErrors];
+
+export type AddCaseV1EvalSuitesSuiteIdCasesPostResponses = {
+  /**
+   * Successful Response
+   */
+  201: CaseResponse;
+};
+
+export type AddCaseV1EvalSuitesSuiteIdCasesPostResponse =
+  AddCaseV1EvalSuitesSuiteIdCasesPostResponses[keyof AddCaseV1EvalSuitesSuiteIdCasesPostResponses];
+
+export type AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostData = {
+  body: CaseFromTask;
+  path: {
+    /**
+     * Suite Id
+     */
+    suite_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}/cases/from-task";
+};
+
+export type AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostError =
+  AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostErrors[keyof AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostErrors];
+
+export type AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostResponses = {
+  /**
+   * Successful Response
+   */
+  201: CaseResponse;
+};
+
+export type AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostResponse =
+  AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostResponses[keyof AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostResponses];
+
+export type DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteData = {
+  body?: never;
+  path: {
+    /**
+     * Suite Id
+     */
+    suite_id: string;
+    /**
+     * Case Id
+     */
+    case_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}/cases/{case_id}";
+};
+
+export type DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteError =
+  DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteErrors[keyof DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteErrors];
+
+export type DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteResponse =
+  DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteResponses[keyof DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteResponses];
+
+export type UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchData = {
+  body: CaseCreate;
+  path: {
+    /**
+     * Suite Id
+     */
+    suite_id: string;
+    /**
+     * Case Id
+     */
+    case_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}/cases/{case_id}";
+};
+
+export type UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchError =
+  UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchErrors[keyof UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchErrors];
+
+export type UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchResponses = {
+  /**
+   * Successful Response
+   */
+  200: CaseResponse;
+};
+
+export type UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchResponse =
+  UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchResponses[keyof UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchResponses];
 
 export type ExportWorkspaceConfigV1ExportGetData = {
   body?: never;
@@ -16747,6 +18389,72 @@ export type ContinueTaskExecutionV1TasksTaskIdContinuePostResponses = {
    */
   200: unknown;
 };
+
+export type ListFeedbackV1TasksTaskIdFeedbackGetData = {
+  body?: never;
+  path: {
+    /**
+     * Task Id
+     */
+    task_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/tasks/{task_id}/feedback";
+};
+
+export type ListFeedbackV1TasksTaskIdFeedbackGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListFeedbackV1TasksTaskIdFeedbackGetError =
+  ListFeedbackV1TasksTaskIdFeedbackGetErrors[keyof ListFeedbackV1TasksTaskIdFeedbackGetErrors];
+
+export type ListFeedbackV1TasksTaskIdFeedbackGetResponses = {
+  /**
+   * Response List Feedback V1 Tasks  Task Id  Feedback Get
+   *
+   * Successful Response
+   */
+  200: Array<FeedbackResponse>;
+};
+
+export type ListFeedbackV1TasksTaskIdFeedbackGetResponse =
+  ListFeedbackV1TasksTaskIdFeedbackGetResponses[keyof ListFeedbackV1TasksTaskIdFeedbackGetResponses];
+
+export type RateRunV1TasksTaskIdFeedbackPutData = {
+  body: FeedbackCreate;
+  path: {
+    /**
+     * Task Id
+     */
+    task_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/tasks/{task_id}/feedback";
+};
+
+export type RateRunV1TasksTaskIdFeedbackPutErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RateRunV1TasksTaskIdFeedbackPutError =
+  RateRunV1TasksTaskIdFeedbackPutErrors[keyof RateRunV1TasksTaskIdFeedbackPutErrors];
+
+export type RateRunV1TasksTaskIdFeedbackPutResponses = {
+  /**
+   * Successful Response
+   */
+  200: FeedbackResponse;
+};
+
+export type RateRunV1TasksTaskIdFeedbackPutResponse =
+  RateRunV1TasksTaskIdFeedbackPutResponses[keyof RateRunV1TasksTaskIdFeedbackPutResponses];
 
 export type ListTriggersV1TriggersGetData = {
   body?: never;

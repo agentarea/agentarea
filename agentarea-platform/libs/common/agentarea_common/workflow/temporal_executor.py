@@ -198,6 +198,14 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             )
 
             workflow_class = AgentExecutionWorkflow.run
+        elif workflow_name == "EvalRunWorkflow":
+            from agentarea_evals.runs.workflow import EvalRunWorkflow
+
+            workflow_class = EvalRunWorkflow.run
+        elif workflow_name == "ExperimentMonitorWorkflow":
+            from agentarea_evals.runs.workflow import ExperimentMonitorWorkflow
+
+            workflow_class = ExperimentMonitorWorkflow.run
         else:
             raise ValueError(f"Unknown workflow: {workflow_name}")
 
@@ -235,6 +243,14 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                     effective_policy=args["effective_policy"],
                 )
                 workflow_args = [execution_request]
+            elif workflow_name == "EvalRunWorkflow":
+                from agentarea_evals.runs.workflow_models import EvalRunInput
+
+                workflow_args = [EvalRunInput.model_validate(args)]
+            elif workflow_name == "ExperimentMonitorWorkflow":
+                from agentarea_evals.runs.workflow_models import ExperimentMonitorInput
+
+                workflow_args = [ExperimentMonitorInput.model_validate(args)]
             else:
                 workflow_args = [args]
 

@@ -37,7 +37,7 @@ from sqlalchemy.orm import RelationshipProperty, selectinload
 from sqlalchemy.pool import StaticPool
 
 PLATFORM_ROOT = Path(__file__).resolve().parents[2]
-EXPECTED_MODEL_COUNT = 29
+EXPECTED_MODEL_COUNT = 34
 
 WS_A = "tenant-scope-a"
 WS_B = "tenant-scope-b"
@@ -134,6 +134,15 @@ def _value(column: Column, unique: str) -> Any:
     return unique
 
 
+# Columns a CHECK constraint confines, with a value that satisfies it.
+_CHECKED_VALUES: dict[tuple[str, str], Any] = {
+    ("run_feedback", "rating"): "good",
+    ("eval_runs", "trials"): 1,
+    ("eval_runs", "concurrency"): 1,
+    ("eval_runs", "budget_usd"): Decimal(1),
+}
+
+
 def _row(table: Table, **given: Any) -> dict[str, Any]:
     row = dict(given)
     for column in table.columns:
@@ -141,6 +150,8 @@ def _row(table: Table, **given: Any) -> dict[str, Any]:
             continue
         if column.primary_key and column.name == "id":
             row["id"] = uuid.uuid4()
+        elif (table.name, column.name) in _CHECKED_VALUES:
+            row[column.name] = _CHECKED_VALUES[(table.name, column.name)]
         elif not column.nullable and column.default is None and column.server_default is None:
             row[column.name] = _value(column, uuid.uuid4().hex[:8])
     return row

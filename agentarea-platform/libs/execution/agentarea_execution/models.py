@@ -821,6 +821,8 @@ class CreateDelegationTaskRequest(BaseModel):
     # provide it and the activity rejects its absence.
     parent_effective_policy: dict[str, Any] | None = None
     run_budget_usd: Money | None = Field(default=None, gt=ZERO)
+    # Set when the parent is an evaluation run; the child inherits its mode.
+    evaluation: dict[str, Any] | None = None
 
 
 class CreateDelegationTaskResult(BaseModel):

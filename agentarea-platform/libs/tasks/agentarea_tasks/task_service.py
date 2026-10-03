@@ -1045,6 +1045,7 @@ class TaskService(BaseTaskService):
         status: str = "pending",
         task_policy: PolicyDocument | None = None,
         scheduled_at: datetime | None = None,
+        agent_revision_id: UUID | None = None,
     ) -> AgentTask:
         """Canonical entry point for creating and executing a task via Temporal workflow.
 
@@ -1065,6 +1066,8 @@ class TaskService(BaseTaskService):
             status: Initial task status (default ``pending``)
             task_policy: Optional task-scoped policy that may only tighten higher scopes.
             scheduled_at: Absolute future time for a one-shot deferred run.
+            agent_revision_id: Run this revision of the agent instead of the one
+                serving now (an evaluation trial).
 
         Returns:
             Created task with workflow execution info, or the routed-into existing
@@ -1125,6 +1128,7 @@ class TaskService(BaseTaskService):
             task_policy=task_policy,
             require_model=True,
             scheduled_at=scheduled_at,
+            agent_revision_id=agent_revision_id,
         )
 
         stored_task.status = "pending"

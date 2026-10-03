@@ -14,6 +14,7 @@ members = [
     "agentarea-api",
     "agentarea-bundles",
     "agentarea-common",
+    "agentarea-evals",
     "agentarea-execution",
     "agentarea-governance",
     "agentarea-llm",
@@ -146,6 +147,7 @@ dependencies = [
     { name = "agentarea-agents" },
     { name = "agentarea-bundles" },
     { name = "agentarea-common" },
+    { name = "agentarea-evals" },
     { name = "agentarea-execution" },
     { name = "agentarea-governance" },
     { name = "agentarea-llm" },
@@ -179,6 +181,7 @@ requires-dist = [
     { name = "agentarea-agents", editable = "libs/agents" },
     { name = "agentarea-bundles", editable = "libs/bundles" },
     { name = "agentarea-common", editable = "libs/common" },
+    { name = "agentarea-evals", editable = "libs/evals" },
     { name = "agentarea-execution", editable = "libs/execution" },
     { name = "agentarea-governance", editable = "libs/governance" },
     { name = "agentarea-llm", editable = "libs/llm" },
@@ -276,6 +279,25 @@ requires-dist = [
     { name = "returns", specifier = ">=0.25.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.23" },
     { name = "temporalio", extras = ["opentelemetry"], specifier = ">=1.12.0" },
+]
+
+[[package]]
+name = "agentarea-evals"
+version = "0.1.0"
+source = { editable = "libs/evals" }
+dependencies = [
+    { name = "agentarea-agents" },
+    { name = "agentarea-common" },
+    { name = "agentarea-tasks" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agentarea-agents", editable = "libs/agents" },
+    { name = "agentarea-common", editable = "libs/common" },
+    { name = "agentarea-tasks", editable = "libs/tasks" },
+    { name = "pydantic", specifier = ">=2.4.2" },
 ]
 
 [[package]]
@@ -557,6 +579,7 @@ dependencies = [
     { name = "agentarea-agents" },
     { name = "agentarea-api" },
     { name = "agentarea-common" },
+    { name = "agentarea-evals" },
     { name = "agentarea-execution" },
     { name = "agentarea-governance" },
     { name = "agentarea-tasks" },
@@ -572,6 +595,7 @@ requires-dist = [
     { name = "agentarea-agents", editable = "libs/agents" },
     { name = "agentarea-api", editable = "apps/api" },
     { name = "agentarea-common", editable = "libs/common" },
+    { name = "agentarea-evals", editable = "libs/evals" },
     { name = "agentarea-execution", editable = "libs/execution" },
     { name = "agentarea-governance", editable = "libs/governance" },
     { name = "agentarea-tasks", editable = "libs/tasks" },

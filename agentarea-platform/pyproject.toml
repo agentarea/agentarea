@@ -39,7 +39,8 @@ members = [
     "libs/openapi",
     "libs/projects",
     "libs/registry",
-    "libs/bundles"
+    "libs/bundles",
+    "libs/evals"
 ]
 
 [tool.uv]

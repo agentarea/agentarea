@@ -26,7 +26,9 @@ from fastapi.routing import APIRoute
 from . import (
     a2a_agent_cards,
     access_control,
+    agent_experiments,
     agent_overview,
+    agent_revisions,
     agents,
     agents_a2a,
     agents_tasks,
@@ -37,6 +39,7 @@ from . import (
     clients,
     connection_oauth,
     dashboard,
+    evals,
     files,
     governance,
     inbox,
@@ -57,6 +60,7 @@ from . import (
     provider_configs,
     provider_specs,
     registries,
+    run_feedback,
     sandboxes,
     skill_collections,
     skills,
@@ -143,6 +147,11 @@ workspace_v1_router.include_router(agents.router)
 workspace_v1_router.include_router(wallet.router)
 workspace_v1_router.include_router(agents_tasks.router)
 workspace_v1_router.include_router(agents_tasks.global_tasks_router)
+workspace_v1_router.include_router(agent_revisions.router)
+workspace_v1_router.include_router(agent_experiments.router)
+workspace_v1_router.include_router(evals.suites_router)
+workspace_v1_router.include_router(evals.runs_router)
+workspace_v1_router.include_router(run_feedback.router)
 
 # MCP server management
 workspace_v1_router.include_router(mcp_servers_specifications.router)

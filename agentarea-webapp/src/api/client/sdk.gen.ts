@@ -13,9 +13,18 @@ import type {
   AcceptInvitationV1InvitationsAcceptPostData,
   AcceptInvitationV1InvitationsAcceptPostErrors,
   AcceptInvitationV1InvitationsAcceptPostResponses,
+  ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostData,
+  ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostErrors,
+  ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostResponses,
   AddAgentToProjectV1ProjectsProjectIdAgentsPostData,
   AddAgentToProjectV1ProjectsProjectIdAgentsPostErrors,
   AddAgentToProjectV1ProjectsProjectIdAgentsPostResponses,
+  AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostData,
+  AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostErrors,
+  AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostResponses,
+  AddCaseV1EvalSuitesSuiteIdCasesPostData,
+  AddCaseV1EvalSuitesSuiteIdCasesPostErrors,
+  AddCaseV1EvalSuitesSuiteIdCasesPostResponses,
   AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostData,
   AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostErrors,
   AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostResponses,
@@ -70,6 +79,9 @@ import type {
   CreateAttachmentUploadUrlV1FilesUploadUrlPostData,
   CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors,
   CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses,
+  CreateCandidateV1AgentsAgentIdRevisionsPostData,
+  CreateCandidateV1AgentsAgentIdRevisionsPostErrors,
+  CreateCandidateV1AgentsAgentIdRevisionsPostResponses,
   CreateCatalogItemV1RegistriesRegistryIdItemsPostData,
   CreateCatalogItemV1RegistriesRegistryIdItemsPostErrors,
   CreateCatalogItemV1RegistriesRegistryIdItemsPostResponses,
@@ -133,6 +145,9 @@ import type {
   CreateSkillV1SkillsPostData,
   CreateSkillV1SkillsPostErrors,
   CreateSkillV1SkillsPostResponses,
+  CreateSuiteV1EvalSuitesPostData,
+  CreateSuiteV1EvalSuitesPostErrors,
+  CreateSuiteV1EvalSuitesPostResponses,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostData,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostErrors,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostResponses,
@@ -154,6 +169,9 @@ import type {
   DeleteAgentV1AgentsAgentIdDeleteData,
   DeleteAgentV1AgentsAgentIdDeleteErrors,
   DeleteAgentV1AgentsAgentIdDeleteResponses,
+  DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteData,
+  DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteErrors,
+  DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteResponses,
   DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteData,
   DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteErrors,
   DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponses,
@@ -205,6 +223,9 @@ import type {
   DeleteSkillV1SkillsSkillIdDeleteData,
   DeleteSkillV1SkillsSkillIdDeleteErrors,
   DeleteSkillV1SkillsSkillIdDeleteResponses,
+  DeleteSuiteV1EvalSuitesSuiteIdDeleteData,
+  DeleteSuiteV1EvalSuitesSuiteIdDeleteErrors,
+  DeleteSuiteV1EvalSuitesSuiteIdDeleteResponses,
   DeleteTriggerV1TriggersTriggerIdDeleteData,
   DeleteTriggerV1TriggersTriggerIdDeleteErrors,
   DeleteTriggerV1TriggersTriggerIdDeleteResponses,
@@ -217,6 +238,9 @@ import type {
   DeployMcpServerV1McpServersServerIdDeployPostData,
   DeployMcpServerV1McpServersServerIdDeployPostErrors,
   DeployMcpServerV1McpServersServerIdDeployPostResponses,
+  DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetData,
+  DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetErrors,
+  DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetResponses,
   DisableTriggerV1TriggersTriggerIdDisablePostData,
   DisableTriggerV1TriggersTriggerIdDisablePostErrors,
   DisableTriggerV1TriggersTriggerIdDisablePostResponses,
@@ -244,6 +268,9 @@ import type {
   EnableTriggerV1TriggersTriggerIdEnablePostData,
   EnableTriggerV1TriggersTriggerIdEnablePostErrors,
   EnableTriggerV1TriggersTriggerIdEnablePostResponses,
+  EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostData,
+  EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostErrors,
+  EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostResponses,
   ExecuteTriggerV1TriggersTriggerIdExecutePostData,
   ExecuteTriggerV1TriggersTriggerIdExecutePostErrors,
   ExecuteTriggerV1TriggersTriggerIdExecutePostResponses,
@@ -325,6 +352,9 @@ import type {
   GetExecutionTimelineV1TriggersTriggerIdTimelineGetData,
   GetExecutionTimelineV1TriggersTriggerIdTimelineGetErrors,
   GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses,
+  GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetData,
+  GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetErrors,
+  GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetResponses,
   GetGraphV1AccessControlGraphGetData,
   GetGraphV1AccessControlGraphGetErrors,
   GetGraphV1AccessControlGraphGetResponses,
@@ -387,6 +417,12 @@ import type {
   GetRegistryV1RegistriesRegistryIdGetData,
   GetRegistryV1RegistriesRegistryIdGetErrors,
   GetRegistryV1RegistriesRegistryIdGetResponses,
+  GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetData,
+  GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetErrors,
+  GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetResponses,
+  GetRunV1AgentsAgentIdEvalRunsRunIdGetData,
+  GetRunV1AgentsAgentIdEvalRunsRunIdGetErrors,
+  GetRunV1AgentsAgentIdEvalRunsRunIdGetResponses,
   GetSecretV1SecretsSecretIdGetData,
   GetSecretV1SecretsSecretIdGetErrors,
   GetSecretV1SecretsSecretIdGetResponses,
@@ -399,6 +435,9 @@ import type {
   GetSkillV1SkillsSkillIdGetData,
   GetSkillV1SkillsSkillIdGetErrors,
   GetSkillV1SkillsSkillIdGetResponses,
+  GetSuiteV1EvalSuitesSuiteIdGetData,
+  GetSuiteV1EvalSuitesSuiteIdGetErrors,
+  GetSuiteV1EvalSuitesSuiteIdGetResponses,
   GetTaskByIdV1TasksTaskIdGetData,
   GetTaskByIdV1TasksTaskIdGetErrors,
   GetTaskByIdV1TasksTaskIdGetResponses,
@@ -500,6 +539,9 @@ import type {
   ListAuditLogsV1AuditLogsGetData,
   ListAuditLogsV1AuditLogsGetErrors,
   ListAuditLogsV1AuditLogsGetResponses,
+  ListCasesV1EvalSuitesSuiteIdCasesGetData,
+  ListCasesV1EvalSuitesSuiteIdCasesGetErrors,
+  ListCasesV1EvalSuitesSuiteIdCasesGetResponses,
   ListClientsV1ClientsGetData,
   ListClientsV1ClientsGetErrors,
   ListClientsV1ClientsGetResponses,
@@ -509,6 +551,12 @@ import type {
   ListConnectionsV1OpenapiConnectionsGetData,
   ListConnectionsV1OpenapiConnectionsGetErrors,
   ListConnectionsV1OpenapiConnectionsGetResponses,
+  ListExperimentsV1AgentsAgentIdExperimentsGetData,
+  ListExperimentsV1AgentsAgentIdExperimentsGetErrors,
+  ListExperimentsV1AgentsAgentIdExperimentsGetResponses,
+  ListFeedbackV1TasksTaskIdFeedbackGetData,
+  ListFeedbackV1TasksTaskIdFeedbackGetErrors,
+  ListFeedbackV1TasksTaskIdFeedbackGetResponses,
   ListInvitationsV1InvitationsGetData,
   ListInvitationsV1InvitationsGetErrors,
   ListInvitationsV1InvitationsGetResponses,
@@ -578,6 +626,12 @@ import type {
   ListRelationshipsV1AccessControlRelationshipsGetData,
   ListRelationshipsV1AccessControlRelationshipsGetErrors,
   ListRelationshipsV1AccessControlRelationshipsGetResponses,
+  ListRevisionsV1AgentsAgentIdRevisionsGetData,
+  ListRevisionsV1AgentsAgentIdRevisionsGetErrors,
+  ListRevisionsV1AgentsAgentIdRevisionsGetResponses,
+  ListRunsV1AgentsAgentIdEvalRunsGetData,
+  ListRunsV1AgentsAgentIdEvalRunsGetErrors,
+  ListRunsV1AgentsAgentIdEvalRunsGetResponses,
   ListSandboxesV1SandboxesGetData,
   ListSandboxesV1SandboxesGetErrors,
   ListSandboxesV1SandboxesGetResponses,
@@ -593,6 +647,9 @@ import type {
   ListSkillsV1SkillsGetData,
   ListSkillsV1SkillsGetErrors,
   ListSkillsV1SkillsGetResponses,
+  ListSuitesV1EvalSuitesGetData,
+  ListSuitesV1EvalSuitesGetErrors,
+  ListSuitesV1EvalSuitesGetResponses,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetData,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetErrors,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetResponses,
@@ -656,6 +713,9 @@ import type {
   ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostData,
   ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors,
   ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostResponses,
+  PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostData,
+  PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostErrors,
+  PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostResponses,
   ProxyInstanceV1McpInstanceIdMcpDeleteData,
   ProxyInstanceV1McpInstanceIdMcpDeleteErrors,
   ProxyInstanceV1McpInstanceIdMcpDeleteResponses,
@@ -665,6 +725,9 @@ import type {
   ProxyInstanceV1McpInstanceIdMcpPostData,
   ProxyInstanceV1McpInstanceIdMcpPostErrors,
   ProxyInstanceV1McpInstanceIdMcpPostResponses,
+  RateRunV1TasksTaskIdFeedbackPutData,
+  RateRunV1TasksTaskIdFeedbackPutErrors,
+  RateRunV1TasksTaskIdFeedbackPutResponses,
   ReadAgentCardV1A2aAgentCardsPostData,
   ReadAgentCardV1A2aAgentCardsPostErrors,
   ReadAgentCardV1A2aAgentCardsPostResponses,
@@ -713,6 +776,9 @@ import type {
   ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostData,
   ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors,
   ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostResponses,
+  RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetData,
+  RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetErrors,
+  RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetResponses,
   RevokeApiKeyV1ApiKeysTokenIdDeleteData,
   RevokeApiKeyV1ApiKeysTokenIdDeleteErrors,
   RevokeApiKeyV1ApiKeysTokenIdDeleteResponses,
@@ -743,6 +809,18 @@ import type {
   SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostData,
   SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostErrors,
   SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostResponses,
+  StartExperimentV1AgentsAgentIdExperimentsPostData,
+  StartExperimentV1AgentsAgentIdExperimentsPostErrors,
+  StartExperimentV1AgentsAgentIdExperimentsPostResponses,
+  StartRunV1AgentsAgentIdEvalRunsPostData,
+  StartRunV1AgentsAgentIdEvalRunsPostErrors,
+  StartRunV1AgentsAgentIdEvalRunsPostResponses,
+  StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostData,
+  StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostErrors,
+  StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostResponses,
+  StopRunV1AgentsAgentIdEvalRunsRunIdStopPostData,
+  StopRunV1AgentsAgentIdEvalRunsRunIdStopPostErrors,
+  StopRunV1AgentsAgentIdEvalRunsRunIdStopPostResponses,
   StreamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGetData,
   StreamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGetErrors,
   StreamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGetResponses,
@@ -770,6 +848,9 @@ import type {
   UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostData,
   UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors,
   UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses,
+  UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchData,
+  UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchErrors,
+  UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchResponses,
   UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchData,
   UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchErrors,
   UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponses,
@@ -815,6 +896,9 @@ import type {
   UpdateSkillV1SkillsSkillIdPutData,
   UpdateSkillV1SkillsSkillIdPutErrors,
   UpdateSkillV1SkillsSkillIdPutResponses,
+  UpdateSuiteV1EvalSuitesSuiteIdPatchData,
+  UpdateSuiteV1EvalSuitesSuiteIdPatchErrors,
+  UpdateSuiteV1EvalSuitesSuiteIdPatchResponses,
   UpdateTriggerV1TriggersTriggerIdPutData,
   UpdateTriggerV1TriggersTriggerIdPutErrors,
   UpdateTriggerV1TriggersTriggerIdPutResponses,
@@ -2307,6 +2391,323 @@ export const updateAgentV1AgentsAgentIdPatch = <
   });
 
 /**
+ * List Runs
+ */
+export const listRunsV1AgentsAgentIdEvalRunsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<ListRunsV1AgentsAgentIdEvalRunsGetData, ThrowOnError>
+): RequestResult<
+  ListRunsV1AgentsAgentIdEvalRunsGetResponses,
+  ListRunsV1AgentsAgentIdEvalRunsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListRunsV1AgentsAgentIdEvalRunsGetResponses,
+    ListRunsV1AgentsAgentIdEvalRunsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/eval-runs",
+    ...options,
+  });
+
+/**
+ * Start Run
+ *
+ * Run a suite against the agent's serving revision, or a baseline and a candidate.
+ */
+export const startRunV1AgentsAgentIdEvalRunsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<StartRunV1AgentsAgentIdEvalRunsPostData, ThrowOnError>
+): RequestResult<
+  StartRunV1AgentsAgentIdEvalRunsPostResponses,
+  StartRunV1AgentsAgentIdEvalRunsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    StartRunV1AgentsAgentIdEvalRunsPostResponses,
+    StartRunV1AgentsAgentIdEvalRunsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/eval-runs",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Run
+ */
+export const getRunV1AgentsAgentIdEvalRunsRunIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetRunV1AgentsAgentIdEvalRunsRunIdGetData, ThrowOnError>
+): RequestResult<
+  GetRunV1AgentsAgentIdEvalRunsRunIdGetResponses,
+  GetRunV1AgentsAgentIdEvalRunsRunIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetRunV1AgentsAgentIdEvalRunsRunIdGetResponses,
+    GetRunV1AgentsAgentIdEvalRunsRunIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/eval-runs/{run_id}",
+    ...options,
+  });
+
+/**
+ * Stop Run
+ *
+ * Stop claiming trials; the ones already running finish and still count.
+ */
+export const stopRunV1AgentsAgentIdEvalRunsRunIdStopPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    StopRunV1AgentsAgentIdEvalRunsRunIdStopPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  StopRunV1AgentsAgentIdEvalRunsRunIdStopPostResponses,
+  StopRunV1AgentsAgentIdEvalRunsRunIdStopPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    StopRunV1AgentsAgentIdEvalRunsRunIdStopPostResponses,
+    StopRunV1AgentsAgentIdEvalRunsRunIdStopPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/eval-runs/{run_id}/stop",
+    ...options,
+  });
+
+/**
+ * List Experiments
+ */
+export const listExperimentsV1AgentsAgentIdExperimentsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ListExperimentsV1AgentsAgentIdExperimentsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListExperimentsV1AgentsAgentIdExperimentsGetResponses,
+  ListExperimentsV1AgentsAgentIdExperimentsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListExperimentsV1AgentsAgentIdExperimentsGetResponses,
+    ListExperimentsV1AgentsAgentIdExperimentsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/experiments",
+    ...options,
+  });
+
+/**
+ * Start Experiment
+ *
+ * Start splitting runs; the candidate begins at the policy's first step.
+ */
+export const startExperimentV1AgentsAgentIdExperimentsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    StartExperimentV1AgentsAgentIdExperimentsPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  StartExperimentV1AgentsAgentIdExperimentsPostResponses,
+  StartExperimentV1AgentsAgentIdExperimentsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    StartExperimentV1AgentsAgentIdExperimentsPostResponses,
+    StartExperimentV1AgentsAgentIdExperimentsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/experiments",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Experiment
+ */
+export const getExperimentV1AgentsAgentIdExperimentsExperimentIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetResponses,
+  GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetResponses,
+    GetExperimentV1AgentsAgentIdExperimentsExperimentIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/experiments/{experiment_id}",
+    ...options,
+  });
+
+/**
+ * Evaluate Experiment
+ *
+ * Decide now instead of waiting for the monitor; ``null`` once it has ended.
+ */
+export const evaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostResponses,
+    EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostResponses,
+      EvaluateExperimentV1AgentsAgentIdExperimentsExperimentIdEvaluatePostErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/agents/{agent_id}/experiments/{experiment_id}/evaluate",
+      ...options,
+    });
+
+/**
+ * Promote Experiment
+ *
+ * Serve the candidate to everyone now.
+ */
+export const promoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostResponses,
+    PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostResponses,
+      PromoteExperimentV1AgentsAgentIdExperimentsExperimentIdPromotePostErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/agents/{agent_id}/experiments/{experiment_id}/promote",
+      ...options,
+    });
+
+/**
+ * Stop Experiment
+ */
+export const stopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostResponses,
+  StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostResponses,
+    StopExperimentV1AgentsAgentIdExperimentsExperimentIdStopPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/experiments/{experiment_id}/stop",
+    ...options,
+  });
+
+/**
  * Install Agent
  *
  * Add a built-in catalog agent to the workspace (copy-on-write fork).
@@ -2366,6 +2767,203 @@ export const getAgentOverviewV1AgentsAgentIdOverviewGet = <
       },
     ],
     url: "/v1/workspaces/{workspace}/agents/{agent_id}/overview",
+    ...options,
+  });
+
+/**
+ * List Revisions
+ *
+ * Every revision of the agent, newest first.
+ */
+export const listRevisionsV1AgentsAgentIdRevisionsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<ListRevisionsV1AgentsAgentIdRevisionsGetData, ThrowOnError>
+): RequestResult<
+  ListRevisionsV1AgentsAgentIdRevisionsGetResponses,
+  ListRevisionsV1AgentsAgentIdRevisionsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListRevisionsV1AgentsAgentIdRevisionsGetResponses,
+    ListRevisionsV1AgentsAgentIdRevisionsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/revisions",
+    ...options,
+  });
+
+/**
+ * Create Candidate
+ *
+ * Propose a candidate revision. What serves does not change until it is activated.
+ */
+export const createCandidateV1AgentsAgentIdRevisionsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    CreateCandidateV1AgentsAgentIdRevisionsPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  CreateCandidateV1AgentsAgentIdRevisionsPostResponses,
+  CreateCandidateV1AgentsAgentIdRevisionsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateCandidateV1AgentsAgentIdRevisionsPostResponses,
+    CreateCandidateV1AgentsAgentIdRevisionsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/revisions",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Revision Outcomes
+ *
+ * Outcomes of past runs per revision. Observational: revisions saw different inputs.
+ */
+export const revisionOutcomesV1AgentsAgentIdRevisionsOutcomesGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetResponses,
+  RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetResponses,
+    RevisionOutcomesV1AgentsAgentIdRevisionsOutcomesGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/revisions/outcomes",
+    ...options,
+  });
+
+/**
+ * Get Revision
+ */
+export const getRevisionV1AgentsAgentIdRevisionsRevisionIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetResponses,
+  GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetResponses,
+    GetRevisionV1AgentsAgentIdRevisionsRevisionIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/revisions/{revision_id}",
+    ...options,
+  });
+
+/**
+ * Activate Revision
+ *
+ * Serve this revision: promote a candidate, or roll back to an earlier one.
+ */
+export const activateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostData,
+    ThrowOnError
+  >
+): RequestResult<
+  ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostResponses,
+  ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostResponses,
+    ActivateRevisionV1AgentsAgentIdRevisionsRevisionIdActivatePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/revisions/{revision_id}/activate",
+    ...options,
+  });
+
+/**
+ * Diff Revision
+ *
+ * What changes going from ``against`` (the serving revision by default) to this one.
+ */
+export const diffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetResponses,
+  DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetResponses,
+    DiffRevisionV1AgentsAgentIdRevisionsRevisionIdDiffGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/revisions/{revision_id}/diff",
     ...options,
   });
 
@@ -4067,6 +4665,315 @@ export const getDashboardV1DashboardGet = <
     ],
     url: "/v1/workspaces/{workspace}/dashboard",
     ...options,
+  });
+
+/**
+ * List Suites
+ */
+export const listSuitesV1EvalSuitesGet = <ThrowOnError extends boolean = false>(
+  options?: Options<ListSuitesV1EvalSuitesGetData, ThrowOnError>
+): RequestResult<
+  ListSuitesV1EvalSuitesGetResponses,
+  ListSuitesV1EvalSuitesGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListSuitesV1EvalSuitesGetResponses,
+    ListSuitesV1EvalSuitesGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/eval-suites",
+    ...options,
+  });
+
+/**
+ * Create Suite
+ */
+export const createSuiteV1EvalSuitesPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreateSuiteV1EvalSuitesPostData, ThrowOnError>
+): RequestResult<
+  CreateSuiteV1EvalSuitesPostResponses,
+  CreateSuiteV1EvalSuitesPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateSuiteV1EvalSuitesPostResponses,
+    CreateSuiteV1EvalSuitesPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/eval-suites",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Suite
+ */
+export const deleteSuiteV1EvalSuitesSuiteIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DeleteSuiteV1EvalSuitesSuiteIdDeleteData, ThrowOnError>
+): RequestResult<
+  DeleteSuiteV1EvalSuitesSuiteIdDeleteResponses,
+  DeleteSuiteV1EvalSuitesSuiteIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteSuiteV1EvalSuitesSuiteIdDeleteResponses,
+    DeleteSuiteV1EvalSuitesSuiteIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}",
+    ...options,
+  });
+
+/**
+ * Get Suite
+ */
+export const getSuiteV1EvalSuitesSuiteIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetSuiteV1EvalSuitesSuiteIdGetData, ThrowOnError>
+): RequestResult<
+  GetSuiteV1EvalSuitesSuiteIdGetResponses,
+  GetSuiteV1EvalSuitesSuiteIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetSuiteV1EvalSuitesSuiteIdGetResponses,
+    GetSuiteV1EvalSuitesSuiteIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}",
+    ...options,
+  });
+
+/**
+ * Update Suite
+ */
+export const updateSuiteV1EvalSuitesSuiteIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UpdateSuiteV1EvalSuitesSuiteIdPatchData, ThrowOnError>
+): RequestResult<
+  UpdateSuiteV1EvalSuitesSuiteIdPatchResponses,
+  UpdateSuiteV1EvalSuitesSuiteIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdateSuiteV1EvalSuitesSuiteIdPatchResponses,
+    UpdateSuiteV1EvalSuitesSuiteIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Cases
+ */
+export const listCasesV1EvalSuitesSuiteIdCasesGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<ListCasesV1EvalSuitesSuiteIdCasesGetData, ThrowOnError>
+): RequestResult<
+  ListCasesV1EvalSuitesSuiteIdCasesGetResponses,
+  ListCasesV1EvalSuitesSuiteIdCasesGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListCasesV1EvalSuitesSuiteIdCasesGetResponses,
+    ListCasesV1EvalSuitesSuiteIdCasesGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}/cases",
+    ...options,
+  });
+
+/**
+ * Add Case
+ */
+export const addCaseV1EvalSuitesSuiteIdCasesPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<AddCaseV1EvalSuitesSuiteIdCasesPostData, ThrowOnError>
+): RequestResult<
+  AddCaseV1EvalSuitesSuiteIdCasesPostResponses,
+  AddCaseV1EvalSuitesSuiteIdCasesPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    AddCaseV1EvalSuitesSuiteIdCasesPostResponses,
+    AddCaseV1EvalSuitesSuiteIdCasesPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}/cases",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Add Case From Task
+ *
+ * A case from a real run: its input, and draft stubs from the tool answers it got.
+ */
+export const addCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostResponses,
+  AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostResponses,
+    AddCaseFromTaskV1EvalSuitesSuiteIdCasesFromTaskPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}/cases/from-task",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Case
+ */
+export const deleteCaseV1EvalSuitesSuiteIdCasesCaseIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteResponses,
+  DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteResponses,
+    DeleteCaseV1EvalSuitesSuiteIdCasesCaseIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}/cases/{case_id}",
+    ...options,
+  });
+
+/**
+ * Update Case
+ */
+export const updateCaseV1EvalSuitesSuiteIdCasesCaseIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchResponses,
+  UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchResponses,
+    UpdateCaseV1EvalSuitesSuiteIdCasesCaseIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/eval-suites/{suite_id}/cases/{case_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
@@ -9425,6 +10332,71 @@ export const continueTaskExecutionV1TasksTaskIdContinuePost = <
       },
     ],
     url: "/v1/workspaces/{workspace}/tasks/{task_id}/continue",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Feedback
+ */
+export const listFeedbackV1TasksTaskIdFeedbackGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<ListFeedbackV1TasksTaskIdFeedbackGetData, ThrowOnError>
+): RequestResult<
+  ListFeedbackV1TasksTaskIdFeedbackGetResponses,
+  ListFeedbackV1TasksTaskIdFeedbackGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListFeedbackV1TasksTaskIdFeedbackGetResponses,
+    ListFeedbackV1TasksTaskIdFeedbackGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/tasks/{task_id}/feedback",
+    ...options,
+  });
+
+/**
+ * Rate Run
+ *
+ * Rate a run; rating it again replaces your previous verdict.
+ *
+ * Ratings feed revision stats and experiment guardrails, so an agent or an
+ * integration holding an API key must not be able to write one.
+ */
+export const rateRunV1TasksTaskIdFeedbackPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<RateRunV1TasksTaskIdFeedbackPutData, ThrowOnError>
+): RequestResult<
+  RateRunV1TasksTaskIdFeedbackPutResponses,
+  RateRunV1TasksTaskIdFeedbackPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    RateRunV1TasksTaskIdFeedbackPutResponses,
+    RateRunV1TasksTaskIdFeedbackPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/tasks/{task_id}/feedback",
     ...options,
     headers: {
       "Content-Type": "application/json",
