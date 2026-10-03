@@ -497,6 +497,9 @@ import type {
   ListApiKeysV1ApiKeysGetData,
   ListApiKeysV1ApiKeysGetErrors,
   ListApiKeysV1ApiKeysGetResponses,
+  ListApprovalDecisionsV1InboxDecisionsGetData,
+  ListApprovalDecisionsV1InboxDecisionsGetErrors,
+  ListApprovalDecisionsV1InboxDecisionsGetResponses,
   ListAuditLogsV1AuditLogsGetData,
   ListAuditLogsV1AuditLogsGetErrors,
   ListAuditLogsV1AuditLogsGetResponses,
@@ -725,6 +728,9 @@ import type {
   RotateSecretV1SecretsSecretIdValuePutData,
   RotateSecretV1SecretsSecretIdValuePutErrors,
   RotateSecretV1SecretsSecretIdValuePutResponses,
+  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostData,
+  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors,
+  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
@@ -4561,6 +4567,36 @@ export const getInboxItemsV1InboxGet = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/v1/workspaces/{workspace}/inbox/",
+    ...options,
+  });
+
+/**
+ * List Approval Decisions
+ *
+ * Answered approval requests, newest first: who decided what, and when.
+ */
+export const listApprovalDecisionsV1InboxDecisionsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListApprovalDecisionsV1InboxDecisionsGetData, ThrowOnError>
+): RequestResult<
+  ListApprovalDecisionsV1InboxDecisionsGetResponses,
+  ListApprovalDecisionsV1InboxDecisionsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListApprovalDecisionsV1InboxDecisionsGetResponses,
+    ListApprovalDecisionsV1InboxDecisionsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/inbox/decisions",
     ...options,
   });
 
@@ -9479,6 +9515,10 @@ export const listTriggersV1TriggersGet = <ThrowOnError extends boolean = false>(
  * If channel_credentials are provided, they are stored encrypted in the secret
  * store under key ``channel_cred:{webhook_type}:{trigger_id}``.
  *
+ * A generic webhook created without a signing secret gets a generated one,
+ * returned once in ``signing_secret``; requests must then be signed as
+ * ``signature_scheme`` describes.
+ *
  * Args:
  * payload: Trigger creation DTO (single source of truth shared with MCP toolset).
  * user_context: Authentication context.
@@ -9721,7 +9761,10 @@ export const getTriggerV1TriggersTriggerIdGet = <
  *
  * Updates the specified trigger with the provided data. Only non-null fields
  * in the request will be updated. Secret selections preserve unselected
- * credential fields; legacy raw credentials replace the stored bundle.
+ * credential fields; legacy raw credentials replace the stored bundle, except
+ * the Telegram secret token, which is kept. A channel webhook is registered
+ * with its provider before anything is saved; if the provider refuses, the
+ * call fails with 502 and nothing changes.
  *
  * Args:
  * trigger_id: The unique identifier of the trigger.
@@ -10108,6 +10151,49 @@ export const runTriggerNowV1TriggersTriggerIdRunPost = <
       },
     ],
     url: "/v1/workspaces/{workspace}/triggers/{trigger_id}/run",
+    ...options,
+  });
+
+/**
+ * Rotate Signing Secret
+ *
+ * Generate a new signing secret for a generic webhook and return it once.
+ *
+ * Signs an unsigned webhook, or replaces the secret of a signed one: from
+ * this call on, requests signed with any previous secret, or not signed, are
+ * refused. The secret is in ``signing_secret`` of this response only.
+ *
+ * Raises:
+ * HTTPException: 404 if the trigger does not exist; 400 if it is not a
+ * generic webhook (other channels are signed with their provider's
+ * secret); 409 if its secret is set inline in ``validation_rules`` or
+ * ``webhook_config``, which this call cannot replace.
+ */
+export const rotateSigningSecretV1TriggersTriggerIdSigningSecretPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RotateSigningSecretV1TriggersTriggerIdSigningSecretPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses,
+  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses,
+    RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/triggers/{trigger_id}/signing-secret",
     ...options,
   });
 

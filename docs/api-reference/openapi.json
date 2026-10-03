@@ -493,11 +493,11 @@
         "properties": {
           "cost_mtd_usd": {
             "title": "Cost Mtd Usd",
-            "type": "number"
+            "type": "string"
           },
           "cost_today_usd": {
             "title": "Cost Today Usd",
-            "type": "number"
+            "type": "string"
           },
           "daily_spend": {
             "items": {
@@ -1077,6 +1077,141 @@
         "title": "AnalyzeRequest",
         "type": "object"
       },
+      "ApprovalDecision": {
+        "description": "One answered approval request, as the workflow recorded the answer.",
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "title": "Decided At",
+            "type": "string"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "escalation_id": {
+            "title": "Escalation Id",
+            "type": "string"
+          },
+          "task_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Description"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "tool_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Name"
+          }
+        },
+        "required": [
+          "escalation_id",
+          "task_id",
+          "decided_at"
+        ],
+        "title": "ApprovalDecision",
+        "type": "object"
+      },
+      "ApprovalDecisionsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalDecision"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "ApprovalDecisionsResponse",
+        "type": "object"
+      },
       "ApprovalPolicy": {
         "additionalProperties": false,
         "description": "Human approval and escalation requirements.",
@@ -1367,8 +1502,76 @@
         "title": "AuditLogListResponse",
         "type": "object"
       },
+      "BlockedTaskBlocker": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "agent_id",
+          "description",
+          "error",
+          "occurred_at"
+        ],
+        "title": "BlockedTaskBlocker",
+        "type": "object"
+      },
       "Blockers": {
         "properties": {
+          "awaiting_continuation": {
+            "items": {
+              "$ref": "#/components/schemas/HitlBlocker"
+            },
+            "title": "Awaiting Continuation",
+            "type": "array"
+          },
+          "blocked_24h": {
+            "items": {
+              "$ref": "#/components/schemas/BlockedTaskBlocker"
+            },
+            "title": "Blocked 24H",
+            "type": "array"
+          },
           "failed_24h": {
             "items": {
               "$ref": "#/components/schemas/FailedTaskBlocker"
@@ -1393,6 +1596,8 @@
         },
         "required": [
           "hitl",
+          "awaiting_continuation",
+          "blocked_24h",
           "wallet_exhausted",
           "failed_24h"
         ],
@@ -3202,7 +3407,7 @@
           },
           "usd": {
             "title": "Usd",
-            "type": "number"
+            "type": "string"
           }
         },
         "required": [
@@ -3305,7 +3510,7 @@
           "cost_usd": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -11276,7 +11481,7 @@
           "cap_usd": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -11286,7 +11491,7 @@
           },
           "mtd_usd": {
             "title": "Mtd Usd",
-            "type": "number"
+            "type": "string"
           },
           "pct_of_cap": {
             "anyOf": [
@@ -11302,7 +11507,7 @@
           "projected_eom_usd": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -11317,7 +11522,7 @@
           },
           "today_usd": {
             "title": "Today Usd",
-            "type": "number"
+            "type": "string"
           }
         },
         "required": [
@@ -12758,6 +12963,29 @@
             ],
             "title": "Next Run Time"
           },
+          "signature_scheme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WebhookSignatureScheme"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signing scheme of a generic webhook; null for other types."
+          },
+          "signing_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Generated signing secret of a generic webhook. Returned only by the create and rotate calls that generated it; never readable afterwards.",
+            "title": "Signing Secret"
+          },
           "task_parameters": {
             "additionalProperties": true,
             "title": "Task Parameters",
@@ -12817,6 +13045,23 @@
               }
             ],
             "title": "Webhook Id"
+          },
+          "webhook_signing": {
+            "anyOf": [
+              {
+                "enum": [
+                  "signed",
+                  "unsigned",
+                  "unsupported"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What protects the public webhook URL. 'signed': requests without a valid signature or token are refused. 'unsigned': this trigger has no secret, so any request starts the agent. 'unsupported': the platform does not verify this provider's requests. Null for non-webhook triggers, or when the stored secret could not be read.",
+            "title": "Webhook Signing"
           },
           "webhook_type": {
             "anyOf": [
@@ -13739,7 +13984,7 @@
           },
           "budget_usd": {
             "title": "Budget Usd",
-            "type": "number"
+            "type": "string"
           },
           "period": {
             "title": "Period",
@@ -13843,6 +14088,33 @@
           "status"
         ],
         "title": "WalletResponse",
+        "type": "object"
+      },
+      "WebhookSignatureScheme": {
+        "description": "How a sender signs requests to a generic webhook.",
+        "properties": {
+          "algorithm": {
+            "description": "HMAC digest, e.g. 'sha256'.",
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "header": {
+            "description": "Request header carrying the signature.",
+            "title": "Header",
+            "type": "string"
+          },
+          "prefix": {
+            "description": "Text before the hex digest in the header; often empty.",
+            "title": "Prefix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "header",
+          "algorithm",
+          "prefix"
+        ],
+        "title": "WebhookSignatureScheme",
         "type": "object"
       },
       "WorkspaceDirectoryResponse": {
@@ -13977,7 +14249,7 @@
           "monthly_cap_usd": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -13997,8 +14269,16 @@
           "monthly_cap_usd": {
             "anyOf": [
               {
-                "minimum": 0.0,
-                "type": "number"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0"
               },
               {
                 "type": "null"
@@ -21580,6 +21860,84 @@
           }
         ],
         "summary": "Get Inbox Items",
+        "tags": [
+          "v1",
+          "protected",
+          "inbox"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/inbox/decisions": {
+      "get": {
+        "description": "Answered approval requests, newest first: who decided what, and when.",
+        "operationId": "list_approval_decisions_v1_inbox_decisions_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "maximum": 1000000,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalDecisionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Approval Decisions",
         "tags": [
           "v1",
           "protected",
@@ -32028,7 +32386,7 @@
         ]
       },
       "post": {
-        "description": "Create a new trigger.\n\nCreates a new trigger with the specified configuration. The trigger will be\nvalidated and, if it's a cron trigger, automatically scheduled.\n\nIf channel_credentials are provided, they are stored encrypted in the secret\nstore under key ``channel_cred:{webhook_type}:{trigger_id}``.\n\nArgs:\n    payload: Trigger creation DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    secret_catalog: Workspace-scoped catalog for selected credential references.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The created trigger.\n\nRaises:\n    HTTPException: If validation fails or creation errors occur.",
+        "description": "Create a new trigger.\n\nCreates a new trigger with the specified configuration. The trigger will be\nvalidated and, if it's a cron trigger, automatically scheduled.\n\nIf channel_credentials are provided, they are stored encrypted in the secret\nstore under key ``channel_cred:{webhook_type}:{trigger_id}``.\n\nA generic webhook created without a signing secret gets a generated one,\nreturned once in ``signing_secret``; requests must then be signed as\n``signature_scheme`` describes.\n\nArgs:\n    payload: Trigger creation DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    secret_catalog: Workspace-scoped catalog for selected credential references.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The created trigger.\n\nRaises:\n    HTTPException: If validation fails or creation errors occur.",
         "operationId": "create_trigger_v1_triggers__post",
         "parameters": [
           {
@@ -32385,7 +32743,7 @@
         ]
       },
       "put": {
-        "description": "Update an existing trigger.\n\nUpdates the specified trigger with the provided data. Only non-null fields\nin the request will be updated. Secret selections preserve unselected\ncredential fields; legacy raw credentials replace the stored bundle.\n\nArgs:\n    trigger_id: The unique identifier of the trigger.\n    payload: Trigger update DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    secret_catalog: Workspace-scoped catalog for selected credential references.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The updated trigger.\n\nRaises:\n    HTTPException: If trigger not found or validation fails.",
+        "description": "Update an existing trigger.\n\nUpdates the specified trigger with the provided data. Only non-null fields\nin the request will be updated. Secret selections preserve unselected\ncredential fields; legacy raw credentials replace the stored bundle, except\nthe Telegram secret token, which is kept. A channel webhook is registered\nwith its provider before anything is saved; if the provider refuses, the\ncall fails with 502 and nothing changes.\n\nArgs:\n    trigger_id: The unique identifier of the trigger.\n    payload: Trigger update DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    secret_catalog: Workspace-scoped catalog for selected credential references.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The updated trigger.\n\nRaises:\n    HTTPException: If trigger not found or validation fails.",
         "operationId": "update_trigger_v1_triggers__trigger_id__put",
         "parameters": [
           {
@@ -33046,6 +33404,70 @@
           }
         ],
         "summary": "Run Trigger Now",
+        "tags": [
+          "v1",
+          "protected",
+          "triggers"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/triggers/{trigger_id}/signing-secret": {
+      "post": {
+        "description": "Generate a new signing secret for a generic webhook and return it once.\n\nSigns an unsigned webhook, or replaces the secret of a signed one: from\nthis call on, requests signed with any previous secret, or not signed, are\nrefused. The secret is in ``signing_secret`` of this response only.\n\nRaises:\n    HTTPException: 404 if the trigger does not exist; 400 if it is not a\n        generic webhook (other channels are signed with their provider's\n        secret); 409 if its secret is set inline in ``validation_rules`` or\n        ``webhook_config``, which this call cannot replace.",
+        "operationId": "rotate_signing_secret_v1_triggers__trigger_id__signing_secret_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trigger_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trigger Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate Signing Secret",
         "tags": [
           "v1",
           "protected",

@@ -315,11 +315,11 @@ export type AgentOverviewResponse = {
     /**
      * Cost Mtd Usd
      */
-    cost_mtd_usd: number;
+    cost_mtd_usd: string;
     /**
      * Cost Today Usd
      */
-    cost_today_usd: number;
+    cost_today_usd: string;
     /**
      * Daily Spend
      */
@@ -580,6 +580,76 @@ export type AnalyzeRequest = {
 };
 
 /**
+ * ApprovalDecision
+ *
+ * One answered approval request, as the workflow recorded the answer.
+ */
+export type ApprovalDecision = {
+    /**
+     * Agent Id
+     */
+    agent_id?: string | null;
+    /**
+     * Agent Name
+     */
+    agent_name?: string | null;
+    /**
+     * Approved
+     */
+    approved?: boolean | null;
+    /**
+     * Comment
+     */
+    comment?: string | null;
+    /**
+     * Decided At
+     */
+    decided_at: string;
+    /**
+     * Decided By
+     */
+    decided_by?: string | null;
+    /**
+     * Escalation Id
+     */
+    escalation_id: string;
+    /**
+     * Task Description
+     */
+    task_description?: string | null;
+    /**
+     * Task Id
+     */
+    task_id: string;
+    /**
+     * Tool Name
+     */
+    tool_name?: string | null;
+};
+
+/**
+ * ApprovalDecisionsResponse
+ */
+export type ApprovalDecisionsResponse = {
+    /**
+     * Items
+     */
+    items: Array<ApprovalDecision>;
+    /**
+     * Page
+     */
+    page: number;
+    /**
+     * Page Size
+     */
+    page_size: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * ApprovalPolicy
  *
  * Human approval and escalation requirements.
@@ -754,9 +824,47 @@ export type AuditLogListResponse = {
 };
 
 /**
+ * BlockedTaskBlocker
+ */
+export type BlockedTaskBlocker = {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Agent Name
+     */
+    agent_name?: string | null;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Occurred At
+     */
+    occurred_at: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
+};
+
+/**
  * Blockers
  */
 export type Blockers = {
+    /**
+     * Awaiting Continuation
+     */
+    awaiting_continuation: Array<HitlBlocker>;
+    /**
+     * Blocked 24H
+     */
+    blocked_24h: Array<BlockedTaskBlocker>;
     /**
      * Failed 24H
      */
@@ -1844,7 +1952,7 @@ export type DailySpendPoint = {
     /**
      * Usd
      */
-    usd: number;
+    usd: string;
 };
 
 /**
@@ -1905,7 +2013,7 @@ export type DashboardTask = {
     /**
      * Cost Usd
      */
-    cost_usd: number | null;
+    cost_usd: string | null;
     /**
      * Finished At
      */
@@ -6575,11 +6683,11 @@ export type SpendCard = {
     /**
      * Cap Usd
      */
-    cap_usd: number | null;
+    cap_usd: string | null;
     /**
      * Mtd Usd
      */
-    mtd_usd: number;
+    mtd_usd: string;
     /**
      * Pct Of Cap
      */
@@ -6587,7 +6695,7 @@ export type SpendCard = {
     /**
      * Projected Eom Usd
      */
-    projected_eom_usd: number | null;
+    projected_eom_usd: string | null;
     /**
      * Projection Method
      */
@@ -6595,7 +6703,7 @@ export type SpendCard = {
     /**
      * Today Usd
      */
-    today_usd: number;
+    today_usd: string;
 };
 
 /**
@@ -7446,6 +7554,16 @@ export type TriggerResponse = {
      */
     next_run_time?: string | null;
     /**
+     * Signing scheme of a generic webhook; null for other types.
+     */
+    signature_scheme?: WebhookSignatureScheme | null;
+    /**
+     * Signing Secret
+     *
+     * Generated signing secret of a generic webhook. Returned only by the create and rotate calls that generated it; never readable afterwards.
+     */
+    signing_secret?: string | null;
+    /**
      * Task Parameters
      */
     task_parameters: {
@@ -7479,6 +7597,12 @@ export type TriggerResponse = {
      * Webhook Id
      */
     webhook_id?: string | null;
+    /**
+     * Webhook Signing
+     *
+     * What protects the public webhook URL. 'signed': requests without a valid signature or token are refused. 'unsigned': this trigger has no secret, so any request starts the agent. 'unsupported': the platform does not verify this provider's requests. Null for non-webhook triggers, or when the stored secret could not be read.
+     */
+    webhook_signing?: 'signed' | 'unsigned' | 'unsupported' | null;
     /**
      * Webhook Type
      */
@@ -8005,7 +8129,7 @@ export type WalletExhaustedBlocker = {
     /**
      * Budget Usd
      */
-    budget_usd: number;
+    budget_usd: string;
     /**
      * Period
      */
@@ -8064,6 +8188,32 @@ export type WalletResponse = {
     x402_config?: {
         [key: string]: unknown;
     } | null;
+};
+
+/**
+ * WebhookSignatureScheme
+ *
+ * How a sender signs requests to a generic webhook.
+ */
+export type WebhookSignatureScheme = {
+    /**
+     * Algorithm
+     *
+     * HMAC digest, e.g. 'sha256'.
+     */
+    algorithm: string;
+    /**
+     * Header
+     *
+     * Request header carrying the signature.
+     */
+    header: string;
+    /**
+     * Prefix
+     *
+     * Text before the hex digest in the header; often empty.
+     */
+    prefix: string;
 };
 
 /**
@@ -8159,7 +8309,7 @@ export type WorkspaceSettingsResponse = {
     /**
      * Monthly Cap Usd
      */
-    monthly_cap_usd: number | null;
+    monthly_cap_usd: string | null;
 };
 
 /**
@@ -8169,7 +8319,7 @@ export type WorkspaceSettingsUpdate = {
     /**
      * Monthly Cap Usd
      */
-    monthly_cap_usd: number | null;
+    monthly_cap_usd: number | string | null;
 };
 
 /**
@@ -11676,6 +11826,40 @@ export type GetInboxItemsV1InboxGetResponses = {
 };
 
 export type GetInboxItemsV1InboxGetResponse = GetInboxItemsV1InboxGetResponses[keyof GetInboxItemsV1InboxGetResponses];
+
+export type ListApprovalDecisionsV1InboxDecisionsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page
+         */
+        page?: number;
+        /**
+         * Page Size
+         */
+        page_size?: number;
+    };
+    url: '/v1/workspaces/{workspace}/inbox/decisions';
+};
+
+export type ListApprovalDecisionsV1InboxDecisionsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListApprovalDecisionsV1InboxDecisionsGetError = ListApprovalDecisionsV1InboxDecisionsGetErrors[keyof ListApprovalDecisionsV1InboxDecisionsGetErrors];
+
+export type ListApprovalDecisionsV1InboxDecisionsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ApprovalDecisionsResponse;
+};
+
+export type ListApprovalDecisionsV1InboxDecisionsGetResponse = ListApprovalDecisionsV1InboxDecisionsGetResponses[keyof ListApprovalDecisionsV1InboxDecisionsGetResponses];
 
 export type ListInvitationsV1InvitationsGetData = {
     body?: never;
@@ -16741,6 +16925,36 @@ export type RunTriggerNowV1TriggersTriggerIdRunPostResponses = {
 };
 
 export type RunTriggerNowV1TriggersTriggerIdRunPostResponse = RunTriggerNowV1TriggersTriggerIdRunPostResponses[keyof RunTriggerNowV1TriggersTriggerIdRunPostResponses];
+
+export type RotateSigningSecretV1TriggersTriggerIdSigningSecretPostData = {
+    body?: never;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/triggers/{trigger_id}/signing-secret';
+};
+
+export type RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RotateSigningSecretV1TriggersTriggerIdSigningSecretPostError = RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors[keyof RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors];
+
+export type RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: TriggerResponse;
+};
+
+export type RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponse = RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses[keyof RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses];
 
 export type GetTriggerStatusV1TriggersTriggerIdStatusGetData = {
     body?: never;
