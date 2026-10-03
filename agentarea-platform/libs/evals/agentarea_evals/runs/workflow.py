@@ -32,6 +32,10 @@ with workflow.unsafe.imports_passed_through():
 
 _ACTIVITY_TIMEOUT = timedelta(minutes=2)
 _RETRY = RetryPolicy(maximum_attempts=5)
+# A deploy or a database blip must not end a healthy experiment; give up only
+# after the monitor has been unable to evaluate for this long.
+_EVALUATE_RETRY = RetryPolicy(maximum_interval=timedelta(minutes=2))
+_EVALUATE_PATIENCE = timedelta(minutes=30)
 
 
 @workflow.defn
@@ -106,7 +110,8 @@ class ExperimentMonitorWorkflow:
                     ),
                     result_type=ExperimentState,
                     start_to_close_timeout=_ACTIVITY_TIMEOUT,
-                    retry_policy=_RETRY,
+                    schedule_to_close_timeout=_EVALUATE_PATIENCE,
+                    retry_policy=_EVALUATE_RETRY,
                 )
             except ActivityError:
                 # Traffic must not keep splitting with nobody watching it.

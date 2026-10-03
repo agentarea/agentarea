@@ -5,6 +5,7 @@ from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.serving.models import AgentExperiment
+from agentarea_agents.serving.revision_service import StaleRevisionError
 from agentarea_api.api.deps.services import get_agent_service, get_read_agent_service
 from agentarea_common.auth.context import UserContext, UserPrincipal
 from agentarea_common.auth.dependencies import UserContextDep, get_principal
@@ -86,10 +87,8 @@ async def start_experiment(
 ):
     """Start splitting runs; the candidate begins at the policy's first step."""
     agent = await load_agent(agent_service, agent_id, user_context, "edit")
-    if payload.auto_promote:
-        await require_person_to_widen(
-            agent_service, agent, payload.candidate_revision_id, principal
-        )
+    # Live traffic on a candidate is serving it, in part.
+    await require_person_to_widen(agent_service, agent, payload.candidate_revision_id, principal)
     require_workflow_engine()
     service = _service(session, user_context, agent_service)
     try:
@@ -171,6 +170,7 @@ async def promote_experiment(
     agent_id: str,
     experiment_id: UUID,
     user_context: UserContextDep,
+    principal: UserPrincipal = Depends(get_principal),
     session: AsyncSession = Depends(get_db_session),
     agent_service: AgentService = Depends(get_agent_service),
 ):
@@ -178,8 +178,9 @@ async def promote_experiment(
     agent = await load_agent(agent_service, agent_id, user_context, "edit")
     service = _service(session, user_context, agent_service)
     experiment = await _require(service, agent.id, experiment_id)
+    await require_person_to_widen(agent_service, agent, experiment.candidate_revision_id, principal)
     try:
         await service.promote(experiment)
-    except ExperimentError as error:
+    except (ExperimentError, StaleRevisionError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     return await _response(service, experiment)

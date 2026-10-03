@@ -146,3 +146,39 @@ async def test_a_monitor_that_cannot_evaluate_stops_the_experiment():
     assert len(stopped) == 1
     assert stopped[0][0] == "e"
     assert stopped[0][1] == "monitor_failed"
+
+
+async def test_a_brief_outage_does_not_stop_the_experiment():
+    attempts: list[int] = []
+    stopped: list[str] = []
+
+    @activity.defn(name=EVALUATE_EXPERIMENT)
+    async def evaluate(request: ExperimentRequest) -> ExperimentState:
+        attempts.append(activity.info().attempt)
+        if len(attempts) < 8:
+            raise RuntimeError("database restarting")
+        return ExperimentState(running=False)
+
+    @activity.defn(name=STOP_EXPERIMENT)
+    async def stop(request: StopExperimentRequest) -> None:
+        stopped.append(request.reason)
+
+    async with await WorkflowEnvironment.start_time_skipping(
+        data_converter=pydantic_data_converter
+    ) as env:
+        queue = str(uuid.uuid4())
+        async with Worker(
+            env.client, task_queue=queue, workflows=[ExperimentMonitorWorkflow],
+            activities=[evaluate, stop],
+        ):
+            await env.client.execute_workflow(
+                ExperimentMonitorWorkflow.run,
+                ExperimentMonitorInput(
+                    agent_id="a", experiment_id="e", user_context_data=CONTEXT
+                ),
+                id=str(uuid.uuid4()),
+                task_queue=queue,
+            )
+
+    assert len(attempts) == 8
+    assert stopped == []

@@ -262,6 +262,11 @@ async def test_an_api_key_cannot_serve_a_candidate_that_widens_the_agent(session
             str(agent.id), ExperimentCreate(candidate_revision_id=wider.id, auto_promote=True),
             context, integration, session, service,
         )
+    with pytest.raises(HTTPException) as no_split:
+        await agent_experiments.start_experiment(
+            str(agent.id), ExperimentCreate(candidate_revision_id=wider.id, auto_promote=False),
+            context, integration, session, service,
+        )
     served = await agent_revisions.activate_revision(
         str(agent.id), narrower.id, context, integration, service
     )
@@ -269,9 +274,61 @@ async def test_an_api_key_cannot_serve_a_candidate_that_widens_the_agent(session
     assert wider.origin == "api_key"
     assert refused.value.status_code == 403
     assert no_auto.value.status_code == 403
+    assert no_split.value.status_code == 403
     assert served.current
 
 
 def test_a_candidate_tool_is_validated_like_an_agent_tool():
     with pytest.raises(ValueError):
         RevisionCreate(tools=[{"type": "nonsense"}])
+
+
+async def test_an_api_key_cannot_promote_a_widening_candidate_a_person_put_on_trial(
+    session, context, started
+):
+    agent = await _agent(session, context)
+    service = _agents(session, context)
+    wider = await agent_revisions.create_candidate(
+        str(agent.id), RevisionCreate(planning=True), context, PERSON, service
+    )
+    experiment = await agent_experiments.start_experiment(
+        str(agent.id), ExperimentCreate(candidate_revision_id=wider.id, auto_promote=False),
+        context, PERSON, session, service,
+    )
+    integration = UserPrincipal(user_id=context.user_id, api_key_id="key-1")
+
+    with pytest.raises(HTTPException) as refused:
+        await agent_experiments.promote_experiment(
+            str(agent.id), experiment.id, context, integration, session, service
+        )
+    promoted = await agent_experiments.promote_experiment(
+        str(agent.id), experiment.id, context, PERSON, session, service
+    )
+
+    assert refused.value.status_code == 403
+    assert promoted.status == "promoted"
+
+
+async def test_promoting_a_candidate_that_went_stale_is_a_conflict(session, context, started):
+    agent = await _agent(session, context)
+    service = _agents(session, context)
+    candidate = await agent_revisions.create_candidate(
+        str(agent.id), RevisionCreate(instruction="Help briefly."), context, PERSON, service
+    )
+    experiment = await agent_experiments.start_experiment(
+        str(agent.id), ExperimentCreate(candidate_revision_id=candidate.id, auto_promote=False),
+        context, PERSON, session, service,
+    )
+    rollback_target = await agent_revisions.create_candidate(
+        str(agent.id), RevisionCreate(instruction="Help kindly."), context, PERSON, service
+    )
+    await agent_revisions.activate_revision(
+        str(agent.id), rollback_target.id, context, PERSON, service
+    )
+
+    with pytest.raises(HTTPException) as conflict:
+        await agent_experiments.promote_experiment(
+            str(agent.id), experiment.id, context, PERSON, session, service
+        )
+
+    assert conflict.value.status_code == 409

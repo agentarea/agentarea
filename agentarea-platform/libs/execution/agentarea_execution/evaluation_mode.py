@@ -52,19 +52,15 @@ def _classify(
 ) -> tuple[str | None, str | None]:
     """The (group, effect) of one call; unknown parts come back ``None``.
 
-    A toolset is called by its name, with ``action`` naming the method when it
-    has more than one; a ``<toolset>_<method>`` name is understood as well.
+    A toolset reaches the model as one tool named after it, with ``action``
+    naming the method when it has more than one.
     """
-    if tool_name in toolsets:
-        group, methods = toolsets[tool_name]
-        if len(methods) == 1:
-            return group, next(iter(methods.values()))
-        return group, methods.get(str(tool_args.get("action") or ""))
-    for name, (group, methods) in toolsets.items():
-        method = tool_name.removeprefix(f"{name}_")
-        if method != tool_name and method in methods:
-            return group, methods[method]
-    return None, None
+    if tool_name not in toolsets:
+        return None, None
+    group, methods = toolsets[tool_name]
+    if len(methods) == 1:
+        return group, next(iter(methods.values()))
+    return group, methods.get(str(tool_args.get("action") or ""))
 
 
 @dataclass(frozen=True)

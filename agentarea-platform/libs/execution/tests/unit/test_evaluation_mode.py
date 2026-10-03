@@ -48,9 +48,10 @@ def test_a_multi_method_toolset_without_an_action_is_not_executed():
     assert not decide("agents", {}).execute
 
 
-def test_a_prefixed_method_name_is_understood():
-    assert decide("agents_list").execute
-    assert not decide("agents_update").execute
+def test_a_name_that_only_looks_like_a_toolset_method_is_not_executed():
+    # Toolsets reach the model as one tool with an action; "agents_list" is someone else's tool.
+    assert not decide("agents_list").execute
+    assert not decide("files_read_file", metadata=meta(sandbox_allowed=True)).execute
 
 
 def test_a_stub_answers_instead_of_the_tool():
