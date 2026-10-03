@@ -1,20 +1,29 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import {
   CreditCard,
+  FlaskConical,
   Gauge,
+  GitBranch,
   List,
   Play,
   SlidersHorizontal,
+  Split,
 } from "lucide-react";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import {
+  useWorkspacePathname,
+  useWorkspaceRouter,
+} from "@/hooks/useWorkspaceNavigation";
 
 const TABS = [
   { key: "", icon: Gauge, labelKey: "overview" },
   { key: "new-task", icon: Play, labelKey: "createTask" },
   { key: "tasks", icon: List, labelKey: "currentTasks", counted: true },
+  { key: "versions", icon: GitBranch, labelKey: "versions" },
+  { key: "evaluations", icon: FlaskConical, labelKey: "evaluations" },
+  { key: "experiments", icon: Split, labelKey: "experiments" },
   { key: "payments", icon: CreditCard, labelKey: "payments" },
   { key: "settings", icon: SlidersHorizontal, labelKey: "settings" },
 ] as const;

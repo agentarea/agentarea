@@ -222,7 +222,11 @@ export function getTaskStatusPresentation(status: string): StatusPresentation {
     case "waiting_for_approval":
     case "waiting_for_continuation":
     case "blocked":
-      return { label: "Needs action", labelKey: "needsAction", kind: "attention" };
+      return {
+        label: "Needs action",
+        labelKey: "needsAction",
+        kind: "attention",
+      };
     case "failed":
       return { label: "Failed", labelKey: "failed", kind: "failed" };
     case "error":
@@ -378,6 +382,82 @@ export function getBillingStatusPresentation(
     case "canceled":
     case "cancelled":
       return { label: "Canceled", kind: "cancelled" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
+
+export function getRevisionStatusPresentation(
+  status: string,
+  stale = false
+): StatusPresentation {
+  if (stale) return { label: "Stale", kind: "off" };
+  switch (normalizeStatus(status)) {
+    case "active":
+      return { label: "Serving", kind: "active" };
+    case "candidate":
+      return { label: "Candidate", kind: "draft" };
+    case "archived":
+      return { label: "Archived", kind: "off" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
+
+export function getEvalRunStatusPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "queued":
+      return { label: "Queued", kind: "queued" };
+    case "running":
+      return { label: "Running", kind: "running" };
+    case "completed":
+      return { label: "Completed", kind: "done" };
+    case "stopped":
+      return { label: "Stopped", kind: "cancelled" };
+    case "failed":
+      return { label: "Failed", kind: "failed" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
+
+export function getExperimentStatusPresentation(
+  status: string,
+  stopReason?: string | null
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "running":
+      return { label: "Running", kind: "running" };
+    case "promoted":
+      return { label: "Promoted", kind: "done" };
+    case "stopped":
+      return stopReason === "regression" || stopReason === "cost"
+        ? { label: "Stopped by guardrail", kind: "failed" }
+        : { label: "Stopped", kind: "cancelled" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
+
+export function getTrialStatusPresentation(
+  status: string,
+  passed: boolean | null | undefined
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "pending":
+      return { label: "Pending", kind: "queued" };
+    case "running":
+      return { label: "Running", kind: "running" };
+    case "done":
+      return passed
+        ? { label: "Passed", kind: "done" }
+        : { label: "Failed", kind: "failed" };
+    case "error":
+      return { label: "Error", kind: "failed" };
+    case "skipped":
+      return { label: "Skipped", kind: "cancelled" };
     default:
       return fallbackStatusPresentation(status);
   }
