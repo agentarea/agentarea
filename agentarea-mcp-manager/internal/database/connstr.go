@@ -4,42 +4,46 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 )
 
-// BuildConnStr builds a PostgreSQL connection string.
-// It prefers DATABASE_URL if set, otherwise constructs from individual env vars.
-// Returns an empty string if required credentials (user/password) are missing.
+// BuildConnStr builds a PostgreSQL connection string from the AGENTAREA_DB_*
+// variables every AgentArea service reads. Returns an empty string if the
+// credentials (user/password) are missing.
 func BuildConnStr(logger *slog.Logger) string {
-	// Prefer DATABASE_URL if available (already includes sslmode)
-	if connStr := os.Getenv("DATABASE_URL"); connStr != "" {
-		logger.Info("Using DATABASE_URL for PostgreSQL connection")
-		return connStr
-	}
-
-	// Fall back to constructing from individual env vars
-	dbHost := os.Getenv("POSTGRES_HOST")
+	dbHost := os.Getenv("AGENTAREA_DB_HOST")
 	if dbHost == "" {
 		dbHost = "db"
 	}
-	dbPort := os.Getenv("POSTGRES_PORT")
+	dbPort := os.Getenv("AGENTAREA_DB_PORT")
 	if dbPort == "" {
 		dbPort = "5432"
 	}
-	dbUser := os.Getenv("POSTGRES_USER")
-	dbPassword := os.Getenv("POSTGRES_PASSWORD")
+	dbUser := os.Getenv("AGENTAREA_DB_USER")
+	dbPassword := os.Getenv("AGENTAREA_DB_PASSWORD")
 	if dbUser == "" || dbPassword == "" {
 		return ""
 	}
-	dbName := os.Getenv("POSTGRES_DB")
+	dbName := os.Getenv("AGENTAREA_DB_NAME")
 	if dbName == "" {
 		dbName = "agentarea"
 	}
 
-	sslMode := os.Getenv("POSTGRES_SSLMODE")
+	sslMode := os.Getenv("AGENTAREA_DB_SSLMODE")
 	if sslMode == "" {
 		sslMode = "prefer"
 	}
 
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		dbUser, dbPassword, dbHost, dbPort, dbName, sslMode)
+	logger.Info("Using PostgreSQL connection", slog.String("host", dbHost), slog.String("database", dbName))
+	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		connValue(dbHost), connValue(dbPort), connValue(dbUser),
+		connValue(dbPassword), connValue(dbName), connValue(sslMode))
+}
+
+// connValue quotes a keyword/value connection string value, so a password
+// containing spaces, quotes or URL syntax survives intact.
+func connValue(value string) string {
+	escaped := strings.ReplaceAll(value, `\`, `\\`)
+	escaped = strings.ReplaceAll(escaped, `'`, `\'`)
+	return "'" + escaped + "'"
 }

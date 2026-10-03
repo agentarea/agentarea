@@ -105,7 +105,7 @@ def _www_authenticate_bearer() -> str:
     """
     from agentarea_common.config import get_settings
 
-    api_base = get_settings().app.API_BASE_URL.rstrip("/")
+    api_base = get_settings().app.API_URL.rstrip("/")
     return f'Bearer resource_metadata="{api_base}/.well-known/oauth-protected-resource"'
 
 
@@ -391,9 +391,9 @@ def get_auth_provider():
     return AuthProviderFactory.create_provider(
         "kratos",
         config={
-            "jwks_b64": settings.KRATOS_JWKS_B64,
-            "issuer": settings.KRATOS_ISSUER,
-            "audience": settings.KRATOS_AUDIENCE,
+            "jwks_b64": settings.JWKS_B64,
+            "issuer": settings.ISSUER,
+            "audience": settings.AUDIENCE,
         },
     )
 
@@ -412,10 +412,9 @@ def _get_hydra_jwks():
 
     import jwt as pyjwt
 
-    from agentarea_common.config import get_settings
+    from agentarea_common.config import get_auth_settings
 
-    settings = get_settings()
-    jwks_url = f"{settings.mcp.HYDRA_PUBLIC_URL.rstrip('/')}/.well-known/jwks.json"
+    jwks_url = f"{get_auth_settings().HYDRA_URL.rstrip('/')}/.well-known/jwks.json"
     _hydra_jwks_client = pyjwt.PyJWKClient(jwks_url, cache_keys=True)
     logger.info(f"Hydra JWKS client initialized: {jwks_url}")
     return _hydra_jwks_client
@@ -430,7 +429,7 @@ async def _try_hydra_token(token: str, request: Request) -> UserPrincipal | None
     """
     import jwt as pyjwt
 
-    from agentarea_common.config import get_settings
+    from agentarea_common.config import get_auth_settings
 
     try:
         jwks_client = _get_hydra_jwks()
@@ -445,11 +444,11 @@ async def _try_hydra_token(token: str, request: Request) -> UserPrincipal | None
         # weakening it: deployments that do not run Hydra (the prod compose does
         # not) keep working, and deployments that do must say which audience they
         # accept.
-        hydra_audience = get_settings().mcp.HYDRA_AUDIENCE
+        hydra_audience = get_auth_settings().HYDRA_AUDIENCE
         if not hydra_audience:
             logger.warning(
-                "Hydra bearer token presented but HYDRA_AUDIENCE is not configured; "
-                "refusing the token. Set HYDRA_AUDIENCE to this API's resource "
+                "Hydra bearer token presented but AGENTAREA_AUTH_HYDRA_AUDIENCE is not configured; "
+                "refusing the token. Set AGENTAREA_AUTH_HYDRA_AUDIENCE to this API's resource "
                 "identifier to enable MCP OAuth."
             )
             return None

@@ -119,7 +119,7 @@ def model_scope(monkeypatch):
     # one: by naming it in the private allowlist.
     from agentarea_common.config import get_settings
 
-    monkeypatch.setattr(get_settings().app, "OUTBOUND_PRIVATE_ALLOWLIST", "localhost")
+    monkeypatch.setattr(get_settings().http, "PRIVATE_ALLOWLIST", "localhost")
     record = SimpleNamespace(
         id=UUID(MODEL_ID),
         workspace_id="ws-model",

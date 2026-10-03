@@ -139,7 +139,7 @@ key.
   <Accordion title="The error says the host resolves to a non-public address">
     The outbound guard refused the address. Use the public one. A self-hosted
     deployment that must reach an internal host names it in
-    `OUTBOUND_PRIVATE_ALLOWLIST` on the worker and the API.
+    `AGENTAREA_HTTP_PRIVATE_ALLOWLIST` on the worker and the API.
   </Accordion>
   <Accordion title="The delegate reports it is still working">
     The target did not finish within the 110-second A2A delegation budget. The

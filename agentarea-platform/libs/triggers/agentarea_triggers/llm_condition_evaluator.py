@@ -62,7 +62,7 @@ def build_condition_evaluator(
     from agentarea_llm.application.model_service import build_model_service
     from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 
-    if not get_settings().triggers.ENABLE_LLM_CONDITIONS:
+    if not get_settings().triggers.LLM_ENABLED:
         return None
     return LLMConditionEvaluator(
         model_instance_service=ModelInstanceService(

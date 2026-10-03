@@ -21,8 +21,8 @@ from enum import StrEnum
 from functools import lru_cache
 from typing import Any, Optional
 
-from pydantic import Field
-from sqlalchemy import Engine, create_engine
+from pydantic_settings import SettingsConfigDict
+from sqlalchemy import URL, Engine, create_engine
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -37,48 +37,62 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseSettings(BaseAppSettings):
-    """Database configuration and connection settings."""
+    """Database configuration and connection settings.
 
-    POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "postgres"  # noqa: S105
-    POSTGRES_HOST: str = "db"
-    POSTGRES_PORT: str = "5432"
-    POSTGRES_DB: str = "agentarea"
-    pool_size: int = 20  # Increased from 5 to handle more concurrent SSE connections
-    max_overflow: int = 30  # Increased from 10 to handle bursts
-    pool_timeout: int = 30  # Timeout for getting connection from pool
-    pool_recycle: int = 3600  # Recycle connections every hour to prevent stale connections
-    echo: bool = False
-    POSTGRES_READ_HOST: str | None = None
-    POSTGRES_READ_PORT: int | None = None
+    ``POSTGRES_*`` stays the contract of the postgres image itself ("create this
+    user and database"); what our services read to connect is separate, and
+    prefixed. The pool knobs used to be bare ``POOL_SIZE`` / ``MAX_OVERFLOW`` /
+    ``ECHO``, generic enough to collide with anything else in the environment.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="AGENTAREA_DB_")
+
+    USER: str = "postgres"
+    PASSWORD: str = "postgres"  # noqa: S105
+    HOST: str = "db"
+    PORT: str = "5432"
+    NAME: str = "agentarea"
+    # libpq sslmode (disable, prefer, require, verify-ca, verify-full); unset
+    # leaves each driver on its own default.
+    SSLMODE: str | None = None
+    POOL_SIZE: int = 20  # Increased from 5 to handle more concurrent SSE connections
+    POOL_OVERFLOW: int = 30  # Increased from 10 to handle bursts
+    POOL_TIMEOUT: int = 30  # Timeout for getting connection from pool
+    POOL_RECYCLE: int = 3600  # Recycle connections every hour to prevent stale connections
+    ECHO: bool = False
+    READ_HOST: str | None = None
+    READ_PORT: int | None = None
     READ_POOL_SIZE: int = 15
-    READ_POOL_MAX_OVERFLOW: int = 20
+    READ_POOL_OVERFLOW: int = 20
+
+    def _url(self, driver: str, host: str, port: str | int, ssl_param: str) -> URL:
+        return URL.create(
+            driver,
+            username=self.USER,
+            password=self.PASSWORD,
+            host=host,
+            port=int(port),
+            database=self.NAME,
+            query={ssl_param: self.SSLMODE} if self.SSLMODE else {},
+        )
 
     @property
-    def read_url(self) -> str:
+    def read_url(self) -> URL:
         """Async database URL for the read replica (falls back to primary if not configured)."""
-        host = self.POSTGRES_READ_HOST or self.POSTGRES_HOST
-        port = self.POSTGRES_READ_PORT or self.POSTGRES_PORT
-        return (
-            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{host}:{port}/{self.POSTGRES_DB}"
+        return self._url(
+            "postgresql+asyncpg", self.READ_HOST or self.HOST, self.READ_PORT or self.PORT, "ssl"
         )
 
     @property
-    def url(self) -> str:
+    def url(self) -> URL:
         """Async database URL for SQLAlchemy."""
-        return (
-            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
+        # asyncpg takes the libpq sslmode values under the name ``ssl``.
+        return self._url("postgresql+asyncpg", self.HOST, self.PORT, "ssl")
 
     @property
-    def sync_url(self) -> str:
+    def sync_url(self) -> URL:
         """Sync database URL for SQLAlchemy."""
-        return (
-            f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
+        return self._url("postgresql", self.HOST, self.PORT, "sslmode")
 
 
 class TenantScopeMode(StrEnum):
@@ -96,7 +110,9 @@ class TenantScopeSettings(BaseAppSettings):
     read those and never open an ORM session.
     """
 
-    mode: TenantScopeMode = Field(validation_alias="AGENTAREA_DB_TENANT_SCOPE")
+    model_config = SettingsConfigDict(env_prefix="AGENTAREA_DB_")
+
+    TENANT_SCOPE: TenantScopeMode
 
     # Pydantic Settings may populate required fields from the environment.
     def __init__(self, **kwargs: Any) -> None:
@@ -139,32 +155,32 @@ class Database:
         # Shared liveness/recycle policy applied to every engine so pool
         # configuration cannot drift between write, read, and sync engines.
         pool_kwargs = {
-            "echo": self.settings.echo,
+            "echo": self.settings.ECHO,
             "pool_pre_ping": True,
-            "pool_recycle": self.settings.pool_recycle,
-            "pool_timeout": self.settings.pool_timeout,
+            "pool_recycle": self.settings.POOL_RECYCLE,
+            "pool_timeout": self.settings.POOL_TIMEOUT,
         }
 
         self.engine: AsyncEngine = create_async_engine(
             self.settings.url,
-            pool_size=self.settings.pool_size,
-            max_overflow=self.settings.max_overflow,
+            pool_size=self.settings.POOL_SIZE,
+            max_overflow=self.settings.POOL_OVERFLOW,
             **pool_kwargs,
         )
         self.sync_engine: Engine = create_engine(
             self.settings.sync_url,
-            pool_size=self.settings.pool_size,
-            max_overflow=self.settings.max_overflow,
+            pool_size=self.settings.POOL_SIZE,
+            max_overflow=self.settings.POOL_OVERFLOW,
             **pool_kwargs,
         )
 
-        if self.settings.POSTGRES_READ_HOST:
+        if self.settings.READ_HOST:
             # A read replica is configured: give it its own connection pool to
             # the replica host, sized independently and running in AUTOCOMMIT.
             self.read_engine: AsyncEngine = create_async_engine(
                 self.settings.read_url,
                 pool_size=self.settings.READ_POOL_SIZE,
-                max_overflow=self.settings.READ_POOL_MAX_OVERFLOW,
+                max_overflow=self.settings.READ_POOL_OVERFLOW,
                 execution_options={"isolation_level": "AUTOCOMMIT"},
                 **pool_kwargs,
             )
@@ -185,7 +201,7 @@ class Database:
         """
         from ..base.tenant_scope import tenant_scoped_session_class
 
-        scoped_session_class = tenant_scoped_session_class(get_tenant_scope_settings().mode)
+        scoped_session_class = tenant_scoped_session_class(get_tenant_scope_settings().TENANT_SCOPE)
         self.async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
             self.engine,
             class_=AsyncSession,
@@ -265,7 +281,7 @@ def get_tenant_scope_settings() -> TenantScopeSettings:
 
 
 # Global database instance - initialized lazily so importing this module does
-# not build engines (and read POSTGRES_* env) at import time.
+# not build engines (and read AGENTAREA_DB_* env) at import time.
 _db_instance: Database | None = None
 
 

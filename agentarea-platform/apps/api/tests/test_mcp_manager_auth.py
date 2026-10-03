@@ -32,7 +32,7 @@ class _Client:
 def _settings():
     return SimpleNamespace(
         mcp=SimpleNamespace(
-            MCP_MANAGER_URL="http://manager",
+            MANAGER_URL="http://manager",
             manager_inspection_headers=lambda: {"Authorization": "Bearer manager-test"},
         )
     )

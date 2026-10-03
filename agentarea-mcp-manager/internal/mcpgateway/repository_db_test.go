@@ -29,10 +29,10 @@ import (
 // these in the migrations gate, where a fresh database has just been migrated
 // to head. Locally:
 //
-//	docker run -d --name pg -e POSTGRES_PASSWORD=test -e POSTGRES_USER=test \
-//	  -e POSTGRES_DB=mcpgateway -p 55433:5432 postgres:18
-//	cd agentarea-platform/apps/api && POSTGRES_HOST=localhost POSTGRES_PORT=55433 \
-//	  POSTGRES_USER=test POSTGRES_PASSWORD=test POSTGRES_DB=mcpgateway uv run alembic upgrade head
+//	docker run -d --name pg -e AGENTAREA_DB_PASSWORD=test -e AGENTAREA_DB_USER=test \
+//	  -e AGENTAREA_DB_NAME=mcpgateway -p 55433:5432 postgres:18
+//	cd agentarea-platform/apps/api && AGENTAREA_DB_HOST=localhost AGENTAREA_DB_PORT=55433 \
+//	  AGENTAREA_DB_USER=test AGENTAREA_DB_PASSWORD=test AGENTAREA_DB_NAME=mcpgateway uv run alembic upgrade head
 //	MCP_GATEWAY_TEST_DATABASE_URL=postgres://test:test@localhost:55433/mcpgateway?sslmode=disable \
 //	  go test ./internal/mcpgateway/...
 

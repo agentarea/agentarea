@@ -33,7 +33,7 @@ _REASONS = {
 
 
 class WorkerHealthSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="AGENTAREA_WF_")
+    model_config = SettingsConfigDict(env_prefix="AGENTAREA_WORKER_")
 
     HEALTH_PORT: int = 8081
 

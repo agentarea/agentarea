@@ -61,8 +61,8 @@ class SandboxListResponse(BaseModel):
 )
 async def list_sandboxes(user_context: UserContextDep) -> SandboxListResponse:
     """Return live provider state for the authenticated workspace only."""
-    settings = get_settings().mcp
-    inspection_secret = settings.SANDBOX_INSPECTION_AUTH_SECRET
+    settings = get_settings()
+    inspection_secret = settings.sandbox.INSPECT_SECRET
     if inspection_secret is None or not inspection_secret.get_secret_value():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -72,7 +72,7 @@ async def list_sandboxes(user_context: UserContextDep) -> SandboxListResponse:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(
-                f"{settings.MCP_MANAGER_URL.rstrip('/')}/sandbox/sessions",
+                f"{settings.mcp.MANAGER_URL.rstrip('/')}/sandbox/sessions",
                 params={"workspace_id": str(user_context.workspace_id)},
                 headers={
                     "Authorization": f"Bearer {inspection_secret.get_secret_value()}",

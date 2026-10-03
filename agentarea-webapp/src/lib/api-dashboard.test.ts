@@ -12,7 +12,7 @@ const { getAuthToken, getRequestWorkspaceSlug } = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/env", () => ({ env: { API_URL: "https://api.example.test" } }));
+vi.mock("@/env", () => ({ env: { AGENTAREA_API_URL: "https://api.example.test" } }));
 vi.mock("./getAuthToken", () => ({ getAuthToken }));
 vi.mock("./workspace-context", () => ({ getRequestWorkspaceSlug }));
 

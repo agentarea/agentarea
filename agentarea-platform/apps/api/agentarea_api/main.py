@@ -66,7 +66,7 @@ async def initialize_services():
         logger.info("Billing currency: %s", get_customer_pricing().currency())
 
         app_settings = get_app_settings()
-        mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
+        mode = DeploymentMode(app_settings.EDITION)
         register_singleton(FeatureService, FeatureService(mode=mode))
 
         from agentarea_common.config import get_settings
@@ -75,33 +75,33 @@ async def initialize_services():
 
         # Shared graph client (used by the rebac API + PermissionService).
         openfga_client = None
-        if settings.access_control.ACCESS_CONTROL_BACKEND == "openfga":
+        if settings.access_control.BACKEND == "openfga":
             from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
             from agentarea_common.rebac.openfga_client import OpenFGAClient
 
-            if not settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN:
+            if not settings.openfga.API_TOKEN:
                 logger.warning(
-                    "ACCESS_CONTROL_OPENFGA_API_TOKEN is not set: OpenFGA calls are "
-                    "unauthenticated. Set ACCESS_CONTROL_OPENFGA_API_TOKEN and the "
+                    "AGENTAREA_AUTHZ_FGA_API_TOKEN is not set: OpenFGA calls are "
+                    "unauthenticated. Set AGENTAREA_AUTHZ_FGA_API_TOKEN and the "
                     "server's OPENFGA_AUTHN_PRESHARED_KEYS to require a bearer token."
                 )
             await bootstrap_openfga(settings.openfga)
             openfga_client = OpenFGAClient(
-                api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-                store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-                authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-                timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
-                api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
+                api_url=settings.openfga.URL,
+                store_id=settings.openfga.STORE_ID,
+                authorization_model_id=settings.openfga.MODEL_ID,
+                timeout_seconds=settings.openfga.TIMEOUT.total_seconds(),
+                api_token=settings.openfga.API_TOKEN or None,
             )
             register_singleton(OpenFGAClient, openfga_client)
 
         # PermissionService is a SELECTOR extension point: exactly one impl is
-        # active, and an EXPLICIT ACCESS_CONTROL_BACKEND must win over a merely
+        # active, and an EXPLICIT AGENTAREA_AUTHZ_BACKEND must win over a merely
         # installed "permissions" extension. (Previously the extension was checked
         # first and silently overrode the configured backend, so OpenFGA never
         # enforced.) The extension is a FALLBACK, used only when the operator did
         # not select a concrete backend. See AGENTS.md "Extension points".
-        backend = settings.access_control.ACCESS_CONTROL_BACKEND
+        backend = settings.access_control.BACKEND
         perm_factory = ExtensionRegistry.get_factory("permissions")
         if openfga_client is not None:
             from agentarea_common.auth.openfga_permission import OpenFGAPermissionService
@@ -113,22 +113,22 @@ async def initialize_services():
             perm_impl = "extension:permissions"
         else:
             raise RuntimeError(
-                "No PermissionService is available: ACCESS_CONTROL_BACKEND="
+                "No PermissionService is available: AGENTAREA_AUTHZ_BACKEND="
                 f"{backend!r} selects no graph backend and no 'permissions' extension "
                 "is installed. Refusing to start rather than falling back to an "
                 "implementation that allows every check -- an authorization backend "
                 "that is merely absent must not read as permission granted. Set "
-                "ACCESS_CONTROL_BACKEND=openfga and point it at a running instance."
+                "AGENTAREA_AUTHZ_BACKEND=openfga and point it at a running instance."
             )
 
         if perm_factory and perm_impl != "extension:permissions":
             logger.warning(
-                "Ignoring registered 'permissions' extension: ACCESS_CONTROL_BACKEND=%s "
+                "Ignoring registered 'permissions' extension: AGENTAREA_AUTHZ_BACKEND=%s "
                 "selects %s explicitly. An extension cannot override an explicit backend.",
                 backend,
                 perm_impl,
             )
-        logger.info("PermissionService=%s (ACCESS_CONTROL_BACKEND=%s)", perm_impl, backend)
+        logger.info("PermissionService=%s (AGENTAREA_AUTHZ_BACKEND=%s)", perm_impl, backend)
 
         authz_factory = ExtensionRegistry.get_factory("authorization")
         if authz_factory:
@@ -194,22 +194,21 @@ async def cleanup_all_connections():
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     """Original application lifespan."""
-    import os
-
     # Detect if running with uvicorn reload
-    is_reload_mode = os.getenv("RELOAD", "").lower() == "true" or "--reload" in " ".join(sys.argv)
+    # Reload is a local-development flag, not deployment configuration, so it is
+    # read from argv only — the RELOAD env var it also used to consult was never
+    # wired to the --reload option and so silently did nothing.
+    is_reload_mode = "--reload" in " ".join(sys.argv)
 
     # NOTE: Don't override signal handlers - let uvicorn handle them for proper reload
 
     # Startup. The metrics port first: failing to bind it must not leave the
     # events router running with nothing to stop it.
-    from agentarea_common.config import ObservabilitySettings
+    from agentarea_common.config import MetricsSettings
     from agentarea_common.observability.metrics import start_metrics_server
 
-    observability = ObservabilitySettings()
-    metrics_server = (
-        start_metrics_server(observability.METRICS_PORT) if observability.METRICS_ENABLED else None
-    )
+    metrics = MetricsSettings()
+    metrics_server = start_metrics_server(metrics.PORT) if metrics.ENABLED else None
 
     get_container()
     await initialize_services()
@@ -368,20 +367,20 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         BodySizeLimitMiddleware,
-        max_bytes=_get_settings().app.MAX_REQUEST_BODY_BYTES,
+        max_bytes=_get_settings().app.API_MAX_BODY,
     )
 
     # Add CORS middleware. Origins are an explicit allowlist (never "*"): with
     # allow_credentials=True a wildcard would reflect any origin for credentialed
-    # cross-site reads. Configure via CORS_ALLOWED_ORIGINS.
+    # cross-site reads. Configure via AGENTAREA_CORS_ORIGINS.
     from agentarea_common.config import get_settings
 
     _cors = get_settings().app
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_cors.cors_allowed_origins,
-        allow_origin_regex=_cors.CORS_ALLOWED_ORIGIN_REGEX,
-        allow_credentials=_cors.CORS_ALLOW_CREDENTIALS,
+        allow_origin_regex=_cors.CORS_ORIGIN_REGEX,
+        allow_credentials=_cors.CORS_CREDENTIALS,
         allow_methods=_cors.cors_allowed_methods,
         allow_headers=_cors.cors_allowed_headers,
         max_age=_cors.CORS_MAX_AGE,

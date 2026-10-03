@@ -26,7 +26,7 @@ async def test_platform_managed_endpoint_is_trusted() -> None:
 async def test_allowlisted_localhost_is_admitted_then_mapped(monkeypatch) -> None:
     from agentarea_common.config import get_settings
 
-    monkeypatch.setattr(get_settings().app, "OUTBOUND_PRIVATE_ALLOWLIST", "localhost")
+    monkeypatch.setattr(get_settings().http, "PRIVATE_ALLOWLIST", "localhost")
     mapped = await guarded_llm_endpoint(
         "http://localhost:11434/v1", managed_by=None, local_host="host.docker.internal"
     )

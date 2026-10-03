@@ -38,11 +38,8 @@ class TemporalTaskManager(BaseTaskManager):
         self.task_repository = task_repository
 
         settings = get_settings()
-        self.temporal_executor: WorkflowExecutor = temporal_executor or TemporalWorkflowExecutor(
-            namespace=settings.workflow.TEMPORAL_NAMESPACE,
-            server_url=settings.workflow.TEMPORAL_SERVER_URL,
-        )
-        self.task_queue = settings.workflow.TEMPORAL_TASK_QUEUE
+        self.temporal_executor: WorkflowExecutor = temporal_executor or TemporalWorkflowExecutor()
+        self.task_queue = settings.temporal.QUEUE
 
     def _task_to_agent_task(self, task) -> AgentTask:
         """Convert Task domain model to AgentTask."""

@@ -41,7 +41,7 @@ type McpAppFrameProps = {
 };
 
 type RuntimeConfig = {
-  APPS_SANDBOX_ORIGIN?: string;
+  AGENTAREA_MCP_APPS_ORIGIN?: string;
 };
 
 function runtimeConfig(): RuntimeConfig {
@@ -109,7 +109,7 @@ export default function McpAppFrame({
       console.error("MCP App failed", reason);
     };
 
-    const sandboxValue = runtimeConfig().APPS_SANDBOX_ORIGIN?.trim();
+    const sandboxValue = runtimeConfig().AGENTAREA_MCP_APPS_ORIGIN?.trim();
     if (!sandboxValue) {
       fail(
         new Error("Apps sandbox origin is not configured"),

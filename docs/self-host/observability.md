@@ -18,7 +18,7 @@ Metrics are limited to the API. While `global.monitoring.prometheus.enabled` is
 set (the chart default), the API serves Prometheus metrics at `/metrics` on
 `global.monitoring.prometheus.port` (9090), a port of its own that the public
 API port never answers for. Outside the chart, set `METRICS_ENABLED=true`
-(`METRICS_PORT` defaults to 9090):
+(`AGENTAREA_METRICS_PORT` defaults to 9090):
 
 - `agentarea_http_request_duration_seconds{method, route, status}` — request
   latency. `route` is the route template (`/v1/workspaces/{workspace}/mcp-servers/`),
@@ -89,12 +89,12 @@ metrics. Read the section below before wiring a scrape config against them.
   <Step title="Set the log level">
     | Service | Variable | Default |
     |---|---|---|
-    | Backend | `LOG_LEVEL` | `info` (chart), `info` (Compose) |
-    | MCP Manager | `LOG_LEVEL` | `INFO` |
+    | Backend | `AGENTAREA_LOG_LEVEL` | `info` (chart), `info` (Compose) |
+    | MCP Manager | `AGENTAREA_LOG_LEVEL` | `INFO` |
     | Worker | not configurable by environment | `DEBUG` — `main.py` calls `setup_logging(level="DEBUG")` |
     | OpenFGA | `openfga.log.level` / `openfga.log.format` | `info` / `json` |
 
-    The worker's level is hardcoded at its call site, so a `LOG_LEVEL` set on the
+    The worker's level is hardcoded at its call site, so a `AGENTAREA_LOG_LEVEL` set on the
     worker deployment has no effect. Worker output is verbose by design; budget log
     storage accordingly.
   </Step>
@@ -124,12 +124,12 @@ metrics. Read the section below before wiring a scrape config against them.
 
   <Step title="Enable tracing">
     Tracing is off by default and gated by one variable. `setup_otel()` returns
-    immediately when `OTEL_ENABLED` is false, so the SDK is never installed.
+    immediately when `AGENTAREA_OTEL_ENABLED` is false, so the SDK is never installed.
 
     ```yaml
     backend:
       extraEnv:
-        - name: OTEL_ENABLED
+        - name: AGENTAREA_OTEL_ENABLED
           value: "true"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: http://otel-collector.observability:4317
@@ -138,7 +138,7 @@ metrics. Read the section below before wiring a scrape config against them.
 
     worker:
       extraEnv:
-        - name: OTEL_ENABLED
+        - name: AGENTAREA_OTEL_ENABLED
           value: "true"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: http://otel-collector.observability:4317
@@ -148,7 +148,7 @@ metrics. Read the section below before wiring a scrape config against them.
 
     | Variable | Default | Meaning |
     |---|---|---|
-    | `OTEL_ENABLED` | `false` | AgentArea's own gate. Nothing is installed unless this is true. |
+    | `AGENTAREA_OTEL_ENABLED` | `false` | AgentArea's own gate. Nothing is installed unless this is true. |
     | `OTEL_SERVICE_NAME` | `""` | Overrides the built-in name — `agentarea-api` or `agentarea-worker`. |
     | `OTEL_EXPORTER_OTLP_PROTOCOL` | `grpc` | `grpc`, or `http/protobuf` to use the HTTP exporter. |
 
@@ -179,9 +179,8 @@ metrics. Read the section below before wiring a scrape config against them.
     {"status":"healthy","service":"agentarea-api","version":"0.1.0","connections":{},"timestamp":"..."}
     ```
 
-    The chart's `global.monitoring.health.port` (8001) does not move this endpoint.
-    It is rendered as `HEALTH_CHECK_PORT` and has no reader; the API serves `/health`
-    on its normal port.
+    The chart's `global.monitoring.health.port` (8001) does not move this endpoint;
+    the API serves `/health` on its normal port.
 
     The chart's liveness and readiness probes for the backend, frontend, and event
     service are configurable under `<service>.livenessProbe` and
@@ -218,7 +217,7 @@ metrics. Read the section below before wiring a scrape config against them.
     ```
 
     The namespace is `global.temporal.namespace` in the chart and
-    `WORKFLOW__TEMPORAL_NAMESPACE` under Compose; both default to `default`.
+    `TEMPORAL_NAMESPACE` under Compose; both default to `default`.
 
     If you want the graphical history, run the UI against the same address for as
     long as you need it:
@@ -275,7 +274,7 @@ kubectl logs -n agentarea -l app.kubernetes.io/component=backend | grep "OpenTel
 OpenTelemetry tracing enabled for agentarea-api
 ```
 
-Absence of that line with `OTEL_ENABLED=true` means the variable did not reach
+Absence of that line with `AGENTAREA_OTEL_ENABLED=true` means the variable did not reach
 the process. Then send a request and confirm `trace_id` appears in the logs and
 the matching trace arrives in your collector.
 
@@ -300,7 +299,7 @@ curl -s http://localhost:8000/health | jq .
     after that point is not covered. Call it again after whatever added the
     handler.
   </Accordion>
-  <Accordion title="`OTEL_ENABLED=true` and no spans arrive">
+  <Accordion title="`AGENTAREA_OTEL_ENABLED=true` and no spans arrive">
     Check the startup line first — if `OpenTelemetry tracing enabled` is absent,
     the process never got the variable. If it is present, the exporter is
     failing: the endpoint comes from `OTEL_EXPORTER_OTLP_ENDPOINT` , which the
@@ -309,7 +308,7 @@ curl -s http://localhost:8000/health | jq .
     `http/protobuf` .
   </Accordion>
   <Accordion title="Traces stop at the workflow boundary">
-    The worker does not have `OTEL_ENABLED` set. Context propagation across
+    The worker does not have `AGENTAREA_OTEL_ENABLED` set. Context propagation across
     activities comes from the Temporal plugin, which is only registered on the
     worker.
   </Accordion>
@@ -319,11 +318,11 @@ curl -s http://localhost:8000/health | jq .
     `global.monitoring.prometheus.enabled` is set.
   </Accordion>
   <Accordion title="Setting `global.monitoring.health.port` did not move the health endpoint">
-    That value renders `HEALTH_CHECK_PORT` , which nothing reads. `/health`
-    stays on the service port.
+    It names a container and Service port only; nothing in the API reads it.
+    `/health` stays on the service port.
   </Accordion>
   <Accordion title="Worker logs are overwhelming">
-    The worker hardcodes `DEBUG` at its `setup_logging` call. `LOG_LEVEL` on the
+    The worker hardcodes `DEBUG` at its `setup_logging` call. `AGENTAREA_LOG_LEVEL` on the
     deployment does not change it. Filter at the collector.
   </Accordion>
 </AccordionGroup>

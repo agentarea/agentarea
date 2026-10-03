@@ -158,7 +158,7 @@ func TestSandboxCleanupRouteUsesWorkspaceScopedTaskIdentity(t *testing.T) {
 
 func TestSandboxCleanupRequiresDedicatedBearerBeforeRuntimeAccess(t *testing.T) {
 	t.Setenv(sandboxCleanupAuthSecretEnv, "cleanup-secret-for-tests")
-	t.Setenv("MCP_FEATURE_WARM_POOL", "false")
+	t.Setenv("AGENTAREA_MCP_FEATURE_WARM_POOL", "false")
 
 	for _, test := range []struct {
 		name          string
@@ -209,8 +209,8 @@ func TestSandboxCleanupFailsClosedWithoutConfiguredSecret(t *testing.T) {
 
 func TestExternalSandboxCleanupRunsEvenWhenWarmPoolFeatureIsDisabled(t *testing.T) {
 	t.Setenv(sandboxCleanupAuthSecretEnv, "cleanup-secret-for-tests")
-	t.Setenv("MCP_FEATURE_WARM_POOL", "false")
-	t.Setenv("SANDBOX_TASK_IDLE_TTL", "42s")
+	t.Setenv("AGENTAREA_MCP_FEATURE_WARM_POOL", "false")
+	t.Setenv("AGENTAREA_SANDBOX_IDLE_TTL", "42s")
 	runtime := &retiringSandboxRuntime{}
 	recorder := httptest.NewRecorder()
 	context, _ := gin.CreateTestContext(recorder)

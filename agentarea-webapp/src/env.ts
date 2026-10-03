@@ -3,21 +3,21 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    ORY_ADMIN_URL: z.string().url(),
+    AGENTAREA_AUTH_KRATOS_ADMIN_URL: z.string().url(),
     ORY_SDK_URL: z.string().url(),
     ORY_BROWSER_URL: z.string().url().optional(),
-    API_URL: z.string().url(),
-    APPS_SANDBOX_ORIGIN: z.string().url(),
-    WEBAPP_PUBLIC_ORIGIN: z.string().url(),
+    AGENTAREA_API_URL: z.string().url(),
+    AGENTAREA_MCP_APPS_ORIGIN: z.string().url(),
+    AGENTAREA_APP_ORIGIN: z.string().url(),
   },
   client: {},
   runtimeEnv: {
-    ORY_ADMIN_URL: process.env.ORY_ADMIN_URL,
+    AGENTAREA_AUTH_KRATOS_ADMIN_URL: process.env.AGENTAREA_AUTH_KRATOS_ADMIN_URL,
     ORY_SDK_URL: process.env.ORY_SDK_URL,
     ORY_BROWSER_URL: process.env.ORY_BROWSER_URL,
-    API_URL: process.env.API_URL,
-    APPS_SANDBOX_ORIGIN: process.env.APPS_SANDBOX_ORIGIN,
-    WEBAPP_PUBLIC_ORIGIN: process.env.WEBAPP_PUBLIC_ORIGIN,
+    AGENTAREA_API_URL: process.env.AGENTAREA_API_URL,
+    AGENTAREA_MCP_APPS_ORIGIN: process.env.AGENTAREA_MCP_APPS_ORIGIN,
+    AGENTAREA_APP_ORIGIN: process.env.AGENTAREA_APP_ORIGIN,
   },
   skipValidation: true,
 });

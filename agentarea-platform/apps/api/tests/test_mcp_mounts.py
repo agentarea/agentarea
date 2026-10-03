@@ -21,7 +21,7 @@ _HEADERS = {"Accept": "application/json, text/event-stream"}
 
 async def _challenge(path: str) -> str:
     settings = MagicMock()
-    settings.app.API_BASE_URL = API_BASE
+    settings.app.API_URL = API_BASE
     app = create_app()
     with patch("agentarea_common.config.get_settings", return_value=settings):
         async with httpx.AsyncClient(

@@ -58,7 +58,7 @@ graph TB
         ports:
           - "8000:8000"
         environment:
-          - ENVIRONMENT=development
+          - AGENTAREA_ENV=development
           - HOT_RELOAD=true
         volumes:
           - ./src:/app/src

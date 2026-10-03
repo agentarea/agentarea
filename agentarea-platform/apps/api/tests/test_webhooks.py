@@ -333,7 +333,7 @@ def test_webhook_rate_limit_returns_429_after_limit(client, mock_webhook_manager
         rate_limit,
         "get_settings",
         lambda: SimpleNamespace(
-            triggers=SimpleNamespace(WEBHOOK_RATE_LIMIT_PER_MINUTE=1),
+            triggers=SimpleNamespace(WEBHOOK_RATE=1),
         ),
     )
     mock_webhook_manager.handle_webhook_request.return_value = {
@@ -368,7 +368,7 @@ def test_webhook_rate_limit_fails_open_when_redis_is_unavailable(
         rate_limit,
         "get_settings",
         lambda: SimpleNamespace(
-            triggers=SimpleNamespace(WEBHOOK_RATE_LIMIT_PER_MINUTE=1),
+            triggers=SimpleNamespace(WEBHOOK_RATE=1),
         ),
     )
     mock_webhook_manager.handle_webhook_request.return_value = {

@@ -23,7 +23,7 @@ def wire_di(
 ):
     """Simulate the startup wiring logic (mirrors apps/api + apps/worker main.py).
 
-    PermissionService is a SELECTOR: an explicit ACCESS_CONTROL_BACKEND wins over a
+    PermissionService is a SELECTOR: an explicit AGENTAREA_AUTHZ_BACKEND wins over a
     merely-installed "permissions" extension; the extension is only a fallback used
     when no concrete backend is selected.
     """
@@ -82,7 +82,7 @@ def test_enterprise_factory_overrides_default():
 
 @pytest.mark.flow(MainFlow.EXTENSION_CONTRACT)
 def test_explicit_backend_shadows_extension():
-    """An EXPLICIT ACCESS_CONTROL_BACKEND must win over an installed extension.
+    """An EXPLICIT AGENTAREA_AUTHZ_BACKEND must win over an installed extension.
 
     Regression guard: a registered "permissions" extension used to be checked
     first and silently overrode the configured backend, so OpenFGA never enforced.

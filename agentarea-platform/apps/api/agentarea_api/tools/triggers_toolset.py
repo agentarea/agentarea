@@ -34,8 +34,7 @@ async def _build_trigger_service(
     temporal_schedule_manager: TemporalScheduleManager | None = None
     try:
         temporal_schedule_manager = TemporalScheduleManager(
-            namespace=settings.triggers.TEMPORAL_SCHEDULE_NAMESPACE,
-            task_queue=settings.triggers.TEMPORAL_SCHEDULE_TASK_QUEUE,
+            task_queue=settings.triggers.QUEUE,
         )
     except Exception:
         temporal_schedule_manager = None
