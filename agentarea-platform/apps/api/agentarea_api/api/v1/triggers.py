@@ -24,6 +24,7 @@ from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
 from agentarea_api.api.deps.services import (
+    AuditServiceDep,
     BaseSecretManagerDep,
     SecretCatalogServiceDep,
     get_trigger_health_check,
@@ -32,7 +33,11 @@ from agentarea_api.api.deps.services import (
 from agentarea_api.api.v1._icons import CHANNEL_ICON_NAMESPACE, build_icon_url
 from agentarea_api.api.v1._trigger_creation import (
     create_trigger_from_spec,
+    discard_trigger,
     get_channel_webhook_service,
+    issue_generic_signing_secret,
+    needs_generated_signing_secret,
+    register_channel_webhook,
     resolve_channel_credentials,
     with_webhook_secret_token,
 )
@@ -52,8 +57,13 @@ from agentarea_triggers.trigger_service import (
     TriggerValidationError,
 )
 from agentarea_triggers.webhook_verification import (
+    SIGNING_SECRET_KEYS,
+    SigningSecretUnavailableError,
+    WebhookSigning,
     channel_credential_secret_name,
+    generic_signature_scheme,
     redact_secret_fields,
+    webhook_signing_status,
 )
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -67,6 +77,14 @@ router = APIRouter(prefix="/triggers", tags=["triggers"])
 
 
 # API Response Models
+
+
+class WebhookSignatureScheme(BaseModel):
+    """How a sender signs requests to a generic webhook."""
+
+    header: str = Field(description="Request header carrying the signature.")
+    algorithm: str = Field(description="HMAC digest, e.g. 'sha256'.")
+    prefix: str = Field(description="Text before the hex digest in the header; often empty.")
 
 
 class TriggerResponse(BaseModel):
@@ -106,9 +124,34 @@ class TriggerResponse(BaseModel):
     # Channel credentials indicator (actual credentials never returned)
     has_channel_credentials: bool = False
 
+    webhook_signing: WebhookSigning | None = Field(
+        default=None,
+        description=(
+            "What protects the public webhook URL. 'signed': requests without a valid "
+            "signature or token are refused. 'unsigned': this trigger has no secret, so "
+            "any request starts the agent. 'unsupported': the platform does not verify "
+            "this provider's requests. Null for non-webhook triggers, or when the stored "
+            "secret could not be read."
+        ),
+    )
+    signature_scheme: WebhookSignatureScheme | None = Field(
+        default=None, description="Signing scheme of a generic webhook; null for other types."
+    )
+    signing_secret: str | None = Field(
+        default=None,
+        description=(
+            "Generated signing secret of a generic webhook. Returned only by the create "
+            "and rotate calls that generated it; never readable afterwards."
+        ),
+    )
+
     @classmethod
     def from_domain_model(
-        cls, trigger: Any, has_channel_credentials: bool = False
+        cls,
+        trigger: Any,
+        has_channel_credentials: bool = False,
+        webhook_signing: WebhookSigning | None = None,
+        signing_secret: str | None = None,
     ) -> "TriggerResponse":
         """Create response from domain model."""
         # Base fields
@@ -143,18 +186,28 @@ class TriggerResponse(BaseModel):
             )
 
         if hasattr(trigger, "webhook_id"):
+            webhook_type = (
+                trigger.webhook_type.value
+                if hasattr(trigger.webhook_type, "value")
+                else str(trigger.webhook_type)
+            )
             response_data.update(
                 {
                     "webhook_id": trigger.webhook_id,
                     "allowed_methods": trigger.allowed_methods,
-                    "webhook_type": trigger.webhook_type.value
-                    if hasattr(trigger.webhook_type, "value")
-                    else str(trigger.webhook_type),
+                    "webhook_type": webhook_type,
                     "validation_rules": redact_secret_fields(trigger.validation_rules),
                     "webhook_config": redact_secret_fields(trigger.webhook_config),
                     "event_types": getattr(trigger, "event_types", []) or [],
+                    "webhook_signing": webhook_signing,
                 }
             )
+            if webhook_type == "generic":
+                scheme = generic_signature_scheme(trigger.validation_rules)
+                response_data["signature_scheme"] = WebhookSignatureScheme(
+                    header=scheme.header, algorithm=scheme.algorithm, prefix=scheme.prefix
+                )
+                response_data["signing_secret"] = signing_secret
 
         response_data["has_channel_credentials"] = has_channel_credentials
 
@@ -303,7 +356,7 @@ class TriggerRunResponse(BaseModel):
 # Utility Functions
 
 
-DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
 
 def _task_cost_expr():
@@ -388,6 +441,31 @@ async def _has_credentials(secret_manager: Any, trigger: Any, trigger_id: UUID) 
         return False
 
 
+async def _webhook_signing(secret_manager: Any, trigger: Any) -> WebhookSigning | None:
+    """What protects a webhook trigger's URL; None for other triggers.
+
+    A display value like ``has_channel_credentials``: a secret that cannot be
+    read costs the label, not the trigger. The webhook itself refuses requests
+    while its secret is unreadable (see ``verify_webhook_signature``).
+    """
+    if not hasattr(trigger, "webhook_id"):
+        return None
+    wt = trigger.webhook_type
+    try:
+        return await webhook_signing_status(
+            wt.value if hasattr(wt, "value") else str(wt),
+            trigger.validation_rules,
+            trigger.webhook_config,
+            secret_manager,
+            trigger.id,
+        )
+    except SigningSecretUnavailableError:
+        logger.warning(
+            f"Could not resolve the webhook signing secret of trigger {trigger.id}", exc_info=True
+        )
+        return None
+
+
 # API Endpoints
 
 
@@ -456,6 +534,10 @@ async def create_trigger(
     If channel_credentials are provided, they are stored encrypted in the secret
     store under key ``channel_cred:{webhook_type}:{trigger_id}``.
 
+    A generic webhook created without a signing secret gets a generated one,
+    returned once in ``signing_secret``; requests must then be signed as
+    ``signature_scheme`` describes.
+
     Args:
         payload: Trigger creation DTO (single source of truth shared with MCP toolset).
         user_context: Authentication context.
@@ -486,10 +568,33 @@ async def create_trigger(
             secret_manager=secret_manager,
             webhook_service=webhook_service,
         )
+        signing_secret: str | None = None
+        if needs_generated_signing_secret(payload, credentials):
+            try:
+                signing_secret = await issue_generic_signing_secret(trigger.id, secret_manager)
+            except Exception:
+                # Never leave behind an unsigned webhook its creator believes is signed.
+                await discard_trigger(
+                    trigger,
+                    payload,
+                    credentials,
+                    trigger_service=trigger_service,
+                    secret_manager=secret_manager,
+                    webhook_service=webhook_service,
+                )
+                raise
+            has_creds = True
 
         logger.info(f"Created trigger {trigger.id} for agent {trigger.agent_id}")
 
-        return TriggerResponse.from_domain_model(trigger, has_channel_credentials=has_creds)
+        return TriggerResponse.from_domain_model(
+            trigger,
+            has_channel_credentials=has_creds,
+            webhook_signing=(
+                "signed" if signing_secret else await _webhook_signing(secret_manager, trigger)
+            ),
+            signing_secret=signing_secret,
+        )
 
     except HTTPException:
         raise
@@ -562,14 +667,19 @@ async def list_triggers(
 
         logger.info(f"Listed {len(triggers)} triggers")
 
-        # Resolve credential presence per trigger concurrently so the flag is
-        # correct on the list path too (not just create/update).
-        creds_flags = await asyncio.gather(
-            *(_has_credentials(secret_manager, trigger, trigger.id) for trigger in triggers)
+        # Resolve credential presence and webhook signing per trigger
+        # concurrently so both are correct on the list path too.
+        creds_flags, signing = await asyncio.gather(
+            asyncio.gather(
+                *(_has_credentials(secret_manager, trigger, trigger.id) for trigger in triggers)
+            ),
+            asyncio.gather(*(_webhook_signing(secret_manager, trigger) for trigger in triggers)),
         )
         return [
-            TriggerResponse.from_domain_model(trigger, has_channel_credentials=has_creds)
-            for trigger, has_creds in zip(triggers, creds_flags, strict=True)
+            TriggerResponse.from_domain_model(
+                trigger, has_channel_credentials=has_creds, webhook_signing=signed
+            )
+            for trigger, has_creds, signed in zip(triggers, creds_flags, signing, strict=True)
         ]
 
     except HTTPException:
@@ -651,7 +761,11 @@ async def get_trigger(
             raise HTTPException(status_code=404, detail=f"Trigger {trigger_id} not found")
 
         has_creds = await _has_credentials(secret_manager, trigger, trigger_id)
-        return TriggerResponse.from_domain_model(trigger, has_channel_credentials=has_creds)
+        return TriggerResponse.from_domain_model(
+            trigger,
+            has_channel_credentials=has_creds,
+            webhook_signing=await _webhook_signing(secret_manager, trigger),
+        )
 
     except HTTPException:
         raise
@@ -678,7 +792,10 @@ async def update_trigger(
 
     Updates the specified trigger with the provided data. Only non-null fields
     in the request will be updated. Secret selections preserve unselected
-    credential fields; legacy raw credentials replace the stored bundle.
+    credential fields; legacy raw credentials replace the stored bundle, except
+    the Telegram secret token, which is kept. A channel webhook is registered
+    with its provider before anything is saved; if the provider refuses, the
+    call fails with 502 and nothing changes.
 
     Args:
         trigger_id: The unique identifier of the trigger.
@@ -699,65 +816,71 @@ async def update_trigger(
         credentials = await resolve_channel_credentials(
             payload.channel_credentials, secret_catalog, secret_manager
         )
-        if credentials and any(
-            isinstance(value, dict) for value in (payload.channel_credentials or {}).values()
-        ):
+        secret_name: str | None = None
+        if credentials:
             current_trigger = await trigger_service.get_trigger(trigger_id)
             if current_trigger is None:
                 raise HTTPException(status_code=404, detail=f"Trigger {trigger_id} not found")
-            secret_name = _channel_secret_name(current_trigger, trigger_id)
-            if secret_name is None:
-                extractor = getattr(current_trigger, "data_extractor", None) or ""
+            current_any = cast(Any, current_trigger)
+            webhook_type = payload.webhook_type or getattr(current_any, "webhook_type", None)
+            if webhook_type:
+                channel_type = str(getattr(webhook_type, "value", webhook_type))
+            else:
+                extractor = getattr(current_any, "data_extractor", None) or ""
                 channel_type = extractor.removesuffix("_polling") or "generic"
-                secret_name = channel_credential_secret_name(channel_type, trigger_id)
-            try:
-                stored = await secret_manager.get_secret(secret_name)
-                existing_credentials = json.loads(stored) if stored is not None else {}
-                if not isinstance(existing_credentials, dict):
-                    raise ValueError("Stored channel credentials must be an object")
-            except Exception:
-                raise HTTPException(
-                    status_code=422,
-                    detail="Existing channel credentials could not be read. No changes were saved.",
-                ) from None
-            credentials = {**existing_credentials, **credentials}
+            secret_name = channel_credential_secret_name(channel_type, trigger_id)
+            selection = any(
+                isinstance(value, dict) for value in (payload.channel_credentials or {}).values()
+            )
+            if selection or channel_type == "telegram":
+                try:
+                    stored = await secret_manager.get_secret(secret_name)
+                    existing_credentials = json.loads(stored) if stored is not None else {}
+                    if not isinstance(existing_credentials, dict):
+                        raise ValueError("Stored channel credentials must be an object")
+                except Exception:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            "Existing channel credentials could not be read. No changes were saved."
+                        ),
+                    ) from None
+                if selection:
+                    credentials = {**existing_credentials, **credentials}
+                else:
+                    # Telegram already echoes the stored token; a new one would
+                    # reject its updates until setWebhook caught up.
+                    token_key = SIGNING_SECRET_KEYS["telegram"]
+                    if existing_credentials.get(token_key) and not credentials.get(token_key):
+                        credentials = {**credentials, token_key: existing_credentials[token_key]}
+            credentials, secret_token = with_webhook_secret_token(channel_type, credentials)
+            await register_channel_webhook(
+                webhook_service,
+                channel_type=webhook_type,
+                webhook_id=getattr(current_any, "webhook_id", None),
+                credentials=credentials,
+                secret_token=secret_token,
+            )
         trigger_update = payload.to_domain()
 
         # Update trigger
         updated_trigger = await trigger_service.update_trigger(trigger_id, trigger_update)
 
-        # Update channel credentials if provided
-        has_creds = False
-        if credentials and secret_manager:
-            # Determine channel type from the updated trigger
-            channel_type = "generic"
-            updated_trigger_any = cast(Any, updated_trigger)
-            if hasattr(updated_trigger_any, "webhook_type"):
-                wt = updated_trigger_any.webhook_type
-                channel_type = wt.value if hasattr(wt, "value") else str(wt)
-            elif (
-                hasattr(updated_trigger_any, "data_extractor")
-                and updated_trigger_any.data_extractor
-            ):
-                channel_type = str(updated_trigger_any.data_extractor).removesuffix("_polling")
-            credentials, secret_token = with_webhook_secret_token(channel_type, credentials)
-            secret_name = channel_credential_secret_name(channel_type, trigger_id)
+        # Store channel credentials only once the provider has accepted them.
+        if credentials and secret_name:
             await secret_manager.set_secret(secret_name, json.dumps(credentials))
             has_creds = True
-            await webhook_service.register(
-                channel_type=getattr(updated_trigger, "webhook_type", None),
-                webhook_id=getattr(updated_trigger, "webhook_id", None),
-                credentials=credentials,
-                secret_token=secret_token,
-            )
             logger.info(f"Updated channel credentials for trigger {trigger_id}")
-        elif secret_manager:
-            # Check if credentials already exist
+        else:
             has_creds = await _has_credentials(secret_manager, updated_trigger, trigger_id)
 
         logger.info(f"Updated trigger {trigger_id}")
 
-        return TriggerResponse.from_domain_model(updated_trigger, has_channel_credentials=has_creds)
+        return TriggerResponse.from_domain_model(
+            updated_trigger,
+            has_channel_credentials=has_creds,
+            webhook_signing=await _webhook_signing(secret_manager, updated_trigger),
+        )
 
     except HTTPException:
         raise
@@ -768,6 +891,71 @@ async def update_trigger(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception(f"Failed to update trigger {trigger_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post(
+    "/{trigger_id}/signing-secret",
+    response_model=TriggerResponse,
+    dependencies=[requires("edit", "trigger", id_param="trigger_id")],
+)
+async def rotate_signing_secret(
+    trigger_id: UUID,
+    secret_manager: BaseSecretManagerDep,
+    audit: AuditServiceDep,
+    user_context: UserContext = Depends(get_user_context),
+    trigger_service: TriggerService = Depends(get_trigger_service),
+) -> TriggerResponse:
+    """Generate a new signing secret for a generic webhook and return it once.
+
+    Signs an unsigned webhook, or replaces the secret of a signed one: from
+    this call on, requests signed with any previous secret, or not signed, are
+    refused. The secret is in ``signing_secret`` of this response only.
+
+    Raises:
+        HTTPException: 404 if the trigger does not exist; 400 if it is not a
+            generic webhook (other channels are signed with their provider's
+            secret); 409 if its secret is set inline in ``validation_rules`` or
+            ``webhook_config``, which this call cannot replace.
+    """
+    try:
+        trigger = await trigger_service.get_trigger(trigger_id)
+        if not trigger:
+            raise HTTPException(status_code=404, detail=f"Trigger {trigger_id} not found")
+        trigger_any = cast(Any, trigger)
+        wt = getattr(trigger_any, "webhook_type", None)
+        if not hasattr(trigger_any, "webhook_id") or str(getattr(wt, "value", wt)) != "generic":
+            raise HTTPException(
+                status_code=400,
+                detail="Only generic webhooks take a generated signing secret.",
+            )
+        key = SIGNING_SECRET_KEYS["generic"]
+        if any(
+            source and source.get(key)
+            for source in (trigger_any.validation_rules, trigger_any.webhook_config)
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"This webhook's {key} is set in its configuration; change it there "
+                    "or remove it before generating one."
+                ),
+            )
+
+        signing_secret = await issue_generic_signing_secret(trigger_id, secret_manager)
+        logger.info(f"Rotated the signing secret of trigger {trigger_id}")
+        await audit.record("trigger.signing_secret_rotate", "trigger", trigger_id)
+        return TriggerResponse.from_domain_model(
+            trigger,
+            has_channel_credentials=True,
+            webhook_signing="signed",
+            signing_secret=signing_secret,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Failed to rotate the signing secret of trigger {trigger_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -949,7 +1137,7 @@ async def get_execution_history(
     ),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
-    db_session: AsyncSession = Depends(get_db_session),
+    db_session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> ExecutionHistoryResponse:
     """Get execution history for a trigger with filtering and pagination.
 
@@ -1109,7 +1297,7 @@ async def get_execution_metrics(
     ),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
-    db_session: AsyncSession = Depends(get_db_session),
+    db_session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> ExecutionMetricsResponse:
     """Get execution metrics for a trigger.
 

@@ -323,6 +323,17 @@ async def hydra_dcr_proxy(request: Request) -> Response:
         client_data = _json.loads(await request.body())
     except Exception:
         client_data = {}
+    if not isinstance(client_data, dict):
+        return Response(
+            content=_json.dumps(
+                {
+                    "error": "invalid_client_metadata",
+                    "error_description": "the registration request must be a JSON object",
+                }
+            ),
+            status_code=400,
+            headers={"Content-Type": "application/json"},
+        )
 
     # Security-relevant fields are FORCED, not defaulted. `setdefault` let the
     # caller keep its own value, so a self-registering client could ask for
@@ -382,7 +393,8 @@ async def hydra_dcr_proxy(request: Request) -> Response:
     client_data["scope"] = " ".join(sorted(granted_scopes))
 
     # A redirect_uri is the client's own callback, so it stays caller-supplied —
-    # but only over https, or loopback for desktop clients.
+    # but only over https, or plain http to loopback for desktop clients
+    # (RFC 8252 §7.3). Any other scheme with a loopback host is not a callback.
     redirect_uris = client_data.get("redirect_uris") or []
     if not redirect_uris:
         return Response(
@@ -397,13 +409,20 @@ async def hydra_dcr_proxy(request: Request) -> Response:
         )
     for uri in redirect_uris:
         parsed = urlparse(str(uri))
-        is_loopback = parsed.hostname in ("localhost", "127.0.0.1", "::1")
+        is_loopback = parsed.scheme == "http" and parsed.hostname in (
+            "localhost",
+            "127.0.0.1",
+            "::1",
+        )
         if parsed.scheme != "https" and not is_loopback:
             return Response(
                 content=_json.dumps(
                     {
                         "error": "invalid_redirect_uri",
-                        "error_description": "redirect_uris must use https, or loopback for native clients",
+                        "error_description": (
+                            "redirect_uris must use https, or http to a loopback host "
+                            "for native clients"
+                        ),
                     }
                 ),
                 status_code=400,

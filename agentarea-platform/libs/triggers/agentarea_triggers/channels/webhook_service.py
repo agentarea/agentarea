@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChannelWebhookService:
-    """Register/deregister a trigger's provider-side webhook, best-effort."""
+    """Register/deregister a trigger's provider-side webhook."""
 
     def __init__(self, base_url: str | None):
         # The reachable ingress Telegram (etc.) should POST to. May differ from
@@ -40,11 +40,19 @@ class ChannelWebhookService:
         webhook_id: str | None,
         credentials: dict[str, Any] | None,
         secret_token: str | None = None,
-    ) -> bool:
+    ) -> bool | None:
+        """Point the provider at this trigger's webhook URL.
+
+        True when the provider accepted it, False when it refused or could not
+        be reached, None when there is nothing to register (the channel has no
+        provider-side webhook, or no public base URL is configured). Callers
+        must not persist anything the provider needs to agree on -- such as a
+        Telegram secret token -- on False.
+        """
         registrar = get_webhook_registrar(self._channel_name(channel_type))
         url = self._webhook_url(webhook_id)
         if not (registrar and url):
-            return False
+            return None
         return await registrar.register(
             webhook_url=url, credentials=credentials or {}, secret_token=secret_token
         )

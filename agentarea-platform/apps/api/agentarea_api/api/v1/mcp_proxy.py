@@ -4,8 +4,9 @@ Each MCP instance gets a stable governed endpoint:
 
     POST/GET/DELETE  /v1/mcp/{instance_id}/mcp
 
-The proxy resolves the instance, determines the upstream URL, injects
-outbound auth headers (OAuth2 bearer with auto-refresh, API key, etc.), and
+The proxy resolves the instance, determines the upstream URL, injects the
+instance's own headers (secret ones from the secret store) and outbound auth
+headers (OAuth2 bearer with auto-refresh, API key, etc.), and
 streams the request/response transparently. AgentArea owns access control
 (workspace scoping today; access-control next) and audit centrally; downstream MCP
 servers see only governed traffic.
@@ -474,6 +475,11 @@ async def proxy_instance(
     if pinned_host:
         # Connect to the pinned IP but present the original hostname upstream.
         outbound_headers.setdefault("Host", pinned_host)
+    try:
+        outbound_headers.update(await instance_service.outbound_headers(instance))
+    except Exception as exc:
+        logger.exception("Failed to build outbound headers for instance %s", instance_id)
+        raise HTTPException(status_code=502, detail="Upstream auth failed") from exc
     if instance.auth_config_id:
         auth_repo = MCPAuthConfigRepository(db_session, user_context)
         auth_config = await auth_repo.get_by_id(instance.auth_config_id)

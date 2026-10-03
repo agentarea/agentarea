@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import socket
 from typing import TYPE_CHECKING, Any
@@ -63,7 +64,7 @@ def _reject_platform_managed(config: ProviderConfig, verb: str) -> None:
 logger = logging.getLogger(__name__)
 
 
-def _reject_unsafe_endpoint(endpoint_url: str | None) -> None:
+async def _reject_unsafe_endpoint(endpoint_url: str | None) -> None:
     """Refuse a member-supplied LLM endpoint that points at a non-public address.
 
     The worker and the API POST to this URL on every run and model test, from
@@ -71,11 +72,16 @@ def _reject_unsafe_endpoint(endpoint_url: str | None) -> None:
     services. Private endpoints (a local Ollama) are admitted through
     ``OUTBOUND_PRIVATE_ALLOWLIST`` / ``ALLOW_PRIVATE_URLS``. A name that does not
     resolve yet reaches nothing and is left for the model test to report.
+
+    The check resolves the name with a blocking ``getaddrinfo``, so it runs in a
+    thread: a slow resolver must not stall every request the event loop serves.
     """
     if not endpoint_url:
         return
     try:
-        validate_outbound_url(endpoint_url, policy=OutboundPolicy.from_env())
+        await asyncio.to_thread(
+            validate_outbound_url, endpoint_url, policy=OutboundPolicy.from_env()
+        )
     except UnsafeUrlError as exc:
         if isinstance(exc.__cause__, socket.gaierror):
             return
@@ -170,7 +176,7 @@ class ProviderService:
             ProviderConfig: The created provider configuration.
         """
         await self._assert_may_manage_configs()
-        _reject_unsafe_endpoint(payload.endpoint_url)
+        await _reject_unsafe_endpoint(payload.endpoint_url)
         config_id = uuid4()
         config = ProviderConfig(
             id=config_id,
@@ -298,7 +304,7 @@ class ProviderService:
         if "description" in patch:
             config.description = patch["description"]
         if "endpoint_url" in patch:
-            _reject_unsafe_endpoint(patch["endpoint_url"])
+            await _reject_unsafe_endpoint(patch["endpoint_url"])
             config.endpoint_url = patch["endpoint_url"]
         if "is_active" in patch:
             config.is_active = patch["is_active"]

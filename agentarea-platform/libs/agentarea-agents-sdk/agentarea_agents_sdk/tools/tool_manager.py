@@ -13,6 +13,7 @@ from .mcp_tool_identity import McpToolIdentity
 from .openapi_tool import OpenAPIToolFactory, _slugify_name
 from .tool_builders import (
     ToolBuildContext,
+    allowed_tool_names,
     build_tool_builder_registry,
     parse_tool_spec,
 )
@@ -385,6 +386,30 @@ class ToolManager:
                 exc_info=True,
             )
             return []
+
+    async def openapi_operation_tools(
+        self, tools_config: list[dict[str, Any]] | None
+    ) -> dict[str, list[str]]:
+        """Each OpenAPI attachment's config name -> the model-facing tools it builds.
+
+        Policy may name a connection to govern every operation it exposes, and
+        an attachment whose ``allowed_tools`` is unset exposes operations its
+        config does not list. Built the way the tool activity builds them.
+        """
+        operations: dict[str, list[str]] = {}
+        for tool in tools_config or []:
+            if tool.get("type") != "openapi":
+                continue
+            spec = parse_tool_spec(tool)
+            if spec is None:
+                continue
+            tools = await self._discover_openapi_tools_by_name(
+                spec.settings.get("openapi_connection_id") or spec.name,
+                allowed_tool_names(spec.settings),
+                self._openapi_connection_service,
+            )
+            operations[spec.name] = [openapi_tool.name for openapi_tool in tools]
+        return operations
 
     async def discover_tool_providers(
         self,

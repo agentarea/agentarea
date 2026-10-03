@@ -2,10 +2,20 @@
 
 A member sets ``endpoint_url`` on their own provider config; every run, model
 test and compaction then POSTs to it from inside the deployment. The write path
-refuses non-public addresses (``ProviderService``); this re-checks at use so a
-row stored before that check, or a policy that has since tightened, cannot
-reach cloud metadata or an internal service. Platform-managed configs carry
-the operator's own endpoint and are trusted.
+refuses non-public addresses (``ProviderService``); this re-checks at use, so a
+row stored before that check, or under a policy that has since tightened, is
+refused before any request is made. Platform-managed configs carry the
+operator's own endpoint and are trusted.
+
+What it does not cover: the check resolves the name and returns a string; the
+LLM client (LiteLLM, the OpenAI SDK, the direct streaming path) resolves it
+again when it connects, and LiteLLM and the OpenAI SDK follow redirects. A
+public endpoint that answers with a redirect to an internal address, or a name
+that resolves to a public address for the check and a private one for the
+connection (DNS rebinding), still reaches that address. Those requests do not
+go through the pinned ``safe_async_client``, because LiteLLM builds a
+different HTTP client per provider. Containing them is the job of the egress
+network policy described in :mod:`agentarea_common.utils.url_safety`.
 """
 
 from __future__ import annotations

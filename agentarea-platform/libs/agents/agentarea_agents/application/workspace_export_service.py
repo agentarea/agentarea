@@ -1,8 +1,29 @@
-"""Export a workspace as a canonical, importable bundle."""
+"""Export a workspace as a canonical, importable bundle.
+
+A bundle is meant to be shared, so no credential may travel in it. MCP secrets
+(names listed in ``env_vars``) are never read; they become secret setup fields.
+Values the source keeps in plain configuration are screened too, and anything
+that carries a credential is replaced by a ``${setup.<key>}`` reference to a
+secret setup field the importer fills in:
+
+- an environment variable or header whose name looks like a credential, or
+  whose value is a credentialed URL or an ``Authorization``-style value;
+- an ``args`` entry that is a credentialed URL, the value of a credential flag
+  (``--api-key=x``, ``--token x``, ``TOKEN=x``), or a credential header
+  (``Authorization: Bearer x``);
+- an ``endpoint_url`` that is a credentialed URL.
+
+A URL is credentialed when it has a password in its userinfo, a query parameter
+named like a credential, or an opaque path segment (24+ letters and digits, the
+shape of per-user secret URLs). Setup keys are derived from the MCP key and the
+position, so the same workspace always exports the same document.
+"""
 
 import logging
 import re
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
+from urllib.parse import parse_qsl, urlsplit
 
 import yaml
 from agentarea_common.auth.authorization import assert_workspace_admin
@@ -28,6 +49,87 @@ def _bundle_key(kind: str, name: str, identifier: Any) -> str:
 def _setup_key(name: str) -> str:
     normalized = re.sub(r"[^a-zA-Z0-9]+", "_", name).strip("_").lower()
     return f"setup_{normalized or 'value'}"
+
+
+_CREDENTIAL_WORDS_RE = re.compile(
+    r"token|secret|passw|pwd|api[_-]?key|apikey|access[_-]?key|private[_-]?key|"
+    r"credential|bearer|cookie|session|authorization|auth[_-]?key|signature",
+    re.IGNORECASE,
+)
+_CREDENTIAL_EXACT_NAMES = {"key", "sig", "auth", "pass", "code"}
+_CREDENTIAL_VALUE_RE = re.compile(r"^(bearer|basic|token)\s+\S", re.IGNORECASE)
+_OPAQUE_SEGMENT_RE = re.compile(r"^(?=.*\d)(?=.*[A-Za-z])[A-Za-z0-9_\-]{24,}$")
+_HEADER_ARG_RE = re.compile(r"^([A-Za-z0-9_-]+)\s*:\s*(\S.*)$")
+
+
+def _is_credential_name(name: str) -> bool:
+    normalized = name.strip().lstrip("-")
+    return bool(_CREDENTIAL_WORDS_RE.search(normalized)) or (
+        normalized.lower() in _CREDENTIAL_EXACT_NAMES
+    )
+
+
+def _is_url(value: str) -> bool:
+    return "://" in value
+
+
+def _url_carries_credentials(value: str) -> bool:
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        # Unparseable: nothing can vouch that it is credential-free.
+        return True
+    if parts.password is not None:
+        return True
+    if any(_is_credential_name(name) for name, _ in parse_qsl(parts.query)):
+        return True
+    return any(_OPAQUE_SEGMENT_RE.match(segment) for segment in parts.path.split("/"))
+
+
+def _value_carries_credentials(value: str) -> bool:
+    if _is_url(value):
+        return _url_carries_credentials(value)
+    return bool(_CREDENTIAL_VALUE_RE.match(value.strip()))
+
+
+def _template_args(
+    args: list[Any], mcp_key: str, secret_ref: Callable[[str, str], str]
+) -> list[Any]:
+    """Replace credential-carrying command arguments with secret setup references."""
+    result: list[Any] = []
+    value_is_credential = False
+    for index, arg in enumerate(args):
+        if not isinstance(arg, str):
+            result.append(arg)
+            value_is_credential = False
+            continue
+        field = f"{mcp_key}_arg_{index}"
+        what = f"command argument {index + 1}"
+        if value_is_credential and not arg.startswith("-"):
+            # The value following a credential flag: --token <value>.
+            result.append(secret_ref(field, what))
+            value_is_credential = False
+            continue
+        value_is_credential = False
+
+        flag, separator, value = arg.partition("=")
+        header = _HEADER_ARG_RE.match(arg)
+        if _is_url(arg) and not (separator and not _is_url(flag)):
+            result.append(secret_ref(field, what) if _url_carries_credentials(arg) else arg)
+        elif separator and value:
+            # --api-key=<value>, TOKEN=<value>, --db=<credentialed url>
+            if _is_credential_name(flag) or _value_carries_credentials(value):
+                result.append(f"{flag}={secret_ref(field, what)}")
+            else:
+                result.append(arg)
+        elif header and (
+            _is_credential_name(header.group(1)) or _value_carries_credentials(header.group(2))
+        ):
+            result.append(f"{header.group(1)}: {secret_ref(field, what)}")
+        else:
+            value_is_credential = arg.startswith("-") and _is_credential_name(arg)
+            result.append(arg)
+    return result
 
 
 class WorkspaceExportService:
@@ -79,13 +181,14 @@ class WorkspaceExportService:
             full = await self.agent_service.get_with_skills(agent.id)
             workspace_agents.append(full or agent)
 
-        mcps, mcp_keys, setup_fields = await self._export_mcp_instances(
+        mcps, mcp_keys, builtin_mcp_refs, setup_fields = await self._export_mcp_instances(
             BundleMcp, SetupField, SetupFieldType
         )
         bundle_agents, agent_keys = self._agents_to_bundle(
             workspace_agents,
             skill_keys,
             mcp_keys,
+            builtin_mcp_refs,
             setup_fields,
             BundleAgent,
             SetupField,
@@ -127,16 +230,26 @@ class WorkspaceExportService:
                 continue
 
             key = _bundle_key("skill", getattr(skill, "slug", None) or skill.name, skill.id)
-            if not skill.content:
+            if skill.source_type == "github" and skill.source_url:
+                # The repository is the package: re-importing it brings back the
+                # files SKILL.md references, which inline content would drop.
+                bundle_skill = bundle_skill_type(
+                    key=key,
+                    name=skill.name,
+                    source_type="github",
+                    source_url=skill.source_url,
+                )
+            elif skill.content:
+                bundle_skill = bundle_skill_type(
+                    key=key,
+                    name=skill.name,
+                    source_type="content",
+                    content=skill.content,
+                )
+            else:
                 raise ValueError(
                     f"Skill '{skill.name}' has no inline content for bundle installation"
                 )
-            bundle_skill = bundle_skill_type(
-                key=key,
-                name=skill.name,
-                source_type="content",
-                content=skill.content,
-            )
 
             result.append(bundle_skill)
             skill_keys[str(skill.id)] = key
@@ -147,15 +260,18 @@ class WorkspaceExportService:
         bundle_mcp_type: Any,
         setup_field_type: Any,
         setup_field_enum: Any,
-    ) -> tuple[list[Any], dict[str, str], list[Any]]:
+    ) -> tuple[list[Any], dict[str, str], set[str], list[Any]]:
+        """Returns (mcps, {instance id and name -> key}, built-in refs, setup fields)."""
         if not self.mcp_instance_service:
-            return [], {}, []
+            return [], {}, set(), []
 
         result = []
-        mcp_keys = {}
-        setup_fields = []
+        mcp_keys: dict[str, str] = {}
+        builtin_refs: set[str] = set()
+        setup_fields: list[Any] = []
         for instance in await self.mcp_instance_service.list():
             if is_builtin(instance):
+                builtin_refs.update({str(instance.id), instance.name})
                 continue
 
             key = _bundle_key("mcp", instance.name, instance.id)
@@ -167,25 +283,54 @@ class WorkspaceExportService:
                 raise ValueError(
                     f"MCP instance '{instance.name}' uses unsupported transport '{spec_type}'"
                 )
-            json_spec = {
-                field: transport_spec[field]
-                for field in ("type", "command", "args", "image", "endpoint_url")
-                if field in transport_spec
-            }
 
-            bindings = {}
-            for env_name in instance.get_configured_env_vars():
-                setup_key = _setup_key(f"{key}_{env_name}")
+            def secret_ref(field: str, what: str, *, name: str = instance.name) -> str:
+                setup_key = _setup_key(field)
                 setup_fields.append(
                     setup_field_type(
                         key=setup_key,
-                        label=f"{instance.name}: {env_name}",
+                        label=f"{name}: {what}",
                         type=setup_field_enum.SECRET,
                         required=True,
-                        help=f"Provide {env_name} for {instance.name}.",
+                        help=f"Provide {what} for {name}.",
                     )
                 )
-                bindings[env_name] = f"${{setup.{setup_key}}}"
+                return f"${{setup.{setup_key}}}"
+
+            json_spec: dict[str, Any] = {"type": spec_type}
+            for field in ("command", "image"):
+                if field in transport_spec:
+                    json_spec[field] = transport_spec[field]
+            if isinstance(transport_spec.get("args"), list):
+                json_spec["args"] = _template_args(transport_spec["args"], key, secret_ref)
+            endpoint_url = transport_spec.get("endpoint_url")
+            if isinstance(endpoint_url, str):
+                json_spec["endpoint_url"] = (
+                    secret_ref(f"{key}_endpoint_url", "endpoint URL")
+                    if _url_carries_credentials(endpoint_url)
+                    else endpoint_url
+                )
+
+            secret_names = instance.get_configured_env_vars()
+            bindings = {
+                env_name: secret_ref(f"{key}_{env_name}", env_name) for env_name in secret_names
+            }
+            for field in ("environment", "headers"):
+                values = transport_spec.get(field)
+                if not isinstance(values, dict):
+                    continue
+                plain: dict[str, Any] = {}
+                for name, value in values.items():
+                    if name in bindings:
+                        continue
+                    if _is_credential_name(name) or (
+                        isinstance(value, str) and _value_carries_credentials(value)
+                    ):
+                        bindings[name] = secret_ref(f"{key}_{name}", name)
+                    else:
+                        plain[name] = value
+                if plain:
+                    json_spec[field] = plain
 
             result.append(
                 bundle_mcp_type(
@@ -195,14 +340,18 @@ class WorkspaceExportService:
                     bindings=bindings,
                 )
             )
+            # Agents reference an MCP by instance name or, when attached in
+            # the UI, by instance id.
+            mcp_keys[str(instance.id)] = key
             mcp_keys[instance.name] = key
-        return result, mcp_keys, setup_fields
+        return result, mcp_keys, builtin_refs, setup_fields
 
     def _agents_to_bundle(
         self,
         agents: list[Agent],
         skill_keys: dict[str, str],
         mcp_keys: dict[str, str],
+        builtin_mcp_refs: set[str],
         setup_fields: list[Any],
         bundle_agent_type: Any,
         setup_field_type: Any,
@@ -252,13 +401,23 @@ class WorkspaceExportService:
                 if not isinstance(tool, dict):
                     continue
                 name = tool.get("name")
-                if not isinstance(name, str):
+                if name is None:
                     continue
+                name = str(name)
                 tool_type = tool.get("type")
                 if tool_type == "code" and name not in toolsets:
                     toolsets.append(name)
-                elif tool_type == "mcp" and name in mcp_keys and mcp_keys[name] not in agent_mcps:
-                    agent_mcps.append(mcp_keys[name])
+                elif tool_type == "mcp":
+                    mcp_key = mcp_keys.get(name)
+                    if mcp_key is None:
+                        if name in builtin_mcp_refs:
+                            continue
+                        raise ValueError(
+                            f"MCP '{name}' attached to agent '{agent.name}' could not be "
+                            "exported: it is not an MCP connection of this workspace"
+                        )
+                    if mcp_key not in agent_mcps:
+                        agent_mcps.append(mcp_key)
 
             result.append(
                 bundle_agent_type(

@@ -6,6 +6,7 @@ to traverse out of /oauth2/ on that host (partial-SSRF / path-traversal hardenin
 """
 
 import json
+from typing import ClassVar
 
 import pytest
 from agentarea_api.api.v1 import mcp_oauth_as
@@ -69,7 +70,7 @@ class _FakeResponse:
 class _FakeAsyncClient:
     """Stands in for httpx.AsyncClient, recording what was sent upstream."""
 
-    sent: list = []
+    sent: ClassVar[list] = []
 
     def __init__(self, *args, **kwargs):
         pass
@@ -379,3 +380,28 @@ class TestDynamicClientRegistration:
             assert response.status_code == 400, body
             assert response.json()["error"] == "invalid_redirect_uri"
         assert _FakeAsyncClient.sent == []
+
+    def test_refuses_a_registration_body_that_is_not_an_object(self, hydra):
+        """A JSON array or scalar is a malformed request, not a server error."""
+        for body in ("[]", '["redirect_uris"]', '"client"', "42", "null"):
+            response = hydra.post(
+                "/oauth2/register", content=body, headers={"Content-Type": "application/json"}
+            )
+
+            assert response.status_code == 400, body
+            assert response.json()["error"] == "invalid_client_metadata"
+        assert _FakeAsyncClient.sent == []
+
+    def test_loopback_callback_must_be_plain_http(self, hydra):
+        """Loopback is the native-app exception for http, not a pass for any scheme."""
+        for uri in ("javascript://localhost/%0aalert(1)", "file://localhost/etc/passwd"):
+            response = hydra.post(
+                "/oauth2/register", json={"client_name": "probe", "redirect_uris": [uri]}
+            )
+
+            assert response.status_code == 400, uri
+            assert response.json()["error"] == "invalid_redirect_uri"
+        assert _FakeAsyncClient.sent == []
+
+        hydra.post("/oauth2/register", json={"client_name": "probe", "redirect_uris": REDIRECT})
+        assert _FakeAsyncClient.sent[-1]["redirect_uris"] == REDIRECT

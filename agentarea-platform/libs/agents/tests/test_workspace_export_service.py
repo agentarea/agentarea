@@ -8,6 +8,7 @@ import pytest
 from agentarea_agents.application import workspace_export_service
 from agentarea_agents.application.workspace_export_service import WorkspaceExportService
 from agentarea_bundles.application.analyzer import parse_bundle
+from agentarea_bundles.schemas.bundle import setup_refs
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
@@ -95,7 +96,13 @@ def _agent(name: str, *, tools=None, skills=None, registry_item_id=None, is_cata
     )
 
 
-def _skill(name: str, *, content: str | None = None, source_url: str | None = None):
+def _skill(
+    name: str,
+    *,
+    content: str | None = None,
+    source_url: str | None = None,
+    source_type: str = "content",
+):
     return SimpleNamespace(
         id=uuid4(),
         workspace_id=WORKSPACE,
@@ -104,7 +111,21 @@ def _skill(name: str, *, content: str | None = None, source_url: str | None = No
         slug=name.lower().replace(" ", "-"),
         name=name,
         content=content,
+        source_type=source_type,
         source_url=source_url,
+    )
+
+
+def _mcp_instance(name: str, *, secret_names=(), instance_id: UUID | None = None):
+    return SimpleNamespace(
+        id=instance_id or uuid4(),
+        workspace_id=WORKSPACE,
+        registry_item_id=None,
+        is_catalog=False,
+        name=name,
+        server_spec_id=str(uuid4()),
+        json_spec={},
+        get_configured_env_vars=lambda: list(secret_names),
     )
 
 
@@ -215,19 +236,29 @@ class TestSkillExport:
     ):
         mock_skill_service.list.return_value = [
             _skill("Export Skill", content="# Export Skill\nContent here"),
-            _skill(
-                "GitHub Skill", content="# Local copy", source_url="https://github.com/owner/repo"
-            ),
         ]
 
         bundle = parse_bundle(await export_service.export_workspace())
 
-        assert [skill.name for skill in bundle.skills] == ["Export Skill", "GitHub Skill"]
+        assert [skill.name for skill in bundle.skills] == ["Export Skill"]
         assert bundle.skills[0].source_type == "content"
         assert bundle.skills[0].content == "# Export Skill\nContent here"
-        assert bundle.skills[1].source_type == "content"
-        assert bundle.skills[1].content == "# Local copy"
-        assert bundle.skills[1].source_url is None
+
+    @pytest.mark.asyncio
+    async def test_github_skill_exports_its_repository_not_a_lossy_copy(
+        self, export_service, mock_skill_service
+    ):
+        # Inline content would carry SKILL.md only and lose the packaged files.
+        url = "https://github.com/owner/repo/tree/main/skills/review"
+        mock_skill_service.list.return_value = [
+            _skill("GitHub Skill", content="# Local copy", source_url=url, source_type="github"),
+        ]
+
+        bundle = parse_bundle(await export_service.export_workspace())
+
+        assert bundle.skills[0].source_type == "github"
+        assert bundle.skills[0].source_url == url
+        assert bundle.skills[0].content is None
 
     @pytest.mark.asyncio
     async def test_export_fails_for_skill_without_installable_content(
@@ -251,3 +282,160 @@ class TestSkillExport:
         bundle = parse_bundle(await export_service.export_workspace())
 
         assert bundle.agents[0].skills == [bundle.skills[0].key]
+
+
+class TestMcpExport:
+    @pytest.mark.asyncio
+    async def test_agent_mcp_referenced_by_instance_id_or_name_is_kept(
+        self, export_service, mock_agent_service, mock_mcp_instance_service
+    ):
+        # The webapp stores an attached MCP by instance id; the API also accepts names.
+        github = _mcp_instance("GitHub")
+        search = _mcp_instance("Search")
+        mock_mcp_instance_service.list.return_value = [github, search]
+        mock_mcp_instance_service.get_transport_spec_for_instance.return_value = {
+            "type": "url",
+            "endpoint_url": "https://mcp.example.test/mcp",
+        }
+        mock_agent_service.list.return_value = [
+            _agent(
+                "Agent",
+                tools=[
+                    {"type": "mcp", "name": str(github.id)},
+                    {"type": "mcp", "name": "Search"},
+                ],
+            )
+        ]
+
+        bundle = parse_bundle(await export_service.export_workspace())
+
+        keys = {mcp.name: mcp.key for mcp in bundle.mcps}
+        assert bundle.agents[0].mcps == [keys["GitHub"], keys["Search"]]
+
+    @pytest.mark.asyncio
+    async def test_an_unresolvable_agent_mcp_refuses_the_export(
+        self, export_service, mock_agent_service
+    ):
+        mock_agent_service.list.return_value = [
+            _agent("Agent", tools=[{"type": "mcp", "name": "deleted-connection"}])
+        ]
+
+        with pytest.raises(ValueError, match="deleted-connection"):
+            await export_service.export_workspace()
+
+    @pytest.mark.asyncio
+    async def test_a_builtin_mcp_reference_is_not_an_error(
+        self, export_service, mock_agent_service, mock_mcp_instance_service
+    ):
+        builtin = _mcp_instance("Platform Search")
+        builtin.is_catalog = True
+        mock_mcp_instance_service.list.return_value = [builtin]
+        mock_agent_service.list.return_value = [
+            _agent("Agent", tools=[{"type": "mcp", "name": "Platform Search"}])
+        ]
+
+        bundle = parse_bundle(await export_service.export_workspace())
+
+        assert bundle.mcps == []
+        assert bundle.agents[0].mcps == []
+
+    @pytest.mark.asyncio
+    async def test_plain_configuration_is_exported_and_credentials_become_setup_fields(
+        self, export_service, mock_mcp_instance_service
+    ):
+        mock_mcp_instance_service.list.return_value = [
+            _mcp_instance("Postgres", secret_names=["PGPASSWORD"])
+        ]
+        mock_mcp_instance_service.get_transport_spec_for_instance.return_value = {
+            "type": "command",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-postgres",
+                "postgresql://app:CANARY_URL@db.internal:5432/app",  # pragma: allowlist secret
+                "--api-key=CANARY_FLAG",
+                "--token",
+                "CANARY_NEXT",
+                "--header",
+                "Authorization: Bearer CANARY_HEADER",
+                "--read-only",
+                "https://docs.example.test/schema.json",
+            ],
+            "environment": {
+                "MODE": "readonly",
+                "ROOT": "/data",
+                "SERVICE_TOKEN": "CANARY_ENV_NAME",
+                "UPSTREAM": "https://user:CANARY_ENV_URL@upstream.test",  # pragma: allowlist secret
+            },
+            "env_vars": ["PGPASSWORD"],
+        }
+
+        yaml_text = await export_service.export_workspace()
+        bundle = parse_bundle(yaml_text)
+
+        assert "CANARY" not in yaml_text
+        mcp = bundle.mcps[0]
+        args = mcp.json_spec["args"]
+        assert args[:2] == ["-y", "@modelcontextprotocol/server-postgres"]
+        assert args[2].startswith("${setup.")
+        assert args[3].startswith("--api-key=${setup.")
+        assert args[4] == "--token"
+        assert args[5].startswith("${setup.")
+        assert args[6] == "--header"
+        assert args[7].startswith("Authorization: ${setup.")
+        assert args[8:] == ["--read-only", "https://docs.example.test/schema.json"]
+        assert mcp.json_spec["environment"] == {"MODE": "readonly", "ROOT": "/data"}
+        assert set(mcp.bindings) == {"PGPASSWORD", "SERVICE_TOKEN", "UPSTREAM"}
+
+        secret_keys = {field.key for field in bundle.setup if field.type.value == "secret"}
+        referenced = {ref for value in [*args, *mcp.bindings.values()] for ref in setup_refs(value)}
+        assert referenced == secret_keys
+        assert len(secret_keys) == 7
+        # Deterministic: the same workspace exports the same document.
+        assert await export_service.export_workspace() == yaml_text
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "endpoint_url",
+        [
+            "https://mcp.example.test/sse?api_key=CANARY",
+            "https://user:CANARY@mcp.example.test/sse",  # pragma: allowlist secret
+            "https://mcp.example.test/api/mcp/s/CANARYx9aB3cD4eF5gH6iJ7kL8/mcp",
+        ],
+    )
+    async def test_a_credentialed_endpoint_url_becomes_a_secret_setup_field(
+        self, export_service, mock_mcp_instance_service, endpoint_url
+    ):
+        mock_mcp_instance_service.list.return_value = [_mcp_instance("Hosted")]
+        mock_mcp_instance_service.get_transport_spec_for_instance.return_value = {
+            "type": "url",
+            "endpoint_url": endpoint_url,
+            "headers": {"X-Org": "acme"},
+        }
+
+        yaml_text = await export_service.export_workspace()
+        bundle = parse_bundle(yaml_text)
+
+        assert "CANARY" not in yaml_text
+        (setup_key,) = setup_refs(bundle.mcps[0].json_spec["endpoint_url"])
+        field = bundle.setup_field(setup_key)
+        assert field is not None
+        assert field.type.value == "secret"
+        assert bundle.mcps[0].json_spec["headers"] == {"X-Org": "acme"}
+
+    @pytest.mark.asyncio
+    async def test_a_plain_endpoint_url_is_exported_verbatim(
+        self, export_service, mock_mcp_instance_service
+    ):
+        mock_mcp_instance_service.list.return_value = [_mcp_instance("Docs")]
+        mock_mcp_instance_service.get_transport_spec_for_instance.return_value = {
+            "type": "url",
+            "endpoint_url": "https://mcp.example.test/mcp?format=json",
+        }
+
+        bundle = parse_bundle(await export_service.export_workspace())
+
+        assert (
+            bundle.mcps[0].json_spec["endpoint_url"] == "https://mcp.example.test/mcp?format=json"
+        )
+        assert bundle.setup == []

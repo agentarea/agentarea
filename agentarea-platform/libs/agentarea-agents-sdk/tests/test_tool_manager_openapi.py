@@ -123,6 +123,29 @@ class TestToolManagerOpenAPIBranch:
         assert "deleteItem" not in names
 
     @pytest.mark.asyncio
+    async def test_operation_map_lists_each_attachment_s_operation_tools(self):
+        """Policy governs a connection's tools through this map, unlisted ones included."""
+        connection = _make_connection()
+        openapi_svc = _make_openapi_service(connection)
+        tools_config = [
+            {"type": "openapi", "name": "my-api", "settings": {"allowed_tools": None}},
+            {
+                "type": "openapi",
+                "name": "narrow",
+                "settings": {
+                    "openapi_connection_id": str(connection.id),
+                    "allowed_tools": ["listItems"],
+                },
+            },
+            {"type": "code", "name": "agentarea/shell"},
+        ]
+
+        manager = ToolManager(openapi_connection_service=openapi_svc)
+        operations = await manager.openapi_operation_tools(tools_config)
+
+        assert operations == {"my-api": ["listItems", "deleteItem"], "narrow": ["listItems"]}
+
+    @pytest.mark.asyncio
     async def test_openapi_skipped_without_service(self):
         """Without openapi_connection_service, no openapi tools are added (no crash)."""
         mcp_svc = AsyncMock()

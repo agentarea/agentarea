@@ -302,6 +302,7 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             # (the platform principal's), a graph check would refuse every
             # other workspace -- "Permission denied" on a catalog connection.
             # Writes still go through the PDP, which denies them.
+            server.is_catalog = True
             return await self._hydrate_catalog_env_schema(server)
 
         # Fall back to a read-only catalog projection: built-in specs may live in

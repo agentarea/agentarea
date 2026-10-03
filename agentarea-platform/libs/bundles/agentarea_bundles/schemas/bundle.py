@@ -11,6 +11,9 @@ Design notes:
   else references them via ``${setup.<key>}`` placeholders.
 - ``json_spec`` on an MCP is the native runtime shape consumed by the MCP
   service (``type``: ``command`` | ``docker`` | ``url``) — no second schema.
+  ``args`` and ``endpoint_url`` may contain ``${setup.<key>}`` references;
+  ``environment`` / ``headers`` hold literal non-secret configuration, while
+  credentials go through ``bindings``.
 """
 
 from __future__ import annotations

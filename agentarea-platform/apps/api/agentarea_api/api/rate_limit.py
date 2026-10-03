@@ -8,8 +8,10 @@ from collections.abc import Awaitable
 from typing import cast
 
 import redis.asyncio as redis
+from agentarea_common.auth.context import UserPrincipal
+from agentarea_common.auth.dependencies import get_optional_principal
 from agentarea_common.config import get_settings
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from redis.exceptions import RedisError
 
 logger = logging.getLogger(__name__)
@@ -117,9 +119,20 @@ async def limit_oauth_registration(request: Request) -> None:
     )
 
 
-async def limit_a2a_rpc(request: Request) -> None:
-    await enforce_rate_limit(
-        scope="a2a-rpc",
-        identity=_client_ip(request),
-        limit=_A2A_RPC_LIMIT_PER_MINUTE,
-    )
+async def limit_a2a_rpc(
+    request: Request,
+    subject: UserPrincipal | None = Depends(get_optional_principal),
+) -> None:
+    """One bucket per caller: the API key or user that authenticated, else the IP.
+
+    Agent-to-agent delegation reaches this endpoint from the worker, so every
+    workspace's delegations arrive from one address; an IP bucket would let
+    one busy workspace refuse everyone else's calls.
+    """
+    if subject is None:
+        identity = f"ip:{_client_ip(request)}"
+    elif subject.api_key_id is not None:
+        identity = f"api-key:{subject.api_key_id}"
+    else:
+        identity = f"user:{subject.user_id}"
+    await enforce_rate_limit(scope="a2a-rpc", identity=identity, limit=_A2A_RPC_LIMIT_PER_MINUTE)

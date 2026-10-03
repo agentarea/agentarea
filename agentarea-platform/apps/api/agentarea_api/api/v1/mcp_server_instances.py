@@ -33,7 +33,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
 logger = logging.getLogger(__name__)
 

@@ -674,8 +674,13 @@ class DefaultWebhookManager(WebhookManager):
         elif webhook_type == WebhookType.TEAMS:
             return await self._parse_teams_webhook(request_data, base_data)
         else:
-            # Generic webhook - just include raw body
-            return {**base_data, "body": request_data.body, "raw_data": request_data.body}
+            # Generic webhook: the raw body, plus its ``text`` lifted to where
+            # resolve_task_query reads a run's instruction from.
+            parsed = {**base_data, "body": request_data.body, "raw_data": request_data.body}
+            body = request_data.body
+            if isinstance(body, dict) and isinstance(body.get("text"), str):
+                parsed["text"] = body["text"]
+            return parsed
 
     async def _parse_generic_mapping_webhook(
         self, request_data: WebhookRequestData, base_data: dict[str, Any], mapping: dict[str, str]

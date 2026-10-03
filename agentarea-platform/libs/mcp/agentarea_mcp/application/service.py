@@ -682,7 +682,10 @@ class MCPServerInstanceService:
 
         if is_url_type:
             # Synchronous verify — blocks until succeeded or failed
-            verification = await verify(instance)
+            verification = await verify(
+                instance,
+                extra_headers=await self._secret_headers(instance, instance_type) or None,
+            )
             instance.verification = dict(verification)
             refresh_result = self.repository.session.refresh(instance)
             if inspect.isawaitable(refresh_result):
@@ -844,8 +847,9 @@ class MCPServerInstanceService:
                     logger.debug("bundle member %s lookup failed: %s", mid, e)
             return derive_bundle_verification(instance, members)
 
+        secret_headers = await self._secret_headers(instance, instance_type)
         try:
-            extra_headers = await self._resolve_auth_headers(instance)
+            extra_headers = {**secret_headers, **await self._resolve_auth_headers(instance)}
         except OAuthReauthRequiredError:
             return await self._store_reauth_required(instance.id)
 
@@ -859,7 +863,10 @@ class MCPServerInstanceService:
         # instead of the raw 401/403.
         if instance.auth_config_id and self._is_auth_error_payload(payload):
             try:
-                extra_headers = await self._resolve_auth_headers(instance, force_refresh=True)
+                extra_headers = {
+                    **secret_headers,
+                    **await self._resolve_auth_headers(instance, force_refresh=True),
+                }
             except OAuthReauthRequiredError:
                 return await self._store_reauth_required(instance.id)
             payload = await verify(instance, extra_headers=extra_headers or None, force=True)
@@ -953,6 +960,37 @@ class MCPServerInstanceService:
                 exc_info=True,
             )
             return {}
+
+    async def _secret_headers(
+        self, instance: MCPServerInstance, instance_type: str
+    ) -> dict[str, str]:
+        """The header values ``_extract_secrets_from_spec`` moved into the secret store.
+
+        A URL connection has no process environment, so every secret it holds is
+        one of its HTTP headers. The values are credentials: send them upstream,
+        never return them to a caller.
+        """
+        if instance_type != "url":
+            return {}
+        names = instance.get_configured_env_vars()
+        if not names:
+            return {}
+        return await self.env_service.get_instance_environment(instance.id, names)
+
+    async def outbound_headers(self, instance: MCPServerInstance) -> dict[str, str]:
+        """The headers this connection sends its upstream, secret ones included."""
+        transport_spec = await self.get_transport_spec_for_instance(instance)
+        return await self._outbound_headers(instance, transport_spec)
+
+    async def _outbound_headers(
+        self, instance: MCPServerInstance, transport_spec: dict[str, Any]
+    ) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        plain_headers = transport_spec.get("headers")
+        if isinstance(plain_headers, dict):
+            headers.update(plain_headers)
+        headers.update(await self._secret_headers(instance, transport_spec.get("type", "docker")))
+        return headers
 
     async def get_instance_environment(self, instance_id: UUID) -> dict[str, str]:
         instance = await self.repository.get_by_id(instance_id)
@@ -1213,10 +1251,7 @@ class MCPServerInstanceService:
             )
         transport = declared_remote_transport(transport_spec)
 
-        headers: dict[str, str] = {}
-        custom_headers = transport_spec.get("headers")
-        if isinstance(custom_headers, dict):
-            headers.update(custom_headers)
+        headers = await self._outbound_headers(instance, transport_spec)
 
         if not headers and instance.auth_config_id:
             try:

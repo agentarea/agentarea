@@ -38,3 +38,10 @@ def test_real_references_are_accepted() -> None:
         json_spec={"type": "docker", "image": "mcp/fetch:latest", "port": 8000},
     )
     assert spec.docker_image_url == "ghcr.io/github/github-mcp-server:v0.4.0"
+
+
+@pytest.mark.parametrize("image", ["alpine:tagé", "alpine:\uff561", "alpine:標籤"])
+def test_non_ascii_tag_is_refused_as_the_manager_refuses_it(image: str) -> None:
+    """The manager's Go grammar is ASCII-only; a tag it would refuse must be a 422 here."""
+    with pytest.raises(ValidationError):
+        MCPServerCreate(name="x", description="d", docker_image_url=image)

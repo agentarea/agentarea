@@ -8,9 +8,11 @@ from uuid import uuid4
 
 import pytest
 from agentarea_triggers.webhook_verification import (
+    SigningSecretUnavailableError,
     channel_credential_secret_name,
     resolve_signing_secret,
     verify_webhook_signature,
+    webhook_signing_status,
 )
 
 BODY = b'{"event":"push","ref":"refs/heads/main"}'
@@ -382,6 +384,73 @@ async def test_resolve_signing_secret_ignores_other_triggers_credentials():
     result = await resolve_signing_secret("slack", {}, {}, reader, trigger_id)
 
     assert result is None
+
+
+class _BrokenSecretReader:
+    """A secret backend that cannot answer."""
+
+    async def get_secret(self, name: str) -> str | None:
+        raise ConnectionError("vault unreachable")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("webhook_type", ["telegram", "generic", "email"])
+async def test_unreadable_secret_store_rejects_instead_of_accepting_unsigned(webhook_type):
+    # These types accept unsigned requests when no secret is configured. A
+    # store that cannot answer is not "no secret": treating it as one would
+    # wave forged requests through whenever the backend is degraded.
+    result = await verify_webhook_signature(
+        webhook_type, {}, {}, {}, BODY, _BrokenSecretReader(), uuid4()
+    )
+    assert result is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stored", ["not json", "[]"])
+async def test_corrupt_stored_credentials_reject_instead_of_accepting_unsigned(stored):
+    trigger_id = uuid4()
+    reader = _FakeSecretReader({channel_credential_secret_name("telegram", trigger_id): stored})
+    result = await verify_webhook_signature("telegram", {}, {}, {}, BODY, reader, trigger_id)
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_generic_secret_from_the_store_is_enforced():
+    secret = "generated-secret"  # noqa: S105  # pragma: allowlist secret
+    trigger_id = uuid4()
+    reader = _FakeSecretReader(
+        {
+            channel_credential_secret_name("generic", trigger_id): json.dumps(
+                {"signing_secret": secret}
+            )
+        }
+    )
+    signed = {"X-Webhook-Signature": _generic_sig(secret, BODY)}
+
+    assert await verify_webhook_signature("generic", {}, {}, signed, BODY, reader, trigger_id)
+    assert await verify_webhook_signature("generic", {}, {}, {}, BODY, reader, trigger_id) is False
+
+
+@pytest.mark.asyncio
+async def test_signing_status_matches_what_the_endpoint_enforces():
+    trigger_id = uuid4()
+    signed_reader = _FakeSecretReader(
+        {channel_credential_secret_name("generic", trigger_id): json.dumps({"signing_secret": "s"})}
+    )
+
+    async def status(webhook_type, reader=_EMPTY_READER):
+        return await webhook_signing_status(webhook_type, {}, {}, reader, trigger_id)
+
+    assert await status("generic") == "unsigned"
+    assert await status("generic", signed_reader) == "signed"
+    assert await status("telegram") == "unsigned"
+    # A registered scheme refuses requests even before its secret is set.
+    assert await status("github") == "signed"
+    # No verification is implemented for these providers at all.
+    assert await status("gmail") == "unsupported"
+    assert await status("teams") == "unsupported"
+    with pytest.raises(SigningSecretUnavailableError):
+        await status("generic", _BrokenSecretReader())
 
 
 class TestTelegramSecretToken:

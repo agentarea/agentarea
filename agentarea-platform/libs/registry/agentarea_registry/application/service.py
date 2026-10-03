@@ -182,7 +182,12 @@ def _registry_argument_tokens(arguments: Any) -> tuple[list[str], list[str]] | N
 def _command_package_args(
     package: dict[str, Any], registry_type: str, server_version: str
 ) -> tuple[str, list[str]] | None:
-    """Build a pinned command only when the registry names its executable."""
+    """Build a pinned command, or ``None`` when the package cannot run unattended.
+
+    The registry rarely names an executable; then the package's default bin
+    runs, which is how ``npx``/``uvx`` resolve a bare package. Only a required
+    argument with no value, an unpinned version or an ambiguous entrypoint hides it.
+    """
     package_name = package.get("name") or package.get("identifier")
     version = package.get("version") or server_version
     defaults = {"pypi": "uvx", "npm": "npx", "mcpb": "npx", "nuget": "dotnet"}
@@ -202,12 +207,13 @@ def _command_package_args(
     if runtime_args is None or package_args is None:
         return None
     runtime_tokens, entrypoints = runtime_args
-    if len(entrypoints) != 1:
+    if len(entrypoints) > 1:
         return None
-    entrypoint = entrypoints[0]
-    if "/" in entrypoint or "\\" in entrypoint or entrypoint in {".", ".."}:
-        return None
-    runtime_tokens.remove(entrypoint)
+    entrypoint = entrypoints[0] if entrypoints else None
+    if entrypoint is not None:
+        if "/" in entrypoint or "\\" in entrypoint or entrypoint in {".", ".."}:
+            return None
+        runtime_tokens = [token for token in runtime_tokens if token != entrypoint]
     if any(token in {"--from", "--package"} for token in runtime_tokens):
         return None
 
@@ -215,6 +221,8 @@ def _command_package_args(
     if runtime == "uvx":
         if registry_type != "pypi":
             return None
+        if entrypoint is None:
+            return runtime, [*runtime_tokens, f"{package_name}@{version}", *package_tokens]
         return runtime, [
             *runtime_tokens,
             "--from",
@@ -224,6 +232,17 @@ def _command_package_args(
         ]
     if registry_type not in {"npm", "mcpb"}:
         return None
+    if entrypoint is None:
+        if registry_type != "npm":
+            # An mcpb package is a bundle file, not an npm package with a bin.
+            return None
+        assume_yes = [] if {"-y", "--yes"} & set(runtime_tokens) else ["-y"]
+        return runtime, [
+            *assume_yes,
+            *runtime_tokens,
+            f"{package_name}@{version}",
+            *package_tokens,
+        ]
     return runtime, [
         *runtime_tokens,
         "--package",

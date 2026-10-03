@@ -12,12 +12,15 @@ from __future__ import annotations
 import re
 from typing import Any
 
+# Spelled out in ASCII rather than with ``\w``: Python's ``\w`` matches any
+# Unicode letter, Go's (the MCP manager's validator) only ASCII, and the two
+# grammars must accept exactly the same references.
 _COMPONENT = r"[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*"
 _DOMAIN_LABEL = r"(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])"
 IMAGE_REFERENCE = re.compile(
     rf"^(?:{_DOMAIN_LABEL}(?:\.{_DOMAIN_LABEL})*(?::[0-9]+)?/)?"
     rf"{_COMPONENT}(?:/{_COMPONENT})*"
-    r"(?::[\w][\w.-]{0,127})?"
+    r"(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?"
     r"(?:@[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,})?$"
 )
 MAX_IMAGE_REFERENCE_LENGTH = 255

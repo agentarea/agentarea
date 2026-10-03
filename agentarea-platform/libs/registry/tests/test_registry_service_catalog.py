@@ -257,7 +257,54 @@ class TestParseMCPServers:
             "--region=east",
         ]
 
-    def test_command_without_resolvable_entrypoint_is_hidden(self):
+    def test_command_without_named_entrypoint_runs_the_pinned_default_bin(self):
+        """The official registry almost never names an executable: hiding those
+        dropped every npm and PyPI server from sync."""
+        data = {
+            "servers": [
+                {
+                    "server": {
+                        "name": "io.example/python-default-bin",
+                        "version": "2.4.1",
+                        "packages": [
+                            {
+                                "registryType": "pypi",
+                                "identifier": "distribution-name",
+                                "version": "2.4.1",
+                            }
+                        ],
+                    }
+                },
+                {
+                    "server": {
+                        "name": "io.example/node-default-bin",
+                        "version": "1.0.3",
+                        "packages": [
+                            {
+                                "registryType": "npm",
+                                "identifier": "@acme/mcp-server",
+                                "version": "1.0.3",
+                                "packageArguments": [
+                                    {"type": "named", "name": "--mode", "value": "stdio"}
+                                ],
+                            }
+                        ],
+                    }
+                },
+            ]
+        }
+
+        commands = [
+            (item["spec"]["command"], item["spec"]["args"])
+            for item in RegistryService._parse_mcp_servers(data)
+        ]
+
+        assert commands == [
+            ("uvx", ["distribution-name@2.4.1"]),
+            ("npx", ["-y", "@acme/mcp-server@1.0.3", "--mode=stdio"]),
+        ]
+
+    def test_command_with_an_unresolved_required_argument_is_hidden(self):
         data = {
             "servers": [
                 {
@@ -265,9 +312,10 @@ class TestParseMCPServers:
                         "name": "io.example/unrunnable",
                         "packages": [
                             {
-                                "registryType": "pypi",
-                                "identifier": "distribution-name",
+                                "registryType": "npm",
+                                "identifier": "needs-a-path",
                                 "version": "2.4.1",
+                                "packageArguments": [{"type": "positional", "isRequired": True}],
                             }
                         ],
                     }

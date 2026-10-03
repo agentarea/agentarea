@@ -180,7 +180,10 @@ def override_trigger_dependencies(
         return mock_health_checker
 
     async def _override_secret_manager():
-        return AsyncMock()
+        # An empty store: nothing configured for any trigger yet.
+        manager = AsyncMock()
+        manager.get_secret.return_value = None
+        return manager
 
     async def _override_db_session():
         return mock_db_session
@@ -360,6 +363,15 @@ class TestTriggersAPI:
         assert data["trigger_type"] == "webhook"
         assert data["webhook_id"] == "test_webhook_123"
         assert data["allowed_methods"] == ["POST"]
+        # An unsigned generic webhook starts the agent for anyone who learns
+        # its URL, so creating one hands back a generated signing secret.
+        assert len(data["signing_secret"]) >= 32
+        assert data["webhook_signing"] == "signed"
+        assert data["signature_scheme"] == {
+            "header": "X-Webhook-Signature",
+            "algorithm": "sha256",
+            "prefix": "",
+        }
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
     @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
