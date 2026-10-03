@@ -22,7 +22,7 @@ from .base import platform_context, platform_read_context
 
 
 async def _workspace_file_download_url(user_context: UserContext, path: str) -> str:
-    base = get_app_settings().API_BASE_URL.rstrip("/")
+    base = get_app_settings().API_URL.rstrip("/")
     encoded_path = quote(path.lstrip("/"), safe="/")
     return f"{base}{await workspace_api_prefix(user_context)}/files/download/{encoded_path}"
 

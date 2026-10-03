@@ -5,7 +5,7 @@ import logging
 import sys
 
 import click
-from agentarea_common.config import get_settings
+from agentarea_common.config import get_settings, temporal_connect_config
 
 from agentarea_worker.main import AgentAreaWorker
 
@@ -31,15 +31,15 @@ def start(debug: bool, max_activities: int | None, max_workflows: int | None):
 
     # Override settings if provided
     if max_activities:
-        settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES = max_activities
+        settings.temporal.MAX_ACTIVITIES = max_activities
     if max_workflows:
-        settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS = max_workflows
+        settings.temporal.MAX_WORKFLOWS = max_workflows
 
     click.echo("Starting AgentArea Temporal Worker...")
-    click.echo(f"Temporal Server: {settings.workflow.TEMPORAL_SERVER_URL}")
-    click.echo(f"Task Queue: {settings.workflow.TEMPORAL_TASK_QUEUE}")
-    click.echo(f"Max Activities: {settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES}")
-    click.echo(f"Max Workflows: {settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS}")
+    click.echo(f"Temporal Server: {temporal_connect_config().get('target_host')}")
+    click.echo(f"Task Queue: {settings.temporal.QUEUE}")
+    click.echo(f"Max Activities: {settings.temporal.MAX_ACTIVITIES}")
+    click.echo(f"Max Workflows: {settings.temporal.MAX_WORKFLOWS}")
 
     try:
         worker = AgentAreaWorker()
@@ -107,10 +107,11 @@ def status():
     settings = get_settings()
 
     click.echo("Worker Configuration:")
-    click.echo(f"Temporal Server: {settings.workflow.TEMPORAL_SERVER_URL}")
-    click.echo(f"Namespace: {settings.workflow.TEMPORAL_NAMESPACE}")
-    click.echo(f"Task Queue: {settings.workflow.TEMPORAL_TASK_QUEUE}")
-    click.echo(f"Database: {settings.database.POSTGRES_HOST}:{settings.database.POSTGRES_PORT}")
+    connect_config = temporal_connect_config()
+    click.echo(f"Temporal Server: {connect_config.get('target_host')}")
+    click.echo(f"Namespace: {connect_config.get('namespace')}")
+    click.echo(f"Task Queue: {settings.temporal.QUEUE}")
+    click.echo(f"Database: {settings.database.HOST}:{settings.database.PORT}")
 
 
 @cli.command()

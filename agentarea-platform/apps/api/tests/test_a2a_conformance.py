@@ -172,7 +172,7 @@ def services(monkeypatch):
     monkeypatch.setattr(agents_a2a, "open_task_event_feed", feed)
     monkeypatch.setattr(agents_well_known, "get_public_agent", public_agent)
     settings = get_settings().app
-    monkeypatch.setattr(settings, "API_BASE_URL", BASE)
+    monkeypatch.setattr(settings, "API_URL", BASE)
     monkeypatch.setattr(settings, "A2A_AGENT_URL", f"http://{AGENT_HOST_PATTERN}")
     monkeypatch.setattr(a2a_request_handler, "validate_outbound_url", lambda url: None)
     monkeypatch.setattr(a2a_auth, "workspace_slug_for", AsyncMock(return_value="acme"))

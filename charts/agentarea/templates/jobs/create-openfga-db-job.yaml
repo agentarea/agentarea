@@ -23,9 +23,9 @@ spec:
         - name: wait-for-db
           image: "postgres:alpine"
           imagePullPolicy: IfNotPresent
-          command: ['sh', '-c', 'until pg_isready -h {{ include "agentarea.database.host" . }} -U $POSTGRES_USER; do echo waiting for database; sleep 2; done;']
+          command: ['sh', '-c', 'until pg_isready -h {{ include "agentarea.database.host" . }} -U $AGENTAREA_DB_USER; do echo waiting for database; sleep 2; done;']
           env:
-            - name: POSTGRES_USER
+            - name: AGENTAREA_DB_USER
               valueFrom:
                 secretKeyRef:
                   name: "{{ .Values.global.secrets.postgresql }}"
@@ -38,16 +38,16 @@ spec:
           args:
             - |
               echo "Checking/Creating openfga database..."
-              export PGPASSWORD=$POSTGRES_PASSWORD
-              psql -h {{ include "agentarea.database.host" . }} -U $POSTGRES_USER -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.openfga.database.name | default "openfga" }}'" | grep -q 1 || \
-              psql -h {{ include "agentarea.database.host" . }} -U $POSTGRES_USER -d postgres -c "CREATE DATABASE {{ .Values.openfga.database.name | default "openfga" }};"
+              export PGPASSWORD=$AGENTAREA_DB_PASSWORD
+              psql -h {{ include "agentarea.database.host" . }} -U $AGENTAREA_DB_USER -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.openfga.database.name | default "openfga" }}'" | grep -q 1 || \
+              psql -h {{ include "agentarea.database.host" . }} -U $AGENTAREA_DB_USER -d postgres -c "CREATE DATABASE {{ .Values.openfga.database.name | default "openfga" }};"
           env:
-            - name: POSTGRES_USER
+            - name: AGENTAREA_DB_USER
               valueFrom:
                 secretKeyRef:
                   name: "{{ .Values.global.secrets.postgresql }}"
                   key: username
-            - name: POSTGRES_PASSWORD
+            - name: AGENTAREA_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: "{{ .Values.global.secrets.postgresql }}"

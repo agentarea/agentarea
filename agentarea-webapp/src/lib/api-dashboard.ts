@@ -24,7 +24,7 @@ async function authedFetch(path: string, init?: RequestInit) {
     headers.set("Content-Type", "application/json");
   }
   const url = fillWorkspace(
-    `${env.API_URL}${path}`,
+    `${env.AGENTAREA_API_URL}${path}`,
     await getRequestWorkspaceSlug()
   );
   return fetch(url, {

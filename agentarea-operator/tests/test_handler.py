@@ -117,7 +117,7 @@ def test_a_missing_encryption_key_refuses_rather_than_storing_the_key_in_the_cle
 
     monkeypatch.setattr(handler, "ENCRYPTION_KEY", "")
 
-    with pytest.raises(kopf.PermanentError, match="SECRET_MANAGER_ENCRYPTION_KEY"):
+    with pytest.raises(kopf.PermanentError, match="AGENTAREA_SECRET_ENCRYPTION_KEY"):
         handler.store_api_key(Mock(), "platform", "provider_config_x", API_KEY)
 
 
@@ -286,7 +286,7 @@ def test_a_permanent_failure_is_written_to_the_resource_status(monkeypatch):
     monkeypatch.setattr(handler, "read_secret", lambda *a, **k: API_KEY)
 
     def refuse(*_args, **_kwargs):
-        raise kopf.PermanentError("SECRET_MANAGER_ENCRYPTION_KEY is not set")
+        raise kopf.PermanentError("AGENTAREA_SECRET_ENCRYPTION_KEY is not set")
 
     monkeypatch.setattr(handler, "sync_provider_config", refuse)
 
@@ -301,7 +301,7 @@ def test_a_permanent_failure_is_written_to_the_resource_status(monkeypatch):
         )
 
     assert patch.status["phase"] == "Error"
-    assert "SECRET_MANAGER_ENCRYPTION_KEY" in patch.status["message"]
+    assert "AGENTAREA_SECRET_ENCRYPTION_KEY" in patch.status["message"]
 
 
 def test_a_cross_namespace_secret_ref_is_rejected_without_reading_it(monkeypatch):
@@ -341,7 +341,7 @@ def test_a_same_namespace_secret_ref_namespace_is_accepted(monkeypatch):
     monkeypatch.setattr(handler, "read_secret", lambda *a, **k: API_KEY)
 
     def refuse(*_args, **_kwargs):
-        raise kopf.PermanentError("SECRET_MANAGER_ENCRYPTION_KEY is not set")
+        raise kopf.PermanentError("AGENTAREA_SECRET_ENCRYPTION_KEY is not set")
 
     monkeypatch.setattr(handler, "sync_provider_config", refuse)
 
@@ -361,7 +361,7 @@ def test_a_same_namespace_secret_ref_namespace_is_accepted(monkeypatch):
 
     # Reached sync_provider_config (and its PermanentError), proving the ref
     # was accepted rather than rejected as cross-namespace.
-    assert "SECRET_MANAGER_ENCRYPTION_KEY" in patch.status["message"]
+    assert "AGENTAREA_SECRET_ENCRYPTION_KEY" in patch.status["message"]
 
 
 def test_periodic_rediscovery_rejects_a_cross_namespace_secret_ref(monkeypatch):

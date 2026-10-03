@@ -213,7 +213,7 @@ export async function createSkillAction(skill: {
 }
 
 export async function uploadSkillAction(formData: FormData) {
-  const uploadUrl = `${env.API_URL}/v1/workspaces/{workspace}/skills/upload`;
+  const uploadUrl = `${env.AGENTAREA_API_URL}/v1/workspaces/{workspace}/skills/upload`;
 
   const response = await workspaceFetch(uploadUrl, {
     method: "POST",
@@ -555,7 +555,7 @@ export async function probeInstanceAuthAction(instanceId: string) {
     return { data: null, error: "Invalid instance ID" };
   }
 
-  const base = new URL(env.API_URL);
+  const base = new URL(env.AGENTAREA_API_URL);
   base.pathname = `/v1/workspaces/{workspace}/mcp-server-instances/${encodeURIComponent(instanceId)}/probe`;
 
   const res = await workspaceFetch(base.href, { method: "POST" });
@@ -599,7 +599,7 @@ export async function mcpOAuthPreflightAction(
     return { data: null, error: "Invalid ID" };
   }
 
-  const base = new URL(env.API_URL);
+  const base = new URL(env.AGENTAREA_API_URL);
   base.pathname = "/v1/workspaces/{workspace}/mcp-oauth/preflight";
   base.search = new URLSearchParams({ [key]: id }).toString();
 
@@ -624,7 +624,7 @@ export async function oauthAuthorizeAction(body: {
     return { data: null, error: "Invalid instance ID" };
   }
 
-  const base = new URL(env.API_URL);
+  const base = new URL(env.AGENTAREA_API_URL);
   base.pathname = "/v1/workspaces/{workspace}/mcp-oauth/authorize";
 
   const res = await workspaceFetch(base.href, {
@@ -663,7 +663,7 @@ export async function validateConnectionAction(
   serverId?: string
 ) {
   const res = await workspaceFetch(
-    `${env.API_URL}/v1/workspaces/{workspace}/mcp-server-instances/validate-connection`,
+    `${env.AGENTAREA_API_URL}/v1/workspaces/{workspace}/mcp-server-instances/validate-connection`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -900,7 +900,7 @@ export async function deleteWorkspaceFileAction(filePath: string) {
     .join("/");
 
   const response = await workspaceFetch(
-    `${env.API_URL}/v1/workspaces/{workspace}/files/${encoded}`,
+    `${env.AGENTAREA_API_URL}/v1/workspaces/{workspace}/files/${encoded}`,
     {
       method: "DELETE",
     }
@@ -921,7 +921,7 @@ export async function moveWorkspaceFileAction(
   destination: string
 ) {
   const response = await workspaceFetch(
-    `${env.API_URL}/v1/workspaces/{workspace}/files/move`,
+    `${env.AGENTAREA_API_URL}/v1/workspaces/{workspace}/files/move`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -130,7 +130,7 @@ func mcpManagerInspectionAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !sandboxCleanupAuthorized(
 			c.GetHeader("Authorization"),
-			os.Getenv("MCP_GATEWAY_AUTH_SECRET"),
+			os.Getenv("AGENTAREA_MCP_GATEWAY_SECRET"),
 		) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error":   "unauthorized",

@@ -50,19 +50,19 @@ def file_sha256(path: str) -> str:
 
 
 def main() -> None:
-    version = os.environ.get("RUNTIME_VERSION")
+    version = os.environ.get("AGENTAREA_SANDBOX_RUNTIME_VERSION")
     if not version:
-        raise SystemExit("RUNTIME_VERSION must be set at build time")
-    supervisor_path = os.environ.get("EXEC_SUPERVISOR_PATH")
+        raise SystemExit("AGENTAREA_SANDBOX_RUNTIME_VERSION must be set at build time")
+    supervisor_path = os.environ.get("AGENTAREA_SANDBOX_SUPERVISOR_PATH")
     if not supervisor_path or not os.path.isabs(supervisor_path):
-        raise SystemExit("EXEC_SUPERVISOR_PATH must be an absolute path")
-    command_uid = int(os.environ.get("SANDBOX_COMMAND_UID", "0"))
-    command_gid = int(os.environ.get("SANDBOX_COMMAND_GID", "0"))
+        raise SystemExit("AGENTAREA_SANDBOX_SUPERVISOR_PATH must be an absolute path")
+    command_uid = int(os.environ.get("AGENTAREA_SANDBOX_UID", "0"))
+    command_gid = int(os.environ.get("AGENTAREA_SANDBOX_GID", "0"))
     if command_uid <= 0 or command_gid <= 0:
-        raise SystemExit("SANDBOX_COMMAND_UID and SANDBOX_COMMAND_GID must be non-root")
-    managed_environment = os.environ.get("MANAGED_ENVIRONMENT")
+        raise SystemExit("AGENTAREA_SANDBOX_UID and AGENTAREA_SANDBOX_GID must be non-root")
+    managed_environment = os.environ.get("AGENTAREA_SANDBOX_MANAGED_ENV")
     if managed_environment not in {"mutable", "immutable"}:
-        raise SystemExit("MANAGED_ENVIRONMENT must be mutable or immutable")
+        raise SystemExit("AGENTAREA_SANDBOX_MANAGED_ENV must be mutable or immutable")
 
     manifest = {
         "schema_version": 2,

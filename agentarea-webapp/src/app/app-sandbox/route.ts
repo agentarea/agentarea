@@ -117,7 +117,7 @@ function sandboxHtml(appOrigin: string): string {
 }
 
 export function GET(request: Request) {
-  const sandboxOrigin = configuredOrigin(env.APPS_SANDBOX_ORIGIN);
+  const sandboxOrigin = configuredOrigin(env.AGENTAREA_MCP_APPS_ORIGIN);
   const requestHost = request.headers.get("host")?.toLowerCase();
   const sandboxHost = sandboxOrigin
     ? new URL(sandboxOrigin).host.toLowerCase()
@@ -128,7 +128,7 @@ export function GET(request: Request) {
     });
   }
 
-  const appOrigin = configuredOrigin(env.WEBAPP_PUBLIC_ORIGIN);
+  const appOrigin = configuredOrigin(env.AGENTAREA_APP_ORIGIN);
   if (!appOrigin) {
     return new NextResponse("Apps host origin is not configured", {
       status: 500,

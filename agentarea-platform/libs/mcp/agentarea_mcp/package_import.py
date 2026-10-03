@@ -78,7 +78,7 @@ async def retire_runtime_before_mutation(
     last_error: Exception | None = None
     saw_conflict = False
 
-    async with httpx.AsyncClient(timeout=settings.MCP_CLIENT_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=settings.TIMEOUT) as client:
         for attempt in range(_MCP_RETIRE_RETRIES):
             try:
                 response = await client.delete(url, headers=headers)
@@ -165,7 +165,7 @@ async def _run_import(session, instance_id: UUID) -> None:
         )
 
     settings = get_settings().mcp
-    manager_url = f"{settings.MCP_MANAGER_URL.rstrip('/')}/packages/import"
+    manager_url = f"{settings.MANAGER_URL.rstrip('/')}/packages/import"
     headers = settings.manager_gateway_headers()
     try:
         async with httpx.AsyncClient(timeout=_PACKAGE_IMPORT_TIMEOUT_SECONDS) as client:

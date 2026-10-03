@@ -36,7 +36,7 @@ def make_files_activities(
             return ArtifactValidationResult(state="passed", generation=0)
         return await validate_published_artifacts(
             request,
-            manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+            manager_url=dependencies.settings.mcp.MANAGER_URL,
             auth_secret=sandbox_file_auth_secret(dependencies),
         )
 

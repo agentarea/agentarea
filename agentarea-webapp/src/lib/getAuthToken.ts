@@ -3,7 +3,7 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { env } from "@/env";
-import { KRATOS_WHOAMI_TIMEOUT_MS } from "./server-timeouts";
+import { AGENTAREA_AUTH_WHOAMI_TIMEOUT } from "./server-timeouts";
 
 /**
  * Get authentication token from current session.
@@ -48,7 +48,7 @@ async function getAuthTokenImpl(): Promise<string | null> {
         },
         // Bound the call so a stalled Kratos fails fast instead of hanging the
         // whole server render (which would never flush a first byte).
-        signal: AbortSignal.timeout(KRATOS_WHOAMI_TIMEOUT_MS),
+        signal: AbortSignal.timeout(AGENTAREA_AUTH_WHOAMI_TIMEOUT),
       }
     );
 

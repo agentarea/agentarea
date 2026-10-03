@@ -40,7 +40,13 @@ def cli():
     "--port", default=8000, envvar="PORT", show_envvar=True, help="Port to bind the server to"
 )
 @click.option("--reload/--no-reload", default=False, help="Enable/disable auto-reload")
-@click.option("--log-level", default="info", help="Logging level")
+@click.option(
+    "--log-level",
+    default="info",
+    envvar="AGENTAREA_LOG_LEVEL",
+    show_envvar=True,
+    help="Logging level",
+)
 @click.option(
     "--workers",
     default=1,
@@ -64,14 +70,14 @@ def cli():
 )
 def serve(host: str, port: int, reload: bool, log_level: str, workers: int, shutdown_timeout: int):
     """Start the API server."""
-    from agentarea_common.config import ObservabilitySettings
+    from agentarea_common.config import MetricsSettings
 
-    observability = ObservabilitySettings()
-    if observability.METRICS_ENABLED and workers > 1 and not reload:
-        # Each worker process would bind METRICS_PORT; the second one fails,
+    metrics = MetricsSettings()
+    if metrics.ENABLED and workers > 1 and not reload:
+        # Each worker process would bind AGENTAREA_METRICS_PORT; the second one fails,
         # and the first would only ever report its own share of requests.
         raise click.UsageError(
-            "METRICS_ENABLED needs a single worker process per pod; "
+            "AGENTAREA_METRICS_ENABLED needs a single worker process per pod; "
             "scale with replicas instead of AGENTAREA_API_WORKERS"
         )
 
@@ -182,8 +188,8 @@ def status():
     click.echo("API Configuration:")
 
     settings = get_db_settings()
-    click.echo(f"Database: {settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}")
-    click.echo(f"Database Name: {settings.POSTGRES_DB}")
+    click.echo(f"Database: {settings.HOST}:{settings.PORT}")
+    click.echo(f"Database Name: {settings.NAME}")
     click.echo("Port: set via --port flag or PORT env var (default: 8000)")
 
 
@@ -264,17 +270,17 @@ async def _register_graph_client() -> None:
     from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
     from agentarea_common.rebac.openfga_client import OpenFGAClient
 
-    backend = AccessControlSettings().ACCESS_CONTROL_BACKEND
+    backend = AccessControlSettings().BACKEND
     openfga = OpenFGASettings()
     await bootstrap_openfga(openfga)
     register_singleton(
         OpenFGAClient,
         OpenFGAClient(
-            api_url=openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-            store_id=openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-            authorization_model_id=openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-            timeout_seconds=openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
-            api_token=openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
+            api_url=openfga.URL,
+            store_id=openfga.STORE_ID,
+            authorization_model_id=openfga.MODEL_ID,
+            timeout_seconds=openfga.TIMEOUT.total_seconds(),
+            api_token=openfga.API_TOKEN or None,
         ),
     )
     click.echo(f"Authorization graph: {backend}")

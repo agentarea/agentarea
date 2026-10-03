@@ -9,12 +9,13 @@ from typing import Any
 
 from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
+from temporalio.envconfig import ClientConfig
 
 
-async def diagnose_workflow(workflow_id: str, namespace: str = "default") -> dict[str, Any]:
+async def diagnose_workflow(workflow_id: str) -> dict[str, Any]:
     """Diagnose a workflow execution to identify why it might not be finishing."""
     client = await Client.connect(
-        "localhost:7233", namespace=namespace, data_converter=pydantic_data_converter
+        **ClientConfig.load_client_connect_config(), data_converter=pydantic_data_converter
     )
 
     try:
@@ -95,17 +96,15 @@ async def diagnose_workflow(workflow_id: str, namespace: str = "default") -> dic
 async def main():
     """Main diagnostic function."""
     if len(sys.argv) < 2:
-        print("Usage: python diagnose_workflow.py <workflow_id> [namespace]")
+        print("Usage: python diagnose_workflow.py <workflow_id>  (reads TEMPORAL_ADDRESS/NAMESPACE)")
         sys.exit(1)
 
     workflow_id = sys.argv[1]
-    namespace = sys.argv[2] if len(sys.argv) > 2 else "default"
 
     print(f"Diagnosing workflow: {workflow_id}")
-    print(f"Namespace: {namespace}")
     print("-" * 50)
 
-    diagnosis = await diagnose_workflow(workflow_id, namespace)
+    diagnosis = await diagnose_workflow(workflow_id)
 
     print(json.dumps(diagnosis, indent=2, default=str))
 

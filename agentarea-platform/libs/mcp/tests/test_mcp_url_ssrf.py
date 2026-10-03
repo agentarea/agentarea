@@ -72,8 +72,8 @@ def _resolver(table: dict[str, list[str]]):
 def _closed_policy(monkeypatch):
     from agentarea_common.config import get_settings
 
-    monkeypatch.delenv("ALLOW_PRIVATE_URLS", raising=False)
-    monkeypatch.delenv("OUTBOUND_PRIVATE_ALLOWLIST", raising=False)
+    monkeypatch.delenv("AGENTAREA_HTTP_ALLOW_PRIVATE", raising=False)
+    monkeypatch.delenv("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", raising=False)
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()

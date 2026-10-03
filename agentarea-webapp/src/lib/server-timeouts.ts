@@ -9,11 +9,11 @@
  *
  * Overridable via env for ops tuning; defaults are deliberately conservative.
  */
-export const KRATOS_WHOAMI_TIMEOUT_MS =
-  Number(process.env.KRATOS_WHOAMI_TIMEOUT_MS) || 5000;
+export const AGENTAREA_AUTH_WHOAMI_TIMEOUT =
+  Number(process.env.AGENTAREA_AUTH_WHOAMI_TIMEOUT) || 5000;
 
-export const SERVER_API_TIMEOUT_MS =
-  Number(process.env.SERVER_API_TIMEOUT_MS) || 8000;
+export const AGENTAREA_API_TIMEOUT =
+  Number(process.env.AGENTAREA_API_TIMEOUT) || 8000;
 
 /**
  * MCP App resource reads and tool calls reach an MCP workload that serverless
@@ -21,5 +21,5 @@ export const SERVER_API_TIMEOUT_MS =
  * start — an npx server downloads and boots its package — which takes far
  * longer than a plain API read.
  */
-export const MCP_APP_TIMEOUT_MS =
-  Number(process.env.MCP_APP_TIMEOUT_MS) || 120_000;
+export const AGENTAREA_MCP_APP_TIMEOUT =
+  Number(process.env.AGENTAREA_MCP_APP_TIMEOUT) || 120_000;

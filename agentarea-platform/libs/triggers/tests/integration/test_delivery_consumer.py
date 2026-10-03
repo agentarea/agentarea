@@ -25,7 +25,7 @@ async def _origin_allowed(_channel_config: dict) -> bool:
     return True
 
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+AGENTAREA_REDIS_URL = os.getenv("AGENTAREA_REDIS_URL", "redis://localhost:6379")
 
 
 class FakeAdapter:
@@ -57,7 +57,7 @@ async def streams():
 
 @pytest_asyncio.fixture()
 async def broker(streams):
-    b = RedisStreamsBroker(REDIS_URL)
+    b = RedisStreamsBroker(AGENTAREA_REDIS_URL)
     try:
         await b.ensure_group(streams["stream"], streams["group"], start="0")
     except Exception as exc:
@@ -68,7 +68,7 @@ async def broker(streams):
 
 @pytest_asyncio.fixture()
 async def dedup(streams):
-    d = DedupCache(REDIS_URL, prefix=f"test-dedup-{streams['test_id']}", ttl_seconds=60)
+    d = DedupCache(AGENTAREA_REDIS_URL, prefix=f"test-dedup-{streams['test_id']}", ttl_seconds=60)
     yield d
     await d.aclose()
 
@@ -173,7 +173,7 @@ async def test_fatal_error_dead_letters_and_acks(broker, dedup, streams):
     # DLQ now holds the entry — check via direct XLEN on the test DLQ stream.
     import redis.asyncio as redis
 
-    client = redis.from_url(REDIS_URL, decode_responses=True)
+    client = redis.from_url(AGENTAREA_REDIS_URL, decode_responses=True)
     try:
         assert await client.xlen(streams["dlq"]) >= 1
     finally:
@@ -292,7 +292,7 @@ async def test_unknown_channel_type_releases_for_redelivery(broker, dedup, strea
     # DLQ stays empty — message is still pending for redelivery.
     import redis.asyncio as redis
 
-    client = redis.from_url(REDIS_URL, decode_responses=True)
+    client = redis.from_url(AGENTAREA_REDIS_URL, decode_responses=True)
     try:
         assert await client.xlen(streams["dlq"]) == 0
     finally:

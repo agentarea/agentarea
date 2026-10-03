@@ -10,7 +10,7 @@ def test_none_icon_returns_none():
 
 
 def test_bare_id_resolves_against_api_base_url(monkeypatch):
-    monkeypatch.setenv("API_BASE_URL", "https://api.agentarea.ai")
+    monkeypatch.setenv("AGENTAREA_API_URL", "https://api.agentarea.ai")
     # AppSettings is lru_cached; clear so the env override takes effect.
     from agentarea_common.config.app import get_app_settings
 
@@ -23,7 +23,7 @@ def test_bare_id_resolves_against_api_base_url(monkeypatch):
 
 
 def test_trailing_slash_on_base_is_normalized(monkeypatch):
-    monkeypatch.setenv("API_BASE_URL", "https://api.agentarea.ai/")
+    monkeypatch.setenv("AGENTAREA_API_URL", "https://api.agentarea.ai/")
     from agentarea_common.config.app import get_app_settings
 
     get_app_settings.cache_clear()
@@ -43,7 +43,7 @@ def test_trailing_slash_on_base_is_normalized(monkeypatch):
 )
 def test_full_url_passes_through(full):
     # Remote registry entries supply their own absolute icon URL; never rewrite
-    # them, and never depend on request host or API_BASE_URL for these.
+    # them, and never depend on request host or AGENTAREA_API_URL for these.
     assert build_provider_icon_url(full) == full
 
 
@@ -51,7 +51,7 @@ def test_root_relative_path_is_not_passed_through(monkeypatch):
     # A root-relative path would resolve against the *frontend* origin in the
     # browser (the host that 404/500s), so it must NOT pass through. It is
     # treated as an id and pinned to the API base instead.
-    monkeypatch.setenv("API_BASE_URL", "https://api.agentarea.ai")
+    monkeypatch.setenv("AGENTAREA_API_URL", "https://api.agentarea.ai")
     from agentarea_common.config.app import get_app_settings
 
     get_app_settings.cache_clear()

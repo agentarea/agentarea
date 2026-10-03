@@ -107,7 +107,7 @@ func initFeatures(cfg *config.Config, logger *slog.Logger) {
 		Variants: cfg.Features.Variants,
 	}
 	configProvider := features.NewConfigProvider(logger, featureConfig)
-	envProvider := features.NewEnvironmentProvider(logger, "MCP_FEATURE")
+	envProvider := features.NewEnvironmentProvider(logger, "AGENTAREA_MCP_FEATURE")
 	hybridProvider := features.NewHybridProvider(logger, envProvider, configProvider)
 	featureService := features.NewService(logger, hybridProvider)
 	features.InitDefaultService(logger, hybridProvider)
@@ -209,7 +209,7 @@ func runControlPlane(
 		ImportTimeout:     cfg.PackageImages.ImportTimeout,
 		NPMRegistryURL:    cfg.PackageImages.NPMRegistryURL,
 		PyPIURL:           cfg.PackageImages.PyPIURL,
-		AuthSecret:        os.Getenv("MCP_GATEWAY_AUTH_SECRET"),
+		AuthSecret:        os.Getenv("AGENTAREA_MCP_GATEWAY_SECRET"),
 		Logger:            logger,
 	})
 	if err != nil {
@@ -725,7 +725,7 @@ func getLogLevel(level string) slog.Level {
 }
 
 func startSandboxTaskGC(ctx context.Context, logger *slog.Logger, client *warmpool.Client) error {
-	interval, err := getDurationEnv("SANDBOX_TASK_GC_INTERVAL", 30*time.Second)
+	interval, err := getDurationEnv("AGENTAREA_SANDBOX_TASK_GC_INTERVAL", 30*time.Second)
 	if err != nil {
 		return err
 	}
@@ -764,7 +764,7 @@ func startSandboxTaskGC(ctx context.Context, logger *slog.Logger, client *warmpo
 // default so Kubernetes (which runs a dedicated agentarea-sandbox-runner) keeps
 // execution work out of the more-privileged control plane.
 func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, runtime sandboxruntime.Runtime, providerName string, workspaceConfig workspace.RepositoryConfig, logger *slog.Logger) error {
-	rawEnabled := os.Getenv("SANDBOX_EMBEDDED_RUNNER")
+	rawEnabled := os.Getenv("AGENTAREA_SANDBOX_EMBEDDED_RUNNER")
 	enabled := false
 	if rawEnabled != "" {
 		parsed, err := strconv.ParseBool(rawEnabled)
@@ -791,7 +791,7 @@ func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, runtime
 		Executor: runtime,
 		Capabilities: sandboxplacement.Capabilities{
 			Name:   providerName,
-			Region: os.Getenv("SANDBOX_REGION"),
+			Region: os.Getenv("AGENTAREA_SANDBOX_REGION"),
 		},
 	})
 	if err != nil {
@@ -814,7 +814,7 @@ func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, runtime
 	}()
 	logger.Info("Embedded sandbox runner started",
 		slog.String("sandbox_target", providerName),
-		slog.String("sandbox_region", os.Getenv("SANDBOX_REGION")))
+		slog.String("sandbox_region", os.Getenv("AGENTAREA_SANDBOX_REGION")))
 	return nil
 }
 

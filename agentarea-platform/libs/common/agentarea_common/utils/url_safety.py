@@ -152,7 +152,7 @@ class OutboundPolicy:
     ``ollama.ai.svc.cluster.local``) and CIDRs (``192.168.1.50/32``) for
     deployments that legitimately target a private endpoint, such as a local
     Ollama. ``allow_private`` is the existing blanket opt-out
-    (``ALLOW_PRIVATE_URLS``). Both default to closed.
+    (``AGENTAREA_HTTP_ALLOW_PRIVATE``). Both default to closed.
 
     Name each endpoint: a wildcard such as ``*.svc.cluster.local`` or a cluster
     CIDR lets every member reach every in-cluster service, the platform's own
@@ -183,9 +183,9 @@ class OutboundPolicy:
         from agentarea_common.config import get_settings
 
         settings = get_settings()
-        raw = settings.app.OUTBOUND_PRIVATE_ALLOWLIST
+        raw = settings.http.PRIVATE_ALLOWLIST
         return cls(
-            allow_private=settings.mcp.ALLOW_PRIVATE_URLS,
+            allow_private=settings.http.ALLOW_PRIVATE,
             private_allowlist=tuple(e.strip() for e in raw.split(",") if e.strip()),
         )
 

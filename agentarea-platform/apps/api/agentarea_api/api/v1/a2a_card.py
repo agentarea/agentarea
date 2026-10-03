@@ -36,7 +36,7 @@ _MODES = ["text/plain", "application/json"]
 
 def agent_rpc_url(agent_id: UUID) -> str:
     """The JSON-RPC endpoint of an agent under the API host."""
-    return f"{get_settings().app.API_BASE_URL.rstrip('/')}/v1/agents/{agent_id}/a2a/rpc"
+    return f"{get_settings().app.API_URL.rstrip('/')}/v1/agents/{agent_id}/a2a/rpc"
 
 
 def agent_host_rpc_url(agent_id: UUID) -> str:

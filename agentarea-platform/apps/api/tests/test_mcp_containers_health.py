@@ -76,7 +76,7 @@ def _install(monkeypatch, answers, asked, requested_headers=None):
         "get_settings",
         lambda: SimpleNamespace(
             mcp=SimpleNamespace(
-                MCP_MANAGER_URL="http://manager",
+                MANAGER_URL="http://manager",
                 manager_inspection_headers=lambda: {"Authorization": "Bearer manager-test"},
             )
         ),

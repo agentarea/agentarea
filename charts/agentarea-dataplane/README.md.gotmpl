@@ -19,7 +19,7 @@ that confines those servers:
 With `sandboxes.enabled` it also runs the control plane's **agent sandboxes**:
 an [OpenSandbox](https://github.com/opensandbox-group/OpenSandbox) server on its
 Kubernetes runtime, which the control plane creates sandboxes through
-(`SANDBOX_OPENSANDBOX_URL`), with the same confinement in a namespace of their
+(`AGENTAREA_SANDBOX_OSB_URL`), with the same confinement in a namespace of their
 own. Only the server may reach a sandbox, and only on execd's port. The
 BatchSandbox CRDs and controller come from the vendored `opensandbox-controller`
 subchart (`opensandbox-controller.enabled`), one per cluster.
