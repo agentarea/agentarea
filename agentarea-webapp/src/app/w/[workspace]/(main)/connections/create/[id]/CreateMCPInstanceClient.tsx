@@ -97,7 +97,7 @@ function parseFieldSpecs(value: unknown): FieldSpec[] {
     if ("isRequired" in entry && typeof entry.isRequired === "boolean") {
       field.isRequired = entry.isRequired;
     }
-    if ("isSecret" in entry && typeof entry.isSecret === "boolean") {
+    if ("isSecret" in entry && typeof entry.isSecret === "boolean") { // pragma: allowlist secret
       field.isSecret = entry.isSecret;
     }
     if ("default" in entry && typeof entry.default === "string") {

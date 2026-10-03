@@ -17,7 +17,7 @@ import (
 
 // The manager inspection API is an internal surface protected by the shared
 // MCP gateway bearer. Response redaction remains defense in depth.
-const managerInspectionTestSecret = "mcp-gateway-inspection-secret-for-tests"
+const managerInspectionTestSecret = "mcp-gateway-inspection-secret-for-tests" // pragma: allowlist secret
 
 type disclosureBackendStub struct {
 	status *backends.InstanceStatus
