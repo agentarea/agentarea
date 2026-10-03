@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import {
   FileText,
   GitCompare,
@@ -35,7 +35,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import WorkspaceLink from "@/components/WorkspaceLink";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { percent } from "@/lib/evals";
+import { percent, usd } from "@/lib/evals";
 import { getRevisionStatusPresentation } from "@/lib/status";
 import {
   activateRevisionAction,
@@ -209,10 +209,16 @@ function DiffDialog({
               <p className="text-xs font-medium text-muted-foreground">
                 {change.field}
               </p>
-              <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-[color:var(--status-danger)]/10 p-2 text-xs">
+              <p className="text-[11px] text-muted-foreground">
+                {t("versions.diffBefore")}
+              </p>
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-destructive/5 p-2 text-xs">
                 {formatValue(change.before)}
               </pre>
-              <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-[color:var(--status-success)]/10 p-2 text-xs">
+              <p className="text-[11px] text-muted-foreground">
+                {t("versions.diffAfter", { number: revision.number })}
+              </p>
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-2 text-xs">
                 {formatValue(change.after)}
               </pre>
             </div>
@@ -231,6 +237,7 @@ export default function VersionsClient({
   outcomes,
 }: Props) {
   const t = useTranslations("AgentEvals");
+  const format = useFormatter();
   const router = useWorkspaceRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -341,12 +348,13 @@ export default function VersionsClient({
                       {percent(outcome?.success_rate)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {outcome?.mean_cost
-                        ? `$${Number(outcome.mean_cost).toFixed(4)}`
-                        : "—"}
+                      {outcome?.mean_cost ? usd(outcome.mean_cost) : "—"}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {new Date(revision.created_at).toLocaleString()}
+                      {format.dateTime(new Date(revision.created_at), {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">

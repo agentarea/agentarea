@@ -16,7 +16,12 @@ import {
 } from "@/components/ui/table";
 import WorkspaceLink from "@/components/WorkspaceLink";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { buildRunMatrix, type ArmCell, type CaseVerdict } from "@/lib/evals";
+import {
+  buildRunMatrix,
+  usd,
+  type ArmCell,
+  type CaseVerdict,
+} from "@/lib/evals";
 import {
   getEvalRunStatusPresentation,
   getTrialStatusPresentation,
@@ -32,7 +37,7 @@ const VERDICT_KIND: Record<CaseVerdict, StatusKind> = {
   pending: "running",
 };
 
-function ArmTrials({ cell, agentRef }: { cell: ArmCell; agentRef: string }) {
+function ArmTrials({ cell }: { cell: ArmCell }) {
   const t = useTranslations("AgentEvals");
   return (
     <div className="space-y-1">
@@ -49,7 +54,7 @@ function ArmTrials({ cell, agentRef }: { cell: ArmCell; agentRef: string }) {
           return trial.task_id ? (
             <WorkspaceLink
               key={trial.id}
-              href={`/agents/${agentRef}/tasks/${trial.task_id}`}
+              href={`/tasks/${trial.task_id}`}
               title={t("evaluations.openTask")}
             >
               {glyph}
@@ -119,7 +124,25 @@ export default function RunDetailClient({
   );
   const status = getEvalRunStatusPresentation(run.status);
   const active = run.status === "queued" || run.status === "running";
-  const passed = (run.summary as { passed?: boolean }).passed;
+  const summary = run.summary as {
+    passed?: boolean;
+    regressions?: string[];
+    improvements?: string[];
+    failing_cases?: string[];
+  };
+  const passed = summary.passed;
+  const improved = summary.improvements?.length ?? 0;
+  const verdict = run.candidate_revision_id
+    ? passed
+      ? t("evaluations.resultPassed")
+      : t("evaluations.resultRegressed", {
+          count: summary.regressions?.length ?? 0,
+        })
+    : passed
+      ? t("evaluations.resultAllPassed")
+      : t("evaluations.resultFailing", {
+          count: summary.failing_cases?.length ?? 0,
+        });
 
   useEffect(() => {
     if (!active) return;
@@ -159,13 +182,13 @@ export default function RunDetailClient({
             {run.candidate_revision_id &&
               ` · ${t("evaluations.candidateArm", { number: numbers.get(run.candidate_revision_id) ?? "?" })}`}
             {` · ${t("evaluations.trials")}: ${run.trials}`}
-            {` · $${Number(run.cost_usd).toFixed(2)} / $${Number(run.budget_usd).toFixed(2)}`}
+            {` · ${usd(run.cost_usd)} / ${usd(run.budget_usd)}`}
           </p>
           {!active && passed !== undefined && (
             <StatusIndicator kind={passed ? "done" : "failed"}>
-              {passed
-                ? t("evaluations.resultPassed")
-                : t("evaluations.resultFailed")}
+              {verdict}
+              {improved > 0 &&
+                ` · ${t("evaluations.resultImproved", { count: improved })}`}
             </StatusIndicator>
           )}
           {run.stop_reason && (
@@ -215,11 +238,11 @@ export default function RunDetailClient({
                   {row.name}
                 </TableCell>
                 <TableCell>
-                  <ArmTrials cell={row.baseline} agentRef={agentRef} />
+                  <ArmTrials cell={row.baseline} />
                 </TableCell>
                 {row.candidate && (
                   <TableCell>
-                    <ArmTrials cell={row.candidate} agentRef={agentRef} />
+                    <ArmTrials cell={row.candidate} />
                   </TableCell>
                 )}
                 <TableCell>

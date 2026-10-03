@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { ListPlus, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
-import type { FeedbackResponse, SuiteResponse } from "@/api/client/types.gen";
+import type { SuiteResponse } from "@/api/client/types.gen";
+import {
+  addCaseFromTaskAction,
+  loadRunFeedbackAction,
+  rateRunAction,
+} from "@/app/w/[workspace]/(main)/agents/shared/evalActions";
+import { InfoPanelSection } from "@/components/InfoPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,32 +21,41 @@ import {
 } from "@/components/ui/select";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { cn } from "@/lib/utils";
-import {
-  addCaseFromTaskAction,
-  rateRunAction,
-} from "../../../shared/evalActions";
+
+type Rating = "good" | "bad";
 
 /** A person's verdict on this run, and a way to keep the run as a test case. */
-export default function RunFeedbackBar({
-  taskId,
-  mine,
-  suites,
-}: {
-  taskId: string;
-  mine: FeedbackResponse | null;
-  suites: SuiteResponse[];
-}) {
+export default function RunFeedback({ taskId }: { taskId: string }) {
   const t = useTranslations("AgentEvals.feedback");
-  const [rating, setRating] = useState<"good" | "bad" | null>(
-    mine ? (mine.rating as "good" | "bad") : null
-  );
-  const [comment, setComment] = useState(mine?.comment ?? "");
-  const [suiteId, setSuiteId] = useState(suites[0]?.id ?? "");
+  const [loaded, setLoaded] = useState(false);
+  const [rating, setRating] = useState<Rating | null>(null);
+  const [comment, setComment] = useState("");
+  const [suites, setSuites] = useState<SuiteResponse[]>([]);
+  const [suiteId, setSuiteId] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const save = (next: "good" | "bad") => {
+  useEffect(() => {
+    let current = true;
+    loadRunFeedbackAction(taskId).then((result) => {
+      if (!current) return;
+      if (!result.ok) {
+        setError(result.error);
+      } else {
+        setRating((result.data.mine?.rating as Rating | undefined) ?? null);
+        setComment(result.data.mine?.comment ?? "");
+        setSuites(result.data.suites);
+        setSuiteId(result.data.suites[0]?.id ?? "");
+      }
+      setLoaded(true);
+    });
+    return () => {
+      current = false;
+    };
+  }, [taskId]);
+
+  const save = (next: Rating) => {
     setRating(next);
     setError(null);
     startTransition(async () => {
@@ -63,10 +78,11 @@ export default function RunFeedbackBar({
     });
   };
 
+  if (!loaded) return null;
+
   return (
-    <div className="mt-4 space-y-3 border-t pt-4">
+    <InfoPanelSection title={t("title")} contentClassName="space-y-2.5 text-xs">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">{t("title")}</span>
         <Button
           size="xs"
           variant="outline"
@@ -101,9 +117,10 @@ export default function RunFeedbackBar({
         )}
       </div>
       {rating === "bad" && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <Input
-            className="max-w-md"
+            className="h-8 text-xs"
+            aria-label={t("comment")}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder={t("comment")}
@@ -113,40 +130,41 @@ export default function RunFeedbackBar({
           </Button>
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        {suites.length === 0 ? (
-          <p className="note">{t("noSuites")}</p>
-        ) : (
-          <>
-            <Select value={suiteId} onValueChange={setSuiteId}>
-              <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder={t("chooseSuite")} />
-              </SelectTrigger>
-              <SelectContent>
-                {suites.map((suite) => (
-                  <SelectItem key={suite.id} value={suite.id}>
-                    {suite.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={addToSuite}
-              disabled={pending || !suiteId}
+      {suites.length === 0 ? (
+        <p className="text-muted-foreground">{t("noSuites")}</p>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Select value={suiteId} onValueChange={setSuiteId}>
+            <SelectTrigger
+              className="h-8 min-w-0 flex-1 text-xs"
+              aria-label={t("chooseSuite")}
             >
-              <ListPlus />
-              {t("addToSuite")}
-            </Button>
-          </>
-        )}
-      </div>
+              <SelectValue placeholder={t("chooseSuite")} />
+            </SelectTrigger>
+            <SelectContent>
+              {suites.map((suite) => (
+                <SelectItem key={suite.id} value={suite.id}>
+                  {suite.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={addToSuite}
+            disabled={pending || !suiteId}
+          >
+            <ListPlus />
+            {t("addToSuite")}
+          </Button>
+        </div>
+      )}
       {error && (
         <p className="form-error" role="alert">
           {error}
         </p>
       )}
-    </div>
+    </InfoPanelSection>
   );
 }

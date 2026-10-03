@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import type {
+  EvalRunResponse,
   ExperimentResponse,
   RevisionResponse,
 } from "@/api/client/types.gen";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { getAgent } from "@/lib/api";
-import { listExperiments, listRevisions } from "@/lib/api-evals";
+import { listEvalRuns, listExperiments, listRevisions } from "@/lib/api-evals";
 import { requireApiData } from "@/lib/server-resource";
 import ExperimentsClient from "./ExperimentsClient";
 
@@ -25,11 +26,12 @@ export default async function AgentExperimentsPage({
   const { candidate } = await searchParams;
   const t = await getTranslations("AgentEvals");
   const agent = requireApiData(await getAgent(id), "agent");
-  const [experiments, revisions] = await Promise.all([
+  const [experiments, revisions, evalRuns] = await Promise.all([
     listExperiments(agent.id),
     listRevisions(agent.id),
+    listEvalRuns(agent.id),
   ]);
-  if (experiments.error || revisions.error) {
+  if (experiments.error || revisions.error || evalRuns.error) {
     return (
       <RetryEmptyState
         title={t("common.loadFailed")}
@@ -41,8 +43,10 @@ export default async function AgentExperimentsPage({
   return (
     <ExperimentsClient
       agentId={agent.id}
+      agentRef={agent.slug || agent.id}
       experiments={(experiments.data ?? []) as ExperimentResponse[]}
       revisions={(revisions.data ?? []) as RevisionResponse[]}
+      evalRuns={(evalRuns.data ?? []) as EvalRunResponse[]}
       initialCandidate={candidate ?? null}
     />
   );

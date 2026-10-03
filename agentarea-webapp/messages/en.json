@@ -2734,6 +2734,8 @@
       "observational": "Run outcomes are observational: versions served different inputs at different times. Use an evaluation or an experiment to compare them fairly.",
       "diffTitle": "v{number} compared with the serving version",
       "diffEmpty": "No differences.",
+      "diffBefore": "Serving now",
+      "diffAfter": "v{number}",
       "confirmServe": "Serve v{number} to every new run?",
       "empty": "No versions yet. The first one is recorded when the agent runs or is edited.",
       "origin": {
@@ -2779,6 +2781,8 @@
       "stubsInvalid": "Stubs must be a JSON object",
       "saveCase": "Add case",
       "deleteCase": "Delete",
+      "checkValue": "{kind}: value",
+      "removeCheck": "Remove check",
       "checkKinds": {
         "response_contains": "Answer contains",
         "response_not_contains": "Answer does not contain",
@@ -2828,7 +2832,10 @@
       "candidateArm": "Candidate v{number}",
       "passedOfTotal": "{passed}/{total}",
       "resultPassed": "Passed: no case regressed",
-      "resultFailed": "Failed",
+      "resultRegressed": "Failed: {count, plural, one {# case} other {# cases}} regressed",
+      "resultAllPassed": "Passed: every case passed",
+      "resultFailing": "Failed: {count, plural, one {# case} other {# cases}} failing",
+      "resultImproved": "{count, plural, one {# case} other {# cases}} improved",
       "openTask": "Open run",
       "checkResults": "Checks",
       "stopReason": "Stopped: {reason}"
@@ -2858,8 +2865,18 @@
       "lastDecision": "Latest decision",
       "pRegression": "P(regression)",
       "pBetter": "P(better)",
-      "offlinePassed": "Passed an evaluation",
-      "offlineMissing": "No passing evaluation yet",
+      "offline": {
+        "passed": "Passed its latest evaluation",
+        "failed": "Failed its latest evaluation",
+        "missing": "No completed evaluation"
+      },
+      "promotesAutomatically": "Promotes automatically once confidently not worse and evaluated",
+      "promotionWaits": "Promotion waits for you",
+      "gate": {
+        "passed": "v{number} passed its latest evaluation",
+        "failed": "v{number} failed its latest evaluation, so it will not be promoted automatically",
+        "missing": "v{number} has no completed evaluation, so it will not be promoted automatically"
+      },
       "history": "History",
       "decisions": "Decisions",
       "actions": {
@@ -2888,7 +2905,7 @@
       "comment": "What was wrong (optional)",
       "save": "Save",
       "saved": "Rating saved",
-      "addToSuite": "Add to evaluation suite",
+      "addToSuite": "Add as test case",
       "chooseSuite": "Choose a suite",
       "added": "Added to the suite",
       "noSuites": "No suites yet — create one on the agent's Evaluations tab."

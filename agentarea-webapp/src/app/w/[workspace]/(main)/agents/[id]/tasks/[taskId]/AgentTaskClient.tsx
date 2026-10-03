@@ -48,16 +48,9 @@ interface Props {
   agent: Agent;
   taskId: string;
   task?: Task;
-  /** Rating and "keep as a test case", rendered under the task details. */
-  feedback?: React.ReactNode;
 }
 
-export default function AgentTaskClient({
-  agent,
-  taskId,
-  task,
-  feedback,
-}: Props) {
+export default function AgentTaskClient({ agent, taskId, task }: Props) {
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [modelInstances, setModelInstances] = useState<ModelInstanceResponse[]>(
@@ -315,7 +308,6 @@ export default function AgentTaskClient({
             </p>
           </div>
         )}
-        {feedback}
       </div>
 
       {/* Chat Interface */}

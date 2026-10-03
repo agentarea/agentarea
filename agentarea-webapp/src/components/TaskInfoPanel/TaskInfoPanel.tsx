@@ -18,9 +18,17 @@ import ModelInfo from "./components/ModelInfo";
 import Participants from "./components/Participants";
 import PolicyInfo from "./components/PolicyInfo";
 import QuickActions from "./components/QuickActions";
+import RunFeedback from "./components/RunFeedback";
 import TaskInfoHeader from "./components/TaskInfoHeader";
 import TaskInfoTabs from "./components/TaskInfoTabs";
 import { Task } from "./types";
+
+const RATEABLE = new Set([
+  "completed",
+  "awaiting_follow_up",
+  "failed",
+  "waiting_for_continuation",
+]);
 
 interface TaskInfoPanelProps {
   task?: Task | null;
@@ -133,6 +141,7 @@ export default function TaskInfoPanel({
               agentName={task.agent_name}
               delegatedAgents={activitySummary?.delegatedAgents}
             />
+            {RATEABLE.has(currentStatus) && <RunFeedback taskId={task.id} />}
             <Files files={activitySummary?.files} />
             <Documents artifacts={artifacts} />
             <Metadata task={task} />

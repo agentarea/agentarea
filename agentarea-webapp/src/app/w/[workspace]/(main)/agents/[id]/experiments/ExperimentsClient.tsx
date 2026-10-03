@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { Gauge, Loader2, Play, Square, Upload } from "lucide-react";
 import type {
   ArmResponse,
+  EvalRunResponse,
   ExperimentResponse,
   RevisionResponse,
 } from "@/api/client/types.gen";
@@ -28,8 +29,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import WorkspaceLink from "@/components/WorkspaceLink";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { percent } from "@/lib/evals";
+import { candidateGate, percent, usd } from "@/lib/evals";
 import { getExperimentStatusPresentation } from "@/lib/status";
 import {
   evaluateExperimentAction,
@@ -76,7 +78,7 @@ function ArmBlock({ title, arm }: { title: string; arm: ArmResponse }) {
           <dd className="tabular-nums">
             {arm.mean_cost === null || arm.mean_cost === undefined
               ? "—"
-              : `$${arm.mean_cost.toFixed(4)}`}
+              : usd(arm.mean_cost)}
           </dd>
         </div>
       </dl>
@@ -86,16 +88,21 @@ function ArmBlock({ title, arm }: { title: string; arm: ArmResponse }) {
 
 export default function ExperimentsClient({
   agentId,
+  agentRef,
   experiments,
   revisions,
+  evalRuns,
   initialCandidate,
 }: {
   agentId: string;
+  agentRef: string;
   experiments: ExperimentResponse[];
   revisions: RevisionResponse[];
+  evalRuns: EvalRunResponse[];
   initialCandidate: string | null;
 }) {
   const t = useTranslations("AgentEvals");
+  const format = useFormatter();
   const router = useWorkspaceRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -115,6 +122,12 @@ export default function ExperimentsClient({
       : (candidates[0]?.id ?? "")
   );
   const [autoPromote, setAutoPromote] = useState(false);
+  const gate = candidate ? candidateGate(evalRuns, candidate) : null;
+  const runningGate = running
+    ? running.offline_passed
+      ? "passed"
+      : candidateGate(evalRuns, running.candidate_revision_id)
+    : null;
   const [maxDays, setMaxDays] = useState("42");
 
   useEffect(() => {
@@ -204,7 +217,7 @@ export default function ExperimentsClient({
             <p className="text-xs text-muted-foreground">
               {t("experiments.traffic")}
             </p>
-            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+            <div className="flex h-2.5 w-full justify-end overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full bg-[color:var(--status-info)]"
                 style={{ width: `${running.weights.candidate ?? 0}%` }}
@@ -241,14 +254,19 @@ export default function ExperimentsClient({
             />
           </div>
 
-          <StatusIndicator
-            kind={running.offline_passed ? "done" : "attention"}
-            size="sm"
-          >
-            {running.offline_passed
-              ? t("experiments.offlinePassed")
-              : t("experiments.offlineMissing")}
-          </StatusIndicator>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <StatusIndicator
+              kind={runningGate === "passed" ? "done" : "attention"}
+              size="sm"
+            >
+              {t(`experiments.offline.${runningGate}`)}
+            </StatusIndicator>
+            <span className="text-xs text-muted-foreground">
+              {running.policy.auto_promote === true
+                ? t("experiments.promotesAutomatically")
+                : t("experiments.promotionWaits")}
+            </span>
+          </div>
 
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">
@@ -263,7 +281,10 @@ export default function ExperimentsClient({
                     className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5"
                   >
                     <span className="text-xs tabular-nums text-muted-foreground">
-                      {new Date(decision.at).toLocaleString()}
+                      {format.dateTime(new Date(decision.at), {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
                     </span>
                     <span className="font-medium">
                       {decisionLabel(decision)}
@@ -335,6 +356,26 @@ export default function ExperimentsClient({
                   </span>
                 </span>
               </label>
+              {gate && (
+                <div className="flex flex-wrap items-center gap-2 md:col-span-2">
+                  <StatusIndicator
+                    kind={gate === "passed" ? "done" : "attention"}
+                    size="sm"
+                  >
+                    {t(`experiments.gate.${gate}`, {
+                      number: numbers.get(candidate) ?? "?",
+                    })}
+                  </StatusIndicator>
+                  {gate !== "passed" && (
+                    <WorkspaceLink
+                      href={`/agents/${agentRef}/evaluations?candidate=${candidate}`}
+                      className="text-xs underline underline-offset-2"
+                    >
+                      {t("versions.evaluate")}
+                    </WorkspaceLink>
+                  )}
+                </div>
+              )}
               <div className="md:col-span-2">
                 <Button
                   size="sm"
@@ -400,7 +441,10 @@ export default function ExperimentsClient({
                         {experiment.control.runs} / {experiment.candidate.runs}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {new Date(experiment.started_at).toLocaleString()}
+                        {format.dateTime(new Date(experiment.started_at), {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
                       </TableCell>
                     </TableRow>
                   );

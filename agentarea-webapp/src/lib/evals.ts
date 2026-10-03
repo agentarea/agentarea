@@ -124,3 +124,37 @@ export function percent(value: number | null | undefined, digits = 0): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   return `${(value * 100).toFixed(digits)}%`;
 }
+
+export function usd(value: number | string | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  const amount = Number(value);
+  if (Number.isNaN(amount)) return "—";
+  return `$${amount.toFixed(amount > 0 && amount < 0.01 ? 4 : 2)}`;
+}
+
+export type CandidateGate = "passed" | "failed" | "missing";
+
+type GateRun = Pick<
+  EvalRunDetail,
+  "candidate_revision_id" | "status" | "completed_at" | "summary"
+>;
+
+export function candidateGate(
+  runs: GateRun[],
+  candidateId: string
+): CandidateGate {
+  const latest = runs
+    .filter(
+      (run) =>
+        run.candidate_revision_id === candidateId &&
+        run.status === "completed" &&
+        run.completed_at
+    )
+    .sort((a, b) =>
+      (b.completed_at ?? "").localeCompare(a.completed_at ?? "")
+    )[0];
+  if (!latest) return "missing";
+  return (latest.summary as { passed?: boolean }).passed === true
+    ? "passed"
+    : "failed";
+}

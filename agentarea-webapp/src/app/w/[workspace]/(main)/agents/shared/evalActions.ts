@@ -5,8 +5,10 @@ import type {
   DecisionResponse,
   EvalRunCreate,
   ExperimentCreate,
+  FeedbackResponse,
   FieldChange,
   RevisionCreate,
+  SuiteResponse,
 } from "@/api/client/types.gen";
 import { apiErrorMessage } from "@/lib/api-errors";
 import {
@@ -19,6 +21,8 @@ import {
   deleteSuite,
   diffRevision,
   evaluateExperiment,
+  listRunFeedback,
+  listSuites,
   promoteExperiment,
   rateRun,
   startEvalRun,
@@ -26,6 +30,7 @@ import {
   stopEvalRun,
   stopExperiment,
 } from "@/lib/api-evals";
+import { getAuthContext } from "@/lib/getAuthContext";
 
 export type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -199,4 +204,28 @@ export async function rateRunAction(
     "Could not save your rating"
   );
   return result.ok ? { ok: true, data: null } : result;
+}
+
+export async function loadRunFeedbackAction(
+  taskId: string
+): Promise<
+  ActionResult<{ mine: FeedbackResponse | null; suites: SuiteResponse[] }>
+> {
+  const [feedback, suites, auth] = await Promise.all([
+    listRunFeedback(taskId),
+    listSuites(),
+    getAuthContext(),
+  ]);
+  const loaded = done(feedback, "Could not load ratings");
+  if (!loaded.ok) return loaded;
+  const suiteList = done(suites, "Could not load suites");
+  if (!suiteList.ok) return suiteList;
+  const mine =
+    (loaded.data as FeedbackResponse[]).find(
+      (entry) => entry.created_by === auth?.userId
+    ) ?? null;
+  return {
+    ok: true,
+    data: { mine, suites: suiteList.data as SuiteResponse[] },
+  };
 }

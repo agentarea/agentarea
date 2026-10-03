@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import {
   FlaskConical,
   ListChecks,
@@ -48,6 +48,7 @@ import {
   CHECK_KINDS,
   checkFromForm,
   checkValue,
+  usd,
   type Check,
   type CheckKind,
 } from "@/lib/evals";
@@ -283,6 +284,9 @@ function AddCaseDialog({
                   </SelectContent>
                 </Select>
                 <Input
+                  aria-label={t("evaluations.checkValue", {
+                    kind: checkLabel(row.kind),
+                  })}
                   value={row.value}
                   onChange={(e) =>
                     setRows(
@@ -295,7 +299,7 @@ function AddCaseDialog({
                 <Button
                   size="icon"
                   variant="ghost"
-                  aria-label={t("evaluations.deleteCase")}
+                  aria-label={t("evaluations.removeCheck")}
                   onClick={() => setRows(rows.filter((_, i) => i !== index))}
                 >
                   <Trash2 />
@@ -355,8 +359,14 @@ function RunSuiteDialog({
 }) {
   const t = useTranslations("AgentEvals");
   const router = useWorkspaceRouter();
-  const [open, setOpen] = useState(Boolean(initialCandidate));
-  const [suiteId, setSuiteId] = useState(initialSuite ?? suites[0]?.id ?? "");
+  const runnable = suites.filter((s) => s.case_count > 0);
+  const [open, setOpen] = useState(
+    Boolean(initialCandidate) && runnable.length > 0
+  );
+  const [pickedSuite, setSuiteId] = useState(initialSuite ?? "");
+  const suiteId = runnable.some((s) => s.id === pickedSuite)
+    ? pickedSuite
+    : (runnable[0]?.id ?? "");
   const [candidate, setCandidate] = useState(initialCandidate ?? "none");
   const [trials, setTrials] = useState("3");
   const [budget, setBudget] = useState("5");
@@ -386,7 +396,7 @@ function RunSuiteDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="xs" disabled={suites.length === 0}>
+        <Button size="xs" disabled={runnable.length === 0}>
           <Play />
           {t("evaluations.runSuite")}
         </Button>
@@ -413,7 +423,7 @@ function RunSuiteDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {suites.map((s) => (
+                {runnable.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.name} ({s.case_count})
                   </SelectItem>
@@ -461,8 +471,8 @@ function RunSuiteDialog({
               <Input
                 id="run-budget"
                 type="number"
-                min={0}
-                step="0.5"
+                min={0.01}
+                step="any"
                 value={budget}
                 onChange={(e) => setBudget(e.target.value)}
               />
@@ -503,6 +513,7 @@ export default function EvaluationsClient({
   initialSuite,
 }: Props) {
   const t = useTranslations("AgentEvals");
+  const format = useFormatter();
   const checkLabel = useCheckLabel();
   const router = useWorkspaceRouter();
   const [selected, setSelected] = useState<string | null>(
@@ -600,7 +611,7 @@ export default function EvaluationsClient({
         </div>
 
         <div className="space-y-3">
-          {selected && (
+          {selected && suiteNames.has(selected) && (
             <>
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-medium">
@@ -766,11 +777,13 @@ export default function EvaluationsClient({
                           : "—"}
                       </TableCell>
                       <TableCell className="text-right text-xs tabular-nums">
-                        ${Number(evalRun.cost_usd).toFixed(2)} / $
-                        {Number(evalRun.budget_usd).toFixed(2)}
+                        {usd(evalRun.cost_usd)} / {usd(evalRun.budget_usd)}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {new Date(evalRun.created_at).toLocaleString()}
+                        {format.dateTime(new Date(evalRun.created_at), {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
                       </TableCell>
                     </TableRow>
                   );

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { EvalRunDetail } from "@/api/client/types.gen";
-import { buildRunMatrix, checkFromForm, checkValue, percent } from "./evals";
+import {
+  buildRunMatrix,
+  candidateGate,
+  checkFromForm,
+  checkValue,
+  percent,
+  usd,
+} from "./evals";
 
 function trial(
   caseId: string,
@@ -142,5 +149,41 @@ describe("percent", () => {
   it("formats a share and a missing value", () => {
     expect(percent(0.256)).toBe("26%");
     expect(percent(null)).toBe("—");
+  });
+});
+
+describe("usd", () => {
+  it("keeps sub-cent spend visible", () => {
+    expect(usd("0.000312")).toBe("$0.0003");
+    expect(usd(1.5)).toBe("$1.50");
+    expect(usd(0)).toBe("$0.00");
+    expect(usd(null)).toBe("—");
+  });
+});
+
+describe("candidateGate", () => {
+  const evalRun = (
+    candidate: string | null,
+    status: string,
+    completedAt: string | null,
+    passed?: boolean
+  ) =>
+    ({
+      candidate_revision_id: candidate,
+      status,
+      completed_at: completedAt,
+      summary: passed === undefined ? {} : { passed },
+    }) as unknown as EvalRunDetail;
+
+  it("follows the latest completed run of that candidate", () => {
+    const runs = [
+      evalRun("v2", "completed", "2026-10-03T10:00:00Z", true),
+      evalRun("v2", "completed", "2026-10-03T12:00:00Z", false),
+      evalRun("v2", "running", null),
+      evalRun("v3", "completed", "2026-10-03T13:00:00Z", true),
+    ];
+    expect(candidateGate(runs, "v2")).toBe("failed");
+    expect(candidateGate(runs, "v3")).toBe("passed");
+    expect(candidateGate(runs, "v4")).toBe("missing");
   });
 });
