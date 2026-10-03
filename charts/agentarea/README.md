@@ -166,12 +166,14 @@ The following table lists configurable parameters of the chart and their default
 | global.security.containerSecurityContext.readOnlyRootFilesystem | bool | `true` |  |
 | global.security.containerSecurityContext.runAsNonRoot | bool | `true` |  |
 | global.security.containerSecurityContext.capabilities.drop[0] | string | `"ALL"` |  |
+| global.outbound.privateAllowlist | list | `[]` | Host globs and CIDRs a member-set URL may reach although they are private (OUTBOUND_PRIVATE_ALLOWLIST), e.g. ["ollama.ai.svc.cluster.local", "192.168.1.50/32"]. Empty refuses every private, loopback and link-local address, so an LLM provider served from the cluster or the LAN (Ollama, vLLM, LM Studio) fails until its host is listed. Name each endpoint: a wildcard such as "*.svc.cluster.local" or a cluster CIDR lets every member reach every in-cluster service, the platform's own included. |
+| global.outbound.allowPrivateUrls | bool | `false` | Admit every private address (ALLOW_PRIVATE_URLS). Single-tenant installs only; prefer privateAllowlist. |
 | global.extraLabels | object | `{}` |  |
 | global.extraSelectorLabels | object | `{}` |  |
 | ingress.enabled | bool | `false` |  |
 | ingress.className | string | `""` |  |
 | ingress.annotations | object | `{}` |  |
-| ingress.kratosRateLimit.enabled | bool | `true` | Add ingress-nginx per-client request limits to the Kratos ingress when `ingress.className` (or the legacy ingress-class annotation) is `nginx`. |
+| ingress.kratosRateLimit.enabled | bool | `false` | Add ingress-nginx per-client request limits to the Kratos ingress when `ingress.className` (or the legacy ingress-class annotation) is `nginx`. See the note above before enabling. |
 | ingress.kratosRateLimit.requestsPerSecond | int | `10` | Requests per second allowed from one client IP. |
 | ingress.kratosRateLimit.burstMultiplier | int | `5` | Multiplier for the ingress-nginx burst allowance. |
 | ingress.hosts.frontend.host | string | `""` |  |
@@ -183,6 +185,9 @@ The following table lists configurable parameters of the chart and their default
 | ingress.hosts.kratos.host | string | `""` |  |
 | ingress.hosts.kratos.paths[0].path | string | `"/"` |  |
 | ingress.hosts.kratos.paths[0].pathType | string | `"Prefix"` |  |
+| ingress.hosts.rustfs.host | string | `""` |  |
+| ingress.hosts.rustfs.paths[0].path | string | `"/"` |  |
+| ingress.hosts.rustfs.paths[0].pathType | string | `"Prefix"` |  |
 | ingress.hosts.appsSandbox.host | string | `""` |  |
 | ingress.hosts.appsSandbox.paths[0].path | string | `"/app-sandbox"` |  |
 | ingress.hosts.appsSandbox.paths[0].pathType | string | `"Exact"` |  |
@@ -193,7 +198,7 @@ The following table lists configurable parameters of the chart and their default
 | backend.preStopDelay | int | `5` | Seconds the pod keeps serving after it is marked for deletion, covering the gap before its removal from the Service endpoints has propagated. |
 | backend.shutdownTimeout | int | `20` | Seconds uvicorn then waits for open connections to finish. Must be finite: the API serves SSE, and those connections never close on their own. |
 | backend.terminationGracePeriodSeconds | int | `30` | Total budget the kubelet allows for the two above before SIGKILL. Keep it above preStopDelay + shutdownTimeout, or draining is cut short. |
-| backend.forwardedAllowIps | string | `"*"` | Addresses whose X-Forwarded-For uvicorn trusts (uvicorn FORWARDED_ALLOW_IPS). The API is reached through the ingress, so "*" makes per-client rate limits see the real caller; narrow it to the ingress controller's pod CIDR if other in-cluster workloads can reach the API directly. |
+| backend.forwardedAllowIps | string | `"10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,127.0.0.1,::1,fc00::/7"` | Addresses whose X-Forwarded-For uvicorn trusts (uvicorn FORWARDED_ALLOW_IPS). The per-IP rate limit on dynamic client registration keys on the client address, which behind the ingress is the proxy's unless this trusts it (A2A calls are limited per API key or user, not per address). uvicorn reads X-Forwarded-For right to left and takes the first address not listed here, so the default (private, CGNAT and loopback ranges, where ingress controllers and cloud load balancers sit) finds the real client even when a proxy appends to a header the client sent. "*" would take the leftmost entry, which the client writes whenever any proxy appends (AWS ALB, GCLB, ingress-nginx with use-forwarded-headers). Two cases the default does not separate: a client whose own address is private (every entry trusted, so uvicorn falls back to the leftmost), and a pod that reaches the API Service directly and sets the header itself. Narrowing this to the range the ingress controller's pods use closes the first; a NetworkPolicy that admits only the ingress to the API Service closes the second. |
 | backend.image.repository | string | `"agentarea/agentarea-api"` |  |
 | backend.image.tag | string | `"latest"` |  |
 | backend.image.pullPolicy | string | `""` |  |

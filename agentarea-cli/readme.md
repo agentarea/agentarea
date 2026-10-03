@@ -137,7 +137,9 @@ The CLI expects the following API endpoints:
 
 ### Authentication
 
-- `POST /auth/refresh` - Refresh access token
+`agentarea login` uses the API's OAuth authorization server
+(`/.well-known/oauth-authorization-server`): PKCE sign-in in the browser, and
+the token endpoint to refresh an expiring access token.
 
 ### Agents
 

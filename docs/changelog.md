@@ -26,6 +26,11 @@ Stay up to date with the latest AgentArea releases, bug fixes, and new features.
 ### Changed
 - MCP manager proxy layer refactored for direct container routing (removed intermediate registry)
 - Skill repository updated to support member-based access control
+- LLM provider endpoints on private, loopback or link-local addresses (local Ollama, LM Studio, LAN or in-cluster hosts) are refused unless their host is listed in `OUTBOUND_PRIVATE_ALLOWLIST` (Helm: `global.outbound.privateAllowlist`). Add the host before upgrading; see [Outbound destinations](/self-host/configuration#outbound-destinations-backend-and-worker).
+- Generic webhook triggers created from the trigger form get a signing secret and refuse unsigned requests. Existing generic webhooks keep accepting unsigned requests until a signing secret is generated for them.
+- A Telegram trigger is saved only after Telegram accepts the webhook registration; a refused or unreachable registration fails the save with 502.
+- Helm `backend.forwardedAllowIps` defaults to private, CGNAT and loopback ranges instead of `"*"`. Add a public load-balancer address to the list if yours has one.
+- Workspace billing routes moved under the workspace: `/v1/workspaces/{workspace}/billing/*`.
 
 ---
 

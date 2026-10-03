@@ -89,7 +89,9 @@ picks the event type from `state.success` and blocked runs are not successful.
 A consumer watching the stream sees a failure; a consumer reading the row sees
 the more specific reason. `failure_reason` carries the machine-readable code in
 both cases — `capability_unavailable`, `validation_failed`, `iteration_limit`,
-`budget_exceeded`, `missing_final_response`, `task_unsuccessful`.
+`budget_exceeded`, `missing_final_response`, `task_unsuccessful`, and, when a
+governance gate refuses the model call, the gate's code (`no_credits`,
+`model_unpriced`, `billing_unavailable`, … or `governance_denied`).
 
 ### Completion is gated, not asserted
 
@@ -117,6 +119,15 @@ parent is blocked awaiting their result, so sitting in a wait would deadlock it.
 This is why a live Temporal status of `running` is never allowed to overwrite a
 persisted `completed`: the workflow is legitimately alive after the task is
 done.
+
+A follow-up after the window has closed still continues the conversation. When
+a completed run ends, it stores where its conversation stands in the task's
+`conversation_resume` metadata; the follow-up starts a new run of the same
+workflow id that adopts that position, keeps the iteration, token, tool-call
+and spend totals, and runs under freshly resolved policy (the next governance
+snapshot revision). Tasks completed before the snapshot existed are rebuilt
+from their conversation log. Cancelled, failed and delegated tasks are not
+resumed; a follow-up to them returns 409.
 
 ### Continuation
 

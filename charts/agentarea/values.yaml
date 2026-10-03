@@ -293,6 +293,23 @@ global:
         drop:
           - ALL
 
+  # Private destinations member-set URLs may reach: LLM provider endpoints,
+  # URL MCP servers, OpenAPI connections and A2A delegates. Rendered into the
+  # backend and the worker, which must agree: the backend checks a URL when it
+  # is saved, the worker again when a run uses it.
+  outbound:
+    # -- Host globs and CIDRs a member-set URL may reach although they are
+    # private (OUTBOUND_PRIVATE_ALLOWLIST), e.g. ["ollama.ai.svc.cluster.local",
+    # "192.168.1.50/32"]. Empty refuses every private, loopback and link-local
+    # address, so an LLM provider served from the cluster or the LAN (Ollama,
+    # vLLM, LM Studio) fails until its host is listed. Name each endpoint: a
+    # wildcard such as "*.svc.cluster.local" or a cluster CIDR lets every member
+    # reach every in-cluster service, the platform's own included.
+    privateAllowlist: []
+    # -- Admit every private address (ALLOW_PRIVATE_URLS). Single-tenant installs
+    # only; prefer privateAllowlist.
+    allowPrivateUrls: false
+
   # Extra labels to add to all resources
   extraLabels: {}
   # team: platform
@@ -312,9 +329,15 @@ ingress:
     # nginx.ingress.kubernetes.io/ssl-redirect: "true"
     # cert-manager.io/cluster-issuer: "letsencrypt-prod"
   # Per-client rate limit on the Kratos ingress when ingress-nginx is selected.
+  # Off by default: the webapp's server side calls Kratos (whoami on every
+  # request) through this same ingress when ORY_SDK_URL is the public auth URL,
+  # so all users would share the frontend pods' bucket and get logged out on a
+  # 503. Enable it only when the frontend reaches Kratos in-cluster, or exclude
+  # the cluster's egress addresses with a `nginx.ingress.kubernetes.io/limit-whitelist`
+  # annotation.
   kratosRateLimit:
-    # -- Add ingress-nginx per-client request limits to the Kratos ingress when `ingress.className` (or the legacy ingress-class annotation) is `nginx`.
-    enabled: true
+    # -- Add ingress-nginx per-client request limits to the Kratos ingress when `ingress.className` (or the legacy ingress-class annotation) is `nginx`. See the note above before enabling.
+    enabled: false
     # -- Requests per second allowed from one client IP.
     requestsPerSecond: 10
     # -- Multiplier for the ingress-nginx burst allowance.
@@ -333,6 +356,12 @@ ingress:
           pathType: Prefix
     kratos:
       host: ""  # e.g., auth.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+    # MinIO-compatible object storage, for presigned browser uploads/downloads.
+    rustfs:
+      host: ""  # e.g., s3.example.com
       paths:
         - path: /
           pathType: Prefix
@@ -373,10 +402,21 @@ backend:
   # above preStopDelay + shutdownTimeout, or draining is cut short.
   terminationGracePeriodSeconds: 30
   # -- Addresses whose X-Forwarded-For uvicorn trusts (uvicorn FORWARDED_ALLOW_IPS).
-  # The API is reached through the ingress, so "*" makes per-client rate limits
-  # see the real caller; narrow it to the ingress controller's pod CIDR if other
-  # in-cluster workloads can reach the API directly.
-  forwardedAllowIps: "*"
+  # The per-IP rate limit on dynamic client registration keys on the client
+  # address, which behind the ingress is the proxy's unless this trusts it (A2A
+  # calls are limited per API key or user, not per address).
+  # uvicorn reads X-Forwarded-For right to left and takes the first address not
+  # listed here, so the default (private, CGNAT and loopback ranges, where
+  # ingress controllers and cloud load balancers sit) finds the real client even
+  # when a proxy appends to a header the client sent. "*" would take the
+  # leftmost entry, which the client writes whenever any proxy appends (AWS ALB,
+  # GCLB, ingress-nginx with use-forwarded-headers). Two cases the default does
+  # not separate: a client whose own address is private (every entry trusted,
+  # so uvicorn falls back to the leftmost), and a pod that reaches the API
+  # Service directly and sets the header itself. Narrowing this to the range the
+  # ingress controller's pods use closes the first; a NetworkPolicy that admits
+  # only the ingress to the API Service closes the second.
+  forwardedAllowIps: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,127.0.0.1,::1,fc00::/7"
 
   image:
     repository: agentarea/agentarea-api

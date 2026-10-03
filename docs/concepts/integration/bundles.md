@@ -8,7 +8,7 @@ related:
   - /concepts/integration/registry-and-catalog
   - /concepts/agents/skills
   - /concepts/governance/policy-engine
-last_updated: 2026-07-29
+last_updated: 2026-10-03
 ---
 
 A bundle is a single document that describes everything a working setup needs:
@@ -76,6 +76,48 @@ The installer marks the resulting `env_schema` entry as a secret based on
 `SetupField.type`, rather than relying on the MCP service's name-based
 heuristic. The bundle already declared which inputs are credentials, so guessing
 from the variable name is unnecessary and less accurate.
+
+### A workspace exports as a bundle
+
+`GET /v1/workspaces/{workspace}/export` (admin only; **Settings → Workspace →
+Export workspace** in the webapp) writes the workspace's agents, MCP
+connections, skills, cron automations and supported webhook channels as one
+bundle. Agents reference MCPs by instance id or by name; both resolve to the
+exported MCP key. An agent that references an MCP or skill the export cannot
+represent fails the export with a 422 naming it, so tools are never silently
+dropped.
+
+A GitHub-imported skill exports as `source_type: github` with its
+`source_url`, so the import fetches the whole package again. Exporting only its
+`SKILL.md` would drop the files the skill references.
+
+An exported bundle is meant to be shared, so no credential travels in it.
+Secret-backed values are never read; each becomes a `secret` setup field.
+Plain MCP configuration is screened as well. These values are replaced by a
+`${setup.<key>}` reference to a secret setup field:
+
+- an environment variable or header whose name looks like a credential
+  (`token`, `secret`, `password`, `api_key` and similar), or whose value is a
+  credentialed URL or an `Authorization`-style value (`Bearer …`, `Basic …`);
+- an `args` entry that is a credentialed URL, the value of a credential flag
+  (`--api-key=x`, `--token x`, `TOKEN=x`), or a credential header argument
+  (`Authorization: Bearer x`);
+- an `endpoint_url` that is a credentialed URL.
+
+A URL counts as credentialed when it has a password in its userinfo, a query
+parameter named like a credential, or an opaque path segment of 24 or more
+letters and digits, which is how per-user secret URLs look. Everything else in
+`environment` and `headers` is exported as written. Setup keys are derived from
+the MCP key and the position, so the same workspace always exports the same
+document.
+
+On install, references in `args` and `endpoint_url` are resolved into the
+values the runtime reads, because an MCP server takes its arguments verbatim.
+
+An export that refused every MCP with a credential in its arguments would
+refuse most real workspaces: a Postgres MCP has nowhere else to take its
+connection string. Templating keeps the export usable, and the person
+installing the bundle supplies their own values.
 
 ### Analyze, then install
 
@@ -166,6 +208,11 @@ preview, moves those failures to a point where nothing has been created yet.
   validation.
 - **Skills support inline content and GitHub only.** Zip and S3 import are not in
   `0.1.0`.
+- **Export screening is heuristic.** A credential in plain MCP configuration
+  that matches none of the rules above (a short token in an unnamed positional
+  argument, for example) is exported as written. Store credentials as secret
+  values (`isSecret` in the spec's `env_schema`) and they never leave the
+  workspace.
 - **There is no uninstall.** `InstalledBundle` records what was installed, and
   removing those resources is manual. The API surface is analyze and install.
 - **Reuse is by name, not by identity.** An existing agent named `Triage Bot` is

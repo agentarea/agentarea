@@ -153,6 +153,10 @@ creation returns HTTP 402 with a problem document naming the numbers:
 }
 ```
 
+The streaming create route (`POST .../tasks/`) opens the stream and sends one
+`error` event instead, with `error_type: "monthly_spend_cap_exceeded"` and the
+same `current_mtd_usd`, `cap_usd` and `currency`.
+
 **Confirm the run budget bites.** The loop emits `BudgetWarning` at 80 percent
 and `BudgetExceeded` when it stops:
 

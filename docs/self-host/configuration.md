@@ -9,7 +9,7 @@ related:
   - /self-host/docker-compose
   - /self-host/secrets-backends
   - /self-host/networking
-last_updated: 2026-07-29
+last_updated: 2026-10-03
 ---
 
 The environment variables each service reads, grouped by service, with the Helm
@@ -126,6 +126,7 @@ Rendered only when `rustfs.enabled` is true.
 | `FRONTEND_BASE_URL` | derived from the frontend ingress | `http://localhost:3000` |
 | `A2A_AGENT_URL` | `global.envVars.A2A_AGENT_URL` | `http://{agent_id}.a2a.localhost:8000` |
 | `SMTP_CONNECTION_URI` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME` | `kratos.smtp.*` | empty (invitations are link-only) |
+| `FORWARDED_ALLOW_IPS` | `backend.forwardedAllowIps` | `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,127.0.0.1,::1,fc00::/7` |
 
 `METRICS_ENABLED` serves Prometheus metrics on `METRICS_PORT`, never on the API
 port. `HEALTH_CHECK_ENABLED` and `HEALTH_CHECK_PORT` are rendered by the chart
@@ -167,6 +168,42 @@ Neither the API nor the worker configures on-demand MCP start any more. Every
 container-backed call goes through the manager's demand gateway, which starts a
 cold workload itself; there is nothing for the Python side to agree on. See the
 MCP Manager group below.
+
+### Outbound destinations (backend and worker)
+
+Which private addresses a URL set by a workspace member may reach: LLM provider
+endpoints, URL MCP servers, OpenAPI connections, A2A delegates and bundle
+sources. The backend checks the URL when it is saved and the worker checks it
+again when a run uses it, so set both services to the same value. The chart
+renders each variable into both, and only when the value is set.
+
+| Variable | Helm value | Compose `.env` | Default |
+|---|---|---|---|
+| `OUTBOUND_PRIVATE_ALLOWLIST` | `global.outbound.privateAllowlist` (a list, comma-joined) | `OUTBOUND_PRIVATE_ALLOWLIST` | empty |
+| `ALLOW_PRIVATE_URLS` | `global.outbound.allowPrivateUrls` | `ALLOW_PRIVATE_URLS` | `false` |
+
+With both at their defaults, every private, loopback, link-local and
+shared-address-space destination is refused. A provider config whose endpoint
+is `http://localhost:11434`, `http://host.docker.internal:...`, a LAN address or
+an in-cluster Service then fails: saving or editing it returns 400, and runs,
+model tests and compaction fail with `LLM endpoint is not an allowed address`.
+Provider configs supplied by the platform are not checked.
+
+`OUTBOUND_PRIVATE_ALLOWLIST` holds host globs and CIDRs, for example
+`localhost,host.docker.internal` for a model server on the Docker host, or
+`ollama.ai.svc.cluster.local,192.168.1.50/32`. A host is matched against the
+name in the URL, a CIDR against the address the name resolves to. Name each
+endpoint: a wildcard such as `*.svc.cluster.local` or a cluster CIDR lets every
+member reach every in-cluster service, the platform's own included.
+`ALLOW_PRIVATE_URLS=true` admits every private address; use it only on a
+single-tenant install.
+
+The check resolves the name before the request is made. The LLM client
+resolves it again when it connects and follows redirects, so it does not stop
+an endpoint that redirects to an internal address, or a name that changes its
+answer between the two lookups. The chart ships no egress NetworkPolicy for the
+backend and worker; blocking the metadata endpoint and other internal services
+from those pods at the network layer is up to the cluster operator.
 
 ### Temporal client (group `temporal`)
 
@@ -220,7 +257,7 @@ are not rendered into environment variables.
 | `MCP_IDLE_SWEEP_INTERVAL` | `mcpManager.serverless.sweepInterval` | `60s` |
 | `MCP_REQUEST_LEASE_TTL` | `mcpManager.serverless.requestLeaseTTL` | `90s` |
 | `MCP_GATEWAY_STARTUP_TIMEOUT` | `mcpManager.serverless.startupTimeout` | `5m` |
-| `MCP_GATEWAY_AUTH_SECRET` | optional; the gateway's shared secret | `""` |
+| `MCP_GATEWAY_AUTH_SECRET` | required, at least 32 characters; `global.runtimeCredentials` `mcp-gateway-token`. Shared with the API and worker: the gateway and the manager's instance, monitoring and container inspection routes reject requests without it | none |
 | `MCP_PACKAGE_REPOSITORY` | `mcpManager.packageImages.repository` | `""` |
 | `MCP_PACKAGE_IMPORT_TIMEOUT` | `mcpManager.packageImages.importTimeout` | `15m` |
 | `DOCKER_CONFIG` | `mcpManager.packageImages.registrySecret` | not set; `/etc/agentarea/mcp-registry` when a registry Secret is configured |
@@ -359,6 +396,7 @@ equivalent are listed; the rest map onto the groups above.
 | `OIDC_GOOGLE_*` / `OIDC_GITHUB_*` | for social login | empty |
 | `VERSION` | no | `latest` |
 | `WORKERS` / `RELOAD` / `PORT` / `LOG_LEVEL` | no | `1` / `false` / `8000` / `info` |
+| `OUTBOUND_PRIVATE_ALLOWLIST` / `ALLOW_PRIVATE_URLS` | for an LLM provider, MCP server or API on this host or the LAN | not listed; Compose defaults them to empty / `false` |
 
 The two sandbox secrets are declared `${VAR:?message}`, so Compose aborts rather
 than starting with them empty.
@@ -373,6 +411,7 @@ than starting with them empty.
 | `docker compose` aborts before starting anything | A `${VAR:?}` variable is empty | Set the sandbox secrets |
 | Presigned upload URLs point at an unreachable host | `PUBLIC_S3_ENDPOINT` empty with a cluster-only object store | Set `global.storage.publicEndpoint` |
 | CI fails on a Helm change with a configs diff | `templates/configs/` is stale relative to `config.yaml` | Run `make helm-gen` and commit |
+| Saving a provider returns 400, or runs fail with `LLM endpoint is not an allowed address` | The endpoint is a private address and `OUTBOUND_PRIVATE_ALLOWLIST` does not name it | Add the host or CIDR to `OUTBOUND_PRIVATE_ALLOWLIST` on the backend and the worker |
 
 ## Example
 
