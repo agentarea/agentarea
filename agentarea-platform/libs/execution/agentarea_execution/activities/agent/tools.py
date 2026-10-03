@@ -198,7 +198,10 @@ def make_tools_activities(
         if not decision.allowed:
             return _deny_tool_result(request.tool_name, decision.reason)
         evaluation = evaluation_decision(
-            request.tool_name, request.metadata, is_mcp=request.mcp_route is not None
+            request.tool_name,
+            request.tool_args,
+            request.metadata,
+            is_mcp=request.mcp_route is not None,
         )
         if evaluation is not None and not evaluation.execute:
             return _evaluation_result(evaluation)

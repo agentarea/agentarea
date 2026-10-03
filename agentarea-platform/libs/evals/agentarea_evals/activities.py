@@ -30,7 +30,7 @@ from agentarea_evals.runs.workflow_models import (
 )
 
 # Nobody answers an evaluation run; waiting on a person means the trial is over.
-_WAITING_ON_A_PERSON = {"waiting_for_input", "waiting_for_approval"}
+_WAITING_ON_A_PERSON = {"waiting_for_input", "waiting_for_approval", "blocked"}
 
 
 def _context(data: dict[str, Any]) -> UserContext:

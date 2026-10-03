@@ -16,20 +16,43 @@ from typing import Any
 NOT_EXECUTED = "not_executed_in_evaluation"
 _SANDBOX_GROUP = "sandbox"
 
-EffectLookup = Callable[[], dict[str, tuple[str | None, str | None]]]
+# {toolset name: (group, {method: effect})}
+Toolsets = dict[str, tuple[str | None, dict[str, str | None]]]
+ToolsetLookup = Callable[[], Toolsets]
 
 
 @functools.cache
-def code_tool_effects() -> dict[str, tuple[str | None, str | None]]:
-    """``{tool name: (toolset group, method effect)}`` for every platform toolset."""
+def code_toolsets() -> Toolsets:
+    """Every platform toolset by the name the model calls it, with its methods' effects."""
     from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
 
-    effects: dict[str, tuple[str | None, str | None]] = {}
-    for namespace, meta in get_code_tools_metadata().items():
-        prefix = namespace.rsplit("/", 1)[-1]
-        for method in meta.get("available_methods") or []:
-            effects[f"{prefix}_{method['name']}"] = (meta.get("group"), method.get("effect"))
-    return effects
+    return {
+        namespace.rsplit("/", 1)[-1]: (
+            meta.get("group"),
+            {m["name"]: m.get("effect") for m in meta.get("available_methods") or []},
+        )
+        for namespace, meta in get_code_tools_metadata().items()
+    }
+
+
+def _classify(
+    tool_name: str, tool_args: dict[str, Any], toolsets: Toolsets
+) -> tuple[str | None, str | None]:
+    """The (group, effect) of one call; unknown parts come back ``None``.
+
+    A toolset is called by its name, with ``action`` naming the method when it
+    has more than one; a ``<toolset>_<method>`` name is understood as well.
+    """
+    if tool_name in toolsets:
+        group, methods = toolsets[tool_name]
+        if len(methods) == 1:
+            return group, next(iter(methods.values()))
+        return group, methods.get(str(tool_args.get("action") or ""))
+    for name, (group, methods) in toolsets.items():
+        method = tool_name.removeprefix(f"{name}_")
+        if method != tool_name and method in methods:
+            return group, methods[method]
+    return None, None
 
 
 @dataclass(frozen=True)
@@ -42,10 +65,11 @@ class EvaluationDecision:
 
 def evaluation_decision(
     tool_name: str,
+    tool_args: dict[str, Any] | None,
     metadata: dict[str, Any] | None,
     *,
     is_mcp: bool,
-    lookup: EffectLookup = code_tool_effects,
+    lookup: ToolsetLookup = code_toolsets,
 ) -> EvaluationDecision | None:
     """``None`` for an ordinary run; otherwise whether and how the call runs."""
     evaluation = (metadata or {}).get("evaluation")
@@ -55,10 +79,10 @@ def evaluation_decision(
     if tool_name in stubs:
         return EvaluationDecision(execute=False, stubbed=True, result=stubs[tool_name])
     if not is_mcp:
-        group, effect = lookup().get(tool_name, (None, None))
+        group, effect = _classify(tool_name, tool_args or {}, lookup())
         if effect == "read":
             return EvaluationDecision(execute=True)
-        if group == _SANDBOX_GROUP and evaluation.get("sandbox_allowed") is True:
+        if group == _SANDBOX_GROUP and effect and evaluation.get("sandbox_allowed") is True:
             return EvaluationDecision(execute=True)
     return EvaluationDecision(
         execute=False,
