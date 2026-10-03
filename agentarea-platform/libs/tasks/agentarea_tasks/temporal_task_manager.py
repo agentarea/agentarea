@@ -12,7 +12,7 @@ from uuid import UUID
 
 from agentarea_common.workflow.executor import WorkflowConfig, WorkflowExecutor
 from agentarea_common.workflow.temporal_executor import TemporalWorkflowExecutor
-from agentarea_execution.models import AgentExecutionRequest
+from agentarea_execution.models import AgentExecutionRequest, AgentExecutionResume
 
 from .domain.interfaces import BaseTaskManager
 from .domain.models import AgentTask
@@ -25,6 +25,7 @@ class TemporalTaskManager(BaseTaskManager):
     """Task manager that uses Temporal workflows for task execution."""
 
     supports_scheduling = True
+    supports_resume = True
 
     def __init__(
         self,
@@ -138,6 +139,34 @@ class TemporalTaskManager(BaseTaskManager):
             return None
         return delay
 
+    @staticmethod
+    def _workflow_args(task: AgentTask, workflow_metadata: dict[str, Any]) -> dict[str, Any]:
+        """The AgentExecutionWorkflow arguments for a task, as the executor takes them."""
+        execution_request = AgentExecutionRequest(
+            task_id=task.id,
+            agent_id=task.agent_id,
+            user_id=task.user_id,
+            workspace_id=task.workspace_id,
+            task_query=task.query,
+            task_parameters=task.task_parameters or {},
+            requires_human_approval=bool(
+                (task.metadata or {}).get("requires_human_approval", False)
+            ),
+            workflow_metadata=workflow_metadata,
+            effective_policy=task.effective_policy,
+        )
+        return {
+            "task_id": str(execution_request.task_id),
+            "agent_id": str(execution_request.agent_id),
+            "user_id": execution_request.user_id,
+            "workspace_id": execution_request.workspace_id,
+            "task_query": execution_request.task_query,
+            "task_parameters": execution_request.task_parameters,
+            "requires_human_approval": execution_request.requires_human_approval,
+            "workflow_metadata": execution_request.workflow_metadata,
+            "effective_policy": execution_request.effective_policy,
+        }
+
     async def submit_task(self, task: AgentTask) -> AgentTask:
         """Submit a task for execution."""
         try:
@@ -160,34 +189,8 @@ class TemporalTaskManager(BaseTaskManager):
                     "scheduled_at": task.scheduled_at.isoformat(),
                 }
 
-            # Create AgentExecutionRequest format
-            execution_request = AgentExecutionRequest(
-                task_id=task.id,
-                agent_id=task.agent_id,
-                user_id=task.user_id,
-                workspace_id=task.workspace_id,
-                task_query=task.query,
-                task_parameters=task.task_parameters or {},
-                requires_human_approval=bool(
-                    (task.metadata or {}).get("requires_human_approval", False)
-                ),
-                workflow_metadata=workflow_metadata,
-                effective_policy=task.effective_policy,
-            )
-
             # Start the workflow using the correct workflow name and arguments
-            # Convert dataclass to dict for JSON serialization
-            args_dict = {
-                "task_id": str(execution_request.task_id),
-                "agent_id": str(execution_request.agent_id),
-                "user_id": execution_request.user_id,
-                "workspace_id": execution_request.workspace_id,
-                "task_query": execution_request.task_query,
-                "task_parameters": execution_request.task_parameters,
-                "requires_human_approval": execution_request.requires_human_approval,
-                "workflow_metadata": execution_request.workflow_metadata,
-                "effective_policy": execution_request.effective_policy,
-            }
+            args_dict = self._workflow_args(task, workflow_metadata)
 
             # Activity retries handle transient failures at the side-effect boundary.
             # Retrying the whole agent workflow would replay a fresh run after a
@@ -237,6 +240,43 @@ class TemporalTaskManager(BaseTaskManager):
             task_domain = self._agent_task_to_task(task)
             await self.task_repository.update_task(task_domain)
             raise
+
+    async def resume_task(
+        self, task: AgentTask, resume: AgentExecutionResume, message: str
+    ) -> AgentTask:
+        """Start a new run of the task's workflow that continues its conversation.
+
+        The workflow id is the task's, which a closed execution leaves free to
+        reuse. The message is the start signal: if another request already
+        started a run, Temporal delivers the message to it instead.
+        """
+        if not task.workspace_id:
+            raise ValueError(f"Task {task.id} missing required workspace_id.")
+        workflow_metadata = {
+            key: value
+            for key, value in (task.metadata or {}).items()
+            if key != "conversation_resume"
+        }
+        args = {
+            **self._workflow_args(task, workflow_metadata),
+            "resume": resume.model_dump(mode="json"),
+        }
+        execution_id = await self.temporal_executor.start_workflow(
+            workflow_name="AgentExecutionWorkflow",
+            workflow_id=f"task-{task.id}",
+            args=args,
+            config=WorkflowConfig(
+                task_queue=self.task_queue,
+                retry_attempts=1,
+                start_signal="workflow_command",
+                start_signal_args=["queue_message", {"message": message}],
+            ),
+        )
+        updated = await self.task_repository.update_status(task.id, "running")
+        if updated is None:
+            raise LookupError(f"Task {task.id} not found")
+        logger.info(f"Task {task.id} resumed in workflow {execution_id}")
+        return self._task_to_agent_task(updated)
 
     async def get_task(self, task_id: UUID) -> AgentTask | None:
         """Get task by ID."""

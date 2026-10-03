@@ -5,7 +5,7 @@ allowing easy replacement of the underlying implementation.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
 from typing import Any
@@ -46,6 +46,10 @@ class WorkflowConfig:
     retry_max_interval: timedelta = timedelta(minutes=10)
     task_queue: str = "default"
     start_delay: timedelta | None = None
+    # Signal sent with the start: a new execution receives it as its first
+    # signal, and an execution already running receives only the signal.
+    start_signal: str | None = None
+    start_signal_args: list[Any] = field(default_factory=list)
 
 
 class WorkflowExecutor(ABC):

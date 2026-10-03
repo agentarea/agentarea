@@ -1,5 +1,8 @@
 """The tool-call policy gate: allow, deny, or pause for human approval."""
 
+from collections.abc import Mapping, Sequence
+from typing import Any
+
 from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
@@ -10,6 +13,7 @@ with workflow.unsafe.imports_passed_through():
         decide_tool_action,
         external_urls,
         sanitize_tool_event_value,
+        tool_config_aliases,
         tool_definition_name,
         tool_policy_aliases,
         web_fetch_url,
@@ -25,11 +29,37 @@ from ..constants import (
 )
 from ..retry import bookkeeping_retry_policy
 from .budget import BudgetMixin
-from .patches import APPROVAL_RESPONSE_ONCE_PATCH, WEB_FETCH_SEEN_URL_PATCH
+from .patches import (
+    APPROVAL_RESPONSE_ONCE_PATCH,
+    TOOL_CONFIG_ALIASES_PATCH,
+    WEB_FETCH_SEEN_URL_PATCH,
+)
 
 
 class ToolApprovalMixin(BudgetMixin):
     """The tool-call policy gate: allow, deny, or pause for human approval."""
+
+    def _policy_tool_configs(
+        self,
+    ) -> tuple[Sequence[Any] | None, Mapping[str, Sequence[str]] | None]:
+        """The agent config a rule may narrow a tool by, or none for an older history.
+
+        Histories recorded before TOOL_CONFIG_ALIASES_PATCH matched rules against
+        the tool's own and routed names only; replaying them must reach the same
+        decisions. ``workflow.patched`` is memoized, so every disclosure, gate and
+        approver lookup of one run agrees. The tool activity re-checks with these
+        names regardless, so such a run fails closed there instead of diverging.
+        """
+        if not workflow.patched(TOOL_CONFIG_ALIASES_PATCH):
+            return None, None
+        return (
+            self.state.agent_config.get("tools"),
+            self.state.agent_config.get("openapi_operation_tools"),
+        )
+
+    def _restricting_tool_aliases(self, tool_name: str) -> tuple[str, ...]:
+        """Agent-config names that may deny this tool or put it behind approval."""
+        return tool_config_aliases(tool_name, *self._policy_tool_configs())
 
     async def _deny_tool_call(
         self, tool_call: ToolCall, tool_name: str, reason: str, ran: bool = False
@@ -92,10 +122,9 @@ class ToolApprovalMixin(BudgetMixin):
             approvers=approvers_for_tool(
                 self.state.effective_policy,
                 tool_name,
-                tool_policy_aliases(
-                    self.state.mcp_tool_routes,
-                    tool_name,
-                    self.state.agent_config.get("tools"),
+                (
+                    *tool_policy_aliases(self.state.mcp_tool_routes, tool_name),
+                    *self._restricting_tool_aliases(tool_name),
                 ),
             ),
         )
@@ -265,12 +294,12 @@ class ToolApprovalMixin(BudgetMixin):
                 )
                 return False, False
 
-        aliases = tool_policy_aliases(
-            self.state.mcp_tool_routes,
+        decision = decide_tool_action(
+            self.state.effective_policy,
             tool_name,
-            self.state.agent_config.get("tools"),
+            tool_policy_aliases(self.state.mcp_tool_routes, tool_name),
+            restricting_aliases=self._restricting_tool_aliases(tool_name),
         )
-        decision = decide_tool_action(self.state.effective_policy, tool_name, aliases)
         workflow.logger.info(f"Tool '{tool_name}' policy decision: {decision.value}")
 
         if decision is ToolAction.DENY:

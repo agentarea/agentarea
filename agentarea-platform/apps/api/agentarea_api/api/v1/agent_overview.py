@@ -14,27 +14,29 @@ from typing import cast as type_cast
 from uuid import UUID
 
 from agentarea_api.api.v1._schedule_preview import cron_runs
+from agentarea_api.api.v1.dashboard import (
+    ACTIVE_TASK_STATUSES,
+    HITL_TASK_STATUSES,
+    DailySpendPoint,
+    task_spend_expr,
+)
 from agentarea_common.auth import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config.database import get_db_session
+from agentarea_common.money import ZERO, Money, to_money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.infrastructure.orm import TriggerORM
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import Date, Numeric, case, cast, desc, func, select
+from sqlalchemy import Date, case, cast, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents/{agent_id}", tags=["dashboard"])
 
-DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
-
-
-class DailySpendPoint(BaseModel):
-    date: str
-    usd: float
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
 
 class DailyTaskCounts(BaseModel):
@@ -54,8 +56,8 @@ class UpcomingItem(BaseModel):
 
 
 class AgentOverviewResponse(BaseModel):
-    cost_today_usd: float
-    cost_mtd_usd: float
+    cost_today_usd: Money
+    cost_mtd_usd: Money
     tasks_done_today: int
     tasks_failed_today: int
     last_activity_at: UtcDatetime | None
@@ -82,7 +84,7 @@ async def get_agent_overview(
     today_start = datetime(now.year, now.month, now.day)
     month_start = datetime(now.year, now.month, 1)
 
-    cost_expr = cast(TaskORM.result.op("->>")("total_cost"), Numeric)
+    cost_expr = task_spend_expr()
     activity_at = func.coalesce(TaskORM.started_at, TaskORM.created_at)
     base_filter = (TaskORM.workspace_id == workspace_id) & (TaskORM.agent_id == agent_id)
 
@@ -133,16 +135,10 @@ async def get_agent_overview(
         .order_by("day")
     )
     spend_rows = (await db_session.execute(spend_q)).all()
-    spend_by_day = {r.day.isoformat(): float(r.usd or 0) for r in spend_rows}
+    spend_by_day = {r.day.isoformat(): to_money(r.usd) for r in spend_rows}
     daily_spend = [
-        DailySpendPoint(
-            date=(spend_since.date() + timedelta(days=i)).isoformat(),
-            usd=round(
-                spend_by_day.get((spend_since.date() + timedelta(days=i)).isoformat(), 0.0),
-                4,
-            ),
-        )
-        for i in range(30)
+        DailySpendPoint(date=day, usd=spend_by_day.get(day, ZERO))
+        for day in ((spend_since.date() + timedelta(days=i)).isoformat() for i in range(30))
     ]
 
     # ----- daily task counts (14d) -----
@@ -157,7 +153,7 @@ async def get_agent_overview(
                 "failed"
             ),
             func.coalesce(
-                func.sum(case((TaskORM.status == "input_required", 1), else_=0)),
+                func.sum(case((TaskORM.status.in_(HITL_TASK_STATUSES), 1), else_=0)),
                 0,
             ).label("input_required"),
         )
@@ -226,7 +222,7 @@ async def get_agent_overview(
     pending_q = (
         select(TaskORM)
         .where(base_filter)
-        .where(TaskORM.status.in_(["pending", "submitted", "running"]))
+        .where(TaskORM.status.in_(ACTIVE_TASK_STATUSES))
         .order_by(desc(TaskORM.created_at))
         .limit(20)
     )
@@ -235,7 +231,7 @@ async def get_agent_overview(
         upcoming.append(
             UpcomingItem(
                 fires_at=t.started_at or t.created_at,
-                kind="running_task" if t.status == "running" else "pending_task",
+                kind="running_task" if t.status in ("running", "working") else "pending_task",
                 title=t.description[:120] if t.description else "(unnamed task)",
                 task_id=type_cast(UUID, t.id),
             )
@@ -244,8 +240,8 @@ async def get_agent_overview(
     upcoming.sort(key=lambda u: u.fires_at)
 
     return AgentOverviewResponse(
-        cost_today_usd=round(float(summary.cost_today or 0), 4),
-        cost_mtd_usd=round(float(summary.cost_mtd or 0), 4),
+        cost_today_usd=to_money(summary.cost_today),
+        cost_mtd_usd=to_money(summary.cost_mtd),
         tasks_done_today=int(summary.done_today or 0),
         tasks_failed_today=int(summary.failed_today or 0),
         last_activity_at=summary.last_activity,

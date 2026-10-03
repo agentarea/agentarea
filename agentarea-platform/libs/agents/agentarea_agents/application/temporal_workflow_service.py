@@ -78,12 +78,9 @@ class TemporalWorkflowService:
                 "error": "Workflow status unavailable",
             }
 
-    async def get_effective_policy(self, execution_id: str) -> dict[str, Any] | None:
-        try:
-            return await self._execution_service.get_effective_policy(execution_id)
-        except Exception as e:
-            logger.exception(f"Failed to get effective policy: {e}")
-            return None
+    async def get_live_state(self, execution_id: str) -> dict[str, Any] | None:
+        """The running workflow's own state, or None when it cannot be read."""
+        return await self._execution_service.get_live_state(execution_id)
 
     async def get_pending_escalations(self, execution_id: str) -> list[dict[str, Any]]:
         return await self._execution_service.get_pending_escalations(execution_id)

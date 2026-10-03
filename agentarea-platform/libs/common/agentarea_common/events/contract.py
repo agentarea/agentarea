@@ -98,6 +98,10 @@ def _part_id_for(kind: str, canonical: str, data: dict[str, Any]) -> str | None:
         iteration = data.get("iteration")
         if execution_id is None or iteration is None:
             return None
+        # A compaction call is metered like a turn but is not the turn's reply;
+        # its own id keeps it from superseding (or being superseded by) that part.
+        if data.get("purpose") == "compaction":
+            return f"{execution_id}:{iteration}:compaction"
         return f"{execution_id}:{iteration}"
     if kind == "form":
         if canonical in (APPROVAL_REQUEST, APPROVAL_RESPONSE):

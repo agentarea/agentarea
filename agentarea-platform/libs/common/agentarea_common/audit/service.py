@@ -34,6 +34,7 @@ class AuditService:
         *,
         changes: list[dict[str, Any]] | None = None,
         actor_type: str = "user",
+        actor_id: str | None = None,
         event_metadata: dict[str, Any] | None = None,
     ) -> AuditEventORM:
         """Record an audit event.
@@ -43,13 +44,70 @@ class AuditService:
             resource_type: Resource type (e.g. "agent", "mcp_server", "trigger")
             resource_id: ID of the affected resource
             changes: List of field changes [{field, before, after}]
-            actor_type: Type of actor ("user", "service", "system", "api_key")
+            actor_type: Type of actor ("user", "agent", "client", "api_key", "system")
+            actor_id: Who acted, when not the context's user (e.g. the agent making
+                a tool call on a user's behalf)
             event_metadata: Additional context
         """
-        ctx = get_audit_context()
+        event = self._build(
+            action,
+            resource_type,
+            resource_id,
+            changes=changes,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            event_metadata=event_metadata,
+        )
+        event = await self._repository.insert(event)
+        await self._forward(event)
+        return event
 
-        event = AuditEventORM(
-            actor_id=self._user_context.user_id,
+    async def record_once(
+        self,
+        event_id: UUID,
+        action: str,
+        resource_type: str,
+        resource_id: str | UUID | None = None,
+        *,
+        actor_type: str = "user",
+        actor_id: str | None = None,
+        event_metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        """Record an event under a caller-chosen id, at most once.
+
+        For writers that are retried whole, such as Temporal activities: derive
+        ``event_id`` from the source fact so a retry is a no-op. Returns whether
+        the row was written now.
+        """
+        event = self._build(
+            action,
+            resource_type,
+            resource_id,
+            changes=None,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            event_metadata=event_metadata,
+        )
+        event.id = event_id
+        inserted = await self._repository.insert_once(event)
+        if inserted:
+            await self._forward(event)
+        return inserted
+
+    def _build(
+        self,
+        action: str,
+        resource_type: str,
+        resource_id: str | UUID | None,
+        *,
+        changes: list[dict[str, Any]] | None,
+        actor_type: str,
+        actor_id: str | None,
+        event_metadata: dict[str, Any] | None,
+    ) -> AuditEventORM:
+        ctx = get_audit_context()
+        return AuditEventORM(
+            actor_id=actor_id or self._user_context.user_id,
             actor_type=actor_type,
             workspace_id=self._user_context.workspace_id,
             source_ip=ctx.source_ip,
@@ -62,9 +120,8 @@ class AuditService:
             event_metadata=event_metadata or {},
         )
 
-        event = await self._repository.insert(event)
-
-        # Forward to enterprise audit sink if registered
+    async def _forward(self, event: AuditEventORM) -> None:
+        """Forward to the enterprise audit sink, if one is registered."""
         sink_factory = ExtensionRegistry.get_factory("audit_sink")
         if sink_factory:
             try:
@@ -72,5 +129,3 @@ class AuditService:
                 await sink.emit(event.to_dict())
             except Exception:
                 logger.warning("Failed to forward audit event to enterprise sink", exc_info=True)
-
-        return event

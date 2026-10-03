@@ -47,12 +47,8 @@ class GovernancePolicyService:
         """Read one policy rule in the current workspace."""
         return await self._rule_repository.get(rule_id)
 
-    @audited(
-        "governance_policy.create",
-        resource_type="governance_policy",
-        resource_id_param="subject_id",
-    )
-    async def create_rule(self, *, rule: PolicyRule, subject_id: str) -> PolicyRule:
+    @audited("governance_policy.create", resource_type="governance_policy")
+    async def create_rule(self, *, rule: PolicyRule) -> PolicyRule:
         """Create a new policy rule."""
         await assert_workspace_admin(self.repository_factory.user_context)
         return await self._rule_repository.create(rule)

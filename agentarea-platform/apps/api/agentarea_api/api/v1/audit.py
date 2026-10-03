@@ -61,7 +61,7 @@ class AuditLogListResponse(BaseModel):
     next_cursor: str | None
 
 
-DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
 
 @router.get("/", response_model=AuditLogListResponse, dependencies=[requires_workspace_admin()])

@@ -704,7 +704,9 @@ async def test_task_status_exposes_business_state_separately_from_execution(
             raise LookupError(execution_id)
         return {"status": business_status, "execution_status": execution_status}
 
-    workflow_service = SimpleNamespace(get_workflow_status=execution_detail)
+    workflow_service = SimpleNamespace(
+        get_workflow_status=execution_detail, get_live_state=AsyncMock(return_value=None)
+    )
     app = FastAPI()
     app.include_router(agents_tasks.router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_user_context] = lambda: context

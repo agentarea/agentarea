@@ -1,16 +1,70 @@
 """Turning Temporal failures into diagnostics and user-facing messages."""
 
+from typing import Any
+
+from temporalio import workflow
 from temporalio.exceptions import ActivityError, ApplicationError
 
+with workflow.unsafe.imports_passed_through():
+    from agentarea_governance.domain.exceptions import GovernanceDeniedError
+
 from .base import AgentWorkflowBase
+
+# failure_reason of a gate denial that carries no entitlement code of its own.
+GOVERNANCE_DENIED_FAILURE_REASON = "governance_denied"
+
+_BILLING_UNAVAILABLE = "Billing is temporarily unavailable. Please try again later."
+
+# What the user can do about each plan entitlement refusal, by its stable code.
+_ENTITLEMENT_MESSAGES = {
+    "no_credits": "No credits remaining. Top up your balance to continue.",
+    "credit_limit_reached": "Credit limit reached. Top up your balance to continue.",
+    "model_unpriced": (
+        "This model is not available on your plan. Choose a different model in the agent settings."
+    ),
+    "billing_unavailable": _BILLING_UNAVAILABLE,
+    "billing_error": _BILLING_UNAVAILABLE,
+    "account_unresolved": _BILLING_UNAVAILABLE,
+}
 
 
 class ErrorReportingMixin(AgentWorkflowBase):
     """Turning Temporal failures into diagnostics and user-facing messages."""
 
     @staticmethod
+    def _governance_denial(error: BaseException) -> tuple[str, str] | None:
+        """The failure_reason and user message of a governance gate refusal, else None.
+
+        The gate's verdict travels as an ApplicationError whose details carry the
+        interceptor's reason and metadata (see the governance Temporal bridge).
+        """
+        cause = error.cause if isinstance(error, ActivityError) else error
+        if not isinstance(cause, ApplicationError) or cause.type != GovernanceDeniedError.__name__:
+            return None
+        verdict: dict[str, Any] = (
+            cause.details[0] if cause.details and isinstance(cause.details[0], dict) else {}
+        )
+        metadata = verdict.get("metadata") if isinstance(verdict.get("metadata"), dict) else {}
+        code = metadata.get("entitlement_code") if metadata else None
+        if isinstance(code, str) and code in _ENTITLEMENT_MESSAGES:
+            return code, _ENTITLEMENT_MESSAGES[code]
+        reason = str(verdict.get("reason") or "").strip()
+        message = (
+            f"This request was blocked by policy: {reason}."
+            if reason
+            else "This request was blocked by policy."
+        )
+        if isinstance(code, str) and code:
+            return code, message
+        return GOVERNANCE_DENIED_FAILURE_REASON, message
+
+    @staticmethod
     def _get_user_facing_error(error: Exception) -> str:
         """Return a short, user-friendly error message (no stack traces)."""
+        denial = ErrorReportingMixin._governance_denial(error)
+        if denial is not None:
+            return denial[1]
+
         msg = str(error).lower()
         cause_msg = ""
         if isinstance(error, ActivityError) and error.cause:
@@ -55,6 +109,8 @@ class ErrorReportingMixin(AgentWorkflowBase):
     @staticmethod
     def _get_user_facing_error_type(error: Exception) -> str:
         """Return a human-readable error category instead of raw Python class names."""
+        if ErrorReportingMixin._governance_denial(error) is not None:
+            return "GovernanceDenied"
         combined = str(error).lower()
         if isinstance(error, ActivityError):
             if error.cause:

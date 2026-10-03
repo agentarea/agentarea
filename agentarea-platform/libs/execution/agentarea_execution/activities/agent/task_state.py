@@ -84,6 +84,14 @@ def make_task_state_activities(
                 if request.error_message:
                     # Tasks table stores this as `error`, not `error_message`.
                     additional_fields["error"] = request.error_message
+                if request.conversation_resume is not None:
+                    task = await task_repo.get_task(_UUID(request.task_id))
+                    if task is None:
+                        return UpdateTaskStatusResult(success=False, error="Task not found")
+                    additional_fields["metadata"] = {
+                        **(task.metadata or {}),
+                        "conversation_resume": request.conversation_resume.model_dump(),
+                    }
 
                 updated = await task_repo.update_status(
                     _UUID(request.task_id), request.status, **additional_fields

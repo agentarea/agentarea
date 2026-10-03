@@ -13,6 +13,7 @@ from temporalio import activity
 
 from ...interfaces import ActivityDependencies
 from ...models import WorkflowEventsRequest, WorkflowEventsResult
+from .tool_audit import record_tool_audit, tool_audit_entry
 
 if TYPE_CHECKING:
     from ..dependencies import ActivityServiceContainer
@@ -46,10 +47,11 @@ def make_events_activities(
     ) -> WorkflowEventsResult:
         """Store each workflow event, then fan it out to live readers and channels.
 
-        The ``task_events`` row is the source of truth and is committed first.
+        The ``task_events`` row is the source of truth and is committed first,
+        together with the audit rows of the tool-call outcomes the batch holds.
         Any failure raises so Temporal retries the whole batch; every step is
         safe to repeat because it is keyed by the workflow's ``event_id``: the
-        row insert is a no-op for a stored id, the stream carries that id for the
+        row inserts are no-ops for a stored id, the stream carries that id for the
         read side to dedup, and channel deliveries are deduplicated by a key
         built from it.
         """
@@ -79,6 +81,17 @@ def make_events_activities(
                     )
                     for event in events
                 ]
+                audited = [
+                    (UUID(event["event_id"]), entry)
+                    for event in events
+                    if (entry := tool_audit_entry(event)) is not None
+                ]
+                if audited:
+                    audit = await ctx.get_audit_service()
+                    for event_id, entry in audited:
+                        await record_tool_audit(
+                            audit, event_id, entry, requested_by=request.user_id
+                        )
 
             for event, stored in zip(events, stored_events, strict=True):
                 if dependencies.broker_client is not None:

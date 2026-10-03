@@ -163,3 +163,46 @@ async def test_invocation_request_carries_aliases():
     )
 
     assert decision.action is ToolAuthorizationAction.DENY
+
+
+# --- restricting aliases: names from editable config only narrow ----------------
+
+
+def test_restricting_alias_never_satisfies_an_allowlist():
+    decision = decide_tool_policy(
+        {"tools": {"allowed": ["web_*"]}},
+        "shell",
+        restricting_aliases=("web_bypass/shell",),
+    )
+
+    assert decision.action is ToolAuthorizationAction.DENY
+
+
+def test_restricting_alias_still_denies_and_requires_approval():
+    deny = decide_tool_policy(
+        {"tools": {"denied": ["agentarea/shell"]}},
+        "shell",
+        restricting_aliases=("agentarea/shell",),
+    )
+    approval = decide_tool_policy(
+        {"tools": {"allowed": ["list_items"]}, "approval": {"escalation_rules": ["catalog-api"]}},
+        "list_items",
+        restricting_aliases=("catalog-api",),
+    )
+
+    assert deny.action is ToolAuthorizationAction.DENY
+    assert approval.action is ToolAuthorizationAction.REQUIRE_APPROVAL
+
+
+@pytest.mark.asyncio
+async def test_invocation_request_keeps_restricting_aliases_out_of_the_allowlist():
+    decision = await authorize_tool_invocation(
+        ToolAuthorizationRequest(
+            tool_name="delegate_to_web_search",
+            tool_args={},
+            effective_policy={"tools": {"allowed": ["web_search"]}},
+            restricting_aliases=("web_search",),
+        )
+    )
+
+    assert decision.action is ToolAuthorizationAction.DENY

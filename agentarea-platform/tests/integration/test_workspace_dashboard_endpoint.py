@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -82,7 +83,7 @@ def session_factory(engine):
 
 @pytest.fixture(scope="module")
 async def seeded(session_factory):
-    """Seed Agent + 7 Tasks + workspace cap governance policy.
+    """Seed tasks across dashboard activity and blocker statuses.
 
     t1 completed today      cost=10  → spend.today, mtd, tasks_done_today
     t2 completed yesterday  cost=5   → spend.mtd only
@@ -91,15 +92,18 @@ async def seeded(session_factory):
     t5 waiting_for_input today       → blockers.hitl
     t6 waiting_for_approval today    → blockers.hitl
     t7 waiting_for_input elsewhere   → excluded by workspace
-    t8 running now                   → active_tasks
-    t9 pending                       → active_tasks
+    t8 running now, t9 pending       → active_tasks
+    t10 preparing, t11 working       → active_tasks
+    t12 waiting_for_continuation     → blockers.awaiting_continuation
+    t13 blocked now-3m               → blockers.blocked_24h and recent_tasks
+    t14 blocked now-30h              → recent_tasks only, outside 24h window
+    t15 completed, unreadable cost   → recent_tasks with cost_usd None
 
     Cron triggers: daily 09:00 UTC → schedule.runs; every 5 minutes →
     schedule.frequent; inactive, unparseable, and other-workspace ones → none.
     """
     agent_id = uuid.uuid4()
     other_workspace_agent_id = uuid.uuid4()
-
     now = _now_utc()
     today = _today_start().replace(tzinfo=None)
 
@@ -111,6 +115,12 @@ async def seeded(session_factory):
     t6_id = uuid.uuid4()
     t8_id = uuid.uuid4()
     t9_id = uuid.uuid4()
+    t10_id = uuid.uuid4()
+    t11_id = uuid.uuid4()
+    t12_id = uuid.uuid4()
+    t13_id = uuid.uuid4()
+    t14_id = uuid.uuid4()
+    t15_id = uuid.uuid4()
     daily_trigger_id = uuid.uuid4()
     frequent_trigger_id = uuid.uuid4()
 
@@ -228,6 +238,17 @@ async def seeded(session_factory):
         )
         session.add(
             TaskORM(
+                id=t12_id,
+                agent_id=agent_id,
+                workspace_id=WORKSPACE_ID,
+                created_by=USER_ID,
+                description="Waiting for continuation",
+                status="waiting_for_continuation",
+                started_at=now,
+            )
+        )
+        session.add(
+            TaskORM(
                 id=uuid.uuid4(),
                 agent_id=other_workspace_agent_id,
                 workspace_id="other-workspace-999",
@@ -257,6 +278,67 @@ async def seeded(session_factory):
                 created_by=USER_ID,
                 description="Queued next",
                 status="pending",
+            )
+        )
+        session.add(
+            TaskORM(
+                id=t10_id,
+                agent_id=agent_id,
+                workspace_id=WORKSPACE_ID,
+                created_by=USER_ID,
+                description="Preparing task",
+                status="preparing",
+                started_at=now,
+            )
+        )
+        session.add(
+            TaskORM(
+                id=t11_id,
+                agent_id=agent_id,
+                workspace_id=WORKSPACE_ID,
+                created_by=USER_ID,
+                description="Working task",
+                status="working",
+                started_at=now,
+            )
+        )
+        session.add(
+            TaskORM(
+                id=t13_id,
+                agent_id=agent_id,
+                workspace_id=WORKSPACE_ID,
+                created_by=USER_ID,
+                description="Blocked by provider quota",
+                status="blocked",
+                started_at=now - timedelta(minutes=5),
+                completed_at=now - timedelta(minutes=3),
+                error="Provider quota exceeded",
+            )
+        )
+        session.add(
+            TaskORM(
+                id=t14_id,
+                agent_id=agent_id,
+                workspace_id=WORKSPACE_ID,
+                created_by=USER_ID,
+                description="Blocked long ago",
+                status="blocked",
+                started_at=now - timedelta(hours=31),
+                completed_at=now - timedelta(hours=30),
+                error="Budget exhausted",
+            )
+        )
+        session.add(
+            TaskORM(
+                id=t15_id,
+                agent_id=agent_id,
+                workspace_id=WORKSPACE_ID,
+                created_by=USER_ID,
+                description="Completed with a garbled cost",
+                status="completed",
+                started_at=now - timedelta(hours=3),
+                completed_at=now - timedelta(hours=2),
+                result={"total_cost": "not-a-number", "output": "done"},
             )
         )
 
@@ -309,6 +391,12 @@ async def seeded(session_factory):
         "t4_id": t4_id,
         "t5_id": t5_id,
         "t6_id": t6_id,
+        "t10_id": t10_id,
+        "t11_id": t11_id,
+        "t12_id": t12_id,
+        "t13_id": t13_id,
+        "t14_id": t14_id,
+        "t15_id": t15_id,
         "t8_id": t8_id,
         "t9_id": t9_id,
         "daily_trigger_id": daily_trigger_id,
@@ -395,17 +483,17 @@ class TestDashboardResponseShape:
 class TestSpendCard:
     async def test_today_usd_comes_from_spend_today(self, session_factory, user_context, seeded):
         result = await _call_dashboard(session_factory, user_context, today_usd=10.0, mtd_usd=15.0)
-        assert result.spend.today_usd == pytest.approx(10.0, abs=0.01)
+        assert result.spend.today_usd == Decimal("10")
 
     async def test_mtd_usd_comes_from_sum_spend_mtd(self, session_factory, user_context, seeded):
         result = await _call_dashboard(session_factory, user_context, today_usd=10.0, mtd_usd=15.0)
-        assert result.spend.mtd_usd == pytest.approx(15.0, abs=0.01)
+        assert result.spend.mtd_usd == Decimal("15")
 
     async def test_cap_usd_populated_when_governance_policy_exists(
         self, session_factory, user_context, seeded
     ):
         result = await _call_dashboard(session_factory, user_context, mtd_usd=15.0)
-        assert result.spend.cap_usd == pytest.approx(MONTHLY_CAP_USD, abs=0.01)
+        assert result.spend.cap_usd == Decimal("500")
 
     async def test_empty_governance_policy_yields_no_cap(self, session_factory, seeded):
         policy_workspace_id = "workspace-policy-clear-dashboard-001"
@@ -445,7 +533,7 @@ class TestSpendCard:
     ):
         result = await _call_dashboard(session_factory, user_context, mtd_usd=50.0)
         assert result.spend.projected_eom_usd is not None
-        assert result.spend.projected_eom_usd >= 0.0
+        assert result.spend.projected_eom_usd >= 0
 
     async def test_cap_fields_are_none_when_no_policy_row(self, session_factory, seeded):
         other_context = UserContext(
@@ -465,6 +553,12 @@ class TestBlockersHitl:
         result = await _call_dashboard(session_factory, user_context)
         hitl_ids = {b.task_id for b in result.blockers.hitl}
         assert hitl_ids == {seeded["t5_id"], seeded["t6_id"]}
+
+    async def test_runs_waiting_to_continue_are_blockers(
+        self, session_factory, user_context, seeded
+    ):
+        result = await _call_dashboard(session_factory, user_context)
+        assert [b.task_id for b in result.blockers.awaiting_continuation] == [seeded["t12_id"]]
 
     async def test_hitl_does_not_contain_completed_tasks(
         self, session_factory, user_context, seeded
@@ -557,11 +651,16 @@ class TestWorkspaceIsolation:
 
 
 class TestTasks:
-    async def test_active_tasks_are_running_and_queued_work(
+    async def test_active_tasks_include_preparing_and_working_statuses(
         self, session_factory, user_context, seeded
     ):
         result = await _call_dashboard(session_factory, user_context)
-        assert {t.task_id for t in result.active_tasks} == {seeded["t8_id"], seeded["t9_id"]}
+        assert {t.task_id for t in result.active_tasks} == {
+            seeded["t8_id"],
+            seeded["t9_id"],
+            seeded["t10_id"],
+            seeded["t11_id"],
+        }
 
     async def test_active_task_carries_agent_name_and_title(
         self, session_factory, user_context, seeded
@@ -572,22 +671,54 @@ class TestTasks:
         assert running.title == "Running right now"
         assert running.status == "running"
 
-    async def test_recent_tasks_are_finished_newest_first(
+    async def test_recent_tasks_include_blocked_tasks(self, session_factory, user_context, seeded):
+        result = await _call_dashboard(session_factory, user_context)
+        ids = [t.task_id for t in result.recent_tasks]
+        assert set(ids) == {
+            seeded["t1_id"],
+            seeded["t2_id"],
+            seeded["t3_id"],
+            seeded["t4_id"],
+            seeded["t13_id"],
+            seeded["t14_id"],
+            seeded["t15_id"],
+        }
+        # t3 finished now, t13 3 minutes ago; the rest depends on the hour the
+        # suite runs, so pin only the head.
+        assert ids[:2] == [seeded["t3_id"], seeded["t13_id"]]
+
+    async def test_blocked_in_the_last_24h_are_blockers(
         self, session_factory, user_context, seeded
     ):
         result = await _call_dashboard(session_factory, user_context)
-        ids = [t.task_id for t in result.recent_tasks]
-        assert set(ids) == {seeded["t1_id"], seeded["t2_id"], seeded["t3_id"], seeded["t4_id"]}
-        # t3 finished now, t1 today at 02:00, t4 30h ago, t2 yesterday at 01:00 —
-        # t4 vs t2 depends on the hour the suite runs, so pin only the head.
-        assert ids[0] == seeded["t3_id"]
+        blocked = result.blockers.blocked_24h
+        assert [b.task_id for b in blocked] == [seeded["t13_id"]]
+        assert blocked[0].description == "Blocked by provider quota"
+        assert blocked[0].error == "Provider quota exceeded"
 
     async def test_recent_task_reports_its_cost(self, session_factory, user_context, seeded):
         result = await _call_dashboard(session_factory, user_context)
         done = next(t for t in result.recent_tasks if t.task_id == seeded["t1_id"])
-        assert done.cost_usd == pytest.approx(10.0)
+        assert done.cost_usd == Decimal("10")
         failed = next(t for t in result.recent_tasks if t.task_id == seeded["t3_id"])
         assert failed.cost_usd is None
+
+    async def test_an_unreadable_cost_is_unknown_not_a_failed_dashboard(
+        self, session_factory, user_context, seeded
+    ):
+        result = await _call_dashboard(session_factory, user_context)
+        garbled = next(t for t in result.recent_tasks if t.task_id == seeded["t15_id"])
+        assert garbled.cost_usd is None
+
+    async def test_money_reaches_the_client_as_decimal_strings(
+        self, session_factory, user_context, seeded
+    ):
+        result = await _call_dashboard(session_factory, user_context, mtd_usd=15.0)
+        body = result.model_dump(mode="json")
+        done = next(t for t in body["recent_tasks"] if t["task_id"] == str(seeded["t1_id"]))
+        amounts = [body["spend"]["mtd_usd"], body["spend"]["cap_usd"], done["cost_usd"]]
+        assert all(isinstance(amount, str) for amount in amounts)
+        assert [Decimal(amount) for amount in amounts] == [15, 500, 10]
 
 
 class TestSchedule:
@@ -643,5 +774,5 @@ class TestWalletExhaustedBlockers:
         exhausted = result.blockers.wallet_exhausted[0]
         assert exhausted.agent_id == seeded["agent_id"]
         assert exhausted.agent_name == "Dashboard Test Agent"
-        assert exhausted.budget_usd == pytest.approx(100.0)
+        assert exhausted.budget_usd == Decimal("100")
         assert exhausted.period == "monthly"

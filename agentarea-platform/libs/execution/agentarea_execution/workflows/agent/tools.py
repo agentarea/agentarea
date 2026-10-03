@@ -115,6 +115,8 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
                 tokens_used=self.state.tokens_used,
                 service_cost_used=self.state.service_cost_used,
                 policy_approval_granted=policy_approval_granted,
+                openapi_operation_tools=self.state.agent_config.get("openapi_operation_tools")
+                or {},
             )
 
             result_obj = await self._execute_governed_tool(

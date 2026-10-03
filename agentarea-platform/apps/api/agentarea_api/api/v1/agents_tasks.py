@@ -54,6 +54,7 @@ from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_secrets.naming import has_reserved_prefix
 from agentarea_tasks.domain.exceptions import (
     AgentModelNotConfiguredError,
+    BudgetCapExceededError,
     SchedulingNotSupportedError,
 )
 from agentarea_tasks.domain.statuses import TaskStatus
@@ -61,6 +62,7 @@ from agentarea_tasks.infrastructure.repository import TaskEventRepository
 from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig, require_future_instant
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import text
@@ -679,37 +681,55 @@ async def _with_sse_heartbeats(
     *,
     interval_seconds: float = 15.0,
 ) -> AsyncGenerator[str, None]:
-    """Emit SSE comments while preserving a pending source read."""
-    # ensure_future, not create_task: anext() returns an awaitable, not a coroutine.
-    next_frame: asyncio.Future[str] = asyncio.ensure_future(anext(source))
-    heartbeat: asyncio.Task[None] | None = None
+    """Emit ``: ping`` comments while ``source`` has no frame ready.
+
+    One producer task iterates ``source`` for its whole life, so a deadline the
+    source holds across ``yield`` (the event feed's wall-clock ``asyncio.timeout``)
+    stays bound to a live task and still fires. The producer also runs
+    ``source.aclose()``, in the task that iterated it.
+    """
+    frames: asyncio.Queue[str] = asyncio.Queue(maxsize=1)
+
+    async def produce() -> None:
+        try:
+            async for frame in source:
+                await frames.put(frame)
+        finally:
+            await source.aclose()
+
+    producer = asyncio.create_task(produce())
+    next_frame = asyncio.create_task(frames.get())
     try:
         while True:
-            heartbeat = asyncio.create_task(asyncio.sleep(interval_seconds))
             done, _ = await asyncio.wait(
-                (next_frame, heartbeat), return_when=asyncio.FIRST_COMPLETED
+                (next_frame, producer),
+                timeout=interval_seconds,
+                return_when=asyncio.FIRST_COMPLETED,
             )
             if next_frame in done:
-                heartbeat.cancel()
-                await asyncio.gather(heartbeat, return_exceptions=True)
-                heartbeat = None
-                try:
-                    frame = next_frame.result()
-                except StopAsyncIteration:
-                    return
-                yield frame
-                next_frame = asyncio.ensure_future(anext(source))
+                yield next_frame.result()
+                next_frame = asyncio.create_task(frames.get())
+            elif producer in done:
+                break
             else:
-                heartbeat = None
                 yield ": ping\n\n"
+        # Cancelling a pending Queue.get leaves its frame queued for the drain.
+        next_frame.cancel()
+        while not frames.empty():
+            yield frames.get_nowait()
+        # A producer cancelled here was cut by the source's own deadline while
+        # it waited to hand over a frame: the stream ends like a timed-out feed.
+        if not producer.cancelled():
+            producer.result()
     finally:
-        pending: list[asyncio.Future[Any]] = [next_frame]
-        if heartbeat is not None:
-            pending.append(heartbeat)
-        for task in pending:
-            task.cancel()
-        await asyncio.gather(*pending, return_exceptions=True)
-        await source.aclose()
+        next_frame.cancel()
+        if not producer.done():
+            producer.cancel()
+            # asyncio.wait, not gather: a repeated cancellation of this task must
+            # not interrupt the producer's source.aclose().
+            await asyncio.wait((producer,))
+            if not producer.cancelled() and (error := producer.exception()) is not None:
+                logger.error("SSE source failed while closing", exc_info=error)
 
 
 @router.post(
@@ -754,7 +774,7 @@ async def create_task_for_agent_with_stream(
                 task_policy=data.task_policy,
             )
         except ValidationError as exc:
-            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+            raise RequestValidationError(exc.errors()) from exc
 
         try:
             created_task = await task_service.reserve_run(
@@ -785,6 +805,7 @@ async def create_task_for_agent_with_stream(
         )
 
     creation_error: tuple[str, str] | None = None
+    creation_error_details: dict[str, str | float] = {}
     if created_task is None:
         try:
             payload = RunCreate(
@@ -796,6 +817,9 @@ async def create_task_for_agent_with_stream(
                 project_id=data.project_id,
                 task_policy=data.task_policy,
             )
+        except ValidationError as exc:
+            raise RequestValidationError(exc.errors()) from exc
+        try:
             created_task = await task_service.start_run(
                 payload,
                 workspace_id=user_context.workspace_id,
@@ -805,7 +829,19 @@ async def create_task_for_agent_with_stream(
             creation_error = ("Task policy rejected", "policy_validation_error")
         except AgentModelNotConfiguredError:
             creation_error = ("Agent model is not configured", "model_not_configured")
+        except BudgetCapExceededError as exc:
+            creation_error = (
+                f"Workspace monthly spend cap reached ({exc.current_mtd_usd} {exc.currency}/"
+                f"{exc.cap_usd} {exc.currency})",
+                "monthly_spend_cap_exceeded",
+            )
+            creation_error_details = {
+                "current_mtd_usd": float(exc.current_mtd_usd),
+                "cap_usd": float(exc.cap_usd),
+                "currency": exc.currency,
+            }
         except ValueError:
+            logger.error("Agent validation failed for agent %s", agent_id, exc_info=True)
             creation_error = ("Agent validation error", "agent_not_found")
         except Exception:
             logger.error("Task creation failed for agent %s", agent_id, exc_info=True)
@@ -827,11 +863,12 @@ async def create_task_for_agent_with_stream(
 
             if creation_error is not None:
                 error, error_type = creation_error
-                error_data: dict[str, str | None] = {
+                error_data: dict[str, str | float | None] = {
                     **({"task_id": None} if error_type == "creation_failed" else {}),
                     "agent_id": str(agent_id),
                     "error": error,
                     "error_type": error_type,
+                    **creation_error_details,
                     "timestamp": datetime.now(UTC).isoformat(),
                 }
                 yield _format_sse_event("error", error_data)
@@ -873,36 +910,6 @@ async def create_task_for_agent_with_stream(
                         "timestamp": datetime.now(UTC).isoformat(),
                     },
                 )
-        except PolicyValidationError:
-            yield _format_sse_event(
-                "error",
-                {
-                    "agent_id": str(agent_id),
-                    "error": "Task policy rejected",
-                    "error_type": "policy_validation_error",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            )
-        except AgentModelNotConfiguredError:
-            yield _format_sse_event(
-                "error",
-                {
-                    "agent_id": str(agent_id),
-                    "error": "Agent model is not configured",
-                    "error_type": "model_not_configured",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            )
-        except ValueError:
-            yield _format_sse_event(
-                "error",
-                {
-                    "agent_id": str(agent_id),
-                    "error": "Agent validation error",
-                    "error_type": "agent_not_found",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            )
         except Exception:
             logger.error("Task creation failed for agent %s", agent_id, exc_info=True)
             yield _format_sse_event(
@@ -990,7 +997,7 @@ async def create_task_for_agent_sync(
         # Convert to API response format
         return TaskResponse.from_agent_task(task)
 
-    except HTTPException:
+    except (HTTPException, BudgetCapExceededError):
         raise
     except PolicyValidationError as exc:
         raise HTTPException(status_code=422, detail="Task policy rejected") from exc
@@ -1084,7 +1091,7 @@ async def schedule_task_for_agent(
 
         return TaskResponse.from_agent_task(task)
 
-    except HTTPException:
+    except (HTTPException, BudgetCapExceededError):
         raise
     except SchedulingNotSupportedError as exc:
         raise HTTPException(
@@ -1235,13 +1242,23 @@ async def get_agent_task_status(
         if stored_artifacts:
             status_artifacts = [item.model_dump() for item in stored_artifacts]
 
+        # A signal-based pause lives in the workflow's own state; Temporal keeps
+        # reporting "running" while the workflow waits, so read it from there.
+        execution_status = status.get("execution_status", status.get("status"))
+        live_state = (
+            await workflow_task_service.get_live_state(execution_id)
+            if execution_status == "running"
+            else None
+        )
+
         return {
             "task_id": str(task_id),
             "agent_id": str(agent_id),
             "execution_id": execution_id,
             # Authoritative lifecycle status/result come from the persisted task.
             "status": task.status,
-            "execution_status": status.get("execution_status", status.get("status")),
+            "execution_status": execution_status,
+            "paused": bool(live_state and live_state.get("paused")),
             "success": status.get("success"),
             "failure_reason": status.get("failure_reason"),
             "start_time": status.get("start_time"),
@@ -1751,7 +1768,10 @@ async def pause_agent_task(
                 status_code=400, detail=f"Cannot pause task in '{current_status}' state"
             )
 
-        if current_status == "paused":
+        # A pause is a signal the workflow holds in its own state; Temporal's
+        # execution status stays "running" while it waits.
+        live_state = await workflow_task_service.get_live_state(execution_id)
+        if live_state and live_state.get("paused"):
             raise HTTPException(status_code=400, detail="Task is already paused")
 
         # Pause the workflow
@@ -2076,9 +2096,8 @@ async def send_task_command(
         elif payload.command == "queue_message":
             if not payload.message:
                 raise HTTPException(status_code=400, detail="message is required for queue_message")
-            delivered = await workflow_task_service.send_workflow_command(
-                execution_id, "queue_message", {"message": payload.message}
-            )
+            # A completed task whose workflow has closed continues in a new run.
+            delivered = await task_service.queue_follow_up(task_id, payload.message)
 
         elif payload.command == "remove_message":
             if not payload.message_id:
@@ -2116,8 +2135,10 @@ async def send_task_command(
 
         return {"status": "accepted", "command": payload.command}
 
-    except HTTPException:
+    except (HTTPException, BudgetCapExceededError):
         raise
+    except PolicyValidationError as exc:
+        raise HTTPException(status_code=422, detail="Task policy rejected") from exc
     except Exception as e:
         logger.error(
             f"Failed to send command '{payload.command}' for task {task_id}: {e}", exc_info=True

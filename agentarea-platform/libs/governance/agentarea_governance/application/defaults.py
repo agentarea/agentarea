@@ -99,7 +99,7 @@ async def provision_default_policies(
     for rule in default_policy_rules(workspace_id, path):
         if _dimension_key(rule.target, rule.effect, rule.params) in existing_keys:
             continue
-        created.append(await service.create_rule(rule=rule, subject_id=rule.subject_id))
+        created.append(await service.create_rule(rule=rule))
     if created:
         logger.info("seeded %d default policies for workspace %s", len(created), workspace_id)
     return created

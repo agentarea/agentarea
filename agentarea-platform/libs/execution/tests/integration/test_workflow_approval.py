@@ -42,16 +42,19 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.workflows.agent.approval import ToolApprovalMixin
+from agentarea_execution.workflows.agent.patches import TOOL_CONFIG_ALIASES_PATCH
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
-from agentarea_execution.workflows.helpers import tool_policy_aliases
+from agentarea_execution.workflows.helpers import tool_config_aliases, tool_policy_aliases
 from agentarea_governance.domain.policies import EffectivePolicy, PolicyDocument, PolicyResolver
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
-from temporalio import activity
+from temporalio import activity, workflow
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import WorkflowEnvironment
-from temporalio.worker import Replayer, Worker
+from temporalio.worker import Replayer, UnsandboxedWorkflowRunner, Worker
+from temporalio.workflow import NondeterminismError
 
 _APPROVER = "approver-1"
 _GATED_TOOL = "deploy_service"
@@ -59,6 +62,10 @@ _HELPER_AGENT = "Helper"
 _DELEGATE_TOOL = f"delegate_to_{_HELPER_AGENT}"
 _CODE_TOOL = "shell"
 _CODE_TOOLSET = "agentarea/shell"
+# An OpenAPI attachment with allowed_tools unset: its config does not list the
+# operation, only the config activity's resolved map does.
+_OPENAPI_CONNECTION = "5b1f0c1e-7a44-4c4b-9d0e-2f1f3b6c9a10"
+_OPENAPI_TOOL = "list_items"
 _CHILD_QUERY = "child: summarise the deployment"
 
 _published: list[dict[str, Any]] = []
@@ -96,7 +103,13 @@ async def _mock_build_config(request: AgentConfigRequest) -> dict[str, Any]:
         "tools": [
             {"type": "agent", "name": _HELPER_AGENT},
             {"type": "code", "name": _CODE_TOOLSET},
+            {
+                "type": "openapi",
+                "name": _OPENAPI_CONNECTION,
+                "settings": {"openapi_connection_id": _OPENAPI_CONNECTION, "allowed_tools": None},
+            },
         ],
+        "openapi_operation_tools": {_OPENAPI_CONNECTION: [_OPENAPI_TOOL]},
         "context_window": 128000,
         "planning": False,
     }
@@ -115,7 +128,7 @@ async def _mock_discover_tools(request: ToolDiscoveryRequest) -> dict[str, Any]:
         }
 
     return {
-        "tools": [tool(_GATED_TOOL), tool(_DELEGATE_TOOL), tool(_CODE_TOOL)],
+        "tools": [tool(_GATED_TOOL), tool(_DELEGATE_TOOL), tool(_CODE_TOOL), tool(_OPENAPI_TOOL)],
         "context_strategy": "STATIC",
     }
 
@@ -184,6 +197,8 @@ async def _mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
         return _reply(_DELEGATE_TOOL, {"message": _CHILD_QUERY}, f"call_delegate_{call}")
     if step == "shell":
         return _reply(_CODE_TOOL, {"command": "echo APPROVAL_OK"}, f"call_shell_{call}")
+    if step == "openapi":
+        return _reply(_OPENAPI_TOOL, {}, f"call_openapi_{call}")
     return _reply("completion", {"result": "done", "artifacts": []}, f"call_done_{call}")
 
 
@@ -197,7 +212,10 @@ async def _mock_execute_mcp(request: MCPToolRequest) -> dict[str, Any]:
             user_id=request.user_id,
             workspace_id=request.workspace_id,
             effective_policy=request.effective_policy,
-            aliases=tool_policy_aliases(request.mcp_route, request.tool_name, request.tools),
+            aliases=tool_policy_aliases(request.mcp_route, request.tool_name),
+            restricting_aliases=tool_config_aliases(
+                request.tool_name, request.tools, request.openapi_operation_tools
+            ),
         )
     )
     if decision.action is ToolAuthorizationAction.DENY or (
@@ -294,7 +312,8 @@ async def _pending_escalation(handle) -> dict[str, Any]:
     raise AssertionError("workflow never asked for approval")
 
 
-async def _run(request: AgentExecutionRequest, drive=None):
+async def _execute(request: AgentExecutionRequest, drive=None, workflow_runner=None):
+    """Run the workflow to its end; return its result and recorded history."""
     env = await WorkflowEnvironment.start_time_skipping(data_converter=pydantic_data_converter)
     async with env:
         task_queue = f"test-{uuid.uuid4()}"
@@ -305,7 +324,7 @@ async def _run(request: AgentExecutionRequest, drive=None):
                 workflows=[AgentExecutionWorkflow],
                 activities=_ALL_ACTIVITIES,
                 activity_executor=executor,
-                workflow_runner=create_workflow_runner(),
+                workflow_runner=workflow_runner or create_workflow_runner(),
             ):
                 handle = await env.client.start_workflow(
                     AgentExecutionWorkflow.run,
@@ -317,12 +336,21 @@ async def _run(request: AgentExecutionRequest, drive=None):
                 if drive is not None:
                     await drive(handle)
                 result = await asyncio.wait_for(handle.result(), timeout=60)
-                await Replayer(
-                    workflows=[AgentExecutionWorkflow],
-                    data_converter=pydantic_data_converter,
-                    workflow_runner=create_workflow_runner(),
-                ).replay_workflow(await handle.fetch_history())
-                return result
+                return result, await handle.fetch_history()
+
+
+async def _replay(history) -> None:
+    await Replayer(
+        workflows=[AgentExecutionWorkflow],
+        data_converter=pydantic_data_converter,
+        workflow_runner=create_workflow_runner(),
+    ).replay_workflow(history)
+
+
+async def _run(request: AgentExecutionRequest, drive=None):
+    result, history = await _execute(request, drive)
+    await _replay(history)
+    return result
 
 
 def _events(event_type: str) -> list[dict[str, Any]]:
@@ -416,6 +444,82 @@ async def test_deny_rule_on_code_toolset_config_blocks_runtime_shell_call():
     assert _executed_tools == []
     denied = [e for e in _events("tool.result") if e["data"].get("denied_by_policy")]
     assert len(denied) == 1
+
+
+@pytest.mark.asyncio
+async def test_approval_rule_on_openapi_connection_escalates_an_unlisted_operation():
+    _llm_script.extend(["openapi", "complete"])
+    policy = _policy(
+        {"escalation_rules": [_OPENAPI_CONNECTION], "approvers": [f"user:{_APPROVER}"]}
+    )
+
+    async def drive(handle):
+        escalation = await _pending_escalation(handle)
+        assert escalation["tool_name"] == _OPENAPI_TOOL
+        assert _tool_requests == []
+        await handle.signal(
+            AgentExecutionWorkflow.resolve_escalation,
+            args=[escalation["escalation_id"], True, "approved", _APPROVER],
+        )
+
+    result = await _run(_request(policy), drive)
+
+    assert result.success is True
+    assert [request.tool_name for request in _tool_requests] == [_OPENAPI_TOOL]
+    assert _tool_requests[0].policy_approval_granted is True
+    assert _executed_tools == [_OPENAPI_TOOL]
+
+
+@pytest.mark.asyncio
+async def test_a_run_recorded_before_config_aliases_replays_and_fails_closed_in_the_activity(
+    monkeypatch,
+):
+    """A deploy must not wedge in-flight runs that config-name rules now govern.
+
+    The history is recorded the way the worker did before config names counted
+    in the workflow: no patch marker, the gate matching routed names only, so it
+    lets ``shell`` through despite a deny on its toolset. Replaying it on the
+    current code must reach the same commands, and the tool activity, which
+    checks config names regardless, refuses the call.
+    """
+    _llm_script.extend(["shell", "complete"])
+    policy = _policy()
+    policy["tools"] = {"denied": [_CODE_TOOLSET]}
+
+    patched = workflow.patched
+    with monkeypatch.context() as before_the_patch:
+        before_the_patch.setattr(
+            workflow,
+            "patched",
+            lambda patch_id: patch_id != TOOL_CONFIG_ALIASES_PATCH and patched(patch_id),
+        )
+        result, history = await _execute(
+            _request(policy), workflow_runner=UnsandboxedWorkflowRunner()
+        )
+
+    assert result.success is True
+    assert [request.tool_name for request in _tool_requests] == [_CODE_TOOL]
+    assert _executed_tools == []
+
+    await _replay(history)
+
+    # The history does exercise the change: deciding with config names on
+    # replay, unguarded, schedules different commands.
+    with monkeypatch.context() as unguarded:
+        unguarded.setattr(
+            ToolApprovalMixin,
+            "_policy_tool_configs",
+            lambda self: (
+                self.state.agent_config.get("tools"),
+                self.state.agent_config.get("openapi_operation_tools"),
+            ),
+        )
+        with pytest.raises(NondeterminismError):
+            await Replayer(
+                workflows=[AgentExecutionWorkflow],
+                data_converter=pydantic_data_converter,
+                workflow_runner=UnsandboxedWorkflowRunner(),
+            ).replay_workflow(history)
 
 
 async def _effective_policy_of_a_run_started_with_the_approval_flag() -> dict[str, Any]:

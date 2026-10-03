@@ -94,19 +94,43 @@ class CancelledAfterTool:
         return content
 
 
+class FakeAudit:
+    """Audit trail keyed by event id, as the real insert-once table is."""
+
+    def __init__(self) -> None:
+        self.rows: dict[Any, dict[str, Any]] = {}
+
+    async def record_once(self, event_id, action, resource_type, resource_id=None, **fields):
+        if event_id in self.rows:
+            return False
+        self.rows[event_id] = {
+            "action": action,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            **fields,
+        }
+        return True
+
+
 @pytest.fixture
 def wallet_service():
     return FakeWalletService()
 
 
 @pytest.fixture
-def activity_fns(monkeypatch, wallet_service):
+def audit():
+    return FakeAudit()
+
+
+@pytest.fixture
+def activity_fns(monkeypatch, wallet_service, audit):
     from agentarea_execution.activities import dependencies
 
     ctx = MagicMock()
     ctx.__aenter__ = AsyncMock(return_value=ctx)
     ctx.__aexit__ = AsyncMock(return_value=False)
     ctx.get_wallet_service = AsyncMock(return_value=wallet_service)
+    ctx.get_audit_service = AsyncMock(return_value=audit)
     ctx.get_mcp_server_instance_service = AsyncMock()
     ctx.get_openapi_connection_service = AsyncMock()
     monkeypatch.setattr(dependencies, "ActivityServiceContainer", MagicMock())
@@ -186,7 +210,7 @@ async def test_policy_approved_code_tool_executes_in_activity(monkeypatch, activ
 
 
 @pytest.mark.asyncio
-async def test_activity_rejects_unapproved_policy_rule(monkeypatch, activity_fns):
+async def test_activity_rejects_unapproved_policy_rule(monkeypatch, activity_fns, audit):
     _, execute_mcp_tool_activity = activity_fns
     executed = _prepare_fake_code_tool(monkeypatch)
     request = _request(
@@ -201,15 +225,18 @@ async def test_activity_rejects_unapproved_policy_rule(monkeypatch, activity_fns
     assert result.success is False
     assert "approval must be resolved" in (result.error or "")
     assert executed == []
+    [row] = audit.rows.values()
+    assert row["action"] == "tool.call.denied"
+    assert "approval must be resolved" in row["event_metadata"]["reason"]
 
 
 @pytest.mark.asyncio
-async def test_activity_deny_overrides_approval_grant(monkeypatch, activity_fns):
+async def test_activity_deny_overrides_approval_grant(monkeypatch, activity_fns, audit):
     _, execute_mcp_tool_activity = activity_fns
     executed = _prepare_fake_code_tool(monkeypatch)
     request = _request(
         tool_name="example",
-        tool_args={},
+        tool_args={"api_token": "sk-live-secret"},
         tools=[{"type": "code", "name": "agentarea/example"}],
         effective_policy={
             "tools": {"denied": ["agentarea/example"]},
@@ -223,6 +250,33 @@ async def test_activity_deny_overrides_approval_grant(monkeypatch, activity_fns)
     assert result.success is False
     assert "denied by policy" in (result.error or "")
     assert executed == []
+    [row] = audit.rows.values()
+    assert row["action"] == "tool.call.denied"
+    assert (row["resource_type"], row["resource_id"]) == ("task", request.task_id)
+    assert (row["actor_type"], row["actor_id"]) == ("agent", str(request.agent_id))
+    assert row["event_metadata"]["tool"] == "example"
+    assert row["event_metadata"]["requested_by"] == "user-1"
+    # The argument's name is auditable; the value the model passed is not.
+    assert row["event_metadata"]["argument_keys"] == ["api_token"]
+    assert "sk-live-secret" not in json.dumps(row)
+
+
+@pytest.mark.asyncio
+async def test_retried_denial_is_audited_once(monkeypatch, activity_fns, audit):
+    _, execute_mcp_tool_activity = activity_fns
+    _prepare_fake_code_tool(monkeypatch)
+    request = _request(
+        tool_name="example",
+        tool_args={},
+        tools=[{"type": "code", "name": "agentarea/example"}],
+        effective_policy={"tools": {"denied": ["agentarea/example"]}},
+    )
+    env = ActivityEnvironment()
+
+    await env.run(execute_mcp_tool_activity, request)
+    await env.run(execute_mcp_tool_activity, request)
+
+    assert len(audit.rows) == 1
 
 
 @pytest.mark.asyncio

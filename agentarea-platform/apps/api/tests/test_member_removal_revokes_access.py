@@ -590,10 +590,12 @@ def _graph_validates_subjects(graph) -> None:
 async def test_removing_someone_who_was_never_a_member_is_not_a_server_error(
     session_factory, graph, user_id, expected
 ):
-    from agentarea_api.api.v1.workspace_invitations import get_membership_service, router
-    from agentarea_common.auth.dependencies import get_user_context
+    from unittest.mock import AsyncMock
     from urllib.parse import quote
 
+    from agentarea_api.api.deps.services import get_audit_service
+    from agentarea_api.api.v1.workspace_invitations import get_membership_service, router
+    from agentarea_common.auth.dependencies import get_user_context
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
 
@@ -609,6 +611,7 @@ async def test_removing_someone_who_was_never_a_member_is_not_a_server_error(
         user_id=OWNER, workspace_id=WORKSPACE, admin_workspaces=[WORKSPACE]
     )
     app.dependency_overrides[get_membership_service] = memberships
+    app.dependency_overrides[get_audit_service] = lambda: AsyncMock()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.delete(f"/v1/workspaces/acme/members/{quote(user_id)}")
 

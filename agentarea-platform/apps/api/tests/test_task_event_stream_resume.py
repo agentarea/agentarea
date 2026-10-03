@@ -24,7 +24,6 @@ from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.task_service import TaskService
 from httpx import ASGITransport, AsyncClient
 
-
 AGENT_ID = uuid4()
 TASK_ID = uuid4()
 DURABLE_ID = str(uuid4())
@@ -116,10 +115,84 @@ async def test_sse_heartbeat_does_not_cancel_pending_frame():
     assert await asyncio.wait_for(anext(stream), timeout=0.2) == ": ping\n\n"
 
     release.set()
-    assert (
-        await asyncio.wait_for(anext(stream), timeout=0.2) == "event: task.completed\n\n"
-    )
+    assert await asyncio.wait_for(anext(stream), timeout=0.2) == "event: task.completed\n\n"
     await stream.aclose()
+
+
+async def _drain(stream) -> list[str]:
+    return [frame async for frame in stream]
+
+
+@pytest.mark.asyncio
+async def test_sse_heartbeat_keeps_a_deadline_held_across_yield():
+    """The event feed bounds itself with an ``asyncio.timeout`` held across ``yield``."""
+
+    async def frames():
+        try:
+            async with asyncio.timeout(0.2):
+                yield "event: first\n\n"
+                await asyncio.sleep(5)
+                yield "event: late\n\n"
+        except TimeoutError:
+            return
+
+    stream = agents_tasks._with_sse_heartbeats(frames(), interval_seconds=10)
+    assert await asyncio.wait_for(_drain(stream), timeout=2) == ["event: first\n\n"]
+
+
+@pytest.mark.asyncio
+async def test_sse_heartbeat_ends_when_the_deadline_hits_a_slow_reader():
+    """A deadline that fires while frames wait for the reader still ends the stream.
+
+    The frame the deadline cut is dropped; a reconnect resumes from the last id.
+    """
+
+    async def frames():
+        try:
+            async with asyncio.timeout(0.2):
+                for name in ("a", "b", "c"):
+                    yield f"event: {name}\n\n"
+                await asyncio.sleep(5)
+        except TimeoutError:
+            return
+
+    stream = agents_tasks._with_sse_heartbeats(frames(), interval_seconds=10)
+    assert await anext(stream) == "event: a\n\n"
+    await asyncio.sleep(0.4)
+    assert await asyncio.wait_for(_drain(stream), timeout=2) == ["event: b\n\n"]
+
+
+@pytest.mark.asyncio
+async def test_sse_heartbeat_propagates_a_source_failure_after_its_frames():
+    async def frames():
+        yield "event: connected\n\n"
+        raise RuntimeError("feed broke")
+
+    stream = agents_tasks._with_sse_heartbeats(frames(), interval_seconds=10)
+    assert await anext(stream) == "event: connected\n\n"
+    with pytest.raises(RuntimeError, match="feed broke"):
+        await anext(stream)
+
+
+@pytest.mark.asyncio
+async def test_sse_heartbeat_closes_the_source_when_the_client_goes_away():
+    closed = asyncio.Event()
+
+    async def frames():
+        try:
+            yield "event: connected\n\n"
+            await asyncio.Event().wait()
+        finally:
+            closed.set()
+
+    stream = agents_tasks._with_sse_heartbeats(frames(), interval_seconds=10)
+    assert await anext(stream) == "event: connected\n\n"
+    reader = asyncio.create_task(anext(stream))
+    await asyncio.sleep(0.05)
+    reader.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await reader
+    assert closed.is_set()
 
 
 @pytest.mark.asyncio
@@ -155,13 +228,9 @@ async def test_event_stream_closes_read_session_before_first_frame(monkeypatch):
         get_user_context,
         lambda: MagicMock(user_id="test_user", workspace_id="test_workspace"),
     )
-    monkeypatch.setitem(
-        app.dependency_overrides, services.get_event_broker, lambda: object()
-    )
+    monkeypatch.setitem(app.dependency_overrides, services.get_event_broker, lambda: object())
     monkeypatch.setattr(services, "_create_task_manager", AsyncMock(return_value=object()))
-    monkeypatch.setattr(
-        services, "get_temporal_workflow_service", AsyncMock(return_value=object())
-    )
+    monkeypatch.setattr(services, "get_temporal_workflow_service", AsyncMock(return_value=object()))
     monkeypatch.setattr(TaskService, "get_task", get_task)
     monkeypatch.setattr(task_event_feed, "open_task_event_feed", feed)
 
@@ -235,3 +304,33 @@ async def test_task_creation_runs_before_first_sse_frame(monkeypatch):
 
     assert response.status_code == 200, response.text
     assert "event: task_created" in response.text
+
+
+@pytest.mark.asyncio
+async def test_streamed_task_create_rejects_an_invalid_run_with_422(monkeypatch, async_client):
+    """An invalid run is a request error, not an "agent not found" SSE frame."""
+    agent = MagicMock(name="agent")
+    agent.name = "Test agent"
+    agent_service = MagicMock()
+    agent_service.get_with_catalog = AsyncMock(return_value=agent)
+    task_service = MagicMock()
+    task_service.start_run = AsyncMock()
+    monkeypatch.setitem(
+        app.dependency_overrides, agents_tasks.get_agent_service, lambda: agent_service
+    )
+    monkeypatch.setitem(
+        app.dependency_overrides, agents_tasks.get_task_service, lambda: task_service
+    )
+    monkeypatch.setitem(
+        app.dependency_overrides,
+        get_user_context,
+        lambda: MagicMock(user_id="test_user", workspace_id="test_workspace"),
+    )
+
+    response = await async_client.post(
+        f"/v1/workspaces/acme/agents/{AGENT_ID}/tasks/", json={"description": ""}
+    )
+
+    assert response.status_code == 422, response.text
+    assert [error["loc"] for error in response.json()["errors"]] == [["description"]]
+    task_service.start_run.assert_not_awaited()

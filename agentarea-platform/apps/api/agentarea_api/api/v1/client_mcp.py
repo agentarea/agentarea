@@ -8,6 +8,11 @@ the fly: its MCP instances' tools (aggregated, each narrowed to the tools the
 client allows), its platform toolsets (minus their disabled methods, run in the
 client's workspace), and ``activate_skill`` over its skills.
 
+Every tool the client carries is still governed by the workspace policy: the
+caller's workspace+user policy is resolved with the resolver task snapshots use
+and judged by the one tool PDP (``decide_tool_policy``). A tool the policy does
+not allow is neither listed nor run, and every call's verdict is audited.
+
 ``/client-mcp/{client_id}`` is the previous address, still mounted so harnesses
 configured against it keep working until they are re-installed.
 """
@@ -24,7 +29,13 @@ from agentarea_agents_sdk.mcp_server.auth import (
     PROTECTED_RESOURCE_SCOPE_KEY,
     use_mcp_user_context,
 )
+from agentarea_agents_sdk.tools.mcp_tool_identity import mcp_tool_target, qualify_mcp_tool_name
 from agentarea_api.platform_mcp import client_platform_server
+from agentarea_common.auth.tool_authorization import (
+    ToolAuthorizationAction,
+    ToolAuthorizationDecision,
+    decide_tool_policy,
+)
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
 from agentarea_mcp.application.tool_list_cache import RedisToolListCache
 from agentarea_mcp.domain.client_models import ClientPlatformToolset
@@ -41,6 +52,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 if TYPE_CHECKING:
     from agentarea_common.auth.context import UserContext
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +112,10 @@ class ClientScope:
     platform_tools: frozenset[str]
     # The caller, acting in the client's workspace.
     user_context: UserContext
+    # The caller's resolved workspace+user policy (``EffectivePolicy`` JSON).
+    tool_policy: dict
+    # How the caller appears in the audit trail.
+    actor_type: str
 
 
 def _platform_tools(client_id: str, attached: list[ClientPlatformToolset]) -> frozenset[str]:
@@ -125,6 +141,30 @@ def _platform_tools(client_id: str, attached: list[ClientPlatformToolset]) -> fr
         disabled = [m for m in attachment.disabled_methods or [] if m in toolset.tools]
         selected |= server.select({toolset.name: disabled})
     return frozenset(selected)
+
+
+async def _effective_tool_policy(session: AsyncSession, user_ctx: UserContext) -> dict:
+    """The caller's workspace+user policy, resolved as for a task snapshot.
+
+    A client is not an agent, so there is no agent layer: what governs its calls
+    is exactly what governs the same caller anywhere else in the workspace —
+    the same resolution the governed MCP proxy uses.
+    """
+    from agentarea_common.base.repository_factory import RepositoryFactory
+    from agentarea_governance.application import GovernancePolicyResolver
+
+    resolver = GovernancePolicyResolver(RepositoryFactory(session, user_ctx))
+    effective = await resolver.resolve(
+        workspace_id=user_ctx.workspace_id,
+        user_id=user_ctx.user_id,
+    )
+    return effective.to_json_dict()
+
+
+def _actor_type(principal, client_id: str) -> str:
+    if principal.client_id == client_id:
+        return "client"
+    return "api_key" if principal.api_key_id else "user"
 
 
 async def _resolve_client_scope(client_id: str) -> ClientScope | None:
@@ -237,7 +277,90 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
                 skill_registry=skill_registry,
                 platform_tools=_platform_tools(client_id, platform_toolsets),
                 user_context=user_ctx,
+                tool_policy=await _effective_tool_policy(session, user_ctx),
+                actor_type=_actor_type(principal, client_id),
             )
+
+
+def _policy_aliases(scope: ClientScope, tool_name: str) -> tuple[str, ...]:
+    """The other names a policy rule may give one of the client's instance tools.
+
+    The same names an agent's call to that tool answers to (see
+    ``McpToolIdentity.policy_names``): the canonical ``mcp:<instance id>:<raw>``,
+    the server referenced by name, the ``mcp__<server>__<raw>`` an agent calls it
+    by, and the raw name the server advertises — so a rule written against an
+    agent's use of the tool governs the client's use of it too.
+    """
+    if tool_name in scope.platform_tools:
+        return ()
+    owner = scope.proxy.owner_of(tool_name)
+    if owner is None:
+        return ()
+    member, raw_name = owner
+    instance_id = str(member.mcp_instance_id)
+    names = [mcp_tool_target(instance_id, raw_name)]
+    if instance_name := scope.proxy.instance_names.get(instance_id):
+        names += [
+            mcp_tool_target(instance_name, raw_name),
+            qualify_mcp_tool_name(instance_name, raw_name),
+        ]
+    names.append(raw_name)
+    return tuple(names)
+
+
+def _client_tool_decision(scope: ClientScope, tool_name: str) -> ToolAuthorizationDecision:
+    """The PDP's verdict on the client running ``tool_name``, approval folded into deny.
+
+    An approval requirement holds an agent's run until a human resolves the
+    escalation. A client's call is a synchronous request from a harness the
+    platform does not drive: there is no run to suspend and no channel to come
+    back on once someone approves, so the call is refused and says why.
+    """
+    decision = decide_tool_policy(
+        scope.tool_policy, tool_name, aliases=_policy_aliases(scope, tool_name)
+    )
+    if decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL:
+        return ToolAuthorizationDecision(
+            ToolAuthorizationAction.REQUIRE_APPROVAL,
+            f"{decision.reason}; a client call cannot wait for approval, "
+            "so run it from an agent task instead",
+        )
+    return decision
+
+
+async def _audit_tool_call(
+    client_id: str,
+    scope: ClientScope,
+    tool_name: str,
+    arguments: dict,
+    decision: ToolAuthorizationDecision,
+) -> None:
+    """Record one client tool call's verdict before anything runs.
+
+    Written in its own transaction ahead of the call, so a call that runs is
+    always on record, and a failure to record stops the call. Argument values
+    never reach the trail — only their keys.
+    """
+    from agentarea_common.audit import AuditService
+    from agentarea_common.config.database import get_database
+
+    owner = None if tool_name in scope.platform_tools else scope.proxy.owner_of(tool_name)
+    metadata: dict = {
+        "tool": tool_name,
+        "decision": decision.action.value,
+        "reason": decision.reason,
+        "argument_keys": sorted(arguments),
+    }
+    if owner is not None:
+        metadata["mcp_instance_id"] = str(owner[0].mcp_instance_id)
+    async with get_database().session() as session:
+        await AuditService(session, scope.user_context).record(
+            "tool.call.allowed" if decision.allowed else "tool.call.denied",
+            "client",
+            client_id,
+            actor_type=scope.actor_type,
+            event_metadata=metadata,
+        )
 
 
 def _activate_skill_tool(skill_registry: dict) -> Tool:
@@ -280,6 +403,8 @@ async def _list_tools(_ctx: object, _params: PaginatedRequestParams | None) -> L
         )
         for t in await scope.proxy.list_namespaced_tools()
     )
+    # Disclosed is a subset of authorized: a tool the client may not run is not offered.
+    tools = [tool for tool in tools if _client_tool_decision(scope, tool.name).allowed]
     if scope.skill_registry:
         tools.append(_activate_skill_tool(scope.skill_registry))
     return ListToolsResult(tools=tools)
@@ -297,18 +422,35 @@ async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolRes
         raise ValueError("Client not found")
 
     arguments = params.arguments or {}
-    if params.name in scope.platform_tools:
-        # Run as the caller in the client's workspace: the tool's own
-        # authorization checks apply exactly as on /mcp/w/{workspace}.
-        with use_mcp_user_context(scope.user_context), selected_tools(scope.platform_tools):
-            return await client_platform_server().call_tool_result(params.name, arguments)
     if params.name == "activate_skill":
+        # Control flow over the client's own skills, not a capability: policy
+        # never gates it, as for an agent (CONTROL_FLOW_TOOL_NAMES).
         from agentarea_agents_sdk.skills.skill_toolset import SkillActivationTool
 
         skill_name = arguments.get("skill_name", "")
         result = SkillActivationTool(scope.skill_registry).activate_skill(skill_name)
-    else:
-        result = await scope.proxy.call_namespaced_tool(params.name, arguments)
+        text = result if isinstance(result, str) else str(result)
+        return CallToolResult(content=[TextContent(type="text", text=text)])
+
+    is_platform_tool = params.name in scope.platform_tools
+    if not is_platform_tool and scope.proxy.owner_of(params.name) is None:
+        # Not a tool of this client: nothing to judge, nothing ran.
+        raise ValueError(f"No member owns tool {params.name}")
+
+    decision = _client_tool_decision(scope, params.name)
+    await _audit_tool_call(client_id, scope, params.name, arguments, decision)
+    if not decision.allowed:
+        return CallToolResult(
+            content=[TextContent(type="text", text=f"Tool call refused: {decision.reason}")],
+            is_error=True,
+        )
+
+    if is_platform_tool:
+        # Run as the caller in the client's workspace: the tool's own
+        # authorization checks apply exactly as on /mcp/w/{workspace}.
+        with use_mcp_user_context(scope.user_context), selected_tools(scope.platform_tools):
+            return await client_platform_server().call_tool_result(params.name, arguments)
+    result = await scope.proxy.call_namespaced_tool(params.name, arguments)
     text = result if isinstance(result, str) else str(result)
     return CallToolResult(content=[TextContent(type="text", text=text)])
 

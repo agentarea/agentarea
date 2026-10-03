@@ -581,8 +581,8 @@ def create_app() -> FastAPI:
             code="budget_cap_exceeded",
             detail=str(exc),
             extra={
-                "current_mtd_usd": exc.current_mtd_usd,
-                "cap_usd": exc.cap_usd,
+                "current_mtd_usd": float(exc.current_mtd_usd),
+                "cap_usd": float(exc.cap_usd),
                 "currency": exc.currency,
                 "workspace_id": exc.workspace_id,
             },

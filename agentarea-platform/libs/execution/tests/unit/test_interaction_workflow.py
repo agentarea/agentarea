@@ -278,7 +278,10 @@ async def test_unavailable_approval_denies_tool_without_escalation(instance):
         "requires_human_approval": True,
         "approvers": ["user:owner"],
     }
-    with patch(f"{MODULE}.wait_condition", new=AsyncMock()) as wait:
+    with (
+        patch(f"{MODULE}.wait_condition", new=AsyncMock()) as wait,
+        patch(f"{MODULE}.patched", return_value=True),
+    ):
         allowed, policy_approval_granted = await instance._gate_tool_call(
             call("shell", command="deploy")
         )
@@ -347,7 +350,10 @@ async def test_unavailable_input_is_hidden_from_actual_model_request(instance):
             "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
         }
 
-    with patch(f"{MODULE}.execute_activity", side_effect=model_activity):
+    with (
+        patch(f"{MODULE}.execute_activity", side_effect=model_activity),
+        patch(f"{MODULE}.patched", return_value=True),
+    ):
         response = await instance._call_llm()
     assert response["content"] == "Completed autonomously"
 
@@ -491,7 +497,8 @@ async def test_completed_business_turn_waits_until_execution_finished_event(inst
     waiting = next(event for event in events if event["event_type"] == "task.awaiting_follow_up")
     assert waiting["data"]["final_response"] == "Delivered"
     assert "execution.finished" not in [event["event_type"] for event in events]
-    result = await instance._finalize_execution({})
+    with patch(f"{MODULE}.patched", return_value=True):
+        result = await instance._finalize_execution({})
     assert result.status == "completed"
     finished = instance._events.get_pending_events()[-1]
     assert finished["event_type"] == "execution.finished"

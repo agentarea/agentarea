@@ -134,7 +134,7 @@ class ToolDisclosureMixin(ToolApprovalMixin):
             self.state.effective_policy,
             self._tool_catalog.activate(source_name),
             self.state.mcp_tool_routes,
-            self.state.agent_config.get("tools"),
+            *self._policy_tool_configs(),
         )
         if new_tools:
             self.state.available_tools.extend(new_tools)

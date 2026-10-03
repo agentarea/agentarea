@@ -181,14 +181,34 @@ class TestDeriveLifecycle:
 class TestReduceParts:
     def test_chunks_then_final_collapse_to_one_final(self):
         events = [
-            ("llm.call.chunk", {"execution_id": "e", "iteration": 1, "chunk": "h", "chunk_index": 0}),
-            ("llm.call.chunk", {"execution_id": "e", "iteration": 1, "chunk": "i", "chunk_index": 1}),
+            (
+                "llm.call.chunk",
+                {"execution_id": "e", "iteration": 1, "chunk": "h", "chunk_index": 0},
+            ),
+            (
+                "llm.call.chunk",
+                {"execution_id": "e", "iteration": 1, "chunk": "i", "chunk_index": 1},
+            ),
             ("llm.call.completed", {"execution_id": "e", "iteration": 1, "content": "hi"}),
         ]
         parts = reduce_parts(events)
         assert len(parts) == 1
         assert parts[0].event_type == "llm.call.completed"
         assert parts[0].part_id == "e:1"
+
+    def test_compaction_call_never_merges_with_the_turn_reply(self):
+        events = [
+            (
+                "llm.call.completed",
+                {"execution_id": "e", "iteration": 3, "purpose": "compaction", "content": ""},
+            ),
+            ("llm.call.started", {"execution_id": "e", "iteration": 3}),
+            ("llm.call.completed", {"execution_id": "e", "iteration": 3, "content": "answer"}),
+        ]
+        parts = reduce_parts(events)
+        reply = next(p for p in parts if p.part_id == "e:3")
+        assert reply.data["content"] == "answer"
+        assert [p.part_id for p in parts] == ["e:3:compaction", "e:3"]
 
     def test_form_supersede_two_requests_same_id(self):
         events = [

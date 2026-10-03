@@ -10,6 +10,7 @@ from collections.abc import AsyncGenerator
 from typing import Annotated, Literal, NoReturn
 from uuid import NAMESPACE_URL, UUID, uuid5
 
+from agentarea_api.api.deps.services import AuditServiceDep
 from agentarea_common.auth.dependencies import (
     PrincipalDep,
     UnboundPrincipalDep,
@@ -29,6 +30,7 @@ from agentarea_common.config import get_database
 from agentarea_common.rebac import OpenFGAError
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_common.workspaces import (
+    INVITATION_STATUS_REVOKED,
     InvitationAddressedElsewhere,
     InvitationAlreadyAccepted,
     InvitationExpired,
@@ -299,6 +301,7 @@ async def create_invitation(
     user: UserContextDep,
     service: InvitationServiceDep,
     session: SessionDep,
+    audit: AuditServiceDep,
 ):
     """Create an invitation link for the given workspace.
 
@@ -313,6 +316,12 @@ async def create_invitation(
     if body.expires_in_days is not None:
         kwargs["expires_in_days"] = body.expires_in_days
     invitation, token = await service.create_invitation(**kwargs)
+    await audit.record(
+        "member.invite",
+        "invitation",
+        invitation.id,
+        event_metadata={"resource_name": invitation.email},
+    )
     delivery = await deliver_invitation_for_workspace(
         workspace_repo=WorkspaceRepository(session),
         workspace_id=invitation.workspace_id,
@@ -348,14 +357,22 @@ async def revoke_invitation(
     invitation_id: UUID,
     user: UserContextDep,
     service: InvitationServiceDep,
+    audit: AuditServiceDep,
 ):
     """Revoke a pending invitation. Idempotent — already-resolved invitations are no-ops."""
     try:
-        await service.revoke(
+        invitation = await service.revoke(
             actor=user, workspace_id=user.workspace_id, invitation_id=invitation_id
         )
     except InvitationNotFound as exc:
         raise HTTPException(status_code=404, detail="Invitation not found") from exc
+    if invitation.status == INVITATION_STATUS_REVOKED:
+        await audit.record(
+            "member.invitation_revoke",
+            "invitation",
+            invitation.id,
+            event_metadata={"resource_name": invitation.email},
+        )
 
 
 @principal_router.post(
@@ -495,6 +512,7 @@ async def remove_member(
     user_id: str,
     user: UserContextDep,
     memberships: MembershipServiceDep,
+    audit: AuditServiceDep,
 ):
     """Remove a member from the workspace.
 
@@ -516,5 +534,12 @@ async def remove_member(
     except OpenFGAError as exc:
         logger.exception("Failed to revoke workspace membership")
         _raise_membership_graph_unavailable(exc)
+    # The membership has ended either way; only the graph catching up differs.
+    await audit.record(
+        "member.remove",
+        "member",
+        user_id,
+        event_metadata={"self_removal": user_id == user.user_id, "access_revoked": revoked},
+    )
     if not revoked:
         return JSONResponse(status_code=202, content=MemberRemovalPendingResponse().model_dump())

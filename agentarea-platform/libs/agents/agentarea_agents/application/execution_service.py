@@ -98,13 +98,9 @@ class ExecutionService(ExecutionServiceInterface):
                 "error": str(e),
             }
 
-    async def get_effective_policy(self, execution_id: str) -> dict[str, Any] | None:
-        """Get the effective governance policy from the workflow orchestrator."""
-        try:
-            return await self._workflow_orchestrator.get_workflow_effective_policy(execution_id)
-        except Exception as e:
-            logger.exception(f"Failed to get effective policy: {e}")
-            return None
+    async def get_live_state(self, execution_id: str) -> dict[str, Any] | None:
+        """The running workflow's own state, from the workflow orchestrator."""
+        return await self._workflow_orchestrator.get_workflow_live_state(execution_id)
 
     async def get_pending_escalations(self, execution_id: str) -> list[dict[str, Any]]:
         """Get the unresolved escalations, with their arguments, from the workflow."""
@@ -198,8 +194,8 @@ class WorkflowOrchestratorInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_workflow_effective_policy(self, execution_id: str) -> dict[str, Any] | None:
-        """Get the effective governance policy from the workflow."""
+    async def get_workflow_live_state(self, execution_id: str) -> dict[str, Any] | None:
+        """The running workflow's own state (e.g. a signal-based pause), or None."""
         pass
 
     @abstractmethod

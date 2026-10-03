@@ -18,6 +18,7 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
+from agentarea_common.money import to_money
 from agentarea_common.testing.temporal import temporal_download_dir
 from agentarea_common.workflow.sandbox import create_workflow_runner
 from agentarea_execution.models import (
@@ -87,6 +88,7 @@ class Scenario:
     reply_content: str = ""
     tool_output: str = "ok"
     call_cost: str = "0.0001"
+    compaction_cost: str = "0.0001"
     first_call_cost: str | None = None
     tools_per_turn: int = 1
     llm_failures: int = 0
@@ -323,7 +325,7 @@ def _activities(scenario: Scenario) -> list[Any]:
             context_tokens=estimate_tokens_for_messages(
                 [scenario.log[seq] for seq in (*new_head, *kept)]
             ),
-            cost="0.0001",
+            cost=scenario.compaction_cost,
             usage=LLMUsage(prompt_tokens=1000, completion_tokens=50, total_tokens=1050),
         )
 
@@ -522,6 +524,52 @@ async def test_compaction_replaces_old_turns_with_a_summary(long_run_env):
     assert result.success is True
     assert scenario.compactions >= 1
     assert scenario.published("ContextCompacted")
+
+
+@pytest.mark.asyncio
+async def test_compaction_that_crosses_the_budget_is_persisted_before_the_run_stops(
+    long_run_env,
+):
+    """The summarizing call was paid for; it must reach the log as a metered model call.
+
+    Usage metering projects llm.call.completed and keys a fact on task, execution,
+    iteration, model, token counts and the run's cumulative cost, so the
+    compaction event carries the turn events' identity and the total after its
+    own cost.
+    """
+    scenario = Scenario(
+        iterations=30, context_window=8_000, tool_output="y" * 2_000, compaction_cost="5"
+    )
+    async with _Run(long_run_env.client, scenario) as run:
+        handle = await run.start(_request(scenario, budget_usd="1"))
+        result = await asyncio.wait_for(handle.result(), timeout=120)
+
+    assert result.success is False
+    assert result.failure_reason == "budget_exceeded"
+    assert scenario.compactions == 1
+    events = [scenario.events[event_id] for event_id in scenario.event_order]
+    completed = [e for e in events if e["event_type"] == "llm.call.completed"]
+    [metered] = [e for e in completed if e["data"].get("purpose") == "compaction"]
+    turns = [e for e in completed if e["data"].get("purpose") is None]
+    last_turn = turns[-1]
+    started = [e for e in events if e["event_type"] == "IterationStarted"]
+
+    data = metered["data"]
+    assert to_money(data["cost"]) == to_money("5")
+    assert data["usage"]["usage"] == {
+        "prompt_tokens": 1000,
+        "completion_tokens": 50,
+        "total_tokens": 1050,
+    }
+    assert data["model_id"] == "model-long-run"
+    assert data["task_id"] == last_turn["data"]["task_id"]
+    assert data["execution_id"] == last_turn["data"]["execution_id"]
+    assert data["iteration"] == started[-1]["data"]["iteration"]
+    assert to_money(data["total_cost"]) == to_money(last_turn["data"]["total_cost"]) + 5
+    assert scenario.published("ContextCompacted")
+    assert events.index(metered) < next(
+        index for index, e in enumerate(events) if e["event_type"] == "task.failed"
+    )
 
 
 @pytest.mark.asyncio
