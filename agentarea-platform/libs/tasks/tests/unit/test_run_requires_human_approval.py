@@ -87,6 +87,7 @@ def _service() -> tuple[TaskService, MagicMock]:
         policy_resolver=_Resolver(),
     )
     service.create_task = AsyncMock(side_effect=lambda task: task)
+    service._pin_run = AsyncMock(return_value=None)
     return service, task_manager
 
 

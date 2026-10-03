@@ -178,7 +178,7 @@ def activity_context(monkeypatch):
         "fetch_runtime_manifest",
         AsyncMock(return_value=RuntimeDiscoveryResult()),
     )
-    monkeypatch.setattr(config_activities, "_record_task_config_hash", AsyncMock())
+    monkeypatch.setattr(config_activities, "_pinned_revision_spec", AsyncMock(return_value=None))
     all_activities = {fn.__name__: fn for fn in activities.make_agent_activities(MagicMock())}
     return ctx, all_activities
 
@@ -505,3 +505,66 @@ async def test_workflow_forwards_selections_and_keeps_policy_filtering(monkeypat
     assert "restricted_action" not in {
         tool["function"]["name"] for tool in flow.state.available_tools
     }
+
+
+@pytest.mark.asyncio
+async def test_a_pinned_run_executes_its_revision_not_the_live_agent(activity_context, monkeypatch):
+    from agentarea_agents.serving.revision_spec import RevisionSpec
+
+    ctx, functions = activity_context
+    kept = skill("Kept")
+    saved = agent(tools=[{"type": "mcp", "name": "live-only"}], skills=[kept])
+    pinned_model = str(uuid4())
+    spec = RevisionSpec(
+        instruction="Pinned instruction",
+        model_id=pinned_model,
+        tools=[{"type": "mcp", "name": "pinned"}],
+        skill_ids=[str(kept.id)],
+        planning=True,
+        a2ui_enabled=False,
+    )
+    monkeypatch.setattr(config_activities, "_pinned_revision_spec", AsyncMock(return_value=spec))
+    ctx.get_agent_service.return_value.get_with_skills.return_value = saved
+    ctx.get_model_instance_service.return_value.get.return_value = SimpleNamespace(
+        model_spec=SimpleNamespace(
+            kind="chat", context_window=64000, default_context_strategy="static"
+        )
+    )
+
+    result = await functions["build_agent_config_activity"](
+        AgentConfigRequest(
+            agent_id=saved.id,
+            user_context_data={"user_id": "user", "workspace_id": "workspace"},
+            task_id=uuid4(),
+        )
+    )
+
+    assert result.instruction.startswith("Pinned instruction")
+    assert result.model_id == pinned_model
+    assert result.tools == [{"type": "mcp", "name": "pinned"}]
+    assert result.planning is True
+    assert [s.name for s in result.skills] == ["Kept"]
+    assert result.config_hash == spec.config_hash()
+    assert saved.instruction == "Do the task"
+
+
+@pytest.mark.asyncio
+async def test_a_pinned_skill_that_no_longer_exists_fails_the_run(activity_context, monkeypatch):
+    from agentarea_agents.serving.revision_spec import RevisionSpec
+
+    ctx, functions = activity_context
+    saved = agent()
+    spec = RevisionSpec(instruction="x", model_id=saved.model_id, skill_ids=[str(uuid4())])
+    monkeypatch.setattr(config_activities, "_pinned_revision_spec", AsyncMock(return_value=spec))
+    ctx.get_agent_service.return_value.get_with_skills.return_value = saved
+
+    with pytest.raises(ApplicationError) as error:
+        await functions["build_agent_config_activity"](
+            AgentConfigRequest(
+                agent_id=saved.id,
+                user_context_data={"user_id": "user", "workspace_id": "workspace"},
+                task_id=uuid4(),
+            )
+        )
+
+    assert error.value.non_retryable

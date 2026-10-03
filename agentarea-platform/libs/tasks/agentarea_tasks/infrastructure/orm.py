@@ -5,7 +5,18 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, DateTime, Index, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -41,6 +52,18 @@ class TaskORM(BaseModel, WorkspaceScopedMixin):  # SoftDeleteMixin commented out
     execution_id: Mapped[str] = mapped_column(String(255), nullable=True)
     task_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True)
     project_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    agent_revision_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("agent_revisions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    experiment_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("agent_experiments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
 
 class TaskEventORM(EventBaseModel, WorkspaceScopedMixin):

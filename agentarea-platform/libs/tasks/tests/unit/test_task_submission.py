@@ -90,6 +90,7 @@ def _make_service(temporal_executor=None):
     )
     # Short-circuit create_task for unit isolation (bypasses audit decorator + db plumbing).
     service.create_task = AsyncMock(side_effect=lambda t: t)
+    service._pin_run = AsyncMock(return_value=None)
 
     return service, {
         "task_repo": task_repo,

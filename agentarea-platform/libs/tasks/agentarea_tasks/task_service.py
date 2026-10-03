@@ -40,6 +40,7 @@ from .infrastructure.repository import TaskRepository
 from .schemas.dto import RunCreate
 
 if TYPE_CHECKING:
+    from agentarea_agents.serving.pinning import RunPin, RunPinner
     from agentarea_common.base import RepositoryFactory
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,13 @@ def _task_resource_selection_key(parameters: dict[str, Any] | None) -> tuple | N
                 return None
         groups.append(frozenset(identities))
     return tuple(groups)
+
+
+_RUN_OVERRIDE_KEYS = ("model_override", "mcps", "mcp", "mcp_servers", "skills")
+
+
+def _has_run_overrides(parameters: dict[str, Any] | None) -> bool:
+    return any((parameters or {}).get(key) for key in _RUN_OVERRIDE_KEYS)
 
 
 class TaskService(BaseTaskService):
@@ -257,6 +265,42 @@ class TaskService(BaseTaskService):
             raise ValueError(f"Agent with ID {agent_id} does not exist")
         return agent
 
+    def _run_pinner(self) -> "RunPinner":
+        from agentarea_agents.serving.pinning import RunPinner
+
+        if self.agent_repository is None:
+            raise RuntimeError("pinning a run needs the agent repository")
+        return RunPinner(self.agent_repository.session, self.agent_repository.user_context)
+
+    async def _pin_run(
+        self,
+        agent: Any,
+        task_id: UUID,
+        parameters: dict[str, Any],
+        explicit_revision_id: UUID | None,
+    ) -> "RunPin | None":
+        """The revision this run executes; ``None`` only without an agent repository."""
+        if agent is None or self.agent_repository is None:
+            return None
+        from agentarea_agents.serving.pinning import RunPin
+
+        pinner = self._run_pinner()
+        overridden = _has_run_overrides(parameters)
+        if explicit_revision_id is not None:
+            if overridden:
+                raise ValueError("a run pinned to a revision cannot carry per-run overrides")
+            revision = await pinner.revisions.get(agent.id, explicit_revision_id)
+            if revision is None:
+                raise ValueError(
+                    f"revision {explicit_revision_id} does not belong to agent {agent.id}"
+                )
+            return RunPin(revision_id=revision.id)
+        if overridden:
+            # A run that changes its own resources is not a sample of any arm.
+            current = await pinner.revisions.ensure_current(agent, origin="detected")
+            return RunPin(revision_id=current.id)
+        return await pinner.pin(agent, task_id)
+
     @staticmethod
     def _require_agent_model(agent, agent_id: UUID, parameters: dict[str, Any] | None) -> None:
         """Fail fast when an agent has no model to run with.
@@ -295,6 +339,7 @@ class TaskService(BaseTaskService):
         upper_bound_policy: EffectivePolicy | None = None,
         require_model: bool = False,
         scheduled_at: datetime | None = None,
+        agent_revision_id: UUID | None = None,
     ) -> AgentTask:
         """Persist a task with resolved governance policy. Does not dispatch to Temporal.
 
@@ -305,6 +350,10 @@ class TaskService(BaseTaskService):
         ``require_model`` is set by the execution path so a run is rejected up
         front when the agent has no model configured; persist-only callers leave
         it ``False``.
+
+        ``agent_revision_id`` pins the run to that revision of the agent (an
+        evaluation trial). Without it the run gets the agent's serving revision,
+        or an experiment arm when one is running.
 
         Raises:
             ValueError: If no owner is supplied. A task carries its creator's
@@ -352,6 +401,7 @@ class TaskService(BaseTaskService):
         agent = await self._validate_agent_exists(agent_id)
         if require_model:
             self._require_agent_model(agent, agent_id, parameters)
+        pin = await self._pin_run(agent, new_task_id, parameters, agent_revision_id)
         metadata: dict[str, Any] = {}
         if metadata_overrides:
             metadata.update(metadata_overrides)
@@ -390,7 +440,11 @@ class TaskService(BaseTaskService):
             task_parameters=parameters,
             metadata=metadata,
             scheduled_at=scheduled_at,
+            agent_revision_id=pin.revision_id if pin else None,
+            experiment_id=pin.experiment_id if pin else None,
         )
+        if pin is not None and pin.arm is not None:
+            task.metadata["experiment_arm"] = pin.arm
         stored_task = await self.create_task(task)
         # Hand the exact DB-persisted snapshot to Temporal. Policy changes after
         # this point must not affect the run.

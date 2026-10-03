@@ -4,6 +4,7 @@ import hashlib
 import logging
 from collections.abc import Callable
 from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -219,24 +220,77 @@ async def _prepare_task_files(
     return descriptors
 
 
-async def _record_task_config_hash(ctx: Any, task_id: UUID, config_hash: str) -> None:
-    """Stamp the run with the hash of the agent config it resolved.
+async def _pinned_revision_spec(ctx: Any, agent_id: UUID, task_id: UUID) -> Any:
+    """The revision spec this run is pinned to; ``None`` for a run with no pin.
 
-    Recorded so a finished run can be told apart from the agent's current
-    definition. Best-effort: losing the stamp must not fail the run, but it is
-    logged loudly enough to notice.
+    A pin that names a revision which no longer exists fails the run: running
+    whatever the agent is now would report results against a config that never
+    ran.
     """
-    from agentarea_tasks.infrastructure.repository import TaskRepository
+    from agentarea_agents.serving.repository import AgentRevisionRepository
+    from agentarea_agents.serving.revision_spec import RevisionSpec
+    from agentarea_tasks.infrastructure.orm import TaskORM
+    from sqlalchemy import select
 
-    try:
-        session = ctx.container._database.async_session_factory()
-        ctx._sessions.append(session)
-        repo = TaskRepository(session, ctx.user_context)
-        # ActivityContext commits every session it owns on exit.
-        if not await repo.merge_metadata(task_id, {"agent_config_hash": config_hash}):
-            logger.warning("Task %s vanished before its config hash could be recorded", task_id)
-    except Exception:
-        logger.warning("Failed to record config hash for task %s", task_id, exc_info=True)
+    session = ctx.container._database.async_session_factory()
+    ctx._sessions.append(session)
+    result = await session.execute(select(TaskORM.agent_revision_id).where(TaskORM.id == task_id))
+    revision_id = result.scalar_one_or_none()
+    if revision_id is None:
+        return None
+    revision = await AgentRevisionRepository(session, ctx.user_context).get_for_agent(
+        agent_id, revision_id
+    )
+    if revision is None:
+        raise ApplicationError(
+            f"Task {task_id} is pinned to revision {revision_id}, which no longer exists",
+            non_retryable=True,
+        )
+    return RevisionSpec.from_dict(revision.spec)
+
+
+@dataclass(frozen=True)
+class _AgentAtRevision:
+    """The agent as its pinned revision defines it; never the ORM row itself."""
+
+    id: Any
+    name: str
+    description: str | None
+    instruction: str | None
+    model_id: str | None
+    tools: list[dict[str, Any]]
+    skills: list[Any]
+    planning: bool | None
+    a2ui_enabled: bool | None
+    agent_type: str
+
+
+async def _agent_at_revision(agent: Any, spec: Any, ctx: Any) -> _AgentAtRevision:
+    attached = {str(skill.id): skill for skill in getattr(agent, "skills", None) or []}
+    skills = []
+    skill_service = None
+    for skill_id in spec.skill_ids:
+        found = attached.get(skill_id)
+        if found is None:
+            skill_service = skill_service or await ctx.get_skill_service()
+            found = await skill_service.get_with_catalog(UUID(skill_id))
+        if found is None:
+            raise ApplicationError(
+                f"Skill {skill_id} of the pinned revision no longer exists", non_retryable=True
+            )
+        skills.append(found)
+    return _AgentAtRevision(
+        id=agent.id,
+        name=agent.name,
+        description=agent.description,
+        instruction=spec.instruction,
+        model_id=spec.model_id,
+        tools=deepcopy(spec.tools),
+        skills=skills,
+        planning=spec.planning,
+        a2ui_enabled=spec.a2ui_enabled,
+        agent_type=getattr(agent, "agent_type", "stateless") or "stateless",
+    )
 
 
 def make_config_activities(
@@ -268,6 +322,10 @@ def make_config_activities(
                 agent = await agent_service.get_with_catalog(request.agent_id)
             if not agent:
                 raise AgentNotFoundError(f"Agent {request.agent_id} not found")
+            if request.task_id is not None:
+                spec = await _pinned_revision_spec(ctx, request.agent_id, request.task_id)
+                if spec is not None:
+                    agent = await _agent_at_revision(agent, spec, ctx)
 
             tools, skills = await _resolve_task_resources(agent, request.task_parameters, ctx)
             runtime = await discover_runtime_manifest_activity()
@@ -331,12 +389,10 @@ def make_config_activities(
                     "model_id": model_id_str,
                     "tools": tools,
                     "planning": agent.planning,
-                    "agent_type": getattr(agent, "agent_type", None),
+                    "a2ui_enabled": agent.a2ui_enabled,
                 },
                 skill_ids=[str(s.id) for s in skills],
             )
-            if request.task_id is not None:
-                await _record_task_config_hash(ctx, request.task_id, config_hash)
 
             execution_context = deepcopy(request.execution_context)
             attachments = await _prepare_task_files(request, user_context)

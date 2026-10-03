@@ -37,6 +37,8 @@ class Task(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     execution_id: str | None = None  # Temporal workflow execution ID
+    agent_revision_id: UUID | None = None
+    experiment_id: UUID | None = None
     user_id: str | None = None
     workspace_id: str | None = None
     scheduled_at: datetime | None = None  # One-shot future run; None means run now
@@ -193,6 +195,9 @@ class AgentTask(BaseModel):
     scheduled_at: datetime | None = None  # One-shot future run; None means run now
     metadata: dict[str, Any] = Field(default_factory=dict)  # Additional task metadata
     effective_policy: dict[str, Any] | None = None  # Resolved governance policy passed to execution
+    # The agent revision this run executes, and the experiment that chose it.
+    agent_revision_id: UUID | None = None
+    experiment_id: UUID | None = None
 
     _validate_scheduled_at = field_validator("scheduled_at")(_require_aware)
 

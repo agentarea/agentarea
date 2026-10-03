@@ -23,6 +23,8 @@ REVISION_CANDIDATE = "candidate"
 REVISION_ARCHIVED = "archived"
 
 EXPERIMENT_RUNNING = "running"
+EXPERIMENT_STOPPED = "stopped"
+EXPERIMENT_PROMOTED = "promoted"
 
 _JSONB = JSON().with_variant(JSONB(), "postgresql")
 

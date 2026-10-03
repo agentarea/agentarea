@@ -91,6 +91,8 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             "completed_at": entity.completed_at,
             "scheduled_at": entity.scheduled_at,
             "execution_id": entity.execution_id,
+            "agent_revision_id": entity.agent_revision_id,
+            "experiment_id": entity.experiment_id,
             "task_metadata": metadata,
         }
 
@@ -122,6 +124,8 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             "completed_at": entity.completed_at,
             "scheduled_at": entity.scheduled_at,
             "execution_id": entity.execution_id,
+            "agent_revision_id": entity.agent_revision_id,
+            "experiment_id": entity.experiment_id,
             "task_metadata": metadata,
         }
 
@@ -402,6 +406,8 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
                 "completed_at": task_orm.completed_at,
                 "scheduled_at": task_orm.scheduled_at,
                 "execution_id": task_orm.execution_id,
+                "agent_revision_id": task_orm.agent_revision_id,
+                "experiment_id": task_orm.experiment_id,
                 "user_id": task_orm.created_by,
                 "workspace_id": task_orm.workspace_id,
                 "metadata": task_metadata,
