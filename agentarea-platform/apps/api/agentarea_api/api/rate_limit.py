@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 from collections.abc import Awaitable
@@ -47,26 +48,39 @@ redis.call('EXPIRE', KEYS[1], ARGV[2])
 return {allowed, retry_after}
 """
 
-_rate_limit_redis: redis.Redis | None = None
+# An asyncio Redis client belongs to the loop it first connected on. A host that
+# serves requests from more than one loop (Starlette's TestClient without a
+# context manager runs each request on its own) would otherwise reuse a client
+# whose loop is closed and fail every rate-limited request after the first.
+_rate_limit_redis: tuple[asyncio.AbstractEventLoop, redis.Redis] | None = None
 
 
 def _get_redis_client() -> redis.Redis:
     global _rate_limit_redis
-    if _rate_limit_redis is None:
-        _rate_limit_redis = redis.from_url(
-            get_settings().mcp.REDIS_URL,
-            decode_responses=True,
-            socket_connect_timeout=1,
-            socket_timeout=1,
+    loop = asyncio.get_running_loop()
+    if _rate_limit_redis is None or _rate_limit_redis[0] is not loop:
+        _rate_limit_redis = (
+            loop,
+            redis.from_url(
+                get_settings().mcp.REDIS_URL,
+                decode_responses=True,
+                socket_connect_timeout=1,
+                socket_timeout=1,
+            ),
         )
-    return _rate_limit_redis
+    return _rate_limit_redis[1]
 
 
 async def close_rate_limit_client() -> None:
     global _rate_limit_redis
-    if _rate_limit_redis is not None:
-        await _rate_limit_redis.aclose()
-        _rate_limit_redis = None
+    if _rate_limit_redis is None:
+        return
+    loop, client = _rate_limit_redis
+    _rate_limit_redis = None
+    # A client from a loop that has since closed cannot be closed from here;
+    # its connections went with that loop.
+    if loop is asyncio.get_running_loop():
+        await client.aclose()
 
 
 async def enforce_rate_limit(*, scope: str, identity: str, limit: int) -> None:
