@@ -16,7 +16,7 @@ from typing import Any
 
 # Bump when the hashed field set changes, so hashes computed under different
 # rules are never compared as if they meant the same thing.
-CONFIG_HASH_VERSION = "v2"
+CONFIG_HASH_VERSION = "v3"
 
 # Only fields the runtime actually acts on. Renaming an agent must not look like
 # a behaviour change.
@@ -25,7 +25,7 @@ _HASHED_FIELDS = (
     "model_id",
     "tools",
     "planning",
-    "agent_type",
+    "a2ui_enabled",
 )
 
 

@@ -1,7 +1,9 @@
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from sqlalchemy import JSON, Boolean, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
@@ -35,6 +37,10 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     # Forward provenance link to the catalog item this agent was forked from
     # (copy-on-write). Null for agents created from scratch. See ADR-003.
     registry_item_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    # The revision that serves by default. The executable columns above are its
+    # materialized copy; RevisionService keeps the two in step. No foreign key:
+    # revisions reference the agent, and a cycle would block deleting either.
+    current_revision_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
 
     # Relationships
     skills: Mapped[list["Skill"]] = relationship(

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from agentarea_agents.serving.models import AgentRevision
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.domain.skill_models import Skill, agent_skills_table
 from agentarea_api.api.deps.services import get_db_session
@@ -59,6 +60,7 @@ async def session_factory():
                     Workspace.__table__,
                     APIKey.__table__,
                     Agent.__table__,
+                    AgentRevision.__table__,
                     Skill.__table__,
                     agent_skills_table,
                 ],

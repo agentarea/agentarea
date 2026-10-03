@@ -8,6 +8,7 @@ workspace admin may bind one, and only to a secret no connection manages.
 from uuid import uuid4
 
 import pytest
+from agentarea_agents.serving.models import AgentRevision
 from agentarea_agents.application.agent_service import AgentService, InvalidDelegateError
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.domain.skill_models import Skill, agent_skills_table
@@ -40,6 +41,7 @@ async def session():
                 sync_conn,
                 tables=[
                     Agent.__table__,
+                    AgentRevision.__table__,
                     Skill.__table__,
                     agent_skills_table,
                     PolicyRuleORM.__table__,

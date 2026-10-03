@@ -1,6 +1,7 @@
 """Decorator for automatic audit logging on service methods."""
 
 import functools
+import json
 import logging
 from typing import Any
 
@@ -51,6 +52,11 @@ def _redact(value: Any) -> Any:
     return None if value is None else _REDACTED
 
 
+def _json_value(value: Any) -> Any:
+    """``value`` as the audit trail's JSON column can hold it (UUIDs, datetimes as text)."""
+    return json.loads(json.dumps(value, default=str))
+
+
 def _compute_changes(before: dict, after: dict) -> list[dict[str, Any]]:
     """Compute field-level diffs between two dicts.
 
@@ -68,7 +74,7 @@ def _compute_changes(before: dict, after: dict) -> list[dict[str, Any]]:
         if _is_sensitive(key):
             changes.append({"field": key, "before": _redact(old), "after": _redact(new)})
         else:
-            changes.append({"field": key, "before": old, "after": new})
+            changes.append({"field": key, "before": _json_value(old), "after": _json_value(new)})
     return changes
 
 

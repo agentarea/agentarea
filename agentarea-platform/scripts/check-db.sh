@@ -60,7 +60,9 @@ DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${P
 #     under the workflow's id (the primary key decides); the SSE catch-up reads
 #     keyset batches ordered by (timestamp, id) and resumes after a given event;
 #     a conversation entry rewritten at its position replaces the first write.
-PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL)
+#   agent revisions: the per-agent revision number is a unique constraint and a
+#     pointer move locks the agent row; spec and evidence are jsonb.
+PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL SERVING_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
   libs/llm/tests/test_provider_secret_lifecycle_db.py
@@ -81,6 +83,7 @@ PY_SUITES=(
   libs/tasks/tests/test_task_conversation_db.py
   libs/execution/tests/unit/test_publish_workflow_events_db.py
   apps/api/tests/test_task_event_feed_db.py
+  libs/agents/tests/test_revision_service_db.py
 )
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, the secret

@@ -189,3 +189,24 @@ async def test_audited_logs_warning_when_audit_record_fails(monkeypatch):
     mock_warning.assert_called_once()
     # A swallowed traceback makes an audit-write failure undiagnosable.
     assert mock_warning.call_args.kwargs["exc_info"] is True
+
+
+def test_changes_hold_only_json_values():
+    import json
+    from datetime import UTC, datetime
+    from uuid import uuid4
+
+    from agentarea_common.audit.decorator import _compute_changes
+
+    before_id, after_id = uuid4(), uuid4()
+    changes = _compute_changes(
+        {"current_revision_id": before_id, "seen_at": None},
+        {"current_revision_id": after_id, "seen_at": datetime(2026, 10, 3, tzinfo=UTC)},
+    )
+
+    json.dumps(changes)
+    assert changes[0] == {
+        "field": "current_revision_id",
+        "before": str(before_id),
+        "after": str(after_id),
+    }

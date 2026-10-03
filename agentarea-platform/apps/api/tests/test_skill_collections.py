@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from agentarea_agents.serving.models import AgentRevision
 from agentarea_agents.application.collection_service import SkillCollectionService
 from agentarea_agents.domain.collection_models import (
     SkillCollection,
@@ -39,6 +40,7 @@ def _graph_ownership(monkeypatch):
 # Tables needed across the collection + skill graph (SQLite in-memory).
 _TABLES = [
     Agent.__table__,
+    AgentRevision.__table__,
     Skill.__table__,
     SkillCollection.__table__,
     MCPServer.__table__,

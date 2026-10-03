@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
 import pytest
+from agentarea_agents.serving.models import AgentRevision
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.domain.models import Agent
@@ -53,6 +54,7 @@ THEIRS = UserContext(user_id="user-b", workspace_id="ws-b")
 
 _TABLES = [
     Agent.__table__,
+    AgentRevision.__table__,
     Skill.__table__,
     MCPAuthConfig.__table__,
     MCPServerInstance.__table__,

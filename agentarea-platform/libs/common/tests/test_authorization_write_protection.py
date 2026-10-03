@@ -57,6 +57,8 @@ def _create_agent_service(user_context, authz):
     mock_repo_factory.user_context = user_context
     mock_event_broker = AsyncMock()
     service = AgentService(mock_repo_factory, mock_event_broker, authorization_service=authz)
+    revisions = AsyncMock()
+    service.revisions = lambda: revisions
     return service, mock_repo
 
 

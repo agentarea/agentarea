@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from agentarea_agents.serving.models import AgentRevision
 from agentarea_agents.domain.models import Agent
 from agentarea_api.api.v1.dashboard import get_dashboard
 from agentarea_common.auth.context import UserContext
@@ -64,6 +65,7 @@ async def engine():
 
     target_tables = [
         Agent.__table__,
+        AgentRevision.__table__,
         TaskORM.__table__,
         PolicyRuleORM.__table__,
     ]

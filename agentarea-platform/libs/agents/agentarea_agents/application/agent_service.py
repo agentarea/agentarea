@@ -38,6 +38,8 @@ from agentarea_agents.infrastructure.catalog_skill_repository import (
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_agents.schemas.dto import AgentCreate, AgentUpdate
+from agentarea_agents.serving.models import AgentRevision
+from agentarea_agents.serving.revision_service import RevisionService
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +150,9 @@ class AgentService(BaseCrudService[Agent]):
     def _get_agent_repository(self) -> AgentRepository:
         """Get the agent repository with proper type."""
         return self.repository_factory.create_repository(AgentRepository)
+
+    def revisions(self) -> RevisionService:
+        return RevisionService(self.repository_factory.session, self._user_context)
 
     async def _resolve_skills(self, skill_ids: list[UUID] | None) -> list[UUID]:
         """The workspace skill ids to attach for ``skill_ids``.
@@ -430,6 +435,7 @@ class AgentService(BaseCrudService[Agent]):
         if skill_ids:
             repo = self._get_agent_repository()
             await repo.set_skills(agent.id, skill_ids)
+        await self.revisions().ensure_current(agent, origin="create")
 
         await self.event_broker.publish(
             AgentCreated(
@@ -480,6 +486,7 @@ class AgentService(BaseCrudService[Agent]):
         await self._get_catalog_repository().mark_installed(item.id, str(agent.id), item.version)
         if approval_targets:
             await self._sync_approval_rules(agent.id, approval_targets)
+        await self.revisions().ensure_current(agent, origin="catalog")
         return agent
 
     async def list_presets(self) -> builtins.list[AgentPreset]:
@@ -592,6 +599,7 @@ class AgentService(BaseCrudService[Agent]):
         if "skill_ids" in patch and payload.skill_ids is not None:
             repo = self._get_agent_repository()
             await repo.set_skills(agent.id, skill_ids)
+        await self.revisions().ensure_current(agent, origin="update")
 
         await self.event_broker.publish(
             AgentUpdated(
@@ -606,6 +614,85 @@ class AgentService(BaseCrudService[Agent]):
         )
 
         return agent
+
+    async def propose_revision(
+        self,
+        id: UUID,
+        patch: dict[str, Any],
+        *,
+        message: str | None,
+        rationale: str | None,
+        evidence: builtins.list[dict[str, Any]],
+        origin: str,
+    ) -> AgentRevision:
+        """Record a candidate revision; what serves does not change.
+
+        The patch is validated as an update would be. Approval toggles are policy,
+        not revision content, so a candidate carrying them is refused.
+        """
+        agent = await self.get(id)
+        if agent is None:
+            raise NotFoundError(f"Agent {id} not found")
+        await self._check_write_access(agent)
+
+        patch = dict(patch)
+        if "model_id" in patch:
+            patch["model_id"] = await self._validate_model_id(patch["model_id"])
+        if "tools" in patch:
+            approval_targets, tools = self._lift_approval_toggles(list(patch["tools"] or []))
+            if approval_targets:
+                raise ValueError(
+                    "approval settings are policy on the agent; set them on the agent, "
+                    "not in a candidate revision"
+                )
+            await self._validate_tool_models(tools)
+            await self._validate_delegates(
+                tools, agent.tools if isinstance(agent.tools, list) else None
+            )
+            patch["tools"] = tools
+        if "skill_ids" in patch:
+            resolved = await self._resolve_skills(patch["skill_ids"] or [])
+            patch["skill_ids"] = [str(skill_id) for skill_id in resolved]
+
+        return await self.revisions().create_candidate(
+            agent,
+            patch,
+            message=message,
+            origin=origin,
+            rationale=rationale,
+            evidence=evidence,
+        )
+
+    @audited("agent.revision.activate", resource_type="agent", resource_id_param="id")
+    async def activate_revision(self, id: UUID, revision_id: UUID) -> AgentRevision:
+        """Serve ``revision_id``: a candidate's promotion or a rollback."""
+        agent = await self.get(id)
+        if agent is None:
+            raise NotFoundError(f"Agent {id} not found")
+        await self._check_write_access(agent)
+
+        target = await self.revisions().get(agent.id, revision_id)
+        if target is None:
+            raise NotFoundError(f"Revision {revision_id} not found for agent {id}")
+        await release_unticked_approvals(
+            self.repository_factory.session,
+            self.repository_factory.user_context,
+            agent.id,
+            list(target.spec.get("tools") or []),
+        )
+        revision = await self.revisions().activate(agent, revision_id)
+        await self.event_broker.publish(
+            AgentUpdated(
+                agent_id=agent.id,
+                name=agent.name,
+                description=agent.description,
+                model_id=agent.model_id,
+                tools=agent.tools,
+                planning=agent.planning,
+                a2ui_enabled=agent.a2ui_enabled,
+            )
+        )
+        return revision
 
     async def get_by_name(self, name: str) -> Agent | None:
         """Get an agent by name."""

@@ -96,6 +96,14 @@ class FakeAuthz:
         return [user_context.workspace_id]
 
 
+class FakeRevisions:
+    def __init__(self):
+        self.recorded = []
+
+    async def ensure_current(self, agent, *, origin):
+        self.recorded.append((agent, origin))
+
+
 class CapturingSession:
     def __init__(self):
         self.executions = []
@@ -108,6 +116,8 @@ def _service(repo, catalog):
     uc = UserContext(user_id="u1", workspace_id="w1")
     svc = AgentService(FakeFactory(repo, uc), FakeBroker(), FakeAuthz())
     svc._get_agent_repository = lambda: repo
+    revisions = FakeRevisions()
+    svc.revisions = lambda: revisions
     svc._get_catalog_repository = lambda: catalog
     return svc
 
