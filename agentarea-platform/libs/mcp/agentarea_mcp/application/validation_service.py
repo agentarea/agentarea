@@ -30,9 +30,10 @@ class MCPConfigurationValidator:
     def validate_json_spec(json_spec: dict[str, Any]) -> list[str]:
         """Validate MCP server spec transport fields.
 
-        Supports two spec types:
-        - "docker" (default): requires "image"
+        ``type`` is required:
+        - "docker": requires "image"
         - "command": requires "command" field; runs via supergateway sandbox
+        - "url": requires "url" or "endpoint_url"
 
         Args:
             json_spec: The JSON specification to validate
@@ -42,7 +43,7 @@ class MCPConfigurationValidator:
         """
         errors: list[str] = []
 
-        spec_type = json_spec.get("type", "docker")
+        spec_type = json_spec.get("type")
 
         if spec_type == "command":
             # Command type: requires "command" field
@@ -86,8 +87,7 @@ class MCPConfigurationValidator:
                             errors.append(f"Header '{key}' value must be a string")
         elif spec_type == "bundle":
             errors.append("bundle is not a valid MCP server instance type")
-        else:
-            # Docker type (default): requires "image"
+        elif spec_type == "docker":
             if "image" not in json_spec:
                 errors.append("Required field 'image' is missing")
             elif not isinstance(json_spec["image"], str) or not json_spec["image"].strip():
@@ -99,6 +99,10 @@ class MCPConfigurationValidator:
                 or json_spec["port"] > 65535
             ):
                 errors.append("Field 'port' must be an integer between 1 and 65535")
+        elif spec_type is None:
+            errors.append("Required field 'type' is missing (url, docker or command)")
+        else:
+            errors.append(f"Unknown transport type '{spec_type}' (url, docker or command)")
 
         # Validate environment variables if present
         if "environment" in json_spec:

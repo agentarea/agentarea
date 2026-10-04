@@ -59,11 +59,13 @@ from agentarea_mcp.application.oauth_client_service import (
     oauth_app_required_detail,
     oauth_authorize_params,
 )
+from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
+from agentarea_mcp.transport_spec import instance_transport_spec, server_transport_spec
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -171,20 +173,19 @@ def _callback_uri() -> str:
     return f"{api_base}/v1/mcp-oauth/callback"
 
 
-def _resolve_instance_remote_url(server_spec) -> str | None:
-    """Resolve the remote MCP URL from the parent MCPServer.
-
-    Transport fields live on the server: the URL comes from its remote_url
-    column, falling back to the URL in its json_spec.
-    """
-    if server_spec is None:
+def _resolve_instance_remote_url(instance, server_spec) -> str | None:
+    """The remote MCP URL a URL-type instance connects to, else None."""
+    if server_spec is None or instance.transport != MCPTransport.URL:
         return None
-    if getattr(server_spec, "remote_url", None):
-        return server_spec.remote_url
-    spec_json = getattr(server_spec, "json_spec", None) or {}
-    if spec_json.get("type") == "url":
-        return spec_json.get("endpoint_url") or spec_json.get("url")
-    return None
+    return instance_transport_spec(server_spec, instance).get("endpoint_url") or None
+
+
+def _resolve_server_remote_url(server_spec) -> str | None:
+    """The remote MCP URL a URL-type server spec declares, else None."""
+    spec = server_transport_spec(server_spec)
+    if spec.get("type") != MCPTransport.URL:
+        return None
+    return spec.get("endpoint_url") or None
 
 
 async def _load_instance_and_spec(
@@ -200,7 +201,7 @@ async def _load_instance_and_spec(
     if instance.server_spec_id:
         server_repo = MCPServerRepository(db_session, user_context)
         server_spec = await server_repo.get_server_by_id(instance.server_spec_id)
-    return instance, server_spec, _resolve_instance_remote_url(server_spec)
+    return instance, server_spec, _resolve_instance_remote_url(instance, server_spec)
 
 
 def _safe_frontend_base(return_to: str) -> str:
@@ -279,7 +280,7 @@ async def oauth_preflight(
         )
         if server_spec is None:
             raise HTTPException(status_code=404, detail="MCP server spec not found")
-        mcp_url = _resolve_instance_remote_url(server_spec)
+        mcp_url = _resolve_server_remote_url(server_spec)
         connected = False
 
     target = {"instance_id": instance_id, "server_id": server_id, "connected": connected}

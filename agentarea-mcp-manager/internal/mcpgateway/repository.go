@@ -130,36 +130,28 @@ func acquireInstanceLock(ctx context.Context, conn *sql.Conn, instanceID string)
 }
 
 func (r *SQLRepository) LoadInstance(ctx context.Context, instanceID string) (*models.MCPServerInstance, error) {
-	var id, name, workspaceID string
+	var id, name, transport, workspaceID string
 	var instanceJSON, serverJSON, commandJSON []byte
-	var dockerImage, remoteURL sql.NullString
-	// The two json_spec columns have different types — mcp_server_instances.json_spec
-	// is json, mcp_servers.json_spec is jsonb — so each COALESCE has to match its
-	// own column. Defaulting both to ::json makes Postgres reject the whole query.
+	var dockerImage sql.NullString
 	err := r.db.QueryRowContext(ctx, `
-SELECT i.id::text, i.name, i.json_spec, COALESCE(s.json_spec, '{}'::jsonb),
-       s.docker_image_url, s.remote_url, COALESCE(s.cmd, 'null'::json), i.workspace_id
+SELECT i.id::text, i.name, i.transport, i.json_spec, COALESCE(s.json_spec, '{}'::jsonb),
+       s.docker_image_url, COALESCE(s.cmd, 'null'::json), i.workspace_id
 FROM mcp_server_instances i
 JOIN mcp_servers s ON s.id::text = i.server_spec_id
 WHERE i.id = $1::uuid
-`, instanceID).Scan(&id, &name, &instanceJSON, &serverJSON, &dockerImage, &remoteURL, &commandJSON, &workspaceID)
+`, instanceID).Scan(&id, &name, &transport, &instanceJSON, &serverJSON, &dockerImage, &commandJSON, &workspaceID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrInstanceNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("load MCP instance: %w", err)
 	}
-	remoteEndpoint := ""
-	if remoteURL.Valid {
-		remoteEndpoint = remoteURL.String
+	if transport != "docker" && transport != "command" {
+		return nil, fmt.Errorf("instance %s is not a container-backed MCP server", id)
 	}
-	serverSpec, err := mergeLoadedSpecs(serverJSON, instanceJSON, remoteEndpoint, commandJSON, dockerImage.String)
+	serverSpec, err := mergeLoadedSpecs(serverJSON, instanceJSON, transport, commandJSON, dockerImage.String)
 	if err != nil {
 		return nil, err
-	}
-	instanceType, _ := serverSpec["type"].(string)
-	if instanceType != "docker" && instanceType != "command" && instanceType != "kubernetes" {
-		return nil, fmt.Errorf("instance %s is not a container-backed MCP server", id)
 	}
 	// Runtime object names are identity-derived. The user-facing display name
 	// remains in Postgres and never participates in data-plane addressing.
@@ -192,9 +184,11 @@ func decodeSpecs(serverJSON, instanceJSON []byte) (map[string]any, error) {
 	return serverSpec, nil
 }
 
-// mergeLoadedSpecs applies server-level transport defaults unless the instance
-// itself contains a complete Docker transport.
-func mergeLoadedSpecs(serverJSON, instanceJSON []byte, remoteURL string, commandJSON []byte, dockerImage string) (map[string]any, error) {
+// mergeLoadedSpecs lays the instance spec over its server's transport fields
+// and types the result with the instance's transport column. A converted
+// package is a docker instance carrying its own image; none of the server's
+// command fields apply to it.
+func mergeLoadedSpecs(serverJSON, instanceJSON []byte, transport string, commandJSON []byte, dockerImage string) (map[string]any, error) {
 	serverSpec, err := decodeSpecs(serverJSON, instanceJSON)
 	if err != nil {
 		return nil, err
@@ -203,43 +197,31 @@ func mergeLoadedSpecs(serverJSON, instanceJSON []byte, remoteURL string, command
 	if err := json.Unmarshal(instanceJSON, &instanceSpec); err != nil {
 		return nil, fmt.Errorf("decode MCP instance spec: %w", err)
 	}
-	instanceType, _ := instanceSpec["type"].(string)
 	instanceImage, _ := instanceSpec["image"].(string)
-	if instanceType == "docker" && strings.TrimSpace(instanceImage) != "" {
+	switch {
+	case transport == "docker" && strings.TrimSpace(instanceImage) != "":
 		for _, key := range []string{"args", "cmd", "endpoint_url"} {
 			if _, exists := instanceSpec[key]; !exists {
 				delete(serverSpec, key)
 			}
 		}
-		return serverSpec, nil
-	}
-	if remoteURL != "" {
-		serverSpec["type"] = "url"
-		serverSpec["endpoint_url"] = remoteURL
-		return serverSpec, nil
-	}
-	if len(commandJSON) > 0 && string(commandJSON) != "null" {
+	case transport == "command" && len(commandJSON) > 0 && string(commandJSON) != "null":
 		var command []string
 		if err := json.Unmarshal(commandJSON, &command); err != nil || len(command) == 0 {
 			return nil, fmt.Errorf("decode MCP command spec")
 		}
-		serverSpec["type"] = "command"
 		serverSpec["command"] = command[0]
 		args := make([]any, 0, len(command)-1)
 		for _, item := range command[1:] {
 			args = append(args, item)
 		}
 		serverSpec["args"] = args
-		return serverSpec, nil
-	}
-	if dockerImage != "" {
-		if _, exists := serverSpec["type"]; !exists {
-			serverSpec["type"] = "docker"
-		}
+	case transport == "docker" && dockerImage != "":
 		if _, exists := serverSpec["image"]; !exists {
 			serverSpec["image"] = dockerImage
 		}
 	}
+	serverSpec["type"] = transport
 	return serverSpec, nil
 }
 
@@ -356,12 +338,11 @@ func (r *SQLRepository) IdleCandidates(ctx context.Context, idleTimeout time.Dur
 SELECT runtime.instance_id::text
 FROM mcp_runtime_instances runtime
 JOIN mcp_server_instances instance ON instance.id = runtime.instance_id
-JOIN mcp_servers server ON server.id::text = instance.server_spec_id
 WHERE (
         (runtime.state = 'ready' AND runtime.last_used_at < now() - make_interval(secs => $1))
      OR (runtime.state IN ('starting','failed') AND runtime.updated_at < now() - make_interval(secs => $1))
       )
-	  AND COALESCE(instance.json_spec->>'type', server.json_spec->>'type', CASE WHEN server.remote_url IS NOT NULL THEN 'url' WHEN server.cmd IS NOT NULL THEN 'command' ELSE 'docker' END) IN ('docker','command','kubernetes')
+  AND instance.transport IN ('docker','command')
   AND NOT EXISTS (
     SELECT 1 FROM mcp_runtime_request_leases lease
     WHERE lease.instance_id = runtime.instance_id AND lease.expires_at > now()

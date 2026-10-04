@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from agentarea_common.testing import install_graph_ownership_stub
 from agentarea_mcp.application.auth_service import AuthConfigAccessDeniedError
+from agentarea_mcp.application.validation_service import MCPValidationError
 from agentarea_mcp.application.service import (
     MCPServerInstanceService,
     derive_bundle_verification,
@@ -41,7 +42,8 @@ def _make_instance(
     inst = MagicMock(spec=MCPServerInstance)
     inst.id = instance_id or uuid.uuid4()
     inst.name = name
-    inst.json_spec = {"type": instance_type}
+    inst.transport = instance_type
+    inst.json_spec = {}
     inst.workspace_id = uuid.uuid4()
     inst.created_by = str(uuid.uuid4())
     inst.verification = verification if verification is not None else dict(DEFAULT_VERIFICATION)
@@ -54,7 +56,7 @@ def _make_instance(
     if instance_type in ("docker", "command"):
         inst.endpoint_url = f"http://mcp-{inst.id}:8080"
     elif instance_type == "url":
-        inst.json_spec = {"type": "url", "endpoint_url": "http://test.example.com/mcp"}
+        inst.json_spec = {"endpoint_url": "http://test.example.com/mcp"}
         inst.endpoint_url = "http://test.example.com/mcp"
 
     return inst
@@ -174,7 +176,7 @@ class _RetireClient:
 @pytest.mark.asyncio
 async def test_update_container_config_retires_runtime_before_persisting_change():
     instance = _make_instance("docker")
-    instance.json_spec = {"type": "docker", "environment": {"MODE": "old"}}
+    instance.json_spec = {"environment": {"MODE": "old"}}
     svc = _make_service({str(instance.id): instance})
     svc.mcp_server_repository.get_server_by_id.return_value.env_schema = [
         {"name": "MODE", "isSecret": False}
@@ -195,7 +197,7 @@ async def test_update_container_config_retires_runtime_before_persisting_change(
     svc._retire_runtime_before_mutation.assert_awaited_once_with(instance.id)
     svc.repository.update.assert_awaited_once_with(
         instance.id,
-        json_spec={"type": "docker", "environment": {"MODE": "new"}},
+        json_spec={"environment": {"MODE": "new"}},
     )
 
 
@@ -203,7 +205,6 @@ async def test_update_container_config_retires_runtime_before_persisting_change(
 async def test_update_converted_spec_keeps_imported_transport_metadata():
     instance = _make_instance("docker")
     instance.json_spec = {
-        "type": "docker",
         "image": "registry.example/server@sha256:" + "a" * 64,
         "command": ["/opt/mcp-pkg/bin/server", "--stdio"],
         "port": 8080,
@@ -224,7 +225,6 @@ async def test_update_converted_spec_keeps_imported_transport_metadata():
 
     assert updated.json_spec == {
         "environment": {"MODE": "new"},
-        "type": "docker",
         "image": "registry.example/server@sha256:" + "a" * 64,
         "command": ["/opt/mcp-pkg/bin/server", "--stdio"],
         "port": 8080,
@@ -237,7 +237,6 @@ async def test_update_converted_spec_keeps_imported_transport_metadata():
 async def test_transport_spec_for_converted_instance_ignores_server_command_defaults():
     instance = _make_instance("docker")
     instance.json_spec = {
-        "type": "docker",
         "image": "registry.example/server@sha256:" + "e" * 64,
         "command": ["/opt/mcp-pkg/bin/server"],
         "port": 8080,
@@ -263,7 +262,6 @@ async def test_transport_spec_for_converted_instance_ignores_server_command_defa
 async def test_update_command_spec_drops_package_import_state():
     instance = _make_instance("command")
     instance.json_spec = {
-        "type": "command",
         "command": "npx",
         "args": ["server"],
         "package_import": {
@@ -286,7 +284,6 @@ async def test_update_command_spec_drops_package_import_state():
 
     assert updated.json_spec == {
         "environment": {"TOKEN": "new"},
-        "type": "command",
         "command": "npx",
         "args": ["server"],
     }
@@ -309,7 +306,7 @@ async def test_update_url_instance_does_not_retire_runtime():
 @pytest.mark.asyncio
 async def test_secret_rotation_retires_runtime_even_when_public_spec_is_unchanged():
     instance = _make_instance("docker")
-    instance.json_spec = {"type": "docker", "env_vars": ["TOKEN"], "environment": {}}
+    instance.json_spec = {"env_vars": ["TOKEN"], "environment": {}}
     svc = _make_service({str(instance.id): instance})
     server_spec = await svc.mcp_server_repository.get_server_by_id(instance.server_spec_id)
     server_spec.env_schema = [{"name": "TOKEN", "isSecret": True}]
@@ -556,7 +553,8 @@ class TestDeriveBundleVerification:
     def _make_bundle(self, member_ids: list[str]) -> MCPServerInstance:
         b = MagicMock(spec=MCPServerInstance)
         b.id = uuid.uuid4()
-        b.json_spec = {"type": "bundle", "members": member_ids}
+        b.transport = "bundle"
+        b.json_spec = {"members": member_ids}
         b.verification = dict(DEFAULT_VERIFICATION)
         return b
 
@@ -651,8 +649,8 @@ class TestServiceCreateInstance:
 
         assert inst is not None
         assert inst.verification == fake_verification
-        # type is persisted onto the instance spec so the UI derives status.
-        assert inst.json_spec.get("type") == "url"
+        assert inst.transport == "url"
+        assert "type" not in inst.json_spec
 
     @pytest.mark.asyncio
     async def test_catalog_spec_is_copied_into_workspace_on_connect(self):
@@ -732,14 +730,36 @@ class TestServiceCreateInstance:
         await asyncio.sleep(0)
         assert len(verify_called) == 1
 
-    def test_bundle_create_payload_is_rejected(self):
-        """Bundle is no longer a valid MCP server instance type."""
-        with pytest.raises(ValueError, match="bundle"):
-            MCPServerInstanceCreate(
-                name="bundle-inst",
-                server_spec_id="00000000-0000-4000-8000-000000000001",
-                json_spec={"type": "bundle", "members": [str(uuid.uuid4())]},
+    @pytest.mark.asyncio
+    async def test_a_bundle_spec_gets_no_instance(self):
+        """Bundle is no longer a valid MCP server instance transport."""
+        svc = _make_service()
+        svc.mcp_server_repository.get_server_by_id.return_value.json_spec = {"type": "bundle"}
+        with pytest.raises(MCPValidationError, match="bundle"):
+            await svc.create_instance(
+                MCPServerInstanceCreate(
+                    name="bundle-inst",
+                    server_spec_id="00000000-0000-4000-8000-000000000001",
+                    json_spec={},
+                )
             )
+        svc.repository.session.add.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_spec_that_declares_no_transport_gets_no_instance(self):
+        svc = _make_service()
+        server_spec = svc.mcp_server_repository.get_server_by_id.return_value
+        server_spec.docker_image_url = None
+        server_spec.json_spec = {}
+        with pytest.raises(MCPValidationError, match="type"):
+            await svc.create_instance(
+                MCPServerInstanceCreate(
+                    name="no-transport",
+                    server_spec_id="00000000-0000-4000-8000-000000000001",
+                    json_spec={},
+                )
+            )
+        svc.repository.session.add.assert_not_called()
 
     def test_derived_env_schema_defaults_to_secret(self):
         """When an instance has no explicit env_schema, we never guess a
@@ -854,7 +874,8 @@ class TestServiceVerifyInstance:
         )
         bundle = MagicMock(spec=MCPServerInstance)
         bundle.id = uuid.uuid4()
-        bundle.json_spec = {"type": "bundle", "members": [str(m_id)]}
+        bundle.transport = "bundle"
+        bundle.json_spec = {"members": [str(m_id)]}
         bundle.verification = dict(DEFAULT_VERIFICATION)
 
         svc = _make_service({str(m_id): member, str(bundle.id): bundle})
@@ -967,7 +988,8 @@ class TestServiceExecuteTool:
         )
         bundle = MagicMock(spec=MCPServerInstance)
         bundle.id = uuid.uuid4()
-        bundle.json_spec = {"type": "bundle"}
+        bundle.transport = "bundle"
+        bundle.json_spec = {}
         bundle.verification = {"schema_version": 1, "status": "succeeded", "at": "x", "error": None}
         bundle.tools = [
             {

@@ -19,6 +19,7 @@ const mcp: McpServerInstanceResponse = {
   created_at: "2026-09-11T00:00:00Z",
   updated_at: "2026-09-11T00:00:00Z",
   server_spec_id: "server-id",
+  transport: "url",
   json_spec: {},
   verification: {},
   tools: [{ name: "list_issues" }, { name: "delete_repository" }],

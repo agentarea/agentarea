@@ -89,7 +89,9 @@ class TestValidateConnectionRefusesNonPublicTargets:
     async def test_the_auth_probe_of_an_instance_never_reaches_the_metadata_address(self):
         service = _service()
         service.repository = MagicMock()
-        service.repository.get_by_id = AsyncMock(return_value=MagicMock(id="inst-1"))
+        service.repository.get_by_id = AsyncMock(
+            return_value=MagicMock(id="inst-1", transport="url")
+        )
         spec = {"type": "url", "endpoint_url": "http://169.254.169.254/latest/meta-data/"}
 
         with patch.object(

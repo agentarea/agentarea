@@ -48,7 +48,8 @@ class _FakeInstance:
     def __init__(self, instance_type="docker", verification=None):
         self.id = uuid.uuid4()
         self.name = "test-inst"
-        self.json_spec = {"type": instance_type}
+        self.transport = instance_type
+        self.json_spec = {}
         self.workspace_id = uuid.uuid4()
         self.created_by = str(uuid.uuid4())
         self.server_spec_id = "test-spec-id"
@@ -58,7 +59,7 @@ class _FakeInstance:
 
     @property
     def endpoint_url(self) -> str:
-        t = self.json_spec.get("type", "")
+        t = self.transport
         if t == "url":
             return self.json_spec.get("endpoint_url", "")
         if t in ("docker", "command"):
@@ -80,21 +81,23 @@ def _make_instance(instance_type="docker", verification=None):
 def test_runtime_instance_uses_converted_transport_as_authority():
     instance = _make_instance("docker")
     instance.json_spec = {
-        "type": "docker",
         "image": "registry.example/server@sha256:" + "f" * 64,
         "command": ["/opt/mcp-pkg/bin/server"],
         "port": 8080,
     }
-
-    runtime = _RuntimeInstance(
-        instance,
-        {
+    server = MagicMock(
+        remote_url=None,
+        cmd=None,
+        docker_image_url=None,
+        json_spec={
             "type": "command",
             "command": "npx",
             "args": ["mcp-server-time"],
             "endpoint_url": "http://server.example",
         },
     )
+
+    runtime = _RuntimeInstance(instance, server)
 
     assert runtime.json_spec["type"] == "docker"
     assert runtime.json_spec["image"] == instance.json_spec["image"]
@@ -130,9 +133,7 @@ def _make_db_mock(instance):
                 server = MagicMock()
                 server.id = "test-spec-id"
                 server.remote_url = (
-                    instance.json_spec.get("endpoint_url")
-                    if instance.json_spec.get("type") == "url"
-                    else None
+                    instance.json_spec.get("endpoint_url") if instance.transport == "url" else None
                 )
                 server.cmd = None
                 server.docker_image_url = "test-image:latest"
@@ -497,7 +498,6 @@ async def test_verify_passes_extra_headers_to_list_tools():
     must be merged with json_spec headers and passed to list_tools."""
     inst = _make_instance("url")
     inst.json_spec = {
-        "type": "url",
         "endpoint_url": "https://mcp.notion.com/sse",
         "headers": {"X-Custom": "value"},
     }
@@ -906,7 +906,8 @@ async def test_monitor_reverify_sweep_enqueues_never_attempted():
         def __init__(self):
             self.id = inst_id
             self.name = "my-inst"
-            self.json_spec = {"type": "docker"}
+            self.transport = "docker"
+            self.json_spec = {}
             self.workspace_id = uuid.uuid4()
             self.created_by = str(uuid.uuid4())
             self.verification = dict(DEFAULT_VERIFICATION)
