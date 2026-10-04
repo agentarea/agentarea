@@ -25,7 +25,11 @@ from agentarea_common.utils.url_safety import (
 )
 from mcp import MCPError
 
-from agentarea_mcp.application.auth_service import MCPAuthService, OAuthReauthRequiredError
+from agentarea_mcp.application.auth_service import (
+    ManagedCredentialDestinationError,
+    MCPAuthService,
+    OAuthReauthRequiredError,
+)
 from agentarea_mcp.application.mcp_client import (
     connected_mcp_client,
     gateway_client_factory,
@@ -950,8 +954,13 @@ class MCPServerInstanceService:
             auth_config = await auth_service.get(instance.auth_config_id)
             if not auth_config:
                 return {}
-            return await auth_service.get_auth_headers(auth_config, force_refresh=force_refresh)
-        except OAuthReauthRequiredError:
+            transport_spec = await self.get_transport_spec_for_instance(instance)
+            return await auth_service.get_auth_headers_for(
+                auth_config,
+                self._endpoint_url_from_spec(instance, transport_spec),
+                force_refresh=force_refresh,
+            )
+        except (OAuthReauthRequiredError, ManagedCredentialDestinationError):
             raise
         except Exception:
             logger.warning(
@@ -1264,7 +1273,9 @@ class MCPServerInstanceService:
                 auth_service = MCPAuthService(auth_repo, self.secret_manager)
                 auth_config = await auth_service.get(instance.auth_config_id)
                 if auth_config:
-                    headers = await auth_service.get_auth_headers(auth_config)
+                    headers = await auth_service.get_auth_headers_for(auth_config, mcp_url)
+            except ManagedCredentialDestinationError:
+                raise
             except Exception as e:
                 logger.warning(
                     "Failed to resolve auth headers for instance %s: %s",

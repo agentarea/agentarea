@@ -1109,7 +1109,8 @@ export const zMcpContainersHealthResponse = z.object({
  *
  * Start an OAuth flow for one MCP instance.
  *
- * ``auto`` registers AgentArea with the authorization server (RFC 7591).
+ * ``auto`` registers AgentArea with the authorization server (RFC 7591), or
+ * uses the operator's platform app when the server has no registration.
  * ``custom`` uses an OAuth app the workspace registered with the provider —
  * the only option when the provider has no Dynamic Client Registration.
  */
@@ -1128,7 +1129,8 @@ export const zMcpoAuthAuthorizeRequest = z.object({
  *
  * What the UI needs before it can offer a Connect action.
  *
- * ``ready`` — Connect can run unattended (the server supports DCR).
+ * ``ready`` — Connect can run unattended (the server supports DCR, or the
+ * operator registered a platform app for it).
  * ``oauth_app_required`` — ask for a client ID/secret first.
  * ``unsupported`` — this server cannot be authorized this way; say why.
  */

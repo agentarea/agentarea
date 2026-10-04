@@ -486,7 +486,7 @@ async def proxy_instance(
         if auth_config is not None:
             auth_service = MCPAuthService(auth_repo, secret_manager)
             try:
-                injected = await auth_service.get_auth_headers(auth_config)
+                injected = await auth_service.get_auth_headers_for(auth_config, upstream_url)
                 outbound_headers.update(injected)
             except Exception as exc:
                 logger.exception(

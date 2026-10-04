@@ -94,6 +94,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "agentarea.mcpGatewaySecretName" . }}
                   key: {{ include "agentarea.mcpGatewaySecretKey" . }}
+            {{- if .Values.global.mcpOAuthApps.existingSecret }}
+            {{- include "agentarea.mcpOAuthApps.env" . | nindent 12 }}
+            {{- end }}
             {{- include "agentarea.temporal.envs" . | nindent 12 }}
             {{- include "agentarea.worker.envs" . | nindent 12 }}
             - name: AGENTAREA_TEMPORAL_SHUTDOWN_GRACE

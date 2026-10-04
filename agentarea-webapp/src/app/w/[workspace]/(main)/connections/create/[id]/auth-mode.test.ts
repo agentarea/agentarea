@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { authModeFromValidation, modeFromMethods } from "./auth-mode";
+import {
+  authModeFromValidation,
+  modeFromMethods,
+  withDeclaredFields,
+} from "./auth-mode";
 
 describe("modeFromMethods", () => {
   it("offers both when OAuth and manual credentials work", () => {
@@ -37,5 +41,28 @@ describe("authModeFromValidation", () => {
     expect(
       authModeFromValidation({ valid: false, errors: ["Connection failed"] })
     ).toBe("error");
+  });
+});
+
+describe("withDeclaredFields", () => {
+  it("offers OAuth next to the declared fields when the probe reports it", () => {
+    // GitHub: the spec declares an Authorization header, the server takes OAuth.
+    expect(withDeclaredFields("both", true)).toBe("both");
+    expect(withDeclaredFields("oauth", true)).toBe("both");
+  });
+
+  it("keeps the declared fields when the probe reports no OAuth", () => {
+    expect(withDeclaredFields("credentials", true)).toBe("fields");
+    expect(withDeclaredFields("none", true)).toBe("fields");
+    expect(withDeclaredFields("error", true)).toBe("fields");
+  });
+
+  it("leaves a spec without declared fields to the probe", () => {
+    expect(withDeclaredFields("oauth", false)).toBe("oauth");
+    expect(withDeclaredFields("error", false)).toBe("error");
+  });
+
+  it("keeps waiting while the probe runs", () => {
+    expect(withDeclaredFields("loading", true)).toBe("loading");
   });
 });

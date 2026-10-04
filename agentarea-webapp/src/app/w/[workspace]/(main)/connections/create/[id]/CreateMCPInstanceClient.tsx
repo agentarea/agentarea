@@ -33,7 +33,12 @@ import {
   validateConnectionAction,
 } from "@/lib/server-actions";
 import { OAuthConnectPanel } from "../../OAuthConnectPanel";
-import { authModeFromValidation, modeFromMethods, type AuthMode } from "./auth-mode";
+import {
+  authModeFromValidation,
+  modeFromMethods,
+  withDeclaredFields,
+  type AuthMode,
+} from "./auth-mode";
 import type { MCPServer } from "../../types";
 import { createMCPServerInstance } from "../../actions";
 import { getConnectionType, MCP_CONSTANTS } from "../../utils";
@@ -388,9 +393,8 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
   });
 
   const [authMode, setAuthMode] = useState<AuthMode>(() => {
-    if (hasFields) return "fields";
     if (cachedMethods.length > 0) {
-      return modeFromMethods(cachedMethods);
+      return withDeclaredFields(modeFromMethods(cachedMethods), hasFields);
     }
     return "loading";
   });
@@ -416,14 +420,17 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     const result = await validateConnectionAction(endpointUrl, {}, server.id);
     const data = result.data as ValidationResult | null;
     if (result.error || !data) {
-      setProbeError(apiErrorText(result.error, t("probeFailed")));
-      setAuthMode("error");
+      const mode = withDeclaredFields("error", hasFields);
+      if (mode === "error") {
+        setProbeError(apiErrorText(result.error, t("probeFailed")));
+      }
+      setAuthMode(mode);
       return;
     }
-    const mode = authModeFromValidation(data);
+    const mode = withDeclaredFields(authModeFromValidation(data), hasFields);
     if (mode === "error") setProbeError(data.errors?.[0] || t("probeFailed"));
     setAuthMode(mode);
-  }, [endpointUrl, server.id, t]);
+  }, [endpointUrl, hasFields, server.id, t]);
 
   const probedRef = useRef(false);
   useEffect(() => {
@@ -433,7 +440,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
   }, [authMode, probe]);
 
   // Which header inputs are shown: the spec's own, or the probed credential hints.
-  const activeFields = authMode === "fields" ? remoteHeaders : credentialFields;
+  const activeFields = hasFields ? remoteHeaders : credentialFields;
   const showManualFields =
     authMode === "fields" ||
     authMode === "credentials" ||

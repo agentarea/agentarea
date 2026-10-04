@@ -150,6 +150,7 @@ Rendered only when `rustfs.enabled` is true.
 | `AGENTAREA_APP_URL` | derived from the frontend ingress | `http://localhost:3000` |
 | `AGENTAREA_A2A_AGENT_URL` | `global.envVars.AGENTAREA_A2A_AGENT_URL` | `http://{agent_id}.a2a.localhost:8000` |
 | `SMTP_CONNECTION_URI` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME` | `kratos.smtp.*` | empty (invitations are link-only) |
+| `AGENTAREA_MCP_OAUTH_APPS` | Secret `global.mcpOAuthApps.existingSecret`, key `global.mcpOAuthApps.existingSecretKey` | unset (no platform OAuth apps) |
 
 `AGENTAREA_METRICS_ENABLED` serves Prometheus metrics on `AGENTAREA_METRICS_PORT`, never on the API
 port. The API serves `/health` on its normal port unconditionally; see
@@ -168,6 +169,17 @@ http(s) origin whose host starts with `{agent_id}.`, such as
 `https://{agent_id}.a2a.example.com`; anything else stops the API at startup.
 See [agent-to-agent communication](/concepts/agents/a2a#addresses).
 
+`AGENTAREA_MCP_OAUTH_APPS` holds the operator's OAuth apps for remote MCP
+servers whose authorization server has no Dynamic Client Registration, such as
+GitHub. It is a JSON list of objects with `issuer`, `client_id`,
+`client_secret`, `authorization_endpoint`, `token_endpoint`, and
+`resource_origins` (exact https origins). A workspace connecting an MCP server
+at one of `resource_origins` through `issuer` then authorizes with that app
+without registering its own; tokens minted through it are sent only to
+`resource_origins`. Unset, such providers need the workspace's own OAuth app.
+A malformed value stops the API and the worker at startup. Both read it, the
+worker to refresh tokens.
+
 ### Worker (group `worker`)
 
 | Variable | Helm value | Default |
@@ -177,6 +189,7 @@ See [agent-to-agent communication](/concepts/agents/a2a#addresses).
 | `AGENTAREA_DEBUG` | fixed | `false` |
 | `AGENTAREA_ENV` | fixed | `production` |
 | `AGENTAREA_MCP_MANAGER_URL` | derived | — |
+| `AGENTAREA_MCP_OAUTH_APPS` | same Secret as the backend | unset |
 
 `global.temporal.worker.maxConcurrentActivityExecutions`,
 `maxConcurrentWorkflowTaskExecutions`, and `maxConcurrentSessionExecutions` in

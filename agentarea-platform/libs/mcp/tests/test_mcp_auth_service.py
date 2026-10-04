@@ -16,6 +16,7 @@ from agentarea_mcp.application.auth_resolver import (
 )
 from agentarea_mcp.application.auth_service import (
     AuthConfigAccessDeniedError,
+    ManagedCredentialDestinationError,
     MCPAuthService,
     MissingCredentialsError,
     OAuthReauthRequiredError,
@@ -651,3 +652,193 @@ class TestMCPAuthConfigModel:
             config={"header_name": "X-Key"},
         )
         cfg.validate_config()  # Should not raise
+
+
+# ---------------------------------------------------------------------------
+# Platform-managed MCP OAuth (the operator's GitHub app, AGENTAREA_MCP_OAUTH_APPS)
+# ---------------------------------------------------------------------------
+
+_GITHUB_ISSUER = "https://github.com/login/oauth"
+_GITHUB_APP = {
+    "issuer": _GITHUB_ISSUER,
+    "client_id": "Iv1.platform",
+    "client_secret": "platform-secret",  # pragma: allowlist secret
+    "authorization_endpoint": "https://github.com/login/oauth/authorize",
+    "token_endpoint": "https://github.com/login/oauth/access_token",
+    "resource_origins": ["https://api.githubcopilot.com"],
+}
+
+
+@pytest.fixture
+def platform_apps(monkeypatch):
+    import agentarea_mcp.application.platform_oauth_app as platform_oauth_app
+    from agentarea_common.config.mcp import MCPSettings
+
+    configured: list[dict] = [_GITHUB_APP]
+    monkeypatch.setattr(
+        platform_oauth_app,
+        "get_settings",
+        lambda: MagicMock(mcp=MCPSettings(OAUTH_APPS=configured)),
+    )
+    return configured
+
+
+def _github_managed_config(**overrides) -> MCPAuthConfig:
+    return _oauth_config(
+        **{
+            "token_url": "https://github.com/login/oauth/access_token",
+            "client_id": None,
+            "credential_mode": "managed",
+            "platform_oauth_issuer": _GITHUB_ISSUER,
+            **overrides,
+        }
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("platform_apps")
+class TestPlatformManagedMCPAuth:
+    async def test_refresh_uses_the_platform_client_secret(self):
+        workspace_sm = AsyncMock()
+        svc = MCPAuthService(AsyncMock(), workspace_sm)
+        workspace_sm.get_secret.return_value = json.dumps(
+            {"access_token": "expired", "refresh_token": "ghr_x", "expires_at": 0}
+        )
+        client = _FakeClient(_FakeResp(200, {"access_token": "gho_fresh", "expires_in": 28800}))
+        posted_to: list[str] = []
+
+        async def post(url, data=None, timeout=None, headers=None, auth=None):
+            posted_to.append(url)
+            client.posted = data
+            client.headers = headers
+            return client._resp
+
+        client.post = post  # type: ignore[method-assign]
+        # A config whose token_url was tampered with still refreshes at the app's endpoint.
+        config = _github_managed_config(token_url="https://token-thief.example/token")  # noqa: S106
+
+        with patch("httpx.AsyncClient", lambda *a, **k: client):
+            headers = await svc.get_auth_headers_for(config, "https://api.githubcopilot.com/mcp/")
+
+        assert headers == {"Authorization": "Bearer gho_fresh"}
+        assert posted_to == ["https://github.com/login/oauth/access_token"]
+        assert client.posted["grant_type"] == "refresh_token"
+        assert client.posted["client_id"] == "Iv1.platform"
+        assert client.posted["client_secret"] == "platform-secret"  # noqa: S105
+        assert client.headers == {"Accept": "application/json"}
+
+    async def test_headers_are_refused_for_an_origin_the_platform_app_does_not_serve(self):
+        workspace_sm = AsyncMock()
+        svc = MCPAuthService(AsyncMock(), workspace_sm)
+
+        with pytest.raises(ManagedCredentialDestinationError):
+            await svc.get_auth_headers_for(
+                _github_managed_config(), "https://attacker.example/mcp"
+            )
+
+        workspace_sm.get_secret.assert_not_awaited()
+
+    async def test_a_secret_store_managed_config_reaches_no_mcp_server(self):
+        managed_sm = AsyncMock()
+        svc = MCPAuthService(AsyncMock(), AsyncMock(), managed_sm)
+        openapi_managed = _oauth_config(
+            credential_mode="managed",
+            managed_credentials_key="connection_oauth_client:yandex-metrica",
+        )
+
+        with pytest.raises(ManagedCredentialDestinationError):
+            await svc.get_auth_headers_for(openapi_managed, "https://api-metrika.yandex.net/mcp")
+
+        managed_sm.get_secret.assert_not_awaited()
+
+    async def test_client_credentials_come_from_settings_not_the_workspace(self):
+        workspace_sm = AsyncMock()
+        workspace_sm.get_secret.return_value = json.dumps({"refresh_token": "ghr_x"})
+        svc = MCPAuthService(AsyncMock(), workspace_sm)
+
+        client_id, client_secret, _ = await svc.get_oauth_client_credentials(
+            _github_managed_config()
+        )
+
+        assert (client_id, client_secret) == ("Iv1.platform", "platform-secret")
+
+    async def test_an_app_removed_from_settings_fails_loud(self, platform_apps):
+        platform_apps.clear()
+        svc = MCPAuthService(AsyncMock(), AsyncMock())
+
+        with pytest.raises(MissingCredentialsError, match="AGENTAREA_MCP_OAUTH_APPS"):
+            await svc.get_auth_headers_for(
+                _github_managed_config(), "https://api.githubcopilot.com/mcp/"
+            )
+
+    async def test_workspace_api_cannot_create_a_platform_managed_config(self):
+        svc, repo, _ = _make_service()
+
+        with pytest.raises(ValueError, match="only be created by a catalog connection"):
+            await svc.create(
+                name="Forged platform config",
+                auth_type=AUTH_TYPE_OAUTH2,
+                config={
+                    "token_url": "https://attacker.example/token",
+                    "credential_mode": "managed",
+                    "platform_oauth_issuer": _GITHUB_ISSUER,
+                },
+                credentials={},
+            )
+
+        repo.create.assert_not_awaited()
+
+    async def test_workspace_api_cannot_repoint_a_managed_config(self):
+        svc, repo, _ = _make_service()
+        repo.get.return_value = _github_managed_config()
+
+        with pytest.raises(ValueError, match="only be changed by reconnecting"):
+            await svc.update(
+                repo.get.return_value.id,
+                config={
+                    "token_url": "https://attacker.example/token",
+                    "client_id": "attacker",
+                    "credential_mode": "custom",
+                },
+            )
+
+        repo.update.assert_not_awaited()
+
+    async def test_connection_resolver_honours_the_platform_apps_origins(self):
+        repo = AsyncMock()
+        repo.get_by_id.return_value = _github_managed_config()
+        repo_factory = MagicMock()
+        repo_factory.create_repository.return_value = repo
+        resolver = build_auth_header_resolver(repo_factory, AsyncMock(), AsyncMock())
+
+        with pytest.raises(ManagedCredentialDestinationError):
+            await resolver(
+                repo.get_by_id.return_value.id,
+                "https://api.yandex.net",
+                ["https://api.yandex.net"],
+            )
+
+
+class TestPlatformManagedConfigModel:
+    def test_a_platform_config_needs_no_client_id(self):
+        MCPAuthConfig(
+            name="x",
+            auth_type=AUTH_TYPE_OAUTH2,
+            config={
+                "token_url": "https://github.com/login/oauth/access_token",
+                "credential_mode": "managed",
+                "platform_oauth_issuer": _GITHUB_ISSUER,
+            },
+        ).validate_config()
+
+    def test_naming_a_platform_app_requires_managed_mode(self):
+        cfg = MCPAuthConfig(
+            name="x",
+            auth_type=AUTH_TYPE_OAUTH2,
+            config={
+                "token_url": "https://attacker.example/token",
+                "platform_oauth_issuer": _GITHUB_ISSUER,
+            },
+        )
+        with pytest.raises(ValueError, match="credential_mode"):
+            cfg.validate_config()

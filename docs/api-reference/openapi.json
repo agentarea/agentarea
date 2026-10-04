@@ -5382,7 +5382,7 @@
       },
       "MCPOAuthAuthorizeRequest": {
         "additionalProperties": false,
-        "description": "Start an OAuth flow for one MCP instance.\n\n``auto`` registers AgentArea with the authorization server (RFC 7591).\n``custom`` uses an OAuth app the workspace registered with the provider \u2014\nthe only option when the provider has no Dynamic Client Registration.",
+        "description": "Start an OAuth flow for one MCP instance.\n\n``auto`` registers AgentArea with the authorization server (RFC 7591), or\nuses the operator's platform app when the server has no registration.\n``custom`` uses an OAuth app the workspace registered with the provider \u2014\nthe only option when the provider has no Dynamic Client Registration.",
         "properties": {
           "client_id": {
             "anyOf": [
@@ -5464,7 +5464,7 @@
         "type": "object"
       },
       "MCPOAuthPreflightResponse": {
-        "description": "What the UI needs before it can offer a Connect action.\n\n``ready`` \u2014 Connect can run unattended (the server supports DCR).\n``oauth_app_required`` \u2014 ask for a client ID/secret first.\n``unsupported`` \u2014 this server cannot be authorized this way; say why.",
+        "description": "What the UI needs before it can offer a Connect action.\n\n``ready`` \u2014 Connect can run unattended (the server supports DCR, or the\noperator registered a platform app for it).\n``oauth_app_required`` \u2014 ask for a client ID/secret first.\n``unsupported`` \u2014 this server cannot be authorized this way; say why.",
         "properties": {
           "authorization_endpoint": {
             "anyOf": [
