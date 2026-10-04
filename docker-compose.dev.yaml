@@ -28,9 +28,6 @@ services:
       - AGENTAREA_DB_PASSWORD=${AGENTAREA_DB_PASSWORD}
       - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
       - AGENTAREA_DB_TENANT_SCOPE=${AGENTAREA_DB_TENANT_SCOPE:?AGENTAREA_DB_TENANT_SCOPE is required (log|enforce)}
-      # Member-set LLM/MCP endpoints may target this machine in development
-      # (a local Ollama, a mock LLM). Production leaves this empty.
-      - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
       # MCP settings
       - AGENTAREA_MCP_MANAGER_URL=http://mcp-manager:80
       - AGENTAREA_REDIS_URL=redis://valkey:6379
@@ -559,9 +556,6 @@ services:
       - AGENTAREA_DB_PASSWORD=${AGENTAREA_DB_PASSWORD}
       - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
       - AGENTAREA_DB_TENANT_SCOPE=${AGENTAREA_DB_TENANT_SCOPE:?AGENTAREA_DB_TENANT_SCOPE is required (log|enforce)}
-      # Member-set LLM/MCP endpoints may target this machine in development
-      # (a local Ollama, a mock LLM). Production leaves this empty.
-      - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
       - LLM_DOCKER_HOST=host.docker.internal
 
       # S3 / RustFS (file tool artifacts land here, keyed by workspace+task)

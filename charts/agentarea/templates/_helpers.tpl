@@ -69,24 +69,6 @@ If release name contains chart name it will be used as a full name.
 {{- end -}}
 
 {{/*
-Which private addresses member-set URLs (LLM provider endpoints, URL MCP
-servers, OpenAPI connections, A2A delegates) may reach. The API checks a URL
-when it is saved and the worker again when a run uses it, so both render the
-same values. Rendered only when set: unset keeps the platform default (every
-private address refused) and leaves an extraEnv entry of the same name alone.
-*/}}
-{{- define "agentarea.outboundPolicy.envs" -}}
-{{- with .Values.global.outbound.privateAllowlist }}
-- name: AGENTAREA_HTTP_PRIVATE_ALLOWLIST
-  value: {{ join "," . | quote }}
-{{- end }}
-{{- if .Values.global.outbound.allowPrivateUrls }}
-- name: AGENTAREA_HTTP_ALLOW_PRIVATE
-  value: "true"
-{{- end }}
-{{- end -}}
-
-{{/*
 Provider-neutral sandbox runtime configuration shared by the HTTP control plane
 and the asynchronous runner. Credentials are referenced from Secrets and never
 rendered into values-backed ConfigMaps.

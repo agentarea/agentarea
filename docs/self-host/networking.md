@@ -74,33 +74,6 @@ different problem with a different mechanism.
     There is no per-host override.
   </Step>
 
-  <Step title="Let the API see the client's address">
-    Dynamic client registration (`POST /oauth2/register`) is rate-limited to 10
-    a minute per client address. A2A JSON-RPC calls are limited to 300 a minute
-    per API key, or per user for a user token, so the address does not matter
-    for them. Behind the ingress the address the API sees is the proxy's, so
-    uvicorn takes the client's from `X-Forwarded-For` when the request comes
-    from an address in `backend.forwardedAllowIps`.
-
-    uvicorn reads that header right to left and uses the first address not in
-    the list. The default lists the private, CGNAT and loopback ranges, where
-    ingress controllers and cloud load balancers sit, so a client cannot choose
-    its own address by sending the header to a proxy that appends to it. Do not
-    set `"*"`: uvicorn then takes the leftmost entry, which the client wrote.
-
-    ```yaml
-    backend:
-      # The range your ingress controller's pods use.
-      forwardedAllowIps: "10.42.0.0/16"
-    ```
-
-    Narrow the list as above when clients reach the ingress from private
-    addresses (an internal deployment): with every entry trusted, uvicorn falls
-    back to the leftmost one. A pod that reaches the API Service directly can
-    still set the header itself; a NetworkPolicy that admits only the ingress
-    to the backend closes that.
-  </Step>
-
   <Step title="Set the URLs the platform advertises">
     These are separate from routing. They are the URLs baked into responses, and
     they must be what a *client* can reach, not what a pod can reach.
@@ -266,6 +239,17 @@ different problem with a different mechanism.
 
     - **This is a no-op on a cluster whose CNI does not enforce NetworkPolicy.** The chart cannot detect that, and nothing warns you. The policy object exists, and untrusted pods reach the metadata endpoint anyway.
     - **This is not kernel isolation.** Egress rules constrain the network; they do nothing about a container escape. That is what `mcpManager.runtimeClass` is for, and it defaults to `""`.
+
+    The backend and the worker are not covered by a chart policy. They send
+    requests to addresses workspace members set. URL MCP servers, OpenAPI
+    connections, A2A delegates and bundle sources are checked against private
+    addresses in code; LLM provider endpoints used for runs, model tests and
+    compaction are not. Restrict their egress with a NetworkPolicy written for
+    your cluster: allow DNS, the services they depend on (Postgres, Valkey,
+    Temporal, Kratos, Hydra, OpenFGA, the MCP manager, object storage) wherever
+    those run, and the public internet, and deny link-local and every other
+    private range. The chart cannot ship that policy: where those services live
+    differs per install.
 
     The policy selects pods by both `app.kubernetes.io/managed-by: mcp-manager` and
     `app.kubernetes.io/component: mcp-server`. The component constraint is

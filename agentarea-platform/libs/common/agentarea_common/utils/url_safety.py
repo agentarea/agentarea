@@ -1,7 +1,10 @@
 """Outbound-URL SSRF guard.
 
 Validation barrier for HTTP requests whose URL is influenced by user input
-(e.g. BYOK LLM provider ``endpoint_url``, MCP upstream proxies). It rejects the
+(URL MCP upstreams, OpenAPI connections, A2A delegates, bundle sources, and a
+BYOK LLM ``endpoint_url`` during model discovery and media generation). LLM chat
+calls (runs, model tests, compaction) do not go through it: their egress is
+left to the deployment's network policy. It rejects the
 universal IANA non-public address classes so it stays portable across clouds and
 hardcodes no provider-specific IPs: RFC1918 private, loopback, link-local
 (blocks ``169.254.169.254`` cloud metadata on every provider), reserved,
@@ -101,7 +104,7 @@ def validate_outbound_url(
     hosted/multi-tenant deployments.
 
     ``allowed_hosts`` is the egress allowlist for the cases the platform makes the
-    request itself (url-type MCP, BYOK endpoints): when provided, the host must
+    request itself (url-type MCP, BYOK model discovery): when provided, the host must
     glob-match at least one pattern (e.g. ``*.github.com``) or the request is
     refused. ``None`` disables allowlist filtering (backwards-compatible default);
     an empty iterable means default-deny. Container-hosted MCPs egress out of the

@@ -13,7 +13,6 @@ from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.config import get_settings
 from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.money import Money
-from agentarea_common.utils.llm_endpoint import guarded_llm_endpoint
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance, ModelKind
@@ -356,12 +355,12 @@ async def validate_model_instance(
                 provider_type=provider_type,
                 model_name=model_name,
             )
-        # The same address a run will call: vetted, then localhost mapped the
-        # way the worker maps it.
-        resolved_endpoint_url = await guarded_llm_endpoint(
-            endpoint_url,
-            managed_by=provider_config.managed_by,
-            local_host=get_settings().app.local_host,
+        # The same address a run will call: localhost mapped the way the worker maps it.
+        local_host = get_settings().app.local_host
+        resolved_endpoint_url = (
+            endpoint_url.replace("localhost", local_host).replace("127.0.0.1", local_host)
+            if endpoint_url
+            else None
         )
 
         logger.info(f"Testing LLM configuration via SDK: {provider_type}/{model_name}")

@@ -18,7 +18,6 @@ from redis.exceptions import RedisError
 logger = logging.getLogger(__name__)
 
 _TOKEN_BUCKET_TTL_SECONDS = 120
-_OAUTH_REGISTRATION_LIMIT_PER_MINUTE = 10
 _A2A_RPC_LIMIT_PER_MINUTE = 300
 _RATE_LIMIT_LUA = """
 local capacity = tonumber(ARGV[1])
@@ -122,14 +121,6 @@ async def limit_webhook(webhook_id: str) -> None:
         scope="webhook",
         identity=webhook_id,
         limit=get_settings().triggers.WEBHOOK_RATE,
-    )
-
-
-async def limit_oauth_registration(request: Request) -> None:
-    await enforce_rate_limit(
-        scope="oauth-registration",
-        identity=_client_ip(request),
-        limit=_OAUTH_REGISTRATION_LIMIT_PER_MINUTE,
     )
 
 
