@@ -31,7 +31,7 @@ def _reset_secret_manager_settings_cache():
 class TestSecretManagerFactory:
     """Unit tests for secret manager factory functions."""
 
-    @patch.dict("os.environ", {"SECRET_MANAGER_ENCRYPTION_KEY": VALID_ENCRYPTION_KEY})
+    @patch.dict("os.environ", {"AGENTAREA_SECRET_ENCRYPTION_KEY": VALID_ENCRYPTION_KEY})
     def test_get_secret_manager_database_type(self, mock_db_session, test_user_context):
         """Test creating database secret manager."""
         manager = get_secret_manager(
@@ -44,7 +44,7 @@ class TestSecretManagerFactory:
         assert manager.session == mock_db_session
         assert manager.workspace_id == "test-workspace-456"
 
-    @patch.dict("os.environ", {"SECRET_MANAGER_ENCRYPTION_KEY": VALID_ENCRYPTION_KEY})
+    @patch.dict("os.environ", {"AGENTAREA_SECRET_ENCRYPTION_KEY": VALID_ENCRYPTION_KEY})
     def test_get_secret_manager_database_case_insensitive(self, mock_db_session, test_user_context):
         """Test that secret manager type is case-insensitive."""
         manager = get_secret_manager(
@@ -76,10 +76,10 @@ class TestSecretManagerFactory:
     @patch.dict(
         "os.environ",
         {
-            "SECRET_MANAGER_TYPE": "infisical", "SECRET_MANAGER_PROJECT_ID": "proj-1",
-            "SECRET_MANAGER_ENDPOINT": "https://test.infisical.com",
-            "SECRET_MANAGER_ACCESS_KEY": "test-client-id",
-            "SECRET_MANAGER_SECRET_KEY": "test-client-secret",
+            "AGENTAREA_SECRET_BACKEND": "infisical", "AGENTAREA_SECRET_PROJECT_ID": "proj-1",
+            "AGENTAREA_SECRET_ENDPOINT": "https://test.infisical.com",
+            "AGENTAREA_SECRET_CLIENT_ID": "test-client-id",
+            "AGENTAREA_SECRET_CLIENT_SECRET": "test-client-secret",
         },
     )
     @patch("infisical_sdk.client.InfisicalSDKClient")
@@ -101,7 +101,7 @@ class TestSecretManagerFactory:
             client_secret="test-client-secret",
         )
 
-    @patch.dict("os.environ", {"SECRET_MANAGER_TYPE": "infisical", "SECRET_MANAGER_PROJECT_ID": "proj-1"}, clear=True)
+    @patch.dict("os.environ", {"AGENTAREA_SECRET_BACKEND": "infisical", "AGENTAREA_SECRET_PROJECT_ID": "proj-1"}, clear=True)
     def test_get_secret_manager_infisical_missing_credentials(
         self, mock_db_session, test_user_context
     ):
@@ -116,9 +116,9 @@ class TestSecretManagerFactory:
     @patch.dict(
         "os.environ",
         {
-            "SECRET_MANAGER_TYPE": "infisical", "SECRET_MANAGER_PROJECT_ID": "proj-1",
-            "SECRET_MANAGER_ACCESS_KEY": "test-id",
-            # Missing SECRET_MANAGER_SECRET_KEY
+            "AGENTAREA_SECRET_BACKEND": "infisical", "AGENTAREA_SECRET_PROJECT_ID": "proj-1",
+            "AGENTAREA_SECRET_CLIENT_ID": "test-id",
+            # Missing AGENTAREA_SECRET_CLIENT_SECRET
         },
         clear=True,
     )
@@ -133,20 +133,20 @@ class TestSecretManagerFactory:
                 user_context=test_user_context,
             )
 
-    @patch.dict("os.environ", {"SECRET_MANAGER_TYPE": "invalid_type"})
+    @patch.dict("os.environ", {"AGENTAREA_SECRET_BACKEND": "invalid_type"})
     def test_get_secret_manager_invalid_type(self, mock_db_session, test_user_context):
         """Test that invalid secret manager type raises error."""
-        with pytest.raises(ValueError, match="Invalid SECRET_MANAGER_TYPE"):
+        with pytest.raises(ValueError, match="Invalid AGENTAREA_SECRET_BACKEND"):
             get_secret_manager(
                 secret_manager_type="invalid_type",
                 session=mock_db_session,
                 user_context=test_user_context,
             )
 
-    @patch.dict("os.environ", {"SECRET_MANAGER_TYPE": "local"})
+    @patch.dict("os.environ", {"AGENTAREA_SECRET_BACKEND": "local"})
     def test_get_secret_manager_local_type_not_supported(self, mock_db_session, test_user_context):
         """Test that 'local' type is not supported anymore."""
-        with pytest.raises(ValueError, match="Invalid SECRET_MANAGER_TYPE.*local"):
+        with pytest.raises(ValueError, match="Invalid AGENTAREA_SECRET_BACKEND.*local"):
             get_secret_manager(
                 secret_manager_type="local",
                 session=mock_db_session,
@@ -155,7 +155,7 @@ class TestSecretManagerFactory:
 
     @patch.dict(
         "os.environ",
-        {"SECRET_MANAGER_TYPE": "database", "SECRET_MANAGER_ENCRYPTION_KEY": VALID_ENCRYPTION_KEY},
+        {"AGENTAREA_SECRET_BACKEND": "database", "AGENTAREA_SECRET_ENCRYPTION_KEY": VALID_ENCRYPTION_KEY},
     )
     def test_get_real_secret_manager_defaults_to_database(self, mock_db_session, test_user_context):
         """Test that get_real_secret_manager uses database by default."""
@@ -167,7 +167,7 @@ class TestSecretManagerFactory:
         assert isinstance(manager, DatabaseSecretManager)
 
     @patch.dict(
-        "os.environ", {"SECRET_MANAGER_ENCRYPTION_KEY": VALID_ENCRYPTION_KEY}, clear=True
+        "os.environ", {"AGENTAREA_SECRET_ENCRYPTION_KEY": VALID_ENCRYPTION_KEY}, clear=True
     )
     def test_get_real_secret_manager_no_env_defaults_to_database(
         self, mock_db_session, test_user_context
@@ -183,17 +183,17 @@ class TestSecretManagerFactory:
     @patch.dict(
         "os.environ",
         {
-            "SECRET_MANAGER_TYPE": "infisical", "SECRET_MANAGER_PROJECT_ID": "proj-1",
-            "SECRET_MANAGER_ENDPOINT": "https://test.infisical.com",
-            "SECRET_MANAGER_ACCESS_KEY": "test-client-id",
-            "SECRET_MANAGER_SECRET_KEY": "test-client-secret",
+            "AGENTAREA_SECRET_BACKEND": "infisical", "AGENTAREA_SECRET_PROJECT_ID": "proj-1",
+            "AGENTAREA_SECRET_ENDPOINT": "https://test.infisical.com",
+            "AGENTAREA_SECRET_CLIENT_ID": "test-client-id",
+            "AGENTAREA_SECRET_CLIENT_SECRET": "test-client-secret",
         },
     )
     @patch("infisical_sdk.client.InfisicalSDKClient")
     def test_get_real_secret_manager_reads_env_var(
         self, mock_infisical_client, mock_db_session, test_user_context
     ):
-        """Test that get_real_secret_manager reads SECRET_MANAGER_TYPE from env."""
+        """Test that get_real_secret_manager reads AGENTAREA_SECRET_BACKEND from env."""
         manager = get_real_secret_manager(
             session=mock_db_session,
             user_context=test_user_context,
@@ -204,9 +204,9 @@ class TestSecretManagerFactory:
     @patch.dict(
         "os.environ",
         {
-            "SECRET_MANAGER_TYPE": "infisical",
-            "SECRET_MANAGER_ACCESS_KEY": "test-id",
-            "SECRET_MANAGER_SECRET_KEY": "test-secret",
+            "AGENTAREA_SECRET_BACKEND": "infisical",
+            "AGENTAREA_SECRET_CLIENT_ID": "test-id",
+            "AGENTAREA_SECRET_CLIENT_SECRET": "test-secret",
         },
         clear=True,
     )
@@ -219,7 +219,7 @@ class TestSecretManagerFactory:
         infisicalsdk is a hard dependency of this package, so the import it
         guarded cannot fail.
         """
-        with pytest.raises(ValueError, match="SECRET_MANAGER_PROJECT_ID"):
+        with pytest.raises(ValueError, match="AGENTAREA_SECRET_PROJECT_ID"):
             get_secret_manager(
                 secret_manager_type="infisical",
                 session=mock_db_session,

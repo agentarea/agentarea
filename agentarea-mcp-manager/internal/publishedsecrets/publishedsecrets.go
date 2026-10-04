@@ -9,11 +9,11 @@ import (
 // Envs are the sandbox and MCP gateway HMAC keys that
 // .env.example and docker-compose.dev.yaml once shipped with concrete values.
 var Envs = []string{
-	"SANDBOX_ACTIVATION_AUTH_SECRET",
-	"SANDBOX_CLEANUP_AUTH_SECRET",
-	"SANDBOX_FILE_AUTH_SECRET",
-	"SANDBOX_CONTROL_AUTH_SECRET",
-	"MCP_GATEWAY_AUTH_SECRET",
+	"AGENTAREA_SANDBOX_ACTIVATION_SECRET",
+	"AGENTAREA_SANDBOX_CLEANUP_SECRET",
+	"AGENTAREA_SANDBOX_FILE_SECRET",
+	"AGENTAREA_SANDBOX_CONTROL_SECRET",
+	"AGENTAREA_MCP_GATEWAY_SECRET",
 }
 
 // Anyone can sign sandbox and gateway tokens with these, so a deployment that

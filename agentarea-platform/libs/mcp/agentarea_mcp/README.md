@@ -45,7 +45,7 @@ request = MCPServerCreateRequest(
     agent_id=agent_id,
     service_name="my-fastapi-server",
     template=MCPServerTemplate.FASTAPI,
-    environment={"DATABASE_URL": "sqlite:///app.db"},
+    environment={"AGENTAREA_DB_URL": "sqlite:///app.db"},
     replicas=1
 )
 
@@ -74,11 +74,11 @@ Set these environment variables:
 
 ```bash
 # MCP Manager connection
-MCP_MANAGER_URL=http://mcp-manager:8000
-MCP_CLIENT_TIMEOUT=30
+AGENTAREA_MCP_MANAGER_URL=http://mcp-manager:8000
+AGENTAREA_MCP_TIMEOUT=30
 
 # Event bus (Redis)
-REDIS_URL=redis://redis:6379
+AGENTAREA_REDIS_URL=redis://redis:6379
 ```
 
 ## Security

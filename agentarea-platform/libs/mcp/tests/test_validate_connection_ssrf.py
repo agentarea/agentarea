@@ -72,7 +72,7 @@ class TestValidateConnectionRefusesNonPublicTargets:
 
     @pytest.mark.asyncio
     async def test_an_allowlisted_local_server_is_dialed(self, monkeypatch, fresh_settings):
-        monkeypatch.setenv("OUTBOUND_PRIVATE_ALLOWLIST", "127.0.0.0/8")
+        monkeypatch.setenv("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", "127.0.0.0/8")
         service = _service()
         listing = MagicMock()
         listing.tools = []

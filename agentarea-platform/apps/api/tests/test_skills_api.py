@@ -17,7 +17,7 @@ from httpx import ASGITransport, AsyncClient
 def graph():
     """Ownership grants and list filtering both need a graph client.
 
-    ``ACCESS_CONTROL_BACKEND`` no longer has a "disabled" value, so the grant
+    ``AGENTAREA_AUTHZ_BACKEND`` no longer has a "disabled" value, so the grant
     path is always live and answers 503 when the client is missing — which is
     the point. Tests that create resources register a stub instead of relying on
     authorization being switched off.

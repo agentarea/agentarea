@@ -1,6 +1,6 @@
-"""OUTBOUND_PRIVATE_ALLOWLIST reaches every path that dials a member's URL.
+"""AGENTAREA_HTTP_PRIVATE_ALLOWLIST reaches every path that dials a member's URL.
 
-The MCP proxy, bundle fetch and OpenAPI connections gated on ALLOW_PRIVATE_URLS
+The MCP proxy, bundle fetch and OpenAPI connections gated on AGENTAREA_HTTP_ALLOW_PRIVATE
 alone, so an endpoint the allowlist admitted passed validate-connection and
 was then refused on the tool call.
 """
@@ -42,8 +42,8 @@ async def test_a_bundle_on_an_allowlisted_address_is_fetched():
 def test_the_policy_is_the_deployments(monkeypatch):
     from agentarea_common.config import get_settings
 
-    monkeypatch.setenv("OUTBOUND_PRIVATE_ALLOWLIST", "127.0.0.0/8")
-    monkeypatch.delenv("ALLOW_PRIVATE_URLS", raising=False)
+    monkeypatch.setenv("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", "127.0.0.0/8")
+    monkeypatch.delenv("AGENTAREA_HTTP_ALLOW_PRIVATE", raising=False)
     get_settings.cache_clear()
     try:
         policy = OutboundPolicy.from_env()

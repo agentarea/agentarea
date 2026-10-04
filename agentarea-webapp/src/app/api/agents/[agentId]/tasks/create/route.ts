@@ -27,7 +27,7 @@ export async function POST(
 
     // Task creation is JSON. Files are pre-staged via POST /v1/files/upload-url
     // (presigned upload) and referenced by ref in the body's `attachments` array.
-    const backendUrl = env.API_URL;
+    const backendUrl = env.AGENTAREA_API_URL;
     const createTaskUrl = fillWorkspace(
       `${backendUrl}/v1/workspaces/{workspace}/agents/${agentId}/tasks/`,
       resolveRequestWorkspaceSlug(request)

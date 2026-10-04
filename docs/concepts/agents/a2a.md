@@ -83,7 +83,7 @@ how a delegated run is distinguished downstream.
 
 It then polls `get_task_with_workflow_status` every 2 seconds until the task
 reaches `completed`, `failed` or `cancelled`. The ceiling is 600 seconds by
-default, configurable through `AGENT_DELEGATION_POLL_TIMEOUT`. That number was
+default, configurable through `AGENTAREA_TASK_DELEGATION_TIMEOUT`. That number was
 raised deliberately: a delegated task is a full agent run, and a research
 sub-agent making web calls can legitimately need minutes, so a shorter ceiling
 abandoned sub-agents that were still working.
@@ -103,7 +103,7 @@ same artifacts as a task started from the UI.
 
 ### Addresses
 
-Every agent has an address of its own: a host, built from `A2A_AGENT_URL` with
+Every agent has an address of its own: a host, built from `AGENTAREA_A2A_AGENT_URL` with
 the agent id as the first label, such as
 `https://4f1c….a2a.agentarea.ru`. The agent API returns it as `a2a_url`. On
 that host the agent card is at the well-known path, and the JSON-RPC endpoint
@@ -132,8 +132,8 @@ POST /v1/agents/{agent_id}/a2a/rpc
 ```
 
 Each card names the endpoint on the host it is served from, built from
-configuration rather than from the request: `A2A_AGENT_URL` for the agent's
-own host, `API_BASE_URL` for the API host. A client is never sent to a host
+configuration rather than from the request: `AGENTAREA_A2A_AGENT_URL` for the agent's
+own host, `AGENTAREA_API_URL` for the API host. A client is never sent to a host
 other than the one it was given.
 
 ### The endpoint
@@ -321,8 +321,8 @@ rotations would silently change it. Setting `auth_secret_name` without
 
 The URL is member-supplied, so every request goes through the same outbound
 guard as OpenAPI connections: an `a2a_url` that resolves to a private address is
-refused unless the deployment allows it through `OUTBOUND_PRIVATE_ALLOWLIST` or
-`ALLOW_PRIVATE_URLS`.
+refused unless the deployment allows it through `AGENTAREA_HTTP_PRIVATE_ALLOWLIST` or
+`AGENTAREA_HTTP_ALLOW_PRIVATE`.
 
 Only `TASK_STATE_COMPLETED` is a success. The tool reads artifacts first, then
 falls back to `status.message`, and returns `"(No output from agent)"` when

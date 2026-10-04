@@ -70,7 +70,7 @@ def test_unknown_path_and_method_are_rejected():
 
 
 def test_port_comes_from_the_agentarea_wf_namespace(monkeypatch):
-    monkeypatch.setenv("AGENTAREA_WF_HEALTH_PORT", "9123")
+    monkeypatch.setenv("AGENTAREA_WORKER_HEALTH_PORT", "9123")
 
     assert WorkerHealthSettings().HEALTH_PORT == 9123
 

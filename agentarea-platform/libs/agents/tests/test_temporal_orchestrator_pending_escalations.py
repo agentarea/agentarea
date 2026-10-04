@@ -34,7 +34,6 @@ class _Handle:
 async def test_pending_escalations_come_from_the_workflows_own_query():
     handle = _Handle()
     orchestrator = TemporalWorkflowOrchestrator(
-        temporal_address="localhost:7233",
         task_queue="test",
         max_concurrent_activities=1,
         max_concurrent_workflows=1,
@@ -56,7 +55,6 @@ class _MissingWorkflowHandle:
 @pytest.mark.asyncio
 async def test_a_run_without_a_workflow_is_reported_as_missing():
     orchestrator = TemporalWorkflowOrchestrator(
-        temporal_address="localhost:7233",
         task_queue="test",
         max_concurrent_activities=1,
         max_concurrent_workflows=1,

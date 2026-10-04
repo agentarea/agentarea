@@ -38,9 +38,8 @@ if config.config_file_name is not None:
 target_metadata = BaseModel.metadata
 
 
-def get_url():
-    settings = get_db_settings()
-    return settings.sync_url
+def get_url() -> str:
+    return get_db_settings().sync_url.render_as_string(hide_password=False)
 
 
 # alembic_version.version_num is VARCHAR(32). Auto-derive every revision id from

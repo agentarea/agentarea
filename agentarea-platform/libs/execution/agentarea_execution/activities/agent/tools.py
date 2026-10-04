@@ -265,7 +265,7 @@ def make_tools_activities(
 
                         extra_kwargs = {
                             "storage": SandboxFileStore(
-                                mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+                                mcp_manager_url=dependencies.settings.mcp.MANAGER_URL,
                                 workspace_id=str(request.workspace_id),
                                 task_id=str(request.task_id) if request.task_id else "",
                                 auth_secret=sandbox_file_auth_secret(dependencies),
@@ -294,14 +294,14 @@ def make_tools_activities(
                         # client resolves, vets and pins every hop's address, and
                         # with an empty policy it reaches public addresses only:
                         # an agent-supplied URL is less trusted than a member's,
-                        # so OUTBOUND_PRIVATE_ALLOWLIST does not apply to it.
+                        # so AGENTAREA_HTTP_PRIVATE_ALLOWLIST does not apply to it.
                         from agentarea_common.utils.url_safety import (
                             OutboundPolicy,
                             safe_async_client,
                         )
 
                         extra_kwargs = {
-                            "search_base_url": dependencies.settings.app.WEB_SEARCH_BASE_URL,
+                            "search_base_url": dependencies.settings.app.TOOL_SEARCH_URL,
                             "http_client_factory": functools.partial(
                                 safe_async_client, policy=OutboundPolicy()
                             ),
@@ -325,7 +325,7 @@ def make_tools_activities(
                                 call_ref=_payment_call_ref(request),
                             ),
                             "storage": SandboxFileStore(
-                                mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+                                mcp_manager_url=dependencies.settings.mcp.MANAGER_URL,
                                 workspace_id=str(request.workspace_id),
                                 task_id=str(request.task_id) if request.task_id else "",
                                 auth_secret=sandbox_file_auth_secret(dependencies),
@@ -368,7 +368,7 @@ def make_tools_activities(
                         )
 
                         extra_kwargs = {
-                            "mcp_manager_url": dependencies.settings.mcp.MCP_MANAGER_URL,
+                            "mcp_manager_url": dependencies.settings.mcp.MANAGER_URL,
                             "auth_secret": sandbox_control_auth_secret(dependencies),
                             "ctx": ToolInvocationContext(
                                 workflow_id=wf_id or "",
@@ -548,7 +548,7 @@ def make_tools_activities(
                     tc for tc in request.tools if isinstance(tc, dict) and tc.get("type") == "agent"
                 ]
                 if agent_configs:
-                    base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
+                    base_url = f"{dependencies.settings.app.API_URL}/api/v1"
                     agent_service = await ctx.get_agent_service()
 
                     # Create task service for internal delegation

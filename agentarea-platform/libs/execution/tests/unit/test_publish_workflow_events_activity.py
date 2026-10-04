@@ -143,7 +143,7 @@ def _activity(
     dependencies = SimpleNamespace(
         event_broker=SimpleNamespace(publish=AsyncMock()),
         broker_client=broker,
-        channel_delivery_settings=SimpleNamespace(OUTBOUND_STREAM=_OUTBOUND) if channels else None,
+        channel_delivery_settings=SimpleNamespace(OUT_STREAM=_OUTBOUND) if channels else None,
     )
     [activity_fn] = make_events_activities(
         dependencies, _Container(service, session, audit or _Audit())

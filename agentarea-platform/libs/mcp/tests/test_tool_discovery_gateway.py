@@ -21,7 +21,7 @@ class _Recorder:
 @pytest.fixture
 def gateway_credential(monkeypatch):
     """Container-backed access is fail-closed without this, by design."""
-    monkeypatch.setenv("MCP_GATEWAY_AUTH_SECRET", "x" * 32)
+    monkeypatch.setenv("AGENTAREA_MCP_GATEWAY_SECRET", "x" * 32)
     from agentarea_common.config import get_settings
 
     get_settings.cache_clear()

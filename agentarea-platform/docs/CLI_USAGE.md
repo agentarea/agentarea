@@ -205,7 +205,11 @@ python -m cli chat interactive \
 ### Environment Variables
 ```bash
 # Database configuration
-DATABASE_URL=postgresql://user:pass@localhost:5432/agentarea
+AGENTAREA_DB_HOST=localhost
+AGENTAREA_DB_PORT=5432
+AGENTAREA_DB_USER=user
+AGENTAREA_DB_PASSWORD=pass
+AGENTAREA_DB_NAME=agentarea
 
 # API server settings
 API_HOST=0.0.0.0

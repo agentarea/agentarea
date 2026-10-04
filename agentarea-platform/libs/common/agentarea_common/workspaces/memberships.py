@@ -20,11 +20,11 @@ def get_workspace_membership_graph() -> OpenFGAClient:
     except ValueError:
         settings = get_settings()
         return OpenFGAClient(
-            api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-            store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-            authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-            timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
-            api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
+            api_url=settings.openfga.URL,
+            store_id=settings.openfga.STORE_ID,
+            authorization_model_id=settings.openfga.MODEL_ID,
+            timeout_seconds=settings.openfga.TIMEOUT.total_seconds(),
+            api_token=settings.openfga.API_TOKEN or None,
         )
 
 

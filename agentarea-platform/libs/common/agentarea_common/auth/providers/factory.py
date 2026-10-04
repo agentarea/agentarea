@@ -64,8 +64,8 @@ class AuthProviderFactory:
         return AuthProviderFactory.create_provider(
             "kratos",
             config={
-                "jwks_b64": settings.KRATOS_JWKS_B64,
-                "issuer": settings.KRATOS_ISSUER,
-                "audience": settings.KRATOS_AUDIENCE,
+                "jwks_b64": settings.JWKS_B64,
+                "issuer": settings.ISSUER,
+                "audience": settings.AUDIENCE,
             },
         )

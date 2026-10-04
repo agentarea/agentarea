@@ -5,14 +5,12 @@ from agentarea_common.observability.otel import setup_otel
 
 
 def test_setup_otel_returns_false_when_disabled():
-    settings = ObservabilitySettings(OTEL_ENABLED=False)
+    settings = ObservabilitySettings(ENABLED=False)
 
     assert setup_otel("agentarea-test", settings) is False
 
 
-def test_otel_service_name_can_override_default(monkeypatch):
-    monkeypatch.setenv("OTEL_SERVICE_NAME", "custom-service")
+def test_enabled_is_read_from_the_prefixed_name(monkeypatch):
+    monkeypatch.setenv("AGENTAREA_OTEL_ENABLED", "true")
 
-    settings = ObservabilitySettings()
-
-    assert settings.OTEL_SERVICE_NAME == "custom-service"
+    assert ObservabilitySettings(_env_file=None).ENABLED is True  # pyright: ignore[reportCallIssue]

@@ -6,10 +6,10 @@ import (
 )
 
 func TestLoadPackageImageConfig(t *testing.T) {
-	t.Setenv("MCP_PACKAGE_REPOSITORY", "registry.example/packages")
-	t.Setenv("MCP_PACKAGE_IMPORT_TIMEOUT", "7m")
-	t.Setenv("MCP_NPM_REGISTRY_URL", "https://npm.example")
-	t.Setenv("MCP_PYPI_URL", "https://pypi.example")
+	t.Setenv("AGENTAREA_MCP_PACKAGE_REPO", "registry.example/packages")
+	t.Setenv("AGENTAREA_MCP_IMPORT_TIMEOUT", "7m")
+	t.Setenv("AGENTAREA_MCP_NPM_REGISTRY", "https://npm.example")
+	t.Setenv("AGENTAREA_MCP_PYPI_URL", "https://pypi.example")
 
 	cfg := Load()
 	if cfg.PackageImages.Repository != "registry.example/packages" {

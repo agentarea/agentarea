@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 import pytest
 from agentarea_api.api.v1 import connection_oauth, mcp_oauth_connect
 
-FRONTEND = SimpleNamespace(app=SimpleNamespace(FRONTEND_BASE_URL="https://app.agentarea.ai"))
+FRONTEND = SimpleNamespace(app=SimpleNamespace(APP_URL="https://app.agentarea.ai"))
 STATE = {
     "connection_id": "d50241d7-eafe-4011-8479-b40f7a2aab3c",
     "instance_id": "d50241d7-eafe-4011-8479-b40f7a2aab3c",

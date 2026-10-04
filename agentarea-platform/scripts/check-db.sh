@@ -14,7 +14,7 @@ PLATFORM_DIR=$(pwd)
 REPO_DIR=$(cd .. && pwd)
 
 missing=()
-for var in POSTGRES_HOST POSTGRES_PORT POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB; do
+for var in AGENTAREA_DB_HOST AGENTAREA_DB_PORT AGENTAREA_DB_USER AGENTAREA_DB_PASSWORD AGENTAREA_DB_NAME; do
   [ -n "${!var:-}" ] || missing+=("$var")
 done
 if [ ${#missing[@]} -gt 0 ]; then
@@ -24,7 +24,7 @@ if [ ${#missing[@]} -gt 0 ]; then
 fi
 command -v go >/dev/null || { echo "check-db needs Go for the MCP manager's SQL suites: https://go.dev/doc/install" >&2; exit 1; }
 
-DSN="${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTAREA_DB_PORT}/${AGENTAREA_DB_NAME}"
 
 # Python suites. Each reads its own *_TEST_DATABASE_URL (asyncpg driver).
 #   secrets catalog: a unique constraint decides "create", a RESTRICT FK "delete".

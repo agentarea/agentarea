@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { identityToProfile, resolveIdentityProfiles } from "@/lib/identities";
 
-const mockEnv = vi.hoisted<{ ORY_ADMIN_URL: string | undefined }>(() => ({
-  ORY_ADMIN_URL: "http://kratos:4434",
+const mockEnv = vi.hoisted<{ AGENTAREA_AUTH_KRATOS_ADMIN_URL: string | undefined }>(() => ({
+  AGENTAREA_AUTH_KRATOS_ADMIN_URL: "http://kratos:4434",
 }));
 vi.mock("@/env", () => ({ env: mockEnv }));
 vi.mock("server-only", () => ({}));
@@ -78,8 +78,8 @@ describe("resolveIdentityProfiles", () => {
 
   it("skips the lookup entirely when no admin URL is configured", async () => {
     const fetchImpl = vi.fn();
-    const saved = mockEnv.ORY_ADMIN_URL;
-    mockEnv.ORY_ADMIN_URL = undefined;
+    const saved = mockEnv.AGENTAREA_AUTH_KRATOS_ADMIN_URL;
+    mockEnv.AGENTAREA_AUTH_KRATOS_ADMIN_URL = undefined;
     try {
       const profiles = await resolveIdentityProfiles(
         ["a"],
@@ -88,7 +88,7 @@ describe("resolveIdentityProfiles", () => {
       expect(profiles.size).toBe(0);
       expect(fetchImpl).not.toHaveBeenCalled();
     } finally {
-      mockEnv.ORY_ADMIN_URL = saved;
+      mockEnv.AGENTAREA_AUTH_KRATOS_ADMIN_URL = saved;
     }
   });
 

@@ -277,7 +277,7 @@ requires-dist = [
     { name = "redis", specifier = ">=5.0.0" },
     { name = "returns", specifier = ">=0.25.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.23" },
-    { name = "temporalio", extras = ["opentelemetry"], specifier = ">=1.12.0" },
+    { name = "temporalio", extras = ["opentelemetry"], specifier = ">=1.18.2" },
 ]
 
 [[package]]

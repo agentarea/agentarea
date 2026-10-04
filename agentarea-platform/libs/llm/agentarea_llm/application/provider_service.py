@@ -70,7 +70,7 @@ async def _reject_unsafe_endpoint(endpoint_url: str | None) -> None:
     The worker and the API POST to this URL on every run and model test, from
     inside the deployment; an unchecked value reaches cloud metadata and internal
     services. Private endpoints (a local Ollama) are admitted through
-    ``OUTBOUND_PRIVATE_ALLOWLIST`` / ``ALLOW_PRIVATE_URLS``. A name that does not
+    ``AGENTAREA_HTTP_PRIVATE_ALLOWLIST`` / ``AGENTAREA_HTTP_ALLOW_PRIVATE``. A name that does not
     resolve yet reaches nothing and is left for the model test to report.
 
     The check resolves the name with a blocking ``getaddrinfo``, so it runs in a

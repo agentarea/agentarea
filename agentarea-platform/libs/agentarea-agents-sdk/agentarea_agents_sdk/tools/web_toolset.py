@@ -153,7 +153,7 @@ class WebToolset(Toolset):
             return "Error: search_web is disabled for this toolset instance"
         if self.search_base_url is None:
             return (
-                "Error: web search is not configured; set WEB_SEARCH_BASE_URL "
+                "Error: web search is not configured; set AGENTAREA_TOOL_SEARCH_URL "
                 "to a SearXNG-compatible endpoint"
             )
         if not query or not query.strip():

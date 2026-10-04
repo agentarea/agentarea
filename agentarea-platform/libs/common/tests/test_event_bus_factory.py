@@ -1,4 +1,4 @@
-"""Tests for the EVENT_BUS_BACKEND factory."""
+"""Tests for the EVENT_BUS factory."""
 
 from __future__ import annotations
 
@@ -15,12 +15,12 @@ def test_default_backend_is_redis():
 
 
 def test_kafka_backend_raises_not_implemented():
-    settings = KafkaSettings(EVENT_BUS_BACKEND="kafka")
+    settings = KafkaSettings(EVENT_BUS="kafka")
     with pytest.raises(NotImplementedError):
         create_event_broker(settings)
 
 
 def test_nats_backend_raises_not_implemented():
-    settings = RedisSettings(EVENT_BUS_BACKEND="nats")
+    settings = RedisSettings(EVENT_BUS="nats")
     with pytest.raises(NotImplementedError):
         create_event_broker(settings)

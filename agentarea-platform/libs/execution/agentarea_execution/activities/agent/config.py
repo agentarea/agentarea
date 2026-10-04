@@ -247,7 +247,7 @@ def make_config_activities(
     @activity.defn
     async def discover_runtime_manifest_activity() -> RuntimeDiscoveryResult:
         """Discover the manifest exposed by the active sandbox data plane."""
-        return await fetch_runtime_manifest(dependencies.settings.mcp.MCP_MANAGER_URL)
+        return await fetch_runtime_manifest(dependencies.settings.mcp.MANAGER_URL)
 
     @activity.defn
     async def build_agent_config_activity(
@@ -405,7 +405,7 @@ def make_config_activities(
 
             # Use tool manager to discover available tools (split path).
             tool_manager = ToolManager(openapi_connection_service=openapi_connection_service)
-            base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
+            base_url = f"{dependencies.settings.app.API_URL}/api/v1"
             split = await tool_manager.discover_available_tools_split(
                 agent_id=request.agent_id,
                 tools_config=request.tools
@@ -459,7 +459,7 @@ def make_config_activities(
                 )
 
             tool_manager = ToolManager(openapi_connection_service=openapi_connection_service)
-            base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
+            base_url = f"{dependencies.settings.app.API_URL}/api/v1"
             discovery = await tool_manager.discover_tool_providers(
                 agent_id=request.agent_id,
                 tools_config=request.tools

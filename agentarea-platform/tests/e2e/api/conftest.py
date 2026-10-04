@@ -9,9 +9,9 @@ Run with:
     uv run pytest -m integration tests/e2e/api/ -v
 
 Override endpoints via env vars if your stack runs elsewhere:
-    KRATOS_ADMIN_URL   (default http://localhost:4434)
-    KRATOS_PUBLIC_URL  (default http://localhost:4433)
-    API_URL            (default http://localhost:8000)
+    AGENTAREA_AUTH_KRATOS_ADMIN_URL   (default http://localhost:4434)
+    AGENTAREA_AUTH_KRATOS_URL         (default http://localhost:4433)
+    AGENTAREA_API_URL                 (default http://localhost:8000)
 """
 
 from __future__ import annotations
@@ -26,9 +26,9 @@ from dataclasses import dataclass
 import httpx
 import pytest
 
-KRATOS_ADMIN_URL = os.environ.get("KRATOS_ADMIN_URL", "http://localhost:4434")
-KRATOS_PUBLIC_URL = os.environ.get("KRATOS_PUBLIC_URL", "http://localhost:4433")
-API_URL = os.environ.get("API_URL", "http://localhost:8000")
+KRATOS_ADMIN_URL = os.environ.get("AGENTAREA_AUTH_KRATOS_ADMIN_URL", "http://localhost:4434")
+KRATOS_PUBLIC_URL = os.environ.get("AGENTAREA_AUTH_KRATOS_URL", "http://localhost:4433")
+API_URL = os.environ.get("AGENTAREA_API_URL", "http://localhost:8000")
 
 TEST_PASSWORD = "Str0ng-Test-PW-xyz!"
 

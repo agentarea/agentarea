@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 import pytest
 import pytest_asyncio
 from agentarea_agents.infrastructure.di_container import initialize_di_container
-from agentarea_common.config import Database, get_settings
+from agentarea_common.config import Database, get_settings, temporal_connect_config
 from agentarea_execution import ActivityDependencies, create_activities_for_worker
 from agentarea_execution.models import AgentExecutionRequest, AgentExecutionResult
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
@@ -25,8 +25,8 @@ os.environ.setdefault("POSTGRES_PORT", "5432")
 os.environ.setdefault("TEMPORAL_SERVER_URL", "localhost:7233")
 os.environ.setdefault("TEMPORAL_NAMESPACE", "default")
 os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault("DEBUG", "true")
-os.environ["REDIS_URL"] = "redis://localhost:6379"
+os.environ.setdefault("AGENTAREA_DEBUG", "true")
+os.environ["AGENTAREA_REDIS_URL"] = "redis://localhost:6379"
 
 
 class E2ETemporalTest:
@@ -45,12 +45,11 @@ class E2ETemporalTest:
         await self._check_temporal_server()
         await self._check_database()
         await self._check_redis()
-        initialize_di_container(self.settings.workflow)
+        initialize_di_container(self.settings.temporal)
         await self._create_test_llm_infrastructure()
         await self._setup_activity_dependencies()
         self.client = await Client.connect(
-            self.settings.workflow.TEMPORAL_SERVER_URL,
-            namespace=self.settings.workflow.TEMPORAL_NAMESPACE,
+            **temporal_connect_config(),
             data_converter=pydantic_data_converter,
         )
 

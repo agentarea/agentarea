@@ -11,7 +11,7 @@ from typing import cast
 import redis.asyncio as redis
 from agentarea_common.auth.context import UserPrincipal
 from agentarea_common.auth.dependencies import get_optional_principal
-from agentarea_common.config import get_settings
+from agentarea_common.config import RedisSettings, get_settings
 from fastapi import Depends, HTTPException, Request
 from redis.exceptions import RedisError
 
@@ -62,7 +62,7 @@ def _get_redis_client() -> redis.Redis:
         _rate_limit_redis = (
             loop,
             redis.from_url(
-                get_settings().mcp.REDIS_URL,
+                RedisSettings().REDIS_URL,
                 decode_responses=True,
                 socket_connect_timeout=1,
                 socket_timeout=1,
@@ -121,7 +121,7 @@ async def limit_webhook(webhook_id: str) -> None:
     await enforce_rate_limit(
         scope="webhook",
         identity=webhook_id,
-        limit=get_settings().triggers.WEBHOOK_RATE_LIMIT_PER_MINUTE,
+        limit=get_settings().triggers.WEBHOOK_RATE,
     )
 
 

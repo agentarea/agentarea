@@ -45,13 +45,18 @@ class _Settings:
     """Minimal stand-in for the app settings the endpoint reads."""
 
     class app:  # noqa: N801 - mirrors the settings attribute name
-        API_BASE_URL = API_BASE
+        API_URL = API_BASE
 
     class mcp:  # noqa: N801 - mirrors the settings attribute name
-        HYDRA_PUBLIC_URL = HYDRA
-        HYDRA_ADMIN_URL = HYDRA_ADMIN
-        HYDRA_BROWSER_URL = HYDRA
-        MCP_OAUTH_SCOPES = "openid offline_access offline"
+        OAUTH_SCOPES = "openid offline_access offline"
+
+
+class _AuthSettings:
+    """Minimal stand-in for the auth settings the endpoint reads."""
+
+    HYDRA_URL = HYDRA
+    HYDRA_ADMIN_URL = HYDRA_ADMIN
+    HYDRA_BROWSER_URL = HYDRA
 
 
 class _FakeResponse:
@@ -93,6 +98,7 @@ class _FakeAsyncClient:
 def hydra(monkeypatch):
     """Point the endpoints at a stubbed Hydra and settings."""
     monkeypatch.setattr(mcp_oauth_as, "get_settings", lambda: _Settings())
+    monkeypatch.setattr(mcp_oauth_as, "get_auth_settings", lambda: _AuthSettings())
     monkeypatch.setattr(mcp_oauth_as.httpx, "AsyncClient", _FakeAsyncClient)
     monkeypatch.setattr(_FakeAsyncClient, "sent", [])
 
@@ -129,6 +135,7 @@ class TestProtectedResourceMetadata:
     @staticmethod
     def _patch(monkeypatch, discovery):
         monkeypatch.setattr(mcp_oauth_as, "get_settings", lambda: _Settings())
+        monkeypatch.setattr(mcp_oauth_as, "get_auth_settings", lambda: _AuthSettings())
 
         async def _discovery():
             return discovery
@@ -188,7 +195,7 @@ class TestProtectedResourceMetadata:
 
         scopes = (await self._metadata())["scopes_supported"]
 
-        assert set(scopes) == set(_Settings.mcp.MCP_OAUTH_SCOPES.split())
+        assert set(scopes) == set(_Settings.mcp.OAUTH_SCOPES.split())
 
 
 class TestProtectedResourceMetadataLocations:
@@ -203,6 +210,7 @@ class TestProtectedResourceMetadataLocations:
     @pytest.fixture
     def client(self, monkeypatch):
         monkeypatch.setattr(mcp_oauth_as, "get_settings", lambda: _Settings())
+        monkeypatch.setattr(mcp_oauth_as, "get_auth_settings", lambda: _AuthSettings())
 
         async def _discovery():
             return None

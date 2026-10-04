@@ -42,7 +42,7 @@ async function handleRequest(
     // The browser passes either a concrete path or a
     // `/v1/workspaces/{workspace}/...` template filled from the page it is on.
     const backendUrl = fillWorkspace(
-      `${env.API_URL}/${pathString}`,
+      `${env.AGENTAREA_API_URL}/${pathString}`,
       resolveRequestWorkspaceSlug(request)
     );
 
