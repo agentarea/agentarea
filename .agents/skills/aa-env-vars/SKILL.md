@@ -107,6 +107,14 @@ It runs as the `env-naming` CI job, under `ci-required`. After any conflict in
 `ci.yml`, check the job is still there (`git grep check_env_naming .github`): it
 was lost to a rebase once, and CI stayed green while checking nothing.
 
+The guard also cannot see a variable an SDK reads implicitly. The Go S3 clients
+once used `awsconfig.LoadDefaultConfig`, which picks up `AWS_ACCESS_KEY_ID` on
+its own. When the chart moved storage to `AGENTAREA_S3_*`, nothing failed until
+production lost object-store access. Before renaming a name an SDK might read
+by itself, grep for the implicit readers: `LoadDefaultConfig`, `boto3.client`
+with no explicit keys, `os.environ` passed whole to a library, and pass the
+values explicitly instead.
+
 The guard cannot see test stubs or attribute access. Run `uv run pyright` for
 the attribute side and `make test` for the stubs. If the chart changed, render
 it (`helm template`) and check that each new name lands on the containers that
