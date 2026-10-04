@@ -30,10 +30,11 @@ from starlette.requests import Request
 
 @pytest.mark.asyncio
 async def test_resolve_upstream_url_url_type_from_server_remote_url():
-    instance = SimpleNamespace(json_spec={}, server_spec_id="x", id="i")
+    instance = SimpleNamespace(transport="url", json_spec={}, server_spec_id="x", id="i")
     server_spec = SimpleNamespace(
         remote_url="https://mcp.clickup.com/mcp",
         cmd=None,
+        docker_image_url=None,
         json_spec={},
     )
 
@@ -46,7 +47,8 @@ async def test_resolve_upstream_url_url_type_from_server_remote_url():
 @pytest.mark.asyncio
 async def test_resolve_upstream_url_docker_uses_manager_demand_gateway():
     instance = SimpleNamespace(
-        json_spec={"type": "docker"},
+        transport="docker",
+        json_spec={},
         endpoint_url="http://mcp-abc:8000",
         id="i",
     )
@@ -61,7 +63,8 @@ async def test_resolve_upstream_url_docker_uses_manager_demand_gateway():
 @pytest.mark.asyncio
 async def test_resolve_upstream_url_docker_ignores_stale_internal_url():
     instance = SimpleNamespace(
-        json_spec={"type": "docker"},
+        transport="docker",
+        json_spec={},
         endpoint_url="http://mcp-abc:8000/",
         id="i",
     )
@@ -76,10 +79,11 @@ async def test_resolve_upstream_url_docker_ignores_stale_internal_url():
 @pytest.mark.asyncio
 async def test_resolve_upstream_url_url_type_returns_empty_without_remote_url():
     instance = SimpleNamespace(
-        json_spec={"type": "url"},
+        transport="url",
+        json_spec={},
         id="i",
     )
-    server_spec = SimpleNamespace(remote_url=None, cmd=None, json_spec={})
+    server_spec = SimpleNamespace(remote_url=None, cmd=None, docker_image_url=None, json_spec={})
 
     assert await _resolve_upstream_url(instance, server_spec) == ("", "url")
 
@@ -362,7 +366,8 @@ async def test_the_upstream_receives_the_connections_stored_secret_header(monkey
     instance = MCPServerInstance(
         name="remote",
         server_spec_id="spec",
-        json_spec={"type": "url", "headers": {}, "env_vars": ["X-Api-Key"]},
+        transport="url",
+        json_spec={"headers": {}, "env_vars": ["X-Api-Key"]},
     )
     instance.id = uuid4()
 

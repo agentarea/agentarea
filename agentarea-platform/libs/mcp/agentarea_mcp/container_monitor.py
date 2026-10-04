@@ -14,6 +14,7 @@ from agentarea_common.base.tenant_scope import unscoped, workspace_scope
 from agentarea_common.config import get_database
 from sqlalchemy import text
 
+from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
 from agentarea_mcp.package_import import import_package_image
 
@@ -51,26 +52,15 @@ _NEVER_ATTEMPTED_SQL = """
 SELECT
   i.id,
   i.name,
+  i.transport,
   i.json_spec,
   i.workspace_id,
   i.created_by,
   i.verification,
   i.last_dispatch,
-  i.tools,
-  s.json_spec AS server_json_spec,
-  s.docker_image_url,
-  s.remote_url,
-  s.cmd
+  i.tools
 FROM mcp_server_instances i
-JOIN mcp_servers s ON s.id::text = i.server_spec_id
-WHERE COALESCE(
-    s.json_spec->>'type',
-    CASE
-      WHEN s.remote_url IS NOT NULL THEN 'url'
-      WHEN s.cmd IS NOT NULL THEN 'command'
-      ELSE 'docker'
-    END
-  ) IN ('docker', 'command')
+WHERE i.transport IN ('docker', 'command')
   AND (i.verification->>'status') = 'never_attempted'
 """
 
@@ -78,57 +68,20 @@ WHERE COALESCE(
 class _InstanceProxy:
     """Lightweight stand-in for MCPServerInstance built from a raw SQL row.
 
-    verify() only reads .id, .name, .json_spec, .workspace_id, .verification,
-    and .endpoint_url — all of which this proxy provides without touching the
-    SQLAlchemy instrumentation layer.
+    verify() reads .id and .transport from it, then locks and reloads the row
+    itself, so nothing here touches the SQLAlchemy instrumentation layer.
     """
 
     def __init__(self, row):
         self.id = row.id
         self.name = row.name
-        transport_spec = dict(getattr(row, "server_json_spec", None) or {})
-        remote_url = getattr(row, "remote_url", None)
-        cmd = getattr(row, "cmd", None)
-        docker_image_url = getattr(row, "docker_image_url", None)
-        if remote_url:
-            transport_spec.setdefault("type", "url")
-            transport_spec.setdefault("endpoint_url", remote_url)
-        elif cmd:
-            transport_spec.setdefault("type", "command")
-            if isinstance(cmd, list) and cmd:
-                transport_spec.setdefault("command", cmd[0])
-                if len(cmd) > 1:
-                    transport_spec.setdefault("args", cmd[1:])
-        elif docker_image_url:
-            transport_spec.setdefault("type", "docker")
-            transport_spec.setdefault("image", docker_image_url)
-        else:
-            transport_spec.update(row.json_spec or {})
-            transport_spec.setdefault("type", "docker")
-        self.json_spec = {**transport_spec, **(row.json_spec or {})}
+        self.transport = MCPTransport(row.transport)
+        self.json_spec = row.json_spec or {}
         self.workspace_id = row.workspace_id
         self.created_by = row.created_by
         self.verification = row.verification or {}
         self.last_dispatch = row.last_dispatch
         self.tools = row.tools
-
-    @property
-    def endpoint_url(self) -> str:
-        """Direct endpoint for URL-type servers only.
-
-        The monitor never dials a container-backed workload itself; it drives
-        verification, which goes through the manager gateway. Synthesizing an
-        address here would reintroduce a path around that boundary.
-        """
-        t = self.json_spec.get("type", "")
-        if t == "url":
-            return self.json_spec.get("endpoint_url", "")
-        if t in ("docker", "command", "kubernetes"):
-            raise ValueError(
-                f"container-backed MCP instance {self.id} has no direct endpoint; "
-                "route the request through the manager gateway"
-            )
-        raise ValueError("bundle has no endpoint_url")
 
 
 class MCPContainerMonitor:

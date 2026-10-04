@@ -283,7 +283,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
             MCPServerInstanceRepository,
             MCPServerRepository,
         )
-        from agentarea_mcp.transport_spec import merge_transport_spec, server_transport_spec
+        from agentarea_mcp.transport_spec import instance_transport_spec
 
         try:
             db = get_database()
@@ -317,9 +317,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                     return ResolveAuthHeadersResult(
                         error=f"MCP server spec {instance.server_spec_id} not found"
                     )
-                transport_spec = merge_transport_spec(
-                    server_transport_spec(server_spec), instance.json_spec
-                )
+                transport_spec = instance_transport_spec(server_spec, instance)
                 headers = await auth_service.get_auth_headers_for(
                     auth_config, str(transport_spec.get("endpoint_url") or "")
                 )

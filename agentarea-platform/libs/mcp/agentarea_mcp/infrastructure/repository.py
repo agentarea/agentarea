@@ -10,13 +10,14 @@ from agentarea_common.base.workspace_scoped_repository import (
 )
 from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from agentarea_common.utils.slug import generate_slug
-from sqlalchemy import DateTime, String, and_, case, cast, func, or_, select, text
+from sqlalchemy import DateTime, String, case, cast, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
 from agentarea_mcp.domain.env_schema import derive_env_schema_from_spec, normalize_env_schema
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.infrastructure.catalog_mcp_repository import (
     CatalogMcpItem,
     CatalogMcpRepository,
@@ -332,11 +333,14 @@ class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
         instance: MCPServerInstance,
         expected_spec: dict,
         updated_spec: dict,
+        transport: MCPTransport | None = None,
     ) -> bool:
         """Replace a locked instance spec only when the import source is unchanged."""
         if instance.json_spec != expected_spec:
             return False
         instance.json_spec = updated_spec
+        if transport is not None:
+            instance.transport = transport
         return True
 
     @staticmethod
@@ -362,12 +366,8 @@ class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
                 cast(MCPServer.id, String) == MCPServerInstance.server_spec_id,
             )
             .where(
+                MCPServerInstance.transport == MCPTransport.COMMAND,
                 effective_command.in_({"npx", "uvx"}),
-                func.nullif(MCPServer.remote_url, "").is_(None),
-                ~and_(
-                    instance_spec["type"].as_string() == "docker",
-                    func.nullif(instance_spec["image"].as_string(), "").is_not(None),
-                ),
                 MCPServerInstance.verification["status"].as_string() == "succeeded",
                 (
                     package_import.is_(None)

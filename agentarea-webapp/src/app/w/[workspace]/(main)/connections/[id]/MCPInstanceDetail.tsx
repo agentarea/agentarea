@@ -51,13 +51,6 @@ interface Props {
   consumersError: string | null;
 }
 
-const MCP_TRANSPORT = {
-  url: "url",
-  bundle: "bundle",
-  command: "command",
-  docker: "docker",
-} as const;
-
 interface McpHeaderField {
   name: string;
   description?: string;
@@ -66,7 +59,6 @@ interface McpHeaderField {
 }
 
 interface McpServerJsonSpec {
-  type?: string;
   remotes?: Array<{ url?: string; headers?: McpHeaderField[] }>;
   repository?: { url?: string; source?: string };
   websiteUrl?: string;
@@ -276,19 +268,6 @@ export default function MCPInstanceDetail({
     return () => clearInterval(interval);
   }, [verification?.status, router]);
 
-  // Derive transport type. After PR #151 transport moved to MCPServer columns,
-  // so instance.json_spec.type is empty for newly-created instances — fall back
-  // to the parent server spec (remote_url → url, cmd → command, else docker).
-  const derivedTransportType = ((): string => {
-    const fromInstance = instance.json_spec?.type as string | undefined;
-    if (fromInstance) return fromInstance;
-    if (serverSpec?.remote_url) return MCP_TRANSPORT.url;
-    const specJson = serverSpec?.json_spec as McpServerJsonSpec | undefined;
-    if (specJson?.type) return specJson.type;
-    if (serverSpec?.cmd) return MCP_TRANSPORT.command;
-    return MCP_TRANSPORT.docker;
-  })();
-
   const plainEnvVars = (instance.json_spec?.environment ?? {}) as Record<
     string,
     string
@@ -307,11 +286,9 @@ export default function MCPInstanceDetail({
     instance.json_spec?.available_tools ??
     []) as Array<{ name: string; description: string }>;
 
-  // Determine MCP type (uses derivedTransportType — see above)
-  const specType = derivedTransportType;
-  const isUrlType = specType === MCP_TRANSPORT.url;
-  const isCommandType = specType === MCP_TRANSPORT.command;
-  const isBundleType = specType === MCP_TRANSPORT.bundle;
+  const isUrlType = instance.transport === "url";
+  const isCommandType = instance.transport === "command";
+  const isBundleType = instance.transport === "bundle";
   const bundleMembers = (instance.json_spec?.members ?? []) as string[];
 
   const authorization = summarizeAuthorization({
@@ -325,9 +302,9 @@ export default function MCPInstanceDetail({
   const commandStr = instance.json_spec?.command as string | undefined;
   const commandArgs = (instance.json_spec?.args ?? []) as string[];
 
-  // URL-type fields. Like derivedTransportType above, the endpoint lives on the
-  // parent server spec for catalog instances (remote_url / remotes[].url), not in
-  // the instance json_spec — fall back so the External Server card isn't empty.
+  // URL-type fields. The endpoint lives on the parent server spec for catalog
+  // instances (remote_url / remotes[].url), not in the instance json_spec —
+  // fall back so the External Server card isn't empty.
   const endpointUrl = (instance.json_spec?.endpoint_url ||
     serverSpec?.remote_url ||
     (serverSpec?.json_spec as McpServerJsonSpec | undefined)?.remotes?.[0]

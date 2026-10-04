@@ -205,7 +205,7 @@ async def test_a_container_connection_never_sends_its_environment_as_headers():
     server.json_spec = {"type": "docker", "image": "ghcr.io/acme/server:1"}
     service = _service(server)
     instance = MCPServerInstance(
-        name="local", server_spec_id=SPEC_ID, json_spec={"type": "docker", "env_vars": ["TOKEN"]}
+        name="local", server_spec_id=SPEC_ID, transport="docker", json_spec={"env_vars": ["TOKEN"]}
     )
     instance.id = uuid.uuid4()
     await service.env_service.set_instance_environment(instance.id, {"TOKEN": CREDENTIAL})

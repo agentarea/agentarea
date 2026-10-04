@@ -39,6 +39,7 @@ from agentarea_common.auth.tool_authorization import (
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
 from agentarea_mcp.application.tool_list_cache import RedisToolListCache
 from agentarea_mcp.domain.client_models import ClientPlatformToolset
+from agentarea_mcp.domain.transport import MCPTransport
 from mcp.server import Server
 from mcp.types import (
     CallToolRequestParams,
@@ -241,7 +242,6 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
                     url, headers, transport = await instance_service._resolve_mcp_url_and_headers(
                         full
                     )
-                    spec = await instance_service.get_transport_spec_for_instance(full)
                 except Exception:
                     logger.exception("Failed to resolve MCP url for instance %s", iid)
                     continue
@@ -257,7 +257,7 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
                         order=order,
                         namespace_prefix=link.namespace_prefix if link else None,
                         transport=instance_transports[iid],
-                        pinned=spec.get("type", "docker") == "url",
+                        pinned=full.transport == MCPTransport.URL,
                         allowed_tools=(
                             frozenset(link.allowed_tools)
                             if link and link.allowed_tools is not None

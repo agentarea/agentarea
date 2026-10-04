@@ -20,7 +20,6 @@ from pydantic import (
     ConfigDict,
     Field,
     field_validator,
-    model_validator,
 )
 
 from .image_reference import validate_optional_image_reference, validate_spec_image
@@ -145,11 +144,11 @@ class MCPServerUpdate(BaseModel):
 class MCPServerInstanceCreate(BaseModel):
     """Payload for creating an MCP server instance.
 
-    ``json_spec`` carries the connection configuration. Common shapes:
-
-    - ``{"type": "url", "endpoint_url": "https://..."}``
-    - ``{"type": "docker", "environment": {...}, "env_vars": [...]}``
-    - ``{"type": "command", "command": [...], "environment": {...}}``
+    The instance's transport (url, docker or command) is the one its server
+    spec declares; the response carries it as ``transport``. ``json_spec``
+    carries the instance's own configuration, e.g.
+    ``{"environment": {...}, "env_vars": [...]}`` or ``{"headers": {...}}``;
+    transport keys in it are ignored.
     For URL-type instances the service synchronously verifies the endpoint;
     docker/command kick off background verification.
     """
@@ -173,8 +172,8 @@ class MCPServerInstanceCreate(BaseModel):
     )
     json_spec: ContainerJsonSpec = Field(
         description=(
-            "Connection configuration. Must include 'type' "
-            "('url' | 'docker' | 'command'); other keys depend on type."
+            "Instance configuration (environment, env_vars, headers). Transport "
+            "keys such as 'type' are ignored: the server spec declares the transport."
         ),
     )
     auth_config_id: str | None = Field(
@@ -189,12 +188,6 @@ class MCPServerInstanceCreate(BaseModel):
         if not v:
             raise ValueError("name cannot be empty or whitespace")
         return v
-
-    @model_validator(mode="after")
-    def _reject_bundle_instances(self) -> MCPServerInstanceCreate:
-        if (self.json_spec or {}).get("type") == "bundle":
-            raise ValueError("bundle is not a valid MCP server instance type")
-        return self
 
 
 class MCPServerInstanceUpdate(BaseModel):

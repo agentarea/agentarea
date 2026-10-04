@@ -24,26 +24,32 @@ from agentarea_secrets.catalog_service import SecretCatalogService
 from fastapi import HTTPException
 
 
+def _server(*, remote_url=None, json_spec=None):
+    return SimpleNamespace(
+        remote_url=remote_url, cmd=None, docker_image_url=None, json_spec=json_spec or {}
+    )
+
+
 @pytest.mark.flow(MainFlow.MCP_OAUTH)
 def test_resolve_instance_remote_url_uses_server_spec_remote_url():
-    server_spec = SimpleNamespace(remote_url="https://server.example/mcp", json_spec={})
+    instance = SimpleNamespace(transport="url", json_spec={})
+    server_spec = _server(remote_url="https://server.example/mcp")
 
-    assert _resolve_instance_remote_url(server_spec) == "https://server.example/mcp"
+    assert _resolve_instance_remote_url(instance, server_spec) == "https://server.example/mcp"
 
 
 def test_resolve_instance_remote_url_uses_server_spec_json_fallback():
-    server_spec = SimpleNamespace(
-        remote_url=None,
-        json_spec={"type": "url", "endpoint_url": "https://json-spec.example/mcp"},
-    )
+    instance = SimpleNamespace(transport="url", json_spec={})
+    server_spec = _server(json_spec={"type": "url", "endpoint_url": "https://json-spec.example/mcp"})
 
-    assert _resolve_instance_remote_url(server_spec) == "https://json-spec.example/mcp"
+    assert _resolve_instance_remote_url(instance, server_spec) == "https://json-spec.example/mcp"
 
 
-def test_resolve_instance_remote_url_returns_none_without_remote_url():
-    server_spec = SimpleNamespace(remote_url=None, json_spec={"type": "docker"})
+def test_resolve_instance_remote_url_returns_none_for_a_container_instance():
+    instance = SimpleNamespace(transport="docker", json_spec={})
+    server_spec = _server(remote_url="https://server.example/mcp")
 
-    assert _resolve_instance_remote_url(server_spec) is None
+    assert _resolve_instance_remote_url(instance, server_spec) is None
 
 
 @pytest.mark.flow(MainFlow.MCP_OAUTH)
@@ -96,11 +102,13 @@ def _patch_instance_lookup(
         server_spec_id=uuid4(),
         auth_config_id=auth_config_id,
         name="Gmail",
+        transport="url",
+        json_spec={},
     )
     json_spec: dict = {"type": "url"}
     if spec_metadata is not None:
         json_spec["metadata"] = spec_metadata
-    server_spec = SimpleNamespace(remote_url=remote_url, json_spec=json_spec)
+    server_spec = _server(remote_url=remote_url, json_spec=json_spec)
 
     class _InstanceRepository:
         def __init__(self, *_args, **_kwargs):

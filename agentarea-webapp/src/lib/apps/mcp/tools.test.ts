@@ -19,7 +19,8 @@ function instance(
     name: "Charts",
     description: null,
     server_spec_id: "spec",
-    json_spec: { type: "command" },
+    transport: "command",
+    json_spec: {},
     verification: { status: "succeeded" },
     created_at: "2026-09-24T00:00:00Z",
     updated_at: "2026-09-24T00:00:00Z",
@@ -94,7 +95,7 @@ describe("mcpAppEntries", () => {
   it("skips bundles and connections that are not verified", () => {
     expect(
       mcpAppEntries([
-        instance([entryTool], { json_spec: { type: "bundle" } }),
+        instance([entryTool], { transport: "bundle" }),
         instance([entryTool], { verification: { status: "failed" } }),
       ])
     ).toEqual([]);
@@ -156,7 +157,7 @@ describe("resolveMcpAppTool", () => {
     );
     expect(() =>
       resolveMcpAppTool(
-        instance([entryTool], { json_spec: { type: "bundle" } }),
+        instance([entryTool], { transport: "bundle" }),
         "show-chart",
         "host"
       )

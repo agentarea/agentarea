@@ -26,7 +26,7 @@ import {
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 import type { ConnectionUsage } from "../usage";
 import { useConnectionListFilter } from "../useConnectionListFilter";
-import { getMCPInstanceToolCount } from "../utils";
+import { getMCPInstanceToolCount, TRANSPORT_LABEL } from "../utils";
 import {
   MCPInstanceCard,
   OpenAPIConnectionCard,
@@ -152,11 +152,7 @@ export function MyMCPsSection({
     if (item._type === "openapi" && item._connection) {
       return hostOf(item._connection.base_url) || "OpenAPI";
     }
-    const type = (item._instance?.json_spec?.type as string) || "";
-    if (type === "url") return "Remote MCP";
-    if (type === "bundle") return "Bundle";
-    if (type === "docker") return "Docker";
-    return "MCP server";
+    return item._instance ? TRANSPORT_LABEL[item._instance.transport] : "";
   };
 
   // Define table columns for instances

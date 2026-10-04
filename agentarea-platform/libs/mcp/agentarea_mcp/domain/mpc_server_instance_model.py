@@ -3,11 +3,12 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, ForeignKey, String, Text
+from sqlalchemy import JSON, CheckConstraint, Enum, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from agentarea_mcp.domain.transport import CONTAINER_TRANSPORTS, MCPTransport
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
 
 # Ensure the referenced auth tables are registered on the shared metadata
@@ -22,9 +23,27 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
     #: ``resource:<id>`` tuples so its creator can reach it afterwards.
     __graph_resource__ = True
 
+    __table_args__ = (
+        CheckConstraint(
+            "transport IN (" + ", ".join(f"'{t}'" for t in MCPTransport) + ")",
+            name="ck_mcp_server_instances_transport",
+        ),
+    )
+
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     server_spec_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    transport: Mapped[MCPTransport] = mapped_column(
+        Enum(
+            MCPTransport,
+            native_enum=False,
+            create_constraint=False,
+            length=16,
+            values_callable=lambda members: [member.value for member in members],
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
     # jsonb, like mcp_servers.json_spec: it is read in SQL (->>), and jsonb
     # refuses at write time the text a plain json column would store and then
     # fail to render on every read.
@@ -47,6 +66,7 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         self,
         name: str,
         server_spec_id: str,
+        transport: MCPTransport,
         description: str | None = None,
         json_spec: dict[str, Any] | None = None,
         verification: dict | None = None,
@@ -60,6 +80,7 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         self.name = name
         self.description = description
         self.server_spec_id = server_spec_id
+        self.transport = MCPTransport(transport)
         self.json_spec = json_spec or {}
         self.verification = verification if verification is not None else dict(DEFAULT_VERIFICATION)
         self.network_scope = network_scope
@@ -80,10 +101,9 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         the manager's `mcp-<id>` naming scheme — bypasses all three, so it fails
         loudly instead of handing back an address that must not be used.
         """
-        instance_type = self.json_spec.get("type") or self.json_spec.get("server_type", "")
-        if instance_type == "url":
+        if self.transport == MCPTransport.URL:
             return self.json_spec.get("endpoint_url", "")
-        if instance_type in ("docker", "command", "kubernetes"):
+        if self.transport in CONTAINER_TRANSPORTS:
             raise ValueError(
                 f"container-backed MCP instance {self.id} has no direct endpoint; "
                 "route the request through the manager gateway"

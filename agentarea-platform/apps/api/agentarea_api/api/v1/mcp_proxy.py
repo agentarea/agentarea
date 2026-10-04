@@ -55,11 +55,13 @@ from agentarea_mcp.application.mcp_client import (
     gateway_start_retry_delay,
 )
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.domain.transport import CONTAINER_TRANSPORTS, MCPTransport
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
+from agentarea_mcp.transport_spec import instance_transport_spec
 from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -284,35 +286,22 @@ async def _authorize_mcp_tool_calls(
         )
 
 
-async def _resolve_upstream_url(instance, server_spec) -> tuple[str, str | None]:
-    """Compute the upstream MCP endpoint URL and the instance type.
+async def _resolve_upstream_url(instance, server_spec) -> tuple[str, MCPTransport]:
+    """Compute the upstream MCP endpoint URL and the instance's transport.
 
-    URL-type instances carry their full endpoint URL on the parent server
-    spec (remote_url). Container-backed instances expose MCP at ``/mcp`` on
-    the resolved internal URL. The returned type drives SSRF handling: only
-    ``url`` upstreams are user-controlled and must be validated/pinned.
+    URL-type instances connect to the endpoint their server spec declares.
+    Container-backed instances go through the manager gateway. The transport
+    drives SSRF handling: only ``url`` upstreams are user-controlled and must be
+    validated/pinned.
     """
-    json_spec: dict[str, Any] = instance.json_spec or {}
-    instance_type = json_spec.get("type") or json_spec.get("server_type")
-    if not instance_type and server_spec is not None:
-        if getattr(server_spec, "remote_url", None):
-            instance_type = "url"
-        elif getattr(server_spec, "cmd", None):
-            instance_type = "command"
-        else:
-            instance_type = "docker"
-
-    if instance_type == "url":
-        if server_spec is not None and getattr(server_spec, "remote_url", None):
-            return server_spec.remote_url, instance_type
-        spec_json = getattr(server_spec, "json_spec", None) or {}
-        if spec_json.get("type") == "url":
-            return spec_json.get("endpoint_url") or spec_json.get("url") or "", instance_type
-        return "", instance_type
-
-    if instance_type in ("docker", "command"):
-        return get_settings().mcp.manager_gateway_url(instance.id), instance_type
-    return "", instance_type
+    transport = MCPTransport(instance.transport)
+    if transport == MCPTransport.URL:
+        if server_spec is None:
+            return "", transport
+        return instance_transport_spec(server_spec, instance).get("endpoint_url") or "", transport
+    if transport in CONTAINER_TRANSPORTS:
+        return get_settings().mcp.manager_gateway_url(instance.id), transport
+    return "", transport
 
 
 def _no_proxy_bypasses(host: str) -> bool:
@@ -343,7 +332,7 @@ def _egress_is_proxied(upstream_url: str) -> bool:
 
 
 def _guard_and_pin_upstream(
-    upstream_url: str, instance_type: str | None, *, policy: OutboundPolicy
+    upstream_url: str, instance_type: MCPTransport, *, policy: OutboundPolicy
 ) -> tuple[str | httpx.URL, str | None, dict | None]:
     """SSRF chokepoint for outbound proxy requests.
 
@@ -366,7 +355,7 @@ def _guard_and_pin_upstream(
     Raises:
         ValueError: If a URL-type upstream is not safe to fetch.
     """
-    if instance_type != "url":
+    if instance_type != MCPTransport.URL:
         return upstream_url, None, None
 
     resolved_ips = validate_url(upstream_url, policy=policy)
@@ -494,7 +483,7 @@ async def proxy_instance(
                 )
                 raise HTTPException(status_code=502, detail="Upstream auth failed") from exc
 
-    if instance_type in ("docker", "command"):
+    if instance_type in CONTAINER_TRANSPORTS:
         try:
             outbound_headers.update(get_settings().mcp.manager_gateway_headers())
         except RuntimeError as exc:
@@ -527,7 +516,7 @@ async def proxy_instance(
             extensions=extensions or {},
         )
         upstream_resp = await client.send(upstream_req, stream=True)
-        if instance_type in ("docker", "command"):
+        if instance_type in CONTAINER_TRANSPORTS:
             upstream_resp = await _wait_out_gateway_start(
                 client, upstream_req, upstream_resp, request
             )

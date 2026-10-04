@@ -32,6 +32,7 @@ import {
   getConnectionTypes,
   getMCPConnectionTitle,
   getMCPInstanceToolCount,
+  TRANSPORT_LABEL,
 } from "../utils";
 import { getMcpConnectionState } from "../state";
 import type { ConnectionUsage } from "../usage";
@@ -117,7 +118,6 @@ export function MCPInstanceCard({
 }: MCPInstanceCardProps) {
   const t = useTranslations("MCPServersPage.table");
   const tState = useTranslations("MCPServersPage.state");
-  const specType = (instance.json_spec?.type as string) || "docker";
   const toolCount = getMCPInstanceToolCount(instance);
   const connectionState = getMcpConnectionState({
     verification: instance.verification,
@@ -137,14 +137,7 @@ export function MCPInstanceCard({
       ? t("toolsTotal", { total: toolCount })
       : null;
 
-  const typeLabel =
-    specType === "command"
-      ? "Command"
-      : specType === "url"
-        ? "External"
-        : specType === "bundle"
-          ? "Bundle"
-          : serverSpec?.name || "Docker";
+  const typeLabel = TRANSPORT_LABEL[instance.transport];
 
   const providerIcon = getMCPConnectionIconSrc(instance, serverSpec);
   const displayTitle = getMCPConnectionTitle(instance, serverSpec);

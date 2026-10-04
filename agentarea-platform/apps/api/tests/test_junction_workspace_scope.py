@@ -122,7 +122,11 @@ async def _instance(session, ctx, name="github") -> MCPServerInstance:
     return await _add(
         session,
         MCPServerInstance(
-            name=name, server_spec_id="spec", workspace_id=ctx.workspace_id, created_by=ctx.user_id
+            name=name,
+            server_spec_id="spec",
+            transport="url",
+            workspace_id=ctx.workspace_id,
+            created_by=ctx.user_id,
         ),
     )
 

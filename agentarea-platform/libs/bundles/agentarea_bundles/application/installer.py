@@ -192,7 +192,7 @@ class BundleInstaller:
                 env_name: resolve_placeholders(ref, setup_values)
                 for env_name, ref in mcp.bindings.items()
             }
-            instance_json: dict[str, Any] = {"type": transport["type"]}
+            instance_json: dict[str, Any] = {}
             for field in ("environment", "headers"):
                 values = _plain_config(mcp.json_spec, field)
                 if field == target:
