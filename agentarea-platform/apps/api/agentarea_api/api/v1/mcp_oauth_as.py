@@ -25,10 +25,9 @@ from urllib.parse import urlparse
 
 import httpx
 from agentarea_agents_sdk.mcp_server.auth import WORKSPACE_REFERENCE_PATTERN
-from agentarea_api.api.rate_limit import limit_oauth_registration
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config import get_auth_settings, get_settings
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 oauth_as_router = APIRouter(tags=["oauth-as"])
@@ -297,7 +296,6 @@ _DCR_TOKEN_AUTH_METHODS = frozenset({"none", "client_secret_basic", "client_secr
     "/oauth2/register",
     dependencies=[
         unrestricted("OAuth authorization-server surface; unauthenticated by protocol"),
-        Depends(limit_oauth_registration),
     ],
 )
 async def hydra_dcr_proxy(request: Request) -> Response:
