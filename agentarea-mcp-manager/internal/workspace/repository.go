@@ -21,6 +21,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
@@ -42,6 +43,11 @@ type RepositoryConfig struct {
 	MaxFileBytes   int64
 	MaxBytes       int64
 	ForcePathStyle bool
+	// AccessKey and SecretKey are AGENTAREA_S3_ACCESS_KEY / _SECRET_KEY, the
+	// object store's own credentials. The store is usually not AWS, so the AWS
+	// SDK's AWS_* chain is used only when both are unset (an IAM role).
+	AccessKey string
+	SecretKey string
 }
 
 type s3Client interface {
@@ -114,6 +120,8 @@ func LoadConfigFromEnv() (RepositoryConfig, error) {
 		MaxFileBytes:   maxFileBytes,
 		MaxBytes:       maxBytes,
 		ForcePathStyle: forcePathStyle,
+		AccessKey:      os.Getenv("AGENTAREA_S3_ACCESS_KEY"),
+		SecretKey:      os.Getenv("AGENTAREA_S3_SECRET_KEY"),
 	}
 	if cfg.Bucket == "" {
 		return RepositoryConfig{}, fmt.Errorf("workspace S3 bucket is required; set AGENTAREA_SANDBOX_S3_BUCKET or AGENTAREA_S3_ARTIFACTS_BUCKET")
@@ -122,7 +130,7 @@ func LoadConfigFromEnv() (RepositoryConfig, error) {
 }
 
 func NewRepositoryFromConfig(ctx context.Context, cfg RepositoryConfig) (*Repository, error) {
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.Region))
+	awsCfg, err := S3Config(ctx, cfg.Region, cfg.AccessKey, cfg.SecretKey)
 	if err != nil {
 		return nil, fmt.Errorf("load workspace S3 configuration: %w", err)
 	}
@@ -133,6 +141,22 @@ func NewRepositoryFromConfig(ctx context.Context, cfg RepositoryConfig) (*Reposi
 		}
 	})
 	return NewRepository(cfg, client, s3.NewPresignClient(client))
+}
+
+// S3Config builds the AWS SDK configuration for the platform's object store:
+// static credentials when the platform names them, the SDK's own chain when it
+// names neither.
+func S3Config(ctx context.Context, region, accessKey, secretKey string) (aws.Config, error) {
+	options := []func(*awsconfig.LoadOptions) error{awsconfig.WithRegion(region)}
+	if accessKey != "" || secretKey != "" {
+		if accessKey == "" || secretKey == "" {
+			return aws.Config{}, fmt.Errorf("set both AGENTAREA_S3_ACCESS_KEY and AGENTAREA_S3_SECRET_KEY, or neither")
+		}
+		options = append(options, awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(accessKey, secretKey, ""),
+		))
+	}
+	return awsconfig.LoadDefaultConfig(ctx, options...)
 }
 
 func requiredPositiveInt(name string) (int, error) {
