@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import type { APIRequestContext, APIResponse } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import {
@@ -466,6 +467,9 @@ test.describe("must functional requirements real stack", () => {
         triggerId = triggerPayload.id;
         expect(triggerPayload.webhook_id).toBe(webhookId);
         expect(triggerPayload.is_active).toBe(true);
+        // A generic webhook created here is signed: the secret is returned once.
+        const signingSecret: string = triggerPayload.signing_secret;
+        expect(signingSecret).toBeTruthy();
 
         const disabled = await authedRequest(request, user, "post", `/v1/triggers/${triggerId}/disable`);
         await expectOk(disabled);
@@ -480,8 +484,19 @@ test.describe("must functional requirements real stack", () => {
         await expectOk(enabled);
         expect((await enabled.json()).is_active).toBe(true);
 
+        const body = JSON.stringify({ event: "playwright-event" });
+        const unsigned = await request.post(`${apiBaseURL}/webhooks/${webhookId}`, {
+          headers: { "Content-Type": "application/json" },
+          data: body,
+        });
+        expect(unsigned.status(), "an unsigned request must be refused").toBe(400);
+
         const webhook = await request.post(`${apiBaseURL}/webhooks/${webhookId}`, {
-          data: { event: "playwright-event" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-Webhook-Signature": createHmac("sha256", signingSecret).update(body).digest("hex"),
+          },
+          data: body,
           timeout: 20_000,
         });
         expect(webhook.status()).toBe(200);
