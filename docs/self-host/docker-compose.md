@@ -196,19 +196,6 @@ recorded the current head without replaying migrations.
     the legacy `/var/lib/postgresql/data` . A data directory laid out for the
     old mount point will not start under this file.
   </Accordion>
-  <Accordion title="A model served on this machine or the LAN is refused with `not an allowed address`">
-    The API and the worker refuse every private and loopback destination a
-    member sets, LLM provider endpoints included, unless
-    `AGENTAREA_HTTP_PRIVATE_ALLOWLIST` names it. For Ollama, LM Studio or vLLM on the
-    Docker host, set it in `.env` and recreate `app` and `agentarea-worker`:
-
-    ```bash
-    AGENTAREA_HTTP_PRIVATE_ALLOWLIST=localhost,host.docker.internal
-    ```
-
-    For a LAN machine, list its hostname or address (`192.168.1.50/32`). See
-    [configuration](/self-host/configuration#outbound-destinations-backend-and-worker).
-  </Accordion>
   <Accordion title="Tasks stay queued and never execute">
     `agentarea-worker` waits for `temporal` to pass its health check, which has
     a 120-second start period. Check

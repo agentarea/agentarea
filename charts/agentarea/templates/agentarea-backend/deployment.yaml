@@ -89,12 +89,6 @@ spec:
               value: {{ .Values.backend.workers | quote }}
             - name: AGENTAREA_API_SHUTDOWN_TIMEOUT
               value: {{ .Values.backend.shutdownTimeout | quote }}
-            # The per-IP rate limit on dynamic client registration keys on the
-            # client address. Behind the ingress that is the proxy's unless uvicorn
-            # trusts its X-Forwarded-For; without it every caller shares one bucket.
-            - name: FORWARDED_ALLOW_IPS
-              value: {{ .Values.backend.forwardedAllowIps | quote }}
-            {{- include "agentarea.outboundPolicy.envs" . | nindent 12 }}
             {{- include "agentarea.database.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.database.envs" . | nindent 12 }}
             {{- include "agentarea.redis.secrets.envs" . | nindent 12 }}

@@ -27,14 +27,6 @@ services:
       - AGENTAREA_REDIS_URL=redis://valkey:6379
       - AGENTAREA_MCP_TIMEOUT=30
       - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
-      # Private addresses member-set URLs may reach: LLM provider endpoints,
-      # URL MCP servers, OpenAPI connections, A2A delegates. Empty refuses every
-      # private, loopback and link-local address. A provider on this machine or
-      # the LAN (Ollama, LM Studio, vLLM) needs its host here, for example
-      # localhost,host.docker.internal. Set the same value on the worker.
-      - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-}
-      # Admits every private address. Single-tenant installs only.
-      - AGENTAREA_HTTP_ALLOW_PRIVATE=${AGENTAREA_HTTP_ALLOW_PRIVATE:-false}
       # Server settings
       - PORT=${PORT:-8000}
       - AGENTAREA_LOG_LEVEL=${AGENTAREA_LOG_LEVEL:-info}
@@ -483,10 +475,6 @@ services:
       - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
       - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80
       - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
-      # Same policy as the API: the API checks a URL when it is saved, the
-      # worker again when a run uses it. See the app service.
-      - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-}
-      - AGENTAREA_HTTP_ALLOW_PRIVATE=${AGENTAREA_HTTP_ALLOW_PRIVATE:-false}
       - AGENTAREA_SANDBOX_CLEANUP_SECRET=${AGENTAREA_SANDBOX_CLEANUP_SECRET:?AGENTAREA_SANDBOX_CLEANUP_SECRET is required; run scripts/gen-dev-secrets.sh}
 
       # Access control: the authorization graph lives in OpenFGA. Bootstrap

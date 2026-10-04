@@ -150,7 +150,6 @@ Rendered only when `rustfs.enabled` is true.
 | `AGENTAREA_APP_URL` | derived from the frontend ingress | `http://localhost:3000` |
 | `AGENTAREA_A2A_AGENT_URL` | `global.envVars.AGENTAREA_A2A_AGENT_URL` | `http://{agent_id}.a2a.localhost:8000` |
 | `SMTP_CONNECTION_URI` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME` | `kratos.smtp.*` | empty (invitations are link-only) |
-| `FORWARDED_ALLOW_IPS` | `backend.forwardedAllowIps` | `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,127.0.0.1,::1,fc00::/7` |
 
 `AGENTAREA_METRICS_ENABLED` serves Prometheus metrics on `AGENTAREA_METRICS_PORT`, never on the API
 port. The API serves `/health` on its normal port unconditionally; see
@@ -188,42 +187,6 @@ Neither the API nor the worker configures on-demand MCP start any more. Every
 container-backed call goes through the manager's demand gateway, which starts a
 cold workload itself; there is nothing for the Python side to agree on. See the
 MCP Manager group below.
-
-### Outbound destinations (backend and worker)
-
-Which private addresses a URL set by a workspace member may reach: LLM provider
-endpoints, URL MCP servers, OpenAPI connections, A2A delegates and bundle
-sources. The backend checks the URL when it is saved and the worker checks it
-again when a run uses it, so set both services to the same value. The chart
-renders each variable into both, and only when the value is set.
-
-| Variable | Helm value | Compose `.env` | Default |
-|---|---|---|---|
-| `AGENTAREA_HTTP_PRIVATE_ALLOWLIST` | `global.outbound.privateAllowlist` (a list, comma-joined) | `AGENTAREA_HTTP_PRIVATE_ALLOWLIST` | empty |
-| `AGENTAREA_HTTP_ALLOW_PRIVATE` | `global.outbound.allowPrivateUrls` | `AGENTAREA_HTTP_ALLOW_PRIVATE` | `false` |
-
-With both at their defaults, every private, loopback, link-local and
-shared-address-space destination is refused. A provider config whose endpoint
-is `http://localhost:11434`, `http://host.docker.internal:...`, a LAN address or
-an in-cluster Service then fails: saving or editing it returns 400, and runs,
-model tests and compaction fail with `LLM endpoint is not an allowed address`.
-Provider configs supplied by the platform are not checked.
-
-`AGENTAREA_HTTP_PRIVATE_ALLOWLIST` holds host globs and CIDRs, for example
-`localhost,host.docker.internal` for a model server on the Docker host, or
-`ollama.ai.svc.cluster.local,192.168.1.50/32`. A host is matched against the
-name in the URL, a CIDR against the address the name resolves to. Name each
-endpoint: a wildcard such as `*.svc.cluster.local` or a cluster CIDR lets every
-member reach every in-cluster service, the platform's own included.
-`AGENTAREA_HTTP_ALLOW_PRIVATE=true` admits every private address; use it only on a
-single-tenant install.
-
-The check resolves the name before the request is made. The LLM client
-resolves it again when it connects and follows redirects, so it does not stop
-an endpoint that redirects to an internal address, or a name that changes its
-answer between the two lookups. The chart ships no egress NetworkPolicy for the
-backend and worker; blocking the metadata endpoint and other internal services
-from those pods at the network layer is up to the cluster operator.
 
 ### Temporal client (group `temporal`)
 
@@ -415,7 +378,6 @@ equivalent are listed; the rest map onto the groups above.
 | `OIDC_GOOGLE_*` / `OIDC_GITHUB_*` | for social login | empty |
 | `VERSION` | no | `latest` |
 | `AGENTAREA_API_WORKERS` / `RELOAD` / `PORT` / `AGENTAREA_LOG_LEVEL` | no | `1` / `false` / `8000` / `info` |
-| `AGENTAREA_HTTP_PRIVATE_ALLOWLIST` / `AGENTAREA_HTTP_ALLOW_PRIVATE` | for an LLM provider, MCP server or API on this host or the LAN | not listed; Compose defaults them to empty / `false` |
 
 The two sandbox secrets are declared `${VAR:?message}`, so Compose aborts rather
 than starting with them empty.
@@ -430,7 +392,6 @@ than starting with them empty.
 | `docker compose` aborts before starting anything | A `${VAR:?}` variable is empty | Set the sandbox secrets |
 | Presigned upload URLs point at an unreachable host | `AGENTAREA_S3_PUBLIC_ENDPOINT` empty with a cluster-only object store | Set `global.storage.publicEndpoint` |
 | CI fails on a Helm change with a configs diff | `templates/configs/` is stale relative to `config.yaml` | Run `make helm-gen` and commit |
-| Saving a provider returns 400, or runs fail with `LLM endpoint is not an allowed address` | The endpoint is a private address and `AGENTAREA_HTTP_PRIVATE_ALLOWLIST` does not name it | Add the host or CIDR to `AGENTAREA_HTTP_PRIVATE_ALLOWLIST` on the backend and the worker |
 
 ## Example
 
