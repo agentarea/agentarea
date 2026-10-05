@@ -41,7 +41,6 @@ def llm_evaluator(mock_model_instance_service, mock_secret_manager):
         model_instance_service=mock_model_instance_service,
         secret_manager=mock_secret_manager,
         model_service=AsyncMock(),
-        default_model_id=uuid4(),
     )
 
 
@@ -144,7 +143,9 @@ class TestLLMConditionEvaluator:
         # Mock LLM response
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "true"
+        mock_response.choices[0].message.content = (
+            '{"verdict": "met", "score": 0.9, "reason": "matches"}'
+        )
         mock_completion.return_value = mock_response
 
         condition = {
@@ -173,7 +174,9 @@ class TestLLMConditionEvaluator:
         # Mock LLM response
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "false"
+        mock_response.choices[0].message.content = (
+            '{"verdict": "not_met", "score": 0.9, "reason": "does not match"}'
+        )
         mock_completion.return_value = mock_response
 
         condition = {
@@ -255,7 +258,9 @@ class TestLLMConditionEvaluator:
             "request": {"body": {"user": {"id": "123"}, "document": {"file_name": "report.pdf"}}}
         }
 
-        result = await llm_evaluator.extract_task_parameters(instruction, event_data)
+        result = await llm_evaluator.extract_task_parameters(
+            instruction, event_data, model_id=uuid4()
+        )
 
         assert result["user_id"] == "123"
         assert result["file_name"] == "report.pdf"
@@ -274,7 +279,9 @@ class TestLLMConditionEvaluator:
         instruction = "extract parameters"
         event_data = {"test": "data"}
 
-        result = await llm_evaluator.extract_task_parameters(instruction, event_data)
+        result = await llm_evaluator.extract_task_parameters(
+            instruction, event_data, model_id=uuid4()
+        )
 
         # Should fallback to basic parameters
         assert "event_data" in result
@@ -333,23 +340,6 @@ class TestLLMConditionEvaluator:
         # Test non-existent path
         assert llm_evaluator._get_nested_value(data, "request.body.nonexistent") is None
         assert llm_evaluator._get_nested_value(data, "nonexistent.path") is None
-
-    def test_parse_evaluation_response(self, llm_evaluator):
-        """Test parsing of LLM evaluation responses."""
-        # Direct boolean responses
-        assert llm_evaluator._parse_evaluation_response("true") is True
-        assert llm_evaluator._parse_evaluation_response("false") is False
-
-        # Positive indicators
-        assert llm_evaluator._parse_evaluation_response("yes, condition is met") is True
-        assert llm_evaluator._parse_evaluation_response("The condition matches") is True
-
-        # Negative indicators
-        assert llm_evaluator._parse_evaluation_response("no, condition not met") is False
-        assert llm_evaluator._parse_evaluation_response("does not match") is False
-
-        # Unclear response defaults to False
-        assert llm_evaluator._parse_evaluation_response("unclear response") is False
 
     @pytest.mark.asyncio
     async def test_llm_call_failure(self, llm_evaluator):

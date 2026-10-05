@@ -7,6 +7,7 @@ in natural language that are evaluated against event data.
 
 import json
 import logging
+import re
 from typing import Any, cast
 from uuid import UUID
 
@@ -18,8 +19,10 @@ from agentarea_llm.domain.media import DecisionQuestionType
 from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_llm.domain.provider_profiles import profile_for
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
+from pydantic import ValidationError
 
 from .domain.enums import ConditionType
+from .domain.models import ConditionVerdict
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +45,28 @@ class LLMConditionEvaluationError(Exception):
 _CONDITION_QUESTION = "condition_met"
 _MET = "true"
 _NOT_MET = "false"
+
+_FENCE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
+
+
+def _parse_verdict(response: str) -> ConditionVerdict:
+    """The model's JSON verdict, or an error. Prose is not a verdict."""
+    text = response.strip()
+    fenced = _FENCE.match(text)
+    if fenced:
+        text = fenced.group(1)
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise LLMConditionEvaluationError(
+            f"Condition model did not answer in JSON: {response[:200]!r}"
+        ) from error
+    try:
+        return ConditionVerdict.model_validate(payload)
+    except ValidationError as error:
+        raise LLMConditionEvaluationError(
+            f"Condition model gave no valid verdict: {error}"
+        ) from error
 
 
 def build_condition_evaluator(
@@ -87,7 +112,6 @@ class LLMConditionEvaluator:
         model_instance_service: ModelInstanceService,
         secret_manager: BaseSecretManager,
         model_service: ModelService,
-        default_model_id: UUID | None = None,
     ):
         """Initialize the LLM condition evaluator.
 
@@ -95,34 +119,21 @@ class LLMConditionEvaluator:
             model_instance_service: Service for managing LLM model instances
             secret_manager: Service for managing API keys and secrets
             model_service: Resolves decision models, which answer a condition directly
-            default_model_id: Default model instance ID to use if none specified
         """
         self.model_instance_service = model_instance_service
         self.secret_manager = secret_manager
         self.model_service = model_service
-        self.default_model_id = default_model_id
 
-    async def evaluate_condition(
+    async def evaluate_structured(
         self,
         condition: dict[str, Any],
         event_data: dict[str, Any],
         trigger_context: dict[str, Any] | None = None,
-    ) -> bool:
-        """Evaluate a condition against event data using LLM.
-
-        Each LLM condition is evaluated with the model instance it names in
-        ``model_id``; there is no default.
-
-        Args:
-            condition: The condition configuration to evaluate
-            event_data: The event data to evaluate against
-            trigger_context: Optional trigger context for evaluation
-
-        Returns:
-            True if condition is met, False otherwise
+    ) -> ConditionVerdict:
+        """Decide a condition against an event. Any failure raises; nothing defaults to met.
 
         Raises:
-            LLMConditionEvaluationError: If evaluation fails
+            LLMConditionEvaluationError: The condition could not be decided.
         """
         try:
             condition_type = _condition_type(condition)
@@ -135,16 +146,26 @@ class LLMConditionEvaluator:
             if condition_type is ConditionType.LLM:
                 return await self._evaluate_llm_condition(condition, event_data, trigger_context)
             return await self._evaluate_combined_condition(condition, event_data, trigger_context)
-
+        except LLMConditionEvaluationError:
+            raise
         except Exception as e:
             logger.exception(f"Condition evaluation failed: {e}")
             raise LLMConditionEvaluationError(f"Condition evaluation failed: {e}") from e
+
+    async def evaluate_condition(
+        self,
+        condition: dict[str, Any],
+        event_data: dict[str, Any],
+        trigger_context: dict[str, Any] | None = None,
+    ) -> bool:
+        """Whether the condition is met; see ``evaluate_structured``."""
+        return (await self.evaluate_structured(condition, event_data, trigger_context)).met
 
     async def _evaluate_rule_condition(
         self,
         condition: dict[str, Any],
         event_data: dict[str, Any],
-    ) -> bool:
+    ) -> ConditionVerdict:
         """Evaluate a rule-based condition.
 
         Args:
@@ -152,13 +173,13 @@ class LLMConditionEvaluator:
             event_data: Event data to evaluate
 
         Returns:
-            True if rule condition is met
+            The verdict, with a reason naming how many rules matched.
         """
         rules = condition.get("rules", [])
         logic = condition.get("logic", "AND").upper()
 
         if not rules:
-            return True
+            return ConditionVerdict(verdict="met", reason="rule condition has no rules")
 
         results = []
         for rule in rules:
@@ -200,19 +221,22 @@ class LLMConditionEvaluator:
 
         # Apply logic
         if logic == "AND":
-            return all(results)
+            met = all(results)
         elif logic == "OR":
-            return any(results)
+            met = any(results)
         else:
-            logger.warning(f"Unknown logic operator: {logic}")
-            return False
+            raise LLMConditionEvaluationError(f"Unknown rule logic: {logic}")
+        return ConditionVerdict(
+            verdict="met" if met else "not_met",
+            reason=f"rule ({logic}): {sum(results)} of {len(results)} rules matched",
+        )
 
     async def _evaluate_llm_condition(
         self,
         condition: dict[str, Any],
         event_data: dict[str, Any],
         trigger_context: dict[str, Any] | None = None,
-    ) -> bool:
+    ) -> ConditionVerdict:
         """Evaluate an LLM-based natural language condition.
 
         Args:
@@ -221,7 +245,7 @@ class LLMConditionEvaluator:
             trigger_context: Optional trigger context
 
         Returns:
-            True if LLM determines condition is met
+            The structured verdict the model gave.
         """
         description = condition.get("description", "")
         context_fields = condition.get("context_fields", [])
@@ -267,7 +291,7 @@ class LLMConditionEvaluator:
         response = await self._call_llm(prompt, effective_model_id)
 
         # Parse response
-        return self._parse_evaluation_response(response)
+        return _parse_verdict(response)
 
     async def _decide_condition(
         self,
@@ -277,7 +301,7 @@ class LLMConditionEvaluator:
         context_data: dict[str, Any],
         examples: list[dict[str, Any]],
         trigger_context: dict[str, Any] | None,
-    ) -> bool:
+    ) -> ConditionVerdict:
         """Ask a decision model whether the event meets the condition."""
         state: dict[str, Any] = {"event": event_data}
         if context_data:
@@ -300,14 +324,20 @@ class LLMConditionEvaluator:
                 }
             },
         )
-        return result.answers[_CONDITION_QUESTION][DecisionQuestionType.CHOICE] == _MET
+        choice = result.answers[_CONDITION_QUESTION][DecisionQuestionType.CHOICE]
+        if choice not in (_MET, _NOT_MET):
+            raise LLMConditionEvaluationError(f"Decision model answered {choice!r}")
+        return ConditionVerdict(
+            verdict="met" if choice == _MET else "not_met",
+            reason=f"decision model {model_id} chose {choice}",
+        )
 
     async def _evaluate_combined_condition(
         self,
         condition: dict[str, Any],
         event_data: dict[str, Any],
         trigger_context: dict[str, Any] | None = None,
-    ) -> bool:
+    ) -> ConditionVerdict:
         """Evaluate a combined condition with multiple sub-conditions.
 
         Args:
@@ -316,27 +346,32 @@ class LLMConditionEvaluator:
             trigger_context: Optional trigger context
 
         Returns:
-            True if combined condition is met
+            The combined verdict, with the weakest (AND) or strongest (OR) score.
         """
         conditions = condition.get("conditions", [])
         logic = condition.get("logic", "AND").upper()
 
         if not conditions:
-            return True
+            return ConditionVerdict(verdict="met", reason="combined condition has no parts")
 
-        results = []
-        for sub_condition in conditions:
-            result = await self.evaluate_condition(sub_condition, event_data, trigger_context)
-            results.append(result)
+        verdicts = [
+            await self.evaluate_structured(sub, event_data, trigger_context) for sub in conditions
+        ]
 
         # Apply logic
         if logic == "AND":
-            return all(results)
+            met = all(v.met for v in verdicts)
         elif logic == "OR":
-            return any(results)
+            met = any(v.met for v in verdicts)
         else:
-            logger.warning(f"Unknown logic operator: {logic}")
-            return False
+            raise LLMConditionEvaluationError(f"Unknown combined logic: {logic}")
+        scores = [v.score for v in verdicts if v.score is not None]
+        score = (min(scores) if logic == "AND" else max(scores)) if scores else None
+        return ConditionVerdict(
+            verdict="met" if met else "not_met",
+            score=score,
+            reason=f"{logic}: " + "; ".join(v.reason for v in verdicts),
+        )
 
     async def extract_task_parameters(
         self,
@@ -605,9 +640,10 @@ class LLMConditionEvaluator:
 
         prompt_parts.extend(
             [
-                "Based on the event data and condition description, determine if the condition is met.",
-                "Respond with exactly 'true' if the condition is met, or 'false' if it is not met.",
-                "Do not include any explanation or additional text.",
+                "Decide whether the event meets the condition.",
+                'Reply with one JSON object and nothing else: {"verdict": "met" or "not_met", '
+                '"score": a number from 0 to 1 for how sure you are, "reason": one short '
+                "sentence}.",
             ]
         )
 
@@ -665,7 +701,7 @@ class LLMConditionEvaluator:
 
         Args:
             prompt: The prompt to send to the LLM
-            model_id: Optional model instance ID to use
+            model_id: The model instance ID to use; there is no default
 
         Returns:
             The LLM response content
@@ -674,12 +710,9 @@ class LLMConditionEvaluator:
             LLMConditionEvaluationError: If LLM call fails
         """
         try:
-            # Use provided model_id or default
-            effective_model_id = model_id or self.default_model_id
-            if not effective_model_id:
-                raise LLMConditionEvaluationError(
-                    "No model ID provided and no default model configured"
-                )
+            if model_id is None:
+                raise LLMConditionEvaluationError("No model instance named for this LLM call")
+            effective_model_id = model_id
 
             # The credential is read by reference from the workspace that owns
             # it; the configuration only stores the secret's name.
@@ -722,63 +755,3 @@ class LLMConditionEvaluator:
         except Exception as e:
             logger.exception(f"LLM call failed: {e}")
             raise LLMConditionEvaluationError(f"LLM call failed: {e}") from e
-
-    def _parse_evaluation_response(self, response: str) -> bool:
-        """Parse LLM evaluation response to boolean.
-
-        Args:
-            response: The LLM response content
-
-        Returns:
-            True if response indicates condition is met
-        """
-        response_lower = response.lower().strip()
-
-        # Direct boolean responses
-        if response_lower == "true":
-            return True
-        elif response_lower == "false":
-            return False
-
-        # Common positive indicators
-        positive_indicators = [
-            "yes",
-            "condition is met",
-            "condition met",
-            "true",
-            "match",
-            "matches",
-            "satisfied",
-            "fulfilled",
-            "correct",
-            "valid",
-            "success",
-        ]
-
-        # Common negative indicators
-        negative_indicators = [
-            "no",
-            "condition is not met",
-            "condition not met",
-            "false",
-            "no match",
-            "does not match",
-            "not satisfied",
-            "not fulfilled",
-            "incorrect",
-            "invalid",
-            "fail",
-            "not match",
-        ]
-
-        # Check for negative indicators first (more specific)
-        if any(indicator in response_lower for indicator in negative_indicators):
-            return False
-
-        # Check for positive indicators
-        if any(indicator in response_lower for indicator in positive_indicators):
-            return True
-
-        # Default to False if unclear
-        logger.warning(f"Unclear LLM evaluation response: {response}")
-        return False

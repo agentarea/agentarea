@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from agentarea_common.channel_origin import drop_channel_origin, reject_channel_origin
@@ -15,6 +15,18 @@ logger = logging.getLogger(__name__)
 # Passed as validation context when rebuilding a trigger from a stored row, so
 # the datetime invariants report instead of raising. See validate_datetime_fields.
 RECONSTITUTING: dict[str, Any] = {"reconstituting": True}
+
+
+class ConditionVerdict(BaseModel):
+    """What a condition decided about one event, and why."""
+
+    verdict: Literal["met", "not_met"]
+    score: float | None = Field(default=None, ge=0.0, le=1.0)
+    reason: str = Field(min_length=1)
+
+    @property
+    def met(self) -> bool:
+        return self.verdict == "met"
 
 
 class Trigger(BaseModel):

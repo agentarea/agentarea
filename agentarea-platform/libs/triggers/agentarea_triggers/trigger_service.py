@@ -22,6 +22,7 @@ from agentarea_common.events.broker import EventBroker
 from .condition_models import validate_condition_models
 from .domain.enums import ExecutionStatus, TriggerType
 from .domain.models import (
+    ConditionVerdict,
     CronTrigger,
     Trigger,
     TriggerCreate,
@@ -1477,9 +1478,9 @@ class TriggerService:
             return reply_channel(extractor)
         return None
 
-    async def evaluate_trigger_conditions(
+    async def evaluate_trigger_verdict(
         self, trigger: Trigger, event_data: dict[str, Any]
-    ) -> bool:
+    ) -> ConditionVerdict:
         """Evaluate trigger conditions against event data using LLM-powered evaluation.
 
         Args:
@@ -1487,14 +1488,14 @@ class TriggerService:
             event_data: Event data to evaluate against
 
         Returns:
-            True if conditions are met, False otherwise
+            The structured verdict: whether conditions are met, and why.
 
         Raises:
             TriggerConditionError: The conditions could not be evaluated. A
                 condition nobody could check is not a condition that passed.
         """
         if not trigger.conditions:
-            return True
+            return ConditionVerdict(verdict="met", reason="trigger has no conditions")
 
         try:
             # Use LLM condition evaluator if available
@@ -1508,7 +1509,7 @@ class TriggerService:
                 }
 
                 # Evaluate conditions using LLM
-                return await self.llm_condition_evaluator.evaluate_condition(
+                return await self.llm_condition_evaluator.evaluate_structured(
                     condition=trigger.conditions,
                     event_data=event_data,
                     trigger_context=trigger_context,
@@ -1558,6 +1559,12 @@ class TriggerService:
                 f"Trigger conditions could not be evaluated: {e}", trigger_id=str(trigger.id)
             ) from e
 
+    async def evaluate_trigger_conditions(
+        self, trigger: Trigger, event_data: dict[str, Any]
+    ) -> bool:
+        """Whether the trigger's conditions are met; see ``evaluate_trigger_verdict``."""
+        return (await self.evaluate_trigger_verdict(trigger, event_data)).met
+
     def _get_nested_value(self, data: dict[str, Any], field_path: str) -> Any:
         """Get nested value from dictionary using dot notation.
 
@@ -1581,7 +1588,7 @@ class TriggerService:
 
     async def _evaluate_simple_conditions(
         self, conditions: dict[str, Any], event_data: dict[str, Any]
-    ) -> bool:
+    ) -> ConditionVerdict:
         """Evaluate simple rule-based conditions as fallback.
 
         Args:
@@ -1589,16 +1596,16 @@ class TriggerService:
             event_data: Event data to evaluate
 
         Returns:
-            True if conditions are met, False otherwise
+            The verdict, with a reason naming the field that failed to match.
         """
-        if "field_matches" in conditions:
-            field_matches = conditions["field_matches"]
-            for field_path, expected_value in field_matches.items():
-                actual_value = self._get_nested_value(event_data, field_path)
-                if actual_value != expected_value:
-                    return False
-
-        return True
+        for field_path, expected_value in conditions.get("field_matches", {}).items():
+            actual_value = self._get_nested_value(event_data, field_path)
+            if actual_value != expected_value:
+                return ConditionVerdict(
+                    verdict="not_met",
+                    reason=f"{field_path} is {actual_value!r}, not {expected_value!r}",
+                )
+        return ConditionVerdict(verdict="met", reason="every field_matches entry matched")
 
     async def extract_task_parameters_with_llm(
         self, instruction: str, event_data: dict[str, Any], trigger_context: dict[str, Any]

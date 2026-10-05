@@ -241,7 +241,7 @@ class TestTriggerExecutionEngine:
             sample_webhook_trigger.conditions, event_data
         )
 
-        assert result is True
+        assert result.met is True
 
     async def test_evaluate_trigger_conditions_field_mismatch(
         self, trigger_service, sample_webhook_trigger
@@ -253,7 +253,7 @@ class TestTriggerExecutionEngine:
             sample_webhook_trigger.conditions, event_data
         )
 
-        assert result is False
+        assert result.met is False
 
     # NOTE: ``test_evaluate_trigger_conditions_time_based`` and
     # ``test_evaluate_trigger_conditions_weekdays_only`` were removed. Time-based
@@ -337,6 +337,6 @@ class TestTriggerExecutionEngine:
         result = await trigger_service._evaluate_simple_conditions(
             sample_cron_trigger.conditions, {}
         )
-        assert result is True
+        assert result.met is True
 
 
