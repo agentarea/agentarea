@@ -31,6 +31,7 @@ export interface TriggerLike {
   data_extractor?: string | null;
   cron_expression?: string | null;
   is_active?: boolean;
+  status?: string;
   consecutive_failures?: number;
   failure_threshold?: number;
   config?: {
@@ -52,6 +53,10 @@ export function findTriggerCatalogEntry(
 
   if (trigger.trigger_type === "cron") {
     return catalog.find((entry) => entry.id === "cron");
+  }
+
+  if (trigger.trigger_type === "stream") {
+    return catalog.find((entry) => entry.id === "stream");
   }
 
   const webhookType = trigger.webhook_type || trigger.config?.webhook_type;
@@ -287,6 +292,9 @@ export function describeTriggerSchedule(trigger: TriggerLike): string {
   if (trigger?.trigger_type === "polling") {
     return "Polls for updates";
   }
+  if (trigger?.trigger_type === "stream") {
+    return "On stream events";
+  }
   const webhookType = (
     trigger?.webhook_type ||
     trigger?.config?.webhook_type ||
@@ -295,13 +303,15 @@ export function describeTriggerSchedule(trigger: TriggerLike): string {
   return WEBHOOK_SCHEDULE_LABEL[webhookType] || "On incoming request";
 }
 
-export type TriggerHealth = "active" | "paused" | "error";
+export type TriggerHealth = "active" | "paused" | "error" | "needs_owner";
 
 /**
- * Derive the listing status pill. A trigger that has hit its failure threshold
- * reads as "error"; otherwise it's "active" or "paused" by its enabled flag.
+ * Derive the listing status pill. A trigger whose configurer lost access reads
+ * as "needs_owner"; one that has hit its failure threshold reads as "error";
+ * otherwise it's "active" or "paused" by its enabled flag.
  */
 export function getTriggerHealth(trigger: TriggerLike): TriggerHealth {
+  if (trigger?.status === "needs_owner") return "needs_owner";
   const failures = Number(trigger?.consecutive_failures ?? 0);
   const threshold = Number(trigger?.failure_threshold ?? 0);
   if (threshold > 0 && failures >= threshold) return "error";

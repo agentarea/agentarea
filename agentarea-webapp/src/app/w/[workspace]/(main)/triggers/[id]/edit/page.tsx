@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
-import { getTrigger, listAgents } from "@/lib/api";
+import { getTrigger, listAgents, listStreams } from "@/lib/api";
 import { requireApiData } from "@/lib/server-resource";
 import { CreateTriggerForm } from "../../create/CreateTriggerForm";
 
@@ -25,9 +25,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function EditTriggerPage({ params }: Props) {
   const { id } = await params;
 
-  const [triggerResponse, agentsResponse] = await Promise.all([
+  const [triggerResponse, agentsResponse, streamsResponse] = await Promise.all([
     getTrigger(id),
     listAgents(),
+    listStreams(),
   ]);
 
   const trigger = requireApiData<TriggerResponse>(triggerResponse, "trigger");
@@ -36,7 +37,11 @@ export default async function EditTriggerPage({ params }: Props) {
   return (
     <div className="px-4 py-5">
       <div className="mx-auto w-full max-w-5xl">
-        <CreateTriggerForm agents={agents} initialData={trigger} />
+        <CreateTriggerForm
+          agents={agents}
+          streams={streamsResponse.data ?? []}
+          initialData={trigger}
+        />
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import {
+  AlertTriangle,
   Boxes,
   CalendarClock,
   Clock,
@@ -38,6 +39,7 @@ import {
   type StatusPresentation,
 } from "@/lib/status";
 import { cn } from "@/lib/utils";
+import { formatDate } from "@/utils/dateUtils";
 import type { TaskParameterRef } from "../../components/taskParameters";
 import {
   formatCompactDistance,
@@ -78,6 +80,10 @@ export type TriggerOverviewModel = {
     rotatable: boolean;
   } | null;
   failure: { consecutive: number; threshold: number };
+  /** The person who configured it can no longer run its agent; it is stopped. */
+  needsOwner: boolean;
+  /** The stream whose events fire it, and when that stream last received one. */
+  stream: { id: string; lastEventAt: string | null } | null;
   lastExecutionAt: string | null;
   nextRunTime: string | null;
   metrics: {
@@ -246,6 +252,16 @@ export async function TriggerOverviewView({
           </div>
         </div>
       </header>
+
+      {model.needsOwner && (
+        <div className="mx-4 mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 md:shrink-0 dark:border-amber-700/60 dark:bg-amber-900/20 dark:text-amber-200">
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <div>
+            <div className="font-medium">{t("needsOwnerTitle")}</div>
+            <div className="text-xs">{t("needsOwnerBody")}</div>
+          </div>
+        </div>
+      )}
 
       <div className="w-full bg-muted/20 px-4 pb-11 pt-[18px] md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
         {/* ===== stat strip ===== */}
@@ -431,6 +447,21 @@ export async function TriggerOverviewView({
                   </div>
                   <CopyableText text={model.webhook.url} />
                 </div>
+              )}
+              {model.stream && (
+                <FactRow
+                  title={t("lastEvent")}
+                  trailing={
+                    <Link
+                      href={`/events/${model.stream.id}`}
+                      className="text-primary hover:underline"
+                    >
+                      {model.stream.lastEventAt
+                        ? formatDate(model.stream.lastEventAt, locale)
+                        : t("noEventsYet")}
+                    </Link>
+                  }
+                />
               )}
               {model.webhook?.signing && (
                 <SigningRow

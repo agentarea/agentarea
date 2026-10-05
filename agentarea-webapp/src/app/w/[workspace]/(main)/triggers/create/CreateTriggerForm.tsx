@@ -10,7 +10,11 @@ import {
   SlidersHorizontal,
   Webhook,
 } from "lucide-react";
-import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
+import type {
+  AgentResponse,
+  StreamResponse,
+  TriggerResponse,
+} from "@/api/client/types.gen";
 import { AgentSelect } from "@/components/AgentSelect";
 import ConfigSheet from "@/components/ConfigSheet";
 import { FileTree } from "@/components/files/file-tree";
@@ -55,6 +59,7 @@ import { triggerShape } from "./triggerShape";
 
 interface CreateTriggerFormProps {
   agents: AgentResponse[];
+  streams: StreamResponse[];
   initialData?: TriggerResponse;
 }
 
@@ -74,6 +79,7 @@ const INLINE_ERROR_FIELDS = new Set([
   "cron_expression",
   "description",
   "agent_id",
+  "stream_id",
 ]);
 const KIND_ORDER: TriggerCatalogEntry["kind"][] = [
   "schedule",
@@ -98,6 +104,7 @@ function resolveInitialId(
       )?.id ?? "cron"
     );
   }
+  if (initialData.trigger_type === "stream") return "stream";
   const wt = initialData.webhook_type;
   if (!wt) return "webhook";
   return catalog.find((e) => e.webhook_type === wt)?.id ?? "webhook";
@@ -105,6 +112,7 @@ function resolveInitialId(
 
 export function CreateTriggerForm({
   agents,
+  streams,
   initialData,
 }: CreateTriggerFormProps) {
   const router = useWorkspaceRouter();
@@ -568,6 +576,44 @@ export function CreateTriggerForm({
               >
                 {t("whenToRun")}
               </h2>
+              {triggerType === "stream" && (
+                <div className="grid gap-2 md:max-w-sm">
+                  <FormLabel htmlFor="stream_id" required>
+                    {t("stream")}
+                  </FormLabel>
+                  {/* The binding is fixed once saved: an update cannot move a
+                      trigger to another stream. */}
+                  <Select
+                    name="stream_id"
+                    defaultValue={initialData?.stream_id ?? undefined}
+                    disabled={isEditing}
+                    required
+                  >
+                    <SelectTrigger id="stream_id">
+                      <SelectValue
+                        placeholder={
+                          streams.length ? undefined : t("noStreams")
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {streams.map((stream) => (
+                        <SelectItem key={stream.id} value={stream.id}>
+                          {stream.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {t("streamHint")}
+                  </p>
+                  {state.errors?.stream_id && (
+                    <p className="text-sm text-destructive">
+                      {state.errors.stream_id[0]}
+                    </p>
+                  )}
+                </div>
+              )}
               {triggerType === "cron" && (
                 <>
                   <div className="grid gap-2">

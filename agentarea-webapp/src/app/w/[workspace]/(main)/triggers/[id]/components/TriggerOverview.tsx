@@ -66,12 +66,10 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
 
   const taskParameters = normalizeTaskParameters(trigger.task_parameters);
   const isCron = trigger.trigger_type === "cron";
-  // The path is the part that is true everywhere: the reachable host is the
-  // API's ingress, which this app cannot know (`API_URL` is the in-cluster
-  // address). Use the server's own value when it ever sends one.
-  const webhookEndpoint =
-    (trigger as { webhook_url?: string | null }).webhook_url ??
-    (trigger.webhook_id ? `/webhooks/${trigger.webhook_id}` : null);
+  // A stream trigger has no intake of its own: it listens to a stream that
+  // something else feeds.
+  const hasWebhook = !isCron && trigger.trigger_type !== "stream";
+  const webhookEndpoint = trigger.webhook_url ?? null;
 
   const model: TriggerOverviewModel = {
     triggerId,
@@ -92,7 +90,7 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
           timezone: trigger.timezone ?? null,
         }
       : null,
-    webhook: isCron
+    webhook: !hasWebhook
       ? null
       : {
           url: webhookEndpoint,
@@ -107,6 +105,10 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
       consecutive: trigger.consecutive_failures,
       threshold: trigger.failure_threshold,
     },
+    needsOwner: trigger.status === "needs_owner",
+    stream: trigger.stream_id
+      ? { id: trigger.stream_id, lastEventAt: trigger.last_event_at ?? null }
+      : null,
     lastExecutionAt: trigger.last_execution_at ?? null,
     nextRunTime: trigger.next_run_time ?? null,
     metrics: metrics

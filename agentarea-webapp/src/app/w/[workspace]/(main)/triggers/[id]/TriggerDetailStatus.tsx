@@ -47,7 +47,7 @@ export function TriggerStatusBadge({
 }) {
   const { active } = useTriggerDetailStatus();
   const presentation =
-    status.kind === "failed"
+    status.kind === "failed" || status.kind === "attention"
       ? status
       : getTriggerStatusPresentation(active ? "active" : "paused");
 
