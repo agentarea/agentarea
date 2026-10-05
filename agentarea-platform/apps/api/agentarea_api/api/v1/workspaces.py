@@ -12,9 +12,13 @@ from typing import Annotated
 
 from agentarea_common.auth.authorization import is_workspace_admin
 from agentarea_common.auth.context import UserContext, UserPrincipal
-from agentarea_common.auth.dependencies import PrincipalDep, UnboundPrincipalDep
+from agentarea_common.auth.dependencies import PrincipalDep, UnboundPrincipalDep, UserContextDep
 from agentarea_common.auth.identity_directory import get_identity_directory
-from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.auth.route_authz import (
+    enforced_in_handler,
+    requires_workspace_admin,
+    unrestricted,
+)
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config import get_database
@@ -27,11 +31,20 @@ from agentarea_common.workspaces import (
     list_workspace_ids_for_member,
 )
 from agentarea_common.workspaces.authority import administered_workspace_ids
+from agentarea_common.workspaces.logo import (
+    LOGO_MAX_BYTES,
+    LogoTooLargeError,
+    UnsupportedLogoTypeError,
+    WorkspaceLogoError,
+    WorkspaceLogoService,
+    WorkspaceLogoStore,
+    WorkspaceNotFoundError,
+)
 from agentarea_governance.application import (
     GovernancePolicyService,
     provision_default_policies,
 )
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -100,6 +113,13 @@ def get_workspace_service(session: SessionDep, user: PrincipalDep) -> WorkspaceS
 WorkspaceServiceDep = Annotated[WorkspaceService, Depends(get_workspace_service)]
 
 
+def get_workspace_logo_store() -> WorkspaceLogoStore:
+    return WorkspaceLogoStore()
+
+
+WorkspaceLogoStoreDep = Annotated[WorkspaceLogoStore, Depends(get_workspace_logo_store)]
+
+
 class WorkspaceResponse(BaseModel):
     id: str
     slug: str
@@ -110,6 +130,8 @@ class WorkspaceResponse(BaseModel):
     # second copy of it.
     owner_user_id: str
     can_administer: bool
+    # Presigned and short-lived: re-read from this response, never stored.
+    logo_url: str | None = None
 
 
 class CreateWorkspaceBody(BaseModel):
@@ -150,16 +172,24 @@ async def describe_workspaces(
         user,
         accessible_workspaces=[*(user.accessible_workspaces or []), *(w.id for w in workspaces)],
     )
-    return [
-        WorkspaceResponse(
-            id=w.id,
-            slug=w.slug,
-            name=w.name,
-            owner_user_id=w.owner_user_id,
-            can_administer=await is_workspace_admin(user.enter(w.id, w.slug)),
-        )
-        for w in workspaces
-    ]
+    logos = WorkspaceLogoStore()
+    return [await describe_workspace(user.enter(w.id, w.slug), w, logos) for w in workspaces]
+
+
+async def describe_workspace(
+    context: UserContext, workspace: Workspace, logos: WorkspaceLogoStore
+) -> WorkspaceResponse:
+    """*workspace* as seen from *context*, which must be acting in it."""
+    return WorkspaceResponse(
+        id=workspace.id,
+        slug=workspace.slug,
+        name=workspace.name,
+        owner_user_id=workspace.owner_user_id,
+        can_administer=await is_workspace_admin(context),
+        logo_url=(
+            None if workspace.logo_key is None else await logos.presigned_url(workspace.logo_key)
+        ),
+    )
 
 
 router = APIRouter(tags=["workspaces"])
@@ -229,3 +259,58 @@ async def list_workspaces(
     seeded by the workspace-creation hook (see ``get_workspace_service``).
     """
     return await describe_workspaces(user, await list_reachable_workspaces(user, service))
+
+
+# Mounted under ``/v1/workspaces/{workspace}``: acts on the workspace the path selects.
+workspace_router = APIRouter(tags=["workspaces"])
+
+
+def _logo_service(session: AsyncSession, logos: WorkspaceLogoStore) -> WorkspaceLogoService:
+    return WorkspaceLogoService(session, WorkspaceRepository(session), logos)
+
+
+def _logo_http_error(exc: WorkspaceLogoError) -> HTTPException:
+    status_code = {
+        LogoTooLargeError: 413,
+        UnsupportedLogoTypeError: 422,
+        WorkspaceNotFoundError: 404,
+    }[type(exc)]
+    return HTTPException(status_code=status_code, detail=str(exc))
+
+
+@workspace_router.put(
+    "/logo",
+    response_model=WorkspaceResponse,
+    dependencies=[requires_workspace_admin()],
+)
+async def upload_workspace_logo(
+    user_context: UserContextDep,
+    session: SessionDep,
+    logos: WorkspaceLogoStoreDep,
+    file: UploadFile = File(..., description="PNG, JPEG or WebP image, at most 1 MB"),
+) -> WorkspaceResponse:
+    """Set the workspace logo, replacing and deleting any previous one."""
+    data = await file.read(LOGO_MAX_BYTES + 1)
+    try:
+        workspace = await _logo_service(session, logos).set(user_context.workspace_id, data)
+    except WorkspaceLogoError as exc:
+        raise _logo_http_error(exc) from exc
+    return await describe_workspace(user_context, workspace, logos)
+
+
+@workspace_router.delete(
+    "/logo",
+    response_model=WorkspaceResponse,
+    dependencies=[requires_workspace_admin()],
+)
+async def delete_workspace_logo(
+    user_context: UserContextDep,
+    session: SessionDep,
+    logos: WorkspaceLogoStoreDep,
+) -> WorkspaceResponse:
+    """Remove the workspace logo; the workspace shows its initials again."""
+    try:
+        workspace = await _logo_service(session, logos).remove(user_context.workspace_id)
+    except WorkspaceLogoError as exc:
+        raise _logo_http_error(exc) from exc
+    return await describe_workspace(user_context, workspace, logos)

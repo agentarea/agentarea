@@ -4,7 +4,10 @@ import {
   rewriteFlowForBrowser,
 } from "@/lib/auth/browser-config";
 import { getSettingsFlow, type OryPageParams } from "@/lib/ory";
-import { getViewerCapabilities } from "@/lib/workspace-context";
+import {
+  getViewerCapabilities,
+  getWorkspaceContext,
+} from "@/lib/workspace-context";
 import { workspacePath } from "@/lib/workspace-routes";
 import config from "@/ory.config";
 import SettingsClient from "./SettingsClient";
@@ -18,7 +21,7 @@ export default async function SettingsPage(
 ) {
   const { workspace } = await props.params;
   // A restarted flow comes back to this workspace, not to Kratos' ui_url.
-  const [flow, { canAdminister }] = await Promise.all([
+  const [flow, { canAdminister }, { active }] = await Promise.all([
     getSettingsFlow(
       {
         project: {
@@ -29,15 +32,20 @@ export default async function SettingsPage(
       props.searchParams
     ),
     getViewerCapabilities(),
+    getWorkspaceContext(),
   ]);
 
   if (!flow) return null;
+  if (!active) {
+    throw new Error("Settings rendered outside a workspace of the caller");
+  }
 
   return (
     <SettingsClient
       flow={rewriteFlowForBrowser(flow)}
       config={await getOryBrowserConfig()}
       canAdminister={canAdminister}
+      workspace={active}
     />
   );
 }

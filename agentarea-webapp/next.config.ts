@@ -19,6 +19,11 @@ const nextConfig: NextConfig = {
   //   ignoreDuringBuilds: true,
   // },
   output: "standalone",
+  experimental: {
+    // Room for a 1 MB workspace logo plus its multipart envelope; the
+    // default 1 MB cap would refuse it before the API could.
+    serverActions: { bodySizeLimit: "2mb" },
+  },
   async rewrites() {
     const backendUrl = process.env.AGENTAREA_API_URL || "http://localhost:8000";
     return [

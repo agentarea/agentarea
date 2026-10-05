@@ -269,6 +269,13 @@ export const zBodyUploadSkillV1SkillsUploadPost = z.object({
 });
 
 /**
+ * Body_upload_workspace_logo_v1_logo_put
+ */
+export const zBodyUploadWorkspaceLogoV1LogoPut = z.object({
+  file: z.string(),
+});
+
+/**
  * BudgetPolicy
  *
  * Budget-related ceilings.
@@ -3603,6 +3610,7 @@ export const zWorkspaceFileListResponse = z.object({
 export const zWorkspaceResponse = z.object({
   can_administer: z.boolean(),
   id: z.string(),
+  logo_url: z.string().nullish(),
   name: z.string(),
   owner_user_id: z.string(),
   slug: z.string(),
@@ -4740,6 +4748,19 @@ export const zRevokeInvitationV1InvitationsInvitationIdDeletePath = z.object({
  */
 export const zRevokeInvitationV1InvitationsInvitationIdDeleteResponse =
   z.void();
+
+/**
+ * Successful Response
+ */
+export const zDeleteWorkspaceLogoV1LogoDeleteResponse = zWorkspaceResponse;
+
+export const zUploadWorkspaceLogoV1LogoPutBody =
+  zBodyUploadWorkspaceLogoV1LogoPut;
+
+/**
+ * Successful Response
+ */
+export const zUploadWorkspaceLogoV1LogoPutResponse = zWorkspaceResponse;
 
 /**
  * Response List Mcp Auth Configs V1 Mcp Auth Configs  Get

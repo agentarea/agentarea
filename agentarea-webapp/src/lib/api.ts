@@ -1296,6 +1296,21 @@ export const createWorkspace = async (name: string) => {
   return { data, error };
 };
 
+export const uploadWorkspaceLogo = async (file: File) => {
+  const result = await sdk.uploadWorkspaceLogoV1LogoPut({
+    client: serverClient,
+    body: { file },
+  });
+  return withStatus(result);
+};
+
+export const deleteWorkspaceLogo = async () => {
+  const result = await sdk.deleteWorkspaceLogoV1LogoDelete({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
 export const listWorkspaceMembers = async () => {
   const { data, error } = await sdk.listMembersV1MembersGet({
     client: serverClient,
