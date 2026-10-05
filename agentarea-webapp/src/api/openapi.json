@@ -4061,6 +4061,26 @@
         "title": "EscalationResolution",
         "type": "object"
       },
+      "EventFilter": {
+        "additionalProperties": false,
+        "description": "Empty kinds and fields match every event.",
+        "properties": {
+          "fields": {
+            "additionalProperties": true,
+            "title": "Fields",
+            "type": "object"
+          },
+          "kinds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Kinds",
+            "type": "array"
+          }
+        },
+        "title": "EventFilter",
+        "type": "object"
+      },
       "ExecutionCorrelationResponse": {
         "description": "Response model for execution correlation data.",
         "properties": {
@@ -4348,6 +4368,30 @@
           "occurred_at"
         ],
         "title": "FailedTaskBlocker",
+        "type": "object"
+      },
+      "ForwardCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "event_filter": {
+            "$ref": "#/components/schemas/EventFilter",
+            "description": "Which events are copied; empty copies all."
+          },
+          "output_stream_ids": {
+            "description": "Streams every matching event is copied into; never the input.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Output Stream Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "output_stream_ids"
+        ],
+        "title": "ForwardCreate",
         "type": "object"
       },
       "FrequentSchedule": {
@@ -8059,6 +8103,100 @@
         "title": "OpenApiToolSettings",
         "type": "object"
       },
+      "OutcomeResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "derived_sequences": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Derived Sequences",
+            "type": "array"
+          },
+          "event_sequence": {
+            "title": "Event Sequence",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "subscription_id": {
+            "format": "uuid",
+            "title": "Subscription Id",
+            "type": "string"
+          },
+          "subscription_kind": {
+            "title": "Subscription Kind",
+            "type": "string"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "trigger_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Id"
+          },
+          "verdict": {
+            "description": "reacted, skipped or error",
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subscription_id",
+          "subscription_kind",
+          "trigger_id",
+          "event_sequence",
+          "verdict",
+          "reason",
+          "score",
+          "task_id",
+          "derived_sequences",
+          "created_at"
+        ],
+        "title": "OutcomeResponse",
+        "type": "object"
+      },
       "PaginatedPaymentsResponse": {
         "properties": {
           "items": {
@@ -11584,6 +11722,307 @@
         "title": "SpendCard",
         "type": "object"
       },
+      "StreamCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name, unique in the workspace.",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "retention_days": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Days events are kept; omitted means the deployment's AGENTAREA_EVENT_RETENTION.",
+            "title": "Retention Days"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "StreamCreate",
+        "type": "object"
+      },
+      "StreamEventPage": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/StreamEventResponse"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "next_after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With ?after=: pass as ?after= for the next page; null at the end.",
+            "title": "Next After"
+          },
+          "next_before": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without ?after=: pass as ?before= for older events; null at the start.",
+            "title": "Next Before"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "StreamEventPage",
+        "type": "object"
+      },
+      "StreamEventResponse": {
+        "properties": {
+          "causation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causation Id"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "depth": {
+            "title": "Depth",
+            "type": "integer"
+          },
+          "event_id": {
+            "format": "uuid",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_key": {
+            "title": "Event Key",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "outcomes": {
+            "description": "One per subscription that took the event; empty means nobody listened.",
+            "items": {
+              "$ref": "#/components/schemas/OutcomeResponse"
+            },
+            "title": "Outcomes",
+            "type": "array"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "sequence",
+          "event_id",
+          "event_key",
+          "kind",
+          "source",
+          "subject",
+          "occurred_at",
+          "received_at",
+          "correlation_id",
+          "causation_id",
+          "depth",
+          "data",
+          "outcomes"
+        ],
+        "title": "StreamEventResponse",
+        "type": "object"
+      },
+      "StreamResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "retention_days": {
+            "title": "Retention Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "kind",
+          "retention_days",
+          "created_by",
+          "created_at"
+        ],
+        "title": "StreamResponse",
+        "type": "object"
+      },
+      "StreamSourceResponse": {
+        "properties": {
+          "allowed_methods": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Methods"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "webhook_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook Id"
+          },
+          "webhook_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook Type"
+          },
+          "webhook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public URL senders post to; null for non-webhook sources.",
+            "title": "Webhook Url"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "webhook_id",
+          "webhook_type",
+          "webhook_url",
+          "allowed_methods",
+          "created_at"
+        ],
+        "title": "StreamSourceResponse",
+        "type": "object"
+      },
       "SubjectSetBody": {
         "properties": {
           "namespace": {
@@ -11605,6 +12044,99 @@
           "relation"
         ],
         "title": "SubjectSetBody",
+        "type": "object"
+      },
+      "SubscriptionResponse": {
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "cursor_sequence": {
+            "title": "Cursor Sequence",
+            "type": "integer"
+          },
+          "filter": {
+            "additionalProperties": true,
+            "title": "Filter",
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          },
+          "output_stream_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Output Stream Ids",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "trigger_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Id"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "trigger_id",
+          "filter",
+          "output_stream_ids",
+          "cursor_sequence",
+          "status",
+          "attempts",
+          "last_error",
+          "next_attempt_at",
+          "created_at"
+        ],
+        "title": "SubscriptionResponse",
         "type": "object"
       },
       "TaskArtifactItem": {
@@ -12668,6 +13200,19 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "event_filter": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which events of the stream fire it: {\"kinds\": [\"push\"], \"fields\": {\"raw_data.action\": \"opened\"}}. Empty means every event.",
+            "title": "Event Filter"
+          },
           "event_types": {
             "description": "Event types to filter on (empty list = accept all events).",
             "items": {
@@ -12691,6 +13236,19 @@
             "title": "Name",
             "type": "string"
           },
+          "stream_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stream whose events fire this trigger (required when trigger_type='stream').",
+            "title": "Stream Id"
+          },
           "task_parameters": {
             "additionalProperties": true,
             "description": "Parameters merged into the task created when the trigger fires.",
@@ -12704,11 +13262,12 @@
             "type": "string"
           },
           "trigger_type": {
-            "description": "'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven.",
+            "description": "'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven, 'stream' to run on events from an existing stream.",
             "enum": [
               "cron",
               "webhook",
-              "polling"
+              "polling",
+              "stream"
             ],
             "title": "Trigger Type",
             "type": "string"
@@ -12959,6 +13518,19 @@
             "title": "Description",
             "type": "string"
           },
+          "event_filter": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which events fire it.",
+            "title": "Event Filter"
+          },
           "event_types": {
             "items": {
               "type": "string"
@@ -12984,6 +13556,19 @@
             "title": "Is Active",
             "type": "boolean"
           },
+          "last_event_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the trigger's stream last recorded an event.",
+            "title": "Last Event At"
+          },
           "last_execution_at": {
             "anyOf": [
               {
@@ -12999,6 +13584,18 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "needs_new_owner_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needs New Owner At"
           },
           "next_run_time": {
             "anyOf": [
@@ -13034,6 +13631,29 @@
             ],
             "description": "Generated signing secret of a generic webhook. Returned only by the create and rotate calls that generated it; never readable afterwards.",
             "title": "Signing Secret"
+          },
+          "status": {
+            "description": "'needs_owner' when the person who configured it can no longer run its agent; the trigger stays stopped until someone who can takes it over.",
+            "enum": [
+              "active",
+              "inactive",
+              "needs_owner"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stream_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stream whose events fire this trigger.",
+            "title": "Stream Id"
           },
           "task_parameters": {
             "additionalProperties": true,
@@ -13122,6 +13742,18 @@
               }
             ],
             "title": "Webhook Type"
+          },
+          "webhook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public URL a sender posts to; set for webhook triggers.",
+            "title": "Webhook Url"
           }
         },
         "required": [
@@ -13137,7 +13769,8 @@
           "updated_at",
           "created_by",
           "failure_threshold",
-          "consecutive_failures"
+          "consecutive_failures",
+          "status"
         ],
         "title": "TriggerResponse",
         "type": "object"
@@ -13279,6 +13912,19 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "event_filter": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which events of the stream fire it: {\"kinds\": [\"push\"], \"fields\": {\"raw_data.action\": \"opened\"}}. Empty means every event.",
+            "title": "Event Filter"
+          },
           "event_types": {
             "description": "Event types to filter on (empty list = accept all events).",
             "items": {
@@ -13302,6 +13948,19 @@
             "title": "Name",
             "type": "string"
           },
+          "stream_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stream whose events fire this trigger (required when trigger_type='stream').",
+            "title": "Stream Id"
+          },
           "task_parameters": {
             "additionalProperties": true,
             "description": "Parameters merged into the task created when the trigger fires.",
@@ -13315,11 +13974,12 @@
             "type": "string"
           },
           "trigger_type": {
-            "description": "'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven.",
+            "description": "'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven, 'stream' to run on events from an existing stream.",
             "enum": [
               "cron",
               "webhook",
-              "polling"
+              "polling",
+              "stream"
             ],
             "title": "Trigger Type",
             "type": "string"
@@ -13514,6 +14174,18 @@
             ],
             "description": "Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (alias).",
             "title": "Enabled"
+          },
+          "event_filter": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Filter"
           },
           "event_types": {
             "anyOf": [
@@ -32169,6 +32841,746 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/streams/": {
+      "get": {
+        "operationId": "list_streams_v1_streams__get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1000000000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StreamResponse"
+                  },
+                  "title": "Response List Streams V1 Streams  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Streams",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      },
+      "post": {
+        "operationId": "create_stream_v1_streams__post",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StreamCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Stream",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/{stream_id}": {
+      "delete": {
+        "operationId": "delete_stream_v1_streams__stream_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Stream",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      },
+      "get": {
+        "operationId": "get_stream_v1_streams__stream_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Stream",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/{stream_id}/events": {
+      "get": {
+        "operationId": "list_events_v1_streams__stream_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Oldest first, after this sequence.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Oldest first, after this sequence.",
+              "title": "After"
+            }
+          },
+          {
+            "description": "Newest first, before this sequence.",
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Newest first, before this sequence.",
+              "title": "Before"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamEventPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Events",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/{stream_id}/events/{sequence}": {
+      "get": {
+        "operationId": "get_event_v1_streams__stream_id__events__sequence__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sequence",
+            "required": true,
+            "schema": {
+              "title": "Sequence",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamEventResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Event",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/{stream_id}/forwards": {
+      "post": {
+        "operationId": "create_forward_v1_streams__stream_id__forwards_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForwardCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Forward",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/{stream_id}/sources": {
+      "get": {
+        "operationId": "list_sources_v1_streams__stream_id__sources_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StreamSourceResponse"
+                  },
+                  "title": "Response List Sources V1 Streams  Stream Id  Sources Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Sources",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions": {
+      "get": {
+        "operationId": "list_subscriptions_v1_streams__stream_id__subscriptions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SubscriptionResponse"
+                  },
+                  "title": "Response List Subscriptions V1 Streams  Stream Id  Subscriptions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Subscriptions",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions/{subscription_id}/outcomes": {
+      "get": {
+        "operationId": "list_outcomes_v1_streams__stream_id__subscriptions__subscription_id__outcomes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OutcomeResponse"
+                  },
+                  "title": "Response List Outcomes V1 Streams  Stream Id  Subscriptions  Subscription Id  Outcomes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Outcomes",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/tasks/": {
       "get": {
         "description": "Get one page of the workspace's tasks across all agents, newest first.\n\nAccess Control:\n    Returns all tasks within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace tasks.",
@@ -32501,7 +33913,7 @@
             }
           },
           {
-            "description": "Filter by trigger type (cron, webhook)",
+            "description": "Filter by trigger type (cron, webhook, stream)",
             "in": "query",
             "name": "trigger_type",
             "required": false,
@@ -32514,7 +33926,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by trigger type (cron, webhook)",
+              "description": "Filter by trigger type (cron, webhook, stream)",
               "title": "Trigger Type"
             }
           },
@@ -33861,7 +35273,7 @@
     },
     "/webhooks/{webhook_id}": {
       "delete": {
-        "description": "Process incoming webhook requests for registered triggers",
+        "description": "Record an incoming webhook in its stream",
         "operationId": "handle_webhook_webhooks__webhook_id__delete",
         "parameters": [
           {
@@ -33906,7 +35318,7 @@
         ]
       },
       "get": {
-        "description": "Process incoming webhook requests for registered triggers",
+        "description": "Record an incoming webhook in its stream",
         "operationId": "handle_webhook_webhooks__webhook_id__get",
         "parameters": [
           {
@@ -33951,7 +35363,7 @@
         ]
       },
       "head": {
-        "description": "Process incoming webhook requests for registered triggers",
+        "description": "Record an incoming webhook in its stream",
         "operationId": "handle_webhook_webhooks__webhook_id__head",
         "parameters": [
           {
@@ -33996,7 +35408,7 @@
         ]
       },
       "options": {
-        "description": "Process incoming webhook requests for registered triggers",
+        "description": "Record an incoming webhook in its stream",
         "operationId": "handle_webhook_webhooks__webhook_id__options",
         "parameters": [
           {
@@ -34041,7 +35453,7 @@
         ]
       },
       "patch": {
-        "description": "Process incoming webhook requests for registered triggers",
+        "description": "Record an incoming webhook in its stream",
         "operationId": "handle_webhook_webhooks__webhook_id__patch",
         "parameters": [
           {
@@ -34086,7 +35498,7 @@
         ]
       },
       "post": {
-        "description": "Process incoming webhook requests for registered triggers",
+        "description": "Record an incoming webhook in its stream",
         "operationId": "handle_webhook_webhooks__webhook_id__post",
         "parameters": [
           {
@@ -34131,7 +35543,7 @@
         ]
       },
       "put": {
-        "description": "Process incoming webhook requests for registered triggers",
+        "description": "Record an incoming webhook in its stream",
         "operationId": "handle_webhook_webhooks__webhook_id__put",
         "parameters": [
           {
