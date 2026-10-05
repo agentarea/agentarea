@@ -2403,6 +2403,10 @@
     "taskFailed": "Task failed",
     "taskBlocked": "Task is blocked",
     "timeAgo": "{time} ago",
+    "relJustNow": "just now",
+    "relMinutes": "{count}m",
+    "relHours": "{count}h",
+    "relDays": "{count}d",
     "tasks": "Tasks",
     "allTasks": "All tasks",
     "runningNow": "Running now",
@@ -2906,13 +2910,57 @@
       }
     }
   },
+  "ProjectsPage": {
+    "title": "Projects",
+    "newProject": "New project",
+    "searchPlaceholder": "Search projects…",
+    "subProject": "Sub-project",
+    "andMore": "and {count} more",
+    "sections": {
+      "label": "Project sections",
+      "overview": "Overview",
+      "files": "Files",
+      "settings": "Settings"
+    },
+    "agentsCount": "{count, plural, one {# agent} other {# agents}}",
+    "skillsCount": "{count, plural, one {# skill} other {# skills}}",
+    "mcpCount": "{count, plural, one {# connection} other {# connections}}",
+    "columns": {
+      "project": "Project",
+      "agents": "Agents",
+      "skills": "Skills",
+      "mcp": "MCP",
+      "instructions": "Instructions"
+    },
+    "hasInstructions": "Yes",
+    "noMatchTitle": "No matching projects",
+    "noMatchDescription": "No projects match “{query}”",
+    "clearSearch": "Clear search",
+    "empty": {
+      "title": "No projects yet",
+      "description": "A project scopes a slice of the workspace — its own agents, skills and connections — so separate lines of work stay apart.",
+      "hintAgents": "Add the agents that work on it",
+      "hintSkills": "Give it the skills and connections it may use",
+      "hintFiles": "Its files become shared context for the work inside it",
+      "action": "Create project"
+    },
+    "form": {
+      "name": "Name",
+      "namePlaceholder": "Inbound triage",
+      "nameRequired": "Enter a project name.",
+      "description": "Description",
+      "descriptionPlaceholder": "What this project is for",
+      "instructions": "Instructions",
+      "instructionsPlaceholder": "Standing instructions for agents working in this project",
+      "createFailed": "Could not create project",
+      "saveFailed": "Couldn’t save the project"
+    },
+    "create": {
+      "title": "New project",
+      "submit": "Create project"
+    }
+  },
   "ProjectSettingsPage": {
-    "name": "Name",
-    "description": "Description",
-    "instructions": "Instructions",
-    "nameRequired": "Enter a project name.",
-    "loadFailed": "Couldn’t load the project",
-    "saveFailed": "Couldn’t save the project",
     "deleteTitle": "Delete project"
   },
   "ProjectFilesPage": {
@@ -2949,7 +2997,9 @@
   },
   "AttachmentSection": {
     "addFailed": "Couldn’t add {item}",
-    "removeFailed": "Couldn’t remove {item}"
+    "removeFailed": "Couldn’t remove {item}",
+    "remove": "Remove {item}",
+    "loading": "Loading…"
   },
   "CatalogPage": {
     "title": "Catalog",
@@ -3026,7 +3076,35 @@
   },
   "ProjectOverviewPage": {
     "loadFailed": "Couldn't load the project",
-    "agentsLoadFailed": "Couldn't load workspace agents"
+    "agentsLoadFailed": "Couldn't load workspace agents",
+    "showMore": "Show more",
+    "showLess": "Show less",
+    "subProject": "Sub-project",
+    "instructions": "Instructions",
+    "edit": "Edit",
+    "noInstructions": "No instructions yet — agents here work without standing guidance.",
+    "addInstructions": "Add instructions",
+    "agents": "Agents",
+    "skills": "Skills",
+    "connections": "Connections",
+    "add": "Add",
+    "files": "Files",
+    "allFiles": "All files",
+    "noFiles": "No files yet.",
+    "uploadFiles": "Upload",
+    "filesLoadFailed": "Couldn't load project files",
+    "agentsSheetDescription": "Add agents to this project",
+    "availableAgents": "Available agents",
+    "noAgents": "No agents in this project yet.",
+    "noAvailableAgents": "No agents available. Create one first.",
+    "skillsSheetDescription": "Add skills to this project",
+    "availableSkills": "Available skills",
+    "noSkills": "No skills in this project yet.",
+    "noAvailableSkills": "No skills available. Create one first.",
+    "connectionsSheetDescription": "Add MCP connections to this project",
+    "availableConnections": "Active MCP connections",
+    "noConnections": "No connections in this project yet.",
+    "noAvailableConnections": "No MCP connections yet. Create one under Connections first."
   },
   "Approvals": {
     "cardLabel": "Pending approval",

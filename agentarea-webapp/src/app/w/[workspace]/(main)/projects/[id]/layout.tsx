@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { getProject } from "@/lib/api";
 import { requireApiData } from "@/lib/server-resource";
@@ -12,6 +13,7 @@ interface Props {
 export default async function ProjectLayout({ params, children }: Props) {
   const { id } = await params;
   const projectResponse = await getProject(id);
+  const t = await getTranslations("ProjectsPage");
 
   const project = requireApiData(projectResponse, "project");
 
@@ -19,7 +21,7 @@ export default async function ProjectLayout({ params, children }: Props) {
     <ContentBlock
       header={{
         breadcrumb: [
-          { label: "Projects", href: "/projects" },
+          { label: t("title"), href: "/projects" },
           { label: project.name, href: `/projects/${project.id}` },
         ],
         controls: <ProjectHeaderControls projectName={project.name} />,

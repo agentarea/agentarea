@@ -1,15 +1,15 @@
-import { FileText } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import type { ProjectResponse } from "@/api/client/types.gen";
 import EmptyState from "@/components/EmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
-import { Badge } from "@/components/ui/badge";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { listProjects } from "@/lib/api";
-import { ENTITY_ICONS, EntityIcon } from "@/lib/entity-icons";
+import { deterministicHue } from "@/lib/avatar-hue";
+import { ENTITY_ICONS } from "@/lib/entity-icons";
+import ProjectCard from "./ProjectCard";
 import { ProjectsEmptyState } from "./ProjectsEmptyState";
 
-const AgentIcon = ENTITY_ICONS.agent;
-const SkillIcon = ENTITY_ICONS.skill;
-const McpIcon = ENTITY_ICONS.mcp;
+const ProjectIcon = ENTITY_ICONS.project;
 
 interface ProjectsContentProps {
   searchQuery?: string;
@@ -22,6 +22,7 @@ export default async function ProjectsContent({
   searchQuery = "",
   viewMode = "grid",
 }: ProjectsContentProps) {
+  const t = await getTranslations("ProjectsPage");
   const { data: projects = [] } = await listProjects();
 
   let filteredProjects = projects as ProjectResponse[];
@@ -38,13 +39,24 @@ export default async function ProjectsContent({
     return <ProjectsEmptyState />;
   }
 
+  const countCell = (value: unknown[] | undefined) => (
+    <span className="text-xs tabular-nums text-muted-foreground">
+      {countOf(value)}
+    </span>
+  );
+
   const columns = [
     {
-      header: "Project",
+      header: t("columns.project"),
       accessor: "name",
       render: (name: string, project: ProjectResponse) => (
         <div className="flex items-center gap-2">
-          <EntityIcon kind="project" className="text-primary" />
+          <EntityAvatar
+            size={24}
+            hue={deterministicHue(project.id)}
+            icon={<ProjectIcon strokeWidth={1.85} />}
+            aria-hidden
+          />
           <div>
             <div className="font-medium">{name}</div>
             {project.description && (
@@ -57,32 +69,26 @@ export default async function ProjectsContent({
       ),
     },
     {
-      header: "Agents",
+      header: t("columns.agents"),
       accessor: "agents",
-      render: (value: ProjectResponse["agents"]) => (
-        <span className="text-xs text-muted-foreground">{countOf(value)}</span>
-      ),
+      render: countCell,
     },
     {
-      header: "Skills",
+      header: t("columns.skills"),
       accessor: "skills",
-      render: (value: ProjectResponse["skills"]) => (
-        <span className="text-xs text-muted-foreground">{countOf(value)}</span>
-      ),
+      render: countCell,
     },
     {
-      header: "MCP",
+      header: t("columns.mcp"),
       accessor: "mcp_instances",
-      render: (value: ProjectResponse["mcp_instances"]) => (
-        <span className="text-xs text-muted-foreground">{countOf(value)}</span>
-      ),
+      render: countCell,
     },
     {
-      header: "Instructions",
+      header: t("columns.instructions"),
       accessor: "instructions",
       render: (value: string | null) => (
         <span className="text-xs text-muted-foreground">
-          {value ? "Yes" : "—"}
+          {value ? t("hasInstructions") : "—"}
         </span>
       ),
     },
@@ -94,62 +100,19 @@ export default async function ProjectsContent({
       data={filteredProjects}
       columns={columns}
       itemLink={(project: ProjectResponse) => `/projects/${project.id}`}
+      // ProjectCard is a LinkedCard: it owns its surface and its link.
+      wrapCardContent={false}
+      cardContent={(project: ProjectResponse) => (
+        <ProjectCard project={project} />
+      )}
       emptyState={
         <EmptyState
-          title="No matching projects"
-          description={`No projects found matching: "${searchQuery}"`}
+          title={t("noMatchTitle")}
+          description={t("noMatchDescription", { query: searchQuery })}
           iconsType="agent"
-          action={{ label: "Clear search", href: "/projects" }}
+          action={{ label: t("clearSearch"), href: "/projects" }}
         />
       }
-      cardContent={(project: ProjectResponse) => (
-        <div className="flex h-full flex-col gap-3">
-          <div className="flex items-start gap-2">
-            <EntityIcon
-              kind="project"
-              className="mt-0.5 flex-shrink-0 text-primary"
-            />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[16px] font-[500]">
-                {project.name}
-              </div>
-              {project.parent_project_id && (
-                <Badge variant="outline" className="mt-1 text-[10px]">
-                  sub-project
-                </Badge>
-              )}
-            </div>
-          </div>
-
-          {project.description && (
-            <div className="line-clamp-2 text-[14px] opacity-50">
-              {project.description}
-            </div>
-          )}
-
-          {project.instructions && (
-            <div className="flex items-start gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
-              <FileText className="mt-0.5 h-3 w-3 flex-shrink-0" />
-              <span className="line-clamp-2">{project.instructions}</span>
-            </div>
-          )}
-
-          <div className="mt-auto flex items-center gap-3 pt-1 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <AgentIcon className="h-3.5 w-3.5" />
-              {countOf(project.agents)}
-            </span>
-            <span className="flex items-center gap-1">
-              <SkillIcon className="h-3.5 w-3.5" />
-              {countOf(project.skills)}
-            </span>
-            <span className="flex items-center gap-1">
-              <McpIcon className="h-3.5 w-3.5" />
-              {countOf(project.mcp_instances)}
-            </span>
-          </div>
-        </div>
-      )}
     />
   );
 }

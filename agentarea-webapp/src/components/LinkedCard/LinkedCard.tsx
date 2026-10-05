@@ -16,6 +16,11 @@ interface LinkedCardProps {
   subtitle?: ReactNode;
   topRight?: ReactNode;
   type?: "view" | "config" | "edit";
+  /**
+   * Render `icon` as given, without the 40px plate — for a node that is
+   * already its own tile (an `EntityAvatar`).
+   */
+  bareIcon?: boolean;
   className?: string;
 }
 
@@ -28,6 +33,7 @@ export default function LinkedCard({
   subtitle,
   topRight,
   type = "view",
+  bareIcon = false,
   className,
 }: LinkedCardProps) {
   const t = useTranslations("Common");
@@ -73,7 +79,9 @@ export default function LinkedCard({
 
       <div className="flex flex-col h-full z-10">
         <div className={cn("flex gap-3 mb-2", subtitle ? "items-start" : "items-center")}>
-          {hasIcon ? (
+          {hasIcon && bareIcon ? (
+            <div className="flex-shrink-0">{icon as ReactNode}</div>
+          ) : hasIcon ? (
             <div
               className={cn(
                 "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg transition-colors duration-300",
