@@ -119,7 +119,12 @@ export function AppSidebarContent({
               <SidebarMenuButton
                 asChild
                 isActive={inboxActive}
-                className={cn(navItemClassName, "relative w-8 shrink-0")}
+                // The count badge hangs past the corner; the menu button's
+                // base overflow-hidden would clip it.
+                className={cn(
+                  navItemClassName,
+                  "relative w-8 shrink-0 overflow-visible"
+                )}
               >
                 <Link
                   href="/inbox"
