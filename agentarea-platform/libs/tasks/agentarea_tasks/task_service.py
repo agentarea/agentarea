@@ -36,7 +36,7 @@ from .domain.exceptions import (
     BudgetCapExceededError,
     SchedulingNotSupportedError,
 )
-from .domain.interfaces import BaseTaskManager
+from .domain.interfaces import BaseTaskManager, FollowUpClaim
 from .domain.models import AgentTask, TaskProvenance
 from .infrastructure.repository import TaskConversationRepository, TaskRepository
 from .schemas.dto import RunCreate
@@ -405,7 +405,9 @@ class TaskService(BaseTaskService):
         stored_task.effective_policy = effective_policy.to_json_dict()
         return stored_task
 
-    async def submit_task(self, task: AgentTask) -> AgentTask:
+    async def submit_task(
+        self, task: AgentTask, *, follow_up_claim: FollowUpClaim | None = None
+    ) -> AgentTask:
         """Submit a pre-built AgentTask. Thin alias delegating to the canonical
         ``create_and_execute_task_with_workflow`` so A2A and MCP callers get the
         same metadata enrichment, channel routing, and defaults as REST.
@@ -428,6 +430,7 @@ class TaskService(BaseTaskService):
             query=task.query,
             metadata_overrides=meta or None,
             provenance=task.provenance,
+            follow_up_claim=follow_up_claim,
         )
 
     async def start_run(
@@ -549,7 +552,9 @@ class TaskService(BaseTaskService):
         task.status = "pending"
         return await self.task_manager.submit_task(task)
 
-    async def route_or_submit_task(self, task: AgentTask) -> AgentTask:
+    async def route_or_submit_task(
+        self, task: AgentTask, *, follow_up_claim: FollowUpClaim | None = None
+    ) -> AgentTask:
         """Submit a channel-originated task, routing follow-ups to an active workflow.
 
         Named entry point for trigger/channel callers. The routing itself — if a
@@ -559,15 +564,18 @@ class TaskService(BaseTaskService):
         ``submit_task``). This delegates straight there so routing happens exactly
         once; doing its own routing pass here as well would query and signal the
         workflow twice on the no-match path.
+
+        ``follow_up_claim`` makes a redelivered event's follow-up go out once.
         """
-        return await self.submit_task(task)
+        return await self.submit_task(task, follow_up_claim=follow_up_claim)
 
     async def _try_route_to_active_workflow(
-        self, task: AgentTask, chat_id: str
+        self, task: AgentTask, chat_id: str, follow_up_claim: FollowUpClaim | None = None
     ) -> AgentTask | None:
         """Try to route a message to an existing active workflow for this channel.
 
         Returns the existing task (with status="routed") if successful, None otherwise.
+        ``follow_up_claim`` is consulted right before the signal; see FollowUpClaim.
         """
         executor = getattr(self.task_manager, "temporal_executor", None)
         if not executor:
@@ -584,49 +592,57 @@ class TaskService(BaseTaskService):
         for candidate in candidates:
             if _task_resource_selection_key(candidate.parameters) != incoming_resources:
                 continue
+            # Both columns are NOT NULL in the database; a stored task missing
+            # either is corrupt, and a follow-up would carry its owner's
+            # authority into a running workflow.
+            if not candidate.user_id or not candidate.workspace_id:
+                logger.warning(
+                    "Task %s is stored without an owner or a workspace; "
+                    "not routing a follow-up into it",
+                    candidate.id,
+                )
+                continue
+            routed = AgentTask(
+                id=candidate.id,
+                title=task.title,
+                description=candidate.description,
+                query=task.query,
+                user_id=candidate.user_id,
+                workspace_id=candidate.workspace_id,
+                agent_id=candidate.agent_id,
+                status="routed",
+                execution_id=candidate.execution_id,
+                task_parameters=candidate.parameters,
+            )
+            if follow_up_claim is not None and not await follow_up_claim.claim(candidate.id):
+                logger.info(
+                    "Follow-up into task %s was already queued for this delivery", candidate.id
+                )
+                return routed
             try:
                 ok = await executor.send_workflow_command(
                     candidate.execution_id,
                     "queue_message",
                     {"message": message_text},
                 )
-                if not ok:
-                    continue
-                logger.info(
-                    "Routed follow-up to workflow %s (agent=%s, chat_id=%s)",
-                    candidate.execution_id,
-                    task.agent_id,
-                    chat_id,
-                )
-                # Return existing task marked as routed. Both columns are NOT
-                # NULL in the database; a stored task missing either is corrupt,
-                # and this one is about to carry its owner's authority into a
-                # running workflow.
-                if not candidate.user_id or not candidate.workspace_id:
-                    raise ValueError(
-                        f"task {candidate.id} is stored without an owner or a workspace; "
-                        "refusing to route a follow-up into it"
-                    )
-                candidate_as_simple = AgentTask(
-                    id=candidate.id,
-                    title=task.title,
-                    description=candidate.description,
-                    query=task.query,
-                    user_id=candidate.user_id,
-                    workspace_id=candidate.workspace_id,
-                    agent_id=candidate.agent_id,
-                    status="routed",
-                    execution_id=candidate.execution_id,
-                    task_parameters=candidate.parameters,
-                )
-                return candidate_as_simple
             except Exception:
                 logger.warning(
                     "Failed to signal workflow %s, trying next candidate",
                     candidate.execution_id,
                     exc_info=True,
                 )
+                ok = False
+            if not ok:
+                if follow_up_claim is not None:
+                    await follow_up_claim.release()
                 continue
+            logger.info(
+                "Routed follow-up to workflow %s (agent=%s, chat_id=%s)",
+                candidate.execution_id,
+                task.agent_id,
+                chat_id,
+            )
+            return routed
 
         return None
 
@@ -1100,6 +1116,7 @@ class TaskService(BaseTaskService):
         task_policy: PolicyDocument | None = None,
         scheduled_at: datetime | None = None,
         provenance: TaskProvenance | None = None,
+        follow_up_claim: FollowUpClaim | None = None,
     ) -> AgentTask:
         """Canonical entry point for creating and executing a task via Temporal workflow.
 
@@ -1121,6 +1138,8 @@ class TaskService(BaseTaskService):
             task_policy: Optional task-scoped policy that may only tighten higher scopes.
             scheduled_at: Absolute future time for a one-shot deferred run.
             provenance: Who or what started this task, and the event that caused it.
+            follow_up_claim: Guards a follow-up routed into a running workflow so a
+                redelivered event does not queue it twice.
 
         Returns:
             Created task with workflow execution info, or the routed-into existing
@@ -1159,7 +1178,7 @@ class TaskService(BaseTaskService):
                 task_parameters=parameters or {},
                 provenance=provenance or TaskProvenance(),
             )
-            routed = await self._try_route_to_active_workflow(draft, str(chat_id))
+            routed = await self._try_route_to_active_workflow(draft, str(chat_id), follow_up_claim)
             if routed:
                 return routed
 

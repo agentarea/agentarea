@@ -104,6 +104,7 @@ PY_SUITES=(
   libs/streams/tests/test_backfill_db.py
   libs/streams/tests/test_dispatcher_db.py
   apps/api/tests/test_webhook_source_intake_db.py
+  libs/triggers/tests/test_routed_follow_up_once_db.py
 )
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, the secret

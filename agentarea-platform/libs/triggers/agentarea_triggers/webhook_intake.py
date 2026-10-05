@@ -1,5 +1,6 @@
 """Webhook intake into a stream: the parsed request becomes one journal event."""
 
+import logging
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -10,18 +11,25 @@ from agentarea_streams.infrastructure.orm import StreamSourceORM
 
 from .webhook_manager import WebhookExecutionCallback
 
+logger = logging.getLogger(__name__)
+
 _DELIVERY_HEADERS = ("webhook-id", "x-github-delivery", "linear-delivery", "idempotency-key")
 _BODY_KEYS = {"telegram": "update_id", "stripe": "id", "slack": "event_id", "discord": "id"}
-_HIDDEN_HEADERS = frozenset(
-    {
-        "authorization",
-        "proxy-authorization",
-        "cookie",
-        "x-api-key",
-        "x-webhook-secret",
-        "x-telegram-bot-api-secret-token",
-    }
+# A header or query parameter whose name carries one of these is a credential (or
+# a signature over one) and never reaches the journal.
+_SECRET_NAME_PARTS = (
+    "auth",
+    "cookie",
+    "token",
+    "secret",
+    "password",
+    "passwd",
+    "signature",
+    "api-key",
+    "api_key",
+    "apikey",
 )
+_SECRET_NAMES = frozenset({"key", "sig", "code"})
 
 
 def webhook_event_key(webhook_type: str, parsed: dict[str, Any]) -> str:
@@ -42,11 +50,20 @@ def webhook_event_kind(webhook_type: str, parsed: dict[str, Any]) -> str:
     return str(event_type) if event_type else f"webhook.{webhook_type}"
 
 
+def is_secret_name(name: str) -> bool:
+    lowered = str(name).lower()
+    return lowered in _SECRET_NAMES or any(part in lowered for part in _SECRET_NAME_PARTS)
+
+
+def _without_secrets(values: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in values.items() if not is_secret_name(k)}
+
+
 def journal_data(parsed: dict[str, Any]) -> dict[str, Any]:
-    headers = parsed.get("headers") or {}
     return {
         **parsed,
-        "headers": {k: v for k, v in headers.items() if str(k).lower() not in _HIDDEN_HEADERS},
+        "headers": _without_secrets(parsed.get("headers") or {}),
+        "query_params": _without_secrets(parsed.get("query_params") or {}),
     }
 
 
@@ -77,7 +94,10 @@ class JournalAppendCallback(WebhookExecutionCallback):
         self.spec = spec
         self.source_id = source_id
         self.receipt: AppendResult | None = None
+        # The journal refused the event: the sender's problem, answered 4xx.
         self.refusal: StreamError | None = None
+        # The journal could not take the event: ours, answered 5xx so the sender retries.
+        self.failure: Exception | None = None
 
     async def execute_webhook_trigger(
         self, webhook_id: str, request_data: dict[str, Any]
@@ -97,5 +117,14 @@ class JournalAppendCallback(WebhookExecutionCallback):
             )
         except StreamError as error:
             self.refusal = error
+            raise
+        except Exception as error:
+            logger.error(
+                "Webhook %s could not be recorded in stream %s",
+                webhook_id,
+                self.spec.stream_id,
+                exc_info=True,
+            )
+            self.failure = error
             raise
         return {"status": "accepted" if self.receipt.appended else "duplicate"}

@@ -22,6 +22,7 @@ from agentarea_common.events.broker import EventBroker
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import EventFilter, StreamNotFoundError
 from agentarea_streams.infrastructure.repository import find_webhook_source
+from pydantic import ValidationError
 
 from .condition_models import validate_condition_models
 from .domain.enums import ExecutionStatus, TriggerType
@@ -35,6 +36,7 @@ from .domain.models import (
     TriggerUpdate,
     WebhookTrigger,
 )
+from .failures import is_permanent
 from .infrastructure.repository import TriggerExecutionRepository, TriggerRepository
 from .llm_condition_evaluator import LLMConditionEvaluationError, LLMConditionEvaluator
 from .logging_utils import (
@@ -54,6 +56,7 @@ from .trigger_validation import validate_trigger_configuration
 from .webhook_verification import keep_stored_secret_fields
 
 if TYPE_CHECKING:
+    from agentarea_tasks.domain.interfaces import FollowUpClaim
     from agentarea_tasks.domain.models import TaskProvenance
 
 logger = TriggerLogger(__name__)
@@ -1086,6 +1089,22 @@ class TriggerService:
                 trigger_update.conditions, self.model_instance_repository
             )
 
+        if trigger_update.event_filter is not None:
+            if not isinstance(existing_trigger, WebhookTrigger) and (
+                existing_trigger.trigger_type != TriggerType.STREAM
+            ):
+                raise TriggerValidationError(
+                    "event_filter applies only to webhook and stream triggers"
+                )
+            if trigger_update.event_types is not None:
+                raise TriggerValidationError(
+                    "Send event_types or event_filter, not both: each replaces the other"
+                )
+            try:
+                EventFilter.model_validate(trigger_update.event_filter)
+            except ValidationError as error:
+                raise TriggerValidationError(f"event_filter: {error}") from error
+
         # Type-specific validation
         if isinstance(existing_trigger, CronTrigger):
             if trigger_update.cron_expression is not None:
@@ -1191,14 +1210,24 @@ class TriggerService:
         *,
         task_id: UUID | None = None,
         provenance: "TaskProvenance | None" = None,
+        follow_up_claim: "FollowUpClaim | None" = None,
+        raise_retryable: bool = False,
     ) -> TriggerFiring:
         """Run a trigger once and say what happened.
 
         ``fired_by`` is set only when a person pressed "run now"; the schedule,
         inbound webhooks and stream subscriptions leave it empty. ``task_id``
         makes a retried firing idempotent: when a task with that id already
-        exists, the firing reports it instead of starting another run.
-        ``provenance`` is stamped on the task it creates.
+        exists, the firing reports it instead of starting another run;
+        ``follow_up_claim`` does the same for a follow-up routed into a running
+        workflow, which stores no task. ``provenance`` is stamped on the task
+        it creates.
+
+        With ``raise_retryable`` only a permanent failure (see
+        ``failures.is_permanent``) becomes an ``error`` outcome; anything else --
+        infrastructure trouble, or a failure nobody classified -- raises without
+        being recorded or counted towards ``failure_threshold``, because the
+        caller still holds the event and retries it.
 
         Raises:
             TriggerNotFoundError: If trigger doesn't exist
@@ -1278,7 +1307,9 @@ class TriggerService:
                     provenance=provenance
                     or TaskProvenance(origin_type="trigger", origin_id=str(trigger.id)),
                 )
-                task = await self.task_service.route_or_submit_task(task)
+                task = await self.task_service.route_or_submit_task(
+                    task, follow_up_claim=follow_up_claim
+                )
 
                 created_task_id = task.id
                 if task.status == "routed":
@@ -1316,6 +1347,13 @@ class TriggerService:
             )
 
         except Exception as e:
+            if raise_retryable and not is_permanent(e):
+                logger.warning(
+                    f"Trigger {trigger_id} failed in a way a retry may not repeat; "
+                    f"the event is retried: {e}",
+                    exc_info=True,
+                )
+                raise
             execution_time_ms = int((time.time() - start_time) * 1000)
             logger.error(f"Error executing trigger {trigger_id}: {e}", exc_info=True)
             execution = None

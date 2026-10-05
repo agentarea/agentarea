@@ -227,7 +227,11 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
 
         update_data["updated_at"] = datetime.utcnow()
 
-        stmt = update(TriggerORM).where(TriggerORM.id == trigger_id).values(**update_data)
+        stmt = (
+            update(TriggerORM)
+            .where(TriggerORM.id == trigger_id, self._get_workspace_filter())
+            .values(**update_data)
+        )
         await self.session.execute(stmt)
         await self.session.flush()
 

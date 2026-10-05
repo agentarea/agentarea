@@ -14,7 +14,9 @@ from agentarea_api.api.v1._webhook_intake import WebhookSourceIntake
 from agentarea_common.config import get_settings
 from agentarea_common.config.streams import EventStreamSettings
 from agentarea_streams.domain.ports import StreamWaker
+from agentarea_streams.infrastructure.journal import StreamJournal
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 TEST_DATABASE_URL = os.getenv("STREAMS_TEST_DATABASE_URL", "")
@@ -133,3 +135,30 @@ async def test_over_the_workspace_quota_answers_429(setup):
     intake, _ = setup.build(quota=1)
     assert (await _post(intake, setup.webhook_id, "a"))["status_code"] == 202
     assert (await _post(intake, setup.webhook_id, "b"))["status_code"] == 429
+
+
+class _JournalThatLosesItsConnection(StreamJournal):
+    """Writes the event, then the database goes away before the request finishes."""
+
+    async def append(self, stream_id, event, **kwargs):
+        await super().append(stream_id, event, **kwargs)
+        raise OperationalError("INSERT ...", {}, ConnectionResetError("connection reset"))
+
+
+async def test_a_storage_failure_answers_503_and_records_nothing(setup, monkeypatch):
+    monkeypatch.setattr(
+        "agentarea_api.api.v1._webhook_intake.StreamJournal", _JournalThatLosesItsConnection
+    )
+    intake, waker = setup.build()
+    result = await _post(intake, setup.webhook_id)
+    assert result["status_code"] == 503
+    assert waker.woken == []
+    async with setup.maker() as session:
+        events = await session.execute(
+            text("SELECT count(*) FROM stream_events WHERE stream_id = :s"), {"s": setup.stream_id}
+        )
+        keys = await session.execute(
+            text("SELECT count(*) FROM stream_event_keys WHERE stream_id = :s"),
+            {"s": setup.stream_id},
+        )
+    assert (events.scalar_one(), keys.scalar_one()) == (0, 0)

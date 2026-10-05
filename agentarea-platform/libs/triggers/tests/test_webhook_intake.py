@@ -90,3 +90,35 @@ async def test_the_callback_remembers_a_refusal_and_reraises():
     with pytest.raises(StreamQuotaExceededError):
         await callback.execute_webhook_trigger("wh", {"headers": {}})
     assert isinstance(callback.refusal, StreamQuotaExceededError)
+    assert callback.failure is None
+
+
+async def test_the_callback_remembers_a_storage_failure_apart_from_a_refusal():
+    journal = AsyncMock()
+    journal.append.side_effect = ConnectionResetError("db went away")
+    callback = JournalAppendCallback(journal=journal, spec=_spec(), source_id=uuid4())
+    with pytest.raises(ConnectionResetError):
+        await callback.execute_webhook_trigger("wh", {"headers": {}})
+    assert isinstance(callback.failure, ConnectionResetError)
+    assert callback.refusal is None
+
+
+def test_credentials_in_query_parameters_never_reach_the_journal():
+    data = journal_data(
+        {
+            "headers": {"X-Gitlab-Token": "g", "X-GitHub-Event": "push"},
+            "query_params": {
+                "token": "t",
+                "key": "k",
+                "secret": "s",
+                "signature": "x",
+                "sig": "y",
+                "access_token": "a",
+                "api_key": "b",
+                "hub.verify_token": "v",
+                "page": "2",
+            },
+        }
+    )
+    assert data["query_params"] == {"page": "2"}
+    assert data["headers"] == {"X-GitHub-Event": "push"}

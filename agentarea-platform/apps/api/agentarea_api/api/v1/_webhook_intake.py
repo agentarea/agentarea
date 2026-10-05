@@ -87,6 +87,18 @@ class WebhookSourceIntake:
                 result = await manager.handle_webhook_request(
                     webhook_id, method, headers, body, query_params, raw_body=raw_body
                 )
+                if callback.receipt is None:
+                    # Whatever a failed append began must not commit with the scope.
+                    await session.rollback()
+        if callback.failure is not None:
+            # The append failure is logged with its traceback where it was caught.
+            return {
+                "status_code": 503,
+                "body": {
+                    "status": "error",
+                    "message": "The webhook could not be recorded; retry the delivery",
+                },
+            }
         if callback.refusal is not None:
             logger.warning(
                 "Webhook %s refused by stream %s: %s", webhook_id, spec.stream_id, callback.refusal

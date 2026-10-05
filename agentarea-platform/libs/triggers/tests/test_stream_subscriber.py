@@ -51,16 +51,60 @@ def _trigger(**kw):
     )
 
 
-def _handler(service, may_run=True):
+class _Claim:
+    def __init__(self, delivered_to=None):
+        self._delivered_to = delivered_to
+
+    async def delivered_to(self):
+        return self._delivered_to
+
+
+def _handler(service, may_run=True, claim=None):
     authority = MagicMock()
     authority.may_run = AsyncMock(return_value=may_run)
+    claim = claim or _Claim()
     return TriggerSubscriptionHandler(
         event_broker=AsyncMock(),
         secret_manager_factory=MagicMock(),
         workflow_executor=MagicMock(),
         authority=authority,
         trigger_service_factory=lambda _s, _c: service,
+        follow_up_claim_factory=lambda _s, _sub, _e: claim,
     )
+
+
+async def test_a_follow_up_already_routed_for_this_event_is_not_fired_again():
+    trigger = _trigger()
+    service = MagicMock()
+    service.get_trigger = AsyncMock(return_value=trigger)
+    service.fire = AsyncMock()
+    running = uuid4()
+    result = await _handler(service, claim=_Claim(delivered_to=running)).handle(
+        _sub(trigger.id), _event(), AsyncMock()
+    )
+    assert (result.verdict, result.task_id) == (Verdict.REACTED, running)
+    service.fire.assert_not_awaited()
+
+
+async def test_the_stream_path_fires_with_the_claim_and_retries_what_is_not_permanent():
+    trigger = _trigger()
+    service = MagicMock()
+    service.get_trigger = AsyncMock(return_value=trigger)
+    service.fire = AsyncMock(return_value=TriggerFiring(outcome="reacted", task_id=uuid4()))
+    claim = _Claim()
+    await _handler(service, claim=claim).handle(_sub(trigger.id), _event(), AsyncMock())
+    kwargs = service.fire.await_args.kwargs
+    assert kwargs["follow_up_claim"] is claim
+    assert kwargs["raise_retryable"] is True
+
+
+async def test_a_firing_that_raises_leaves_no_outcome_for_the_dispatcher_to_record():
+    trigger = _trigger()
+    service = MagicMock()
+    service.get_trigger = AsyncMock(return_value=trigger)
+    service.fire = AsyncMock(side_effect=ConnectionResetError("temporal went away"))
+    with pytest.raises(ConnectionResetError):
+        await _handler(service).handle(_sub(trigger.id), _event(), AsyncMock())
 
 
 async def test_a_reaction_records_the_task_and_the_verdict_score():
