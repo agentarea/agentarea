@@ -70,6 +70,9 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     a short-retention stream's rows, which a mocked session cannot exercise.
 #     The webhook backfill runs its own SQL against real trigger rows, JSON
 #     nulls included, and must keep every webhook_id through a roundtrip.
+#     The dispatcher leases subscriptions with FOR UPDATE SKIP LOCKED and commits
+#     each outcome with its cursor move under the lease; only real row locks and
+#     transactions show two dispatchers never serving one subscription twice.
 PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
@@ -99,6 +102,7 @@ PY_SUITES=(
   libs/streams/tests/test_pg_journal_db.py
   libs/streams/tests/test_partitions_db.py
   libs/streams/tests/test_backfill_db.py
+  libs/streams/tests/test_dispatcher_db.py
   apps/api/tests/test_webhook_source_intake_db.py
 )
 
