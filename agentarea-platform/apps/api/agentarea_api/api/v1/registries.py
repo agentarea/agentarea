@@ -11,7 +11,11 @@ from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import AUTHZ_ATTR, unrestricted
 from agentarea_common.base.pagination import MAX_OFFSET
 from agentarea_common.utils.types import UtcDatetime
-from agentarea_registry.application.catalog_facets import PROTOCOL_REGISTRY_TYPE, CatalogProtocol
+from agentarea_registry.application.catalog_facets import (
+    PROTOCOL_REGISTRY_TYPE,
+    CatalogHosting,
+    CatalogProtocol,
+)
 from agentarea_registry.application.service import (
     VALID_REGISTRY_TYPES,
     CatalogItemAlreadyExistsError,
@@ -118,6 +122,8 @@ class RegistryItemResponse(BaseModel):
     # browsing filters, sorts and counts by the same values the gallery renders.
     category: str | None = None
     featured: bool = False
+    # "vendor" (hosted endpoint) or "agentarea" (package we run); MCP connections only.
+    hosting: str | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -139,6 +145,7 @@ class RegistryItemResponse(BaseModel):
             installed_version=item.installed_version,
             category=item.category,
             featured=item.featured,
+            hosting=getattr(item, "hosting", None),
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
@@ -286,6 +293,8 @@ class CatalogBrowseResponse(BaseModel):
     total: int
     categories: list[CategoryFacet]
     protocols: list[CategoryFacet]
+    # Vendor-hosted vs run on AgentArea, for MCP connections; empty otherwise.
+    hostings: list[CategoryFacet] = []
 
 
 @router.get(
@@ -303,6 +312,14 @@ async def browse_catalog(
         description=(
             "Restrict connections to one protocol. "
             f"Only valid for registry_type='{PROTOCOL_REGISTRY_TYPE}'."
+        ),
+    ),
+    hosting: CatalogHosting | None = Query(
+        None,
+        description=(
+            "Restrict MCP connections to where they run: 'vendor' (hosted endpoint) or "
+            f"'agentarea' (package the platform runs). Only valid for "
+            f"registry_type='{PROTOCOL_REGISTRY_TYPE}'."
         ),
     ),
     sort: str | None = Query(None, description="'recommended' (default) or 'name'"),
@@ -330,11 +347,18 @@ async def browse_catalog(
             detail=f"protocol only applies to registry_type='{PROTOCOL_REGISTRY_TYPE}'",
         )
 
-    items, total, categories, protocols = await service.browse_catalog(
+    if hosting is not None and registry_type != PROTOCOL_REGISTRY_TYPE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"hosting only applies to registry_type='{PROTOCOL_REGISTRY_TYPE}'",
+        )
+
+    items, total, categories, protocols, hostings = await service.browse_catalog(
         registry_type=registry_type,
         query=q,
         category=category,
         protocol=protocol,
+        hosting=hosting,
         sort=sort,
         limit=limit,
         offset=offset,
@@ -344,6 +368,7 @@ async def browse_catalog(
         total=total,
         categories=[CategoryFacet(value=v, count=c) for v, c in categories],
         protocols=[CategoryFacet(value=v, count=c) for v, c in protocols],
+        hostings=[CategoryFacet(value=v, count=c) for v, c in hostings],
     )
 
 

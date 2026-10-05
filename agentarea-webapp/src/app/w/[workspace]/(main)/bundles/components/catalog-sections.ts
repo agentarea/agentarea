@@ -112,6 +112,7 @@ export function showsSections(params: {
   query: string;
   category: string | null | undefined;
   protocol: string | null | undefined;
+  hosting?: string | null | undefined;
   sort: string;
   all: string;
 }): boolean {
@@ -120,6 +121,7 @@ export function showsSections(params: {
     params.query.trim() === "" &&
     unset(params.category) &&
     unset(params.protocol) &&
+    unset(params.hosting) &&
     params.sort === "recommended"
   );
 }

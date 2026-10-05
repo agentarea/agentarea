@@ -31,6 +31,15 @@ CATALOG_PROTOCOLS: tuple[CatalogProtocol, ...] = get_args(CatalogProtocol)
 # type holds one kind of thing.
 PROTOCOL_REGISTRY_TYPE = "mcp_servers"
 
+# Where an MCP connection runs: at the vendor (a hosted endpoint we only call)
+# or on AgentArea (a command/docker package the MCP manager starts for the
+# workspace). It decides what connecting means -- an OAuth sign-in versus keys
+# for a process we run -- so the gallery lets you filter on it. HTTP APIs keep
+# their own protocol facet and have no hosting.
+CatalogHosting = Literal["vendor", "agentarea"]
+CATALOG_HOSTINGS: tuple[CatalogHosting, ...] = get_args(CatalogHosting)
+_LOCAL_CONNECTION_TYPES = {"command", "docker"}
+
 
 class ItemFacets(NamedTuple):
     """Derived, persisted browse dimensions for one catalog item."""
@@ -39,6 +48,7 @@ class ItemFacets(NamedTuple):
     sort_key: str
     featured: bool
     protocol: CatalogProtocol | None
+    hosting: CatalogHosting | None
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -238,13 +248,29 @@ def _protocol(registry_type: str, spec: dict[str, Any]) -> CatalogProtocol | Non
     return "api" if spec.get("connection_type") == OPENAPI_CONNECTION_TYPE else "mcp"
 
 
+def _hosting(registry_type: str, spec: dict[str, Any]) -> CatalogHosting | None:
+    if _protocol(registry_type, spec) != "mcp":
+        return None
+    connection_type = spec.get("connection_type")
+    if connection_type in _LOCAL_CONNECTION_TYPES:
+        return "agentarea"
+    if connection_type == "url":
+        return "vendor"
+    # Managed publications predate connection_type: read the connection itself.
+    if _text(spec.get("url")) or _text(spec.get("remote_url")):
+        return "vendor"
+    if spec.get("cmd") or _text(spec.get("docker_image_url")) or _text(spec.get("image")):
+        return "agentarea"
+    return None
+
+
 def derive_facets(
     registry_type: str,
     name: str,
     spec: dict[str, Any] | None,
     tags: list[Any] | None,
 ) -> ItemFacets:
-    """Category, sort key, featured flag and protocol for one catalog item."""
+    """Category, sort key, featured flag, protocol and hosting for one catalog item."""
     spec = _mapping(spec)
     tags = tags if isinstance(tags, list) else []
     return ItemFacets(
@@ -253,6 +279,7 @@ def derive_facets(
         sort_key=_title(registry_type, name, spec, tags).casefold()[:255],
         featured=FEATURED_TAG in tags,
         protocol=_protocol(registry_type, spec),
+        hosting=_hosting(registry_type, spec),
     )
 
 
@@ -267,4 +294,5 @@ def apply_facets(item: Any, registry_type: str) -> Any:
     item.sort_key = facets.sort_key
     item.featured = facets.featured
     item.protocol = facets.protocol
+    item.hosting = facets.hosting
     return item

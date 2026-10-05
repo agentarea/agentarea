@@ -48,6 +48,19 @@ export const PROTOCOL_LABELS: Record<CatalogProtocol, string> = {
 };
 const OPENAPI_CONNECTION_TYPE = "openapi";
 
+// Where an MCP connection runs. Mirrors CATALOG_HOSTINGS on the backend:
+// "vendor" is a hosted endpoint we only call, "agentarea" a package the MCP
+// manager starts for the workspace.
+export type CatalogHosting = "vendor" | "agentarea";
+export const HOSTING_KEYS = [
+  "vendor",
+  "agentarea",
+] as const satisfies readonly CatalogHosting[];
+export const HOSTING_LABELS: Record<CatalogHosting, string> = {
+  vendor: "Hosted by vendor",
+  agentarea: "Runs on AgentArea",
+};
+
 // Page size for a single registry fetch. A short page means "no more".
 export const PAGE = 96;
 // Sentinel for the "All categories" facet (kept out of the URL as a real value).
@@ -88,6 +101,7 @@ export type RegistryItem = {
   // single-item endpoints predate them.
   category?: string | null;
   featured?: boolean | null;
+  hosting?: string | null;
 };
 
 export type Registry = { id: string; name: string; registry_type: string };
@@ -108,6 +122,9 @@ export type CatalogEntry = {
   // Logo chain + initials, resolved by <EntityMark> at render time.
   identity: EntityIdentity;
   featured: boolean; // hand-curated well-known entry (sorts first server-side)
+  // MCP connections only: "vendor" (hosted endpoint) or "agentarea" (package
+  // the MCP manager runs), as the server derived it. Null when unknown.
+  hosting?: string | null;
   verified: boolean; // official vendor connection with confirmed OAuth
   spec: RawSpec;
 };
@@ -124,6 +141,10 @@ export function toCatalogType(v: unknown): CatalogType | null {
 
 export function isCatalogProtocol(v: unknown): v is CatalogProtocol {
   return typeof v === "string" && (PROTOCOL_KEYS as readonly string[]).includes(v);
+}
+
+export function isCatalogHosting(v: unknown): v is CatalogHosting {
+  return typeof v === "string" && (HOSTING_KEYS as readonly string[]).includes(v);
 }
 
 export function str(v: unknown): string | null {
@@ -329,6 +350,7 @@ function describe(
     tags,
     protocol,
     featured: item.featured ?? tags.includes(FEATURED_TAG),
+    hosting: str(item.hosting),
     verified: false,
     spec,
   };

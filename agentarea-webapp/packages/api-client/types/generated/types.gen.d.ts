@@ -1338,6 +1338,10 @@ export type CatalogBrowseResponse = {
      */
     categories: Array<CategoryFacet>;
     /**
+     * Hostings
+     */
+    hostings?: Array<CategoryFacet>;
+    /**
      * Items
      */
     items: Array<RegistryItemResponse>;
@@ -5480,6 +5484,10 @@ export type RegistryItemResponse = {
      * Featured
      */
     featured?: boolean;
+    /**
+     * Hosting
+     */
+    hosting?: string | null;
     /**
      * Id
      */
@@ -13710,6 +13718,12 @@ export type BrowseCatalogV1RegistriesCatalogBrowseGetData = {
          * Restrict connections to one protocol. Only valid for registry_type='mcp_servers'.
          */
         protocol?: 'mcp' | 'api' | null;
+        /**
+         * Hosting
+         *
+         * Restrict MCP connections to where they run: 'vendor' (hosted endpoint) or 'agentarea' (package the platform runs). Only valid for registry_type='mcp_servers'.
+         */
+        hosting?: 'vendor' | 'agentarea' | null;
         /**
          * Sort
          *

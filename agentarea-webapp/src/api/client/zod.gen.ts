@@ -2244,6 +2244,7 @@ export const zRegistryItemResponse = z.object({
   description: z.string().nullable(),
   external_id: z.string(),
   featured: z.boolean().optional().default(false),
+  hosting: z.string().nullish(),
   id: z.string().uuid(),
   installed_entity_id: z.string().uuid().nullable(),
   installed_version: z.string().nullable(),
@@ -2272,6 +2273,7 @@ export const zRegistryItemResponse = z.object({
  */
 export const zCatalogBrowseResponse = z.object({
   categories: z.array(zCategoryFacet),
+  hostings: z.array(zCategoryFacet).optional().default([]),
   items: z.array(zRegistryItemResponse),
   protocols: z.array(zCategoryFacet),
   total: z.number().int(),
@@ -5723,6 +5725,7 @@ export const zBrowseCatalogV1RegistriesCatalogBrowseGetQuery = z.object({
   q: z.string().nullish(),
   category: z.string().nullish(),
   protocol: z.enum(["mcp", "api"]).nullish(),
+  hosting: z.enum(["vendor", "agentarea"]).nullish(),
   sort: z.string().nullish(),
   limit: z.number().int().gte(1).lte(500).optional().default(50),
   offset: z.number().int().gte(0).lte(1000000000).optional().default(0),

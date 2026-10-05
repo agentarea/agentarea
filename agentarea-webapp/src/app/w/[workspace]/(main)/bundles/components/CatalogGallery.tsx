@@ -89,15 +89,19 @@ import {
   DEFAULT_SORT,
   EXPLORE_VIEW_COOKIE,
   FEATURED_TAG,
+  arr,
+  isCatalogHosting,
   isCatalogProtocol,
   modelNameMatchesPreferred,
   normalize,
+  HOSTING_LABELS,
   PROTOCOL_LABELS,
   SORT_KEYS,
   str,
   strArr,
   TYPE_KEYS,
   type CatalogEntry,
+  type CatalogHosting,
   type CatalogProtocol,
   type CatalogType,
   type RawSpec,
@@ -175,6 +179,7 @@ type BrowseParams = {
   category: string;
   /** The nuqs value, so ALL or anything a hand-edited URL carries. */
   protocol: string;
+  hosting: string;
   sort: SortMode;
 };
 
@@ -187,6 +192,7 @@ async function fetchPage(params: BrowseParams) {
     // ALL, or junk from a hand-edited URL, means "don't filter" rather than a
     // request the server would reject.
     protocol: isCatalogProtocol(params.protocol) ? params.protocol : undefined,
+    hosting: isCatalogHosting(params.hosting) ? params.hosting : undefined,
     sort: params.sort,
   });
 }
@@ -406,6 +412,8 @@ type CatalogGalleryProps = {
   initialCategories: CategoryFacet[];
   /** MCP/API split; empty for every type but connections. */
   initialProtocols: CategoryFacet[];
+  /** Vendor-hosted vs run on AgentArea; empty for every type but connections. */
+  initialHostings?: CategoryFacet[];
   initialError?: string | null;
   /** Persisted grid/table choice (cookie), seeds the view nuqs default. */
   initialView?: ViewMode;
@@ -419,6 +427,7 @@ export default function CatalogGallery({
   initialTotal,
   initialCategories,
   initialProtocols,
+  initialHostings = [],
   initialError = null,
   initialView = "grid",
   initialSections = [],
@@ -470,11 +479,22 @@ export default function CatalogGallery({
       startTransition: explorePending?.startFilterTransition,
     })
   );
+  const [hosting, setHosting] = useQueryState(
+    "hosting",
+    parseAsString.withDefault(ALL).withOptions({
+      shallow: false,
+      startTransition: explorePending?.startFilterTransition,
+    })
+  );
   const [view] = useQueryState(
     "view",
     parseAsStringLiteral(VIEW_KEYS).withDefault(initialView)
   );
-  const [itemId, setItemId] = useQueryState("item", parseAsString);
+  // Pushed, not replaced: the browser's Back from a detail returns to the list.
+  const [itemId, setItemId] = useQueryState(
+    "item",
+    parseAsString.withOptions({ history: "push" })
+  );
 
   // Paging bookkeeping, seeded from the server-rendered first page (no initial
   // client fetch / flash). Kept in a reducer so the append/retry/exhaustion
@@ -488,6 +508,7 @@ export default function CatalogGallery({
       total: initialTotal,
       categories: initialCategories,
       protocols: initialProtocols,
+      hostings: initialHostings,
       error: initialError,
     })
   );
@@ -526,6 +547,7 @@ export default function CatalogGallery({
       total: initialTotal,
       categories: initialCategories,
       protocols: initialProtocols,
+      hostings: initialHostings,
       error: initialError,
     });
   }, [
@@ -533,6 +555,7 @@ export default function CatalogGallery({
     initialTotal,
     initialCategories,
     initialProtocols,
+    initialHostings,
     initialError,
   ]);
 
@@ -547,6 +570,7 @@ export default function CatalogGallery({
         q: query,
         category,
         protocol,
+        hosting,
         sort,
       });
       if (page.error || !page.data) {
@@ -564,6 +588,7 @@ export default function CatalogGallery({
         total: page.data.total,
         categories: page.data.categories,
         protocols: page.data.protocols,
+        hostings: page.data.hostings,
       });
     } catch (e) {
       console.error("Failed to load catalog page", e);
@@ -572,7 +597,7 @@ export default function CatalogGallery({
         error: `${tBundle("catalogLoadFailed")}: ${formatApiError(e)}`,
       });
     }
-  }, [type, query, category, protocol, sort, paging.entries, tBundle]);
+  }, [type, query, category, protocol, hosting, sort, paging.entries, tBundle]);
 
   // Infinite scroll: auto-load the next page when the sentinel nears the
   // viewport. `canFetchMore` is the in-flight guard — a short page leaves the
@@ -654,7 +679,10 @@ export default function CatalogGallery({
       : null) ?? (deepItem?.id === itemId ? deepItem : null);
   // Drives the empty-state copy + "Clear filters" affordance.
   const hasFilters =
-    query.trim() !== "" || category !== ALL || protocol !== ALL;
+    query.trim() !== "" ||
+    category !== ALL ||
+    protocol !== ALL ||
+    hosting !== ALL;
 
   // A type switch invalidates the current results, so they're skeletoned. A
   // filter change only narrows them: the list stays and dims, which is what
@@ -671,15 +699,45 @@ export default function CatalogGallery({
     () => paging.protocols.map((p) => [p.value, p.count] as [string, number]),
     [paging.protocols]
   );
+  const hostings = useMemo(
+    () =>
+      (paging.hostings ?? []).map((h) => [h.value, h.count] as [string, number]),
+    [paging.hostings]
+  );
+
+  // A detail replaces the list, so the list's scroll position is kept here and
+  // put back on return: "Back to catalog" lands where the user left, with the
+  // same filters (they never left the URL).
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const listScroll = useRef<number | null>(null);
+  const openItem = useCallback(
+    (id: string) => {
+      const scroller = scrollContainerOf(rootRef.current);
+      listScroll.current = scroller.scrollTop;
+      void setItemId(id);
+      scroller.scrollTop = 0;
+    },
+    [setItemId]
+  );
+  const closeItem = useCallback(() => void setItemId(null), [setItemId]);
+  useEffect(() => {
+    if (itemId || listScroll.current == null) return;
+    const top = listScroll.current;
+    listScroll.current = null;
+    requestAnimationFrame(() => {
+      scrollContainerOf(rootRef.current).scrollTop = top;
+    });
+  }, [itemId]);
   const moreAvailable = hasMoreItems(paging);
 
   return (
-    <div className="flex gap-6">
+    <div ref={rootRef} className="flex gap-6">
       {/* Facet sidebar — always reserved on desktop so every catalog type keeps
           the same content width. Types without category facets still render the
           Category group with its All option. Counts come from the server and cover
-          the whole catalog, so they do not drift as more pages load. */}
-      <aside className="hidden w-52 shrink-0 lg:block">
+          the whole catalog, so they do not drift as more pages load. A detail is
+          full width: the facets belong to the list it came from. */}
+      <aside className={cn("hidden w-52 shrink-0", !itemId && "lg:block")}>
         {busy ? (
           <FacetSkeleton />
         ) : (
@@ -694,6 +752,20 @@ export default function CatalogGallery({
                 selected={protocol}
                 onSelect={(v) => {
                   void setProtocol(v === ALL ? null : v);
+                  void setItemId(null);
+                }}
+              />
+            )}
+            {/* Where an MCP connection runs: connecting means an OAuth sign-in
+                for one and keys for a process we start for the other. */}
+            {hostings.length > 1 && (
+              <FacetGroup
+                label="Runs"
+                options={hostings}
+                labels={HOSTING_LABELS}
+                selected={hosting}
+                onSelect={(v) => {
+                  void setHosting(v === ALL ? null : v);
                   void setItemId(null);
                 }}
               />
@@ -715,9 +787,9 @@ export default function CatalogGallery({
       {/* Main */}
       <div className="min-w-0 flex-1 space-y-4">
         {active ? (
-          <DetailView entry={active} onBack={() => void setItemId(null)} />
+          <DetailView entry={active} onBack={closeItem} />
         ) : itemId ? (
-          <DeepItemStatus onBack={() => void setItemId(null)}>
+          <DeepItemStatus onBack={closeItem}>
             {deepLoading ? (
               <StatusIndicator kind="running" size="sm">
                 Loading…
@@ -839,7 +911,7 @@ export default function CatalogGallery({
                       <CatalogCard
                         key={e.id}
                         entry={e}
-                        onOpen={() => void setItemId(e.id)}
+                        onOpen={() => openItem(e.id)}
                       />
                     ))}
                   </div>
@@ -872,14 +944,14 @@ export default function CatalogGallery({
                       <CatalogCard
                         key={e.id}
                         entry={e}
-                        onOpen={() => void setItemId(e.id)}
+                        onOpen={() => openItem(e.id)}
                       />
                     ))}
                   </div>
                 ) : (
                   <CatalogTable
                     entries={paging.entries}
-                    onOpen={(e) => void setItemId(e.id)}
+                    onOpen={(e) => openItem(e.id)}
                   />
                 )}
               </div>
@@ -1236,6 +1308,7 @@ function DetailView({
   const tier = (str(rawMeta?.["agentarea:setup_tier"]) ??
     "unverified") as SetupTier;
   const isCatalogApi = entry.protocol === "api";
+  const hosting = connectionHosting(entry);
 
   // Machine tags ("category:x", "repo:y", "featured"…) are provenance, not
   // topical labels — keep them out of the chip row (surfaced elsewhere instead).
@@ -1316,6 +1389,13 @@ function DetailView({
               )}
               {entry.protocol && <ProtocolBadge protocol={entry.protocol} />}
               {entry.category && <CategoryBadge category={entry.category} />}
+              {hosting && (
+                <Badge variant="light" size="sm">
+                  {hosting === "agentarea"
+                    ? HOSTING_LABELS.agentarea
+                    : `Hosted by ${hostOf(str(spec.url)) ?? "vendor"}`}
+                </Badge>
+              )}
             </div>
             {entry.description && (
               <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
@@ -1407,8 +1487,13 @@ function DetailView({
         )}
         {entry.type === "agents" && <PreferredModels models={entry.meta} />}
         {entry.type === "connections" && !isCatalogApi && (
-          <ConnectionSetup tier={tier} />
+          <>
+            <ConnectionSetup tier={tier} />
+            <ConnectionHow entry={entry} />
+            <ConnectionNeeds entry={entry} />
+          </>
         )}
+        {entry.type === "connections" && <ConnectionFacts entry={entry} />}
         {entry.type === "skills" && (
           <>
             <SkillContent
@@ -1564,8 +1649,9 @@ function ConnectionSetup({ tier }: { tier: SetupTier }) {
     },
     unverified: {
       kind: "attention",
-      title: "Not verified yet",
-      detail: "We'll try to connect; you may need to finish setup manually.",
+      title: "Not verified by AgentArea",
+      detail:
+        "We haven't tested this connection end to end. Connect tries the standard setup; some servers need extra configuration afterwards.",
     },
   };
   const c = COPY[tier];
@@ -2163,7 +2249,270 @@ function SkillFacts({ entry }: { entry: CatalogEntry }) {
   );
 }
 
+// ── Connection details ──
+// What the catalog already knows about a connection, said in words: who
+// publishes it, where it runs, and what to have ready before clicking Connect.
+
+type ConnectionInput = {
+  name: string;
+  description: string;
+  secret: boolean;
+  required: boolean;
+};
+
+const TRANSPORT_LABELS: Record<string, string> = {
+  "streamable-http": "Streamable HTTP",
+  sse: "Server-sent events",
+  stdio: "Standard I/O",
+};
+
+const PACKAGE_REGISTRY_LABELS: Record<string, string> = {
+  npm: "npm",
+  pypi: "PyPI",
+  oci: "Docker image",
+  nuget: "NuGet",
+  mcpb: "MCP bundle",
+};
+
+function hostOf(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).host;
+  } catch {
+    return null;
+  }
+}
+
+/** "vendor" | "agentarea" from the server facet, else from the spec itself. */
+function connectionHosting(entry: CatalogEntry): CatalogHosting | null {
+  if (entry.type !== "connections" || entry.protocol === "api") return null;
+  if (isCatalogHosting(entry.hosting)) return entry.hosting;
+  const ct = str(entry.spec.connection_type);
+  if (ct === "command" || ct === "docker") return "agentarea";
+  if (ct === "url" || str(entry.spec.url)) return "vendor";
+  return null;
+}
+
+function inputsOf(entry: CatalogEntry): ConnectionInput[] {
+  const seen = new Map<string, ConnectionInput>();
+  const add = (raw: unknown) => {
+    for (const f of arr(raw)) {
+      const name = str(f.name);
+      if (!name || seen.has(name)) continue;
+      seen.set(name, {
+        name,
+        description: str(f.description) ?? "",
+        secret: Boolean(f.isSecret ?? f.secret),
+        required: Boolean(f.isRequired ?? f.required),
+      });
+    }
+  };
+  const spec = entry.spec;
+  add(spec.env_schema);
+  // The catalog publishes env_schema as a { NAME: field } map.
+  const schema = spec.env_schema;
+  if (schema && typeof schema === "object" && !Array.isArray(schema)) {
+    add(
+      Object.entries(schema as Record<string, RawSpec>).map(([name, f]) => ({
+        ...f,
+        name,
+      }))
+    );
+  }
+  const raw = spec.raw_spec as RawSpec | undefined;
+  const url = str(spec.url);
+  for (const r of arr(raw?.remotes)) {
+    if (!url || str(r.url) === url) add(r.headers);
+  }
+  const pkg = spec.package as RawSpec | undefined;
+  for (const p of arr(raw?.packages)) {
+    if (!pkg || str(p.identifier) === str(pkg.identifier)) {
+      add(p.environmentVariables);
+    }
+  }
+  return [...seen.values()];
+}
+
+function ConnectionFacts({ entry }: { entry: CatalogEntry }) {
+  const spec = entry.spec;
+  const raw = (spec.raw_spec as RawSpec | undefined) ?? {};
+  const meta = (raw.metadata as RawSpec | undefined) ?? {};
+  const repo = str((raw.repository as RawSpec | undefined)?.url);
+  const website = str(raw.websiteUrl);
+  const publisher =
+    repo?.match(/github\.com\/([^/]+)/i)?.[1] ??
+    hostOf(website) ??
+    str(raw.name)?.split("/")[0] ??
+    null;
+  const license = str(meta["agentarea:license"]);
+  const audience = strArr(meta["agentarea:audience"]);
+  const link = (href: string) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex max-w-full items-center gap-1 truncate text-primary hover:underline"
+    >
+      <span className="truncate">{href.replace(/^https?:\/\//, "")}</span>
+      <ExternalLink className="h-3 w-3 shrink-0" />
+    </a>
+  );
+  const facts: [string, React.ReactNode][] = [];
+  if (publisher) facts.push(["Publisher", publisher]);
+  if (repo) facts.push(["Source code", link(repo)]);
+  if (website && website !== repo) facts.push(["Website", link(website)]);
+  if (entry.category) facts.push(["Category", entry.category]);
+  if (license)
+    facts.push(["License", license === "NOASSERTION" ? "Not specified" : license]);
+  if (audience.length)
+    facts.push([
+      "Available in",
+      [...new Set(audience)].map((a) => a.toUpperCase()).join(", "),
+    ]);
+  const id = str(raw.name);
+  if (id)
+    facts.push([
+      "Registry ID",
+      <span key="id" className="font-mono text-xs text-muted-foreground">
+        {id}
+      </span>,
+    ]);
+  if (facts.length === 0) return null;
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/60">
+      <dl className="divide-y divide-border/60">
+        {facts.map(([k, v]) => (
+          <div key={k} className="flex gap-4 px-4 py-2.5 text-sm">
+            <dt className="w-28 shrink-0 text-muted-foreground">{k}</dt>
+            <dd className="min-w-0 truncate font-medium">{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      {children}
+    </div>
+  );
+}
+
+function ConnectionHow({ entry }: { entry: CatalogEntry }) {
+  const spec = entry.spec;
+  const hosting = connectionHosting(entry);
+  if (!hosting) return null;
+  const transport = str(spec.transport);
+  if (hosting === "vendor") {
+    const url = str(spec.url);
+    return (
+      <div>
+        <SectionLabel>How it connects</SectionLabel>
+        <p className="text-sm">
+          Hosted by {hostOf(url) ?? "the vendor"}. AgentArea calls their endpoint
+          — nothing runs on our side.
+        </p>
+        {url && (
+          <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+            {url}
+            {transport ? ` · ${TRANSPORT_LABELS[transport] ?? transport}` : ""}
+          </p>
+        )}
+      </div>
+    );
+  }
+  const pkg = (spec.package as RawSpec | undefined) ?? {};
+  const registry = str(pkg.registryType);
+  const identifier = str(pkg.identifier) ?? str(spec.image);
+  const command = [str(spec.command), ...strArr(spec.args)]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <div>
+      <SectionLabel>How it connects</SectionLabel>
+      <p className="text-sm">
+        Runs on AgentArea: we start the server for your workspace from{" "}
+        {registry ? (PACKAGE_REGISTRY_LABELS[registry] ?? registry) : "its package"}
+        {identifier ? (
+          <>
+            {" "}
+            <span className="font-mono text-xs">{identifier}</span>
+          </>
+        ) : null}
+        .
+      </p>
+      {command && (
+        <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+          $ {command}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ConnectionNeeds({ entry }: { entry: CatalogEntry }) {
+  const inputs = inputsOf(entry);
+  const raw = (entry.spec.raw_spec as RawSpec | undefined) ?? {};
+  const meta = (raw.metadata as RawSpec | undefined) ?? {};
+  const oauth =
+    str(meta["agentarea:auth"]) === "oauth" ||
+    Boolean(str(meta["agentarea:oauth_status"]));
+  if (inputs.length === 0 && !oauth) return null;
+  return (
+    <div>
+      <SectionLabel>What you will need</SectionLabel>
+      <ul className="space-y-1.5">
+        {oauth && (
+          <li className="rounded bg-muted/50 px-3 py-2 text-sm">
+            An account with the vendor — Connect asks you to sign in and approve
+            access.
+          </li>
+        )}
+        {inputs.map((f) => (
+          <li
+            key={f.name}
+            className="flex flex-col gap-0.5 rounded bg-muted/50 px-3 py-2 text-sm"
+          >
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-xs font-medium">{f.name}</span>
+              {f.secret && (
+                <Badge variant="light" size="sm">
+                  secret
+                </Badge>
+              )}
+              <span className="text-xs text-muted-foreground">
+                {f.required ? "required" : "optional"}
+              </span>
+            </span>
+            {f.description && (
+              <span className="text-xs text-muted-foreground">
+                {f.description}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // ── Misc ──
+
+/** The element that scrolls the catalog: the nearest scrolling ancestor. */
+function scrollContainerOf(el: HTMLElement | null): HTMLElement {
+  for (let node = el?.parentElement; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (
+      (overflowY === "auto" || overflowY === "scroll") &&
+      node.scrollHeight > node.clientHeight
+    ) {
+      return node;
+    }
+  }
+  return (document.scrollingElement as HTMLElement) ?? document.documentElement;
+}
 
 // Content placeholder that matches the selected view — grid of card-shaped
 // skeletons or table rows — so switching type never shifts the layout.

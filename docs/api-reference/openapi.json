@@ -2371,6 +2371,14 @@
             "title": "Categories",
             "type": "array"
           },
+          "hostings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CategoryFacet"
+            },
+            "title": "Hostings",
+            "type": "array"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/RegistryItemResponse"
@@ -9863,6 +9871,17 @@
             "default": false,
             "title": "Featured",
             "type": "boolean"
+          },
+          "hosting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hosting"
           },
           "id": {
             "format": "uuid",
@@ -29100,6 +29119,28 @@
               ],
               "description": "Restrict connections to one protocol. Only valid for registry_type='mcp_servers'.",
               "title": "Protocol"
+            }
+          },
+          {
+            "description": "Restrict MCP connections to where they run: 'vendor' (hosted endpoint) or 'agentarea' (package the platform runs). Only valid for registry_type='mcp_servers'.",
+            "in": "query",
+            "name": "hosting",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "vendor",
+                    "agentarea"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict MCP connections to where they run: 'vendor' (hosted endpoint) or 'agentarea' (package the platform runs). Only valid for registry_type='mcp_servers'.",
+              "title": "Hosting"
             }
           },
           {
