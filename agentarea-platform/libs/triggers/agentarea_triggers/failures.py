@@ -13,10 +13,18 @@ from collections.abc import Iterator
 import httpx
 import redis.exceptions
 from agentarea_common.rebac import OpenFGAUnavailableError
+from agentarea_llm.infrastructure.model_clients import ModelProviderUnavailableError
 from sqlalchemy import exc as sa_exc
 from temporalio.service import RPCError, RPCStatusCode
 
+
+class TaskNotStartedError(RuntimeError):
+    """The task was stored but its workflow did not start; the stored task starts on retry."""
+
+
 _TRANSIENT_TYPES: tuple[type[BaseException], ...] = (
+    TaskNotStartedError,
+    ModelProviderUnavailableError,
     ConnectionError,
     TimeoutError,
     sa_exc.OperationalError,

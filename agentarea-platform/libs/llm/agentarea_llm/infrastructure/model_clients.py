@@ -49,6 +49,17 @@ class ModelCallError(RuntimeError):
     """The provider refused the call or answered with something unusable."""
 
 
+class ModelProviderUnavailableError(ModelCallError):
+    """The provider timed out, rate-limited or failed on its side; the same call may pass later."""
+
+    def __init__(self, message: str, *, status_code: int):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+_RETRYABLE_STATUSES = frozenset({408, 429})
+
+
 class ModelCostUnavailableError(RuntimeError):
     """Neither the provider nor the model spec says what a call cost."""
 
@@ -150,7 +161,10 @@ def _error_text(error: Any) -> str | None:
 def _raise_for_status(response: httpx.Response, what: str) -> None:
     if response.is_success:
         return
-    raise ModelCallError(f"{what} failed with HTTP {response.status_code}: {response.text[:500]}")
+    message = f"{what} failed with HTTP {response.status_code}: {response.text[:500]}"
+    if response.status_code in _RETRYABLE_STATUSES or response.status_code >= 500:
+        raise ModelProviderUnavailableError(message, status_code=response.status_code)
+    raise ModelCallError(message)
 
 
 class ImageModel:

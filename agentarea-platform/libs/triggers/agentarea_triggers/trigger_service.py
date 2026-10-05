@@ -36,7 +36,7 @@ from .domain.models import (
     TriggerUpdate,
     WebhookTrigger,
 )
-from .failures import is_permanent
+from .failures import TaskNotStartedError, is_permanent
 from .infrastructure.repository import TriggerExecutionRepository, TriggerRepository
 from .llm_condition_evaluator import (
     LLMConditionEvaluationError,
@@ -1262,6 +1262,14 @@ class TriggerService:
         if task_id is not None and self.task_service:
             existing = await self.task_service.get_task(task_id)
             if existing is not None:
+                if raise_retryable and existing.status == "failed" and not existing.execution_id:
+                    # An earlier attempt stored the task but could not start it;
+                    # starting it now is the retry. A failure raises and is retried.
+                    await self.task_service.restart_undispatched_task(existing)
+                    logger.info(f"Started task {task_id} for trigger {trigger_id} on retry")
+                    return TriggerFiring(
+                        outcome="reacted", reason="task started on retry", task_id=task_id
+                    )
                 return TriggerFiring(
                     outcome="reacted", reason="task already started", task_id=task_id
                 )
@@ -1322,6 +1330,13 @@ class TriggerService:
                 )
 
                 created_task_id = task.id
+                if raise_retryable and task.status == "failed" and not task.execution_id:
+                    # TaskService stores the task, then reports a failed start
+                    # instead of raising; the stored task is started on the retry.
+                    raise TaskNotStartedError(
+                        f"Task {task.id} was stored but its workflow did not start: "
+                        f"{(task.result or {}).get('error')}"
+                    )
                 if task.status == "routed":
                     logger.info(f"Routed follow-up to existing workflow for trigger {trigger_id}")
                 else:

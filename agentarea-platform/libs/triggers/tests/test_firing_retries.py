@@ -5,13 +5,18 @@ must raise so it backs off and tries again, and must not count towards the
 trigger's failure threshold -- a short outage would otherwise switch it off.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import httpx
 import pytest
+from agentarea_llm.infrastructure.model_clients import (
+    ModelCallError,
+    ModelProviderUnavailableError,
+)
 from agentarea_triggers.domain.models import ConditionVerdict, WebhookTrigger
-from agentarea_triggers.failures import is_permanent, is_transient
+from agentarea_triggers.failures import TaskNotStartedError, is_permanent, is_transient
 from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluationError
 from agentarea_triggers.logging_utils import TriggerConditionError
 from agentarea_triggers.trigger_service import TriggerService
@@ -146,6 +151,93 @@ def test_a_failure_that_repeats_on_every_retry_is_permanent(error):
 def test_an_unclassified_failure_is_neither_so_the_stream_path_retries_it(error):
     assert not is_transient(error)
     assert not is_permanent(error)
+
+
+def _not_started(task_id):
+    return SimpleNamespace(
+        id=task_id,
+        status="failed",
+        execution_id=None,
+        result={"error": "temporal unavailable", "error_type": "task_submission_failed"},
+    )
+
+
+async def test_a_task_stored_but_not_started_raises_on_the_stream_path():
+    trigger = _trigger()
+    service = _service(trigger)
+    task_id = uuid4()
+    service.task_service.route_or_submit_task.return_value = _not_started(task_id)
+    with pytest.raises(TaskNotStartedError, match="temporal unavailable"):
+        await service.fire(trigger.id, {"text": "go"}, task_id=task_id, raise_retryable=True)
+    service.trigger_repository.update_execution_tracking.assert_not_awaited()
+    service.disable_trigger.assert_not_awaited()
+
+
+async def test_a_task_stored_but_not_started_is_unchanged_off_the_stream_path():
+    trigger = _trigger()
+    service = _service(trigger)
+    service.task_service.route_or_submit_task.return_value = _not_started(uuid4())
+    firing = await service.fire(trigger.id, {"text": "go"})
+    assert firing.outcome == "reacted"
+
+
+async def test_the_retry_starts_the_task_an_earlier_attempt_stored():
+    trigger = _trigger()
+    service = _service(trigger)
+    task_id = uuid4()
+    stored = _not_started(task_id)
+    service.task_service.get_task.return_value = stored
+    firing = await service.fire(trigger.id, {"text": "go"}, task_id=task_id, raise_retryable=True)
+    service.task_service.restart_undispatched_task.assert_awaited_once_with(stored)
+    service.task_service.route_or_submit_task.assert_not_awaited()
+    assert (firing.outcome, firing.task_id) == ("reacted", task_id)
+
+
+async def test_a_retry_that_still_cannot_start_the_task_raises():
+    trigger = _trigger()
+    service = _service(trigger)
+    task_id = uuid4()
+    service.task_service.get_task.return_value = _not_started(task_id)
+    service.task_service.restart_undispatched_task.side_effect = RPCError(
+        "unavailable", RPCStatusCode.UNAVAILABLE, b""
+    )
+    with pytest.raises(RPCError):
+        await service.fire(trigger.id, {"text": "go"}, task_id=task_id, raise_retryable=True)
+
+
+async def test_a_task_that_started_is_never_started_again():
+    trigger = _trigger()
+    service = _service(trigger)
+    task_id = uuid4()
+    service.task_service.get_task.return_value = SimpleNamespace(
+        id=task_id, status="failed", execution_id="task-1", result=None
+    )
+    firing = await service.fire(trigger.id, {"text": "go"}, task_id=task_id, raise_retryable=True)
+    service.task_service.restart_undispatched_task.assert_not_awaited()
+    assert firing.outcome == "reacted"
+
+
+def test_a_decision_provider_outage_behind_a_condition_error_is_transient():
+    chain = _caused(
+        TriggerConditionError("Trigger conditions could not be evaluated"),
+        _caused(
+            LLMConditionEvaluationError("Condition evaluation failed"),
+            ModelProviderUnavailableError("decision failed with HTTP 503", status_code=503),
+        ),
+    )
+    assert is_transient(chain)
+    assert not is_permanent(chain)
+
+
+def test_a_decision_the_provider_refused_behind_a_condition_error_is_permanent():
+    chain = _caused(
+        TriggerConditionError("Trigger conditions could not be evaluated"),
+        _caused(
+            LLMConditionEvaluationError("Condition evaluation failed"),
+            ModelCallError("decision failed with HTTP 400"),
+        ),
+    )
+    assert is_permanent(chain)
 
 
 async def test_a_duplicate_task_from_a_concurrent_delivery_is_retried_not_counted():
