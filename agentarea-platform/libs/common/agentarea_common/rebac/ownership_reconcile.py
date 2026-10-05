@@ -4,8 +4,9 @@
 but rows written by SQL -- a data migration's backfill, a restore, a row created
 before the grant moved into the repository -- have none, and the graph then
 refuses them to everyone, their creator included. This walks every governed
-table and writes what is missing, plus the workspace-admin projection and the
-member baseline role. Only ever adds; idempotent.
+table and writes what is missing, plus each member's baseline role. Only ever
+adds; idempotent. The workspace-admin projection has one writer (the workspace
+seed); the reconcile script repairs it on request.
 
 Run after every migration by ``agentarea-api reconcile`` (the chart's
 post-migration Job) and by ``scripts/20260923_reconcile_resource_authz.py``.
@@ -149,39 +150,6 @@ async def reconcile_resources(
             )
 
 
-async def reconcile_workspace_admins(writer: TupleWriter, owners: dict[str, str]) -> None:
-    """Project each workspace's owner onto ``Workspace#admin``.
-
-    Two representations of one fact: ``workspaces.owner_user_id`` answers
-    ``requires_workspace_admin()``, while ``Workspace#admin`` is what OpenFGA
-    evaluates in ``project.can_read: ... or admin from workspace`` -- the branch
-    that lets an admin reach objects they do not own. They agree by construction
-    at creation time and nothing changes ownership afterwards, but a seed that
-    failed halfway leaves an admin who can rewrite policy and cannot open an
-    agent. The column is the authority; this writes the projection.
-    """
-    for workspace_id, owner in owners.items():
-        if not owner:
-            logger.warning("workspace %s has no owner_user_id; skipped", workspace_id)
-            continue
-        await writer.ensure(
-            RelationTuple(
-                namespace="Workspace",
-                object=workspace_id,
-                relation="admin",
-                subject_id=f"User:{owner}",
-            )
-        )
-        await writer.ensure(
-            RelationTuple(
-                namespace="project",
-                object=root_project_id(workspace_id),
-                relation="workspace",
-                subject_id=f"Workspace:{workspace_id}",
-            )
-        )
-
-
 async def reconcile_member_roles(writer: TupleWriter, client: TupleGraph) -> int:
     memberships = await client.query_all_tuples(
         RelationQuery(namespace="Workspace", relation="members")
@@ -236,12 +204,11 @@ class OwnershipReconcileResult:
 async def reconcile_graph_ownership(
     session: AsyncSession, client: TupleGraph, *, dry_run: bool = False
 ) -> OwnershipReconcileResult:
-    """Resources, workspace admins and member roles, writing only what the graph lacks."""
+    """Resource ownership and member roles, writing only what the graph lacks."""
     present = await client.query_all_tuples(RelationQuery())
     writer = TupleWriter(client, dry_run, present)
     owners = await load_workspace_owners(session)
     resources = await reconcile_resource_ownership(session, writer, owners)
-    await reconcile_workspace_admins(writer, owners)
     memberships = await reconcile_member_roles(writer, client)
     return OwnershipReconcileResult(
         resources=resources,

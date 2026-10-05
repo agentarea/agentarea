@@ -61,7 +61,6 @@ from agentarea_common.rebac.ownership_reconcile import (
     load_workspace_owners,
     reconcile_member_roles,
     reconcile_resource_ownership,
-    reconcile_workspace_admins,
 )
 from agentarea_common.workspaces.models import (
     INVITATION_STATUS_ACCEPTED,
@@ -73,6 +72,39 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("reconcile_resource_authz")
+
+
+async def reconcile_workspace_admins(writer: TupleWriter, owners: dict[str, str]) -> None:
+    """Project each workspace's owner onto ``Workspace#admin``.
+
+    Two representations of one fact: ``workspaces.owner_user_id`` answers
+    ``requires_workspace_admin()``, while ``Workspace#admin`` is what OpenFGA
+    evaluates in ``project.can_read: ... or admin from workspace`` -- the branch
+    that lets an admin reach objects they do not own. They agree by construction
+    at creation time and nothing changes ownership afterwards, but a seed that
+    failed halfway leaves an admin who can rewrite policy and cannot open an
+    agent. The column is the authority; this writes the projection.
+    """
+    for workspace_id, owner in owners.items():
+        if not owner:
+            logger.warning("workspace %s has no owner_user_id; skipped", workspace_id)
+            continue
+        await writer.ensure(
+            RelationTuple(
+                namespace="Workspace",
+                object=workspace_id,
+                relation="admin",
+                subject_id=f"User:{owner}",
+            )
+        )
+        await writer.ensure(
+            RelationTuple(
+                namespace="project",
+                object=root_project_id(workspace_id),
+                relation="workspace",
+                subject_id=f"Workspace:{workspace_id}",
+            )
+        )
 
 
 class RevocationRefused(Exception):  # noqa: N818
