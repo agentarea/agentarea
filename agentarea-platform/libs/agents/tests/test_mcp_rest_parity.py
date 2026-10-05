@@ -173,6 +173,8 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
         "webhook_config",
         "event_types",
         "channel_credentials",
+        "stream_id",
+        "event_filter",
     },
     "triggers.create_webhook": {
         "trigger_type",
@@ -183,6 +185,8 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
         "validation_rules",
         "webhook_config",
         "channel_credentials",
+        "stream_id",
+        "event_filter",
     },
 }
 
