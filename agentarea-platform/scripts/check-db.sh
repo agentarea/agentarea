@@ -90,6 +90,7 @@ PY_SUITES=(
   apps/api/tests/test_task_event_feed_db.py
   libs/streams/tests/test_schema_db.py
   libs/streams/tests/test_journal_db.py
+  libs/streams/tests/test_stream_isolation_db.py
   libs/streams/tests/test_stream_service_db.py
 )
 

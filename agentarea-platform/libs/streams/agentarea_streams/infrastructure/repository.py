@@ -1,22 +1,29 @@
 """Workspace-scoped repositories for streams, sources, subscriptions and outcomes."""
 
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import select, update
+from sqlalchemy import CursorResult, select, update
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.enums import SourceKind, StreamKind, SubscriptionKind, SubscriptionStatus
 from ..domain.filters import EventFilter
 from .orm import StreamORM, StreamSourceORM, StreamSubscriptionORM, SubscriptionOutcomeORM
 
+WEBHOOK_FIELDS = frozenset(
+    {"webhook_type", "allowed_methods", "validation_rules", "webhook_config", "credential_key"}
+)
+
 
 async def find_webhook_source(session: AsyncSession, webhook_id: str) -> StreamSourceORM | None:
     """Find a webhook source before any tenant is known; the source names the workspace."""
-    with unscoped("an inbound webhook names a source, not a workspace; the source's decides"):
+    with unscoped(
+        "an inbound webhook names a source, not a workspace; the source's workspace decides"
+    ):
         result = await session.execute(
             select(StreamSourceORM).where(
                 StreamSourceORM.webhook_id == webhook_id,
@@ -48,7 +55,9 @@ class StreamRepository(WorkspaceScopedRepository[StreamORM]):
         return stream
 
     async def get_by_name(self, name: str) -> StreamORM | None:
-        result = await self.session.execute(select(StreamORM).where(StreamORM.name == name))
+        result = await self.session.execute(
+            select(StreamORM).where(StreamORM.name == name, self._get_workspace_filter())
+        )
         return result.scalar_one_or_none()
 
 
@@ -85,20 +94,31 @@ class StreamSourceRepository(WorkspaceScopedRepository[StreamSourceORM]):
 
     async def list_for_stream(self, stream_id: UUID) -> list[StreamSourceORM]:
         result = await self.session.execute(
-            select(StreamSourceORM).where(StreamSourceORM.stream_id == stream_id)
+            select(StreamSourceORM).where(
+                StreamSourceORM.stream_id == stream_id, self._get_workspace_filter()
+            )
         )
         return list(result.scalars().all())
 
     async def find_by_credential_key(self, key: UUID) -> list[StreamSourceORM]:
         result = await self.session.execute(
-            select(StreamSourceORM).where(StreamSourceORM.credential_key == key)
+            select(StreamSourceORM).where(
+                StreamSourceORM.credential_key == key, self._get_workspace_filter()
+            )
         )
         return list(result.scalars().all())
 
     async def update_webhook_fields(self, source_id: UUID, **fields: Any) -> None:
-        await self.session.execute(
-            update(StreamSourceORM).where(StreamSourceORM.id == source_id).values(**fields)
+        unknown = sorted(set(fields) - WEBHOOK_FIELDS)
+        if unknown:
+            raise ValueError(f"Not webhook fields of a stream source: {', '.join(unknown)}")
+        result = await self.session.execute(
+            update(StreamSourceORM)
+            .where(StreamSourceORM.id == source_id, self._get_workspace_filter())
+            .values(**fields)
         )
+        if cast(CursorResult[Any], result).rowcount != 1:
+            raise NoResultFound(f"Stream source {source_id} not found in workspace")
 
 
 class StreamSubscriptionRepository(WorkspaceScopedRepository[StreamSubscriptionORM]):
@@ -133,14 +153,16 @@ class StreamSubscriptionRepository(WorkspaceScopedRepository[StreamSubscriptionO
 
     async def get_for_trigger(self, trigger_id: UUID) -> StreamSubscriptionORM | None:
         result = await self.session.execute(
-            select(StreamSubscriptionORM).where(StreamSubscriptionORM.trigger_id == trigger_id)
+            select(StreamSubscriptionORM).where(
+                StreamSubscriptionORM.trigger_id == trigger_id, self._get_workspace_filter()
+            )
         )
         return result.scalar_one_or_none()
 
     async def list_for_stream(self, stream_id: UUID) -> list[StreamSubscriptionORM]:
         result = await self.session.execute(
             select(StreamSubscriptionORM)
-            .where(StreamSubscriptionORM.stream_id == stream_id)
+            .where(StreamSubscriptionORM.stream_id == stream_id, self._get_workspace_filter())
             .order_by(StreamSubscriptionORM.created_at)
         )
         return list(result.scalars().all())
@@ -159,6 +181,7 @@ class SubscriptionOutcomeRepository(WorkspaceScopedRepository[SubscriptionOutcom
             select(SubscriptionOutcomeORM).where(
                 SubscriptionOutcomeORM.stream_id == stream_id,
                 SubscriptionOutcomeORM.event_sequence.in_(sequences),
+                self._get_workspace_filter(),
             )
         )
         return list(result.scalars().all())
@@ -168,7 +191,10 @@ class SubscriptionOutcomeRepository(WorkspaceScopedRepository[SubscriptionOutcom
     ) -> list[SubscriptionOutcomeORM]:
         result = await self.session.execute(
             select(SubscriptionOutcomeORM)
-            .where(SubscriptionOutcomeORM.subscription_id == subscription_id)
+            .where(
+                SubscriptionOutcomeORM.subscription_id == subscription_id,
+                self._get_workspace_filter(),
+            )
             .order_by(SubscriptionOutcomeORM.event_sequence.desc())
             .limit(limit)
         )

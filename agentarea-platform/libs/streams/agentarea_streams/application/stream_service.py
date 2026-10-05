@@ -1,12 +1,12 @@
 """Streams, their sources and subscriptions, as one workspace sees them. Never commits."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.config.streams import EventStreamSettings
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import CursorResult, delete, func, select, update
 
 from ..domain.enums import StreamKind, SubscriptionKind
 from ..domain.errors import ForwardLoopError, StreamNotFoundError
@@ -42,6 +42,10 @@ class StreamService:
     def _session(self):
         return self.repository_factory.session
 
+    @property
+    def _workspace_id(self) -> str:
+        return self.repository_factory.user_context.workspace_id
+
     def _streams(self) -> StreamRepository:
         return self.repository_factory.create_repository(StreamRepository)
 
@@ -75,15 +79,16 @@ class StreamService:
     async def list_streams(
         self, *, limit: int, offset: int, ids: set[str] | None
     ) -> list[StreamORM]:
-        stmt = select(StreamORM).order_by(StreamORM.created_at.desc()).limit(limit).offset(offset)
-        if ids is not None:
-            stmt = stmt.where(StreamORM.id.in_([UUID(i) for i in ids]))
-        result = await self._session.execute(stmt)
-        return list(result.scalars().all())
+        return await self._streams().list_all(limit=limit, offset=offset, ids=ids)
 
     async def delete_stream(self, stream_id: UUID) -> None:
-        await self.get_stream(stream_id)
-        await self._session.execute(delete(StreamORM).where(StreamORM.id == stream_id))
+        result = await self._session.execute(
+            delete(StreamORM).where(
+                StreamORM.id == stream_id, StreamORM.workspace_id == self._workspace_id
+            )
+        )
+        if cast(CursorResult[Any], result).rowcount != 1:
+            raise StreamNotFoundError(stream_id)
 
     async def create_webhook_stream_for_trigger(
         self,
@@ -138,7 +143,10 @@ class StreamService:
     async def update_trigger_filter(self, trigger_id: UUID, event_filter: EventFilter) -> None:
         await self._session.execute(
             update(StreamSubscriptionORM)
-            .where(StreamSubscriptionORM.trigger_id == trigger_id)
+            .where(
+                StreamSubscriptionORM.trigger_id == trigger_id,
+                StreamSubscriptionORM.workspace_id == self._workspace_id,
+            )
             .values(filter=event_filter.model_dump())
         )
 
@@ -149,7 +157,10 @@ class StreamService:
 
     async def remove_trigger_webhook_sources(self, trigger_id: UUID) -> None:
         await self._session.execute(
-            delete(StreamSourceORM).where(StreamSourceORM.credential_key == trigger_id)
+            delete(StreamSourceORM).where(
+                StreamSourceORM.credential_key == trigger_id,
+                StreamSourceORM.workspace_id == self._workspace_id,
+            )
         )
 
     async def create_forward(
