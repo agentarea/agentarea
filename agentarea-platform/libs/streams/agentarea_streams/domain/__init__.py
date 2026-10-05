@@ -6,6 +6,7 @@ from .errors import (
     StreamError,
     StreamNotFoundError,
     StreamQuotaExceededError,
+    TriggerSubscriptionNotFoundError,
 )
 from .filters import EventFilter
 from .models import (
@@ -32,6 +33,7 @@ __all__ = [
     "SubscriptionKind",
     "SubscriptionStatus",
     "SubscriptionView",
+    "TriggerSubscriptionNotFoundError",
     "Verdict",
     "WebhookSourceSpec",
 ]

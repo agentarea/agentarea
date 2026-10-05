@@ -17,7 +17,13 @@ from agentarea_common.base import RepositoryFactory
 from agentarea_common.config.streams import EventStreamSettings
 from agentarea_common.events.ports import IntegrationEvent
 from agentarea_streams.application.stream_service import StreamService
-from agentarea_streams.domain import EventFilter, StreamKind, StreamNotFoundError, SubscriptionKind
+from agentarea_streams.domain import (
+    EventFilter,
+    StreamKind,
+    StreamNotFoundError,
+    SubscriptionKind,
+    TriggerSubscriptionNotFoundError,
+)
 from agentarea_streams.infrastructure.journal import StreamJournal
 from agentarea_streams.infrastructure.repository import (
     StreamRepository,
@@ -172,7 +178,8 @@ async def test_another_workspace_sees_none_of_the_streams_rows(session: AsyncSes
     ]
     with pytest.raises(StreamNotFoundError):
         await service.delete_stream(owned.stream_id)
-    await service.update_trigger_filter(owned.trigger_id, EventFilter(kinds=["changed"]))
+    with pytest.raises(TriggerSubscriptionNotFoundError):
+        await service.update_trigger_filter(owned.trigger_id, EventFilter(kinds=["changed"]))
     await service.remove_trigger_webhook_sources(owned.credential_key)
     await session.commit()
 

@@ -14,7 +14,7 @@ from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config.streams import EventStreamSettings
 from agentarea_common.events.ports import IntegrationEvent
 from agentarea_streams.application.stream_service import StreamService
-from agentarea_streams.domain import EventFilter
+from agentarea_streams.domain import EventFilter, TriggerSubscriptionNotFoundError
 from agentarea_streams.infrastructure.journal import StreamJournal
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -89,4 +89,43 @@ async def test_a_new_subscription_starts_after_the_events_already_there():
             )
             await session.commit()
             assert sub.cursor_sequence == appended.sequence
+    await engine.dispose()
+
+
+async def test_updating_an_unknown_triggers_filter_raises():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
+    async with maker() as session:
+        with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
+            service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
+            with pytest.raises(TriggerSubscriptionNotFoundError):
+                await service.update_trigger_filter(uuid4(), EventFilter(kinds=["x"]))
+    await engine.dispose()
+
+
+async def test_updating_another_workspaces_trigger_filter_raises():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    owner = UserContext(user_id="u", workspace_id=str(uuid4()))
+    other = UserContext(user_id="u", workspace_id=str(uuid4()))
+    async with maker() as session:
+        with workspace_scope(owner.workspace_id), patch(GRANT, new=AsyncMock()):
+            trigger_id = await _trigger_row(session, owner.workspace_id)
+            owner_service = StreamService(RepositoryFactory(session, owner), EventStreamSettings())
+            stream = await owner_service.create_stream(
+                name="feed3", description="", retention_days=7
+            )
+            await owner_service.subscribe_trigger(
+                stream_id=stream.id, trigger_id=trigger_id, event_filter=EventFilter()
+            )
+            await session.commit()
+
+        other_service = StreamService(RepositoryFactory(session, other), EventStreamSettings())
+        with workspace_scope(other.workspace_id):
+            with pytest.raises(TriggerSubscriptionNotFoundError):
+                await other_service.update_trigger_filter(trigger_id, EventFilter(kinds=["x"]))
+
+        kept = await owner_service.trigger_subscription(trigger_id)
+        assert kept is not None and kept.filter == EventFilter().model_dump()
     await engine.dispose()

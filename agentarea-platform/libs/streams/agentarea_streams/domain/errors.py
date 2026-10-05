@@ -29,6 +29,12 @@ class StreamNotFoundError(StreamError):
         self.stream_id = stream_id
 
 
+class TriggerSubscriptionNotFoundError(StreamError):
+    def __init__(self, trigger_id: UUID | str):
+        super().__init__(f"No stream subscription for trigger {trigger_id}")
+        self.trigger_id = trigger_id
+
+
 class ForwardLoopError(StreamError):
     """A forward that would write into its own input, or past the causation depth."""
 

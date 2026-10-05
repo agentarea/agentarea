@@ -9,7 +9,7 @@ from agentarea_common.config.streams import EventStreamSettings
 from sqlalchemy import CursorResult, delete, func, select, update
 
 from ..domain.enums import StreamKind, SubscriptionKind
-from ..domain.errors import ForwardLoopError, StreamNotFoundError
+from ..domain.errors import ForwardLoopError, StreamNotFoundError, TriggerSubscriptionNotFoundError
 from ..domain.filters import EventFilter
 from ..domain.models import JournaledEvent
 from ..infrastructure.journal import StreamJournal
@@ -141,7 +141,7 @@ class StreamService:
         )
 
     async def update_trigger_filter(self, trigger_id: UUID, event_filter: EventFilter) -> None:
-        await self._session.execute(
+        result = await self._session.execute(
             update(StreamSubscriptionORM)
             .where(
                 StreamSubscriptionORM.trigger_id == trigger_id,
@@ -149,6 +149,8 @@ class StreamService:
             )
             .values(filter=event_filter.model_dump())
         )
+        if cast(CursorResult[Any], result).rowcount != 1:
+            raise TriggerSubscriptionNotFoundError(trigger_id)
 
     async def sync_trigger_webhook_source(self, trigger_id: UUID, **fields: Any) -> None:
         sources = await self._sources().find_by_credential_key(trigger_id)
