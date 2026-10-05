@@ -13,7 +13,7 @@ import {
   type DispositionFilter,
 } from "@/lib/streamOutcome";
 import { formatDate } from "@/utils/dateUtils";
-import { feedHref } from "../feedHref";
+import { eventRowId, feedHref } from "../feedHref";
 
 const PAGE = 50;
 
@@ -63,11 +63,12 @@ export default async function EventFeed({
           rowHref={(e) =>
             feedHref(streamId, { outcome, before, event: e.sequence })
           }
-          rowProps={(e) =>
-            e.sequence === selected
+          rowProps={(e) => ({
+            id: eventRowId(e.sequence),
+            ...(e.sequence === selected
               ? { "aria-current": "true", className: "bg-muted/40" }
-              : {}
-          }
+              : {}),
+          })}
           columns={[
             {
               header: t("received"),

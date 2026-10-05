@@ -1287,10 +1287,10 @@ export const getTriggerCorrelations = async (triggerId: string) => {
 };
 
 export const listStreams = async () => {
-  const { data, error } = await sdk.listStreamsV1StreamsGet({
+  const result = await sdk.listStreamsV1StreamsGet({
     client: serverClient,
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const getStream = async (streamId: string) => {

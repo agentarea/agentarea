@@ -1,5 +1,10 @@
 import type { DispositionFilter } from "@/lib/streamOutcome";
 
+/** The DOM id of an event's feed row, so closing its detail lands back on it. */
+export function eventRowId(sequence: number): string {
+  return `event-${sequence}`;
+}
+
 /** A stream feed URL; "all" and absent values stay out of the query. */
 export function feedHref(
   streamId: string,

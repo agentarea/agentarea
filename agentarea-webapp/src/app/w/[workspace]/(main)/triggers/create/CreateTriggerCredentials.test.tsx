@@ -97,7 +97,7 @@ describe("channel credentials on the trigger form", () => {
     render(
       <CreateTriggerForm
         agents={[]}
-        streams={[]}
+        streams={{ items: [], error: null }}
         initialData={telegramTrigger}
       />,
       {
@@ -131,9 +131,12 @@ describe("channel credentials on the trigger form", () => {
   it("picks a trigger type from the catalog and reveals its credential field", async () => {
     listWorkspaceSecretsAction.mockResolvedValue([]);
     const user = userEvent.setup();
-    render(<CreateTriggerForm agents={[]} streams={[]} />, {
-      wrapper: Providers,
-    });
+    render(
+      <CreateTriggerForm agents={[]} streams={{ items: [], error: null }} />,
+      {
+        wrapper: Providers,
+      }
+    );
 
     const typePicker = await screen.findByRole("combobox", {
       name: /Trigger Type/,

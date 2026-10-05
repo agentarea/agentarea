@@ -10,16 +10,13 @@ import {
   SlidersHorizontal,
   Webhook,
 } from "lucide-react";
-import type {
-  AgentResponse,
-  StreamResponse,
-  TriggerResponse,
-} from "@/api/client/types.gen";
+import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
 import { AgentSelect } from "@/components/AgentSelect";
 import ConfigSheet from "@/components/ConfigSheet";
 import { FileTree } from "@/components/files/file-tree";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { SecretSelect } from "@/components/SecretSelect";
+import SectionLoadError from "@/components/SectionLoadError";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -53,13 +50,14 @@ import {
   type TriggerFormState,
 } from "./actions";
 import { CronScheduler } from "./CronScheduler";
+import type { StreamOptions } from "./streamOptions";
 import { TIMEZONES } from "./timezones";
 import { TriggerExecutionContext } from "./TriggerExecutionContext";
 import { triggerShape } from "./triggerShape";
 
 interface CreateTriggerFormProps {
   agents: AgentResponse[];
-  streams: StreamResponse[];
+  streams: StreamOptions;
   initialData?: TriggerResponse;
 }
 
@@ -586,24 +584,29 @@ export function CreateTriggerForm({
                   <Select
                     name="stream_id"
                     defaultValue={initialData?.stream_id ?? undefined}
-                    disabled={isEditing}
+                    disabled={isEditing || streams.error !== null}
                     required
                   >
                     <SelectTrigger id="stream_id">
                       <SelectValue
                         placeholder={
-                          streams.length ? undefined : t("noStreams")
+                          streams.error === null && streams.items.length === 0
+                            ? t("noStreams")
+                            : undefined
                         }
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      {streams.map((stream) => (
+                      {streams.items.map((stream) => (
                         <SelectItem key={stream.id} value={stream.id}>
                           {stream.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {streams.error && (
+                    <SectionLoadError message={streams.error} />
+                  )}
                   <p className="text-xs text-muted-foreground">
                     {t("streamHint")}
                   </p>

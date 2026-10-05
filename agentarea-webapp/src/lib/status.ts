@@ -224,19 +224,19 @@ export function getTriggerStatusPresentation(
 ): StatusPresentation {
   switch (normalizeStatus(status)) {
     case "active":
-      return { label: "Active", kind: "active" };
+      return { label: "Active", labelKey: "active", kind: "active" };
     case "inactive":
     case "disabled":
-      return { label: "Inactive", kind: "off" };
+      return { label: "Inactive", labelKey: "inactive", kind: "off" };
     case "paused":
-      return { label: "Paused", kind: "paused" };
+      return { label: "Paused", labelKey: "paused", kind: "paused" };
     case "error":
     case "failed":
-      return { label: "Error", kind: "failed" };
+      return { label: "Error", labelKey: "error", kind: "failed" };
     case "needs_owner":
       return {
         label: "Needs a new owner",
-        labelKey: "needsOwner",
+        labelKey: "needs_owner",
         kind: "attention",
       };
     default:
@@ -244,7 +244,11 @@ export function getTriggerStatusPresentation(
   }
 }
 
-/** A stream subscriber's verdict on one event, or none at all. */
+/**
+ * A stream subscriber's verdict on one event, or none at all. A verdict this
+ * build does not know reads as "unknown" and asks for a look, never as a
+ * neutral state.
+ */
 export function getStreamOutcomeStatusPresentation(
   verdict: string
 ): StatusPresentation {
@@ -258,7 +262,11 @@ export function getStreamOutcomeStatusPresentation(
     case "unheard":
       return { label: "Nobody listened", labelKey: "unheard", kind: "draft" };
     default:
-      return fallbackStatusPresentation(verdict);
+      return {
+        label: "Unknown outcome",
+        labelKey: "unknown",
+        kind: "attention",
+      };
   }
 }
 

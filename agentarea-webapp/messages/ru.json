@@ -1830,7 +1830,8 @@
       "createdWithSecretTitle": "Вебхук создан",
       "stream": "Поток",
       "streamHint": "Срабатывает на события, пришедшие в этот поток после создания триггера.",
-      "noStreams": "Потоков пока нет"
+      "noStreams": "Потоков пока нет",
+      "streamsLoadFailed": "Не удалось загрузить потоки"
     },
     "detail": {
       "overview": "Обзор",
@@ -1952,7 +1953,6 @@
     "searchPlaceholder": "Поиск потоков",
     "streams": {
       "name": "Поток",
-      "kind": "Тип",
       "retention": "Хранится",
       "retentionDays": "{count, plural, one {# день} few {# дня} many {# дней} other {# дня}}",
       "created": "Создан"
@@ -1974,7 +1974,8 @@
       "reacted": "Сработали",
       "skipped": "Пропущены",
       "error": "Ошибка",
-      "unheard": "Никто не слушал"
+      "unheard": "Никто не слушал",
+      "unknown": "Неизвестный итог"
     },
     "detail": {
       "title": "Событие {sequence}",
@@ -1987,7 +1988,9 @@
       "derived": "Переслано как",
       "noOutcomes": "Ни одна подписка не взяла это событие.",
       "causedBy": "Вызвано",
-      "close": "Закрыть"
+      "close": "Закрыть",
+      "gone": "Это событие больше не хранится.",
+      "triggersLoadFailed": "Не удалось загрузить названия триггеров"
     }
   },
   "NetworkPage": {

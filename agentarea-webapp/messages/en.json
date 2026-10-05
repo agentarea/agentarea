@@ -1830,7 +1830,8 @@
       "createdWithSecretTitle": "Webhook created",
       "stream": "Stream",
       "streamHint": "Fires on events that arrive in this stream after the trigger is created.",
-      "noStreams": "No streams yet"
+      "noStreams": "No streams yet",
+      "streamsLoadFailed": "Could not load streams"
     },
     "detail": {
       "overview": "Overview",
@@ -1952,7 +1953,6 @@
     "searchPlaceholder": "Search streams",
     "streams": {
       "name": "Stream",
-      "kind": "Kind",
       "retention": "Kept for",
       "retentionDays": "{count, plural, one {# day} other {# days}}",
       "created": "Created"
@@ -1974,7 +1974,8 @@
       "reacted": "Reacted",
       "skipped": "Skipped",
       "error": "Error",
-      "unheard": "Nobody listened"
+      "unheard": "Nobody listened",
+      "unknown": "Unknown outcome"
     },
     "detail": {
       "title": "Event {sequence}",
@@ -1987,7 +1988,9 @@
       "derived": "Forwarded as",
       "noOutcomes": "No subscription took this event.",
       "causedBy": "Caused by",
-      "close": "Close"
+      "close": "Close",
+      "gone": "This event is no longer kept.",
+      "triggersLoadFailed": "Could not load trigger names"
     }
   },
   "NetworkPage": {

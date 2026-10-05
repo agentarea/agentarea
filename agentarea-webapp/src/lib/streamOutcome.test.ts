@@ -16,8 +16,31 @@ describe("what happened to an event", () => {
       { verdict: "error" },
       { verdict: "skipped" },
     ]);
-    expect(summary).toEqual({ reacted: 1, skipped: 1, error: 1, total: 3 });
+    expect(summary).toEqual({
+      reacted: 1,
+      skipped: 1,
+      error: 1,
+      unknown: 0,
+      total: 3,
+    });
     expect(eventDisposition(summary)).toBe("error");
+  });
+
+  it("never reads a verdict it does not know as skipped or reacted", () => {
+    const summary = summarizeOutcomes([
+      { verdict: "reacted" },
+      { verdict: "pending" },
+      { verdict: "skipped" },
+    ]);
+    expect(summary).toEqual({
+      reacted: 1,
+      skipped: 1,
+      error: 0,
+      unknown: 1,
+      total: 3,
+    });
+    expect(eventDisposition(summary)).toBe("unknown");
+    expect(matchesDisposition([{ verdict: "pending" }], "skipped")).toBe(false);
   });
 
   it("is a reaction when one subscriber reacted and the rest skipped", () => {
