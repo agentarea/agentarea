@@ -307,3 +307,123 @@ async def test_events_outside_the_filter_move_the_cursor_without_an_outcome(worl
     assert await _outcomes(world, world.s1.id) == []
     assert (await _sub(world, world.s1.id)).cursor_sequence > world.s1.cursor_sequence
     assert world.t1 not in {trigger for trigger, _ in triggers.calls}
+
+
+async def _bad_subscription(world, *, kind: str, filter_json: str) -> UUID:
+    subscription_id = uuid4()
+    async with world.raw() as session:
+        await session.execute(
+            text(
+                "INSERT INTO stream_subscriptions (id, workspace_id, created_by, stream_id, kind, "
+                "trigger_id, filter, output_stream_ids, cursor_sequence, status, attempts, "
+                "created_at, updated_at) VALUES (:id, :ws, 'u', :stream, :kind, NULL, "
+                "CAST(:filter AS json), '[]', 0, 'active', 0, '2000-01-01', '2000-01-01')"
+            ),
+            {
+                "id": subscription_id,
+                "ws": world.ctx.workspace_id,
+                "stream": world.source.id,
+                "kind": kind,
+                "filter": filter_json,
+            },
+        )
+        await session.commit()
+    return subscription_id
+
+
+async def _row(world, subscription_id):
+    async with world.raw() as session:
+        return (
+            await session.execute(
+                text(
+                    "SELECT status, last_error, lease_owner, cursor_sequence "
+                    "FROM stream_subscriptions WHERE id = :s"
+                ),
+                {"s": subscription_id},
+            )
+        ).one()
+
+
+async def test_an_unreadable_subscription_is_failed_and_never_stalls_the_others(world):
+    unknown_kind = await _bad_subscription(world, kind="bogus", filter_json="{}")
+    unreadable = await _bad_subscription(
+        world, kind="forward", filter_json='{"kinds": [], "fields": {}, "audience": "x"}'
+    )
+    await _dispatcher(world, _Triggers()).run_once()
+
+    for sub in (world.s1, world.s2, world.fwd):
+        assert [o.verdict for o in await _outcomes(world, sub.id)] == ["reacted"]
+    failed = await _row(world, unreadable)
+    assert failed.status == "failed" and failed.lease_owner is None
+    assert "audience" in failed.last_error
+    left_for_a_worker_that_knows_it = await _row(world, unknown_kind)
+    assert left_for_a_worker_that_knows_it.status == "active"
+    assert left_for_a_worker_that_knows_it.lease_owner is None
+
+
+@pytest.mark.parametrize(
+    "lapse",
+    [
+        "UPDATE stream_subscriptions SET lease_owner = 'thief' WHERE id = :s",
+        "UPDATE stream_subscriptions SET leased_until = '2000-01-01' WHERE id = :s",
+    ],
+    ids=["taken", "expired"],
+)
+async def test_a_subscription_whose_lease_lapsed_before_its_turn_is_skipped(world, lapse):
+    lapsed: list[UUID] = []
+
+    async def lapse_the_other(subscription):
+        if lapsed or subscription.id not in {world.s1.id, world.s2.id}:
+            return
+        other = world.s2.id if subscription.id == world.s1.id else world.s1.id
+        lapsed.append(other)
+        async with world.raw() as session:
+            await session.execute(text(lapse), {"s": other})
+            await session.commit()
+
+    triggers = _Triggers(on_handle=lapse_the_other)
+    await _dispatcher(world, triggers).run_once()
+
+    assert len(_ours(world, triggers)) == 1
+    (other,) = lapsed
+    assert await _outcomes(world, other) == []
+    assert (await _sub(world, other)).cursor_sequence == world.s1.cursor_sequence
+
+
+async def test_a_failing_wake_does_not_charge_the_subscription_an_attempt(world):
+    class _BrokenWaker(StreamWaker):
+        async def wake(self, stream_id):
+            raise RuntimeError("wake transport down")
+
+    await _dispatcher(world, _Triggers(), waker=_BrokenWaker()).run_once()
+    forward = await _sub(world, world.fwd.id)
+    assert forward.attempts == 0 and forward.last_error is None
+    assert forward.lease_owner is None
+    assert [o.verdict for o in await _outcomes(world, world.fwd.id)] == ["reacted"]
+
+
+async def test_stopping_releases_the_leases_this_dispatcher_holds(world):
+    held_until = datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=5)
+    async with world.raw() as session:
+        await session.execute(
+            text(
+                "UPDATE stream_subscriptions SET lease_owner = :o, leased_until = :u "
+                "WHERE id = ANY(:ids)"
+            ),
+            {"o": "stopping", "u": held_until, "ids": [world.s1.id, world.s2.id]},
+        )
+        await session.execute(
+            text(
+                "UPDATE stream_subscriptions SET lease_owner = 'other', leased_until = :u "
+                "WHERE id = :s"
+            ),
+            {"u": held_until, "s": world.fwd.id},
+        )
+        await session.commit()
+
+    await _dispatcher(world, _Triggers(), owner="stopping").stop()
+
+    for sub in (world.s1, world.s2):
+        released = await _sub(world, sub.id)
+        assert released.lease_owner is None and released.leased_until is None
+    assert (await _sub(world, world.fwd.id)).lease_owner == "other"

@@ -42,7 +42,7 @@ container = get_container()
 
 
 async def initialize_services():
-    """Initialize real services instead of test mocks."""
+    """Initialize real services; returns the stream waker the lifespan closes on shutdown."""
     try:
         # Discover extensions and wire DI
         from agentarea_common.auth.authorization import AuthorizationService
@@ -143,7 +143,7 @@ async def initialize_services():
 
         from agentarea_streams.infrastructure.di_container import setup_streams_di
 
-        setup_streams_di(settings)
+        stream_waker = setup_streams_di(settings)
 
         # Secret manager is created per-request with session and user_context
         # Not registered as singleton during startup
@@ -154,6 +154,7 @@ async def initialize_services():
             "Real services initialized successfully - Event Broker: %s",
             type(event_broker).__name__,
         )
+        return stream_waker
     except Exception as e:
         logger.exception("Service initialization failed: %s", e)
         raise e
@@ -215,7 +216,7 @@ async def app_lifespan(app: FastAPI):
     metrics_server = start_metrics_server(metrics.PORT) if metrics.ENABLED else None
 
     get_container()
-    await initialize_services()
+    stream_waker = await initialize_services()
 
     from agentarea_api.api.events.events_router import start_events_router
 
@@ -235,6 +236,7 @@ async def app_lifespan(app: FastAPI):
         from agentarea_api.api.events.events_router import stop_events_router
 
         await stop_events_router()
+        await stream_waker.aclose()
 
         if is_reload_mode:
             logger.info("Application shutting down (reload mode - skipping full cleanup)")

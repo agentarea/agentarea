@@ -96,6 +96,14 @@ class StreamDispatcher:
             except asyncio.CancelledError:
                 pass
             self._task = None
+        with unscoped("a stopping dispatcher hands back its leases in every workspace"):
+            async with self._session_factory() as session:
+                await session.execute(
+                    update(StreamSubscriptionORM)
+                    .where(StreamSubscriptionORM.lease_owner == self._owner)
+                    .values(leased_until=None, lease_owner=None)
+                )
+                await session.commit()
 
     async def _loop(self) -> None:
         while True:
@@ -145,6 +153,9 @@ class StreamDispatcher:
                     select(StreamSubscriptionORM)
                     .where(
                         StreamSubscriptionORM.status == SubscriptionStatus.ACTIVE.value,
+                        # A kind this worker has no handler for (a newer release's) is
+                        # left for a worker that has one.
+                        StreamSubscriptionORM.kind.in_([kind.value for kind in self._handlers]),
                         or_(
                             StreamSubscriptionORM.next_attempt_at.is_(None),
                             StreamSubscriptionORM.next_attempt_at <= now,
@@ -159,9 +170,21 @@ class StreamDispatcher:
                     .limit(self._settings.DISPATCH_BATCH)
                     .with_for_update(skip_locked=True)
                 )
-                claimed = list(rows.scalars().all())
-                views = [_view(row) for row in claimed]
-                for row in claimed:
+                views: list[SubscriptionView] = []
+                for row in rows.scalars().all():
+                    try:
+                        views.append(_view(row))
+                    except Exception as error:
+                        # One unreadable row fails alone; left active it would head
+                        # every batch and stall dispatch for every workspace.
+                        logger.error(
+                            "Subscription %s is unreadable and is marked failed",
+                            row.id,
+                            exc_info=True,
+                        )
+                        row.status = SubscriptionStatus.FAILED.value
+                        row.last_error = f"unreadable subscription: {error}"[:2000]
+                        continue
                     row.leased_until = now + self._settings.LEASE
                     row.lease_owner = self._owner
                 await session.commit()
@@ -172,6 +195,12 @@ class StreamDispatcher:
         context = UserContext(user_id=view.created_by, workspace_id=view.workspace_id)
         handled = 0
         with workspace_scope(view.workspace_id):
+            if not await self._renew(view):
+                logger.info(
+                    "Subscription %s lost its lease while queued in this pass; skipping it",
+                    view.id,
+                )
+                return handled
             async with self._session_factory() as session:
                 cursor = (
                     await session.execute(
@@ -213,7 +242,33 @@ class StreamDispatcher:
             await session.commit()
         if result and result.derived_sequences:
             for output in view.output_stream_ids:
-                await self._waker.wake(output)
+                try:
+                    await self._waker.wake(output)
+                except Exception:
+                    # The forwarded events are committed; the poll delivers them. The
+                    # event must not be charged a failed attempt for a lost wake.
+                    logger.warning(
+                        "Wake for stream %s failed; the dispatcher's poll picks it up",
+                        output,
+                        exc_info=True,
+                    )
+
+    async def _renew(self, view: SubscriptionView) -> bool:
+        """Extend a lease still ours and unexpired; False when it lapsed while queued."""
+        now = self._clock()
+        async with self._session_factory() as session:
+            renewed = await session.execute(
+                update(StreamSubscriptionORM)
+                .where(
+                    StreamSubscriptionORM.id == view.id,
+                    StreamSubscriptionORM.workspace_id == view.workspace_id,
+                    StreamSubscriptionORM.lease_owner == self._owner,
+                    StreamSubscriptionORM.leased_until > now,
+                )
+                .values(leased_until=now + self._settings.LEASE)
+            )
+            await session.commit()
+        return cast(CursorResult[Any], renewed).rowcount == 1
 
     async def _record(
         self,
@@ -271,11 +326,15 @@ class StreamDispatcher:
         async with self._session_factory() as session:
             row = (
                 await session.execute(
-                    select(StreamSubscriptionORM).where(
+                    select(StreamSubscriptionORM)
+                    .where(
                         StreamSubscriptionORM.id == view.id,
                         StreamSubscriptionORM.workspace_id == view.workspace_id,
                         StreamSubscriptionORM.lease_owner == self._owner,
                     )
+                    # Held until commit: a claimer skips the row instead of taking it
+                    # between this read and the write below.
+                    .with_for_update()
                 )
             ).scalar_one_or_none()
             if row is None:
