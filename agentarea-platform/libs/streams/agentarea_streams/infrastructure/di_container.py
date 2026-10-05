@@ -11,11 +11,14 @@ from .waker import RedisStreamWaker
 logger = logging.getLogger(__name__)
 
 
-def setup_streams_di(settings: Settings) -> None:
+def setup_streams_di(settings: Settings) -> RedisStreamWaker:
+    """Register the waker; the caller owns it and closes it on shutdown."""
     if not isinstance(settings.broker, RedisSettings):
         raise RuntimeError(
             "Event streams wake their dispatchers over Redis; set AGENTAREA_BROKER=redis "
             f"(current: {settings.broker.BROKER})"
         )
-    register_singleton(StreamWaker, RedisStreamWaker(settings.broker.REDIS_URL))
+    waker = RedisStreamWaker(settings.broker.REDIS_URL)
+    register_singleton(StreamWaker, waker)
     logger.info("StreamWaker=RedisStreamWaker")
+    return waker
