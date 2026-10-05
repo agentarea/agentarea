@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
 import { CreateProjectDialog } from "./CreateProjectDialog";
 
@@ -9,20 +10,21 @@ import { CreateProjectDialog } from "./CreateProjectDialog";
  * without leaving the list.
  */
 export function ProjectsEmptyState() {
+  const t = useTranslations("ProjectsPage.empty");
   const [open, setOpen] = useState(false);
 
   return (
     <>
       <EmptyState
-        title="No projects yet"
-        description="A project scopes a slice of the workspace — its own agents, skills and connections — so separate lines of work stay apart."
+        title={t("title")}
+        description={t("description")}
         hints={[
-          { text: "Add the agents that work on it" },
-          { text: "Give it the skills and connections it may use" },
-          { text: "Its files become shared context for the work inside it" },
+          { text: t("hintAgents") },
+          { text: t("hintSkills") },
+          { text: t("hintFiles") },
         ]}
         iconsType="agent"
-        action={{ label: "Create project", onClick: () => setOpen(true) }}
+        action={{ label: t("action"), onClick: () => setOpen(true) }}
       />
       <CreateProjectDialog
         open={open}

@@ -2910,6 +2910,48 @@
       }
     }
   },
+  "ProjectsPage": {
+    "title": "Projects",
+    "newProject": "New project",
+    "searchPlaceholder": "Search projects…",
+    "subProject": "Sub-project",
+    "andMore": "and {count} more",
+    "agentsCount": "{count, plural, one {# agent} other {# agents}}",
+    "skillsCount": "{count, plural, one {# skill} other {# skills}}",
+    "mcpCount": "{count, plural, one {# connection} other {# connections}}",
+    "columns": {
+      "project": "Project",
+      "agents": "Agents",
+      "skills": "Skills",
+      "mcp": "MCP",
+      "instructions": "Instructions"
+    },
+    "hasInstructions": "Yes",
+    "noMatchTitle": "No matching projects",
+    "noMatchDescription": "No projects match “{query}”",
+    "clearSearch": "Clear search",
+    "empty": {
+      "title": "No projects yet",
+      "description": "A project scopes a slice of the workspace — its own agents, skills and connections — so separate lines of work stay apart.",
+      "hintAgents": "Add the agents that work on it",
+      "hintSkills": "Give it the skills and connections it may use",
+      "hintFiles": "Its files become shared context for the work inside it",
+      "action": "Create project"
+    },
+    "create": {
+      "title": "New project",
+      "description": "A place to keep agents, skills and files that belong together.",
+      "name": "Name",
+      "namePlaceholder": "Inbound triage",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "What this project is for",
+      "instructions": "Instructions",
+      "instructionsPlaceholder": "Standing instructions for agents working in this project",
+      "submit": "Create project",
+      "submitting": "Creating…",
+      "failed": "Could not create project"
+    }
+  },
   "ProjectSettingsPage": {
     "name": "Name",
     "description": "Description",

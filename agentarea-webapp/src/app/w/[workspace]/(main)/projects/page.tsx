@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
+import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
 import { ViewModeTabs } from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
@@ -18,6 +19,7 @@ interface ProjectsPageProps {
 }
 
 export default async function ProjectsPage({ searchParams }: ProjectsPageProps) {
+  const t = await getTranslations("ProjectsPage");
   const resolvedSearchParams = await searchParams;
   const searchQuery =
     typeof resolvedSearchParams.search === "string"
@@ -35,13 +37,18 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
   return (
     <ContentBlock
       header={{
-        breadcrumb: [{ label: "Projects" }],
-        description: "Organize agents, skills, and tools into projects",
+        breadcrumb: [{ label: t("title") }],
         controls: <CreateProjectDialog />,
       }}
       subheader={
         <SubheaderToolbar
-          search={<SearchInput urlParamName="search" urlPath="/projects" />}
+          search={
+            <SearchInput
+              urlParamName="search"
+              urlPath="/projects"
+              placeholder={t("searchPlaceholder")}
+            />
+          }
           controls={<ViewModeTabs currentTab={tab} />}
         />
       }

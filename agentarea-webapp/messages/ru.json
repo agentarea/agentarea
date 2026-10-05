@@ -2910,6 +2910,48 @@
       }
     }
   },
+  "ProjectsPage": {
+    "title": "Проекты",
+    "newProject": "Новый проект",
+    "searchPlaceholder": "Поиск проектов…",
+    "subProject": "Подпроект",
+    "andMore": "и ещё {count}",
+    "agentsCount": "{count, plural, one {# агент} few {# агента} many {# агентов} other {# агента}}",
+    "skillsCount": "{count, plural, one {# навык} few {# навыка} many {# навыков} other {# навыка}}",
+    "mcpCount": "{count, plural, one {# подключение} few {# подключения} many {# подключений} other {# подключения}}",
+    "columns": {
+      "project": "Проект",
+      "agents": "Агенты",
+      "skills": "Навыки",
+      "mcp": "MCP",
+      "instructions": "Инструкции"
+    },
+    "hasInstructions": "Есть",
+    "noMatchTitle": "Нет подходящих проектов",
+    "noMatchDescription": "Ни один проект не подходит под «{query}»",
+    "clearSearch": "Сбросить поиск",
+    "empty": {
+      "title": "Проектов пока нет",
+      "description": "Проект выделяет часть воркспейса — своих агентов, навыки и подключения, — чтобы разные направления работы не смешивались.",
+      "hintAgents": "Добавьте агентов, которые над ним работают",
+      "hintSkills": "Дайте ему навыки и подключения, которыми можно пользоваться",
+      "hintFiles": "Его файлы станут общим контекстом для работы внутри проекта",
+      "action": "Создать проект"
+    },
+    "create": {
+      "title": "Новый проект",
+      "description": "Место для агентов, навыков и файлов, которые относятся к одному делу.",
+      "name": "Название",
+      "namePlaceholder": "Разбор входящих",
+      "descriptionLabel": "Описание",
+      "descriptionPlaceholder": "Для чего этот проект",
+      "instructions": "Инструкции",
+      "instructionsPlaceholder": "Постоянные инструкции для агентов в этом проекте",
+      "submit": "Создать проект",
+      "submitting": "Создаём…",
+      "failed": "Не удалось создать проект"
+    }
+  },
   "ProjectSettingsPage": {
     "name": "Название",
     "description": "Описание",

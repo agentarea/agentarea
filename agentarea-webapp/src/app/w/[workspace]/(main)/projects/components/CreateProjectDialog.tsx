@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ export function CreateProjectDialog({
   onOpenChange,
   showTrigger = true,
 }: CreateProjectDialogProps = {}) {
+  const t = useTranslations("ProjectsPage");
   const router = useWorkspaceRouter();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
@@ -56,7 +58,7 @@ export function CreateProjectDialog({
 
       if (failure) {
         setError(
-          (failure as { detail?: string })?.detail ?? "Could not create project"
+          (failure as { detail?: string })?.detail ?? t("create.failed")
         );
         return;
       }
@@ -78,16 +80,14 @@ export function CreateProjectDialog({
         <DialogTrigger asChild>
           <Button className="shrink-0" size="xs">
             <Plus />
-            New project
+            {t("newProject")}
           </Button>
         </DialogTrigger>
       )}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New project</DialogTitle>
-          <DialogDescription>
-            A place to keep agents, skills and files that belong together.
-          </DialogDescription>
+          <DialogTitle>{t("create.title")}</DialogTitle>
+          <DialogDescription>{t("create.description")}</DialogDescription>
         </DialogHeader>
 
         <form
@@ -98,10 +98,10 @@ export function CreateProjectDialog({
           }}
         >
           <div className="grid gap-2">
-            <Label htmlFor="project-name">Name</Label>
+            <Label htmlFor="project-name">{t("create.name")}</Label>
             <Input
               id="project-name"
-              placeholder="Inbound triage"
+              placeholder={t("create.namePlaceholder")}
               value={name}
               onChange={(event) => setName(event.target.value)}
               required
@@ -110,20 +110,24 @@ export function CreateProjectDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="project-description">Description</Label>
+            <Label htmlFor="project-description">
+              {t("create.descriptionLabel")}
+            </Label>
             <Input
               id="project-description"
-              placeholder="What this project is for"
+              placeholder={t("create.descriptionPlaceholder")}
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="project-instructions">Instructions</Label>
+            <Label htmlFor="project-instructions">
+              {t("create.instructions")}
+            </Label>
             <Textarea
               id="project-instructions"
-              placeholder="Standing instructions for agents working in this project"
+              placeholder={t("create.instructionsPlaceholder")}
               value={instructions}
               onChange={(event) => setInstructions(event.target.value)}
               rows={4}
@@ -138,7 +142,7 @@ export function CreateProjectDialog({
 
           <DialogFooter>
             <Button type="submit" size="sm" disabled={pending || !name.trim()}>
-              {pending ? "Creating…" : "Create project"}
+              {pending ? t("create.submitting") : t("create.submit")}
             </Button>
           </DialogFooter>
         </form>
