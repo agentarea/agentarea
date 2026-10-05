@@ -11,7 +11,7 @@ from sqlalchemy import CursorResult, delete, func, select, update
 from ..domain.enums import StreamKind, SubscriptionKind
 from ..domain.errors import ForwardLoopError, StreamNotFoundError, TriggerSubscriptionNotFoundError
 from ..domain.filters import EventFilter
-from ..domain.models import JournaledEvent
+from ..domain.models import JournaledEvent, TriggerBinding
 from ..infrastructure.journal import StreamJournal
 from ..infrastructure.orm import (
     StreamEventKeyORM,
@@ -212,6 +212,55 @@ class StreamService:
             )
         )
         return result.scalar_one()
+
+    async def trigger_bindings(self, trigger_ids: list[UUID]) -> dict[UUID, TriggerBinding]:
+        """Stream, filter, webhook id and last event of each trigger, in three queries."""
+        if not trigger_ids:
+            return {}
+        subscriptions = (
+            (
+                await self._session.execute(
+                    select(StreamSubscriptionORM).where(
+                        StreamSubscriptionORM.trigger_id.in_(trigger_ids),
+                        StreamSubscriptionORM.workspace_id == self._workspace_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        sources = (
+            (
+                await self._session.execute(
+                    select(StreamSourceORM).where(
+                        StreamSourceORM.credential_key.in_(trigger_ids),
+                        StreamSourceORM.workspace_id == self._workspace_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        stream_ids = list({s.stream_id for s in subscriptions})
+        last_by_stream: dict[UUID, datetime] = {}
+        if stream_ids:
+            rows = await self._session.execute(
+                select(StreamEventKeyORM.stream_id, func.max(StreamEventKeyORM.received_at))
+                .where(StreamEventKeyORM.stream_id.in_(stream_ids))
+                .group_by(StreamEventKeyORM.stream_id)
+            )
+            last_by_stream = dict(rows.tuples().all())
+        webhook_by_trigger = {s.credential_key: s.webhook_id for s in sources}
+        return {
+            s.trigger_id: TriggerBinding(
+                stream_id=s.stream_id,
+                event_filter=s.filter,
+                webhook_id=webhook_by_trigger.get(s.trigger_id),
+                last_event_at=last_by_stream.get(s.stream_id),
+            )
+            for s in subscriptions
+            if s.trigger_id is not None
+        }
 
     async def list_sources(self, stream_id: UUID) -> list[StreamSourceORM]:
         return await self._sources().list_for_stream(stream_id)

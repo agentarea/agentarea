@@ -129,3 +129,59 @@ async def test_updating_another_workspaces_trigger_filter_raises():
         kept = await owner_service.trigger_subscription(trigger_id)
         assert kept is not None and kept.filter == EventFilter().model_dump()
     await engine.dispose()
+
+
+async def test_bindings_report_stream_filter_url_and_last_event():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
+    async with maker() as session:
+        with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
+            trigger_id = await _trigger_row(session, ctx.workspace_id)
+            service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
+            stream, _, _ = await service.create_webhook_stream_for_trigger(
+                trigger_id=trigger_id,
+                trigger_name="t",
+                webhook_id=f"wh{uuid4().hex}",
+                webhook_type="generic",
+                allowed_methods=["POST"],
+                validation_rules={},
+                webhook_config=None,
+                event_types=[],
+            )
+            await StreamJournal(session, ctx, EventStreamSettings()).append(
+                stream.id, IntegrationEvent(type="x", source="s"), event_key="one"
+            )
+            await session.commit()
+            binding = (await service.trigger_bindings([trigger_id]))[trigger_id]
+            assert binding.stream_id == stream.id
+            assert binding.webhook_id is not None
+            assert binding.last_event_at is not None
+    await engine.dispose()
+
+
+async def test_bindings_leave_out_another_workspaces_triggers():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    owner = UserContext(user_id="u", workspace_id=str(uuid4()))
+    other = UserContext(user_id="u", workspace_id=str(uuid4()))
+    async with maker() as session:
+        with workspace_scope(owner.workspace_id), patch(GRANT, new=AsyncMock()):
+            trigger_id = await _trigger_row(session, owner.workspace_id)
+            owner_service = StreamService(RepositoryFactory(session, owner), EventStreamSettings())
+            await owner_service.create_webhook_stream_for_trigger(
+                trigger_id=trigger_id,
+                trigger_name="t",
+                webhook_id=f"wh{uuid4().hex}",
+                webhook_type="generic",
+                allowed_methods=["POST"],
+                validation_rules={},
+                webhook_config=None,
+                event_types=[],
+            )
+            await session.commit()
+
+        other_service = StreamService(RepositoryFactory(session, other), EventStreamSettings())
+        with workspace_scope(other.workspace_id):
+            assert await other_service.trigger_bindings([trigger_id]) == {}
+    await engine.dispose()

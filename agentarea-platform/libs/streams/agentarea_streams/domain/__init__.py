@@ -14,6 +14,7 @@ from .models import (
     HandlerResult,
     JournaledEvent,
     SubscriptionView,
+    TriggerBinding,
     WebhookSourceSpec,
 )
 
@@ -33,6 +34,7 @@ __all__ = [
     "SubscriptionKind",
     "SubscriptionStatus",
     "SubscriptionView",
+    "TriggerBinding",
     "TriggerSubscriptionNotFoundError",
     "Verdict",
     "WebhookSourceSpec",

@@ -60,3 +60,12 @@ class WebhookSourceSpec(BaseModel):
     credential_key: UUID
     event_types: list[str] = Field(default_factory=list)
     is_active: bool = True
+
+
+class TriggerBinding(BaseModel):
+    """How a trigger is attached to the event journal, for the trigger API."""
+
+    stream_id: UUID
+    event_filter: dict[str, Any]
+    webhook_id: str | None
+    last_event_at: datetime | None

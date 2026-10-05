@@ -127,6 +127,8 @@ async def async_client():
 def mock_trigger_service():
     """Create mock trigger service."""
     service = AsyncMock(spec=TriggerService)
+    service.stream_service = AsyncMock()
+    service.stream_service.trigger_bindings.return_value = {}
     return service
 
 

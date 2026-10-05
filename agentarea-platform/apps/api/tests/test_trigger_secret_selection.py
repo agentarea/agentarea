@@ -62,6 +62,7 @@ def harness():
         event_types=[],
     )
     service = AsyncMock()
+    service.stream_service.trigger_bindings.return_value = {}
     service.get_trigger.return_value = trigger
     service.create_trigger.return_value = trigger
     service.update_trigger.return_value = trigger

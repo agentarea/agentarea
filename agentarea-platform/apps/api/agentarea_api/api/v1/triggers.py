@@ -37,6 +37,7 @@ from agentarea_api.api.v1._trigger_creation import (
     get_channel_webhook_service,
     issue_generic_signing_secret,
     needs_generated_signing_secret,
+    public_webhook_url,
     register_channel_webhook,
     resolve_channel_credentials,
     with_webhook_secret_token,
@@ -46,6 +47,7 @@ from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.base.pagination import MAX_PAGE
 from agentarea_common.config.database import get_db_session
 from agentarea_common.utils.types import NaiveUtcDatetime, UtcDatetime, utc_isoformat
+from agentarea_streams.domain.models import TriggerBinding
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
@@ -106,6 +108,25 @@ class TriggerResponse(BaseModel):
     failure_threshold: int
     consecutive_failures: int
     last_execution_at: UtcDatetime | None = None
+    status: Literal["active", "inactive", "needs_owner"] = Field(
+        description=(
+            "'needs_owner' when the person who configured it can no longer run its agent; "
+            "the trigger stays stopped until someone who can takes it over."
+        )
+    )
+    needs_new_owner_at: UtcDatetime | None = None
+
+    # Event journal binding
+    stream_id: UUID | None = Field(
+        default=None, description="Stream whose events fire this trigger."
+    )
+    event_filter: dict[str, Any] | None = Field(default=None, description="Which events fire it.")
+    webhook_url: str | None = Field(
+        default=None, description="Public URL a sender posts to; set for webhook triggers."
+    )
+    last_event_at: UtcDatetime | None = Field(
+        default=None, description="When the trigger's stream last recorded an event."
+    )
 
     # Type-specific fields (optional)
     cron_expression: str | None = None
@@ -152,6 +173,7 @@ class TriggerResponse(BaseModel):
         has_channel_credentials: bool = False,
         webhook_signing: WebhookSigning | None = None,
         signing_secret: str | None = None,
+        binding: TriggerBinding | None = None,
     ) -> "TriggerResponse":
         """Create response from domain model."""
         # Base fields
@@ -209,6 +231,22 @@ class TriggerResponse(BaseModel):
                 )
                 response_data["signing_secret"] = signing_secret
 
+        needs_owner_at = getattr(trigger, "needs_new_owner_at", None)
+        response_data["needs_new_owner_at"] = needs_owner_at
+        response_data["status"] = (
+            "needs_owner" if needs_owner_at else ("active" if trigger.is_active else "inactive")
+        )
+        if binding is not None:
+            response_data.update(
+                {
+                    "stream_id": binding.stream_id,
+                    "event_filter": binding.event_filter,
+                    "webhook_url": public_webhook_url(binding.webhook_id)
+                    if binding.webhook_id
+                    else None,
+                    "last_event_at": binding.last_event_at,
+                }
+            )
         response_data["has_channel_credentials"] = has_channel_credentials
 
         return cls(**response_data)
@@ -587,6 +625,7 @@ async def create_trigger(
 
         logger.info(f"Created trigger {trigger.id} for agent {trigger.agent_id}")
 
+        bindings = await trigger_service.stream_service.trigger_bindings([trigger.id])
         return TriggerResponse.from_domain_model(
             trigger,
             has_channel_credentials=has_creds,
@@ -594,6 +633,7 @@ async def create_trigger(
                 "signed" if signing_secret else await _webhook_signing(secret_manager, trigger)
             ),
             signing_secret=signing_secret,
+            binding=bindings.get(trigger.id),
         )
 
     except HTTPException:
@@ -616,7 +656,9 @@ async def create_trigger(
 async def list_triggers(
     secret_manager: BaseSecretManagerDep,
     agent_id: UUID | None = Query(None, description="Filter by agent ID"),
-    trigger_type: str | None = Query(None, description="Filter by trigger type (cron, webhook)"),
+    trigger_type: str | None = Query(
+        None, description="Filter by trigger type (cron, webhook, stream)"
+    ),
     active_only: bool = Query(False, description="Only return active triggers"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of triggers to return"),
     user_context: UserContext = Depends(get_user_context),
@@ -653,6 +695,8 @@ async def list_triggers(
                 domain_trigger_type = TriggerType.CRON
             elif trigger_type.lower() == "webhook":
                 domain_trigger_type = TriggerType.WEBHOOK
+            elif trigger_type.lower() == "stream":
+                domain_trigger_type = TriggerType.STREAM
             else:
                 raise HTTPException(status_code=400, detail=f"Invalid trigger type: {trigger_type}")
 
@@ -675,9 +719,13 @@ async def list_triggers(
             ),
             asyncio.gather(*(_webhook_signing(secret_manager, trigger) for trigger in triggers)),
         )
+        bindings = await trigger_service.stream_service.trigger_bindings([t.id for t in triggers])
         return [
             TriggerResponse.from_domain_model(
-                trigger, has_channel_credentials=has_creds, webhook_signing=signed
+                trigger,
+                has_channel_credentials=has_creds,
+                webhook_signing=signed,
+                binding=bindings.get(trigger.id),
             )
             for trigger, has_creds, signed in zip(triggers, creds_flags, signing, strict=True)
         ]
@@ -761,10 +809,12 @@ async def get_trigger(
             raise HTTPException(status_code=404, detail=f"Trigger {trigger_id} not found")
 
         has_creds = await _has_credentials(secret_manager, trigger, trigger_id)
+        bindings = await trigger_service.stream_service.trigger_bindings([trigger.id])
         return TriggerResponse.from_domain_model(
             trigger,
             has_channel_credentials=has_creds,
             webhook_signing=await _webhook_signing(secret_manager, trigger),
+            binding=bindings.get(trigger.id),
         )
 
     except HTTPException:
@@ -876,10 +926,12 @@ async def update_trigger(
 
         logger.info(f"Updated trigger {trigger_id}")
 
+        bindings = await trigger_service.stream_service.trigger_bindings([updated_trigger.id])
         return TriggerResponse.from_domain_model(
             updated_trigger,
             has_channel_credentials=has_creds,
             webhook_signing=await _webhook_signing(secret_manager, updated_trigger),
+            binding=bindings.get(updated_trigger.id),
         )
 
     except HTTPException:
@@ -945,11 +997,13 @@ async def rotate_signing_secret(
         signing_secret = await issue_generic_signing_secret(trigger_id, secret_manager)
         logger.info(f"Rotated the signing secret of trigger {trigger_id}")
         await audit.record("trigger.signing_secret_rotate", "trigger", trigger_id)
+        bindings = await trigger_service.stream_service.trigger_bindings([trigger.id])
         return TriggerResponse.from_domain_model(
             trigger,
             has_channel_credentials=True,
             webhook_signing="signed",
             signing_secret=signing_secret,
+            binding=bindings.get(trigger.id),
         )
 
     except HTTPException:
