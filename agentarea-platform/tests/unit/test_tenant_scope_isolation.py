@@ -37,7 +37,7 @@ from sqlalchemy.orm import RelationshipProperty, selectinload
 from sqlalchemy.pool import StaticPool
 
 PLATFORM_ROOT = Path(__file__).resolve().parents[2]
-EXPECTED_MODEL_COUNT = 27
+EXPECTED_MODEL_COUNT = 32
 
 WS_A = "tenant-scope-a"
 WS_B = "tenant-scope-b"
@@ -141,9 +141,26 @@ def _row(table: Table, **given: Any) -> dict[str, Any]:
             continue
         if column.primary_key and column.name == "id":
             row["id"] = uuid.uuid4()
-        elif not column.nullable and column.default is None and column.server_default is None:
+        elif column.primary_key or (
+            not column.nullable and column.default is None and column.server_default is None
+        ):
             row[column.name] = _value(column, uuid.uuid4().hex[:8])
     return row
+
+
+def _primary_key(model: type) -> list[Any]:
+    """Primary-key attributes: not always ``id`` (the stream journal is keyed by sequence)."""
+    mapper = inspect(model)
+    return [getattr(model, mapper.get_property_by_column(c).key) for c in mapper.primary_key]
+
+
+def _is_row(model: type, row: dict[str, Any]) -> list[Any]:
+    columns = inspect(model).primary_key
+    return [a == row[c.name] for a, c in zip(_primary_key(model), columns, strict=True)]
+
+
+def _identity(model: type, row: dict[str, Any]) -> tuple[Any, ...]:
+    return tuple(row[column.name] for column in inspect(model).primary_key)
 
 
 @dataclass
@@ -213,9 +230,10 @@ async def test_select_stays_in_its_workspace(backend: Backend, model: type) -> N
 
     async with backend.sessions() as session:
         with workspace_scope(WS_A):
-            own = (await session.execute(select(model.id).where(model.id == row["id"]))).all()
+            query = select(*_primary_key(model)).where(*_is_row(model, row))
+            own = (await session.execute(query)).all()
         with workspace_scope(WS_B):
-            foreign = (await session.execute(select(model).where(model.id == row["id"]))).all()
+            foreign = (await session.execute(select(model).where(*_is_row(model, row)))).all()
 
     assert len(own) == 1
     assert len(foreign) == (1 if _visible_from_b(model) else 0)
@@ -227,7 +245,7 @@ async def test_get_by_id_stays_in_its_workspace(backend: Backend, model: type) -
 
     async with backend.sessions() as session:
         with workspace_scope(WS_B):
-            found = await session.get(model, row["id"])
+            found = await session.get(model, _identity(model, row))
 
     assert (found is not None) == _visible_from_b(model)
 
@@ -239,11 +257,11 @@ async def test_bulk_update_stays_in_its_workspace(backend: Backend, model: type)
     async with backend.sessions() as session:
         with workspace_scope(WS_B):
             foreign = await session.execute(
-                update(model).where(model.id == row["id"]).values(created_by="intruder")
+                update(model).where(*_is_row(model, row)).values(created_by="intruder")
             )
         with workspace_scope(WS_A):
             own = await session.execute(
-                update(model).where(model.id == row["id"]).values(created_by="owner-2")
+                update(model).where(*_is_row(model, row)).values(created_by="owner-2")
             )
         await session.rollback()
 
@@ -257,9 +275,9 @@ async def test_bulk_delete_stays_in_its_workspace(backend: Backend, model: type)
 
     async with backend.sessions() as session:
         with workspace_scope(WS_B):
-            foreign = await session.execute(delete(model).where(model.id == row["id"]))
+            foreign = await session.execute(delete(model).where(*_is_row(model, row)))
         with workspace_scope(WS_A):
-            own = await session.execute(delete(model).where(model.id == row["id"]))
+            own = await session.execute(delete(model).where(*_is_row(model, row)))
         await session.rollback()
 
     assert foreign.rowcount == 0

@@ -6,6 +6,14 @@ from agentarea_common.artifacts import ArtifactEvent  # noqa: F401
 from agentarea_common.base.models import BaseModel
 from agentarea_common.config import get_db_settings
 from agentarea_common.events.outbox_orm import EventOutbox  # noqa: F401
+from agentarea_streams.infrastructure.orm import (  # noqa: F401
+    StreamEventKeyORM,
+    StreamEventORM,
+    StreamORM,
+    StreamSourceORM,
+    StreamSubscriptionORM,
+    SubscriptionOutcomeORM,
+)
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
