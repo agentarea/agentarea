@@ -38,7 +38,11 @@ from .domain.models import (
 )
 from .failures import is_permanent
 from .infrastructure.repository import TriggerExecutionRepository, TriggerRepository
-from .llm_condition_evaluator import LLMConditionEvaluationError, LLMConditionEvaluator
+from .llm_condition_evaluator import (
+    LLMConditionEvaluationError,
+    LLMConditionEvaluator,
+    condition_syntax_errors,
+)
 from .logging_utils import (
     DependencyUnavailableError,
     TriggerConditionError,
@@ -1088,6 +1092,12 @@ class TriggerService:
             await validate_condition_models(
                 trigger_update.conditions, self.model_instance_repository
             )
+            # An empty dict means "no conditions configured", which stays
+            # legitimate; anything else must be a well-formed condition body.
+            if trigger_update.conditions:
+                errors = condition_syntax_errors(trigger_update.conditions)
+                if errors:
+                    raise TriggerValidationError("; ".join(errors))
 
         if trigger_update.event_filter is not None:
             if not isinstance(existing_trigger, WebhookTrigger) and (
@@ -1734,8 +1744,15 @@ class TriggerService:
 
         Returns:
             The verdict, with a reason naming the field that failed to match.
+
+        Raises:
+            TriggerConditionError: ``conditions`` names nothing this fallback
+                can check. A condition nobody looked at is not a condition
+                that passed.
         """
-        for field_path, expected_value in conditions.get("field_matches", {}).items():
+        if "field_matches" not in conditions:
+            raise TriggerConditionError("Conditions have no 'field_matches' to check")
+        for field_path, expected_value in conditions["field_matches"].items():
             actual_value = self._get_nested_value(event_data, field_path)
             if actual_value != expected_value:
                 return ConditionVerdict(
