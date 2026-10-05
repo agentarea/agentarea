@@ -1966,7 +1966,8 @@
       "key": "Key",
       "outcome": "Outcome",
       "older": "Older events",
-      "empty": "Nothing has arrived on this stream yet."
+      "empty": "Nothing has arrived on this stream yet.",
+      "noneMatching": "No events on this page have that outcome."
     },
     "filter": {
       "all": "All",

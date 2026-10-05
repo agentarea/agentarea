@@ -1294,11 +1294,11 @@ export const listStreams = async () => {
 };
 
 export const getStream = async (streamId: string) => {
-  const { data, error } = await sdk.getStreamV1StreamsStreamIdGet({
+  const result = await sdk.getStreamV1StreamsStreamIdGet({
     client: serverClient,
     path: { stream_id: streamId },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const listStreamEvents = async (
@@ -1314,11 +1314,11 @@ export const listStreamEvents = async (
 };
 
 export const getStreamEvent = async (streamId: string, sequence: number) => {
-  const { data, error } = await sdk.getEventV1StreamsStreamIdEventsSequenceGet({
+  const result = await sdk.getEventV1StreamsStreamIdEventsSequenceGet({
     client: serverClient,
     path: { stream_id: streamId, sequence },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const listStreamSubscriptions = async (streamId: string) => {
