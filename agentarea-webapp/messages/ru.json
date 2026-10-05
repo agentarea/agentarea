@@ -2944,27 +2944,23 @@
       "hintFiles": "Его файлы станут общим контекстом для работы внутри проекта",
       "action": "Создать проект"
     },
-    "create": {
-      "title": "Новый проект",
-      "description": "Место для агентов, навыков и файлов, которые относятся к одному делу.",
+    "form": {
       "name": "Название",
       "namePlaceholder": "Разбор входящих",
-      "descriptionLabel": "Описание",
+      "nameRequired": "Введите название проекта.",
+      "description": "Описание",
       "descriptionPlaceholder": "Для чего этот проект",
       "instructions": "Инструкции",
       "instructionsPlaceholder": "Постоянные инструкции для агентов в этом проекте",
-      "submit": "Создать проект",
-      "submitting": "Создаём…",
-      "failed": "Не удалось создать проект"
+      "createFailed": "Не удалось создать проект",
+      "saveFailed": "Не удалось сохранить проект"
+    },
+    "create": {
+      "title": "Новый проект",
+      "submit": "Создать проект"
     }
   },
   "ProjectSettingsPage": {
-    "name": "Название",
-    "description": "Описание",
-    "instructions": "Инструкции",
-    "nameRequired": "Введите название проекта.",
-    "loadFailed": "Не удалось загрузить проект",
-    "saveFailed": "Не удалось сохранить проект",
     "deleteTitle": "Удалить проект"
   },
   "ProjectFilesPage": {

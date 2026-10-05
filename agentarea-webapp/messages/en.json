@@ -2944,27 +2944,23 @@
       "hintFiles": "Its files become shared context for the work inside it",
       "action": "Create project"
     },
-    "create": {
-      "title": "New project",
-      "description": "A place to keep agents, skills and files that belong together.",
+    "form": {
       "name": "Name",
       "namePlaceholder": "Inbound triage",
-      "descriptionLabel": "Description",
+      "nameRequired": "Enter a project name.",
+      "description": "Description",
       "descriptionPlaceholder": "What this project is for",
       "instructions": "Instructions",
       "instructionsPlaceholder": "Standing instructions for agents working in this project",
-      "submit": "Create project",
-      "submitting": "Creating…",
-      "failed": "Could not create project"
+      "createFailed": "Could not create project",
+      "saveFailed": "Couldn’t save the project"
+    },
+    "create": {
+      "title": "New project",
+      "submit": "Create project"
     }
   },
   "ProjectSettingsPage": {
-    "name": "Name",
-    "description": "Description",
-    "instructions": "Instructions",
-    "nameRequired": "Enter a project name.",
-    "loadFailed": "Couldn’t load the project",
-    "saveFailed": "Couldn’t save the project",
     "deleteTitle": "Delete project"
   },
   "ProjectFilesPage": {

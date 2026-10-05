@@ -6,7 +6,7 @@ import ContentBlock from "@/components/ContentBlock";
 import { ViewModeTabs } from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
-import { CreateProjectDialog } from "./components/CreateProjectDialog";
+import CreateProjectButton from "./components/CreateProjectButton";
 import ProjectsContent from "./components/ProjectsContent";
 import ProjectsSkeleton from "./components/ProjectsSkeleton";
 
@@ -38,7 +38,7 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
     <ContentBlock
       header={{
         breadcrumb: [{ label: t("title") }],
-        controls: <CreateProjectDialog />,
+        controls: <CreateProjectButton />,
       }}
       subheader={
         <SubheaderToolbar
