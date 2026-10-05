@@ -2138,6 +2138,8 @@ export const browseCatalog = async (params: {
   category?: string;
   /** Connections only; mirrors CatalogProtocol on the backend. */
   protocol?: "mcp" | "api";
+  /** MCP connections only; mirrors CatalogHosting on the backend. */
+  hosting?: "vendor" | "agentarea";
   sort?: string;
   limit: number;
   offset: number;
@@ -2150,6 +2152,7 @@ export const browseCatalog = async (params: {
         q: params.q || undefined,
         category: params.category || undefined,
         protocol: params.protocol || undefined,
+        hosting: params.hosting || undefined,
         sort: params.sort || undefined,
         limit: params.limit,
         offset: params.offset,
@@ -2161,6 +2164,7 @@ export const browseCatalog = async (params: {
       total: 0,
       categories: [],
       protocols: [],
+      hostings: [],
       error: error ?? "Failed to load catalog",
       status: response?.status,
     };
@@ -2170,6 +2174,7 @@ export const browseCatalog = async (params: {
     total: data.total,
     categories: data.categories,
     protocols: data.protocols,
+    hostings: data.hostings ?? [],
     error: null,
     status: response?.status,
   };

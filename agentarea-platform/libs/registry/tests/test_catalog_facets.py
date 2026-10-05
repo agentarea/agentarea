@@ -176,6 +176,18 @@ class TestTolerance:
         f = derive_facets("mcp_servers", name="x", spec={"raw_spec": {"title": "a" * 400}}, tags=[])
         assert len(f.sort_key) == 255
 
+    def test_mcp_connections_say_where_they_run(self):
+        def hosting(spec):
+            return derive_facets("mcp_servers", name="x", spec=spec, tags=[]).hosting
+
+        assert hosting({"connection_type": "url", "url": "https://x"}) == "vendor"
+        assert hosting({"connection_type": "command"}) == "agentarea"
+        assert hosting({"connection_type": "docker"}) == "agentarea"
+        # Managed publications predate connection_type.
+        assert hosting({"remote_url": "https://x"}) == "vendor"
+        assert hosting({"connection_type": "openapi"}) is None
+        assert derive_facets("skills", name="x", spec={}, tags=[]).hosting is None
+
     def test_survives_non_mapping_nested_spec(self):
         # Sources are external; raw_spec/metadata are whatever the upstream
         # served. A string where a mapping was expected must not raise.

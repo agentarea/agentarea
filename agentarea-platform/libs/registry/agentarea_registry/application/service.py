@@ -338,10 +338,17 @@ class RegistryService:
         query: str | None = None,
         category: str | None = None,
         protocol: str | None = None,
+        hosting: str | None = None,
         sort: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> tuple[list[RegistryItem], int, list[tuple[str, int]], list[tuple[str, int]]]:
+    ) -> tuple[
+        list[RegistryItem],
+        int,
+        list[tuple[str, int]],
+        list[tuple[str, int]],
+        list[tuple[str, int]],
+    ]:
         """One page of a type's catalog, its total, and its facets.
 
         Backs the /explore gallery. All of them come from the same filter so the
@@ -353,13 +360,21 @@ class RegistryService:
             q=query,
             category=category,
             protocol=protocol,
+            hosting=hosting,
             sort=sort or DEFAULT_CATALOG_SORT,
             limit=limit,
             offset=offset,
         )
-        categories = await self.item_repo.category_counts(registry_type, q=query, protocol=protocol)
-        protocols = await self.item_repo.protocol_counts(registry_type, q=query, category=category)
-        return items, total, categories, protocols
+        categories = await self.item_repo.category_counts(
+            registry_type, q=query, protocol=protocol, hosting=hosting
+        )
+        protocols = await self.item_repo.protocol_counts(
+            registry_type, q=query, category=category, hosting=hosting
+        )
+        hostings = await self.item_repo.hosting_counts(
+            registry_type, q=query, category=category, protocol=protocol
+        )
+        return items, total, categories, protocols, hostings
 
     async def search_catalog(
         self,

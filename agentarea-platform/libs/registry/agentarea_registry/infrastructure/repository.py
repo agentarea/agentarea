@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from agentarea_registry.application.catalog_facets import (
+    CATALOG_HOSTINGS,
     CATALOG_PROTOCOLS,
     PROTOCOL_REGISTRY_TYPE,
 )
@@ -304,6 +305,7 @@ class RegistryItemRepository:
         q: str | None,
         category: str | None,
         protocol: str | None = None,
+        hosting: str | None = None,
     ) -> list[ColumnElement[bool]]:
         """WHERE clause shared by the page query, its total, and the facets."""
         conditions: list[ColumnElement[bool]] = [
@@ -316,6 +318,8 @@ class RegistryItemRepository:
             conditions.append(RegistryItem.category == category)
         if protocol:
             conditions.append(RegistryItem.protocol == protocol)
+        if hosting:
+            conditions.append(RegistryItem.hosting == hosting)
         if q:
             pattern = f"%{q}%"
             conditions.append(
@@ -329,6 +333,7 @@ class RegistryItemRepository:
         q: str | None = None,
         category: str | None = None,
         protocol: str | None = None,
+        hosting: str | None = None,
         sort: str = DEFAULT_CATALOG_SORT,
         limit: int = 50,
         offset: int = 0,
@@ -338,7 +343,7 @@ class RegistryItemRepository:
         The total is what lets the client know there is more to fetch even when
         the current page contributes nothing visible.
         """
-        conditions = self._browse_filter(registry_type, q, category, protocol)
+        conditions = self._browse_filter(registry_type, q, category, protocol, hosting)
         order_by = CATALOG_SORTS.get(sort, CATALOG_SORTS[DEFAULT_CATALOG_SORT])()
         page = (
             select(RegistryItem).where(*conditions).order_by(*order_by).offset(offset).limit(limit)
@@ -350,7 +355,11 @@ class RegistryItemRepository:
         return items, total
 
     async def category_counts(
-        self, registry_type: str, q: str | None = None, protocol: str | None = None
+        self,
+        registry_type: str,
+        q: str | None = None,
+        protocol: str | None = None,
+        hosting: str | None = None,
     ) -> list[tuple[str, int]]:
         """Facet counts over the whole type, not just the loaded page.
 
@@ -364,7 +373,9 @@ class RegistryItemRepository:
         enough (most categories hold one or two entries) that size conveyed
         nothing to begin with.
         """
-        conditions = self._browse_filter(registry_type, q, category=None, protocol=protocol)
+        conditions = self._browse_filter(
+            registry_type, q, category=None, protocol=protocol, hosting=hosting
+        )
         query = (
             select(RegistryItem.category, func.count().label("n"))
             .where(*conditions, RegistryItem.category.is_not(None))
@@ -378,7 +389,11 @@ class RegistryItemRepository:
         return [(value, count) for value, count in rows]
 
     async def protocol_counts(
-        self, registry_type: str, q: str | None = None, category: str | None = None
+        self,
+        registry_type: str,
+        q: str | None = None,
+        category: str | None = None,
+        hosting: str | None = None,
     ) -> list[tuple[str, int]]:
         """How the matching connections split between MCP servers and HTTP APIs.
 
@@ -389,7 +404,7 @@ class RegistryItemRepository:
         """
         if registry_type != PROTOCOL_REGISTRY_TYPE:
             return []
-        conditions = self._browse_filter(registry_type, q, category, protocol=None)
+        conditions = self._browse_filter(registry_type, q, category, protocol=None, hosting=hosting)
         query = (
             select(RegistryItem.protocol, func.count())
             .where(*conditions)
@@ -399,6 +414,29 @@ class RegistryItemRepository:
         # lost and the dict reads as bytes.
         counts: dict[str | None, int] = dict((await self.session.execute(query)).tuples().all())
         return [(name, counts[name]) for name in CATALOG_PROTOCOLS if counts.get(name)]
+
+    async def hosting_counts(
+        self,
+        registry_type: str,
+        q: str | None = None,
+        category: str | None = None,
+        protocol: str | None = None,
+    ) -> list[tuple[str, int]]:
+        """How the matching MCP connections split between vendor-hosted and run here.
+
+        Connections catalog only. Ignores the active hosting filter so the other
+        side stays reachable, and drops an empty side.
+        """
+        if registry_type != PROTOCOL_REGISTRY_TYPE:
+            return []
+        conditions = self._browse_filter(registry_type, q, category, protocol, hosting=None)
+        query = (
+            select(RegistryItem.hosting, func.count())
+            .where(*conditions)
+            .group_by(RegistryItem.hosting)
+        )
+        counts: dict[str | None, int] = dict((await self.session.execute(query)).tuples().all())
+        return [(name, counts[name]) for name in CATALOG_HOSTINGS if counts.get(name)]
 
     async def search(
         self,

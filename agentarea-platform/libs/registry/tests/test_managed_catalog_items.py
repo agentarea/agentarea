@@ -157,6 +157,8 @@ async def test_update_recomputes_facets_from_the_new_definition():
         "sort_key": "new name",
         "featured": True,
         "protocol": "mcp",
+        # An empty spec says nothing about where it runs.
+        "hosting": None,
     }
 
 

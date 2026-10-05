@@ -38,13 +38,14 @@ class _Item:
         self.installed_version = None
         self.category = category
         self.featured = featured
+        self.hosting = None
         self.created_at = datetime(2026, 1, 1)
         self.updated_at = datetime(2026, 1, 1)
 
 
 class _Service:
-    def __init__(self, items=None, total=0, categories=None, protocols=None):
-        self._result = (items or [], total, categories or [], protocols or [])
+    def __init__(self, items=None, total=0, categories=None, protocols=None, hostings=None):
+        self._result = (items or [], total, categories or [], protocols or [], hostings or [])
         self.calls = []
 
     async def browse_catalog(self, **kwargs):
@@ -120,6 +121,7 @@ class TestParameterPassThrough:
             q="pdf",
             category="other",
             protocol="api",
+            hosting="vendor",
             sort="name",
             limit=24,
             offset=48,
@@ -130,6 +132,7 @@ class TestParameterPassThrough:
                 "query": "pdf",
                 "category": "other",
                 "protocol": "api",
+                "hosting": "vendor",
                 "sort": "name",
                 "limit": 24,
                 "offset": 48,
@@ -144,6 +147,7 @@ class TestParameterPassThrough:
         assert call["category"] is None
         assert call["sort"] is None
         assert call["protocol"] is None
+        assert call["hosting"] is None
         assert call["offset"] == 0
 
 
@@ -168,6 +172,18 @@ class TestValidation:
         # caller believes it asked for HTTP APIs.
         resp = await _browse(_Service(), registry_type="skills", protocol="api")
         assert resp.status_code == 400
+
+    async def test_rejects_a_hosting_filter_on_a_type_that_has_none(self):
+        resp = await _browse(_Service(), registry_type="skills", hosting="vendor")
+        assert resp.status_code == 400
+
+    async def test_reports_the_hosting_split(self):
+        service = _Service(hostings=[("vendor", 900), ("agentarea", 300)])
+        body = (await _browse(service, registry_type="mcp_servers")).json()
+        assert body["hostings"] == [
+            {"value": "vendor", "count": 900},
+            {"value": "agentarea", "count": 300},
+        ]
 
     async def test_requires_a_registry_type(self):
         assert (await _browse(_Service())).status_code == 422
