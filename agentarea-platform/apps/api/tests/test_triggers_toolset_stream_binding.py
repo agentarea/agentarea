@@ -40,6 +40,7 @@ def harness(monkeypatch):
     monkeypatch.setattr(
         triggers_toolset, "public_webhook_url", lambda wid: f"https://api.example/webhooks/{wid}"
     )
+    monkeypatch.setattr(triggers_toolset, "require_stream_readable", AsyncMock())
     return service
 
 
@@ -95,3 +96,21 @@ async def test_a_webhook_trigger_reports_its_public_url_and_a_lost_owner(harness
     assert summary["webhook_url"] == "https://api.example/webhooks/abc123"
     assert summary["status"] == "needs_owner"
     assert summary["needs_new_owner"] is True
+
+
+async def test_create_stream_refuses_a_stream_the_caller_may_not_read(harness, monkeypatch):
+    from fastapi import HTTPException
+
+    check = AsyncMock(side_effect=HTTPException(status_code=403, detail="Permission denied"))
+    monkeypatch.setattr(triggers_toolset, "require_stream_readable", check)
+    stream_id = uuid4()
+
+    result = json.loads(
+        await TriggersToolset().create_stream(
+            name="on push", agent_id=str(uuid4()), stream_id=str(stream_id)
+        )
+    )
+
+    assert result == {"error": "Permission denied"}
+    check.assert_awaited_once_with(stream_id, "u")
+    harness.create_trigger_from_payload.assert_not_called()

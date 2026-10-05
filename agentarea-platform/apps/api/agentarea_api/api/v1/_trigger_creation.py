@@ -13,6 +13,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.permission import require_permission
 from agentarea_common.config.app import get_app_settings
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_secrets.catalog_service import (
@@ -235,6 +236,17 @@ async def issue_generic_signing_secret(trigger_id: UUID, secret_manager: BaseSec
     return signing_secret
 
 
+async def require_stream_readable(stream_id: UUID | None, user_id: str) -> None:
+    """Refuse a stream trigger on a stream its creator may not read (403).
+
+    The trigger hands every event of the stream to the agent as task input, so
+    subscribing is reading. Shared by ``POST /triggers``, agent creation and the
+    MCP ``triggers.create_stream`` tool.
+    """
+    if stream_id is not None:
+        await require_permission("read", "stream", str(stream_id), user_id)
+
+
 async def create_trigger_from_spec(
     spec: TriggerSpec,
     *,
@@ -252,6 +264,8 @@ async def create_trigger_from_spec(
     never fires before its owner switches it on. When the provider refuses the
     webhook registration the trigger is deleted again and the 502 propagates.
     """
+    if spec.trigger_type == "stream":
+        await require_stream_readable(spec.stream_id, user_context.user_id)
     trigger = await trigger_service.create_trigger(
         build_domain_trigger(spec, agent_id, user_context, credentials)
     )

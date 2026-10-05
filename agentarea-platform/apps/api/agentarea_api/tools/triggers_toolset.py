@@ -18,8 +18,9 @@ from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_streams.domain.models import TriggerBinding
 from agentarea_triggers.schemas.dto import TriggerCreate
+from fastapi import HTTPException
 
-from ..api.v1._trigger_creation import public_webhook_url
+from ..api.v1._trigger_creation import public_webhook_url, require_stream_readable
 from ..api.v1.triggers import trigger_status
 from .base import platform_context, platform_read_context
 
@@ -240,6 +241,10 @@ class TriggersToolset(Toolset):
         trigger is created fire it.
         """
         async with platform_context() as (_session, user_ctx, repo_factory, broker, secret):
+            try:
+                await require_stream_readable(UUID(stream_id), user_ctx.user_id)
+            except HTTPException as exc:
+                return json.dumps({"error": exc.detail})
             service = await _build_trigger_service(repo_factory, broker, secret)
             payload = TriggerCreate(
                 name=name,
