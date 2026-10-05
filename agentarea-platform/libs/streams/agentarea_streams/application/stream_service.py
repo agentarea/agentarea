@@ -29,8 +29,21 @@ from ..infrastructure.repository import (
 
 
 def webhook_stream_name(trigger_name: str, webhook_id: str) -> str:
-    """The name a webhook trigger's own stream gets; the backfill migration writes the same."""
-    return f"{trigger_name[:200]} ({webhook_id})"
+    """The name a webhook trigger's own stream gets; the backfill migration writes the same.
+
+    ``streams.name`` is a ``varchar(255)``; the trigger name is truncated so the
+    ``" (webhook_id)"`` suffix always survives intact, down to 0 characters of
+    name. A ``webhook_id`` long enough that even the bare suffix would not fit
+    has nothing left to truncate, so this raises instead of cutting the id.
+    """
+    suffix = f" ({webhook_id})"
+    if len(suffix) > 255:
+        raise ValueError(
+            f"webhook_id {webhook_id!r} is {len(webhook_id)} characters; its stream-name "
+            f"suffix alone is {len(suffix)} characters, past the 255-character limit"
+        )
+    name_budget = min(200, 255 - len(suffix))
+    return f"{trigger_name[:name_budget]}{suffix}"
 
 
 class StreamService:
