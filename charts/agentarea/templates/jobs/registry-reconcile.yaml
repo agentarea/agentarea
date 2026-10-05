@@ -1,4 +1,3 @@
-{{- if .Values.registryReconcile.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -12,7 +11,9 @@ metadata:
   annotations:
     # Standard resource (not a Helm hook) that waits for the database, mirroring
     # the db-migration Job. ttlSecondsAfterFinished clears it so a later upgrade
-    # recreates and re-runs it (reconcile is idempotent).
+    # recreates and re-runs it (reconcile is idempotent). Runs even with
+    # registryReconcile disabled: it also writes the graph ownership of rows a
+    # migration inserted by SQL, once the schema reaches the migration head.
 spec:
   ttlSecondsAfterFinished: 300
   template:
@@ -63,6 +64,8 @@ spec:
           command:
             - agentarea-api
             - reconcile
+            - --wait-for-schema
+            - {{ .Values.global.database.migrations.initializationTimeout | quote }}
           envFrom:
             - configMapRef:
                 name: {{ include "agentarea.fullname" . }}-env-databasejobs
@@ -78,10 +81,38 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.postgresql }}
                   key: password
+            {{- if .Values.registryReconcile.enabled }}
             # Registry definitions consumed by `agentarea-api reconcile`
             # (JSON array; bound to the --registries-config option via envvar).
             - name: REGISTRIES_CONFIG
               value: {{ .Values.registryReconcile.registries | toJson | quote }}
+            {{- end }}
+            {{- if .Values.openfga.enabled }}
+            # The authorization graph, as the backend reaches it. The model is the
+            # API's to apply; this Job only resolves the store.
+            - name: AGENTAREA_AUTHZ_BACKEND
+              value: "openfga"
+            - name: AGENTAREA_AUTHZ_FGA_URL
+              value: "http://{{ include "agentarea.fullname" . }}-openfga:{{ .Values.openfga.service.httpPort | default 8080 }}"
+            - name: AGENTAREA_AUTHZ_FGA_STORE_ID
+              value: {{ .Values.openfga.accessControl.storeId | quote }}
+            - name: AGENTAREA_AUTHZ_FGA_MODEL_ID
+              value: {{ .Values.openfga.accessControl.authorizationModelId | quote }}
+            - name: AGENTAREA_AUTHZ_FGA_BOOTSTRAP
+              value: {{ .Values.openfga.accessControl.autoBootstrap | quote }}
+            - name: AGENTAREA_AUTHZ_FGA_APPLY_MODEL
+              value: "false"
+            - name: AGENTAREA_AUTHZ_FGA_STORE_NAME
+              value: {{ .Values.openfga.accessControl.storeName | default "agentarea" | quote }}
+            {{- end }}
+            {{- if or .Values.backend.envVars .Values.global.envVars }}
+            {{- $backendEnv := deepCopy (default dict .Values.backend.envVars) -}}
+            {{- $globalEnv := default dict .Values.global.envVars -}}
+            {{- range $k, $v := mergeOverwrite $backendEnv $globalEnv }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- end }}
           {{- if or .Values.global.jobs.kube.resources .Values.backend.resources }}
           resources:
             {{- if .Values.global.jobs.kube.resources }}
@@ -103,4 +134,3 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
   backoffLimit: 3
-{{- end }}

@@ -39,183 +39,40 @@ With ``--revoke-ended-memberships`` it also goes the other way, and deletes:
    and only its graph revocation is outstanding. Run it, and read its warnings,
    before ``--revoke-ended-memberships``.
 
-Which tables to walk is read off the models themselves (``__graph_resource__``):
-every installed ``agentarea_*`` module declaring one is imported, so this stays
-in step with the runtime instead of repeating a list that rots.
+Steps 1 and 2 are ``agentarea_common.rebac.ownership_reconcile``, which
+``agentarea-api reconcile`` also runs after every migration; this script adds
+the membership repairs that need a person to read their output first.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-import importlib.util
 import logging
-import pkgutil
-import re
 from collections.abc import Awaitable, Callable
-from pathlib import Path
 
-from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.config import get_database, get_settings
 from agentarea_common.rebac.models import RelationQuery, RelationTuple
 from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
 from agentarea_common.rebac.openfga_client import OpenFGAClient
-from agentarea_common.rebac.ownership import (
-    OWNER_RELATIONS,
-    graph_governed_models,
-    root_project_id,
+from agentarea_common.rebac.ownership import root_project_id
+from agentarea_common.rebac.ownership_reconcile import (
+    TupleWriter,
+    load_workspace_owners,
+    reconcile_member_roles,
+    reconcile_resource_ownership,
+    reconcile_workspace_admins,
 )
 from agentarea_common.workspaces.models import (
     INVITATION_STATUS_ACCEPTED,
     INVITATION_STATUS_REVOKED,
 )
 from agentarea_common.workspaces.repository import MEMBERSHIP_ENDED
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("reconcile_resource_authz")
-
-_GOVERNED_DECLARATION = re.compile(r"^\s+__graph_resource__\s*=\s*True\b", re.MULTILINE)
-
-
-def load_governed_models() -> list[type]:
-    """Import every module that declares a governed model, then read the registry.
-
-    ``graph_governed_models()`` sees only mapped models, and a model is mapped
-    only once its module is imported. Importing a hand-kept list left new
-    governed models unmapped here and their rows unrepaired, so the modules are
-    found by the declaration itself across every installed ``agentarea_*``
-    package.
-    """
-    for package in pkgutil.iter_modules():
-        if not package.ispkg or not package.name.startswith("agentarea_"):
-            continue
-        spec = importlib.util.find_spec(package.name)
-        if spec is None or spec.submodule_search_locations is None:
-            raise RuntimeError(f"package {package.name} was listed but cannot be located")
-        for location in spec.submodule_search_locations:
-            root = Path(location)
-            for path in sorted(root.rglob("*.py")):
-                if not _GOVERNED_DECLARATION.search(path.read_text(encoding="utf-8")):
-                    continue
-                parts = [package.name, *path.relative_to(root).with_suffix("").parts]
-                if parts[-1] == "__init__":
-                    parts.pop()
-                importlib.import_module(".".join(parts))
-    return graph_governed_models()
-
-
-class _Writer:
-    def __init__(self, client: OpenFGAClient, dry_run: bool) -> None:
-        self._client = client
-        self._dry_run = dry_run
-        self.written = 0
-        self.deleted = 0
-
-    async def ensure(self, relationship: RelationTuple) -> None:
-        if self._dry_run:
-            logger.info("would write %s", relationship)
-            self.written += 1
-            return
-        try:
-            await self._client.write_tuple(relationship)
-            self.written += 1
-        except Exception as exc:
-            message = str(exc).lower()
-            if "already exists" in message or "tuple to be written already existed" in message:
-                return
-            logger.exception("write failed for %s", relationship)
-            raise
-
-    async def remove(self, relationship: RelationTuple) -> None:
-        if self._dry_run:
-            logger.info("would delete %s", relationship)
-        else:
-            await self._client.delete_tuple(relationship)
-        self.deleted += 1
-
-
-async def _reconcile_resources(writer: _Writer, rows, workspace_owners: dict[str, str]) -> None:
-    for row in rows:
-        resource_id = str(row.id)
-        workspace_id = str(row.workspace_id)
-        # `created_by` is the person who actually made it; the workspace owner is
-        # the fallback for rows old enough to predate the column being filled.
-        owner = str(row.created_by or "") or workspace_owners.get(workspace_id, "")
-        if not owner:
-            logger.warning("resource %s has no owner to grant; skipped", resource_id)
-            continue
-        await writer.ensure(
-            RelationTuple(
-                namespace="resource",
-                object=resource_id,
-                relation="project",
-                subject_id=f"project:{root_project_id(workspace_id)}",
-            )
-        )
-        for relation in OWNER_RELATIONS:
-            await writer.ensure(
-                RelationTuple(
-                    namespace="resource",
-                    object=resource_id,
-                    relation=relation,
-                    subject_id=f"User:{owner}",
-                )
-            )
-
-
-async def _reconcile_workspace_admins(writer: _Writer, owners: dict[str, str]) -> None:
-    """Project each workspace's owner onto ``Workspace#admin``.
-
-    Two representations of one fact: ``workspaces.owner_user_id`` answers
-    ``requires_workspace_admin()``, while ``Workspace#admin`` is what OpenFGA
-    evaluates in ``project.can_read: ... or admin from workspace`` -- the branch
-    that lets an admin reach objects they do not own. They agree by construction
-    at creation time and nothing changes ownership afterwards, but a seed that
-    failed halfway leaves an admin who can rewrite policy and cannot open an
-    agent. The column is the authority; this writes the projection.
-    """
-    for workspace_id, owner in owners.items():
-        if not owner:
-            logger.warning("workspace %s has no owner_user_id; skipped", workspace_id)
-            continue
-        await writer.ensure(
-            RelationTuple(
-                namespace="Workspace",
-                object=workspace_id,
-                relation="admin",
-                subject_id=f"User:{owner}",
-            )
-        )
-        await writer.ensure(
-            RelationTuple(
-                namespace="project",
-                object=root_project_id(workspace_id),
-                relation="workspace",
-                subject_id=f"Workspace:{workspace_id}",
-            )
-        )
-
-
-async def _reconcile_member_roles(writer: _Writer, client: OpenFGAClient) -> int:
-    memberships = await client.query_all_tuples(
-        RelationQuery(namespace="Workspace", relation="members")
-    )
-    seen = 0
-    for membership in memberships:
-        if not membership.subject_id or not membership.subject_id.startswith("User:"):
-            continue
-        seen += 1
-        await writer.ensure(
-            RelationTuple(
-                namespace="project",
-                object=root_project_id(membership.object),
-                relation="reader",
-                subject_id=membership.subject_id,
-            )
-        )
-    return seen
 
 
 class RevocationRefused(Exception):  # noqa: N818
@@ -258,7 +115,7 @@ async def load_protected(session: AsyncSession, workspace_id: str) -> set[str]:
 
 
 async def _revoke_ended_memberships(
-    writer: _Writer,
+    writer: TupleWriter,
     client: OpenFGAClient,
     *,
     load_members: Callable[[str], Awaitable[set[str]]],
@@ -492,30 +349,18 @@ async def main() -> None:
         authorization_model_id=settings.openfga.MODEL_ID,
         timeout_seconds=settings.openfga.TIMEOUT.total_seconds(),
     )
-    writer = _Writer(client, args.dry_run)
-    models = load_governed_models()
-    logger.info("governed tables: %s", ", ".join(m.__tablename__ for m in models))
+    writer = TupleWriter(
+        client, args.dry_run, await client.query_all_tuples(RelationQuery())
+    )
 
     database = get_database()
     resource_count = 0
     try:
         async with database.async_session_factory() as session:
-            workspace_owners = {
-                str(row.id): str(row.owner_user_id)
-                for row in (
-                    await session.execute(text("SELECT id, owner_user_id FROM workspaces"))
-                ).all()
-            }
-            with unscoped("reconcile walks every governed row of every workspace"):
-                for model in models:
-                    rows = (
-                        await session.execute(select(model.id, model.workspace_id, model.created_by))
-                    ).all()
-                    await _reconcile_resources(writer, rows, workspace_owners)
-                    resource_count += len(rows)
-                    logger.info("reconciled %d %s rows", len(rows), model.__tablename__)
+            workspace_owners = await load_workspace_owners(session)
+            resource_count = await reconcile_resource_ownership(session, writer, workspace_owners)
 
-        await _reconcile_workspace_admins(writer, workspace_owners)
+        await reconcile_workspace_admins(writer, workspace_owners)
         logger.info("reconciled admin projections for %d workspaces", len(workspace_owners))
 
         if args.backfill_memberships_from_graph:
@@ -578,7 +423,7 @@ async def main() -> None:
                 revoked,
             )
 
-        members = await _reconcile_member_roles(writer, client)
+        members = await reconcile_member_roles(writer, client)
         logger.info("reconciled baseline roles for %d workspace memberships", members)
     finally:
         await client.aclose()

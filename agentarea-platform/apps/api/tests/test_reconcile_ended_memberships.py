@@ -74,7 +74,7 @@ async def _revoke(
     load=None,
     protected: dict[str, set[str]] | None = None,
 ) -> int:
-    writer = _module._Writer(graph, dry_run)
+    writer = _module.TupleWriter(graph, dry_run)
 
     async def load_protected(workspace_id: str) -> set[str]:
         return (protected or {}).get(workspace_id, set())
