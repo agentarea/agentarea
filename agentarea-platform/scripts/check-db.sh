@@ -60,6 +60,9 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     under the workflow's id (the primary key decides); the SSE catch-up reads
 #     keyset batches ordered by (timestamp, id) and resumes after a given event;
 #     a conversation entry rewritten at its position replaces the first write.
+#   task provenance: a task's origin, correlation, causation and parent id are
+#     plain nullable columns the migrated schema must carry; a mocked session
+#     never catches a missing column.
 #   event streams: the journal is partitioned by day and deduplicated by a
 #     separate key table; a webhook id belongs to one source and a trigger
 #     subscription names its trigger -- rules only the migrated schema holds.
@@ -82,6 +85,7 @@ PY_SUITES=(
   tests/unit/test_tenant_scope_isolation.py
   libs/tasks/tests/test_task_event_idempotency_db.py
   libs/tasks/tests/test_task_conversation_db.py
+  libs/tasks/tests/test_task_provenance_db.py
   libs/execution/tests/unit/test_publish_workflow_events_db.py
   apps/api/tests/test_task_event_feed_db.py
   libs/streams/tests/test_schema_db.py

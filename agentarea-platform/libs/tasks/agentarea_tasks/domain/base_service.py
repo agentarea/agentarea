@@ -104,6 +104,7 @@ class BaseTaskService(ABC):
             scheduled_at=task.scheduled_at,
             # user_id and workspace_id will be set automatically by WorkspaceScopedRepository
             metadata=task.metadata,
+            provenance=task.provenance,
         )
 
         # Persist the task
@@ -129,6 +130,7 @@ class BaseTaskService(ABC):
             scheduled_at=created_task_domain.scheduled_at,
             workspace_id=created_task_domain.workspace_id,
             metadata=created_task_domain.metadata,
+            provenance=created_task_domain.provenance,
         )
 
         logger.info(f"Created task {created_task.id} for agent {created_task.agent_id}")

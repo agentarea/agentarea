@@ -37,7 +37,7 @@ from .domain.exceptions import (
     SchedulingNotSupportedError,
 )
 from .domain.interfaces import BaseTaskManager
-from .domain.models import AgentTask
+from .domain.models import AgentTask, TaskProvenance
 from .infrastructure.repository import TaskConversationRepository, TaskRepository
 from .schemas.dto import RunCreate
 
@@ -301,6 +301,7 @@ class TaskService(BaseTaskService):
         upper_bound_policy: EffectivePolicy | None = None,
         require_model: bool = False,
         scheduled_at: datetime | None = None,
+        provenance: TaskProvenance | None = None,
     ) -> AgentTask:
         """Persist a task with resolved governance policy. Does not dispatch to Temporal.
 
@@ -396,6 +397,7 @@ class TaskService(BaseTaskService):
             task_parameters=parameters,
             metadata=metadata,
             scheduled_at=scheduled_at,
+            provenance=provenance or TaskProvenance(),
         )
         stored_task = await self.create_task(task)
         # Hand the exact DB-persisted snapshot to Temporal. Policy changes after
@@ -425,6 +427,7 @@ class TaskService(BaseTaskService):
             title=task.title,
             query=task.query,
             metadata_overrides=meta or None,
+            provenance=task.provenance,
         )
 
     async def start_run(
@@ -1096,6 +1099,7 @@ class TaskService(BaseTaskService):
         status: str = "pending",
         task_policy: PolicyDocument | None = None,
         scheduled_at: datetime | None = None,
+        provenance: TaskProvenance | None = None,
     ) -> AgentTask:
         """Canonical entry point for creating and executing a task via Temporal workflow.
 
@@ -1116,6 +1120,7 @@ class TaskService(BaseTaskService):
             status: Initial task status (default ``pending``)
             task_policy: Optional task-scoped policy that may only tighten higher scopes.
             scheduled_at: Absolute future time for a one-shot deferred run.
+            provenance: Who or what started this task, and the event that caused it.
 
         Returns:
             Created task with workflow execution info, or the routed-into existing
@@ -1152,6 +1157,7 @@ class TaskService(BaseTaskService):
                 agent_id=agent_id,
                 status=status,
                 task_parameters=parameters or {},
+                provenance=provenance or TaskProvenance(),
             )
             routed = await self._try_route_to_active_workflow(draft, str(chat_id))
             if routed:
@@ -1176,6 +1182,7 @@ class TaskService(BaseTaskService):
             task_policy=task_policy,
             require_model=True,
             scheduled_at=scheduled_at,
+            provenance=provenance,
         )
 
         stored_task.status = "pending"
