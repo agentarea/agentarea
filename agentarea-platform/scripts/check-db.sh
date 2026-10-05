@@ -66,6 +66,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #   event streams: the journal is partitioned by day and deduplicated by a
 #     separate key table; a webhook id belongs to one source and a trigger
 #     subscription names its trigger -- rules only the migrated schema holds.
+#     Partition maintenance creates and drops real daily partitions and trims
+#     a short-retention stream's rows, which a mocked session cannot exercise.
 PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
@@ -93,6 +95,7 @@ PY_SUITES=(
   libs/streams/tests/test_stream_isolation_db.py
   libs/streams/tests/test_stream_service_db.py
   libs/streams/tests/test_pg_journal_db.py
+  libs/streams/tests/test_partitions_db.py
 )
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, the secret
