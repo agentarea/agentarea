@@ -148,7 +148,10 @@ partitioned by day on `received_at`. A worker job keeps
 partitions older than the longest `retention_days` configured on any stream in
 the deployment (floored at `AGENTAREA_EVENT_RETENTION`), and separately trims
 a shorter-lived stream's own rows out of partitions still being kept for
-someone else's longer one.
+someone else's longer one. Each step commits on its own and deletes go in
+bounded batches. Creating or dropping a partition locks the whole journal, so
+it waits at most 5 seconds for that lock and otherwise leaves the partition to
+the next hourly pass rather than queue webhook intake behind it.
 
 ## Why not keep a webhook wired to exactly one trigger
 

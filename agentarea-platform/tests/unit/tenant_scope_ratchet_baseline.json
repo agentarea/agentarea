@@ -41,7 +41,7 @@
     "libs/secrets/agentarea_secrets/catalog_service.py": 13,
     "libs/secrets/agentarea_secrets/database_secret_manager.py": 5,
     "libs/streams/agentarea_streams/infrastructure/cross_workspace_leases.py": 2,
-    "libs/streams/agentarea_streams/infrastructure/partitions.py": 8
+    "libs/streams/agentarea_streams/infrastructure/partitions.py": 9
   },
   "unscoped": {
     "apps/api/agentarea_api/api/v1/agents_well_known.py": 1,
