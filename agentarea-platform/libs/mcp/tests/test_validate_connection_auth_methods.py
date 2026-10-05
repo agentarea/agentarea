@@ -272,7 +272,7 @@ def _probing(service: MCPServerInstanceService, url: str = URL) -> MCPServerInst
     """Point probe_instance_auth at one URL-type instance at ``url``."""
     service.repository = MagicMock()
     service.repository.get_by_id = AsyncMock(
-        return_value=MagicMock(id="inst-1", server_spec_id=None)
+        return_value=MagicMock(id="inst-1", server_spec_id=None, transport="url")
     )
     service.get_transport_spec_for_instance = AsyncMock(  # type: ignore[method-assign]
         return_value={"type": "url", "endpoint_url": url}

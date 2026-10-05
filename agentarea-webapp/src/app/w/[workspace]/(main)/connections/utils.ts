@@ -2,7 +2,17 @@
  * Utility functions for MCP server categorization and styling
  */
 
-export type MCPConnectionType = "docker" | "command" | "url";
+import type { McpTransport } from "@/api/client/types.gen";
+
+export type MCPConnectionType = Exclude<McpTransport, "bundle">;
+
+/** How a connection is reached, as the instance's `transport` records it. */
+export const TRANSPORT_LABEL: Record<McpTransport, string> = {
+  url: "Remote",
+  docker: "Docker",
+  command: "Command",
+  bundle: "Bundle",
+};
 export type MCPVerificationStatus =
   | "succeeded"
   | "in_progress"
@@ -129,17 +139,17 @@ export const CONNECTION_TYPE_CONFIG: Record<
   { label: string; color: string }
 > = {
   docker: {
-    label: "Docker",
+    label: TRANSPORT_LABEL.docker,
     color:
       "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800",
   },
   command: {
-    label: "Command",
+    label: TRANSPORT_LABEL.command,
     color:
       "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800",
   },
   url: {
-    label: "Remote",
+    label: TRANSPORT_LABEL.url,
     color:
       "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-300 dark:border-sky-800",
   },

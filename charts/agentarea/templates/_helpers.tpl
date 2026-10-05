@@ -35,6 +35,15 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 {{- end }}
 
+{{/* AGENTAREA_MCP_OAUTH_APPS for backend and worker, from global.mcpOAuthApps.existingSecret. */}}
+{{- define "agentarea.mcpOAuthApps.env" -}}
+- name: AGENTAREA_MCP_OAUTH_APPS
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.global.mcpOAuthApps.existingSecret | quote }}
+      key: {{ .Values.global.mcpOAuthApps.existingSecretKey | default "mcp-oauth-apps" | quote }}
+{{- end -}}
+
 {{/* Dedicated secret name for worker-to-manager sandbox cleanup authentication. */}}
 {{- define "agentarea.sandboxCleanupSecretName" -}}
 {{- required "global.runtimeCredentials.existingSecret is required" .Values.global.runtimeCredentials.existingSecret -}}

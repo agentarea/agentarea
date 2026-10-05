@@ -18,7 +18,6 @@ import {
   Blocks,
   Bot,
   ChevronLeft,
-  Clock,
   Compass,
   ExternalLink,
   FileText,
@@ -26,17 +25,13 @@ import {
   Plug,
   Puzzle,
   Search,
-  Send,
-  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Star,
   Telescope,
 } from "lucide-react";
-
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { Streamdown } from "streamdown";
-import { AgentAvatar } from "@/components/AgentAvatar";
 import EmptyState from "@/components/EmptyState";
 import EntityMark from "@/components/EntityMark";
 import FormError from "@/components/FormError";
@@ -89,10 +84,9 @@ import {
   type AgentLite,
   type WorkspaceModel,
 } from "./actions";
-import { BundleInstallWizard } from "./BundleInstallWizard";
+import { BundlePlan } from "./BundlePlan";
 import {
   ALL,
-  arr,
   DEFAULT_SORT,
   EXPLORE_VIEW_COOKIE,
   FEATURED_TAG,
@@ -1297,21 +1291,10 @@ function DetailView({
 
   const installing = state.phase === "loading";
 
-  // Bundles route through the configure-then-install wizard in place of the
-  // detail view; everything else keeps the look-first detail layout.
-  if (entry.type === "bundles" && configuring) {
-    return (
-      <BundleInstallWizard
-        source={JSON.stringify(spec)}
-        title={entry.title}
-        identity={entry.identity}
-        onBack={() => setConfiguring(false)}
-      />
-    );
-  }
+  const isBundle = entry.type === "bundles";
 
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className={cn("space-y-8", isBundle ? "max-w-[1120px]" : "max-w-2xl")}>
       <button
         onClick={onBack}
         className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -1360,17 +1343,13 @@ function DetailView({
             <StartAgentButton asChild size="xs">
               <Link href={connectHref}>Connect</Link>
             </StartAgentButton>
-          ) : (
+          ) : isBundle && configuring ? null : (
             <StartAgentButton
               size="xs"
-              onClick={() =>
-                entry.type === "bundles" ? setConfiguring(true) : installAgent()
-              }
+              onClick={() => (isBundle ? setConfiguring(true) : installAgent())}
               isLoading={installing}
             >
-              {entry.type === "bundles"
-                ? "Use this bundle"
-                : "Add to workspace"}
+              {isBundle ? "Use this bundle" : "Add to workspace"}
             </StartAgentButton>
           )}
         </CatalogActionSlot>
@@ -1404,8 +1383,19 @@ function DetailView({
         </div>
       )}
 
-      {topicalTags.length > 0 && (
+      {(capabilitySet.size > 0 || topicalTags.length > 0) && (
         <div className="flex flex-wrap gap-1.5">
+          {[...capabilitySet].map((c) => (
+            <Badge
+              key={c}
+              variant="light"
+              size="sm"
+              className="gap-1 capitalize"
+            >
+              <Sparkles className="h-3 w-3" />
+              {c.replace(/[-_]+/g, " ")}
+            </Badge>
+          ))}
           {topicalTags.slice(0, 12).map((t) => (
             <Badge key={t} variant="light" size="sm">
               {t}
@@ -1416,7 +1406,13 @@ function DetailView({
 
       {/* details */}
       <div className="space-y-5 border-t border-border/60 pt-6">
-        {entry.type === "bundles" && <BundleContents spec={spec} />}
+        {isBundle && (
+          <BundlePlan
+            source={JSON.stringify(spec)}
+            configuring={configuring}
+            onCancel={() => setConfiguring(false)}
+          />
+        )}
         {entry.type === "agents" && <PreferredModels models={entry.meta} />}
         {entry.type === "connections" && !isCatalogApi && (
           <ConnectionSetup tier={tier} />
@@ -1599,349 +1595,10 @@ function ConnectionSetup({ tier }: { tier: SetupTier }) {
   );
 }
 
-function Inside({
-  icon: Icon,
-  label,
-  rows,
-  hint,
-}: {
-  icon: LucideIcon;
-  label: string;
-  rows: string[];
-  hint?: string;
-}) {
-  if (rows.length === 0) return null;
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" />
-        {label}
-        <span className="tabular-nums">({rows.length})</span>
-      </div>
-      <ul className="space-y-1">
-        {rows.map((r) => (
-          <li
-            key={r}
-            className="truncate rounded bg-muted/50 px-2 py-1 text-sm"
-          >
-            {r}
-          </li>
-        ))}
-      </ul>
-      {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
-
-// ── Bundle contents (rich breakdown of what's inside a bundle) ──
-
-// Each entity in a bundle carries far more than a name: agents have an
-// instruction, a model, and the skills/connections they wire up; skills carry a
-// source and a content preview; connections carry a transport and the secrets
-// they bind. The detail view surfaces all of it so you can judge a bundle
-// before installing — not just count its parts. Everything is referenced by
-// in-bundle `key` (portable; ids are resolved on install), so we resolve those
-// keys to display names against the bundle's own entity lists.
-
 // Presentation capabilities a bundle advertises ("interactive", "write"…),
-// carried in metadata — surfaced as their own labeled row, not loose tags.
+// carried in metadata — shown beside its tags, not mixed into them.
 function bundleCapabilities(spec: RawSpec): string[] {
   return strArr((spec.metadata as RawSpec | undefined)?.capabilities);
-}
-
-// Display name for an in-bundle reference key (e.g. an agent's skill/mcp key).
-function bundleRefName(items: Record<string, unknown>[], key: string): string {
-  const found = items.find((i) => str(i.key) === key);
-  return found ? String(found.name ?? key) : key;
-}
-
-// Models are literal ids ("gpt-4o") or "${setup.x}" placeholders. Resolve the
-// placeholder to the setup field's default so the card shows a real model name
-// instead of a raw template; hide it when nothing concrete is known.
-function resolveBundleModel(
-  model: string | null,
-  setup: Record<string, unknown>[]
-): string | null {
-  if (!model) return null;
-  const ref = model.match(/^\$\{setup\.([a-zA-Z0-9_]+)\}$/);
-  if (!ref) return model;
-  const field = setup.find((f) => str(f.key) === ref[1]);
-  return field ? str(field.default) : null;
-}
-
-// First meaningful line of a SKILL.md body, with the leading "# Heading" (which
-// just repeats the skill name) dropped.
-function skillPreview(content: string | null): string | null {
-  if (!content) return null;
-  const body = content
-    .split("\n")
-    .map((l) => l.trim())
-    .find((l) => l.length > 0 && !l.startsWith("#"));
-  return body ?? null;
-}
-
-function BundleSection({
-  icon: Icon,
-  label,
-  count,
-  hint,
-  children,
-}: {
-  icon: LucideIcon;
-  label: string;
-  count: number;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  if (count === 0) return null;
-  return (
-    <div>
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" />
-        {label}
-        <span className="tabular-nums">({count})</span>
-      </div>
-      <div className="space-y-2">{children}</div>
-      {hint && (
-        <p className="mt-1.5 text-[11px] text-muted-foreground">{hint}</p>
-      )}
-    </div>
-  );
-}
-
-// A small icon+text chip used to show an agent's wired skills/connections.
-function RefChip({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
-  return (
-    <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-border/60 bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground">
-      <Icon className="h-3 w-3 shrink-0" />
-      <span className="truncate">{label}</span>
-    </span>
-  );
-}
-
-function BundleContents({ spec }: { spec: RawSpec }) {
-  const agents = arr(spec.agents);
-  const skills = arr(spec.skills);
-  const mcps = arr(spec.mcps);
-  const channels = arr(spec.channels);
-  const setup = arr(spec.setup);
-  const automations = arr(spec.automations);
-  const policies = arr(spec.policies);
-  const capabilities = bundleCapabilities(spec);
-
-  // Tool-scoping surfaced from governance policies (allow/deny on `tool:X`).
-  const agentAllowedTools = (agentKey: string) =>
-    policies
-      .filter((p) => str(p.subject) === agentKey && str(p.effect) === "allow")
-      .map((p) => str(p.target)?.match(/^tool:(.+)$/)?.[1])
-      .filter((t): t is string => Boolean(t) && t !== "*");
-
-  const total =
-    agents.length +
-    skills.length +
-    mcps.length +
-    channels.length +
-    automations.length +
-    policies.length +
-    capabilities.length;
-  if (total === 0) return null;
-
-  return (
-    <>
-      {capabilities.length > 0 && (
-        <div>
-          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5" />
-            Capabilities
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {capabilities.map((c) => (
-              <Badge
-                key={c}
-                variant="light"
-                size="sm"
-                className="gap-1 capitalize"
-              >
-                <Sparkles className="h-3 w-3" />
-                {c.replace(/[-_]+/g, " ")}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <BundleSection icon={Bot} label="Agents" count={agents.length}>
-        {agents.map((a, i) => {
-          const usesSkills = strArr(a.skills).map((k) =>
-            bundleRefName(skills, k)
-          );
-          const usesMcps = strArr(a.mcps).map((k) => bundleRefName(mcps, k));
-          const model = resolveBundleModel(str(a.model), setup);
-          const instruction = str(a.instruction);
-          return (
-            <div
-              key={str(a.key) ?? i}
-              className="rounded-lg border border-border/60 bg-muted/20 p-3"
-            >
-              <div className="flex items-center gap-2">
-                <AgentAvatar
-                  agent={{
-                    id: String(a.key ?? a.name ?? i),
-                    name: str(a.name),
-                  }}
-                  size="sm"
-                />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {String(a.name ?? a.key)}
-                </span>
-                {model && (
-                  <ModelBadge
-                    modelDisplayName={model}
-                    size="sm"
-                    className="shrink-0"
-                  />
-                )}
-              </div>
-              {instruction && (
-                <p className="mt-2 line-clamp-3 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
-                  {instruction}
-                </p>
-              )}
-              {(usesSkills.length > 0 || usesMcps.length > 0) && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {usesSkills.map((s) => (
-                    <RefChip key={`s-${s}`} icon={Puzzle} label={s} />
-                  ))}
-                  {usesMcps.map((m) => (
-                    <RefChip key={`m-${m}`} icon={Plug} label={m} />
-                  ))}
-                </div>
-              )}
-              {(() => {
-                const allowed = agentAllowedTools(String(a.key ?? ""));
-                if (allowed.length === 0) return null;
-                return (
-                  <StatusIndicator
-                    kind="attention"
-                    size="sm"
-                    className="text-[11px]"
-                  >
-                    Tools locked to{" "}
-                    <span className="font-medium">{allowed.join(", ")}</span>
-                  </StatusIndicator>
-                );
-              })()}
-            </div>
-          );
-        })}
-      </BundleSection>
-
-      <BundleSection icon={Puzzle} label="Skills" count={skills.length}>
-        {skills.map((s, i) => {
-          const source = str(s.source_type) ?? "content";
-          const preview =
-            source === "github"
-              ? str(s.source_url)
-              : skillPreview(str(s.content));
-          return (
-            <div
-              key={str(s.key) ?? i}
-              className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
-            >
-              <div className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {String(s.name ?? s.key)}
-                </span>
-                <Badge variant="light" size="sm" className="shrink-0">
-                  {source}
-                </Badge>
-              </div>
-              {preview && (
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                  {preview}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </BundleSection>
-
-      <BundleSection
-        icon={Plug}
-        label="Connections"
-        count={mcps.length}
-        hint="Connected via OAuth or your credentials after install"
-      >
-        {mcps.map((m, i) => {
-          const transport = str((m.json_spec as RawSpec | undefined)?.type);
-          const binds = Object.keys(
-            (m.bindings as Record<string, unknown> | undefined) ?? {}
-          );
-          return (
-            <div
-              key={str(m.key) ?? i}
-              className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
-            >
-              <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/60 bg-white dark:bg-zinc-800">
-                  <Plug className="h-3.5 w-3.5 text-zinc-400" />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {String(m.name ?? m.key)}
-                </span>
-                {transport && (
-                  <Badge variant="light" size="sm" className="shrink-0">
-                    {transport}
-                  </Badge>
-                )}
-              </div>
-              {binds.length > 0 && (
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Requires: {binds.join(", ")}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </BundleSection>
-
-      <Inside
-        icon={Send}
-        label="Channels"
-        rows={channels.map((c) => {
-          const name = String(c.name ?? c.key ?? "channel");
-          const type = str(c.type);
-          return type ? `${name} · ${type}` : name;
-        })}
-        hint="Chat with the agent here — connect after install"
-      />
-      <Inside
-        icon={Clock}
-        label="Automations"
-        rows={automations.map((a) => {
-          const kind =
-            str(a.type) ?? str(a.trigger) ?? str(a.kind) ?? str(a.cron);
-          const name = String(a.name ?? a.key ?? "automation");
-          return kind ? `${name} · ${kind}` : name;
-        })}
-        hint="Imported disabled — enable when ready"
-      />
-      <Inside
-        icon={ShieldCheck}
-        label="Policies"
-        rows={policies.map((p) => {
-          const msg = str(p.message);
-          if (msg) return msg;
-          const effect = str(p.effect);
-          const target = str(p.target);
-          return effect && target
-            ? `${effect} · ${target}`
-            : String(p.key ?? "policy");
-        })}
-        hint="Govern this bundle at runtime"
-      />
-    </>
-  );
 }
 
 // Primary action for a catalog skill: attach it to an agent. A workspace skill

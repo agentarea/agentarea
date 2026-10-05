@@ -126,12 +126,12 @@ VALUES
 
 	if _, err := db.ExecContext(ctx, `
 INSERT INTO mcp_server_instances
-  (id, server_spec_id, name, description, json_spec, verification, network_scope, workspace_id, created_by)
+  (id, server_spec_id, name, description, transport, json_spec, verification, network_scope, workspace_id, created_by)
 VALUES
-  ($1::uuid, $2, $3, NULL, '{}'::json,
+  ($1::uuid, $2, $3, NULL, $4, '{}'::json,
    '{"schema_version":1,"status":"succeeded","at":null,"error":null}'::json,
    'private', 'ws-test', 'user-test')
-`, instanceID, serverID, unique); err != nil {
+`, instanceID, serverID, unique, specKind); err != nil {
 		t.Fatalf("inserting instance: %v", err)
 	}
 

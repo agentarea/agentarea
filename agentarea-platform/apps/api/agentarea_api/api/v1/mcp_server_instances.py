@@ -21,6 +21,7 @@ from agentarea_mcp.application.service import MCPServerInstanceService, derive_b
 from agentarea_mcp.application.validation_service import MCPValidationError
 from agentarea_mcp.domain.env_schema import normalize_env_schema
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.domain.transport import CONTAINER_TRANSPORTS, MCPTransport
 from agentarea_mcp.package_import import MCPRuntimeRetirementError
 from agentarea_mcp.schemas.dto import (
     MCPServerCreate,
@@ -50,6 +51,7 @@ class MCPServerInstanceResponse(BaseModel):
     name: str
     description: str | None
     server_spec_id: str
+    transport: MCPTransport
     json_spec: dict[str, Any]
     verification: dict[str, Any]
     last_dispatch: dict[str, Any] | None = None
@@ -99,6 +101,7 @@ class MCPServerInstanceResponse(BaseModel):
                 "name": instance.name,
                 "description": instance.description,
                 "server_spec_id": instance.server_spec_id,
+                "transport": instance.transport,
                 "json_spec": json_spec,
                 "verification": verification,
                 "last_dispatch": instance.last_dispatch,
@@ -223,8 +226,7 @@ async def create_mcp_server_instance(
         if not instance:
             raise HTTPException(status_code=500, detail="Failed to create MCP instance")
 
-        instance_type = (data.json_spec or {}).get("type", "docker")
-        if instance_type in ("docker", "command"):
+        if instance.transport in CONTAINER_TRANSPORTS:
             response.status_code = 202
 
         return await _instance_response(service, instance)
@@ -264,16 +266,7 @@ async def create_mcp_server_connection(
         if not instance:
             raise HTTPException(status_code=500, detail="Failed to create MCP instance")
 
-        server_spec = await service.mcp_server_repository.get_server_by_id(instance.server_spec_id)
-        instance_type = "docker"
-        if server_spec:
-            if server_spec.remote_url:
-                instance_type = "url"
-            elif server_spec.cmd:
-                instance_type = "command"
-            elif server_spec.json_spec:
-                instance_type = server_spec.json_spec.get("type", instance_type)
-        if instance_type in ("docker", "command"):
+        if instance.transport in CONTAINER_TRANSPORTS:
             response.status_code = 202
         return await _instance_response(service, instance)
     except MCPValidationError as e:
@@ -395,8 +388,7 @@ async def list_mcp_server_instances(
     response_instances = []
     schema_cache: dict[str, list[dict[str, Any]]] = {}
     for instance in instances:
-        instance_type = (instance.json_spec or {}).get("type", "")
-        if instance_type == "bundle":
+        if instance.transport == MCPTransport.BUNDLE:
             # Derive bundle verification from current member states
             member_ids: list[str] = (instance.json_spec or {}).get("members", [])
             members = []
@@ -439,8 +431,7 @@ async def get_mcp_server_instance(
     if not instance.server_spec_id:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
 
-    instance_type = (instance.json_spec or {}).get("type", "")
-    if instance_type == "bundle":
+    if instance.transport == MCPTransport.BUNDLE:
         member_ids: list[str] = (instance.json_spec or {}).get("members", [])
         members = []
         for mid in member_ids:

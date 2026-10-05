@@ -3024,7 +3024,8 @@ export type McpInstanceHealthResponse = {
  *
  * Start an OAuth flow for one MCP instance.
  *
- * ``auto`` registers AgentArea with the authorization server (RFC 7591).
+ * ``auto`` registers AgentArea with the authorization server (RFC 7591), or
+ * uses the operator's platform app when the server has no registration.
  * ``custom`` uses an OAuth app the workspace registered with the provider —
  * the only option when the provider has no Dynamic Client Registration.
  */
@@ -3067,7 +3068,8 @@ export type McpoAuthAuthorizeRequest = {
  *
  * What the UI needs before it can offer a Connect action.
  *
- * ``ready`` — Connect can run unattended (the server supports DCR).
+ * ``ready`` — Connect can run unattended (the server supports DCR, or the
+ * operator registered a platform app for it).
  * ``oauth_app_required`` — ask for a client ID/secret first.
  * ``unsupported`` — this server cannot be authorized this way; say why.
  */
@@ -3200,11 +3202,11 @@ export type McpServerCreate = {
  *
  * Payload for creating an MCP server instance.
  *
- * ``json_spec`` carries the connection configuration. Common shapes:
- *
- * - ``{"type": "url", "endpoint_url": "https://..."}``
- * - ``{"type": "docker", "environment": {...}, "env_vars": [...]}``
- * - ``{"type": "command", "command": [...], "environment": {...}}``
+ * The instance's transport (url, docker or command) is the one its server
+ * spec declares; the response carries it as ``transport``. ``json_spec``
+ * carries the instance's own configuration, e.g.
+ * ``{"environment": {...}, "env_vars": [...]}`` or ``{"headers": {...}}``;
+ * transport keys in it are ignored.
  * For URL-type instances the service synchronously verifies the endpoint;
  * docker/command kick off background verification.
  */
@@ -3224,7 +3226,7 @@ export type McpServerInstanceCreate = {
     /**
      * Json Spec
      *
-     * Connection configuration. Must include 'type' ('url' | 'docker' | 'command'); other keys depend on type.
+     * Instance configuration (environment, env_vars, headers). Transport keys such as 'type' are ignored: the server spec declares the transport.
      */
     json_spec: {
         [key: string]: unknown;
@@ -3311,6 +3313,7 @@ export type McpServerInstanceResponse = {
     tools?: Array<{
         [key: string]: unknown;
     }> | null;
+    transport: McpTransport;
     /**
      * Updated At
      */
@@ -3477,6 +3480,12 @@ export type McpServerUpdate = {
      */
     version?: string;
 };
+/**
+ * MCPTransport
+ *
+ * How a connection is reached: the instance's ``transport`` column, set once at creation.
+ */
+export type McpTransport = 'url' | 'docker' | 'command' | 'bundle';
 /**
  * MPPConfigSchema
  */

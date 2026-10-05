@@ -9,9 +9,10 @@ server that requires OAuth (e.g. GitHub Copilot), this module handles:
     GET  /v1/mcp-oauth/callback   — exchange code for token, store in MCPAuthConfig
 
 Preflight exists so the UI never offers a Connect button that cannot complete:
-providers without Dynamic Client Registration (Google, GitHub) need the
-workspace's own OAuth app, and that has to be asked for before the redirect,
-not discovered as an error after it.
+providers without Dynamic Client Registration (Google, GitHub) need an OAuth
+app — the operator's platform app when AGENTAREA_MCP_OAUTH_APPS configures
+one for the provider, otherwise the workspace's own — and that has to be asked
+for before the redirect, not discovered as an error after it.
 
 Implements the client-side of:
     - MCP Authorization Spec (draft)
@@ -27,6 +28,7 @@ import logging
 import secrets
 import time
 import urllib.parse
+from dataclasses import replace
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -50,7 +52,7 @@ from agentarea_common.config.database import get_database
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
 from agentarea_common.workspaces.lookup import workspace_slug_for
-from agentarea_mcp.application.auth_service import MCPAuthService
+from agentarea_mcp.application.auth_service import MCPAuthService, platform_oauth_app_for
 from agentarea_mcp.application.oauth_client_service import (
     AuthServerMetadata,
     MCPOAuthClientService,
@@ -59,11 +61,14 @@ from agentarea_mcp.application.oauth_client_service import (
     oauth_app_required_detail,
     oauth_authorize_params,
 )
+from agentarea_mcp.application.platform_oauth_app import find_platform_oauth_app
+from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
+from agentarea_mcp.transport_spec import instance_transport_spec, server_transport_spec
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -91,7 +96,8 @@ _STATE_TTL_SECONDS = 600  # 10 minutes
 class MCPOAuthAuthorizeRequest(CustomOAuthAppFields):
     """Start an OAuth flow for one MCP instance.
 
-    ``auto`` registers AgentArea with the authorization server (RFC 7591).
+    ``auto`` registers AgentArea with the authorization server (RFC 7591), or
+    uses the operator's platform app when the server has no registration.
     ``custom`` uses an OAuth app the workspace registered with the provider —
     the only option when the provider has no Dynamic Client Registration.
     """
@@ -117,7 +123,8 @@ class MCPOAuthAuthorizeRequest(CustomOAuthAppFields):
 class MCPOAuthPreflightResponse(BaseModel):
     """What the UI needs before it can offer a Connect action.
 
-    ``ready`` — Connect can run unattended (the server supports DCR).
+    ``ready`` — Connect can run unattended (the server supports DCR, or the
+    operator registered a platform app for it).
     ``oauth_app_required`` — ask for a client ID/secret first.
     ``unsupported`` — this server cannot be authorized this way; say why.
     """
@@ -171,20 +178,19 @@ def _callback_uri() -> str:
     return f"{api_base}/v1/mcp-oauth/callback"
 
 
-def _resolve_instance_remote_url(server_spec) -> str | None:
-    """Resolve the remote MCP URL from the parent MCPServer.
-
-    Transport fields live on the server: the URL comes from its remote_url
-    column, falling back to the URL in its json_spec.
-    """
-    if server_spec is None:
+def _resolve_instance_remote_url(instance, server_spec) -> str | None:
+    """The remote MCP URL a URL-type instance connects to, else None."""
+    if server_spec is None or instance.transport != MCPTransport.URL:
         return None
-    if getattr(server_spec, "remote_url", None):
-        return server_spec.remote_url
-    spec_json = getattr(server_spec, "json_spec", None) or {}
-    if spec_json.get("type") == "url":
-        return spec_json.get("endpoint_url") or spec_json.get("url")
-    return None
+    return instance_transport_spec(server_spec, instance).get("endpoint_url") or None
+
+
+def _resolve_server_remote_url(server_spec) -> str | None:
+    """The remote MCP URL a URL-type server spec declares, else None."""
+    spec = server_transport_spec(server_spec)
+    if spec.get("type") != MCPTransport.URL:
+        return None
+    return spec.get("endpoint_url") or None
 
 
 async def _load_instance_and_spec(
@@ -200,7 +206,7 @@ async def _load_instance_and_spec(
     if instance.server_spec_id:
         server_repo = MCPServerRepository(db_session, user_context)
         server_spec = await server_repo.get_server_by_id(instance.server_spec_id)
-    return instance, server_spec, _resolve_instance_remote_url(server_spec)
+    return instance, server_spec, _resolve_instance_remote_url(instance, server_spec)
 
 
 def _safe_frontend_base(return_to: str) -> str:
@@ -279,7 +285,7 @@ async def oauth_preflight(
         )
         if server_spec is None:
             raise HTTPException(status_code=404, detail="MCP server spec not found")
-        mcp_url = _resolve_instance_remote_url(server_spec)
+        mcp_url = _resolve_server_remote_url(server_spec)
         connected = False
 
     target = {"instance_id": instance_id, "server_id": server_id, "connected": connected}
@@ -355,11 +361,12 @@ async def oauth_authorize(
         resolved = await resolve_custom_oauth_app(
             body, catalog=secret_catalog, manager=workspace_secret_manager
         )
-    else:
-        # Dynamic registration or nothing: a shared server-wide OAuth app would
-        # silently authorize one workspace's users through another workspace's
-        # client, so the workspace's own app is the only alternative.
-        if not as_metadata.registration_endpoint:
+    elif not as_metadata.registration_endpoint:
+        # Never another workspace's app: only one the operator configured for
+        # this issuer, and only for the MCP origins it names. Its endpoints, not
+        # discovery or the workspace's spec, say where the client secret goes.
+        platform_app = find_platform_oauth_app(as_metadata.issuer, mcp_url)
+        if platform_app is None:
             raise HTTPException(
                 status_code=422,
                 detail={
@@ -368,6 +375,17 @@ async def oauth_authorize(
                     "issuer": as_metadata.issuer,
                 },
             )
+        as_metadata = replace(
+            as_metadata,
+            issuer=platform_app.issuer,
+            authorization_endpoint=platform_app.authorization_endpoint,
+            token_endpoint=platform_app.token_endpoint,
+        )
+        resolved = ResolvedOAuthApp(
+            client_id=platform_app.client_id,
+            config={"credential_mode": "managed", "platform_oauth_issuer": platform_app.issuer},
+        )
+    else:
         try:
             client_creds = await oauth_client.register_client(as_metadata, redirect_uri)
         except Exception as exc:
@@ -410,7 +428,8 @@ async def oauth_authorize(
             **resolved.config,
         },
         credentials=resolved.credentials,
-        allow_managed_credentials=bool(resolved.references),
+        allow_managed_credentials=bool(resolved.references)
+        or resolved.config.get("credential_mode") == "managed",
     )
     for secret_id, field_name in resolved.references:
         await secret_catalog.add_reference(
@@ -519,8 +538,11 @@ async def oauth_callback(
 
     oauth_client = MCPOAuthClientService()
     try:
+        platform_app = platform_oauth_app_for(auth_config)
+        if platform_app is not None:
+            as_metadata = replace(as_metadata, token_endpoint=platform_app.token_endpoint)
         # PKCE public clients have no secret; confidential ones (custom OAuth
-        # apps, and DCR servers that issue one) do.
+        # apps, platform apps, and DCR servers that issue one) do.
         (
             client_id,
             client_secret,

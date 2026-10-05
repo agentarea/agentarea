@@ -1109,7 +1109,8 @@ export const zMcpContainersHealthResponse = z.object({
  *
  * Start an OAuth flow for one MCP instance.
  *
- * ``auto`` registers AgentArea with the authorization server (RFC 7591).
+ * ``auto`` registers AgentArea with the authorization server (RFC 7591), or
+ * uses the operator's platform app when the server has no registration.
  * ``custom`` uses an OAuth app the workspace registered with the provider —
  * the only option when the provider has no Dynamic Client Registration.
  */
@@ -1128,7 +1129,8 @@ export const zMcpoAuthAuthorizeRequest = z.object({
  *
  * What the UI needs before it can offer a Connect action.
  *
- * ``ready`` — Connect can run unattended (the server supports DCR).
+ * ``ready`` — Connect can run unattended (the server supports DCR, or the
+ * operator registered a platform app for it).
  * ``oauth_app_required`` — ask for a client ID/secret first.
  * ``unsupported`` — this server cannot be authorized this way; say why.
  */
@@ -1173,11 +1175,11 @@ export const zMcpServerCreate = z.object({
  *
  * Payload for creating an MCP server instance.
  *
- * ``json_spec`` carries the connection configuration. Common shapes:
- *
- * - ``{"type": "url", "endpoint_url": "https://..."}``
- * - ``{"type": "docker", "environment": {...}, "env_vars": [...]}``
- * - ``{"type": "command", "command": [...], "environment": {...}}``
+ * The instance's transport (url, docker or command) is the one its server
+ * spec declares; the response carries it as ``transport``. ``json_spec``
+ * carries the instance's own configuration, e.g.
+ * ``{"environment": {...}, "env_vars": [...]}`` or ``{"headers": {...}}``;
+ * transport keys in it are ignored.
  * For URL-type instances the service synchronously verifies the endpoint;
  * docker/command kick off background verification.
  */
@@ -1205,23 +1207,6 @@ export const zMcpServerInstanceCreateWithoutSpec = z.object({
 export const zMcpServerConnectionCreateRequest = z.object({
   instance: zMcpServerInstanceCreateWithoutSpec,
   server: zMcpServerCreate,
-});
-
-/**
- * MCPServerInstanceResponse
- */
-export const zMcpServerInstanceResponse = z.object({
-  auth_config_id: z.union([z.string().uuid(), z.string()]).nullish(),
-  created_at: z.string().datetime(),
-  description: z.string().nullable(),
-  id: z.string().uuid(),
-  json_spec: z.record(z.unknown()),
-  last_dispatch: z.record(z.unknown()).nullish(),
-  name: z.string(),
-  server_spec_id: z.string(),
-  tools: z.array(z.record(z.unknown())).nullish(),
-  updated_at: z.string().datetime(),
-  verification: z.record(z.unknown()),
 });
 
 /**
@@ -1275,6 +1260,31 @@ export const zMcpServerUpdate = z.object({
   status: z.string().optional(),
   tags: z.array(z.string()).optional(),
   version: z.string().optional(),
+});
+
+/**
+ * MCPTransport
+ *
+ * How a connection is reached: the instance's ``transport`` column, set once at creation.
+ */
+export const zMcpTransport = z.enum(["url", "docker", "command", "bundle"]);
+
+/**
+ * MCPServerInstanceResponse
+ */
+export const zMcpServerInstanceResponse = z.object({
+  auth_config_id: z.union([z.string().uuid(), z.string()]).nullish(),
+  created_at: z.string().datetime(),
+  description: z.string().nullable(),
+  id: z.string().uuid(),
+  json_spec: z.record(z.unknown()),
+  last_dispatch: z.record(z.unknown()).nullish(),
+  name: z.string(),
+  server_spec_id: z.string(),
+  tools: z.array(z.record(z.unknown())).nullish(),
+  transport: zMcpTransport,
+  updated_at: z.string().datetime(),
+  verification: z.record(z.unknown()),
 });
 
 /**

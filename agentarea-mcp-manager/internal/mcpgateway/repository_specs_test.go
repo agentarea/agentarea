@@ -64,8 +64,8 @@ func TestDecodeSpecsRejectsMalformedJSON(t *testing.T) {
 func TestMergeLoadedSpecsPreservesConvertedDockerTransport(t *testing.T) {
 	spec, err := mergeLoadedSpecs(
 		[]byte(`{"type":"command","args":["server-arg"],"cmd":["npx","-y","pkg","--flag"],"endpoint_url":"https://server.example","catalog":"keep"}`),
-		[]byte(`{"type":"docker","image":"repo@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","command":["/opt/mcp-pkg/bin/server","--flag"],"port":8080}`),
-		"",
+		[]byte(`{"image":"repo@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","command":["/opt/mcp-pkg/bin/server","--flag"],"port":8080}`),
+		"docker",
 		[]byte(`["npx","-y","pkg","--flag"]`),
 		"server-image:latest",
 	)

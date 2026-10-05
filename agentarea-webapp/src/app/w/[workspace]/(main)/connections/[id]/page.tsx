@@ -62,7 +62,7 @@ export default async function MCPInstancePage({ params }: Props) {
   // Resolve bundle member names
   const memberNames: Record<string, string> = {};
   const jsonSpec = instance.json_spec;
-  if (jsonSpec?.type === "bundle" && Array.isArray(jsonSpec.members)) {
+  if (instance.transport === "bundle" && Array.isArray(jsonSpec.members)) {
     const results = await Promise.all(
       jsonSpec.members.map((memberId: string) => getMCPServerInstance(memberId))
     );

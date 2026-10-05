@@ -71,6 +71,21 @@ global:
       sandboxInspection: "sandbox-inspection-token"
       sandboxCleanup: "sandbox-cleanup-token"
 
+  # Platform OAuth apps for remote MCP servers whose authorization server has
+  # no Dynamic Client Registration (GitHub). Off by default: without them such
+  # providers need the workspace's own OAuth app. When existingSecret is set,
+  # backend and worker read AGENTAREA_MCP_OAUTH_APPS from its key: a JSON list of
+  #   {"issuer": "https://github.com/login/oauth", "client_id": "...",
+  #    "client_secret": "...",
+  #    "authorization_endpoint": "https://github.com/login/oauth/authorize",
+  #    "token_endpoint": "https://github.com/login/oauth/access_token",
+  #    "resource_origins": ["https://api.githubcopilot.com"]}
+  # Tokens minted through an app are only ever sent to its resource_origins.
+  # A malformed value fails startup.
+  mcpOAuthApps:
+    existingSecret: ""
+    existingSecretKey: "mcp-oauth-apps"  # pragma: allowlist secret
+
   # Database configuration
   database:
     # Secret name where database credentials are stored

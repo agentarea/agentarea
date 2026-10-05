@@ -74,6 +74,8 @@ The following table lists configurable parameters of the chart and their default
 | global.runtimeCredentials.keys.sandboxFile | string | `"sandbox-file-token"` |  |
 | global.runtimeCredentials.keys.sandboxInspection | string | `"sandbox-inspection-token"` |  |
 | global.runtimeCredentials.keys.sandboxCleanup | string | `"sandbox-cleanup-token"` |  |
+| global.mcpOAuthApps.existingSecret | string | `""` |  |
+| global.mcpOAuthApps.existingSecretKey | string | `"mcp-oauth-apps"` |  |
 | global.database.secretName | string | `"agentarea-postgresql-secret"` |  |
 | global.database.host | string | `""` |  |
 | global.database.port | int | `5432` |  |

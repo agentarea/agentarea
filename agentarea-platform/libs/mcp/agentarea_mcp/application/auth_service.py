@@ -6,9 +6,11 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.authorization import is_workspace_admin
+from agentarea_common.config import MCPOAuthApp
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.utils.url_safety import safe_async_client
 
+from agentarea_mcp.application.platform_oauth_app import platform_oauth_app, url_origin
 from agentarea_mcp.domain.auth_models import (
     AUTH_TYPE_API_KEY,
     AUTH_TYPE_BEARER,
@@ -26,9 +28,22 @@ _MANAGED_CREDENTIALS_PREFIX = "connection_oauth_client:"
 _TOKEN_RESPONSE_HEADERS = {"Accept": "application/json"}
 
 
+def _platform_oauth_issuer(config: dict[str, Any]) -> str | None:
+    """The issuer whose platform app a managed MCP config authorizes through."""
+    if config.get("credential_mode") != "managed":
+        return None
+    return str(config.get("platform_oauth_issuer") or "") or None
+
+
+def _is_managed(config: dict[str, Any]) -> bool:
+    return (
+        _platform_oauth_issuer(config) is not None or _managed_credentials_key(config) is not None
+    )
+
+
 def _managed_credentials_key(config: dict[str, Any]) -> str | None:
     """Return a valid internal managed-app key, if this is a managed config."""
-    if config.get("credential_mode") != "managed":
+    if config.get("credential_mode") != "managed" or config.get("platform_oauth_issuer"):
         return None
     key = str(config.get("managed_credentials_key") or "")
     if not key.startswith(_MANAGED_CREDENTIALS_PREFIX):
@@ -62,6 +77,14 @@ class OAuthReauthRequiredError(Exception):
     """
 
 
+class ManagedCredentialDestinationError(ValueError):
+    """Platform-managed credentials were asked for on behalf of a host they do not serve.
+
+    The operator's OAuth app, and the tokens minted through it, may only reach
+    the origins its platform app names; anywhere else is a leak.
+    """
+
+
 class AuthConfigAccessDeniedError(PermissionError):
     """Only the auth config's creator or a workspace admin may attach it.
 
@@ -69,6 +92,23 @@ class AuthConfigAccessDeniedError(PermissionError):
     credential to a host the caller chooses, so workspace membership alone is
     not enough to select one.
     """
+
+
+def platform_oauth_app_for(config: MCPAuthConfig) -> MCPOAuthApp | None:
+    """The configured platform app a managed MCP config names, or None for other configs.
+
+    Fails loud when the config names one the deployment no longer configures.
+    """
+    issuer = _platform_oauth_issuer(config.config)
+    if issuer is None:
+        return None
+    app = platform_oauth_app(issuer)
+    if app is None:
+        raise MissingCredentialsError(
+            f"Auth config {config.id} authorizes through the platform OAuth app for {issuer}, "
+            "which AGENTAREA_MCP_OAUTH_APPS does not configure."
+        )
+    return app
 
 
 def _secret_key(config_id: UUID) -> str:
@@ -147,6 +187,10 @@ class MCPAuthService:
             client_secret = str(
                 await self._secret_manager.get_secret(client_secret_secret_name) or ""
             )
+        platform_app = platform_oauth_app_for(config)
+        if platform_app is not None:
+            client_id = platform_app.client_id
+            client_secret = platform_app.client_secret.get_secret_value()
         managed_key = _managed_credentials_key(config.config)
         if managed_key is not None:
             if self._managed_secret_manager is None:
@@ -213,6 +257,24 @@ class MCPAuthService:
 
         return {}
 
+    async def get_auth_headers_for(
+        self, config: MCPAuthConfig, destination_url: str, *, force_refresh: bool = False
+    ) -> dict[str, str]:
+        """``get_auth_headers`` for a request to ``destination_url``.
+
+        Platform-managed credentials are refused unless the destination's origin
+        is one the config's platform app names in ``resource_origins``.
+        """
+        if config.config.get("credential_mode") == "managed":
+            platform_app = platform_oauth_app_for(config)
+            allowed = platform_app.resource_origins if platform_app is not None else ()
+            if url_origin(destination_url) not in allowed:
+                raise ManagedCredentialDestinationError(
+                    f"Auth config {config.id} holds platform-managed credentials that may not "
+                    f"be sent to {url_origin(destination_url) or destination_url!r}."
+                )
+        return await self.get_auth_headers(config, force_refresh=force_refresh)
+
     async def _get_oauth2_token(
         self, config: MCPAuthConfig, creds: dict[str, Any], *, force_refresh: bool = False
     ) -> str:
@@ -243,7 +305,12 @@ class MCPAuthService:
 
         import httpx
 
-        token_url: str = config.config.get("token_url", "")
+        platform_app = platform_oauth_app_for(config)
+        token_url: str = (
+            platform_app.token_endpoint
+            if platform_app is not None
+            else config.config.get("token_url", "")
+        )
         client_id, client_secret, _ = await self.get_oauth_client_credentials(config)
         refresh_token: str = creds.get("refresh_token", "")
         scopes: list[str] = config.config.get("scopes", [])
@@ -339,7 +406,7 @@ class MCPAuthService:
         allow_managed_credentials: bool = False,
     ) -> MCPAuthConfig:
         """Create and persist a new auth config, storing creds encrypted."""
-        if _managed_credentials_key(config) is not None and not allow_managed_credentials:
+        if _is_managed(config) and not allow_managed_credentials:
             raise ValueError("Managed OAuth configs can only be created by a catalog connection")
         if _uses_workspace_secret_references(config) and not allow_managed_credentials:
             raise ValueError(
@@ -408,8 +475,8 @@ class MCPAuthService:
         existing = await self._repo.get(config_id)
         if existing is None:
             return None
-        existing_is_managed = _managed_credentials_key(existing.config) is not None
-        incoming_is_managed = config is not None and _managed_credentials_key(config) is not None
+        existing_is_managed = _is_managed(existing.config)
+        incoming_is_managed = config is not None and _is_managed(config)
         existing_has_references = _uses_workspace_secret_references(existing.config)
         incoming_has_references = config is not None and _uses_workspace_secret_references(config)
         if (

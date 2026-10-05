@@ -22,7 +22,7 @@ from .database import (
 )
 from .duration import Duration, parse_duration
 from .http import HttpSettings
-from .mcp import MCPSettings
+from .mcp import MCPOAuthApp, MCPSettings
 from .observability import MetricsSettings, ObservabilitySettings
 from .openfga import OpenFGASettings
 from .sandbox import SandboxSettings
@@ -43,6 +43,7 @@ __all__ = [
     "Duration",
     "HttpSettings",
     "KafkaSettings",
+    "MCPOAuthApp",
     "MCPSettings",
     "MetricsSettings",
     "ObservabilitySettings",

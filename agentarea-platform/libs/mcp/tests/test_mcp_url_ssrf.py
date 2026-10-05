@@ -50,6 +50,7 @@ class _Session:
 def _url_instance_db(endpoint_url: str):
     instance = MagicMock(
         id=uuid.uuid4(),
+        transport="url",
         json_spec={},
         verification=dict(DEFAULT_VERIFICATION),
         last_dispatch=None,
@@ -179,7 +180,7 @@ def _capture_factory():
 @pytest.mark.asyncio
 async def test_execute_tool_dials_a_url_instance_through_the_pinned_transport():
     service = _service()
-    instance = MagicMock(id=uuid.uuid4(), auth_config_id=None, json_spec={"type": "url"})
+    instance = MagicMock(id=uuid.uuid4(), auth_config_id=None, transport="url", json_spec={})
     instance.name = "remote"
     service.repository = MagicMock()
     service.repository.get_by_id = AsyncMock(return_value=instance)

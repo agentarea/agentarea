@@ -1,8 +1,17 @@
 """MCP (Model Context Protocol) configuration."""
 
+from urllib.parse import urlparse
 from uuid import UUID
 
-from pydantic import SecretStr, ValidationInfo, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import SettingsConfigDict
 
 from .base import BaseAppSettings
@@ -27,10 +36,55 @@ PUBLISHED_SECRET_VALUES = frozenset(
 )
 
 
+def https_origin(url: str) -> str:
+    """``scheme://host[:port]`` of an https URL; anything else is refused."""
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ValueError(f"{url!r} is not an https URL")
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def normalize_issuer(issuer: str) -> str:
+    return issuer.strip().rstrip("/")
+
+
+class MCPOAuthApp(BaseModel):
+    """An OAuth app the operator registered with an authorization server without DCR.
+
+    Every workspace connecting an MCP server at one of ``resource_origins``
+    through ``issuer`` authorizes with it. Its endpoints, not discovery or a
+    workspace's spec, are where the client secret is sent.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
+
+    issuer: str
+    client_id: str = Field(min_length=1)
+    client_secret: SecretStr
+    authorization_endpoint: str
+    token_endpoint: str
+    resource_origins: tuple[str, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _refuse_loose_urls(self) -> "MCPOAuthApp":
+        if not self.client_secret.get_secret_value():
+            raise ValueError(f"MCP OAuth app for {self.issuer} has an empty client_secret")
+        https_origin(self.issuer)
+        if normalize_issuer(self.issuer) != self.issuer:
+            raise ValueError(f"Issuer {self.issuer!r} must not end with a slash")
+        https_origin(self.token_endpoint)
+        https_origin(self.authorization_endpoint)
+        for origin in self.resource_origins:
+            if https_origin(origin) != origin:
+                raise ValueError(f"Resource origin {origin!r} must be an exact https origin")
+        return self
+
+
 class MCPSettings(BaseAppSettings):
     """MCP (Model Context Protocol) configuration."""
 
-    model_config = SettingsConfigDict(env_prefix="AGENTAREA_MCP_")
+    # Validation errors would otherwise echo AGENTAREA_MCP_OAUTH_APPS, secrets included.
+    model_config = SettingsConfigDict(env_prefix="AGENTAREA_MCP_", hide_input_in_errors=True)
 
     MANAGER_URL: str = "http://mcp-manager:8000"
     GATEWAY_SECRET: SecretStr | None = None
@@ -40,6 +94,9 @@ class MCPSettings(BaseAppSettings):
     # advertised set, so DCR clients must be registered for both or Hydra
     # rejects authorization with ``invalid_scope`` before login begins.
     OAUTH_SCOPES: str = "openid offline_access offline"
+    # JSON list of MCPOAuthApp. Unset means no platform apps: providers without
+    # DCR then need the workspace's own OAuth app.
+    OAUTH_APPS: tuple[MCPOAuthApp, ...] = ()
 
     @field_validator("GATEWAY_SECRET")
     @classmethod
@@ -52,6 +109,19 @@ class MCPSettings(BaseAppSettings):
                 "generate a new one (scripts/gen-dev-secrets.sh rotates it) and restart"
             )
         return value
+
+    @field_validator("OAUTH_APPS")
+    @classmethod
+    def _one_app_per_issuer(cls, apps: tuple[MCPOAuthApp, ...]) -> tuple[MCPOAuthApp, ...]:
+        issuers = [app.issuer for app in apps]
+        duplicates = sorted({issuer for issuer in issuers if issuers.count(issuer) > 1})
+        if duplicates:
+            raise ValueError(f"AGENTAREA_MCP_OAUTH_APPS lists {', '.join(duplicates)} twice")
+        return apps
+
+    def oauth_app_for(self, issuer: str) -> MCPOAuthApp | None:
+        wanted = normalize_issuer(issuer)
+        return next((app for app in self.OAUTH_APPS if app.issuer == wanted), None)
 
     def manager_gateway_url(self, instance_id: UUID | str) -> str:
         return f"{self.MANAGER_URL.rstrip('/')}/mcp/{instance_id}/mcp"

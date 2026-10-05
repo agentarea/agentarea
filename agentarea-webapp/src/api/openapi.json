@@ -5382,7 +5382,7 @@
       },
       "MCPOAuthAuthorizeRequest": {
         "additionalProperties": false,
-        "description": "Start an OAuth flow for one MCP instance.\n\n``auto`` registers AgentArea with the authorization server (RFC 7591).\n``custom`` uses an OAuth app the workspace registered with the provider \u2014\nthe only option when the provider has no Dynamic Client Registration.",
+        "description": "Start an OAuth flow for one MCP instance.\n\n``auto`` registers AgentArea with the authorization server (RFC 7591), or\nuses the operator's platform app when the server has no registration.\n``custom`` uses an OAuth app the workspace registered with the provider \u2014\nthe only option when the provider has no Dynamic Client Registration.",
         "properties": {
           "client_id": {
             "anyOf": [
@@ -5464,7 +5464,7 @@
         "type": "object"
       },
       "MCPOAuthPreflightResponse": {
-        "description": "What the UI needs before it can offer a Connect action.\n\n``ready`` \u2014 Connect can run unattended (the server supports DCR).\n``oauth_app_required`` \u2014 ask for a client ID/secret first.\n``unsupported`` \u2014 this server cannot be authorized this way; say why.",
+        "description": "What the UI needs before it can offer a Connect action.\n\n``ready`` \u2014 Connect can run unattended (the server supports DCR, or the\noperator registered a platform app for it).\n``oauth_app_required`` \u2014 ask for a client ID/secret first.\n``unsupported`` \u2014 this server cannot be authorized this way; say why.",
         "properties": {
           "authorization_endpoint": {
             "anyOf": [
@@ -5687,7 +5687,7 @@
       },
       "MCPServerInstanceCreate": {
         "additionalProperties": false,
-        "description": "Payload for creating an MCP server instance.\n\n``json_spec`` carries the connection configuration. Common shapes:\n\n- ``{\"type\": \"url\", \"endpoint_url\": \"https://...\"}``\n- ``{\"type\": \"docker\", \"environment\": {...}, \"env_vars\": [...]}``\n- ``{\"type\": \"command\", \"command\": [...], \"environment\": {...}}``\nFor URL-type instances the service synchronously verifies the endpoint;\ndocker/command kick off background verification.",
+        "description": "Payload for creating an MCP server instance.\n\nThe instance's transport (url, docker or command) is the one its server\nspec declares; the response carries it as ``transport``. ``json_spec``\ncarries the instance's own configuration, e.g.\n``{\"environment\": {...}, \"env_vars\": [...]}`` or ``{\"headers\": {...}}``;\ntransport keys in it are ignored.\nFor URL-type instances the service synchronously verifies the endpoint;\ndocker/command kick off background verification.",
         "properties": {
           "auth_config_id": {
             "anyOf": [
@@ -5715,7 +5715,7 @@
           },
           "json_spec": {
             "additionalProperties": true,
-            "description": "Connection configuration. Must include 'type' ('url' | 'docker' | 'command'); other keys depend on type.",
+            "description": "Instance configuration (environment, env_vars, headers). Transport keys such as 'type' are ignored: the server spec declares the transport.",
             "title": "Json Spec",
             "type": "object"
           },
@@ -5859,6 +5859,9 @@
             ],
             "title": "Tools"
           },
+          "transport": {
+            "$ref": "#/components/schemas/MCPTransport"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -5875,6 +5878,7 @@
           "name",
           "description",
           "server_spec_id",
+          "transport",
           "json_spec",
           "verification",
           "created_at",
@@ -6150,6 +6154,17 @@
         },
         "title": "MCPServerUpdate",
         "type": "object"
+      },
+      "MCPTransport": {
+        "description": "How a connection is reached: the instance's ``transport`` column, set once at creation.",
+        "enum": [
+          "url",
+          "docker",
+          "command",
+          "bundle"
+        ],
+        "title": "MCPTransport",
+        "type": "string"
       },
       "MPPConfigSchema": {
         "properties": {

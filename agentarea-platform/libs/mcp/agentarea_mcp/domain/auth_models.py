@@ -67,6 +67,11 @@ class MCPAuthConfig(BaseModel, WorkspaceScopedMixin):
         elif self.auth_type == AUTH_TYPE_OAUTH2:
             if not self.config.get("token_url"):
                 raise ValueError("oauth2 auth requires 'token_url' in config")
+            if self.config.get("platform_oauth_issuer"):
+                # The platform app supplies the client; the config only names it.
+                if self.config.get("credential_mode") != "managed":
+                    raise ValueError("'platform_oauth_issuer' requires credential_mode 'managed'")
+                return
             client_id = self.config.get("client_id")
             client_id_secret_name = self.config.get("client_id_secret_name")
             if bool(client_id) == bool(client_id_secret_name):

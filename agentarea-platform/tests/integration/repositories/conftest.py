@@ -441,6 +441,7 @@ class ModelFactory:
             "name": f"test-mcp-instance-{uuid4().hex[:8]}",
             "description": "Test MCP server instance",
             "server_spec_id": server_spec_id,
+            "transport": "docker",
             "json_spec": {"env_vars": []},
             "status": "active",
         }

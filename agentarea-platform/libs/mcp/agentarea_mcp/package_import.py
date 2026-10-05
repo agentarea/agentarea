@@ -10,11 +10,12 @@ from uuid import UUID
 import httpx
 from agentarea_common.config import get_database, get_settings
 
+from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
-from agentarea_mcp.transport_spec import merge_transport_spec, server_transport_spec
+from agentarea_mcp.transport_spec import instance_transport_spec
 
 _PACKAGE_IMPORT_TIMEOUT_SECONDS = 20 * 60
 
@@ -159,10 +160,7 @@ async def _run_import(session, instance_id: UUID) -> None:
         )
         if server is None:
             raise ValueError(f"MCP server spec {instance.server_spec_id} not found")
-        effective_source_spec = merge_transport_spec(
-            server_transport_spec(server),
-            source_spec,
-        )
+        effective_source_spec = instance_transport_spec(server, instance)
 
     settings = get_settings().mcp
     manager_url = f"{settings.MANAGER_URL.rstrip('/')}/packages/import"
@@ -235,7 +233,6 @@ async def _run_import(session, instance_id: UUID) -> None:
     }
     converted_spec.update(
         {
-            "type": "docker",
             "image": image,
             "port": port,
             "command": list(command),
@@ -265,6 +262,7 @@ async def _run_import(session, instance_id: UUID) -> None:
             instance,
             source_spec,
             converted_spec,
+            transport=MCPTransport.DOCKER,
         )
 
 
