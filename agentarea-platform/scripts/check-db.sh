@@ -89,6 +89,7 @@ PY_SUITES=(
   libs/execution/tests/unit/test_publish_workflow_events_db.py
   apps/api/tests/test_task_event_feed_db.py
   libs/streams/tests/test_schema_db.py
+  libs/streams/tests/test_journal_db.py
 )
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, the secret
