@@ -89,6 +89,16 @@ class WebhookSignatureScheme(BaseModel):
     prefix: str = Field(description="Text before the hex digest in the header; often empty.")
 
 
+TriggerStatus = Literal["active", "inactive", "needs_owner"]
+
+
+def trigger_status(trigger: Any) -> TriggerStatus:
+    """'needs_owner' wins over is_active: the trigger stays stopped until someone takes it over."""
+    if getattr(trigger, "needs_new_owner_at", None) is not None:
+        return "needs_owner"
+    return "active" if trigger.is_active else "inactive"
+
+
 class TriggerResponse(BaseModel):
     """Response model for trigger data."""
 
@@ -108,7 +118,7 @@ class TriggerResponse(BaseModel):
     failure_threshold: int
     consecutive_failures: int
     last_execution_at: UtcDatetime | None = None
-    status: Literal["active", "inactive", "needs_owner"] = Field(
+    status: TriggerStatus = Field(
         description=(
             "'needs_owner' when the person who configured it can no longer run its agent; "
             "the trigger stays stopped until someone who can takes it over."
@@ -231,11 +241,8 @@ class TriggerResponse(BaseModel):
                 )
                 response_data["signing_secret"] = signing_secret
 
-        needs_owner_at = getattr(trigger, "needs_new_owner_at", None)
-        response_data["needs_new_owner_at"] = needs_owner_at
-        response_data["status"] = (
-            "needs_owner" if needs_owner_at else ("active" if trigger.is_active else "inactive")
-        )
+        response_data["needs_new_owner_at"] = getattr(trigger, "needs_new_owner_at", None)
+        response_data["status"] = trigger_status(trigger)
         if binding is not None:
             response_data.update(
                 {

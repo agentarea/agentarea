@@ -58,3 +58,26 @@ async def test_create_forward_refuses_an_output_the_caller_may_not_edit(monkeypa
     )
     assert result == {"error": "forbidden"}
     service.create_forward.assert_not_called()
+
+
+def test_the_streams_toolset_is_declared_where_its_writes_belong():
+    (meta,) = [
+        t.metadata
+        for t in get_platform_tools()
+        if t.metadata and t.metadata.namespace == "agentarea/streams"
+    ]
+    assert meta.plane == "build"
+
+
+async def test_list_refuses_a_limit_past_the_rest_bound():
+    result = json.loads(await StreamsToolset().list(limit=1001))
+    assert "limit must be between 1 and 1000" in result["error"]
+
+
+async def test_list_events_refuses_a_limit_past_the_rest_bound():
+    result = json.loads(
+        await StreamsToolset().list_events.__wrapped__(
+            StreamsToolset(), stream_id=str(uuid4()), limit=201
+        )
+    )
+    assert "limit must be between 1 and 200" in result["error"]

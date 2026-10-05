@@ -15,6 +15,7 @@ from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires,
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
+from agentarea_common.base.pagination import MAX_OFFSET
 from agentarea_common.config import get_settings
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import EventFilter, StreamError
@@ -36,14 +37,23 @@ def _service(repo_factory: Any) -> StreamService:
     return StreamService(repo_factory, get_settings().streams)
 
 
+def _out_of_range(name: str, value: int, low: int, high: int | None = None) -> str | None:
+    """The REST routes' Query(ge=, le=) bounds; MCP arguments are not validated before the call."""
+    if value >= low and (high is None or value <= high):
+        return None
+    bounds = f"between {low} and {high}" if high is not None else f"at least {low}"
+    return json.dumps({"error": f"{name} must be {bounds}, got {value}"})
+
+
 @toolset(
     namespace="agentarea/streams",
     display_name="Event Streams",
     description=(
-        "Read what arrived on event streams, who listened and what they decided; forward streams."
+        "Create event streams and forwards between them; read what arrived, who listened "
+        "and what they decided."
     ),
     category="platform",
-    plane="observe",
+    plane="build",
 )
 class StreamsToolset(Toolset):
     """Streams: list, get, create, delete; sources, subscriptions, forwards, events."""
@@ -51,7 +61,11 @@ class StreamsToolset(Toolset):
     @tool_method(effect="read")
     @enforced_in_handler("narrowed to the rows the graph says this caller may read")
     async def list(self, limit: int = 100, offset: int = 0) -> str:
-        """List the workspace's streams."""
+        """List the workspace's streams. limit is 1-1000."""
+        if refused := _out_of_range("limit", limit, 1, 1000) or _out_of_range(
+            "offset", offset, 0, MAX_OFFSET
+        ):
+            return refused
         async with platform_read_context() as (_s, user_ctx, repo_factory, _b, _sec):
             rows = await _service(repo_factory).list_streams(
                 limit=limit, offset=offset, ids=await readable_resource_ids(user_ctx.user_id)
@@ -166,7 +180,10 @@ class StreamsToolset(Toolset):
         """Events after a sequence, oldest first, each with every subscription's outcome.
 
         Pass the returned ``next_after`` as ``after`` for the next page; null at the end.
+        limit is 1-200.
         """
+        if refused := _out_of_range("limit", limit, 1, 200) or _out_of_range("after", after, 0):
+            return refused
         async with platform_read_context() as (_s, _u, repo_factory, _b, _sec):
             service = _service(repo_factory)
             try:

@@ -16,8 +16,11 @@ from uuid import UUID
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_streams.domain.models import TriggerBinding
 from agentarea_triggers.schemas.dto import TriggerCreate
 
+from ..api.v1._trigger_creation import public_webhook_url
+from ..api.v1.triggers import trigger_status
 from .base import platform_context, platform_read_context
 
 
@@ -47,7 +50,9 @@ async def _build_trigger_service(
     )
 
 
-def _trigger_summary(trigger: Any) -> dict[str, Any]:
+def _trigger_summary(trigger: Any, binding: TriggerBinding | None) -> dict[str, Any]:
+    """A trigger as MCP returns it; the stream fields come from its subscription, as in REST."""
+    status = trigger_status(trigger)
     return {
         "id": str(trigger.id),
         "name": trigger.name,
@@ -57,14 +62,20 @@ def _trigger_summary(trigger: Any) -> dict[str, Any]:
         "is_active": trigger.is_active,
         "cron_expression": getattr(trigger, "cron_expression", None),
         "webhook_id": getattr(trigger, "webhook_id", None),
-        "stream_id": getattr(trigger, "stream_id", None),
-        "needs_new_owner": getattr(trigger, "needs_new_owner_at", None) is not None,
-        "status": (
-            "needs_owner"
-            if getattr(trigger, "needs_new_owner_at", None) is not None
-            else ("active" if trigger.is_active else "inactive")
+        "status": status,
+        "needs_new_owner": status == "needs_owner",
+        "stream_id": binding.stream_id if binding else None,
+        "event_filter": binding.event_filter if binding else None,
+        "webhook_url": (
+            public_webhook_url(binding.webhook_id) if binding and binding.webhook_id else None
         ),
+        "last_event_at": binding.last_event_at if binding else None,
     }
+
+
+async def _summary(service: Any, trigger: Any) -> dict[str, Any]:
+    bindings = await service.stream_service.trigger_bindings([trigger.id])
+    return _trigger_summary(trigger, bindings.get(trigger.id))
 
 
 @toolset(
@@ -98,7 +109,10 @@ class TriggersToolset(Toolset):
                 active_only=active_only,
                 limit=limit,
             )
-            return json.dumps([_trigger_summary(t) for t in triggers], default=str)
+            bindings = await service.stream_service.trigger_bindings([t.id for t in triggers])
+            return json.dumps(
+                [_trigger_summary(t, bindings.get(t.id)) for t in triggers], default=str
+            )
 
     @tool_method(effect="read")
     @unrestricted("a trigger in the caller's workspace, as GET /v1/triggers/{id} returns it")
@@ -109,7 +123,7 @@ class TriggersToolset(Toolset):
             trigger = await service.get_trigger(UUID(trigger_id))
             if not trigger:
                 return json.dumps({"error": "Trigger not found"})
-            return json.dumps(_trigger_summary(trigger), default=str)
+            return json.dumps(await _summary(service, trigger), default=str)
 
     @tool_method(effect="write")
     @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
@@ -157,7 +171,7 @@ class TriggersToolset(Toolset):
                 created_by=user_ctx.user_id,
                 workspace_id=user_ctx.workspace_id,
             )
-            return json.dumps(_trigger_summary(trigger), default=str)
+            return json.dumps(await _summary(service, trigger), default=str)
 
     @tool_method(effect="write")
     @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
@@ -203,7 +217,7 @@ class TriggersToolset(Toolset):
                 created_by=user_ctx.user_id,
                 workspace_id=user_ctx.workspace_id,
             )
-            return json.dumps(_trigger_summary(trigger), default=str)
+            return json.dumps(await _summary(service, trigger), default=str)
 
     @tool_method(effect="write")
     @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
@@ -244,7 +258,7 @@ class TriggersToolset(Toolset):
                 created_by=user_ctx.user_id,
                 workspace_id=user_ctx.workspace_id,
             )
-            return json.dumps(_trigger_summary(trigger), default=str)
+            return json.dumps(await _summary(service, trigger), default=str)
 
     @tool_method(effect="destructive")
     @requires("delete", "trigger", id_param="trigger_id")
