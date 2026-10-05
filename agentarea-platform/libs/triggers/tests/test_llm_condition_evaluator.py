@@ -118,6 +118,7 @@ class TestLLMConditionEvaluator:
         condition = {
             "type": "rule",
             "rules": [{"field": "request.body.message", "operator": "contains", "value": "file"}],
+            "logic": "AND",
         }
 
         event_data = {"request": {"body": {"message": "I have a file to upload"}}}
@@ -129,6 +130,7 @@ class TestLLMConditionEvaluator:
         condition = {
             "type": "rule",
             "rules": [{"field": "request.body.attachment", "operator": "exists"}],
+            "logic": "AND",
         }
 
         event_data = {"request": {"body": {"attachment": {"name": "file.pdf"}}}}
@@ -200,10 +202,12 @@ class TestLLMConditionEvaluator:
                 {
                     "type": "rule",
                     "rules": [{"field": "request.method", "operator": "eq", "value": "POST"}],
+                    "logic": "AND",
                 },
                 {
                     "type": "rule",
                     "rules": [{"field": "request.body.type", "operator": "eq", "value": "file"}],
+                    "logic": "AND",
                 },
             ],
             "logic": "AND",
@@ -225,10 +229,12 @@ class TestLLMConditionEvaluator:
                 {
                     "type": "rule",
                     "rules": [{"field": "request.method", "operator": "eq", "value": "GET"}],
+                    "logic": "AND",
                 },
                 {
                     "type": "rule",
                     "rules": [{"field": "request.body.type", "operator": "eq", "value": "file"}],
+                    "logic": "AND",
                 },
             ],
             "logic": "OR",
@@ -371,7 +377,11 @@ class TestLLMConditionEvaluator:
         valid_condition = {
             "type": "combined",
             "conditions": [
-                {"type": "rule", "rules": [{"field": "test", "operator": "eq", "value": "value"}]},
+                {
+                    "type": "rule",
+                    "rules": [{"field": "test", "operator": "eq", "value": "value"}],
+                    "logic": "AND",
+                },
                 {"type": "llm", "description": "test description", "model_id": str(uuid4())},
             ],
             "logic": "AND",

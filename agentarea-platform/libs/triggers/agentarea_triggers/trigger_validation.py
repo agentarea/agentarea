@@ -3,6 +3,7 @@
 from .condition_models import ModelInstances, validate_condition_models
 from .domain.enums import TriggerType
 from .domain.models import TriggerCreate
+from .llm_condition_evaluator import condition_syntax_errors
 from .logging_utils import TriggerValidationError
 
 
@@ -29,6 +30,15 @@ async def validate_trigger_configuration(
         raise TriggerValidationError("Trigger created_by is required")
 
     await validate_condition_models(trigger_data.conditions, model_instances)
+
+    # An empty dict means "no conditions configured", which is legitimate and
+    # carries no body to check; anything else must be well-formed. Checked
+    # after validate_condition_models so an LLM condition with no model_id
+    # keeps raising that specific, already-relied-on message.
+    if trigger_data.conditions:
+        errors = condition_syntax_errors(trigger_data.conditions)
+        if errors:
+            raise TriggerValidationError("; ".join(errors))
 
     # Type-specific validation
     if trigger_data.trigger_type == TriggerType.CRON:

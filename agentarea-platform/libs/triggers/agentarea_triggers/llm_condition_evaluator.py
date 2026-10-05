@@ -69,6 +69,137 @@ def _parse_verdict(response: str) -> ConditionVerdict:
         ) from error
 
 
+def condition_syntax_errors(condition: dict[str, Any]) -> list[str]:
+    """Syntax errors in a condition body, or an empty list when it is well-formed.
+
+    Independent of any evaluator instance, so trigger save-time validation
+    (``trigger_validation.py``) can call it without a model service.
+    """
+    errors: list[str] = []
+
+    try:
+        condition_type = _condition_type(condition)
+        if condition_type is None:
+            errors.append(f"Unknown condition type: {condition.get('type')}")
+        elif condition_type is ConditionType.RULE:
+            errors.extend(_rule_condition_errors(condition))
+        elif condition_type is ConditionType.LLM:
+            errors.extend(_llm_condition_errors(condition))
+        else:
+            errors.extend(_combined_condition_errors(condition))
+
+    except Exception as e:
+        errors.append(f"Validation error: {e}")
+
+    return errors
+
+
+def _rule_condition_errors(condition: dict[str, Any]) -> list[str]:
+    """Validate rule-based condition syntax."""
+    errors = []
+
+    rules = condition.get("rules", [])
+    if not rules:
+        errors.append("Rule condition must have at least one rule")
+
+    valid_operators = {
+        "eq",
+        "ne",
+        "gt",
+        "lt",
+        "gte",
+        "lte",
+        "contains",
+        "not_contains",
+        "exists",
+        "not_exists",
+    }
+    valid_logic = {"AND", "OR"}
+
+    logic = condition.get("logic")
+    if not logic:
+        errors.append("Rule condition must name its 'logic' (AND or OR)")
+    elif logic.upper() not in valid_logic:
+        errors.append(f"Invalid logic operator: {logic}. Must be one of {valid_logic}")
+
+    for i, rule in enumerate(rules):
+        if not isinstance(rule, dict):
+            errors.append(f"Rule {i} must be a dictionary")
+            continue
+
+        if "field" not in rule:
+            errors.append(f"Rule {i} missing required 'field'")
+
+        operator = rule.get("operator")
+        if not operator:
+            errors.append(f"Rule {i} missing required 'operator'")
+        elif operator not in valid_operators:
+            errors.append(f"Rule {i} has invalid operator: {operator}")
+
+        if operator not in {"exists", "not_exists"} and "value" not in rule:
+            errors.append(f"Rule {i} missing required 'value' for operator {operator}")
+
+    return errors
+
+
+def _llm_condition_errors(condition: dict[str, Any]) -> list[str]:
+    """Validate LLM-based condition syntax."""
+    errors = []
+
+    if not condition.get("description"):
+        errors.append("LLM condition must have a 'description'")
+    if not condition.get("model_id"):
+        errors.append("LLM condition must name its 'model_id'")
+
+    context_fields = condition.get("context_fields", [])
+    if context_fields and not isinstance(context_fields, list):
+        errors.append("context_fields must be a list")
+
+    examples = condition.get("examples", [])
+    if examples and not isinstance(examples, list):
+        errors.append("examples must be a list")
+
+    for i, example in enumerate(examples):
+        if not isinstance(example, dict):
+            errors.append(f"Example {i} must be a dictionary")
+            continue
+
+        if "input" not in example or "expected" not in example:
+            errors.append(f"Example {i} must have 'input' and 'expected' fields")
+
+    return errors
+
+
+def _combined_condition_errors(condition: dict[str, Any]) -> list[str]:
+    """Validate combined condition syntax."""
+    errors = []
+
+    conditions = condition.get("conditions", [])
+    if not conditions:
+        errors.append("Combined condition must have at least one sub-condition")
+
+    valid_logic = {"AND", "OR"}
+    logic = condition.get("logic")
+    if not logic:
+        errors.append("Combined condition must name its 'logic' (AND or OR)")
+    elif logic.upper() not in valid_logic:
+        errors.append(f"Invalid logic operator: {logic}. Must be one of {valid_logic}")
+
+    for i, sub_condition in enumerate(conditions):
+        if not isinstance(sub_condition, dict):
+            errors.append(f"Sub-condition {i} must be a dictionary")
+            continue
+
+        try:
+            sub_errors = condition_syntax_errors(sub_condition)
+            for error in sub_errors:
+                errors.append(f"Sub-condition {i}: {error}")
+        except Exception as e:
+            errors.append(f"Sub-condition {i}: Validation error: {e}")
+
+    return errors
+
+
 def build_condition_evaluator(
     *,
     session: Any,
@@ -175,16 +306,23 @@ class LLMConditionEvaluator:
         Returns:
             The verdict, with a reason naming how many rules matched.
         """
-        rules = condition.get("rules", [])
-        logic = condition.get("logic", "AND").upper()
-
+        rules = condition.get("rules")
         if not rules:
-            return ConditionVerdict(verdict="met", reason="rule condition has no rules")
+            raise LLMConditionEvaluationError("Rule condition needs at least one rule")
+
+        logic = condition.get("logic")
+        if not logic:
+            raise LLMConditionEvaluationError("Rule condition needs its 'logic' (AND or OR)")
+        logic = logic.upper()
 
         results = []
         for rule in rules:
-            field = rule.get("field", "")
-            operator = rule.get("operator", "eq")
+            field = rule.get("field")
+            if not field:
+                raise LLMConditionEvaluationError("Rule is missing its 'field'")
+            operator = rule.get("operator")
+            if not operator:
+                raise LLMConditionEvaluationError("Rule is missing its 'operator'")
             expected_value = rule.get("value")
 
             # Extract field value from event data using dot notation
@@ -214,8 +352,7 @@ class LLMConditionEvaluator:
             elif operator == "not_exists":
                 result = actual_value is None
             else:
-                logger.warning(f"Unknown operator: {operator}")
-                result = False
+                raise LLMConditionEvaluationError(f"Unknown operator: {operator}")
 
             results.append(result)
 
@@ -348,11 +485,14 @@ class LLMConditionEvaluator:
         Returns:
             The combined verdict, with the weakest (AND) or strongest (OR) score.
         """
-        conditions = condition.get("conditions", [])
-        logic = condition.get("logic", "AND").upper()
-
+        conditions = condition.get("conditions")
         if not conditions:
-            return ConditionVerdict(verdict="met", reason="combined condition has no parts")
+            raise LLMConditionEvaluationError("Combined condition needs at least one sub-condition")
+
+        logic = condition.get("logic")
+        if not logic:
+            raise LLMConditionEvaluationError("Combined condition needs its 'logic' (AND or OR)")
+        logic = logic.upper()
 
         verdicts = [
             await self.evaluate_structured(sub, event_data, trigger_context) for sub in conditions
@@ -434,135 +574,26 @@ class LLMConditionEvaluator:
         Returns:
             List of validation error messages (empty if valid)
         """
-        return self._validate_condition_sync(condition)
+        return condition_syntax_errors(condition)
 
     def _validate_condition_sync(
         self,
         condition: dict[str, Any],
     ) -> list[str]:
-        """Synchronous condition validation helper.
-
-        Args:
-            condition: Condition configuration to validate
-
-        Returns:
-            List of validation error messages (empty if valid)
-        """
-        errors = []
-
-        try:
-            condition_type = _condition_type(condition)
-            if condition_type is None:
-                errors.append(f"Unknown condition type: {condition.get('type')}")
-            elif condition_type is ConditionType.RULE:
-                errors.extend(self._validate_rule_condition(condition))
-            elif condition_type is ConditionType.LLM:
-                errors.extend(self._validate_llm_condition(condition))
-            else:
-                errors.extend(self._validate_combined_condition(condition))
-
-        except Exception as e:
-            errors.append(f"Validation error: {e}")
-
-        return errors
+        """Synchronous condition validation helper; see ``condition_syntax_errors``."""
+        return condition_syntax_errors(condition)
 
     def _validate_rule_condition(self, condition: dict[str, Any]) -> list[str]:
-        """Validate rule-based condition syntax."""
-        errors = []
-
-        rules = condition.get("rules", [])
-        if not rules:
-            errors.append("Rule condition must have at least one rule")
-
-        valid_operators = {
-            "eq",
-            "ne",
-            "gt",
-            "lt",
-            "gte",
-            "lte",
-            "contains",
-            "not_contains",
-            "exists",
-            "not_exists",
-        }
-        valid_logic = {"AND", "OR"}
-
-        logic = condition.get("logic", "AND").upper()
-        if logic not in valid_logic:
-            errors.append(f"Invalid logic operator: {logic}. Must be one of {valid_logic}")
-
-        for i, rule in enumerate(rules):
-            if not isinstance(rule, dict):
-                errors.append(f"Rule {i} must be a dictionary")
-                continue
-
-            if "field" not in rule:
-                errors.append(f"Rule {i} missing required 'field'")
-
-            operator = rule.get("operator", "eq")
-            if operator not in valid_operators:
-                errors.append(f"Rule {i} has invalid operator: {operator}")
-
-            if operator not in {"exists", "not_exists"} and "value" not in rule:
-                errors.append(f"Rule {i} missing required 'value' for operator {operator}")
-
-        return errors
+        """Validate rule-based condition syntax; see ``_rule_condition_errors``."""
+        return _rule_condition_errors(condition)
 
     def _validate_llm_condition(self, condition: dict[str, Any]) -> list[str]:
-        """Validate LLM-based condition syntax."""
-        errors = []
-
-        if not condition.get("description"):
-            errors.append("LLM condition must have a 'description'")
-        if not condition.get("model_id"):
-            errors.append("LLM condition must name its 'model_id'")
-
-        context_fields = condition.get("context_fields", [])
-        if context_fields and not isinstance(context_fields, list):
-            errors.append("context_fields must be a list")
-
-        examples = condition.get("examples", [])
-        if examples and not isinstance(examples, list):
-            errors.append("examples must be a list")
-
-        for i, example in enumerate(examples):
-            if not isinstance(example, dict):
-                errors.append(f"Example {i} must be a dictionary")
-                continue
-
-            if "input" not in example or "expected" not in example:
-                errors.append(f"Example {i} must have 'input' and 'expected' fields")
-
-        return errors
+        """Validate LLM-based condition syntax; see ``_llm_condition_errors``."""
+        return _llm_condition_errors(condition)
 
     def _validate_combined_condition(self, condition: dict[str, Any]) -> list[str]:
-        """Validate combined condition syntax."""
-        errors = []
-
-        conditions = condition.get("conditions", [])
-        if not conditions:
-            errors.append("Combined condition must have at least one sub-condition")
-
-        valid_logic = {"AND", "OR"}
-        logic = condition.get("logic", "AND").upper()
-        if logic not in valid_logic:
-            errors.append(f"Invalid logic operator: {logic}. Must be one of {valid_logic}")
-
-        for i, sub_condition in enumerate(conditions):
-            if not isinstance(sub_condition, dict):
-                errors.append(f"Sub-condition {i} must be a dictionary")
-                continue
-
-            # Recursively validate sub-conditions (sync validation only)
-            try:
-                sub_errors = self._validate_condition_sync(sub_condition)
-                for error in sub_errors:
-                    errors.append(f"Sub-condition {i}: {error}")
-            except Exception as e:
-                errors.append(f"Sub-condition {i}: Validation error: {e}")
-
-        return errors
+        """Validate combined condition syntax; see ``_combined_condition_errors``."""
+        return _combined_condition_errors(condition)
 
     def _get_nested_value(self, data: dict[str, Any], field_path: str) -> Any:
         """Extract nested value from data using dot notation.
