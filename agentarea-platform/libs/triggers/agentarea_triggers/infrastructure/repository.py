@@ -225,6 +225,8 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         if not update_data:
             return await self.get_trigger(trigger_id)
 
+        if update_data.get("is_active") is True:
+            update_data["needs_new_owner_at"] = None
         update_data["updated_at"] = datetime.utcnow()
 
         stmt = (
@@ -361,11 +363,15 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         return cast(CursorResult[Any], result).rowcount > 0
 
     async def enable_trigger(self, trigger_id: UUID) -> bool:
-        """Enable a trigger in the current workspace."""
+        """Enable a trigger in the current workspace.
+
+        Clears a "needs a new owner" stop: the next event re-checks the
+        configurer's access and stops the trigger again if it is still missing.
+        """
         stmt = (
             update(TriggerORM)
             .where(TriggerORM.id == trigger_id, self._get_workspace_filter())
-            .values(is_active=True, updated_at=datetime.utcnow())
+            .values(is_active=True, needs_new_owner_at=None, updated_at=datetime.utcnow())
         )
         result = await self.session.execute(stmt)
         await self.session.flush()

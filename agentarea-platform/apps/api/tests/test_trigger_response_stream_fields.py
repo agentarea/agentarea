@@ -51,6 +51,16 @@ def test_a_trigger_whose_configurer_left_says_so():
     assert response.webhook_url is None
 
 
+def test_an_enabled_trigger_is_active_whatever_its_owner_stamp_says():
+    response = TriggerResponse.from_domain_model(
+        _trigger(
+            is_active=True,
+            needs_new_owner_at=datetime(2026, 10, 6, tzinfo=UTC).replace(tzinfo=None),
+        )
+    )
+    assert response.status == "active"
+
+
 def test_a_stopped_trigger_without_an_owner_problem_is_inactive():
     response = TriggerResponse.from_domain_model(_trigger(is_active=False))
     assert response.status == "inactive"

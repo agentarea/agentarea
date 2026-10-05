@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -12,7 +13,11 @@ from agentarea_streams.domain import (
 )
 from agentarea_streams.domain.keys import task_id_for
 from agentarea_triggers.domain.models import ConditionVerdict, TriggerFiring, WebhookTrigger
-from agentarea_triggers.stream_subscriber import ConfigurerAuthority, TriggerSubscriptionHandler
+from agentarea_triggers.stream_subscriber import (
+    ConfigurerAuthority,
+    SubscriptionFollowUpClaim,
+    TriggerSubscriptionHandler,
+)
 
 
 def _sub(trigger_id):
@@ -69,7 +74,7 @@ def _handler(service, may_run=True, claim=None):
         workflow_executor=MagicMock(),
         authority=authority,
         trigger_service_factory=lambda _s, _c: service,
-        follow_up_claim_factory=lambda _s, _sub, _e: claim,
+        follow_up_claim_factory=lambda _s, _sub, _e: cast(SubscriptionFollowUpClaim, claim),
     )
 
 
@@ -139,6 +144,17 @@ async def test_a_configurer_who_lost_access_stops_the_trigger():
     assert result.verdict == Verdict.ERROR
     assert "configurer_lost_access" in (result.reason or "")
     service.trigger_repository.mark_needs_new_owner.assert_awaited_once_with(trigger.id)
+    service.fire.assert_not_awaited()
+
+
+async def test_a_stop_that_updated_no_row_is_not_reported_as_a_stop():
+    trigger = _trigger()
+    service = MagicMock()
+    service.get_trigger = AsyncMock(return_value=trigger)
+    service.fire = AsyncMock()
+    service.trigger_repository.mark_needs_new_owner = AsyncMock(return_value=False)
+    with pytest.raises(RuntimeError, match="no row updated"):
+        await _handler(service, may_run=False).handle(_sub(trigger.id), _event(), AsyncMock())
     service.fire.assert_not_awaited()
 
 

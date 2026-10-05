@@ -93,10 +93,12 @@ TriggerStatus = Literal["active", "inactive", "needs_owner"]
 
 
 def trigger_status(trigger: Any) -> TriggerStatus:
-    """'needs_owner' wins over is_active: the trigger stays stopped until someone takes it over."""
+    """'needs_owner' while a trigger stopped for its configurer's lost access stays off."""
+    if trigger.is_active:
+        return "active"
     if getattr(trigger, "needs_new_owner_at", None) is not None:
         return "needs_owner"
-    return "active" if trigger.is_active else "inactive"
+    return "inactive"
 
 
 class TriggerResponse(BaseModel):
@@ -121,7 +123,8 @@ class TriggerResponse(BaseModel):
     status: TriggerStatus = Field(
         description=(
             "'needs_owner' when the person who configured it can no longer run its agent; "
-            "the trigger stays stopped until someone who can takes it over."
+            "the trigger stays stopped until it is enabled again, and the next event "
+            "re-checks that person's access."
         )
     )
     needs_new_owner_at: UtcDatetime | None = None

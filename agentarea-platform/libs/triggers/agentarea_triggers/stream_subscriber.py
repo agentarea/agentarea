@@ -179,7 +179,10 @@ class TriggerSubscriptionHandler:
             workspace_id=subscription.workspace_id,
             agent_id=trigger.agent_id,
         ):
-            await service.trigger_repository.mark_needs_new_owner(trigger.id)
+            if not await service.trigger_repository.mark_needs_new_owner(trigger.id):
+                raise RuntimeError(
+                    f"trigger {trigger.id} could not be stopped for a new owner: no row updated"
+                )
             logger.warning(
                 "Trigger %s stopped: %s can no longer run agent %s",
                 trigger.id,

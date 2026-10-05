@@ -138,7 +138,9 @@ triggers keep auto-creating their stream as before. A `stream` trigger has no
 intake of its own: it names an existing `stream_id` and `event_filter`
 directly and rides the same dispatcher path. Firing still checks that the
 person who configured the trigger can still run its agent — a configurer who
-lost access gets the trigger marked `needs_owner` instead of a firing.
+lost access gets the trigger stopped and marked `needs_owner` instead of a
+firing. Enabling it again clears the mark; the next event re-checks access and
+stops it again if that person still cannot run the agent.
 
 **Partitions are maintained ahead of need, not on demand.** `stream_events` is
 partitioned by day on `received_at`. A worker job keeps

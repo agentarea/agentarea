@@ -1077,14 +1077,16 @@ async def test_a_stream_trigger_checks_its_creator_may_read_the_stream(
 ):
     from agentarea_common.auth.permission import PermissionService
     from agentarea_common.di.container import register_singleton
+    from agentarea_triggers.domain.enums import TriggerType as DomainTriggerType
+    from agentarea_triggers.domain.models import Trigger as DomainTrigger
 
     stream_id = str(uuid4())
     pdp = _StreamReaders()
     register_singleton(PermissionService, pdp)
-    mock_trigger_service.create_trigger.return_value = Trigger(
+    mock_trigger_service.create_trigger.return_value = DomainTrigger(
         name="On push",
         agent_id=uuid4(),
-        trigger_type=TriggerType.STREAM,
+        trigger_type=DomainTriggerType.STREAM,
         created_by="test_user",
         workspace_id="w",
     )

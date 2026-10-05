@@ -1914,7 +1914,7 @@
       "lastEvent": "Last event",
       "noEventsYet": "No events yet",
       "needsOwnerTitle": "This trigger stopped",
-      "needsOwnerBody": "The person who set it up can no longer run this agent. Recreate it from an account that can."
+      "needsOwnerBody": "The person who set it up can no longer run this agent. Restore their access and enable it again, or recreate it from an account that can."
     },
     "error": {
       "createFailed": "Failed to create trigger",

@@ -15,6 +15,7 @@ from agentarea_common.rebac import RelationTuple
 
 _SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "20260923_reconcile_resource_authz.py"
 _spec = importlib.util.spec_from_file_location("_reconcile_resource_authz", _SCRIPT)
+assert _spec is not None and _spec.loader is not None
 _module = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_module)
 
