@@ -159,8 +159,10 @@ async def seeded(session_factory):
                 created_by=USER_ID,
                 description="Completed task today",
                 status="completed",
-                started_at=today + timedelta(hours=1),
-                completed_at=today + timedelta(hours=2),
+                # Never in the future: today + 2h is ahead of now until 02:00 UTC,
+                # which put t1 at the head of recent_tasks.
+                started_at=today,
+                completed_at=max(today, min(today + timedelta(hours=2), now - timedelta(minutes=5))),
                 result={"total_cost": 10.0, "output": "done"},
             )
         )
