@@ -724,7 +724,7 @@ class TestPlatformManagedMCPAuth:
         assert posted_to == ["https://github.com/login/oauth/access_token"]
         assert client.posted["grant_type"] == "refresh_token"
         assert client.posted["client_id"] == "Iv1.platform"
-        assert client.posted["client_secret"] == "platform-secret"  # noqa: S105
+        assert client.posted["client_secret"] == "platform-secret"  # noqa: S105  # pragma: allowlist secret
         assert client.headers == {"Accept": "application/json"}
 
     async def test_headers_are_refused_for_an_origin_the_platform_app_does_not_serve(self):

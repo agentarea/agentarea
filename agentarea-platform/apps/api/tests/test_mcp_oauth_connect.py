@@ -993,7 +993,7 @@ async def test_callback_exchanges_a_managed_code_at_the_platform_apps_token_endp
         exchange_kwargs["as_metadata"].token_endpoint
         == "https://github.com/login/oauth/access_token"  # noqa: S105
     )
-    assert exchange_kwargs["client_secret"] == "platform-secret"  # noqa: S105
+    assert exchange_kwargs["client_secret"] == "platform-secret"  # noqa: S105  # pragma: allowlist secret
 
 
 @pytest.mark.asyncio

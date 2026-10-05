@@ -84,7 +84,7 @@ global:
   # A malformed value fails startup.
   mcpOAuthApps:
     existingSecret: ""
-    existingSecretKey: "mcp-oauth-apps"
+    existingSecretKey: "mcp-oauth-apps"  # pragma: allowlist secret
 
   # Database configuration
   database:
