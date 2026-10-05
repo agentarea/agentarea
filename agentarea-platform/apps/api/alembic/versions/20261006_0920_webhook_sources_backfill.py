@@ -10,7 +10,9 @@ writing; a migration cannot read runtime settings.
 A webhook_id some source already owns (the app created it after an earlier
 upgrade) is left alone. JSON columns are read the way the trigger repository
 reads them: a JSON null or an empty method list is the trigger's default. The
-downgrade removes these rows and, by cascade, their journal and outcomes.
+stream name shortens the trigger name so a long webhook_id still fits. The
+downgrade removes these rows and, by cascade, their journal, outcomes and any
+other subscription made on these streams since.
 
 Revision ID: 20261006_0920_webhook_backfill
 Revises: 20261006_0910_task_provenance
@@ -34,6 +36,11 @@ _PENDING = """
     AND NOT EXISTS (SELECT 1 FROM stream_sources s WHERE s.webhook_id = t.webhook_id)
 """
 _WEBHOOK_TYPE = "coalesce(nullif(t.webhook_type, ''), 'generic')"
+_NAME_SUFFIX = "' (' || t.webhook_id || ')'"
+_STREAM_NAME = f"""
+    left(left(t.name, least(200, greatest(0, 255 - length({_NAME_SUFFIX})))) || {_NAME_SUFFIX},
+         255)
+"""
 _ALLOWED_METHODS = """
     CASE WHEN coalesce(t.allowed_methods::jsonb, 'null') IN ('null', '[]')
          THEN '["POST"]'::json ELSE t.allowed_methods END
@@ -52,7 +59,7 @@ UPGRADE_SQL: list[str] = [
     DO $$
     DECLARE shared text;
     BEGIN
-      SELECT string_agg(webhook_id, ', ') INTO shared FROM (
+      SELECT string_agg(webhook_id, ', ' ORDER BY webhook_id) INTO shared FROM (
         SELECT t.webhook_id FROM triggers t WHERE {_PENDING}
         GROUP BY t.webhook_id HAVING count(*) > 1) d;
       IF shared IS NOT NULL THEN
@@ -65,9 +72,9 @@ UPGRADE_SQL: list[str] = [
     INSERT INTO streams (id, workspace_id, created_by, name, description, kind, retention_days,
                          created_at, updated_at)
     SELECT md5('stream:' || t.id::text)::uuid, t.workspace_id, t.created_by,
-           left(t.name, 200) || ' (' || t.webhook_id || ')',
-           'Webhook ' || {_WEBHOOK_TYPE}, 'custom', 30, now(), now()
+           {_STREAM_NAME}, 'Webhook ' || {_WEBHOOK_TYPE}, 'custom', 30, now(), now()
     FROM triggers t WHERE {_PENDING}
+    ON CONFLICT (id) DO NOTHING
     """,
     f"""
     INSERT INTO stream_sources (id, workspace_id, created_by, stream_id, kind, webhook_id,

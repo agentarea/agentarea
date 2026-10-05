@@ -37,6 +37,7 @@ async def _add_trigger(
     *,
     ws: str,
     webhook_id: str,
+    name: str = "GitHub",
     allowed_methods: str = '["POST"]',
     webhook_type: str | None = "github",
     validation_rules: str = "{}",
@@ -48,13 +49,14 @@ async def _add_trigger(
             "INSERT INTO triggers (id, workspace_id, created_by, name, description, agent_id, "
             "trigger_type, is_active, task_parameters, conditions, failure_threshold, "
             "consecutive_failures, webhook_id, allowed_methods, webhook_type, validation_rules, "
-            "event_types, created_at, updated_at) VALUES (:id, :ws, 'owner', 'GitHub', '', "
+            "event_types, created_at, updated_at) VALUES (:id, :ws, 'owner', :name, '', "
             ":agent, 'webhook', true, '{}', '{}', 5, 0, :wh, CAST(:methods AS json), :type, "
             "CAST(:rules AS json), CAST(:events AS json), now(), now())"
         ),
         {
             "id": trigger_id,
             "ws": ws,
+            "name": name,
             "agent": uuid4(),
             "wh": webhook_id,
             "methods": allowed_methods,
@@ -227,5 +229,22 @@ async def test_two_triggers_sharing_a_webhook_id_stop_the_backfill_by_name():
         await _add_trigger(session, ws=ws, webhook_id=webhook_id)
         with pytest.raises(DBAPIError, match=f"cannot each own a source: {webhook_id}"):
             await _run(session, migration.UPGRADE_SQL)
+        await session.rollback()
+    await engine.dispose()
+
+
+async def test_a_long_name_and_webhook_id_still_fit_the_stream_name():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    migration = _migration()
+    ws, webhook_id = str(uuid4()), "w" * 168 + uuid4().hex
+    async with maker() as session:
+        trigger_id = await _add_trigger(session, ws=ws, webhook_id=webhook_id, name="n" * 200)
+        await _run(session, migration.UPGRADE_SQL)
+
+        rows = await _rows_for(session, trigger_id)
+        assert rows.webhook_id == webhook_id
+        assert len(rows.name) <= 255
+        assert rows.name.endswith(f" ({webhook_id})")
         await session.rollback()
     await engine.dispose()
