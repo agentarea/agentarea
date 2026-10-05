@@ -366,6 +366,10 @@ two configure the channel-inbound poller; the eight above configure the
 event-stream journal and its dispatcher. See [Event
 streams](/concepts/integration/event-streams).
 
+The API and the worker wake the dispatcher over Redis, so both refuse to start
+unless `AGENTAREA_BROKER=redis` (the default, and what every chart and Compose
+file sets).
+
 ### Event service (group `eventService` values, chart keys only)
 
 | Setting | Helm value | Default |
