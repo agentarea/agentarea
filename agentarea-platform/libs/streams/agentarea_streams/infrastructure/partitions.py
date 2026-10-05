@@ -20,6 +20,11 @@ logger = logging.getLogger(__name__)
 
 _PARTITION = re.compile(r"^stream_events_p(\d{8})$")
 
+#: Fixed, arbitrary key for pg_try_advisory_xact_lock: one maintenance pass at
+#: a time across every worker replica. Transaction-scoped, so it releases
+#: itself on commit or rollback -- no unlock call needed.
+_ADVISORY_LOCK_KEY = 798_021_335_641
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -53,6 +58,18 @@ class PartitionMaintainer:
         today = self._clock().date()
         with unscoped("journal partitions span every workspace"):
             async with self._session_factory() as session:
+                acquired = (
+                    await session.execute(
+                        text("SELECT pg_try_advisory_xact_lock(:key)"),
+                        {"key": _ADVISORY_LOCK_KEY},
+                    )
+                ).scalar_one()
+                if not acquired:
+                    logger.info(
+                        "Journal partition maintenance already running in another process; "
+                        "skipping this pass"
+                    )
+                    return report
                 for offset in range(-1, self._settings.PARTITIONS_AHEAD + 1):
                     day = today + timedelta(days=offset)
                     if await self._create(session, day):
@@ -62,7 +79,7 @@ class PartitionMaintainer:
                 horizon = today - timedelta(days=keep_days)
                 for name, day in await self._partitions(session):
                     if day < horizon:
-                        await session.execute(text(f'DROP TABLE "{name}"'))
+                        await session.execute(text(f'DROP TABLE IF EXISTS "{name}"'))
                         report.dropped.append(name)
                 await session.execute(
                     text("DELETE FROM stream_event_keys WHERE received_at < :h"),
@@ -87,7 +104,7 @@ class PartitionMaintainer:
         following = day + timedelta(days=1)
         await session.execute(
             text(
-                f'CREATE TABLE "{name}" PARTITION OF stream_events FOR VALUES FROM '
+                f'CREATE TABLE IF NOT EXISTS "{name}" PARTITION OF stream_events FOR VALUES FROM '
                 f"('{day.isoformat()} 00:00:00+00') TO ('{following.isoformat()} 00:00:00+00')"
             )
         )
@@ -124,7 +141,14 @@ class PartitionMaintainer:
         return len(trimmed.all())
 
     async def start(self, interval: timedelta = timedelta(hours=1)) -> None:
-        await self.run_once()
+        try:
+            await self.run_once()
+        except Exception:
+            # The worker must not start without partitions ahead of today; log with
+            # the traceback before re-raising so the failure is diagnosable even if
+            # the caller's own startup logging does not carry this context.
+            logger.exception("Journal partition maintenance failed on startup")
+            raise
         self._task = asyncio.create_task(self._loop(interval), name="stream-partitions")
 
     async def _loop(self, interval: timedelta) -> None:
