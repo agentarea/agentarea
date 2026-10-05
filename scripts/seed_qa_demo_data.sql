@@ -373,7 +373,7 @@ BEGIN
             mcp_server_ids := array_append(mcp_server_ids, new_id);
 
             INSERT INTO mcp_server_instances (
-                id, server_spec_id, name, description, json_spec, verification, last_dispatch, tools,
+                id, server_spec_id, name, description, transport, json_spec, verification, last_dispatch, tools,
                 network_scope, auth_config_id, workspace_id, created_by, created_at, updated_at
             )
             VALUES (
@@ -381,8 +381,8 @@ BEGIN
                 new_id::text,
                 'QA Seed MCP Instance ' || i || ' ' || batch,
                 'Synthetic MCP instance for testing ready/error/auth states.',
+                CASE WHEN i % 2 = 1 THEN 'url' ELSE 'docker' END,
                 json_build_object(
-                    'type', CASE WHEN i % 2 = 1 THEN 'url' ELSE 'docker' END,
                     'endpoint_url', CASE WHEN i % 2 = 1 THEN 'https://mcp' || i || '.qa-seed.local/mcp' ELSE NULL END,
                     'image', CASE WHEN i % 2 = 0 THEN 'agentarea/qa-seed-mcp:' || i ELSE NULL END,
                     'env_vars', json_build_array('QA_SEED_TOKEN')

@@ -53,16 +53,17 @@ export default async function AgentsBrowsePage({
         breadcrumb: [{ label: t("browseAgents") }],
         description: t("mainDescriptionPage"),
         controls: (
-          <Link href="/agents/create">
-            <Button
-              className="shrink-0"
-              size="xs"
-              data-test="deploy-button"
-            >
+          <Button
+            asChild
+            className="shrink-0 min-h-11 md:min-h-6"
+            size="xs"
+            data-test="deploy-button"
+          >
+            <Link href="/agents/create">
               <Plus />
               {t("deployNewAgent")}
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         ),
       }}
       subheader={

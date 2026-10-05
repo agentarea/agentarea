@@ -16,6 +16,8 @@ export interface DisplayMenuProps {
   children: ReactNode;
   /** Class for the button label, e.g. to hide it in a narrow container. */
   labelClassName?: string;
+  /** Accessible name for cases where the visible label is collapsed. */
+  accessibleLabel?: string;
 }
 
 /**
@@ -26,13 +28,14 @@ export interface DisplayMenuProps {
 export default function DisplayMenu({
   children,
   labelClassName,
+  accessibleLabel,
 }: DisplayMenuProps) {
   const t = useTranslations("Common");
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <ToolbarButton>
+        <ToolbarButton aria-label={accessibleLabel ?? t("display")}>
           <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
           {/* Icon-only on a phone, so the subheader keeps room for the rest. */}
           <span className={cn("max-sm:sr-only", labelClassName)}>

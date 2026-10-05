@@ -11,6 +11,9 @@ Design notes:
   else references them via ``${setup.<key>}`` placeholders.
 - ``json_spec`` on an MCP is the native runtime shape consumed by the MCP
   service (``type``: ``command`` | ``docker`` | ``url``) — no second schema.
+  ``args`` and ``endpoint_url`` may contain ``${setup.<key>}`` references;
+  ``environment`` / ``headers`` hold literal non-secret configuration, while
+  credentials go through ``bindings``.
 """
 
 from __future__ import annotations
@@ -241,19 +244,17 @@ class BundlePolicy(BaseModel):
 
 
 class BundleChannel(BaseModel):
-    """A messaging channel that lets an agent receive and reply to messages.
+    """An inbound webhook trigger bound to one of the package's agents.
 
-    Installs as an inbound trigger (e.g. a Telegram webhook): a message to the
-    bot becomes a task for ``agent``, and the reply is delivered back on the same
-    channel. Credentials (a bot token) enter via ``bindings`` → ``${setup.x}``,
-    exactly like an MCP's secret bindings, so the token is never inlined.
+    Telegram channels may require a bot token, which enters via ``bindings`` →
+    ``${setup.x}``; generic webhook triggers need no credential.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     key: str = Field(min_length=1)
-    type: Literal["telegram"] = Field(
-        default="telegram", description="Channel provider. Only Telegram in v0.1.0."
+    type: Literal["telegram", "generic"] = Field(
+        default="telegram", description="Webhook provider for the created trigger."
     )
     name: str = Field(min_length=1, description="Display name for the created channel trigger.")
     agent: str = Field(min_length=1, description="BundleAgent key that handles inbound messages.")

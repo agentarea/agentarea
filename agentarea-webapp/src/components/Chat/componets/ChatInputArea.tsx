@@ -388,7 +388,7 @@ export function ChatInputArea({
           onChange={onInputChange}
           placeholder={placeholder}
           disabled={isLoading || disabled}
-          className="min-h-[48px] max-h-48 resize-none rounded-none border-0 bg-transparent px-4 pb-2 pt-3 text-[15px] leading-6 text-foreground shadow-none transition-none placeholder:text-muted-foreground/70 focus-visible:border-transparent dark:bg-transparent sm:min-h-[68px] sm:text-[13px] sm:leading-[21px]"
+          className="min-h-[48px] max-h-48 resize-none rounded-none border-0 bg-transparent px-4 pb-2 pt-3 text-[15px] leading-6 text-foreground shadow-none transition-none placeholder:text-muted-foreground focus-visible:border-transparent dark:bg-transparent sm:min-h-[68px] sm:text-[13px] sm:leading-[21px]"
           rows={rows}
           onKeyDown={onKeyDown}
         />

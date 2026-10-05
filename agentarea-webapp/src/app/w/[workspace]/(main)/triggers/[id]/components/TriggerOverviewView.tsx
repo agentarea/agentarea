@@ -10,7 +10,10 @@ import {
   Webhook,
   Zap,
 } from "lucide-react";
-import type { TriggerExecutionResponse } from "@/api/client/types.gen";
+import type {
+  TriggerExecutionResponse,
+  TriggerResponse,
+} from "@/api/client/types.gen";
 import { HeroDescription } from "@/components/Overview/HeroDescription";
 import {
   EmptyRow,
@@ -31,6 +34,7 @@ import { getPricingCurrency } from "@/lib/api-dashboard";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import {
   getTriggerExecutionStatusPresentation,
+  getWebhookSigningPresentation,
   type StatusPresentation,
 } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -39,6 +43,8 @@ import {
   formatCompactDistance,
   formatTriggerCost,
 } from "../../components/triggerDisplay";
+import { WebhookSigningControl } from "../../components/WebhookSigning";
+import { TriggerStatusBadge } from "../TriggerDetailStatus";
 
 /**
  * Everything the trigger overview renders, already resolved by the data
@@ -62,7 +68,15 @@ export type TriggerOverviewModel = {
   mcps: TaskParameterRef[];
   files: string[];
   cron: { expression: string | null; timezone: string | null } | null;
-  webhook: { url: string | null; methods: string[]; events: string[] } | null;
+  webhook: {
+    url: string | null;
+    methods: string[];
+    events: string[];
+    /** Null when the stored secret could not be read. */
+    signing: TriggerResponse["webhook_signing"];
+    /** Whether its signing secret is generated here and can be rotated. */
+    rotatable: boolean;
+  } | null;
   failure: { consecutive: number; threshold: number };
   lastExecutionAt: string | null;
   nextRunTime: string | null;
@@ -170,15 +184,13 @@ export async function TriggerOverviewView({
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="m-0 text-[18px] font-semibold tracking-[-0.022em]">
+                <h2 className="m-0 text-[18px] font-semibold tracking-[-0.022em]">
                   {model.name}
-                </h1>
-                <StatusIndicator
-                  kind={model.status.kind}
+                </h2>
+                <TriggerStatusBadge
+                  status={model.status}
                   className="whitespace-nowrap text-[13px] font-medium"
-                >
-                  {model.status.label}
-                </StatusIndicator>
+                />
               </div>
 
               {model.description && (
@@ -420,6 +432,14 @@ export async function TriggerOverviewView({
                   <CopyableText text={model.webhook.url} />
                 </div>
               )}
+              {model.webhook?.signing && (
+                <SigningRow
+                  triggerId={triggerId}
+                  signing={model.webhook.signing}
+                  rotatable={model.webhook.rotatable}
+                  t={t}
+                />
+              )}
               {model.webhook && (
                 <FactRow
                   title={t("methods")}
@@ -462,6 +482,49 @@ export async function TriggerOverviewView({
 }
 
 /* ------------------------- subcomponents ------------------------- */
+/**
+ * Whether a request to the webhook has to prove where it came from. An
+ * unprotected URL is called out, because anyone who learns it starts the agent.
+ */
+function SigningRow({
+  triggerId,
+  signing,
+  rotatable,
+  t,
+}: {
+  triggerId: string;
+  signing: NonNullable<TriggerResponse["webhook_signing"]>;
+  rotatable: boolean;
+  t: Translator;
+}) {
+  const presentation = getWebhookSigningPresentation(signing);
+  const hint = {
+    signed: t("signingSignedHint"),
+    unsigned: rotatable
+      ? t("signingUnsignedHint")
+      : t("signingUnsignedChannelHint"),
+    unsupported: t("signingUnsupportedHint"),
+  }[signing];
+  return (
+    <div className="space-y-2 border-b border-border/60 px-[15px] py-3 last:border-b-0">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[12.5px] font-medium">{t("signing")}</span>
+        <StatusIndicator kind={presentation.kind} size="sm">
+          {t(`signingStatus.${presentation.labelKey ?? signing}`)}
+        </StatusIndicator>
+      </div>
+      <p className="m-0 text-[11.5px] leading-[1.5] text-muted-foreground">
+        {hint}
+      </p>
+      {rotatable && (
+        <WebhookSigningControl
+          triggerId={triggerId}
+          signed={signing === "signed"}
+        />
+      )}
+    </div>
+  );
+}
 
 /**
  * One past run. It links to the task it created, which is where the actual
@@ -521,7 +584,7 @@ function ExecutionRow({
     >
       <div className="min-w-0 flex-1">
         <div className="truncate text-[12.5px] font-medium">{when}</div>
-        <div className="mt-px truncate text-[11px] text-muted-foreground/80">
+        <div className="mt-px truncate text-[11px] text-muted-foreground">
           {sub}
         </div>
       </div>

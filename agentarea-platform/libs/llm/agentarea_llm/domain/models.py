@@ -172,6 +172,14 @@ class ProviderConfig(BaseModel, WorkspaceScopedMixin):
 class ModelSpec(BaseModel, WorkspaceScopedMixin):
     """Model specification - defines available models for each provider"""
 
+    @property
+    def is_catalog(self) -> bool:
+        return bool(getattr(self, "_is_catalog", False))
+
+    @is_catalog.setter
+    def is_catalog(self, value: bool) -> None:
+        object.__setattr__(self, "_is_catalog", value)
+
     __tablename__ = "model_specs"
     __table_args__ = (
         UniqueConstraint(
@@ -186,7 +194,7 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
         ),
     )
 
-    provider_spec_id: Mapped[str] = mapped_column(
+    provider_spec_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("provider_specs.id", ondelete="CASCADE"), nullable=False
     )
     model_name: Mapped[str] = mapped_column(String, nullable=False)  # gpt-4, claude-3-opus

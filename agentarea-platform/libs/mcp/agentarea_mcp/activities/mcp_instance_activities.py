@@ -279,7 +279,11 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
 
         from agentarea_mcp.application.auth_service import MCPAuthService
         from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
-        from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
+        from agentarea_mcp.infrastructure.repository import (
+            MCPServerInstanceRepository,
+            MCPServerRepository,
+        )
+        from agentarea_mcp.transport_spec import instance_transport_spec
 
         try:
             db = get_database()
@@ -306,7 +310,17 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                         error=f"Auth config {instance.auth_config_id} not found"
                     )
 
-                headers = await auth_service.get_auth_headers(auth_config)
+                server_spec = await MCPServerRepository(session, user_context).get_server_by_id(
+                    str(instance.server_spec_id)
+                )
+                if server_spec is None:
+                    return ResolveAuthHeadersResult(
+                        error=f"MCP server spec {instance.server_spec_id} not found"
+                    )
+                transport_spec = instance_transport_spec(server_spec, instance)
+                headers = await auth_service.get_auth_headers_for(
+                    auth_config, str(transport_spec.get("endpoint_url") or "")
+                )
                 await session.commit()
                 return ResolveAuthHeadersResult(headers=headers)
 

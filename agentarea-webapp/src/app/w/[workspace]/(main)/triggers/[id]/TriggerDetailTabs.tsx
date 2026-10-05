@@ -65,6 +65,7 @@ export default function TriggerDetailTabs({
         value={activeTab}
         onChange={(next) => router.push(hrefFor(next))}
         variant="solid"
+        itemClassName="max-md:min-h-11"
         className="max-w-full"
         layoutId="trigger-section-control"
       />

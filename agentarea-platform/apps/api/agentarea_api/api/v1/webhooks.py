@@ -5,6 +5,7 @@ import logging
 from typing import Any
 
 from agentarea_api.api.deps.services import get_public_webhook_manager
+from agentarea_api.api.rate_limit import limit_webhook
 from agentarea_common.auth.route_authz import unrestricted
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -93,7 +94,11 @@ async def webhook_health_check(
     ],
 )
 async def handle_webhook(
-    webhook_id: str, request: Request, webhook_manager=Depends(get_public_webhook_manager)
+    webhook_id: str,
+    request: Request,
+    # Every method reaches the same handler, so the limit lives here, not on one route.
+    _rate_limited: None = Depends(limit_webhook),
+    webhook_manager=Depends(get_public_webhook_manager),
 ):
     """Handle incoming webhook requests from external services (Telegram, Slack, GitHub, etc.)."""
     try:

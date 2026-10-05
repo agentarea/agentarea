@@ -32,7 +32,7 @@ func TestRejectRefusesAValueFromTheRepository(t *testing.T) {
 
 func TestRejectRefusesTheOldComposeDefaults(t *testing.T) {
 	clearEnvs(t)
-	t.Setenv("MCP_GATEWAY_AUTH_SECRET", "agentarea-dev-mcp-gateway-secret-change-me") // pragma: allowlist secret
+	t.Setenv("AGENTAREA_MCP_GATEWAY_SECRET", "agentarea-dev-mcp-gateway-secret-change-me") // pragma: allowlist secret
 
 	if err := Reject(); err == nil {
 		t.Fatal("Reject() accepted the old docker-compose.dev.yaml default")
@@ -41,7 +41,7 @@ func TestRejectRefusesTheOldComposeDefaults(t *testing.T) {
 
 func TestRejectAcceptsGeneratedAndUnsetValues(t *testing.T) {
 	clearEnvs(t)
-	t.Setenv("SANDBOX_FILE_AUTH_SECRET", "q7Xk0m3v9Zr2Lp8sWc4Nh6Ty1Bd5Fg0J") // pragma: allowlist secret
+	t.Setenv("AGENTAREA_SANDBOX_FILE_SECRET", "q7Xk0m3v9Zr2Lp8sWc4Nh6Ty1Bd5Fg0J") // pragma: allowlist secret
 
 	if err := Reject(); err != nil {
 		t.Fatalf("Reject() = %v, want nil", err)

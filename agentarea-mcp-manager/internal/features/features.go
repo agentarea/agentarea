@@ -126,10 +126,10 @@ type EnvironmentProvider struct {
 }
 
 // NewEnvironmentProvider creates provider that reads from env vars
-// e.g., MCP_FEATURE_WARM_POOL=true
+// e.g., AGENTAREA_MCP_FEATURE_WARM_POOL=true
 func NewEnvironmentProvider(logger *slog.Logger, prefix string) *EnvironmentProvider {
 	if prefix == "" {
-		prefix = "MCP_FEATURE"
+		prefix = "AGENTAREA_MCP_FEATURE"
 	}
 	return &EnvironmentProvider{
 		prefix: prefix,
@@ -137,7 +137,7 @@ func NewEnvironmentProvider(logger *slog.Logger, prefix string) *EnvironmentProv
 	}
 }
 
-// IsEnabled checks env var like MCP_FEATURE_WARM_POOL
+// IsEnabled checks env var like AGENTAREA_MCP_FEATURE_WARM_POOL
 func (p *EnvironmentProvider) IsEnabled(ctx context.Context, feature Feature) bool {
 	envVar := fmt.Sprintf("%s_%s", p.prefix, strings.ToUpper(string(feature)))
 	envVar = strings.ReplaceAll(envVar, ".", "_")
@@ -264,7 +264,7 @@ func (s *Service) GatewayAPIEnabled() bool {
 // GetWarmPoolConfig and its WarmPoolConfig struct were removed here. They had no
 // callers: nothing read Size, and nothing read IdleTimeout — the pool size comes
 // from the chart, and MCP instance idleness is owned by internal/mcpgateway via
-// request leases and MCP_IDLE_TIMEOUT. Keeping them was worse than dead weight, because an
+// request leases and AGENTAREA_MCP_IDLE_TIMEOUT. Keeping them was worse than dead weight, because an
 // `idle_timeout` variant on the warm_pool flag reads as the way to configure
 // exactly the thing it did not configure. Restore from git history if a warm
 // pool ever needs per-variant tuning.

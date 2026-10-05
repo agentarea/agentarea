@@ -41,14 +41,48 @@ class BudgetMixin(AgentWorkflowBase):
         total_tokens: int,
         source: str,
     ) -> None:
-        """Account and enforce every paid model call, including compaction."""
+        """Account and enforce one paid model call in the pre-patch order.
+
+        Runs recorded before ``PAID_CALL_PERSISTED_BEFORE_LIMITS_PATCH`` stop on
+        the run budget before counting the call's tokens; their replay needs that.
+        """
+        self._require_total_tokens(total_tokens, source)
+        self._budget.add_cost(cost)
+        self._enforce_run_budget(source)
+        self.state.tokens_used += total_tokens
+        self._enforce_token_budget(source)
+
+    def _account_inference_usage(
+        self,
+        *,
+        cost: Money | float,
+        total_tokens: int,
+        source: str,
+    ) -> None:
+        """Add a paid model call to the run's spend and tokens without enforcing limits.
+
+        The caller persists the call, then calls ``_enforce_inference_limits``:
+        the provider was paid either way, so the call is billed before the stop.
+        """
+        self._require_total_tokens(total_tokens, source)
+        self._budget.add_cost(cost)
+        self.state.tokens_used += total_tokens
+
+    def _enforce_inference_limits(self, source: str) -> None:
+        """Stop the run when accounted spend or tokens exceed the resolved limits."""
+        self._enforce_run_budget(source)
+        self._enforce_token_budget(source)
+
+    @staticmethod
+    def _require_total_tokens(total_tokens: int, source: str) -> None:
         if isinstance(total_tokens, bool) or not isinstance(total_tokens, int) or total_tokens <= 0:
             raise ApplicationError(
                 f"{source} usage accounting is missing total_tokens",
                 type="LLMAccountingUnavailable",
                 non_retryable=True,
             )
-        self._budget.add_cost(cost)
+
+    def _enforce_run_budget(self, source: str) -> None:
         if self._budget.cost > self._budget.budget_limit:
             raise ApplicationError(
                 f"{source} exceeded the resolved run budget: "
@@ -58,7 +92,7 @@ class BudgetMixin(AgentWorkflowBase):
                 non_retryable=True,
             )
 
-        self.state.tokens_used += total_tokens
+    def _enforce_token_budget(self, source: str) -> None:
         token_limit = ((self.state.effective_policy or {}).get("tokens") or {}).get("max_tokens")
         if isinstance(token_limit, bool) or not isinstance(token_limit, int) or token_limit <= 0:
             raise ApplicationError(
@@ -129,5 +163,5 @@ class BudgetMixin(AgentWorkflowBase):
             unit = f" {result.currency}" if result.currency else ""
             self._monthly_cap_message = (
                 f"Workspace monthly spend cap reached "
-                f"({result.month_to_date_usd:.2f}{unit}/{result.cap_usd:.2f}{unit})"
+                f"({result.month_to_date_usd}{unit}/{result.cap_usd}{unit})"
             )

@@ -434,6 +434,7 @@ export default function AgentForm({
               errors={errors}
               setValue={setValue}
               llmModelInstances={llmModelInstances}
+              suggestedName={create ? initialData?.name : undefined}
               onOpenConfigSheet={() => {}}
               onRefreshModels={() => router.refresh()}
             />

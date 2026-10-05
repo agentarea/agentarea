@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import {
   Bot,
   CheckCircle2,
+  History,
   MessageCircleQuestion,
   ScrollText,
   ShieldAlert,
@@ -33,6 +34,7 @@ const ICONS: Record<FilterValue, LucideIcon[]> = {
   input: [Bot, MessageCircleQuestion, ScrollText],
   completed: [CheckCircle2, ShieldCheck, ScrollText],
   failed: [XCircle, ShieldAlert, ScrollText],
+  decided: [ShieldCheck, History, ScrollText],
 };
 
 export function InboxEmptyState({ filter, counts }: InboxEmptyStateProps) {

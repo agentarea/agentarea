@@ -96,6 +96,46 @@ func testProviderRuntime(t *testing.T, backend backends.Backend, provider provid
 	return runtime
 }
 
+func TestStartFailureBackoffGrowsExponentiallyToCap(t *testing.T) {
+	tests := []struct {
+		failures int
+		want     time.Duration
+	}{
+		{failures: 0, want: 0},
+		{failures: 1, want: time.Second},
+		{failures: 2, want: 2 * time.Second},
+		{failures: 3, want: 4 * time.Second},
+		{failures: 10, want: startFailureBackoffCap},
+	}
+	for _, test := range tests {
+		if got := startFailureBackoff(test.failures); got != test.want {
+			t.Errorf("startFailureBackoff(%d) = %s, want %s", test.failures, got, test.want)
+		}
+	}
+}
+
+func TestStartFailureBackoffPreventsRepeatedCreation(t *testing.T) {
+	backend := &runtimeBackendStub{statuses: []statusReply{{err: backends.ErrInstanceNotFound}}}
+	provider := &runtimeProviderStub{err: errors.New("failed")}
+	runtime := testProviderRuntime(t, backend, provider, time.Second)
+	instance := dockerInstance()
+
+	if _, err := runtime.EnsureReady(context.Background(), instance); err == nil {
+		t.Fatal("first EnsureReady() error = nil, want the simulated start failure")
+	}
+	_, err := runtime.EnsureReady(context.Background(), instance)
+	var blocked *StartBackoffError
+	if !errors.As(err, &blocked) {
+		t.Fatalf("second EnsureReady() error = %v, want a start-backoff failure", err)
+	}
+	if creates, _ := provider.counts(); creates != 1 {
+		t.Fatalf("provider creates = %d during backoff, want one", creates)
+	}
+	if calls := backend.statusCalls(); calls != 1 {
+		t.Fatalf("runtime status calls = %d during backoff, want one", calls)
+	}
+}
+
 func dockerInstance() *models.MCPServerInstance {
 	return &models.MCPServerInstance{
 		InstanceID: "8ca9f331-9cc9-4a51-9933-27d7bb73860b",

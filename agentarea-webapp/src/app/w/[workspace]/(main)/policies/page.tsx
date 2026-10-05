@@ -7,7 +7,6 @@ import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { getViewerCapabilities } from "@/lib/workspace-context";
 import AccessControlData from "./components/access/AccessControlData";
 import AccessControlHeaderControls from "./components/access/AccessControlHeaderControls";
-import AccessViewTabs from "./components/access/AccessViewTabs";
 import { PoliciesData } from "./components/PoliciesData";
 import PoliciesHeaderControls from "./components/PoliciesHeaderControls";
 import PoliciesSkeleton from "./components/PoliciesSkeleton";
@@ -40,9 +39,6 @@ export default async function PoliciesPage({
       subheader={
         <SubheaderToolbar
           categories={<PoliciesViewTabs current={view} />}
-          controls={
-            canAdminister && view === "access" ? <AccessViewTabs /> : undefined
-          }
         />
       }
     >

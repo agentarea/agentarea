@@ -49,19 +49,34 @@ class BundleInstallError(Exception):
         self.issues = issues or []
 
 
-def _transport_fields(json_spec: dict[str, Any]) -> dict[str, Any]:
-    """Extract the runtime transport portion of a package MCP json_spec."""
+def _transport_fields(json_spec: dict[str, Any], setup_values: dict[str, Any]) -> dict[str, Any]:
+    """Extract the runtime transport portion of a package MCP json_spec.
+
+    ``args`` and ``endpoint_url`` may carry ``${setup.x}`` references (an
+    exported workspace templates credentials out of them); they are resolved
+    here, since the runtime reads both verbatim.
+    """
+
+    def resolve(value: Any) -> Any:
+        return resolve_placeholders(value, setup_values) if isinstance(value, str) else value
+
     spec_type = json_spec.get("type")
     out: dict[str, Any] = {"type": spec_type}
     if spec_type == "command":
         out["command"] = json_spec.get("command")
         if json_spec.get("args"):
-            out["args"] = list(json_spec["args"])
+            out["args"] = [resolve(arg) for arg in json_spec["args"]]
     elif spec_type == "docker":
         out["image"] = json_spec.get("image")
     elif spec_type == "url":
-        out["endpoint_url"] = json_spec.get("endpoint_url") or json_spec.get("url")
+        out["endpoint_url"] = resolve(json_spec.get("endpoint_url") or json_spec.get("url"))
     return out
+
+
+def _plain_config(json_spec: dict[str, Any], field: str) -> dict[str, Any]:
+    """Non-secret environment variables or headers written literally in the spec."""
+    values = json_spec.get(field)
+    return dict(values) if isinstance(values, dict) else {}
 
 
 class BundleInstaller:
@@ -155,7 +170,7 @@ class BundleInstaller:
                 )
                 continue
 
-            transport = _transport_fields(mcp.json_spec)
+            transport = _transport_fields(mcp.json_spec, setup_values)
             spec_kwargs: dict[str, Any] = {
                 "name": mcp.name,
                 "description": f"Imported from package '{package.name}'",
@@ -177,9 +192,13 @@ class BundleInstaller:
                 env_name: resolve_placeholders(ref, setup_values)
                 for env_name, ref in mcp.bindings.items()
             }
-            instance_json: dict[str, Any] = {"type": transport["type"]}
-            if resolved:
-                instance_json[target] = resolved
+            instance_json: dict[str, Any] = {}
+            for field in ("environment", "headers"):
+                values = _plain_config(mcp.json_spec, field)
+                if field == target:
+                    values.update(resolved)
+                if values:
+                    instance_json[field] = values
 
             instance = await self._mcp_instance_service.create_instance(
                 MCPServerInstanceCreate(
@@ -208,6 +227,7 @@ class BundleInstaller:
 
         We do not rely on the MCP service's name-based secret heuristic — the
         package already declares which inputs are secrets via SetupField.type.
+        Literal environment/header values are plain configuration by definition.
         """
         env_schema: list[dict[str, Any]] = []
         for env_name, ref in mcp.bindings.items():
@@ -221,13 +241,30 @@ class BundleInstaller:
                     "isSecret": is_secret,
                 }
             )
+        for config_field in ("environment", "headers"):
+            for name in _plain_config(mcp.json_spec, config_field):
+                if name in mcp.bindings:
+                    continue
+                env_schema.append(
+                    {
+                        "name": str(name),
+                        "description": f"{name} for {mcp.name}",
+                        "isSecret": False,
+                    }
+                )
         return env_schema
 
     # -- skills -------------------------------------------------------------
 
     async def _install_skills(self, package: Bundle, result: InstallResult) -> dict[str, UUID]:
         """Returns {package skill key -> skill id}."""
-        from agentarea_agents.schemas.skills_dto import SkillCreateFromContent
+        from agentarea_agents.infrastructure.github_skill_importer import (
+            GitHubSkillImporterError,
+        )
+        from agentarea_agents.schemas.skills_dto import (
+            SkillCreateFromContent,
+            SkillImportFromGithub,
+        )
 
         skill_ids: dict[str, UUID] = {}
         for skill in package.skills:
@@ -245,26 +282,29 @@ class BundleInstaller:
                 )
                 continue
 
-            if skill.source_type != "content":
-                # github import is analyzed/declared but deferred for v0.1.0 install.
-                result.entities.append(
-                    InstalledEntity(
-                        kind=EntityKind.SKILL,
-                        key=skill.key,
+            if skill.source_type == "github":
+                try:
+                    created = await self._skill_service.create_from_github(
+                        SkillImportFromGithub(github_url=skill.source_url or "", name=skill.name)
+                    )
+                except (GitHubSkillImporterError, ValueError) as exc:
+                    logger.warning(
+                        "Failed to import skill '%s' from %s",
+                        skill.name,
+                        skill.source_url,
+                        exc_info=True,
+                    )
+                    raise BundleInstallError(
+                        f"failed to import skill '{skill.name}' from {skill.source_url}: {exc}"
+                    ) from exc
+            else:
+                created = await self._skill_service.create_from_content(
+                    SkillCreateFromContent(
+                        content=skill.content or "",
                         name=skill.name,
-                        action=InstallAction.SKIPPED,
-                        detail=f"source_type '{skill.source_type}' install not yet supported",
+                        description=None,
                     )
                 )
-                continue
-
-            created = await self._skill_service.create_from_content(
-                SkillCreateFromContent(
-                    content=skill.content or "",
-                    name=skill.name,
-                    description=None,
-                )
-            )
             skill_ids[skill.key] = created.id
             result.entities.append(
                 InstalledEntity(
@@ -573,7 +613,7 @@ class BundleInstaller:
                 )
                 continue
 
-            created = await self._governance_service.create_rule(rule=rule, subject_id=subject_id)
+            created = await self._governance_service.create_rule(rule=rule)
             detail = f"{policy.effect} {policy.target} on {policy.subject}"
             if policy.message:
                 detail = f"{detail} — {policy.message}"

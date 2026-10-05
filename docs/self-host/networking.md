@@ -9,7 +9,7 @@ related:
   - /self-host/requirements
   - /self-host/kubernetes
   - /self-host/troubleshooting
-last_updated: 2026-07-29
+last_updated: 2026-10-03
 ---
 
 Getting AgentArea onto a hostname takes more than an Ingress resource. Three
@@ -95,8 +95,8 @@ different problem with a different mechanism.
 
     | Value | Becomes | Used for |
     |---|---|---|
-    | `global.api.publicUrl` | `API_BASE_URL` | Provider icon URLs, OAuth protected-resource metadata, the MCP `WWW-Authenticate` header |
-    | `global.storage.publicEndpoint` | `PUBLIC_S3_ENDPOINT` | Signing presigned URLs for browser-direct upload and download |
+    | `global.api.publicUrl` | `AGENTAREA_API_URL` | Provider icon URLs, OAuth protected-resource metadata, the MCP `WWW-Authenticate` header |
+    | `global.storage.publicEndpoint` | `AGENTAREA_S3_PUBLIC_ENDPOINT` | Signing presigned URLs for browser-direct upload and download |
     | `kratos.urls.public` | `ORY_SDK_URL` | Server-side calls from the frontend container to Kratos |
     | `kratos.urls.publicBrowser` | `ORY_BROWSER_URL` | Where the browser is redirected for login |
 
@@ -145,7 +145,7 @@ different problem with a different mechanism.
             - apps-sandbox.example.com
     ```
 
-    `global.webapp.url` matters here too: it becomes `WEBAPP_PUBLIC_ORIGIN`, the
+    `global.webapp.url` matters here too: it becomes `AGENTAREA_APP_ORIGIN`, the
     only origin the sandbox lets embed it. When it is empty, the chart derives the
     internal frontend service URL, which no browser uses, and every app fails to
     start.
@@ -240,6 +240,17 @@ different problem with a different mechanism.
     - **This is a no-op on a cluster whose CNI does not enforce NetworkPolicy.** The chart cannot detect that, and nothing warns you. The policy object exists, and untrusted pods reach the metadata endpoint anyway.
     - **This is not kernel isolation.** Egress rules constrain the network; they do nothing about a container escape. That is what `mcpManager.runtimeClass` is for, and it defaults to `""`.
 
+    The backend and the worker are not covered by a chart policy. They send
+    requests to addresses workspace members set. URL MCP servers, OpenAPI
+    connections, A2A delegates and bundle sources are checked against private
+    addresses in code; LLM provider endpoints used for runs, model tests and
+    compaction are not. Restrict their egress with a NetworkPolicy written for
+    your cluster: allow DNS, the services they depend on (Postgres, Valkey,
+    Temporal, Kratos, Hydra, OpenFGA, the MCP manager, object storage) wherever
+    those run, and the public internet, and deny link-local and every other
+    private range. The chart cannot ship that policy: where those services live
+    differs per install.
+
     The policy selects pods by both `app.kubernetes.io/managed-by: mcp-manager` and
     `app.kubernetes.io/component: mcp-server`. The component constraint is
     deliberate: workflow sandboxes are also manager-created, and locked sandboxes
@@ -265,8 +276,8 @@ Confirm the backend advertises the right URL — this catches the derived-value
 fallback silently pointing at a ClusterIP name:
 
 ```bash
-kubectl get configmap -n agentarea agentarea-env-backend -o jsonpath='{.data.API_BASE_URL}'
-kubectl get configmap -n agentarea agentarea-env-backend -o jsonpath='{.data.PUBLIC_S3_ENDPOINT}'
+kubectl get configmap -n agentarea agentarea-env-backend -o jsonpath='{.data.AGENTAREA_API_URL}'
+kubectl get configmap -n agentarea agentarea-env-backend -o jsonpath='{.data.AGENTAREA_S3_PUBLIC_ENDPOINT}'
 ```
 
 Check the endpoints answer from outside the cluster:
@@ -323,7 +334,7 @@ policy and the protection you think you have does not exist.
     installed. The manager creates HTTPRoutes that nothing programs.
   </Accordion>
   <Accordion title="Provider icons are broken in the UI">
-    `API_BASE_URL` resolved to an internal address. Icons are served by the
+    `AGENTAREA_API_URL` resolved to an internal address. Icons are served by the
     backend at that URL; set `global.api.publicUrl` .
   </Accordion>
   <Accordion title="The egress NetworkPolicy exists and untrusted pods still reach the metadata endpoint">

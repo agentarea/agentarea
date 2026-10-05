@@ -262,7 +262,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
           }
           controls={
             <>
-              <DisplayMenu>
+              <DisplayMenu accessibleLabel={t("display.accessibleLabel")}>
                 <MenuSectionLabel>{t("display.grouping")}</MenuSectionLabel>
                 <MenuRow
                   icon={<Layers className="h-3.5 w-3.5" />}
@@ -313,6 +313,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
     >
       {/* The size container lets the rows drop columns as the panel narrows. */}
       <div className="skills-cq">
+        {/* Keep Skills' collapsible groups and row/card actions local; the shared view contract does not model that combination. */}
         {isLoading ? (
           <SkillsContentSkeleton view={view} />
         ) : error ? (

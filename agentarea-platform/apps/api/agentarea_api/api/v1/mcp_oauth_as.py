@@ -26,14 +26,14 @@ from urllib.parse import urlparse
 import httpx
 from agentarea_agents_sdk.mcp_server.auth import WORKSPACE_REFERENCE_PATTERN
 from agentarea_common.auth.route_authz import unrestricted
-from agentarea_common.config import get_settings
+from agentarea_common.config import get_auth_settings, get_settings
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 oauth_as_router = APIRouter(tags=["oauth-as"])
 
 # Conservative allowlist for the proxied /oauth2/{path} subpath. The host is
-# fixed to HYDRA_PUBLIC_URL, so the caller can only influence the path/query;
+# fixed to HYDRA_URL, so the caller can only influence the path/query;
 # restrict the path to OAuth2-style identifiers and forbid parent traversal so a
 # request cannot escape /oauth2/ on the Hydra host (partial-SSRF hardening).
 _SAFE_OAUTH2_SUBPATH = re.compile(r"^[A-Za-z0-9._~/-]+$")
@@ -58,7 +58,7 @@ def _is_safe_oauth2_subpath(path: str) -> bool:
 
 
 def _hydra_public_url() -> str:
-    return get_settings().mcp.HYDRA_PUBLIC_URL.rstrip("/")
+    return get_auth_settings().HYDRA_URL.rstrip("/")
 
 
 # Hydra's discovery document, fetched once and reused.
@@ -112,7 +112,7 @@ def _is_protected_resource(resource_path: str) -> bool:
 async def _protected_resource_metadata(resource_path: str) -> JSONResponse:
     """RFC 9728: advertise the authorization server that actually issues tokens."""
     settings = get_settings()
-    api_base = settings.app.API_BASE_URL.rstrip("/")
+    api_base = settings.app.API_URL.rstrip("/")
 
     # Hydra mints the tokens, so Hydra — not this API — is the authorization
     # server identity. Its issuer ends up in the token's `iss`, and clients that
@@ -156,7 +156,7 @@ async def _protected_resource_metadata(resource_path: str) -> JSONResponse:
             # be assembled field by field above — this is the resource half of
             # that fix. Sourced from the one setting that decides what this
             # server issues, so the two cannot drift apart.
-            "scopes_supported": settings.mcp.MCP_OAUTH_SCOPES.split(),
+            "scopes_supported": settings.mcp.OAUTH_SCOPES.split(),
             "bearer_methods_supported": ["header"],
         }
     )
@@ -204,7 +204,7 @@ async def oauth_authorization_server_metadata() -> JSONResponse:
     still get the Hydra endpoints, rewritten to point to our proxy paths.
     """
     settings = get_settings()
-    api_base = settings.app.API_BASE_URL.rstrip("/")
+    api_base = settings.app.API_URL.rstrip("/")
     hydra_url = _hydra_public_url()
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(5)) as client:
@@ -244,7 +244,7 @@ async def oauth_authorization_server_metadata() -> JSONResponse:
 
 # ---------------------------------------------------------------------------
 # Hydra OAuth2 proxy — forward oauth2/* and related paths to Hydra
-# This lets Cursor use our API_BASE_URL as the single AS URL for all ops.
+# This lets Cursor use our AGENTAREA_API_URL as the single AS URL for all ops.
 # ---------------------------------------------------------------------------
 
 
@@ -267,17 +267,36 @@ async def hydra_auth_redirect(request: Request) -> Response:
     """
     from fastapi.responses import RedirectResponse
 
-    settings = get_settings()
-    hydra_browser = settings.mcp.HYDRA_BROWSER_URL.rstrip("/")
+    hydra_browser = get_auth_settings().HYDRA_BROWSER_URL.rstrip("/")
     target = f"{hydra_browser}/oauth2/auth"
     if request.url.query:
         target = f"{target}?{request.url.query}"
     return RedirectResponse(url=target, status_code=302)
 
 
+_DCR_FIELDS = (
+    "client_name",
+    "client_uri",
+    "logo_uri",
+    "policy_uri",
+    "tos_uri",
+    "contacts",
+    "redirect_uris",
+    "token_endpoint_auth_method",
+    "audience",
+    "response_types",
+    "grant_types",
+    "scope",
+    "skip_consent",
+)
+_DCR_TOKEN_AUTH_METHODS = frozenset({"none", "client_secret_basic", "client_secret_post"})
+
+
 @oauth_as_router.post(
     "/oauth2/register",
-    dependencies=[unrestricted("OAuth authorization-server surface; unauthenticated by protocol")],
+    dependencies=[
+        unrestricted("OAuth authorization-server surface; unauthenticated by protocol"),
+    ],
 )
 async def hydra_dcr_proxy(request: Request) -> Response:
     """Dynamic Client Registration (RFC 7591) — proxy to Hydra admin API.
@@ -288,19 +307,30 @@ async def hydra_dcr_proxy(request: Request) -> Response:
 
     We inject server-side defaults:
       - skip_consent: true — MCP clients accessing their own workspace don't need consent
-      - audience: [API_BASE_URL] — ensures issued JWTs have the correct audience for validation
+      - audience: [AGENTAREA_API_URL] — ensures issued JWTs have the correct audience for validation
       - grant_types / scope — so the client can refresh instead of re-authorizing
     """
     import json as _json
 
     settings = get_settings()
-    admin_url = settings.mcp.HYDRA_ADMIN_URL.rstrip("/")
-    api_base = settings.app.API_BASE_URL.rstrip("/")
+    admin_url = get_auth_settings().HYDRA_ADMIN_URL.rstrip("/")
+    api_base = settings.app.API_URL.rstrip("/")
 
     try:
         client_data = _json.loads(await request.body())
     except Exception:
         client_data = {}
+    if not isinstance(client_data, dict):
+        return Response(
+            content=_json.dumps(
+                {
+                    "error": "invalid_client_metadata",
+                    "error_description": "the registration request must be a JSON object",
+                }
+            ),
+            status_code=400,
+            headers={"Content-Type": "application/json"},
+        )
 
     # Security-relevant fields are FORCED, not defaulted. `setdefault` let the
     # caller keep its own value, so a self-registering client could ask for
@@ -340,7 +370,7 @@ async def hydra_dcr_proxy(request: Request) -> Response:
     client_data["grant_types"] = granted
 
     # Cap the requested scope to what this authorization server issues.
-    allowed_scopes = set(settings.mcp.MCP_OAUTH_SCOPES.split())
+    allowed_scopes = set(settings.mcp.OAUTH_SCOPES.split())
     requested_scopes = set(str(client_data.get("scope", "")).split())
     granted_scopes = requested_scopes & allowed_scopes if requested_scopes else allowed_scopes
     if not granted_scopes:
@@ -360,7 +390,8 @@ async def hydra_dcr_proxy(request: Request) -> Response:
     client_data["scope"] = " ".join(sorted(granted_scopes))
 
     # A redirect_uri is the client's own callback, so it stays caller-supplied —
-    # but only over https, or loopback for desktop clients.
+    # but only over https, or plain http to loopback for desktop clients
+    # (RFC 8252 §7.3). Any other scheme with a loopback host is not a callback.
     redirect_uris = client_data.get("redirect_uris") or []
     if not redirect_uris:
         return Response(
@@ -375,13 +406,20 @@ async def hydra_dcr_proxy(request: Request) -> Response:
         )
     for uri in redirect_uris:
         parsed = urlparse(str(uri))
-        is_loopback = parsed.hostname in ("localhost", "127.0.0.1", "::1")
+        is_loopback = parsed.scheme == "http" and parsed.hostname in (
+            "localhost",
+            "127.0.0.1",
+            "::1",
+        )
         if parsed.scheme != "https" and not is_loopback:
             return Response(
                 content=_json.dumps(
                     {
                         "error": "invalid_redirect_uri",
-                        "error_description": "redirect_uris must use https, or loopback for native clients",
+                        "error_description": (
+                            "redirect_uris must use https, or http to a loopback host "
+                            "for native clients"
+                        ),
                     }
                 ),
                 status_code=400,
@@ -394,10 +432,30 @@ async def hydra_dcr_proxy(request: Request) -> Response:
     if not client_data.get("contacts"):
         client_data["contacts"] = []
 
+    auth_method = client_data.get("token_endpoint_auth_method")
+    if auth_method is not None and auth_method not in _DCR_TOKEN_AUTH_METHODS:
+        return Response(
+            content=_json.dumps(
+                {
+                    "error": "invalid_client_metadata",
+                    "error_description": (
+                        f"token_endpoint_auth_method must be one of {sorted(_DCR_TOKEN_AUTH_METHODS)}"
+                    ),
+                }
+            ),
+            status_code=400,
+            headers={"Content-Type": "application/json"},
+        )
+
+    # The admin API accepts every client field, token lifespans and URLs Hydra
+    # will fetch (jwks_uri, sector_identifier_uri) included; a caller gets only
+    # the descriptive fields plus what was forced above.
+    registration = {key: client_data[key] for key in _DCR_FIELDS if key in client_data}
+
     async with httpx.AsyncClient(timeout=httpx.Timeout(15)) as client:
         upstream = await client.post(
             f"{admin_url}/admin/clients",
-            content=_json.dumps(client_data).encode(),
+            content=_json.dumps(registration).encode(),
             headers={"Content-Type": "application/json"},
         )
     return Response(

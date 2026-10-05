@@ -66,6 +66,20 @@ def _context(workspace_id: str = "workspace-a") -> UserContext:
     return UserContext(user_id=f"user-{workspace_id}", workspace_id=workspace_id)
 
 
+def _point_reads(fake_query_all):
+    """Serve the fake's tuples the way OpenFGA answers a one-object read.
+
+    The explorer must never read the ``resource`` namespace unfiltered: that walks
+    every tenant's tuples and times out on a real store.
+    """
+
+    async def read(query):
+        assert query.object is not None, "store-wide read of the resource namespace"
+        return [t for t in await fake_query_all(query) if t.object == query.object]
+
+    return read
+
+
 async def _make_skill(session: AsyncSession, context: UserContext, name: str) -> Skill:
     skill = Skill(
         name=name,
@@ -231,7 +245,7 @@ async def test_graph_builds_edges_from_graph_relationships(session_factory, monk
                 ]
             return []
 
-        graph.query_all_tuples.side_effect = fake_query_all
+        graph.query_all_tuples.side_effect = _point_reads(fake_query_all)
         monkeypatch.setattr(access_control, "get_graph_client", lambda: graph)
         monkeypatch.setattr(access_control, "_assert_workspace_admin", AsyncMock())
 
@@ -280,7 +294,7 @@ async def test_relationships_maps_collection_grant(session_factory, monkeypatch)
                 ]
             return []
 
-        graph.query_all_tuples.side_effect = fake_query_all
+        graph.query_all_tuples.side_effect = _point_reads(fake_query_all)
         monkeypatch.setattr(access_control, "get_graph_client", lambda: graph)
         monkeypatch.setattr(access_control, "_assert_workspace_admin", AsyncMock())
 
@@ -326,7 +340,7 @@ async def test_relationships_filters_cross_workspace_tuples(session_factory, mon
                 ]
             return []
 
-        graph.query_all_tuples.side_effect = fake_query_all
+        graph.query_all_tuples.side_effect = _point_reads(fake_query_all)
         monkeypatch.setattr(access_control, "get_graph_client", lambda: graph)
         monkeypatch.setattr(access_control, "_assert_workspace_admin", AsyncMock())
 
@@ -370,7 +384,7 @@ async def test_resolve_computes_direct_grant_path(session_factory, monkeypatch):
                 ]
             return []
 
-        graph.query_all_tuples.side_effect = fake_query_all
+        graph.query_all_tuples.side_effect = _point_reads(fake_query_all)
         monkeypatch.setattr(access_control, "get_graph_client", lambda: graph)
         monkeypatch.setattr(access_control, "_assert_workspace_admin", AsyncMock())
 

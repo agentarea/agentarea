@@ -74,6 +74,8 @@ The following table lists configurable parameters of the chart and their default
 | global.runtimeCredentials.keys.sandboxFile | string | `"sandbox-file-token"` |  |
 | global.runtimeCredentials.keys.sandboxInspection | string | `"sandbox-inspection-token"` |  |
 | global.runtimeCredentials.keys.sandboxCleanup | string | `"sandbox-cleanup-token"` |  |
+| global.mcpOAuthApps.existingSecret | string | `""` |  |
+| global.mcpOAuthApps.existingSecretKey | string | `"mcp-oauth-apps"` |  |
 | global.database.secretName | string | `"agentarea-postgresql-secret"` |  |
 | global.database.host | string | `""` |  |
 | global.database.port | int | `5432` |  |
@@ -180,6 +182,9 @@ The following table lists configurable parameters of the chart and their default
 | ingress.hosts.kratos.host | string | `""` |  |
 | ingress.hosts.kratos.paths[0].path | string | `"/"` |  |
 | ingress.hosts.kratos.paths[0].pathType | string | `"Prefix"` |  |
+| ingress.hosts.rustfs.host | string | `""` |  |
+| ingress.hosts.rustfs.paths[0].path | string | `"/"` |  |
+| ingress.hosts.rustfs.paths[0].pathType | string | `"Prefix"` |  |
 | ingress.hosts.appsSandbox.host | string | `""` |  |
 | ingress.hosts.appsSandbox.paths[0].path | string | `"/app-sandbox"` |  |
 | ingress.hosts.appsSandbox.paths[0].pathType | string | `"Exact"` |  |
@@ -253,7 +258,7 @@ The following table lists configurable parameters of the chart and their default
 | worker.image.repository | string | `"agentarea/agentarea-worker"` |  |
 | worker.image.tag | string | `"latest"` |  |
 | worker.image.pullPolicy | string | `""` |  |
-| worker.healthPort | int | `8081` | Port of the worker's health endpoint, passed to the container as AGENTAREA_WF_HEALTH_PORT. /readyz answers 200 once the database, the authorization backend and Redis are reachable and every Temporal worker is polling; /livez answers 200 while the event loop responds. |
+| worker.healthPort | int | `8081` | Port of the worker's health endpoint, passed to the container as AGENTAREA_WORKER_HEALTH_PORT. /readyz answers 200 once the database, the authorization backend and Redis are reachable and every Temporal worker is polling; /livez answers 200 while the event loop responds. |
 | worker.minReadySeconds | int | `10` | Seconds a new pod must stay ready before it counts as available, so a pod that passes readiness and then crashes cannot retire an old replica. |
 | worker.shutdownTimeout | int | `120` | Seconds a stopping worker lets in-flight activities (model calls, tools, event writes) finish before it cancels them. A cancelled model call is paid for twice when it reruns on another replica. |
 | worker.terminationGracePeriodSeconds | int | `150` | Total budget the kubelet allows the worker before SIGKILL. Keep it above shutdownTimeout, or the drain is cut short. |
@@ -360,7 +365,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.warmPool.image.repository | string | `"agentarea/agentarea-mcp-runner"` |  |
 | mcpManager.warmPool.image.tag | string | `"latest"` |  |
 | mcpManager.warmPool.image.pullPolicy | string | `"IfNotPresent"` |  |
-| mcpManager.warmPool.idleTimeoutSeconds | int | `0` |  |
+| mcpManager.warmPool.idleTimeout | string | `"0s"` |  |
 | mcpManager.warmPool.size | int | `1` |  |
 | mcpManager.warmPool.logLevel | string | `"info"` |  |
 | mcpManager.warmPool.resources.limits.cpu | string | `"500m"` |  |
@@ -559,7 +564,7 @@ The following table lists configurable parameters of the chart and their default
 | kratos.config.secrets.cipher[0] | string | `"${KRATOS_SECRETS_CIPHER}"` |  |
 | kratos.config.ciphers.algorithm | string | `"xchacha20-poly1305"` |  |
 | kratos.config.hashers.algorithm | string | `"bcrypt"` |  |
-| kratos.config.hashers.bcrypt.cost | int | `8` |  |
+| kratos.config.hashers.bcrypt.cost | int | `12` |  |
 | kratos.config.identity.default_schema_id | string | `"default"` |  |
 | kratos.config.identity.schemas[0].id | string | `"default"` |  |
 | kratos.config.identity.schemas[0].url | string | `"file:///etc/config/kratos/identity.schema.json"` |  |

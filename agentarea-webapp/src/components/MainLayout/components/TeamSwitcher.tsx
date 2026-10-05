@@ -20,7 +20,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,9 +28,9 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { WorkspaceIcon } from "@/components/WorkspaceIcon";
 import { resetCurrencyCache } from "@/hooks/useCurrency";
 import { useWorkspaceSlug } from "@/hooks/useWorkspaceNavigation";
-import { deterministicHue } from "@/lib/avatar-hue";
 import { createWorkspaceAction } from "@/lib/workspace-actions";
 import {
   WORKSPACE_HOME,
@@ -39,24 +38,6 @@ import {
   workspaceSection,
 } from "@/lib/workspace-routes";
 import type { Workspace } from "@/lib/workspaces";
-
-function WorkspaceIcon({
-  workspace,
-  size,
-}: {
-  workspace: Workspace;
-  size: number;
-}) {
-  return (
-    <EntityAvatar
-      size={size}
-      variant="pigment"
-      hue={deterministicHue(workspace.id)}
-      alt={workspace.name}
-      text={nameInitials(workspace.name)}
-    />
-  );
-}
 
 export function TeamSwitcher({ workspaces }: { workspaces: Workspace[] }) {
   const { isMobile } = useSidebar();
@@ -115,7 +96,7 @@ export function TeamSwitcher({ workspaces }: { workspaces: Workspace[] }) {
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
                 size="lg"
-                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground transition-all duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground transition-colors duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
               >
                 <div className="flex aspect-square size-8 items-center justify-center bg-transparent">
                   <WorkspaceIcon workspace={active} size={32} />

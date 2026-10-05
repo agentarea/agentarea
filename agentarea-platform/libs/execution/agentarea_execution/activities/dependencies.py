@@ -9,6 +9,7 @@ from typing import Any
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.skill_service import SkillService
+from agentarea_common.audit import AuditService
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
@@ -159,6 +160,11 @@ class ActivityServiceContainer:
             repository_factory=repository_factory, event_broker=self.dependencies.event_broker
         )
         return service, session
+
+    async def get_audit_service(self, user_context: UserContext) -> tuple[AuditService, Any]:
+        """Get AuditService writing to the shared audit trail, in its own session."""
+        session = self._database.async_session_factory()
+        return AuditService(session, user_context), session
 
     async def get_wallet_service(self, user_context: UserContext) -> tuple[WalletService, Any]:
         """Get WalletService with proper session and context."""
@@ -316,6 +322,12 @@ class ActivityContext:
     async def get_task_event_service(self) -> TaskEventService:
         """Get TaskEventService for this context."""
         service, session = await self.container.get_task_event_service(self.user_context)
+        self._sessions.append(session)
+        return service
+
+    async def get_audit_service(self) -> AuditService:
+        """Get AuditService for this context."""
+        service, session = await self.container.get_audit_service(self.user_context)
         self._sessions.append(session)
         return service
 

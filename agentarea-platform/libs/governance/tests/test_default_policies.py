@@ -60,7 +60,7 @@ class _FakeService:
             and (subject_type is None or r.subject_type == subject_type)
         ]
 
-    async def create_rule(self, *, rule, subject_id):
+    async def create_rule(self, *, rule):
         self.rules.append(rule)
         return rule
 

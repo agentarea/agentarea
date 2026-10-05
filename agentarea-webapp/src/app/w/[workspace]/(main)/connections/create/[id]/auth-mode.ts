@@ -38,3 +38,15 @@ export function authModeFromValidation(outcome: ValidationOutcome): AuthMode {
   if (methods.length > 0) return modeFromMethods(methods);
   return outcome.valid ? "none" : "error";
 }
+
+/**
+ * A spec that declares its own header fields is still probed: a provider such
+ * as GitHub documents a token header yet also takes OAuth. When the probe
+ * reports OAuth the user gets both, the manual tab showing the declared
+ * fields; otherwise only those fields — a failed probe included, since they
+ * are enough to connect.
+ */
+export function withDeclaredFields(mode: AuthMode, hasFields: boolean): AuthMode {
+  if (!hasFields || mode === "loading") return mode;
+  return mode === "oauth" || mode === "both" ? "both" : "fields";
+}

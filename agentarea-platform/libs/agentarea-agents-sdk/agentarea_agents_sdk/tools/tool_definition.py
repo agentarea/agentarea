@@ -193,7 +193,7 @@ def build_method_schema(method: Callable) -> dict[str, Any]:
         if _is_basemodel(annotation):
             return annotation.model_json_schema()
 
-    fields: dict[str, tuple[Any, Any]] = {}
+    fields: dict[str, Any] = {}
     for name, param in params:
         annotation = hints.get(name, param.annotation)
         if annotation is inspect.Parameter.empty:
@@ -204,7 +204,7 @@ def build_method_schema(method: Callable) -> dict[str, Any]:
     if not fields:
         return {"type": "object", "properties": {}}
 
-    args_model = create_model(f"{method.__name__}_args", **fields)  # type: ignore[call-overload]
+    args_model = create_model(f"{method.__name__}_args", **fields)
     return args_model.model_json_schema()
 
 

@@ -129,19 +129,19 @@ async def _migrate_resource(
 
 async def main() -> None:
     settings = get_settings()
-    if settings.access_control.ACCESS_CONTROL_BACKEND != "openfga":
+    if settings.access_control.BACKEND != "openfga":
         raise SystemExit(
-            f"ACCESS_CONTROL_BACKEND={settings.access_control.ACCESS_CONTROL_BACKEND!r}; "
+            f"AGENTAREA_AUTHZ_BACKEND={settings.access_control.BACKEND!r}; "
             "this backfill targets OpenFGA."
         )
 
     await bootstrap_openfga(settings.openfga)
     client = OpenFGAClient(
-        api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-        store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-        authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-        timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
-        api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
+        api_url=settings.openfga.URL,
+        store_id=settings.openfga.STORE_ID,
+        authorization_model_id=settings.openfga.MODEL_ID,
+        timeout_seconds=settings.openfga.TIMEOUT.total_seconds(),
+        api_token=settings.openfga.API_TOKEN or None,
     )
 
     database = get_database()

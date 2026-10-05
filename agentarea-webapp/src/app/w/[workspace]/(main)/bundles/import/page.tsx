@@ -18,7 +18,7 @@ export default async function ImportBundlePage({
     <ContentBlock
       header={{
         breadcrumb: [
-          { label: "Bundles", href: "/bundles" },
+          { label: "Catalog", href: "/explore" },
           { label: "Import" },
         ],
         description: "Install a pre-built agent package into your workspace.",

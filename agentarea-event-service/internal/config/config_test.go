@@ -6,18 +6,22 @@ import (
 )
 
 func TestLoadReadsAgentareaEventsEnv(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://agentarea:test@localhost:5432/agentarea")
-	t.Setenv("REDIS_URL", "redis://localhost:6379/0")
-	t.Setenv("AGENTAREA_EVENTS_WORKER_ID", "worker-test")
-	t.Setenv("AGENTAREA_EVENTS_POLL_INTERVAL", "17s")
-	t.Setenv("AGENTAREA_EVENTS_MAX_POLLERS", "7")
-	t.Setenv("AGENTAREA_EVENTS_INBOUND_STREAM", "events.inbound.test")
-	t.Setenv("AGENTAREA_EVENTS_TELEGRAM_POLLING_ENABLED", "true")
-	t.Setenv("AGENTAREA_EVENTS_PORT", "18002")
+	t.Setenv("AGENTAREA_DB_HOST", "localhost")
+	t.Setenv("AGENTAREA_DB_PORT", "5432")
+	t.Setenv("AGENTAREA_DB_NAME", "agentarea")
+	t.Setenv("AGENTAREA_DB_USER", "agentarea")
+	t.Setenv("AGENTAREA_DB_PASSWORD", "test")
+	t.Setenv("AGENTAREA_REDIS_URL", "redis://localhost:6379/0")
+	t.Setenv("AGENTAREA_EVENT_WORKER_ID", "worker-test")
+	t.Setenv("AGENTAREA_EVENT_POLL_INTERVAL", "17s")
+	t.Setenv("AGENTAREA_EVENT_MAX_POLLERS", "7")
+	t.Setenv("AGENTAREA_EVENT_STREAM", "events.inbound.test")
+	t.Setenv("AGENTAREA_EVENT_TELEGRAM_ENABLED", "true")
+	t.Setenv("PORT", "18002")
 
 	cfg := Load()
 
-	if cfg.DatabaseURL != "postgres://agentarea:test@localhost:5432/agentarea" {
+	if cfg.DatabaseURL != "host='localhost' port='5432' user='agentarea' password='test' dbname='agentarea' sslmode='disable'" { // pragma: allowlist secret
 		t.Fatalf("DatabaseURL = %q", cfg.DatabaseURL)
 	}
 	if cfg.RedisURL != "redis://localhost:6379/0" {
@@ -43,35 +47,38 @@ func TestLoadReadsAgentareaEventsEnv(t *testing.T) {
 	}
 }
 
-func TestLoadBuildsEscapedServiceURLsFromComponentEnvs(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgresql://raw:raw@raw/raw")
-	t.Setenv("POSTGRES_HOST", "agentarea-postgresql")
-	t.Setenv("POSTGRES_PORT", "5432")
-	t.Setenv("POSTGRES_DB", "agentarea")
-	t.Setenv("POSTGRES_USER", "agentarea")
-	t.Setenv("POSTGRES_PASSWORD", "p@ss/with:chars")
-	t.Setenv("POSTGRES_SSLMODE", "disable")
-	t.Setenv("REDIS_URL", "redis://raw:6379")
-	t.Setenv("REDIS_HOST", "agentarea-valkey")
-	t.Setenv("REDIS_PORT", "6379")
-	t.Setenv("REDIS_PASSWORD", "redis@pass/with:chars")
+func TestLoadBuildsEscapedDatabaseConnStringFromComponentEnvs(t *testing.T) {
+	t.Setenv("AGENTAREA_DB_HOST", "agentarea-postgresql")
+	t.Setenv("AGENTAREA_DB_PORT", "5432")
+	t.Setenv("AGENTAREA_DB_NAME", "agentarea")
+	t.Setenv("AGENTAREA_DB_USER", "agentarea")
+	t.Setenv("AGENTAREA_DB_PASSWORD", "p@ss/with:chars")
+	t.Setenv("AGENTAREA_DB_SSLMODE", "disable")
 
 	cfg := Load()
 
 	if cfg.DatabaseURL != "host='agentarea-postgresql' port='5432' user='agentarea' password='p@ss/with:chars' dbname='agentarea' sslmode='disable'" {
 		t.Fatalf("DatabaseURL = %q", cfg.DatabaseURL)
 	}
-	if cfg.RedisURL != "redis://:redis%40pass%2Fwith%3Achars@agentarea-valkey:6379" {
-		t.Fatalf("RedisURL = %q", cfg.RedisURL)
+}
+
+func TestLoadLeavesDatabaseUnsetWithoutCredentials(t *testing.T) {
+	t.Setenv("AGENTAREA_DB_HOST", "agentarea-postgresql")
+	t.Setenv("AGENTAREA_DB_NAME", "agentarea")
+	t.Setenv("AGENTAREA_DB_USER", "")
+	t.Setenv("AGENTAREA_DB_PASSWORD", "")
+
+	if cfg := Load(); cfg.DatabaseURL != "" {
+		t.Fatalf("DatabaseURL = %q, want empty so startup refuses to run", cfg.DatabaseURL)
 	}
 }
 
 func TestLoadEscapesPostgresConnStringValues(t *testing.T) {
-	t.Setenv("POSTGRES_HOST", "agentarea-postgresql")
-	t.Setenv("POSTGRES_PORT", "5432")
-	t.Setenv("POSTGRES_DB", "agentarea")
-	t.Setenv("POSTGRES_USER", "agent'area")
-	t.Setenv("POSTGRES_PASSWORD", `p\ass'word`)
+	t.Setenv("AGENTAREA_DB_HOST", "agentarea-postgresql")
+	t.Setenv("AGENTAREA_DB_PORT", "5432")
+	t.Setenv("AGENTAREA_DB_NAME", "agentarea")
+	t.Setenv("AGENTAREA_DB_USER", "agent'area")
+	t.Setenv("AGENTAREA_DB_PASSWORD", `p\ass'word`)
 
 	cfg := Load()
 

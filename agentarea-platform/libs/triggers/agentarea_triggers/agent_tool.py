@@ -133,8 +133,7 @@ class TriggersAgentToolset(Toolset):
             schedule_mgr: TemporalScheduleManager | None = None
             try:
                 schedule_mgr = TemporalScheduleManager(
-                    namespace=settings.triggers.TEMPORAL_SCHEDULE_NAMESPACE,
-                    task_queue=settings.triggers.TEMPORAL_SCHEDULE_TASK_QUEUE,
+                    task_queue=settings.triggers.QUEUE,
                 )
             except Exception:
                 schedule_mgr = None

@@ -16,7 +16,7 @@ from temporalio.common import RetryPolicy, WorkflowIDReusePolicy
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.exceptions import TemporalError
 
-from agentarea_common.config import ObservabilitySettings
+from agentarea_common.config import ObservabilitySettings, temporal_connect_config
 from agentarea_common.observability import get_temporal_plugins, setup_otel
 from agentarea_common.workflow.executor import (
     TaskExecutorInterface,
@@ -100,15 +100,8 @@ def _extract_a2a_message_from_workflow_result(result: dict[str, Any]) -> dict[st
 class TemporalWorkflowExecutor(WorkflowExecutor):
     """Temporal implementation of WorkflowExecutor."""
 
-    def __init__(
-        self,
-        client: Client | None = None,
-        namespace: str = "default",
-        server_url: str = "localhost:7233",
-    ):
+    def __init__(self, client: Client | None = None):
         self.client = client
-        self.namespace = namespace
-        self.server_url = server_url
         self._connected = False
 
     async def _ensure_connected(self) -> Client:
@@ -117,21 +110,20 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             try:
                 observability_settings = ObservabilitySettings()
                 setup_otel("agentarea-temporal-client", observability_settings)
-                # Connect to configured Temporal server
+                connect_config = temporal_connect_config()
                 logger.info(
-                    f"Connecting to Temporal server at {self.server_url} "
-                    f"with namespace {self.namespace}"
+                    f"Connecting to Temporal server at {connect_config.get('target_host')} "
+                    f"with namespace {connect_config.get('namespace')}"
                 )
                 self.client = await Client.connect(
-                    self.server_url,
-                    namespace=self.namespace,
+                    **connect_config,
                     data_converter=pydantic_data_converter,
                     plugins=get_temporal_plugins(observability_settings),
                 )
                 self._connected = True
                 logger.info("Successfully connected to Temporal server")
             except Exception as e:
-                logger.exception(f"Failed to connect to Temporal server at {self.server_url}: {e}")
+                logger.exception(f"Failed to connect to Temporal server: {e}")
                 raise ConnectionError(f"Cannot connect to Temporal server: {e}") from e
 
         if self.client is None:
@@ -153,6 +145,10 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
         if config.start_delay:
             temporal_params["start_delay"] = config.start_delay
+
+        if config.start_signal:
+            temporal_params["start_signal"] = config.start_signal
+            temporal_params["start_signal_args"] = config.start_signal_args
 
         # Convert retry policy
         temporal_params["retry_policy"] = RetryPolicy(
@@ -233,6 +229,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                     requires_human_approval=args.get("requires_human_approval", False),
                     workflow_metadata=args.get("workflow_metadata", {}),
                     effective_policy=args["effective_policy"],
+                    resume=args.get("resume"),
                 )
                 workflow_args = [execution_request]
             else:

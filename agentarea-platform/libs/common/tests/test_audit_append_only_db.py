@@ -125,3 +125,28 @@ async def test_mutation_matching_no_rows_is_still_refused(session: AsyncSession)
     with pytest.raises(DBAPIError, match="append-only"):
         await session.execute(text("UPDATE audit_events SET action = 'x' WHERE false"))
     await session.rollback()
+
+
+async def test_a_retried_record_once_writes_one_row_under_the_append_only_rule(
+    session: AsyncSession,
+):
+    """A retried worker batch repeats its insert; the repeat must neither fail
+    on the trigger nor add a second row."""
+    from agentarea_common.audit import AuditService
+    from agentarea_common.auth.context import UserContext
+
+    audit = AuditService(session, UserContext(user_id="tester", workspace_id=WORKSPACE))
+    event_id = uuid4()
+
+    written = [
+        await audit.record_once(event_id, "tool.call.allowed", "task", str(uuid4()))
+        for _ in range(2)
+    ]
+    await session.commit()
+
+    assert written == [True, False]
+    count = await session.execute(
+        text("SELECT count(*) FROM audit_events WHERE id = :id"), {"id": event_id}
+    )
+    assert count.scalar_one() == 1
+    assert await _stored_action(session, event_id) == "tool.call.allowed"

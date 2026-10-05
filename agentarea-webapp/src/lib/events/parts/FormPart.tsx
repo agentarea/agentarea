@@ -1,4 +1,6 @@
 import React from "react";
+import { useTranslations } from "next-intl";
+import { ApprovalOutcome } from "@/components/Approvals/ApprovalOutcome";
 import HumanInputMessage from "@/components/Chat/componets/HumanInputMessage";
 import type {
   HumanInputField,
@@ -7,6 +9,7 @@ import type {
 } from "@/components/Chat/types";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import type { Part } from "../contract";
+import { eventTimestamp } from "../normalize";
 
 interface FormPartProps {
   part: Part;
@@ -57,44 +60,7 @@ export const FormPart: React.FC<FormPartProps> = ({
   }
 
   if (isApproval) {
-    if (resolved) {
-      const approved = part.data.approved;
-      const decision =
-        approved === true
-          ? "Approved"
-          : approved === false
-            ? "Rejected"
-            : "Resolved";
-      const reason = asString(part.data.reason, "Approval request");
-      const comment = asString(part.data.deny_comment ?? part.data.comment);
-      return (
-        <details className="group text-[13px] leading-5">
-          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-1 py-0.5 text-foreground/80 outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-            <StatusIndicator kind={approved === false ? "cancelled" : "done"}>
-              {decision}
-            </StatusIndicator>
-            <span className="min-w-0 truncate text-muted-foreground">
-              {reason}
-            </span>
-          </summary>
-          <div className="space-y-1 pb-1 pl-3 pt-1 text-muted-foreground">
-            <p>{reason}</p>
-            {comment && <p>{comment}</p>}
-          </div>
-        </details>
-      );
-    }
-
-    return (
-      <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-medium text-foreground">
-            {asString(part.data.message, "Approval required")}
-          </span>
-          <StatusIndicator kind="attention">Approval required</StatusIndicator>
-        </div>
-      </div>
-    );
+    return <ApprovalPart part={part} resolved={resolved} />;
   }
 
   const data: HumanInputRequestData = {
@@ -111,5 +77,33 @@ export const FormPart: React.FC<FormPartProps> = ({
 
   return <HumanInputMessage data={data} />;
 };
+
+function ApprovalPart({ part, resolved }: { part: Part; resolved: boolean }) {
+  const t = useTranslations("Approvals");
+  const toolName = asString(part.data.tool_name) || null;
+
+  if (resolved) {
+    const approved = part.data.approved;
+    return (
+      <ApprovalOutcome
+        approved={typeof approved === "boolean" ? approved : null}
+        toolName={toolName}
+        decidedBy={asString(part.data.approved_by) || null}
+        decidedAt={eventTimestamp(part.data)}
+        comment={asString(part.data.deny_comment ?? part.data.comment) || null}
+      />
+    );
+  }
+
+  // The decision itself is taken in the approval card above the composer;
+  // the transcript only marks where the run stopped to ask.
+  return (
+    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+      <StatusIndicator kind="attention" className="text-sm font-medium">
+        {toolName ? t("requiredForTool", { tool: toolName }) : t("required")}
+      </StatusIndicator>
+    </div>
+  );
+}
 
 export default FormPart;

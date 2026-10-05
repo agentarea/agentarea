@@ -25,7 +25,11 @@ from agentarea_common.utils.url_safety import (
 )
 from mcp import MCPError
 
-from agentarea_mcp.application.auth_service import MCPAuthService, OAuthReauthRequiredError
+from agentarea_mcp.application.auth_service import (
+    ManagedCredentialDestinationError,
+    MCPAuthService,
+    OAuthReauthRequiredError,
+)
 from agentarea_mcp.application.mcp_client import (
     connected_mcp_client,
     gateway_client_factory,
@@ -45,6 +49,7 @@ from agentarea_mcp.domain.events import (
 )
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.domain.transport import CONTAINER_TRANSPORTS, MCPTransport
 from agentarea_mcp.domain.verification_types import (
     DEFAULT_VERIFICATION,
     VERIFICATION_SCHEMA_VERSION,
@@ -60,7 +65,11 @@ from agentarea_mcp.schemas.dto import (
     MCPServerUpdate,
 )
 from agentarea_mcp.tool_serialization import serialize_mcp_tool
-from agentarea_mcp.transport_spec import merge_transport_spec, server_transport_spec
+from agentarea_mcp.transport_spec import (
+    instance_transport_spec,
+    server_transport,
+    server_transport_spec,
+)
 from agentarea_mcp.verification import declared_remote_transport, verify
 
 from .mcp_env_service import MCPEnvironmentService
@@ -91,12 +100,6 @@ def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
             spec = {**spec, "endpoint_url": value}
             spec.pop(legacy, None)
             break
-    return spec
-
-
-def _server_transport_spec(server_spec: MCPServer) -> dict[str, Any]:
-    """Build the effective transport fields declared by a server row."""
-    spec = server_transport_spec(server_spec)
     return spec
 
 
@@ -409,7 +412,10 @@ class MCPServerInstanceService:
         payload: MCPServerInstanceCreate,
     ) -> MCPServer:
         spec = _normalize_url_keys(payload.json_spec or {})
-        spec_type = spec.get("type", "docker")
+        declared = spec.get("type")
+        if declared not in {MCPTransport.URL, MCPTransport.DOCKER, MCPTransport.COMMAND}:
+            raise MCPValidationError(["json_spec.type must be one of: url, docker, command"])
+        spec_type = MCPTransport(declared)
         transport_spec = {
             key: value for key, value in spec.items() if key in INSTANCE_TRANSPORT_FIELDS
         }
@@ -438,17 +444,16 @@ class MCPServerInstanceService:
         await self.repository.session.flush()
         return server
 
-    async def _get_transport_spec_for_instance(self, instance: MCPServerInstance) -> dict[str, Any]:
+    async def get_transport_spec_for_instance(self, instance: MCPServerInstance) -> dict[str, Any]:
         server_spec = await self.mcp_server_repository.get_server_by_id(instance.server_spec_id)
         if not server_spec:
             raise ValueError(f"MCP server spec {instance.server_spec_id} not found")
-        return merge_transport_spec(_server_transport_spec(server_spec), instance.json_spec)
+        return instance_transport_spec(server_spec, instance)
 
     def _endpoint_url_from_spec(self, instance: MCPServerInstance, spec: dict[str, Any]) -> str:
-        instance_type = spec.get("type", "docker")
-        if instance_type == "url":
+        if instance.transport == MCPTransport.URL:
             return spec.get("endpoint_url", "")
-        if instance_type in ("docker", "command"):
+        if instance.transport in CONTAINER_TRANSPORTS:
             return get_settings().mcp.manager_gateway_url(instance.id)
         raise ValueError("bundle has no endpoint_url")
 
@@ -456,44 +461,76 @@ class MCPServerInstanceService:
         self,
         spec: dict[str, Any],
         server_spec_id: str,
+        previous_spec: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], dict[str, str]]:
         secret_env_vars: dict[str, str] = {}
+        secret_names: set[str] = set()
+        known_names: set[str] = set()
 
         server_spec = await self.mcp_server_repository.get_server_by_id(server_spec_id)
-        if not server_spec:
-            return spec, secret_env_vars
+        env_schema = getattr(server_spec, "env_schema", None) or []
+        for entry in env_schema:
+            if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+                continue
+            known_names.add(entry["name"])
+            if entry.get("isSecret"):
+                secret_names.add(entry["name"])
 
-        env_schema = server_spec.env_schema or []
-        secret_names = self._get_secret_env_names(env_schema)
-        if not secret_names:
-            return spec, secret_env_vars
+        declared_secret_names = spec.get("env_vars", [])
+        if not isinstance(declared_secret_names, list):
+            declared_secret_names = []
+        client_secret_names = list(
+            dict.fromkeys(name for name in declared_secret_names if isinstance(name, str))
+        )
+        secret_names.update(client_secret_names)
 
         spec = dict(spec)
+        previous_spec = previous_spec or {}
+        secret_fields = list(client_secret_names)
+        secret_field_set = set(client_secret_names)
+        masked_placeholders = {SECRET_MASKED_VALUE, "\u2022" * 6}
 
-        environment = spec.get("environment")
-        if isinstance(environment, dict):
-            clean_env = {}
-            for key, value in environment.items():
-                if key in secret_names:
-                    secret_env_vars[key] = value
-                else:
-                    clean_env[key] = value
-            spec["environment"] = clean_env
+        for field_name in ("environment", "headers"):
+            values = spec.get(field_name)
+            if not isinstance(values, dict):
+                continue
+            previous_values = previous_spec.get(field_name)
+            if not isinstance(previous_values, dict):
+                previous_values = {}
 
-        headers = spec.get("headers")
-        if isinstance(headers, dict):
-            clean_headers = {}
-            for key, value in headers.items():
-                if key in secret_names:
-                    secret_env_vars[key] = value
-                else:
-                    clean_headers[key] = value
-            spec["headers"] = clean_headers
+            cleaned_values = {}
+            for name, value in values.items():
+                if name not in secret_names and name in known_names:
+                    cleaned_values[name] = value
+                    continue
 
-        if secret_env_vars:
+                if name not in secret_field_set:
+                    secret_field_set.add(name)
+                    secret_fields.append(name)
+                stored_value = value
+                if isinstance(value, str) and value in masked_placeholders:
+                    previous_value = previous_values.get(name)
+                    if isinstance(previous_value, str) and previous_value in masked_placeholders:
+                        continue
+                    if previous_value is None:
+                        continue
+                    stored_value = previous_value
+                if stored_value is not None:
+                    secret_env_vars[name] = str(stored_value)
+            spec[field_name] = cleaned_values
+
+        if secret_fields:
             existing_env_vars = spec.get("env_vars", [])
-            all_env_var_names = list(set(existing_env_vars) | set(secret_env_vars.keys()))
-            spec["env_vars"] = all_env_var_names
+            if not isinstance(existing_env_vars, list):
+                existing_env_vars = []
+            spec["env_vars"] = list(
+                dict.fromkeys(
+                    [
+                        *(name for name in existing_env_vars if isinstance(name, str)),
+                        *secret_fields,
+                    ]
+                )
+            )
 
         return spec, secret_env_vars
 
@@ -581,15 +618,18 @@ class MCPServerInstanceService:
                 server_spec_id = str(server_spec.id)
                 created_spec_id = server_spec_id
 
-            transport_spec = _server_transport_spec(server_spec)
+            transport_spec = server_transport_spec(server_spec)
             validation_errors = MCPConfigurationValidator.validate_json_spec(transport_spec)
             if validation_errors:
                 raise MCPValidationError(validation_errors)
 
-            instance_type = transport_spec.get("type", "docker")
-            if instance_type == "bundle":
+            try:
+                instance_type = server_transport(server_spec)
+            except ValueError as exc:
+                raise MCPValidationError([str(exc)]) from exc
+            if instance_type == MCPTransport.BUNDLE:
                 raise MCPValidationError(["bundle is not a valid MCP server instance type"])
-            if instance_type == "url":
+            if instance_type == MCPTransport.URL:
                 refusal = _endpoint_refusal(transport_spec.get("endpoint_url"))
                 if refusal:
                     raise MCPValidationError([refusal])
@@ -598,15 +638,12 @@ class MCPServerInstanceService:
             spec, secret_env_vars = await self._extract_secrets_from_spec(
                 instance_spec, server_spec_id
             )
-            # Persist the resolved transport type so the UI derives health/status
-            # correctly (a missing type defaults to docker and mis-runs container
-            # health checks against a url-type connection).
-            spec.setdefault("type", instance_type)
 
             create_kwargs: dict[str, Any] = {
                 "name": name,
                 "description": description,
                 "server_spec_id": server_spec_id,
+                "transport": instance_type,
                 "json_spec": spec,
                 "verification": dict(DEFAULT_VERIFICATION),
             }
@@ -630,7 +667,7 @@ class MCPServerInstanceService:
             await self._grant_creator_ownership(created_spec_id)
         await self._grant_creator_ownership(instance.id)
 
-        is_url_type = instance_type == "url"
+        is_url_type = instance_type == MCPTransport.URL
 
         if secret_env_vars:
             try:
@@ -650,7 +687,10 @@ class MCPServerInstanceService:
 
         if is_url_type:
             # Synchronous verify — blocks until succeeded or failed
-            verification = await verify(instance)
+            verification = await verify(
+                instance,
+                extra_headers=await self._secret_headers(instance) or None,
+            )
             instance.verification = dict(verification)
             refresh_result = self.repository.session.refresh(instance)
             if inspect.isawaitable(refresh_result):
@@ -737,7 +777,7 @@ class MCPServerInstanceService:
             instance = await self.repository.get_by_id(id)
             if instance:
                 cleaned_spec, secret_env_vars = await self._extract_secrets_from_spec(
-                    json_spec, instance.server_spec_id
+                    json_spec, instance.server_spec_id, instance.json_spec
                 )
                 # Transport belongs to the original connection and is immutable
                 # through this DTO. Preserve it while replacing the editable
@@ -755,12 +795,7 @@ class MCPServerInstanceService:
                     real_secrets
                 )
                 if runtime_config_changed:
-                    transport_spec = await self._get_transport_spec_for_instance(instance)
-                    if transport_spec.get("type", "docker") in (
-                        "docker",
-                        "command",
-                        "kubernetes",
-                    ):
+                    if instance.transport in CONTAINER_TRANSPORTS:
                         # A running MCP process cannot observe changed environment,
                         # command, or rotated secrets. Retire it before persisting
                         # the new desired state; the next demand then cold-starts
@@ -798,9 +833,7 @@ class MCPServerInstanceService:
         if not instance:
             raise ValueError(f"Instance {instance_id} not found")
 
-        transport_spec = await self._get_transport_spec_for_instance(instance)
-        instance_type = transport_spec.get("type", "docker")
-        if instance_type == "bundle":
+        if instance.transport == MCPTransport.BUNDLE:
             member_ids: list[str] = (instance.json_spec or {}).get("members", [])
             members = []
             for mid in member_ids:
@@ -812,8 +845,9 @@ class MCPServerInstanceService:
                     logger.debug("bundle member %s lookup failed: %s", mid, e)
             return derive_bundle_verification(instance, members)
 
+        secret_headers = await self._secret_headers(instance)
         try:
-            extra_headers = await self._resolve_auth_headers(instance)
+            extra_headers = {**secret_headers, **await self._resolve_auth_headers(instance)}
         except OAuthReauthRequiredError:
             return await self._store_reauth_required(instance.id)
 
@@ -827,7 +861,10 @@ class MCPServerInstanceService:
         # instead of the raw 401/403.
         if instance.auth_config_id and self._is_auth_error_payload(payload):
             try:
-                extra_headers = await self._resolve_auth_headers(instance, force_refresh=True)
+                extra_headers = {
+                    **secret_headers,
+                    **await self._resolve_auth_headers(instance, force_refresh=True),
+                }
             except OAuthReauthRequiredError:
                 return await self._store_reauth_required(instance.id)
             payload = await verify(instance, extra_headers=extra_headers or None, force=True)
@@ -911,8 +948,13 @@ class MCPServerInstanceService:
             auth_config = await auth_service.get(instance.auth_config_id)
             if not auth_config:
                 return {}
-            return await auth_service.get_auth_headers(auth_config, force_refresh=force_refresh)
-        except OAuthReauthRequiredError:
+            transport_spec = await self.get_transport_spec_for_instance(instance)
+            return await auth_service.get_auth_headers_for(
+                auth_config,
+                self._endpoint_url_from_spec(instance, transport_spec),
+                force_refresh=force_refresh,
+            )
+        except (OAuthReauthRequiredError, ManagedCredentialDestinationError):
             raise
         except Exception:
             logger.warning(
@@ -921,6 +963,35 @@ class MCPServerInstanceService:
                 exc_info=True,
             )
             return {}
+
+    async def _secret_headers(self, instance: MCPServerInstance) -> dict[str, str]:
+        """The header values ``_extract_secrets_from_spec`` moved into the secret store.
+
+        A URL connection has no process environment, so every secret it holds is
+        one of its HTTP headers. The values are credentials: send them upstream,
+        never return them to a caller.
+        """
+        if instance.transport != MCPTransport.URL:
+            return {}
+        names = instance.get_configured_env_vars()
+        if not names:
+            return {}
+        return await self.env_service.get_instance_environment(instance.id, names)
+
+    async def outbound_headers(self, instance: MCPServerInstance) -> dict[str, str]:
+        """The headers this connection sends its upstream, secret ones included."""
+        transport_spec = await self.get_transport_spec_for_instance(instance)
+        return await self._outbound_headers(instance, transport_spec)
+
+    async def _outbound_headers(
+        self, instance: MCPServerInstance, transport_spec: dict[str, Any]
+    ) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        plain_headers = transport_spec.get("headers")
+        if isinstance(plain_headers, dict):
+            headers.update(plain_headers)
+        headers.update(await self._secret_headers(instance))
+        return headers
 
     async def get_instance_environment(self, instance_id: UUID) -> dict[str, str]:
         instance = await self.repository.get_by_id(instance_id)
@@ -939,8 +1010,7 @@ class MCPServerInstanceService:
         if not instance:
             return False
 
-        transport_spec = await self._get_transport_spec_for_instance(instance)
-        if transport_spec.get("type", "docker") in ("docker", "command", "kubernetes"):
+        if instance.transport in CONTAINER_TRANSPORTS:
             await self._retire_runtime_before_mutation(instance.id)
 
         deleted = await self.repository.delete(id)
@@ -1031,11 +1101,11 @@ class MCPServerInstanceService:
                 f"MCP server instance {server_instance_id} not found",
             )
 
-        transport_spec = await self._get_transport_spec_for_instance(instance)
-        instance_type = transport_spec.get("type", "docker")
+        transport_spec = await self.get_transport_spec_for_instance(instance)
+        instance_type = instance.transport
 
         # Bundle: resolve member and check before dispatching
-        if instance_type == "bundle":
+        if instance_type == MCPTransport.BUNDLE:
             tools = instance.tools or transport_spec.get("available_tools") or []
             matched = next((t for t in tools if t.get("name") == tool_name), None)
             if not matched:
@@ -1076,7 +1146,7 @@ class MCPServerInstanceService:
         try:
             mcp_url, headers, transport = await self._resolve_mcp_url_and_headers(instance)
             verdict_key = mcp_verdict_key(server_instance_id, transport_spec)
-            if instance_type == "url":
+            if instance_type == MCPTransport.URL:
                 httpx_client_factory = pinned_client_factory(httpx_client_factory)
             elif httpx_client_factory is None:
                 httpx_client_factory = platform_client_factory
@@ -1117,7 +1187,7 @@ class MCPServerInstanceService:
             )
             reason = (
                 "could not connect to the MCP server"
-                if instance_type == "url" and not _is_mcp_protocol_error(e)
+                if instance_type == MCPTransport.URL and not _is_mcp_protocol_error(e)
                 else str(e)
             )
             return _fail(
@@ -1172,8 +1242,7 @@ class MCPServerInstanceService:
     async def _resolve_mcp_url_and_headers(
         self, instance: MCPServerInstance
     ) -> tuple[str, dict[str, str], str | None]:
-        transport_spec = await self._get_transport_spec_for_instance(instance)
-        instance_type = transport_spec.get("type", "docker")
+        transport_spec = await self.get_transport_spec_for_instance(instance)
         mcp_url = self._endpoint_url_from_spec(instance, transport_spec)
         if not mcp_url:
             raise RuntimeError(
@@ -1181,10 +1250,7 @@ class MCPServerInstanceService:
             )
         transport = declared_remote_transport(transport_spec)
 
-        headers: dict[str, str] = {}
-        custom_headers = transport_spec.get("headers")
-        if isinstance(custom_headers, dict):
-            headers.update(custom_headers)
+        headers = await self._outbound_headers(instance, transport_spec)
 
         if not headers and instance.auth_config_id:
             try:
@@ -1197,7 +1263,9 @@ class MCPServerInstanceService:
                 auth_service = MCPAuthService(auth_repo, self.secret_manager)
                 auth_config = await auth_service.get(instance.auth_config_id)
                 if auth_config:
-                    headers = await auth_service.get_auth_headers(auth_config)
+                    headers = await auth_service.get_auth_headers_for(auth_config, mcp_url)
+            except ManagedCredentialDestinationError:
+                raise
             except Exception as e:
                 logger.warning(
                     "Failed to resolve auth headers for instance %s: %s",
@@ -1206,7 +1274,7 @@ class MCPServerInstanceService:
                     exc_info=True,
                 )
 
-        if instance_type in ("docker", "command"):
+        if instance.transport in CONTAINER_TRANSPORTS:
             headers.update(get_settings().mcp.manager_gateway_headers())
             transport = "streamable-http"
 
@@ -1410,10 +1478,9 @@ class MCPServerInstanceService:
         if not instance:
             return {"status": "error", "message": "Instance not found"}
 
-        transport_spec = await self._get_transport_spec_for_instance(instance)
-        instance_type = transport_spec.get("type", "docker")
-        if instance_type != "url":
+        if instance.transport != MCPTransport.URL:
             return {"status": "error", "message": "Probe is only supported for URL-type instances"}
+        transport_spec = await self.get_transport_spec_for_instance(instance)
 
         mcp_url = self._endpoint_url_from_spec(instance, transport_spec)
         if not mcp_url:

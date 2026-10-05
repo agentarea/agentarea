@@ -59,6 +59,22 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     #: ``resource:<id>`` tuples so its creator can reach it afterwards.
     __graph_resource__ = True
 
+    @property
+    def is_catalog(self) -> bool:
+        return bool(getattr(self, "_is_catalog", False))
+
+    @is_catalog.setter
+    def is_catalog(self, value: bool) -> None:
+        object.__setattr__(self, "_is_catalog", value)
+
+    @property
+    def update_available(self) -> bool:
+        return bool(getattr(self, "_update_available", False))
+
+    @update_available.setter
+    def update_available(self, value: bool) -> None:
+        object.__setattr__(self, "_update_available", value)
+
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     # Immutable, workspace-scoped human-readable identifier (derived from name at creation).
     slug: Mapped[str] = mapped_column(String(120), nullable=False, index=True)

@@ -1,6 +1,6 @@
 import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
-import { SERVER_API_TIMEOUT_MS } from "@/lib/server-timeouts";
+import { AGENTAREA_API_TIMEOUT } from "@/lib/server-timeouts";
 import { fillWorkspace, isWorkspaceScoped } from "@/lib/workspace-url";
 import type { CreateClientConfig } from "./client/client";
 
@@ -41,14 +41,14 @@ async function addAuthToken(request: Request) {
 
 export const createClientConfig: CreateClientConfig = (config) => ({
   ...config,
-  baseUrl: env.API_URL,
+  baseUrl: env.AGENTAREA_API_URL,
   fetch: async (input, init) => {
     if (typeof input !== "string") {
       throw new TypeError("The generated client passes its URL as a string");
     }
     const request = new Request(await fillRequestWorkspace(input), {
       ...init,
-      signal: init?.signal ?? AbortSignal.timeout(SERVER_API_TIMEOUT_MS),
+      signal: init?.signal ?? AbortSignal.timeout(AGENTAREA_API_TIMEOUT),
     });
 
     await addAuthToken(request);

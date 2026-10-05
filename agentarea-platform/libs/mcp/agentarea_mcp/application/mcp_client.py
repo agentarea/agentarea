@@ -39,6 +39,7 @@ MCP_CONNECT_TIMEOUT_SECONDS = 30.0
 # The manager gateway answers a request that arrives while another one is
 # cold-starting the workload with this header on a 503, and never forwards it.
 GATEWAY_STARTING_HEADER = "X-AgentArea-MCP-Starting"
+GATEWAY_START_FAILURE_HEADER = "X-AgentArea-MCP-Start-Failure"
 # The manager's default MCP_GATEWAY_STARTUP_TIMEOUT. A start still running past
 # it has failed, and the gateway answers with that failure instead.
 GATEWAY_START_WAIT_SECONDS = 300.0
@@ -133,7 +134,9 @@ def shared_era_verdict_store() -> RedisEraVerdictStore | None:
         from agentarea_common.config import get_settings
 
         settings = get_settings()
-        redis_url = getattr(settings.broker, "REDIS_URL", None) or settings.mcp.REDIS_URL
+        # Only the broker carries the Redis URL now; MCPSettings used to declare a
+        # second copy of it. KafkaSettings has no REDIS_URL, hence the getattr.
+        redis_url = getattr(settings.broker, "REDIS_URL", None)
         if not redis_url:
             return None
         _shared_store = RedisEraVerdictStore(redis_url)
@@ -165,6 +168,22 @@ class SafeMCPTransport(httpx2.AsyncBaseTransport):
         await self._sender.aclose()
 
 
+class MCPGatewayStartupFailureError(RuntimeError):
+    """A safe startup classification returned by the manager gateway."""
+
+    def __init__(self, detail: str) -> None:
+        self.detail = detail.strip()
+        super().__init__(f"MCP workload failed during startup: {self.detail}")
+
+
+def gateway_start_failure_detail(status_code: int, headers: Mapping[str, str]) -> str | None:
+    """Return a classified manager startup failure, never a workload response."""
+    if status_code != 503:
+        return None
+    detail = headers.get(GATEWAY_START_FAILURE_HEADER, "").strip()
+    return detail or None
+
+
 def gateway_start_retry_delay(status_code: int, headers: Mapping[str, str]) -> float | None:
     """Seconds to wait before repeating a request the gateway answered
     "workload is starting"; ``None`` for any other response.
@@ -193,6 +212,10 @@ class GatewayStartRetryTransport(httpx2.AsyncBaseTransport):
         deadline = loop.time() + GATEWAY_START_WAIT_SECONDS
         while True:
             response = await self._inner.handle_async_request(request)
+            failure_detail = gateway_start_failure_detail(response.status_code, response.headers)
+            if failure_detail is not None:
+                await response.aclose()
+                raise MCPGatewayStartupFailureError(failure_detail)
             delay = gateway_start_retry_delay(response.status_code, response.headers)
             if delay is None or loop.time() + delay > deadline:
                 return response

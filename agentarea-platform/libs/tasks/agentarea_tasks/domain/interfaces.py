@@ -5,10 +5,13 @@ from implementation details.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from .models import AgentTask
+
+if TYPE_CHECKING:
+    from agentarea_execution.models import AgentExecutionResume
 
 
 class BaseTaskManager(ABC):
@@ -23,6 +26,20 @@ class BaseTaskManager(ABC):
     #: running it on submission. Engines without a durable timer say False and
     #: callers reject the run up front rather than running it early.
     supports_scheduling: bool = False
+    #: Whether this engine can continue a completed task whose execution has
+    #: closed. Engines without one say False and the follow-up is refused.
+    supports_resume: bool = False
+
+    async def resume_task(
+        self, task: AgentTask, resume: "AgentExecutionResume", message: str
+    ) -> AgentTask:
+        """Continue a completed task's conversation with a new execution.
+
+        ``message`` is the follow-up that starts it. If an execution of the task
+        is already running, it receives the message instead. Only engines with
+        ``supports_resume`` implement this.
+        """
+        raise NotImplementedError(f"{type(self).__name__} cannot resume tasks")
 
     @abstractmethod
     async def submit_task(self, task: AgentTask) -> AgentTask:

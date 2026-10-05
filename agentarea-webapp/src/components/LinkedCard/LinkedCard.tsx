@@ -47,7 +47,7 @@ export default function LinkedCard({
   const CardContent = (
     <Card
       className={cn(
-        "group h-full flex flex-col justify-between px-4 py-4 cursor-pointer transition-all duration-300",
+        "group h-full flex flex-col justify-between px-4 py-4 cursor-pointer transition-[box-shadow,border-color,background-color,transform] duration-300",
         "border border-zinc-200 dark:border-zinc-800",
         "bg-white dark:bg-zinc-900",
         "hover:shadow-lg hover:shadow-zinc-200/50 dark:hover:shadow-zinc-950/50",

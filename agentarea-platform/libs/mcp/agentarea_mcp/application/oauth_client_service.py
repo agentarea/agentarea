@@ -28,6 +28,8 @@ from urllib.parse import urlencode, urlparse
 import httpx
 from agentarea_common.utils.url_safety import safe_async_client
 
+from agentarea_mcp.application.platform_oauth_app import find_platform_oauth_app
+
 logger = logging.getLogger(__name__)
 
 # Timeout for outbound HTTP calls during discovery / token exchange
@@ -120,9 +122,10 @@ class OAuthClientCredentials:
 class OAuthCapability:
     """Whether a remote MCP server can be authorized, and what it takes.
 
-    ``ready`` — the provider supports dynamic registration, so Connect runs on
-    its own. ``oauth_app_required`` — it does not, so the workspace brings an
-    OAuth app it registered with the provider. ``unsupported`` — no OAuth
+    ``ready`` — the provider supports dynamic registration, or the operator
+    configured a platform app for it, so Connect runs on its own.
+    ``oauth_app_required`` — neither, so the workspace brings an OAuth app it
+    registered with the provider. ``unsupported`` — no OAuth
     discovery here; ``detail`` says why.
     """
 
@@ -151,7 +154,9 @@ class MCPOAuthClientService:
 
         Every caller that decides whether to offer Connect — the preflight
         endpoint, the create page's auth detection — reads this, so a server
-        cannot be "OAuth" on one screen and "open" on the next.
+        cannot be "OAuth" on one screen and "open" on the next. A provider
+        without DCR is still ``ready`` when the operator configured an app for
+        its issuer that may serve ``mcp_url``.
         """
         try:
             metadata = await self.discover_auth_server(mcp_url)
@@ -161,6 +166,8 @@ class MCPOAuthClientService:
             logger.info("OAuth discovery could not reach %s", mcp_url, exc_info=True)
             return OAuthCapability(status="unsupported", detail=f"Could not reach {mcp_url}: {exc}")
         if metadata.registration_endpoint:
+            return OAuthCapability(status="ready", metadata=metadata)
+        if find_platform_oauth_app(metadata.issuer, mcp_url) is not None:
             return OAuthCapability(status="ready", metadata=metadata)
         return OAuthCapability(
             status="oauth_app_required",

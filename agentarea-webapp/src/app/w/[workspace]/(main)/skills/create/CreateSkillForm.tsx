@@ -560,8 +560,8 @@ export function CreateSkillForm() {
       {source === "content" && (
         <>
           <div className="mb-2.5 flex flex-wrap items-center gap-2">
-            <FormLabel icon={FileCode} required>
-              {tCreate("content")}
+            <FormLabel htmlFor="content-markdown" icon={FileCode} required>
+              <span id="content-markdown-label">{tCreate("content")}</span>
             </FormLabel>
             <div className="flex-1" />
             <Button
@@ -624,13 +624,19 @@ export function CreateSkillForm() {
                   viewMode === "split" && "border-border/70 lg:border-r"
                 )}
               >
-                <div className="flex h-[33px] items-center gap-1.5 border-b border-border/70 bg-muted/30 px-3.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground/80">
+                <div className="flex h-[33px] items-center gap-1.5 border-b border-border/70 bg-muted/30 px-3.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
                   <FileCode className="h-3.5 w-3.5" strokeWidth={1.7} />
                   {tCreate("markdownPane")}
                 </div>
+                <p id="content-markdown-example" className="sr-only">
+                  {CONTENT_PLACEHOLDER}
+                </p>
                 <textarea
                   id="content-markdown"
-                  placeholder={CONTENT_PLACEHOLDER}
+                  aria-labelledby="content-markdown-label"
+                  aria-required="true"
+                  aria-describedby="content-markdown-example"
+                  placeholder={tCreate("contentPlaceholder")}
                   className="min-h-0 flex-1 resize-none bg-background p-[17px_19px] font-mono text-[12.5px] leading-[1.75] outline-none focus:outline-none"
                   value={contentMarkdown}
                   onChange={(e) => {
@@ -645,7 +651,7 @@ export function CreateSkillForm() {
 
             {(viewMode === "preview" || viewMode === "split") && (
               <div className="flex min-h-0 flex-col">
-                <div className="flex h-[33px] items-center gap-1.5 border-b border-border/70 bg-muted/30 px-3.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground/80">
+                <div className="flex h-[33px] items-center gap-1.5 border-b border-border/70 bg-muted/30 px-3.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
                   <Eye className="h-3.5 w-3.5" strokeWidth={1.7} />
                   {tCreate("previewPane")}
                 </div>

@@ -142,14 +142,19 @@ async def test_selected_secret_is_resolved_before_mutation_and_never_returned(ha
 
     assert response.status_code == (201 if operation == "create" else 200), response.text
     harness.catalog.get_for_use.assert_awaited_once_with(harness.secret.id)
-    harness.manager.set_secret.assert_awaited_once_with(
-        f"channel_cred:telegram:{harness.trigger.id}",
-        json.dumps({"bot_token": "private-channel-token"}),
-    )
+    harness.manager.set_secret.assert_awaited_once()
+    name, stored_json = harness.manager.set_secret.await_args.args
+    stored = json.loads(stored_json)
+    assert name == f"channel_cred:telegram:{harness.trigger.id}"
+    assert stored["bot_token"] == "private-channel-token"
+    # Telegram echoes this token on every update; the webhook verifies it.
+    token = stored["secret_token"]
+    assert len(token) >= 32
     harness.webhook_service.register.assert_awaited_once_with(
         channel_type="telegram",
         webhook_id="channel-hook",
-        credentials={"bot_token": "private-channel-token"},
+        credentials=stored,
+        secret_token=token,
     )
     assert response.json()["has_channel_credentials"] is True
     assert "private-channel-token" not in response.text
@@ -314,15 +319,49 @@ async def test_all_credentials_are_resolved_before_any_mutation(harness, operati
 
 @pytest.mark.parametrize("operation", ["create", "update"])
 async def test_legacy_raw_credentials_remain_supported(harness, operation):
+    harness.manager.get_secret.return_value = None  # nothing stored for this trigger yet
     credentials = {"bot_token": "legacy-channel-token"}
     response = await request(harness, operation, channel_credentials=credentials)
 
     assert response.status_code == (201 if operation == "create" else 200), response.text
     harness.catalog.get_for_use.assert_not_awaited()
-    harness.manager.get_secret.assert_not_awaited()
-    assert json.loads(harness.manager.set_secret.await_args.args[1]) == credentials
-    assert harness.webhook_service.register.await_args.kwargs["credentials"] == credentials
+    stored = json.loads(harness.manager.set_secret.await_args.args[1])
+    assert stored == {**credentials, "secret_token": stored["secret_token"]}
+    assert harness.webhook_service.register.await_args.kwargs["credentials"] == stored
     assert "legacy-channel-token" not in response.text
+
+
+async def test_plain_credential_update_keeps_the_token_telegram_already_echoes(harness):
+    harness.manager.get_secret.return_value = json.dumps(
+        {"bot_token": "old-channel-token", "secret_token": "kept-webhook-token"}
+    )
+    response = await request(
+        harness, "update", channel_credentials={"bot_token": "new-channel-token"}
+    )
+
+    assert response.status_code == 200, response.text
+    expected = {"bot_token": "new-channel-token", "secret_token": "kept-webhook-token"}
+    assert json.loads(harness.manager.set_secret.await_args.args[1]) == expected
+    registered = harness.webhook_service.register.await_args.kwargs
+    assert registered["secret_token"] == expected["secret_token"]
+
+
+@pytest.mark.parametrize("operation", ["create", "update"])
+async def test_refused_webhook_registration_saves_nothing_and_says_so(harness, operation):
+    # A token Telegram never received would make the webhook reject every
+    # genuine update while the save looked successful.
+    harness.manager.get_secret.return_value = None
+    harness.webhook_service.register.return_value = False
+    response = await request(
+        harness, operation, channel_credentials={"bot_token": "legacy-channel-token"}
+    )
+
+    assert response.status_code == 502, response.text
+    assert "legacy-channel-token" not in response.text
+    harness.manager.set_secret.assert_not_awaited()
+    harness.service.update_trigger.assert_not_awaited()
+    if operation == "create":
+        harness.service.delete_trigger.assert_awaited_once_with(harness.trigger.id)
 
 
 @pytest.mark.parametrize(
@@ -334,7 +373,6 @@ async def test_update_with_omitted_credentials_preserves_stored_secret(harness, 
     assert response.status_code == 200, response.text
     assert response.json()["has_channel_credentials"] is True
     harness.catalog.get_for_use.assert_not_awaited()
-    harness.manager.get_secret.assert_not_awaited()
     harness.manager.set_secret.assert_not_awaited()
     harness.webhook_service.register.assert_not_awaited()
 

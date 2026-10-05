@@ -27,6 +27,7 @@ import yaml
 from agentarea_common.money import to_optional_money
 from agentarea_common.utils.slug import generate_slug
 from agentarea_llm.domain.model_kind import ModelKind
+from agentarea_mcp.domain.env_schema import derive_env_schema_from_spec, normalize_env_schema
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
 
 from agentarea_registry.application.catalog_facets import apply_facets, derive_facets
@@ -125,6 +126,130 @@ def rank_fields(*mappings: Any) -> dict[str, int]:
                 continue
             return {"recommendation_rank": value}
     return {}
+
+
+def _registry_argument_tokens(arguments: Any) -> tuple[list[str], list[str]] | None:
+    """Extract concrete MCP registry arguments without inventing required inputs."""
+    if not isinstance(arguments, list):
+        return None if arguments is not None else ([], [])
+
+    tokens: list[str] = []
+    positional: list[str] = []
+    for argument in arguments:
+        if not isinstance(argument, dict):
+            return None
+        value = argument.get("value")
+        if value is None:
+            value = argument.get("default")
+        required = argument.get("isRequired")
+        if required is None:
+            required = argument.get("required", False)
+        if value is None:
+            if required:
+                return None
+            continue
+        is_boolean = isinstance(value, bool)
+        if is_boolean:
+            value = str(value).lower()
+        elif isinstance(value, (str, int, float)):
+            value = str(value)
+        else:
+            return None
+        if not value:
+            if required:
+                return None
+            continue
+
+        argument_type = argument.get("type", "positional")
+        if argument_type == "positional":
+            tokens.append(value)
+            if not value.startswith("-"):
+                positional.append(value)
+        elif argument_type == "named":
+            name = argument.get("name")
+            if not isinstance(name, str) or not name:
+                return None
+            if is_boolean:
+                if value == "true":
+                    tokens.append(name)
+            else:
+                tokens.append(f"{name}={value}")
+        else:
+            return None
+    return tokens, positional
+
+
+def _command_package_args(
+    package: dict[str, Any], registry_type: str, server_version: str
+) -> tuple[str, list[str]] | None:
+    """Build a pinned command, or ``None`` when the package cannot run unattended.
+
+    The registry rarely names an executable; then the package's default bin
+    runs, which is how ``npx``/``uvx`` resolve a bare package. Only a required
+    argument with no value, an unpinned version or an ambiguous entrypoint hides it.
+    """
+    package_name = package.get("name") or package.get("identifier")
+    version = package.get("version") or server_version
+    defaults = {"pypi": "uvx", "npm": "npx", "mcpb": "npx", "nuget": "dotnet"}
+    runtime = package.get("runtimeHint") or defaults.get(registry_type)
+    if (
+        not isinstance(package_name, str)
+        or not package_name
+        or not isinstance(version, str)
+        or not version
+        or version.lower() == "latest"
+        or runtime not in {"uvx", "npx", "bunx"}
+    ):
+        return None
+
+    runtime_args = _registry_argument_tokens(package.get("runtimeArguments", []))
+    package_args = _registry_argument_tokens(package.get("packageArguments", []))
+    if runtime_args is None or package_args is None:
+        return None
+    runtime_tokens, entrypoints = runtime_args
+    if len(entrypoints) > 1:
+        return None
+    entrypoint = entrypoints[0] if entrypoints else None
+    if entrypoint is not None:
+        if "/" in entrypoint or "\\" in entrypoint or entrypoint in {".", ".."}:
+            return None
+        runtime_tokens = [token for token in runtime_tokens if token != entrypoint]
+    if any(token in {"--from", "--package"} for token in runtime_tokens):
+        return None
+
+    package_tokens, _ = package_args
+    if runtime == "uvx":
+        if registry_type != "pypi":
+            return None
+        if entrypoint is None:
+            return runtime, [*runtime_tokens, f"{package_name}@{version}", *package_tokens]
+        return runtime, [
+            *runtime_tokens,
+            "--from",
+            f"{package_name}=={version}",
+            entrypoint,
+            *package_tokens,
+        ]
+    if registry_type not in {"npm", "mcpb"}:
+        return None
+    if entrypoint is None:
+        if registry_type != "npm":
+            # An mcpb package is a bundle file, not an npm package with a bin.
+            return None
+        assume_yes = [] if {"-y", "--yes"} & set(runtime_tokens) else ["-y"]
+        return runtime, [
+            *assume_yes,
+            *runtime_tokens,
+            f"{package_name}@{version}",
+            *package_tokens,
+        ]
+    return runtime, [
+        *runtime_tokens,
+        "--package",
+        f"{package_name}@{version}",
+        entrypoint,
+        *package_tokens,
+    ]
 
 
 class RegistryService:
@@ -651,7 +776,7 @@ class RegistryService:
             version=item.version or "latest",
             tags=tags,
             is_public=False,
-            env_schema=spec.get("env_schema", []),
+            env_schema=derive_env_schema_from_spec(spec),
             cmd=cmd,
             remote_url=remote_url,
             registry_item_id=item.id,
@@ -679,7 +804,7 @@ class RegistryService:
             docker_image_url=docker_image_url,
             version=item.version or "latest",
             tags=tags,
-            env_schema=spec.get("env_schema", []),
+            env_schema=derive_env_schema_from_spec(spec),
             cmd=cmd,
             remote_url=remote_url,
             json_spec=raw_spec,
@@ -706,7 +831,7 @@ class RegistryService:
                 json_spec=raw_spec,
                 remote_url=remote_url,
                 registry_url=registry_url,
-                env_schema=spec.get("env_schema", []),
+                env_schema=derive_env_schema_from_spec(spec),
             )
         except Exception:
             logger.debug("Backfill failed for %s", item.installed_entity_id, exc_info=True)
@@ -992,11 +1117,7 @@ class RegistryService:
                 if not url:
                     continue
 
-                # Store headers as-is (raw KeyValueInput format from registry)
-                raw_headers = remote.get("headers", [])
-                env_schema: list[dict[str, Any]] = []
-                if isinstance(raw_headers, list):
-                    env_schema = [h for h in raw_headers if isinstance(h, dict)]
+                env_schema = normalize_env_schema(remote.get("headers", []))
 
                 requires_auth = any(
                     h.get("name", "").lower() in ("authorization", "api_key", "x-api-key", "token")
@@ -1030,14 +1151,11 @@ class RegistryService:
                 if pkg.get("registryType") != "oci":
                     continue
                 image = pkg.get("name", "") or pkg.get("identifier", "")
-                pkg_version = pkg.get("version", version)
+                pkg_version = pkg.get("version") or version
                 if not image:
                     continue
 
-                # Store raw KeyValueInput as-is from registry
-                env_schema = [
-                    ev for ev in pkg.get("environmentVariables", []) if isinstance(ev, dict)
-                ]
+                env_schema = normalize_env_schema(pkg.get("environmentVariables", []))
 
                 items.append(
                     {
@@ -1050,6 +1168,8 @@ class RegistryService:
                             "image": f"{image}:{pkg_version}" if ":" not in image else image,
                             "transport": "stdio",
                             "env_schema": env_schema,
+                            "package_registry": "oci",
+                            "package_name": pkg.get("name", "") or pkg.get("identifier", ""),
                             "raw_spec": server,
                         },
                         "tags": ["docker", "oci"],
@@ -1063,31 +1183,16 @@ class RegistryService:
                 if reg_type not in ("npm", "pypi", "nuget", "mcpb"):
                     continue
                 pkg_name = pkg.get("name", "") or pkg.get("identifier", "")
-                pkg_version = pkg.get("version", version)
+                pkg_version = pkg.get("version") or version
                 if not pkg_name:
                     continue
 
-                runtime_args = pkg.get("runtimeArgs", [])
-                if runtime_args:
-                    command = runtime_args[0]
-                    args = runtime_args[1:]
-                elif reg_type == "npm":
-                    command = "npx"
-                    args = ["-y", pkg_name]
-                elif reg_type == "nuget":
-                    command = "dotnet"
-                    args = ["tool", "run", pkg_name]
-                elif reg_type == "mcpb":
-                    command = "npx"
-                    args = ["-y", pkg_name]
-                else:
-                    command = "uvx"
-                    args = [pkg_name]
+                resolved_command = _command_package_args(pkg, reg_type, version)
+                if resolved_command is None:
+                    continue
+                command, args = resolved_command
 
-                # Store raw KeyValueInput as-is from registry
-                env_schema = [
-                    ev for ev in pkg.get("environmentVariables", []) if isinstance(ev, dict)
-                ]
+                env_schema = normalize_env_schema(pkg.get("environmentVariables", []))
 
                 items.append(
                     {
@@ -1136,7 +1241,13 @@ class RegistryService:
 
             spec = {**json_spec, "connection_type": connection_type}
             if entry.get("env_schema"):
-                spec["env_schema"] = entry["env_schema"]
+                spec["env_schema"] = normalize_env_schema(entry["env_schema"])
+            elif "env_schema" in spec:
+                spec["env_schema"] = normalize_env_schema(spec["env_schema"])
+            else:
+                derived_schema = derive_env_schema_from_spec(spec)
+                if derived_schema:
+                    spec["env_schema"] = derived_schema
 
             items.append(
                 {

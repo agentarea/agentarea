@@ -123,7 +123,7 @@ workloads:
     extraEgress: []
 
 # Agent sandboxes: an OpenSandbox server the control plane creates them through
-# (SANDBOX_OPENSANDBOX_URL), running them here as BatchSandbox pods. Needs the
+# (AGENTAREA_SANDBOX_OSB_URL), running them here as BatchSandbox pods. Needs the
 # BatchSandbox controller: enable opensandbox-controller below, or install it
 # yourself.
 sandboxes:
@@ -150,13 +150,13 @@ sandboxes:
       # development only.
       apiKey: ""
     # -- Image the server copies execd from into every sandbox. The runtime
-    # identity the control plane pins (SANDBOX_OPENSANDBOX_RUNTIME_IDENTITY)
+    # identity the control plane pins (AGENTAREA_SANDBOX_OSB_IDENTITY)
     # names this digest.
     execdImage: "opensandbox/execd:v1.0.21@sha256:1dc98c7de10b9a73450ac75aa0f200ad7972f2c40f5225f6a8998e166b45d6dd"
     # -- Longest lifetime a sandbox may be created with.
     maxSandboxTimeoutSeconds: 21600
     # -- How long a create waits for the pod to run, image pull included. The
-    # control plane's SANDBOX_PROVIDER_PROVISIONING_TIMEOUT should be longer.
+    # control plane's AGENTAREA_SANDBOX_PROVISION_TIMEOUT should be longer.
     createTimeoutSeconds: 120
     # -- Resources of the server itself.
     resources:

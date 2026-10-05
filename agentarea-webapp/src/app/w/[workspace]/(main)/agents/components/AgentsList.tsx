@@ -1,14 +1,11 @@
-"use client";
-
-import React from "react";
-import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import Table from "@/components/Table/Table";
+import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import ModelBadge from "@/components/ui/model-badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { Agent, agentPath, type ModelInfo } from "@/types";
-import { AgentToolIcon } from "@/utils/agentToolIcons";
+import { cn } from "@/lib/utils";
+import { agentPath, type Agent, type ModelInfo } from "@/types";
+import type { AgentToolIcon } from "@/utils/agentToolIcons";
 import AgentCard from "./AgentCard";
 import { AGENT_COLUMNS, AGENTS_GRID_CLASS } from "./agentColumns";
 import { AgentToolIcons } from "./AgentToolIcons";
@@ -20,15 +17,12 @@ interface AgentsListProps {
   viewMode?: string;
 }
 
-export default function AgentsList({
+export default async function AgentsList({
   initialAgents,
   viewMode = "grid",
 }: AgentsListProps) {
-  const t = useTranslations("AgentsPage");
-  const router = useWorkspaceRouter();
+  const t = await getTranslations("AgentsPage");
 
-  // Cell renderers keyed by accessor. The column order, labels, and widths come
-  // from the shared `AGENT_COLUMNS` meta (also used by the table skeleton).
   const renderers = {
     name: (value: string, item: Agent) => (
       <div className="flex items-center gap-2">
@@ -62,7 +56,7 @@ export default function AgentsList({
       ) : (
         <span className="text-xs text-muted-foreground">—</span>
       ),
-    tools_config: (_value: unknown, item: AgentWithToolIcons) => {
+    tools: (_value: unknown, item: AgentWithToolIcons) => {
       const toolIcons = item.tool_icons ?? [];
 
       if (toolIcons.length === 0) {
@@ -80,33 +74,36 @@ export default function AgentsList({
     },
   };
 
-  const agentColumns = AGENT_COLUMNS.map((column) => ({
-    accessor: column.accessor,
-    header: t(column.labelKey),
-    cellClassName: column.cellClassName,
-    render: renderers[column.accessor as keyof typeof renderers],
-  }));
-
-  // Render table view
-  if (viewMode === "table") {
-    return (
-      <Table
-        data={initialAgents}
-        columns={agentColumns}
-        onRowClick={(agent) => {
-          router.push(agentPath(agent));
-        }}
-      />
+  const agentColumns = AGENT_COLUMNS.map((column) => {
+    const hideOnMobile = ["description", "model_info", "tools"].includes(
+      column.accessor
     );
-  }
 
-  // Render grid view (default). The agents list is "Yours only" — catalog
-  // (built-in) agents are discovered via Explore, not mixed into the working set.
+    return {
+      accessor: column.accessor,
+      header: t(column.labelKey),
+      headerClassName: hideOnMobile ? "hidden md:table-cell" : undefined,
+      cellClassName: cn(
+        column.cellClassName,
+        hideOnMobile && "hidden md:table-cell"
+      ),
+      rowLink: column.accessor === "name",
+      render: renderers[column.accessor as keyof typeof renderers],
+    };
+  });
+
+  // Built-in catalog agents are discovered via Explore, not mixed into this list.
   return (
-    <div className={AGENTS_GRID_CLASS}>
-      {initialAgents.map((agent) => (
-        <AgentCard key={agent.id} agent={agent} />
-      ))}
-    </div>
+    <GridAndTableViews
+      viewMode={viewMode}
+      data={initialAgents}
+      columns={agentColumns}
+      rowHref={agentPath}
+      tableClassName="table-fixed md:table-auto"
+      wrapCardContent={false}
+      gridClassName={AGENTS_GRID_CLASS}
+      emptyState={null}
+      cardContent={(agent) => <AgentCard agent={agent} />}
+    />
   );
 }

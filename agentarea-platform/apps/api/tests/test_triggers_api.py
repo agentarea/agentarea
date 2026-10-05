@@ -180,7 +180,10 @@ def override_trigger_dependencies(
         return mock_health_checker
 
     async def _override_secret_manager():
-        return AsyncMock()
+        # An empty store: nothing configured for any trigger yet.
+        manager = AsyncMock()
+        manager.get_secret.return_value = None
+        return manager
 
     async def _override_db_session():
         return mock_db_session
@@ -360,6 +363,15 @@ class TestTriggersAPI:
         assert data["trigger_type"] == "webhook"
         assert data["webhook_id"] == "test_webhook_123"
         assert data["allowed_methods"] == ["POST"]
+        # An unsigned generic webhook starts the agent for anyone who learns
+        # its URL, so creating one hands back a generated signing secret.
+        assert len(data["signing_secret"]) >= 32
+        assert data["webhook_signing"] == "signed"
+        assert data["signature_scheme"] == {
+            "header": "X-Webhook-Signature",
+            "algorithm": "sha256",
+            "prefix": "",
+        }
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
     @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
@@ -813,7 +825,7 @@ class TestTriggersAPI:
             "name": "Test Trigger",
             "agent_id": str(uuid4()),
             "trigger_type": "webhook",
-            "webhook_id": "test_webhook",
+            "webhook_id": "test_webhook_123",
             "webhook_type": "invalid_webhook_type",
         }
 
@@ -822,6 +834,32 @@ class TestTriggersAPI:
         # Should fail validation
         assert response.status_code == 422
         assert "Invalid webhook type" in str(response.json())
+
+    async def test_short_custom_webhook_id_is_rejected_with_422(self, async_client):
+        response = await async_client.post(
+            "/v1/workspaces/acme/triggers/",
+            json={
+                "name": "Webhook",
+                "agent_id": str(uuid4()),
+                "trigger_type": "webhook",
+                "webhook_id": "short-id",
+            },
+        )
+
+        assert response.status_code == 422
+
+    async def test_custom_webhook_id_rejects_non_url_safe_chars_with_422(self, async_client):
+        response = await async_client.post(
+            "/v1/workspaces/acme/triggers/",
+            json={
+                "name": "Webhook",
+                "agent_id": str(uuid4()),
+                "trigger_type": "webhook",
+                "webhook_id": "unsafe/hook-id_123",
+            },
+        )
+
+        assert response.status_code == 422
 
     async def test_missing_required_fields(self, async_client):
         """Test trigger creation with missing required fields."""
@@ -849,8 +887,8 @@ async def test_create_telegram_webhook_trigger_registers_webhook(
     mock_trigger_service.create_trigger.return_value = WebhookTrigger(**data)
 
     class _Settings:
-        TELEGRAM_WEBHOOK_BASE_URL = "https://gw.example"
-        API_BASE_URL = "http://localhost:8000"
+        TELEGRAM_WEBHOOK_URL = "https://gw.example"
+        API_URL = "http://localhost:8000"
 
     with (
         patch(

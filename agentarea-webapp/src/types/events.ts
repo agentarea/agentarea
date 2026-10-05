@@ -3,6 +3,7 @@ import type {
   TaskEventResponse as ApiTaskEventResponse,
 } from "@/api/client/types.gen";
 import { formatMoney } from "@/lib/money";
+import { parseUtcTimestamp } from "@/utils/dateUtils";
 
 // Base types from API schema
 export type TaskEvent = ApiTaskEvent;
@@ -12,7 +13,7 @@ export type TaskEventResponse = ApiTaskEventResponse;
 export interface SSEEvent {
   event_type: string;
   timestamp: string;
-  data: Record<string, any>;
+  data: Record<string, unknown>;
 }
 
 // Specific event type definitions based on our backend implementation
@@ -68,13 +69,13 @@ export interface SSEMessage {
       };
       tool_calls?: Array<{
         name: string;
-        arguments: any;
+        arguments: unknown;
       }>;
       model_id?: string;
 
       // Tool event fields
       tool_name?: string;
-      result?: any;
+      result?: unknown;
       success?: boolean;
 
       // Chunk event fields
@@ -104,7 +105,7 @@ export interface DisplayEvent {
   title: string;
   description: string;
   level: EventLevel;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
   icon?: string;
 }
 
@@ -324,6 +325,7 @@ export const EVENT_TYPE_CONFIG: Record<
 };
 
 // Utility functions
+
 export const mapSSEToDisplayEvent = (
   sseEvent: SSEMessage,
   id?: string,
@@ -394,7 +396,7 @@ export const mapSSEToDisplayEvent = (
   const mappedEventType =
     eventTypeMap[eventKey] ||
     eventTypeMap[eventTypeKey] ||
-    (sseEvent.data.event_type as WorkflowEventType) ||
+    sseEvent.data.event_type ||
     "WorkflowStarted";
 
   const config = EVENT_TYPE_CONFIG[mappedEventType];
@@ -408,11 +410,25 @@ export const mapSSEToDisplayEvent = (
     const toolCall = eventData.tool_calls[0];
     if (toolCall.name === "task_complete") {
       try {
-        const args =
+        const args: unknown =
           typeof toolCall.arguments === "string"
             ? JSON.parse(toolCall.arguments)
             : toolCall.arguments;
-        description = `Task completed: ${args.summary || args.result || "Success"}`;
+        if (
+          typeof args !== "object" ||
+          args === null ||
+          Array.isArray(args)
+        ) {
+          throw new TypeError("Invalid task_complete arguments");
+        }
+        const summary = "summary" in args ? args.summary : undefined;
+        const result = "result" in args ? args.result : undefined;
+        const completion =
+          [summary, result].find(
+            (value): value is string =>
+              typeof value === "string" && value.length > 0
+          ) ?? "Success";
+        description = `Task completed: ${completion}`;
       } catch {
         description = `Task completed with ${toolCall.name}`;
       }
@@ -440,7 +456,9 @@ export const mapSSEToDisplayEvent = (
   return {
     id: id || `${eventData.task_id}-${mappedEventType}-${Date.now()}`,
     type: mappedEventType,
-    timestamp: new Date(sseEvent.data.timestamp),
+    timestamp:
+      parseUtcTimestamp(sseEvent.data.timestamp) ??
+      new Date(sseEvent.data.timestamp),
     title: config?.title || mappedEventType,
     description,
     level: config?.level || "info",

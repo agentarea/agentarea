@@ -24,9 +24,15 @@ from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthori
 from agentarea_common.di.container import get_container
 from fastapi.testclient import TestClient
 
-PERSONAL = SimpleNamespace(id="alice", slug="alice", name="Alice", owner_user_id="alice")
-OWNED = SimpleNamespace(id="ws-acme", slug="acme", name="Acme", owner_user_id="alice")
-JOINED = SimpleNamespace(id="ws-other", slug="other", name="Other", owner_user_id="bob")
+PERSONAL = SimpleNamespace(
+    id="alice", slug="alice", name="Alice", owner_user_id="alice", logo_key=None
+)
+OWNED = SimpleNamespace(
+    id="ws-acme", slug="acme", name="Acme", owner_user_id="alice", logo_key=None
+)
+JOINED = SimpleNamespace(
+    id="ws-other", slug="other", name="Other", owner_user_id="bob", logo_key=None
+)
 
 
 def _alice(**overrides) -> UserPrincipal:
@@ -90,7 +96,9 @@ def test_an_api_key_administers_only_the_workspace_it_was_issued_for() -> None:
 
 def test_the_creator_administers_the_workspace_they_just_created() -> None:
     service = _service()
-    created = SimpleNamespace(id="ws-new", slug="new", name="New", owner_user_id="alice")
+    created = SimpleNamespace(
+        id="ws-new", slug="new", name="New", owner_user_id="alice", logo_key=None
+    )
     service.create_shared.return_value = created
     app.dependency_overrides[get_principal] = lambda: _alice()
     app.dependency_overrides[workspaces.get_workspace_service] = lambda: service

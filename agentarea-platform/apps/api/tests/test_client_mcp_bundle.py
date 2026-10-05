@@ -5,6 +5,7 @@ the client carries are listed or reachable.
 """
 
 from typing import cast
+from unittest.mock import AsyncMock
 
 import pytest
 from agentarea_agents_sdk.mcp_server import create_mcp_server
@@ -13,7 +14,7 @@ from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import ToolsetMetadata
 from agentarea_api.api.v1 import client_mcp
 from agentarea_common.auth.context import UserContext, UserPrincipal
-from agentarea_mcp.application.mcp_aggregator import MCPAggregatorProxy
+from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
 from agentarea_mcp.domain.client_models import ClientPlatformToolset
 from mcp.types import CallToolRequestParams, TextContent
 
@@ -36,8 +37,16 @@ class _ProbeToolset(Toolset):
 
 
 class _Proxy:
+    def __init__(self) -> None:
+        self.instance_names: dict[str, str] = {}
+
     async def list_namespaced_tools(self):
         return [{"name": "gh__create_issue", "description": "", "inputSchema": {"type": "object"}}]
+
+    def owner_of(self, name):
+        if name == "gh__create_issue":
+            return AggregatedMember(mcp_instance_id="gh"), "create_issue"
+        return None
 
     async def call_namespaced_tool(self, name, arguments):
         raise ValueError(f"No member owns tool {name}")
@@ -60,12 +69,15 @@ def bundle(monkeypatch):
             CLIENT_ID, [ClientPlatformToolset(toolset="test/probe", disabled_methods=["wipe"])]
         ),
         user_context=UserContext(user_id="user-1", workspace_id="client-ws"),
+        tool_policy={},
+        actor_type="user",
     )
 
     async def resolve(_client_id):
         return scope
 
     monkeypatch.setattr(client_mcp, "_resolve_client_scope", resolve)
+    monkeypatch.setattr(client_mcp, "_audit_tool_call", AsyncMock())
     token = client_mcp._client_id_var.set(CLIENT_ID)
     caller = UserPrincipal(user_id="user-1", accessible_workspaces=["client-ws", "other-ws"])
     with client_mcp.use_mcp_user_context(caller):

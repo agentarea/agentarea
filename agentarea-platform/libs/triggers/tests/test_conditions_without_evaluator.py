@@ -95,7 +95,7 @@ def test_background_paths_get_the_evaluator_when_llm_conditions_are_enabled(
         build_condition_evaluator,
     )
 
-    monkeypatch.setenv("TRIGGER_ENABLE_LLM_CONDITIONS", enabled)
+    monkeypatch.setenv("AGENTAREA_TRIGGER_LLM_ENABLED", enabled)
     get_settings.cache_clear()
     try:
         evaluator = build_condition_evaluator(

@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import {
+  ApprovalDecisionCard,
+  type ApprovalDecisionResult,
+} from "@/components/Approvals/ApprovalDecisionCard";
 import ActivityGroup from "@/components/Chat/ActivityGroup";
 import {
   buildActivitySegments,
@@ -65,6 +69,15 @@ interface TaskConversationProps {
   onActivityChange?: (activity: TaskConversationActivity) => void;
   onRefresh?: () => Promise<void> | void;
   onA2UIAction?: A2UIActionHandler;
+  /**
+   * Resolve the pending approval. Defaults to the task's own resolve action;
+   * the inbox passes its own so the decision also updates its queue.
+   */
+  onDecideApproval?: (
+    escalationId: string,
+    approved: boolean,
+    comment: string
+  ) => Promise<ApprovalDecisionResult>;
 }
 
 export function TaskConversation({
@@ -74,6 +87,7 @@ export function TaskConversation({
   onActivityChange,
   onRefresh,
   onA2UIAction,
+  onDecideApproval,
 }: TaskConversationProps) {
   const router = useWorkspaceRouter();
   const workspaceSlug = useWorkspaceSlug();
@@ -230,6 +244,18 @@ export function TaskConversation({
     }
   };
 
+  const pendingApproval =
+    pendingForm?.eventType === "approval.request" &&
+    !isInteractionClosed(pendingForm)
+      ? pendingForm
+      : null;
+  const decideApproval = (approved: boolean, comment: string) => {
+    if (!pendingApproval) return Promise.resolve();
+    return onDecideApproval
+      ? onDecideApproval(pendingApproval.partId, approved, comment)
+      : actions.resolveEscalation(pendingApproval.partId, approved, comment);
+  };
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
       <div
@@ -331,6 +357,22 @@ export function TaskConversation({
 
       <div className="shrink-0 bg-background">
         <div className="mx-auto w-full max-w-3xl px-4 py-3 md:px-6">
+          {pendingApproval && (
+            <div className="mb-3">
+              <ApprovalDecisionCard
+                key={pendingApproval.partId}
+                agentId={task.agent_id}
+                taskId={task.id}
+                escalationId={pendingApproval.partId}
+                toolName={
+                  typeof pendingApproval.data.tool_name === "string"
+                    ? pendingApproval.data.tool_name
+                    : null
+                }
+                onDecide={decideApproval}
+              />
+            </div>
+          )}
           {status === "waiting_for_continuation" ? (
             <ContinuationGrantForm
               taskId={task.id}

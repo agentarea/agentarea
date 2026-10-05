@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { AdminOnlyState } from "@/components/AdminOnlyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { getViewerCapabilities } from "@/lib/workspace-context";
-import { fetchAuditLogs } from "./actions";
+import { fetchAuditLogs, listAuditActorOptions } from "./actions";
 import AuditLogClient from "./AuditLogClient";
 
 export default async function AuditLogContent() {
@@ -11,7 +11,10 @@ export default async function AuditLogContent() {
     return <AdminOnlyState what="auditLog" />;
   }
 
-  const { data, error } = await fetchAuditLogs({ limit: 50 });
+  const [{ data, error }, actorOptions] = await Promise.all([
+    fetchAuditLogs({ limit: 50 }),
+    listAuditActorOptions(),
+  ]);
 
   if (!data) {
     const t = await getTranslations("AuditLogPage");
@@ -28,6 +31,7 @@ export default async function AuditLogContent() {
     <AuditLogClient
       initialEvents={data.events}
       initialCursor={data.next_cursor ?? null}
+      actorOptions={actorOptions}
     />
   );
 }

@@ -32,9 +32,10 @@ class _Response:
 class _Client:
     """Records every URL asked about and answers from a fixed table."""
 
-    def __init__(self, answers, asked):
+    def __init__(self, answers, asked, requested_headers=None):
         self._answers = answers
         self._asked = asked
+        self._requested_headers = requested_headers
 
     async def __aenter__(self):
         return self
@@ -42,8 +43,10 @@ class _Client:
     async def __aexit__(self, *exc):
         return False
 
-    async def get(self, url):
+    async def get(self, url, headers=None):
         self._asked.append(url)
+        if self._requested_headers is not None:
+            self._requested_headers.append(headers)
         answer = self._answers.get(url)
         if answer is None:
             return _Response(404, text="unknown instance")
@@ -67,21 +70,30 @@ def _health_url(instance_id):
     return f"http://manager/instances/{instance_id}/health"
 
 
-def _install(monkeypatch, answers, asked):
+def _install(monkeypatch, answers, asked, requested_headers=None):
     monkeypatch.setattr(
         module,
         "get_settings",
-        lambda: SimpleNamespace(mcp=SimpleNamespace(MCP_MANAGER_URL="http://manager")),
+        lambda: SimpleNamespace(
+            mcp=SimpleNamespace(
+                MANAGER_URL="http://manager",
+                manager_inspection_headers=lambda: {"Authorization": "Bearer manager-test"},
+            )
+        ),
     )
-    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: _Client(answers, asked))
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *a, **k: _Client(answers, asked, requested_headers),
+    )
 
 
 def test_only_workspace_instances_are_asked_about(monkeypatch):
     mine, theirs = uuid4(), uuid4()
     asked = []
+    requested_headers = []
     answers = {_health_url(mine): _Response(200, {"healthy": True, "status": "running"})}
-    _install(monkeypatch, answers, asked)
-
+    _install(monkeypatch, answers, asked, requested_headers=requested_headers)
     result = asyncio.run(
         module.get_containers_health(
             user_context=_context(),
@@ -90,6 +102,7 @@ def test_only_workspace_instances_are_asked_about(monkeypatch):
     )
 
     assert asked == [_health_url(mine)]
+    assert requested_headers == [{"Authorization": "Bearer manager-test"}]
     assert str(theirs) not in str(result)
     assert result["total"] == 1
     assert result["healthy"] == 1

@@ -10,6 +10,8 @@ from typing import BinaryIO
 from agentarea_common.config.aws import get_aws_settings, get_s3_client
 from botocore.exceptions import ClientError
 
+from ..application.skill_package_limits import check_zip_budget, read_entry, safe_package_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,7 +55,7 @@ class SkillStorageService:
         """S3 bucket name. Skills share the artifacts bucket and live under
         the ``skills/`` prefix — keeps storage to one bucket per workspace.
         """
-        return self.settings.ARTIFACTS_BUCKET_NAME
+        return self.settings.ARTIFACTS_BUCKET
 
     def _get_s3_prefix(self, workspace_id: str, skill_id: str) -> str:
         """Get the S3 prefix for a skill package.
@@ -89,6 +91,7 @@ class SkillStorageService:
         s3_prefix = self._get_s3_prefix(workspace_id, skill_id)
 
         with zipfile.ZipFile(zip_data, "r") as zf:
+            check_zip_budget(zf)
             # Detect common root folder (GitHub style)
             root_folder = self._detect_root_folder(zf.namelist())
 
@@ -109,8 +112,8 @@ class SkillStorageService:
                 if not relative_path:
                     continue
 
-                # Read file content
-                content = zf.read(info.filename)
+                relative_path = safe_package_path(relative_path)
+                content = read_entry(zf, info)
 
                 # Upload to S3
                 s3_key = f"{s3_prefix}{relative_path}"
@@ -190,7 +193,7 @@ class SkillStorageService:
             S3 path prefix for the stored file.
         """
         s3_prefix = self._get_s3_prefix(workspace_id, skill_id)
-        s3_key = f"{s3_prefix}{filename}"
+        s3_key = f"{s3_prefix}{safe_package_path(filename)}"
 
         if isinstance(content, str):
             content = content.encode("utf-8")
@@ -222,7 +225,7 @@ class SkillStorageService:
         Returns:
             Presigned URL for the file.
         """
-        s3_key = f"{s3_path.rstrip('/')}/{relative_path.lstrip('/')}"
+        s3_key = f"{s3_path.rstrip('/')}/{safe_package_path(relative_path)}"
 
         url = self.client.generate_presigned_url(
             "get_object",
@@ -252,7 +255,7 @@ class SkillStorageService:
         Raises:
             FileNotFoundError: If the file does not exist.
         """
-        s3_key = f"{s3_path.rstrip('/')}/{relative_path.lstrip('/')}"
+        s3_key = f"{s3_path.rstrip('/')}/{safe_package_path(relative_path)}"
 
         try:
             response = self.client.get_object(

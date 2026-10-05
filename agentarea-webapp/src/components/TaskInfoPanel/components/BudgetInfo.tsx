@@ -43,7 +43,7 @@ export default function BudgetInfo({
       {costPct != null && (
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
           <div
-            className={`h-full rounded-full transition-all ${
+            className={`h-full rounded-full transition-[width] ${
               costPct > 90
                 ? "bg-destructive"
                 : costPct > 70

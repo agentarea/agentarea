@@ -83,7 +83,6 @@ export type RegistryItem = {
   version: string | null;
   tags: string[];
   spec: RawSpec;
-  installed_entity_id?: string | null;
   // Derived and stored server-side (agentarea_registry.application.catalog_facets)
   // so browsing can filter, sort and count in SQL. Optional because the
   // single-item endpoints predate them.
@@ -110,7 +109,6 @@ export type CatalogEntry = {
   identity: EntityIdentity;
   featured: boolean; // hand-curated well-known entry (sorts first server-side)
   verified: boolean; // official vendor connection with confirmed OAuth
-  installEntityId: string | null; // linked MCP spec id → existing create-from-spec page
   spec: RawSpec;
 };
 
@@ -332,7 +330,6 @@ function describe(
     protocol,
     featured: item.featured ?? tags.includes(FEATURED_TAG),
     verified: false,
-    installEntityId: item.installed_entity_id ?? null,
     spec,
   };
   const serverCategory = str(item.category);

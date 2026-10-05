@@ -47,6 +47,7 @@ from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config.app import get_app_settings
+from agentarea_common.utils.types import utc_isoformat
 from agentarea_common.workspaces.lookup import workspace_api_prefix
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
@@ -207,7 +208,7 @@ async def _ensure_no_file_ancestors(service: ArtifactService, workspace_id: str,
 
 
 async def _workspace_file_download_url(user_context: UserContext, file_path: str) -> str:
-    base = get_app_settings().API_BASE_URL.rstrip("/")
+    base = get_app_settings().API_URL.rstrip("/")
     encoded_path = quote(file_path.lstrip("/"), safe="/")
     return f"{base}{await workspace_api_prefix(user_context)}/files/download/{encoded_path}"
 
@@ -514,7 +515,7 @@ async def workspace_file_history(
             created_by=ev.created_by,
             agent_id=ev.agent_id,
             task_id=ev.task_id,
-            created_at=ev.created_at.isoformat(),
+            created_at=utc_isoformat(ev.created_at),
         )
         for ev in rows
     ]

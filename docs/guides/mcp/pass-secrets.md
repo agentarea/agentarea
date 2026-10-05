@@ -61,7 +61,9 @@ explicitly if you want some values to stay readable.
   </Step>
 
   <Step title="Supply the values on the instance">
-    For a remote server, credentials go in `headers`:
+    The instance takes its transport from the spec and reports it as
+    `transport` in the response. For a remote server, credentials go in
+    `headers`:
 
     ```bash
     curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/" \
@@ -71,8 +73,6 @@ explicitly if you want some values to stay readable.
         \"name\": \"GitHub\",
         \"server_spec_id\": \"$SPEC_ID\",
         \"json_spec\": {
-          \"type\": \"url\",
-          \"endpoint_url\": \"https://api.githubcopilot.com/mcp/\",
           \"headers\": {\"Authorization\": \"Bearer ghp_...\", \"X-Org\": \"acme\"}
         }
       }"
@@ -88,9 +88,7 @@ explicitly if you want some values to stay readable.
         \"name\": \"Postgres\",
         \"server_spec_id\": \"$SPEC_ID\",
         \"json_spec\": {
-          \"type\": \"docker\",
-          \"image\": \"mcp/postgres:latest\",
-          \"environment\": {\"DATABASE_URL\": \"postgres://user:pw@host/db\"}
+          \"environment\": {\"AGENTAREA_DB_URL\": \"postgres://user:pw@host/db\"}
         }
       }"
     ```
@@ -108,7 +106,7 @@ explicitly if you want some values to stay readable.
     curl -s -X PATCH "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-server-instances/$INSTANCE_ID" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
-      -d '{"json_spec": {"type": "url", "endpoint_url": "https://api.githubcopilot.com/mcp/", "headers": {"Authorization": "Bearer ghp_NEW"}}}'
+      -d '{"json_spec": {"headers": {"Authorization": "Bearer ghp_NEW"}}}'
     ```
 
     Then re-verify, because the stored tool list was discovered with the old

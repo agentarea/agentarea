@@ -72,7 +72,7 @@ class TestValidateConnectionRefusesNonPublicTargets:
 
     @pytest.mark.asyncio
     async def test_an_allowlisted_local_server_is_dialed(self, monkeypatch, fresh_settings):
-        monkeypatch.setenv("OUTBOUND_PRIVATE_ALLOWLIST", "127.0.0.0/8")
+        monkeypatch.setenv("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", "127.0.0.0/8")
         service = _service()
         listing = MagicMock()
         listing.tools = []
@@ -89,11 +89,13 @@ class TestValidateConnectionRefusesNonPublicTargets:
     async def test_the_auth_probe_of_an_instance_never_reaches_the_metadata_address(self):
         service = _service()
         service.repository = MagicMock()
-        service.repository.get_by_id = AsyncMock(return_value=MagicMock(id="inst-1"))
+        service.repository.get_by_id = AsyncMock(
+            return_value=MagicMock(id="inst-1", transport="url")
+        )
         spec = {"type": "url", "endpoint_url": "http://169.254.169.254/latest/meta-data/"}
 
         with patch.object(
-            service, "_get_transport_spec_for_instance", new=AsyncMock(return_value=spec)
+            service, "get_transport_spec_for_instance", new=AsyncMock(return_value=spec)
         ):
             result = await service.probe_instance_auth("inst-1")
 

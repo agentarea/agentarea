@@ -33,7 +33,7 @@ pytestmark = [
     ),
 ]
 
-API_BASE_URL = "http://localhost:8000"
+AGENTAREA_API_URL = "http://localhost:8000"
 TEST_WORKSPACE = "test-mcp-container-workspace"
 
 
@@ -156,7 +156,7 @@ def api_client():
     headers = {"Authorization": f"Bearer {token}"}
 
     client = WorkspaceClient(
-        base_url=API_BASE_URL,
+        base_url=AGENTAREA_API_URL,
         timeout=60.0,
         headers=headers,
     )

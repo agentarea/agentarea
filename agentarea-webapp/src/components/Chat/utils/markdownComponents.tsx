@@ -1,4 +1,5 @@
 import React from "react";
+import type { Components, ExtraProps } from "streamdown";
 import { fileBasename, FileChip, isFileLike } from "./fileIcon";
 import { SiteLink } from "./SiteLink";
 
@@ -46,7 +47,7 @@ function childText(children: React.ReactNode): string {
  * - other external links get a small globe so result lists read like link lists
  * - preserves the existing <think> styling
  */
-export const fileAwareMarkdownComponents = {
+export const fileAwareMarkdownComponents: Components = {
   think: (props: Record<string, unknown>) => (
     <div className="text-xs text-gray-400 dark:text-gray-300">
       {props.children as React.ReactNode}
@@ -58,7 +59,7 @@ export const fileAwareMarkdownComponents = {
     children,
     node: _node,
     ...props
-  }: React.ComponentProps<"code"> & { node?: unknown }) => {
+  }: React.ComponentProps<"code"> & ExtraProps) => {
     void _node;
     const text = childText(children);
     if (isFileLike(text)) {
@@ -73,7 +74,7 @@ export const fileAwareMarkdownComponents = {
       </code>
     );
   },
-  a: ({ href, children }: React.ComponentProps<"a">) => {
+  a: ({ href, children }: React.ComponentProps<"a"> & ExtraProps) => {
     // Only treat real web URLs as clickable; sandbox:/file: and other schemes
     // would otherwise render as dead/"blocked" links.
     const reachableHref =

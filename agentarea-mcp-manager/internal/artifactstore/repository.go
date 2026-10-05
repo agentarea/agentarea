@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 	"github.com/google/uuid"
@@ -48,6 +47,8 @@ type Config struct {
 	MaxBytes       int64
 	MaxCount       int
 	MaxTotalBytes  int64
+	AccessKey      string
+	SecretKey      string
 }
 
 // ObjectStoreClient is the S3 surface the repository uses.
@@ -85,6 +86,8 @@ func ConfigFromWorkspace(workspaceConfig workspace.RepositoryConfig) Config {
 		MaxBytes:       workspaceConfig.MaxFileBytes,
 		MaxCount:       workspaceConfig.MaxFiles,
 		MaxTotalBytes:  workspaceConfig.MaxBytes,
+		AccessKey:      workspaceConfig.AccessKey,
+		SecretKey:      workspaceConfig.SecretKey,
 	}
 }
 
@@ -92,7 +95,7 @@ func NewFromConfig(ctx context.Context, cfg Config) (*Repository, error) {
 	if cfg.Bucket == "" {
 		return nil, fmt.Errorf("artifact S3 bucket is required")
 	}
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.Region))
+	awsCfg, err := workspace.S3Config(ctx, cfg.Region, cfg.AccessKey, cfg.SecretKey)
 	if err != nil {
 		return nil, fmt.Errorf("load artifact S3 configuration: %w", err)
 	}

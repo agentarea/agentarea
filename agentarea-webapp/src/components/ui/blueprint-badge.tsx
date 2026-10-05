@@ -19,7 +19,7 @@ export function BlueprintBadge({
   return (
     <span
       className={cn(
-        "relative inline-flex shrink-0 items-center text-[8px] font-medium uppercase leading-[11px] tracking-[0.08em] text-primary",
+        "relative inline-flex shrink-0 items-center text-[8px] font-medium uppercase leading-[11px] tracking-[0.08em] text-primary dark:text-accent-foreground",
         variant === "corners" && "px-[5px] py-[2px]",
         variant === "crop" && "gap-[5px]",
         variant === "bracket" && "px-[5px] py-px",

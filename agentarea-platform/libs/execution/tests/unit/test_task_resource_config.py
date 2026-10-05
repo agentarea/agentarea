@@ -252,6 +252,33 @@ async def test_both_discovery_modes_use_resolved_run_tools(
     )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "mode", ["discover_available_tools_activity", "discover_tool_providers_activity"]
+)
+async def test_file_toolset_is_discovered_with_workspace_scope(activity_context, mode):
+    ctx, functions = activity_context
+    saved = agent(tools=[{"type": "code", "name": "agentarea/files"}])
+    ctx.get_agent_service.return_value.get.return_value = saved
+
+    result = await functions[mode](
+        ToolDiscoveryRequest(
+            agent_id=saved.id,
+            user_context_data={"user_id": "user", "workspace_id": "workspace"},
+        )
+    )
+
+    if mode == "discover_available_tools_activity":
+        assert "files" in {tool.function["name"] for tool in result.tools}
+        return
+    file_provider = next(
+        (provider for provider in result.providers if provider.name == "agentarea/files"),
+        None,
+    )
+    assert file_provider is not None
+    assert "files" in file_provider.tool_names
+
+
 @pytest.fixture
 def file_storage(monkeypatch):
     import agentarea_common.artifacts as artifacts
@@ -474,6 +501,7 @@ async def test_workflow_forwards_selections_and_keeps_policy_filtering(monkeypat
 
     monkeypatch.setattr(workflow_module.workflow, "execute_activity", execute_activity)
     monkeypatch.setattr(workflow_module.workflow, "logger", MagicMock())
+    monkeypatch.setattr(workflow_module.workflow, "patched", lambda _patch_id: True)
     flow = workflow_module.AgentExecutionWorkflow()
     flow.state.agent_id = config.id
     flow.state.task_id = str(uuid4())

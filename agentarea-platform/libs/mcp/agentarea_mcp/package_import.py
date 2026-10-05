@@ -10,13 +10,30 @@ from uuid import UUID
 import httpx
 from agentarea_common.config import get_database, get_settings
 
+from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
-from agentarea_mcp.transport_spec import merge_transport_spec, server_transport_spec
+from agentarea_mcp.transport_spec import instance_transport_spec
 
 _PACKAGE_IMPORT_TIMEOUT_SECONDS = 20 * 60
+
+_MCP_RETIRE_RETRIES = 5
+_MCP_RETIRE_BASE_DELAY_SECONDS = 0.2
+_MCP_RETIRE_MAX_DELAY_SECONDS = 1.0
+
+
+class MCPRuntimeRetirementError(RuntimeError):
+    """A transient runtime retirement failure that left desired state unchanged."""
+
+    status_code = 503
+
+
+class MCPRuntimeRetirementConflictError(MCPRuntimeRetirementError):
+    """The manager could not retire this runtime before the retry window ended."""
+
+    status_code = 409
 
 
 def _now_iso() -> str:
@@ -60,11 +77,14 @@ async def retire_runtime_before_mutation(
     headers = settings.manager_gateway_headers()
     retryable = {409, 502, 503, 504}
     last_error: Exception | None = None
+    saw_conflict = False
 
-    async with httpx.AsyncClient(timeout=settings.MCP_CLIENT_TIMEOUT) as client:
-        for attempt in range(3):
+    async with httpx.AsyncClient(timeout=settings.TIMEOUT) as client:
+        for attempt in range(_MCP_RETIRE_RETRIES):
             try:
                 response = await client.delete(url, headers=headers)
+                if response.status_code == 409:
+                    saw_conflict = True
                 if response.status_code == 204:
                     return
                 if response.status_code not in retryable:
@@ -74,10 +94,18 @@ async def retire_runtime_before_mutation(
                 )
             except (httpx.TransportError, httpx.TimeoutException) as exc:
                 last_error = exc
-            if attempt < 2:
-                await asyncio.sleep(0.2 * (attempt + 1))
+            if attempt + 1 < _MCP_RETIRE_RETRIES:
+                delay = min(
+                    _MCP_RETIRE_BASE_DELAY_SECONDS * (2**attempt),
+                    _MCP_RETIRE_MAX_DELAY_SECONDS,
+                )
+                await asyncio.sleep(delay)
 
-    raise RuntimeError(
+    if saw_conflict:
+        raise MCPRuntimeRetirementConflictError(
+            f"MCP runtime retirement for {instance_id} is still in progress; retry the mutation"
+        ) from last_error
+    raise MCPRuntimeRetirementError(
         f"MCP runtime retirement failed for {instance_id}; desired state was preserved"
     ) from last_error
 
@@ -132,13 +160,10 @@ async def _run_import(session, instance_id: UUID) -> None:
         )
         if server is None:
             raise ValueError(f"MCP server spec {instance.server_spec_id} not found")
-        effective_source_spec = merge_transport_spec(
-            server_transport_spec(server),
-            source_spec,
-        )
+        effective_source_spec = instance_transport_spec(server, instance)
 
     settings = get_settings().mcp
-    manager_url = f"{settings.MCP_MANAGER_URL.rstrip('/')}/packages/import"
+    manager_url = f"{settings.MANAGER_URL.rstrip('/')}/packages/import"
     headers = settings.manager_gateway_headers()
     try:
         async with httpx.AsyncClient(timeout=_PACKAGE_IMPORT_TIMEOUT_SECONDS) as client:
@@ -208,7 +233,6 @@ async def _run_import(session, instance_id: UUID) -> None:
     }
     converted_spec.update(
         {
-            "type": "docker",
             "image": image,
             "port": port,
             "command": list(command),
@@ -238,6 +262,7 @@ async def _run_import(session, instance_id: UUID) -> None:
             instance,
             source_spec,
             converted_spec,
+            transport=MCPTransport.DOCKER,
         )
 
 

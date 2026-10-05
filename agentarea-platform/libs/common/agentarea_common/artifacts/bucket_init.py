@@ -56,11 +56,11 @@ def init_buckets(client: Any, buckets: list[str], cors_origins: list[str]) -> No
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
-    buckets = parse_list(os.environ["STORAGE_BUCKETS"])
+    buckets = parse_list(os.environ["AGENTAREA_S3_BUCKETS"])
     if not buckets:
-        raise ValueError("STORAGE_BUCKETS names no bucket")
+        raise ValueError("AGENTAREA_S3_BUCKETS names no bucket")
     init_buckets(
-        get_s3_client(), buckets, parse_list(os.environ.get("STORAGE_CORS_ALLOWED_ORIGINS", ""))
+        get_s3_client(), buckets, parse_list(os.environ.get("AGENTAREA_S3_CORS_ORIGINS", ""))
     )
 
 

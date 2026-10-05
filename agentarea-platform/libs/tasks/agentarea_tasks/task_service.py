@@ -18,6 +18,7 @@ from agentarea_common.events.broker import EventBroker
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.money import Money, serialize_money, to_money
 from agentarea_common.ports.policy_resolver import PolicyResolverPort
+from agentarea_execution.models import AgentExecutionResume, ConversationResumeSnapshot
 from agentarea_governance.domain.policies import (
     ApprovalPolicy,
     EffectivePolicy,
@@ -28,6 +29,7 @@ from agentarea_governance.domain.policies import (
     effective_policy_from_json,
 )
 
+from .conversation_resume import reconstruct_conversation
 from .domain.base_service import BaseTaskService
 from .domain.exceptions import (
     AgentModelNotConfiguredError,
@@ -36,7 +38,7 @@ from .domain.exceptions import (
 )
 from .domain.interfaces import BaseTaskManager
 from .domain.models import AgentTask
-from .infrastructure.repository import TaskRepository
+from .infrastructure.repository import TaskConversationRepository, TaskRepository
 from .schemas.dto import RunCreate
 
 if TYPE_CHECKING:
@@ -47,6 +49,10 @@ logger = logging.getLogger(__name__)
 # Execution closure permits reconciliation; its business outcome determines the task status.
 _CLOSED_EXECUTION_STATUSES = frozenset({"completed", "failed", "cancelled", "canceled"})
 _GOVERNANCE_SNAPSHOT_METADATA_KEY = "governance_snapshot"
+_CONVERSATION_RESUME_METADATA_KEY = "conversation_resume"
+# A completed task may continue once its execution is gone: closed, or no longer
+# known to the engine because its history aged out.
+_RESUMABLE_EXECUTION_STATUSES = _CLOSED_EXECUTION_STATUSES | {"unknown"}
 
 
 def _task_resource_selection_key(parameters: dict[str, Any] | None) -> tuple | None:
@@ -233,8 +239,8 @@ class TaskService(BaseTaskService):
         if mtd >= cap:
             raise BudgetCapExceededError(
                 workspace_id=workspace_id,
-                current_mtd_usd=float(mtd),
-                cap_usd=float(cap),
+                current_mtd_usd=mtd,
+                cap_usd=cap,
                 currency=get_customer_pricing().currency(),
             )
 
@@ -924,6 +930,105 @@ class TaskService(BaseTaskService):
         if additional_budget_usd is not None:
             payload["additional_budget_usd"] = serialize_money(additional_budget_usd)
         return await self.workflow_service.continue_execution(task.execution_id, payload)
+
+    async def queue_follow_up(self, task_id: UUID, message: str) -> bool:
+        """Deliver a user message to a task's conversation.
+
+        A running execution receives it as a signal. A completed task whose
+        execution has closed is continued by a new run of the same workflow that
+        carries the conversation on. Returns False when the task can take no
+        message: it is not running and it is not a completed conversation.
+        """
+        task = await self.get_task(task_id)
+        if task is None or not task.execution_id or self.workflow_service is None:
+            return False
+        if await self.workflow_service.send_workflow_command(
+            task.execution_id, "queue_message", {"message": message}
+        ):
+            return True
+
+        metadata = task.metadata or {}
+        if (
+            task.status != "completed"
+            or metadata.get("created_via") == "agent_delegation"
+            or not self.task_manager.supports_resume
+        ):
+            return False
+        workflow_status = await self.workflow_service.get_workflow_status(task.execution_id)
+        execution_status = workflow_status.get("execution_status", workflow_status.get("status"))
+        if execution_status not in _RESUMABLE_EXECUTION_STATUSES:
+            return False
+
+        await self._refresh_governance_snapshot(task)
+        resume = await self._conversation_resume(task)
+        await self.task_manager.resume_task(task, resume, message)
+        return True
+
+    async def _conversation_resume(self, task: AgentTask) -> AgentExecutionResume:
+        """Where the task's conversation stands and what the task has spent so far."""
+        result = task.result if isinstance(task.result, dict) else {}
+        total_cost = to_money(result.get("total_cost") or 0)
+        own_cost = to_money(result["own_cost"]) if result.get("own_cost") is not None else None
+        stored = (task.metadata or {}).get(_CONVERSATION_RESUME_METADATA_KEY)
+        if stored is not None:
+            return AgentExecutionResume(
+                snapshot=ConversationResumeSnapshot.model_validate(stored),
+                total_cost=total_cost,
+                own_cost=own_cost,
+            )
+
+        conversation = self.repository_factory.create_repository(TaskConversationRepository)
+        response = result.get("response")
+        rebuilt = reconstruct_conversation(
+            await conversation.read_all(task.id),
+            query=task.query or task.description,
+            response=response if isinstance(response, str) else None,
+        )
+        await conversation.write(task.id, rebuilt.appended)
+        return AgentExecutionResume(
+            snapshot=rebuilt.snapshot,
+            total_cost=total_cost,
+            own_cost=own_cost,
+            system_prompt_missing=rebuilt.system_prompt_missing,
+        )
+
+    async def _refresh_governance_snapshot(self, task: AgentTask) -> None:
+        """Resolve the task's policy again for a new run and record the revision.
+
+        The task keeps what it requested; workspace and agent policies may have
+        changed since its last run, and the new run must run under today's.
+        """
+        metadata = dict(task.metadata or {})
+        current = metadata.get(_GOVERNANCE_SNAPSHOT_METADATA_KEY)
+        current = current if isinstance(current, dict) else {}
+        requested_policy = PolicyDocument.model_validate(current.get("requested_policy") or {})
+        policy = await self._resolve_effective_policy(
+            workspace_id=task.workspace_id,
+            agent_id=task.agent_id,
+            task_id=task.id,
+            task_policy=requested_policy,
+        )
+        policy.require_runtime_contract()
+        await self._enforce_budget_cap(task.workspace_id, policy)
+        resolved_execution = policy.execution
+        snapshot = {
+            "requested_policy": requested_policy.to_json_dict(),
+            "requested_execution": requested_policy.execution.model_dump(exclude_none=True)
+            if requested_policy.execution is not None
+            else {},
+            "resolved_execution": resolved_execution.model_dump(exclude_none=True)
+            if resolved_execution is not None
+            else {},
+            "effective_policy": policy.to_json_dict(),
+            "resolved_at": datetime.now(UTC).isoformat(),
+            "revision": int(current.get("revision") or 1) + 1,
+        }
+        if not await self.task_repository.merge_metadata(
+            task.id, {_GOVERNANCE_SNAPSHOT_METADATA_KEY: snapshot}
+        ):
+            raise LookupError(f"Task {task.id} not found")
+        task.metadata = {**metadata, _GOVERNANCE_SNAPSHOT_METADATA_KEY: snapshot}
+        task.effective_policy = snapshot["effective_policy"]
 
     async def _enrich_task_with_workflow_status(self, task: AgentTask) -> AgentTask:
         """Enrich a task with current workflow status.

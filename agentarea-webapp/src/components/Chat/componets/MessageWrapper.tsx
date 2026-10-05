@@ -1,5 +1,4 @@
 import React from "react";
-import Image from "next/image";
 import { Bot, User } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StatusIndicator } from "@/components/ui/status-indicator";
@@ -16,10 +15,6 @@ interface MessageWrapperProps {
     | "tool-call"
     | "tool-result"
     | "info";
-  /** Optional MCP server icon URL. When provided, replaces the default tool icon. */
-  iconUrl?: string;
-  // FIXME: iconUrl is passed through but the lookup from server_instance_id → icon is not yet
-  // implemented. See EventParser.ts ToolCallCompleted case where server_instance_id is available.
   /** Optional custom icon node (e.g. a per-tool lucide icon). Takes precedence over the default. */
   icon?: React.ReactNode;
   /** DOM id for deep-linking (e.g. scroll-to from the side panel). */
@@ -30,7 +25,6 @@ export const MessageWrapper: React.FC<MessageWrapperProps> = ({
   children,
   className = "",
   type = "assistant",
-  iconUrl,
   icon,
   id,
 }) => {
@@ -52,9 +46,7 @@ export const MessageWrapper: React.FC<MessageWrapperProps> = ({
         <AvatarFallback
           className="bg-muted/50 text-muted-foreground"
         >
-          {iconUrl && (type === "tool-call" || type === "tool-result") ? (
-            <Image src={iconUrl} alt="" width={16} height={16} className="h-4 w-4 rounded-sm object-contain" />
-          ) : icon ? (
+          {icon ? (
             icon
           ) : type === "error" ? (
             <StatusIndicator

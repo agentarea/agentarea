@@ -69,7 +69,7 @@ async def get_event_broker() -> EventBroker:
 
 
 # Common database dependency
-DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
 # Common event broker dependency
 EventBrokerDep = Annotated[EventBroker, Depends(get_event_broker)]
@@ -197,7 +197,7 @@ async def get_task_manager(
 
 
 async def _create_task_manager(repository_factory: RepositoryFactoryDep):
-    """Create task manager based on WORKFLOW__EXECUTION_ENGINE setting.
+    """Create task manager based on AGENTAREA_TASK_EXECUTOR setting.
 
     "temporal" (default): Uses Temporal workflows for durable execution.
     "direct": Runs agent loop in-process. No Temporal/workers needed.
@@ -208,7 +208,7 @@ async def _create_task_manager(repository_factory: RepositoryFactoryDep):
 
     task_repository = repository_factory.create_repository(TaskRepository)
 
-    if settings.workflow.EXECUTION_ENGINE == "direct":
+    if settings.app.TASK_EXECUTOR == "direct":
         from agentarea_tasks.direct_task_manager import DirectTaskManager
 
         logger.info("Using DirectTaskManager (in-process, no Temporal)")
@@ -290,12 +290,12 @@ async def get_workspace_export_service(
     mcp_instance_service: Annotated[
         "MCPServerInstanceService", Depends(get_mcp_server_instance_service)
     ],
-    provider_service: Annotated["ProviderService", Depends(get_provider_service)],
     skill_service: Annotated["SkillService", Depends(get_skill_service)],
 ) -> WorkspaceExportService:
     """Get a WorkspaceExportService instance for the current request."""
     from agentarea_common.auth.authorization import AuthorizationService
     from agentarea_common.di.container import resolve
+    from agentarea_triggers.infrastructure.repository import TriggerRepository
 
     authz = resolve(AuthorizationService)
     agent_service = AgentService(repository_factory, event_broker, authorization_service=authz)
@@ -303,8 +303,8 @@ async def get_workspace_export_service(
         agent_service=agent_service,
         repository_factory=repository_factory,
         mcp_instance_service=mcp_instance_service,
-        provider_service=provider_service,
         skill_service=skill_service,
+        trigger_repository=repository_factory.create_repository(TriggerRepository),
     )
 
 
@@ -472,7 +472,7 @@ async def get_trigger_service(
 
     # Create LLM condition evaluator if enabled
     llm_condition_evaluator = None
-    if settings.triggers.ENABLE_LLM_CONDITIONS:
+    if settings.triggers.LLM_ENABLED:
         try:
             from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluator
 
@@ -502,8 +502,7 @@ async def get_trigger_service(
     temporal_schedule_manager = None
     try:
         temporal_schedule_manager = TemporalScheduleManager(
-            namespace=settings.triggers.TEMPORAL_SCHEDULE_NAMESPACE,
-            task_queue=settings.triggers.TEMPORAL_SCHEDULE_TASK_QUEUE,
+            task_queue=settings.triggers.QUEUE,
         )
     except Exception as e:
         logger.warning(f"Temporal schedule manager not available: {e}", exc_info=True)
@@ -531,7 +530,7 @@ async def get_webhook_manager(
     return DefaultWebhookManager(
         execution_callback=execution_callback,
         event_broker=event_broker,
-        base_url=settings.triggers.WEBHOOK_BASE_URL,
+        base_url=settings.triggers.WEBHOOK_URL,
         trigger_service=trigger_service,
         secret_reader=secret_manager,
     )
@@ -621,7 +620,7 @@ async def get_public_webhook_manager(
                     mgr = DefaultWebhookManager(
                         execution_callback=callback,
                         event_broker=self._event_broker,
-                        base_url=self._settings.triggers.WEBHOOK_BASE_URL,
+                        base_url=self._settings.triggers.WEBHOOK_URL,
                         trigger_service=svc,
                         secret_reader=sec_manager,
                     )
@@ -686,8 +685,7 @@ async def get_trigger_health_check(
     try:
         settings = get_settings()
         temporal_schedule_manager = TemporalScheduleManager(
-            namespace=settings.triggers.TEMPORAL_SCHEDULE_NAMESPACE,
-            task_queue=settings.triggers.TEMPORAL_SCHEDULE_TASK_QUEUE,
+            task_queue=settings.triggers.QUEUE,
         )
     except Exception as e:
         logger.warning(

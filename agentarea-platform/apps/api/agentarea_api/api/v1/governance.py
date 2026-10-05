@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/governance", tags=["governance"])
 
-DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
 
 class EffectivePolicyResponse(BaseModel):

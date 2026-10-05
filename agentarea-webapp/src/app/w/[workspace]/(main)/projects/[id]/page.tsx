@@ -151,9 +151,9 @@ export default function ProjectOverviewPage() {
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
                   Project blueprint
                 </p>
-                <h1 className="mt-1 text-balance text-2xl font-semibold tracking-tight text-foreground">
+                <h2 className="mt-1 text-balance text-2xl font-semibold tracking-tight text-foreground">
                   {project.name}
-                </h1>
+                </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
                   {project.description ||
                     "A shared workspace for assembling agents, reusable skills, and connected tools."}

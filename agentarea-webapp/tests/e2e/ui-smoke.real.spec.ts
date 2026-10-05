@@ -54,15 +54,11 @@ const ROUTES = [
   "/skills/create",
   "/policies/new",
   "/triggers/create",
-  "/triggers/new",
   "/connections/add",
   "/connections/add-openapi",
   "/models/create",
   "/models/specs",
-  "/tasks/showcase",
-  "/tasks/concept",
   // Bundles
-  "/bundles/catalog",
   "/bundles/import",
   // Legacy redirect into /models
   "/admin/provider-configs",

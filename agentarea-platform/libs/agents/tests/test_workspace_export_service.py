@@ -1,12 +1,14 @@
-"""Unit tests for the workspace export service."""
+"""Unit tests for canonical workspace bundle export."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
-import yaml
+from agentarea_agents.application import workspace_export_service
 from agentarea_agents.application.workspace_export_service import WorkspaceExportService
-from agentarea_agents.schemas.import_export import WorkspaceConfigYAML
+from agentarea_bundles.application.analyzer import parse_bundle
+from agentarea_bundles.schemas.bundle import setup_refs
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
@@ -28,65 +30,33 @@ def _authorization():
 
 @pytest.fixture
 def mock_agent_service():
-    """Create a mock agent service."""
     service = MagicMock()
     service.list = AsyncMock(return_value=[])
-    service.get_by_name = AsyncMock(return_value=None)
-    service.create_agent = AsyncMock()
-    service.update_agent = AsyncMock()
-    # get_with_skills is called during export to eager-load skills relationship
-    service.get_with_skills = AsyncMock(side_effect=lambda agent_id: None)
+    service.get_with_skills = AsyncMock(return_value=None)
     return service
 
 
 @pytest.fixture
 def mock_repository_factory():
-    """Create a mock repository factory."""
     factory = MagicMock()
     factory.user_context = UserContext(
         user_id="user-owner", workspace_id=WORKSPACE, admin_workspaces=[WORKSPACE]
     )
-    mock_repo = MagicMock()
-    mock_repo.list_all = AsyncMock(
-        return_value=[MagicMock(id=UUID("a1b2c3d4-e5f6-789a-bcde-123456789abc"))]
-    )
-    factory.create_repository = MagicMock(return_value=mock_repo)
     return factory
 
 
 @pytest.fixture
 def mock_mcp_instance_service():
-    """Create a mock MCP instance service."""
     service = MagicMock()
     service.list = AsyncMock(return_value=[])
-    service.create_instance = AsyncMock()
-    service.update_instance = AsyncMock()
-    return service
-
-
-@pytest.fixture
-def mock_provider_service():
-    """Create a mock provider service."""
-    service = MagicMock()
-    service.list_provider_configs = AsyncMock(return_value=[])
-    service.list_provider_specs = AsyncMock(
-        return_value=[MagicMock(id=UUID("932f3839-af2a-455e-80c6-c58fa97e312c"))]
-    )
-    service.create_provider_config = AsyncMock()
-    service.update_provider_config = AsyncMock()
+    service.get_transport_spec_for_instance = AsyncMock(return_value={})
     return service
 
 
 @pytest.fixture
 def mock_skill_service():
-    """Create a mock skill service."""
     service = MagicMock()
     service.list = AsyncMock(return_value=[])
-    service.get_by_name = AsyncMock(return_value=None)
-    service.create_from_content = AsyncMock()
-    service.create_from_github = AsyncMock()
-    service.create_from_path = AsyncMock()
-    service.delete = AsyncMock()
     return service
 
 
@@ -95,27 +65,75 @@ def export_service(
     mock_agent_service,
     mock_repository_factory,
     mock_mcp_instance_service,
-    mock_provider_service,
     mock_skill_service,
+    monkeypatch,
 ):
-    """Create an import/export service with mock dependencies."""
+    monkeypatch.setattr(
+        workspace_export_service,
+        "load_workspace",
+        AsyncMock(return_value=SimpleNamespace(name="Test Workspace", slug=WORKSPACE)),
+    )
     return WorkspaceExportService(
         agent_service=mock_agent_service,
         repository_factory=mock_repository_factory,
         mcp_instance_service=mock_mcp_instance_service,
-        provider_service=mock_provider_service,
         skill_service=mock_skill_service,
     )
 
 
-class TestExportWorkspace:
-    """Test workspace export functionality."""
+def _agent(name: str, *, tools=None, skills=None, registry_item_id=None, is_catalog=False):
+    return SimpleNamespace(
+        id=uuid4(),
+        workspace_id=WORKSPACE,
+        registry_item_id=registry_item_id,
+        is_catalog=is_catalog,
+        slug=name.lower().replace(" ", "-"),
+        name=name,
+        instruction=f"Instructions for {name}",
+        model_id="gpt-4o",
+        tools=tools or [],
+        skills=skills or [],
+    )
 
+
+def _skill(
+    name: str,
+    *,
+    content: str | None = None,
+    source_url: str | None = None,
+    source_type: str = "content",
+):
+    return SimpleNamespace(
+        id=uuid4(),
+        workspace_id=WORKSPACE,
+        registry_item_id=None,
+        is_catalog=False,
+        slug=name.lower().replace(" ", "-"),
+        name=name,
+        content=content,
+        source_type=source_type,
+        source_url=source_url,
+    )
+
+
+def _mcp_instance(name: str, *, secret_names=(), instance_id: UUID | None = None):
+    return SimpleNamespace(
+        id=instance_id or uuid4(),
+        workspace_id=WORKSPACE,
+        registry_item_id=None,
+        is_catalog=False,
+        name=name,
+        server_spec_id=str(uuid4()),
+        json_spec={},
+        get_configured_env_vars=lambda: list(secret_names),
+    )
+
+
+class TestExportWorkspace:
     @pytest.mark.asyncio
     async def test_a_member_cannot_export_the_workspace(
         self, export_service, mock_repository_factory, mock_agent_service
     ):
-        """The export carries every agent, connection and provider config: admin only."""
         mock_repository_factory.user_context = UserContext(
             user_id="user-member", workspace_id=WORKSPACE, admin_workspaces=[]
         )
@@ -127,291 +145,297 @@ class TestExportWorkspace:
         mock_agent_service.list.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_export_agents_only(self, export_service, mock_agent_service):
-        """Test exporting agents only."""
-        mock_agent = MagicMock()
-        mock_agent.workspace_id = "test-workspace"
-        mock_agent.registry_item_id = None
-        mock_agent.is_catalog = False
-        mock_agent.name = "Test Agent"
-        mock_agent.description = "A test agent"
-        mock_agent.instruction = "You are a test agent"
-        mock_agent.tools = [{"type": "code", "name": "agentarea/math"}]
-        mock_agent.planning = True
-        mock_agent.a2ui_enabled = False
-
-        mock_agent_service.list.return_value = [mock_agent]
-
-        result = await export_service.export_workspace()
-
-        # Parse the YAML output
-        exported = yaml.safe_load(result)
-
-        assert len(exported["agents"]) == 1
-        assert exported["agents"][0]["name"] == "Test Agent"
-        assert exported["agents"][0]["tools"] == [{"type": "code", "name": "agentarea/math"}]
-        assert exported["agents"][0]["planning"] is True
-        assert "mcp_instances" not in exported
-        assert "provider_configs" not in exported
-
-    @pytest.mark.asyncio
-    async def test_export_skips_catalog_agents(self, export_service, mock_agent_service):
-        """Test that catalog-projection (built-in) agents are not exported."""
-        user_agent = MagicMock()
-        user_agent.workspace_id = "test-workspace"
-        user_agent.registry_item_id = None
-        user_agent.is_catalog = False
-        user_agent.name = "User Agent"
-        user_agent.description = "User agent"
-        user_agent.instruction = "You are a user agent"
-        user_agent.tools = None
-        user_agent.planning = None
-        user_agent.a2ui_enabled = None
-
-        # Built-in: a read-only catalog projection (is_catalog True, not persisted).
-        catalog_agent = MagicMock()
-        catalog_agent.workspace_id = "platform"
-        catalog_agent.registry_item_id = "ri-catalog-agent"
-        catalog_agent.is_catalog = True
-        catalog_agent.name = "Catalog Agent"
-        catalog_agent.description = "Catalog agent"
-        catalog_agent.instruction = "You are a catalog agent"
-        catalog_agent.tools = None
-        catalog_agent.planning = None
-
-        mock_agent_service.list.return_value = [user_agent, catalog_agent]
-
-        result = await export_service.export_workspace()
-        exported = yaml.safe_load(result)
-
-        assert len(exported["agents"]) == 1
-        assert exported["agents"][0]["name"] == "User Agent"
-
-    @pytest.mark.asyncio
-    async def test_export_includes_forked_agents(self, export_service, mock_agent_service):
-        """A forked agent carries registry_item_id but is owned content -> exported."""
-        forked_agent = MagicMock()
-        forked_agent.workspace_id = "test-workspace"
-        forked_agent.registry_item_id = "ri-forked-from"
-        forked_agent.is_catalog = False
-        forked_agent.name = "Forked Agent"
-        forked_agent.description = "A fork of a catalog agent"
-        forked_agent.instruction = "You are a forked agent"
-        forked_agent.tools = None
-        forked_agent.planning = None
-        forked_agent.a2ui_enabled = None
-
-        mock_agent_service.list.return_value = [forked_agent]
-
-        result = await export_service.export_workspace()
-        exported = yaml.safe_load(result)
-
-        assert len(exported["agents"]) == 1
-        assert exported["agents"][0]["name"] == "Forked Agent"
-
-    @pytest.mark.asyncio
-    async def test_export_mcp_instances(self, export_service, mock_mcp_instance_service):
-        """Test exporting MCP instances."""
-        mock_instance = MagicMock()
-        mock_instance.workspace_id = "test-workspace"
-        mock_instance.registry_item_id = None
-        mock_instance.is_catalog = False
-        mock_instance.name = "Test Filesystem"
-        mock_instance.description = "File access"
-        mock_instance.server_spec_id = "a1b2c3d4-e5f6-789a-bcde-123456789abc"
-        # json_spec stores the secret *names*; the values live in the secret manager.
-        mock_instance.json_spec = {"env_vars": ["ROOT", "TOKEN"]}
-        mock_instance.get_configured_env_vars.return_value = ["ROOT", "TOKEN"]
-
-        mock_mcp_instance_service.list.return_value = [mock_instance]
-
-        result = await export_service.export_workspace()
-        exported = yaml.safe_load(result)
-
-        assert len(exported["mcp_instances"]) == 1
-        assert exported["mcp_instances"][0]["name"] == "Test Filesystem"
-        assert (
-            exported["mcp_instances"][0]["server_spec_id"] == "a1b2c3d4-e5f6-789a-bcde-123456789abc"
-        )
-        # Secrets export as placeholders, and the result must satisfy the import
-        # schema -- emitting the raw name list here made exports unimportable.
-        assert exported["mcp_instances"][0]["env_vars"] == {
-            "ROOT": "<REQUIRED>",
-            "TOKEN": "<REQUIRED>",
-        }
-        WorkspaceConfigYAML(**exported)
-
-    @pytest.mark.asyncio
-    async def test_export_provider_configs(self, export_service, mock_provider_service):
-        """Test exporting provider configs."""
-        mock_config = MagicMock()
-        mock_config.workspace_id = "test-workspace"
-        mock_config.registry_item_id = None
-        mock_config.is_catalog = False
-        mock_config.name = "OpenAI Config"
-        mock_config.description = "OpenAI provider"
-        mock_config.provider_spec_id = UUID("932f3839-af2a-455e-80c6-c58fa97e312c")
-        mock_config.endpoint_url = "https://api.openai.com"
-
-        mock_provider_service.list_provider_configs.return_value = [mock_config]
-
-        result = await export_service.export_workspace()
-        exported = yaml.safe_load(result)
-
-        assert len(exported["provider_configs"]) == 1
-        assert exported["provider_configs"][0]["name"] == "OpenAI Config"
-        assert (
-            exported["provider_configs"][0]["provider_spec_id"]
-            == "932f3839-af2a-455e-80c6-c58fa97e312c"
-        )
-        assert exported["provider_configs"][0]["api_key_placeholder"] == "<REQUIRED>"
-        assert exported["provider_configs"][0]["endpoint_url"] == "https://api.openai.com"
-
-    @pytest.mark.asyncio
-    async def test_export_includes_all_provider_configs(
-        self, export_service, mock_provider_service
+    async def test_export_uses_canonical_bundle_schema_and_stable_keys(
+        self, export_service, mock_agent_service
     ):
-        """Provider configs are never catalog projections, so all are exported.
+        mock_agent_service.list.return_value = [
+            _agent("Test Agent", tools=[{"type": "code", "name": "agentarea/math"}])
+        ]
 
-        After the registry-catalog refactor there are no persisted built-in
-        provider configs; a config carrying a registry_item_id is still owned,
-        exportable content (not a catalog projection).
-        """
-        user_config = MagicMock()
-        user_config.workspace_id = "test-workspace"
-        user_config.registry_item_id = None
-        user_config.is_catalog = False
-        user_config.name = "User Config"
-        user_config.description = None
-        user_config.provider_spec_id = UUID("932f3839-af2a-455e-80c6-c58fa97e312c")
-        user_config.endpoint_url = "https://api.openai.com"
+        yaml_text = await export_service.export_workspace()
+        bundle = parse_bundle(yaml_text)
 
-        # Carries a registry_item_id link but is owned content, not a projection.
-        linked_config = MagicMock()
-        linked_config.workspace_id = "test-workspace"
-        linked_config.registry_item_id = "ri-linked-config"
-        linked_config.is_catalog = False
-        linked_config.name = "Linked Config"
-        linked_config.description = None
-        linked_config.provider_spec_id = UUID("932f3839-af2a-455e-80c6-c58fa97e312c")
-        linked_config.endpoint_url = "https://api.openai.com"
-
-        mock_provider_service.list_provider_configs.return_value = [user_config, linked_config]
-
-        result = await export_service.export_workspace()
-        exported = yaml.safe_load(result)
-
-        assert len(exported["provider_configs"]) == 2
-        names = {c["name"] for c in exported["provider_configs"]}
-        assert names == {"User Config", "Linked Config"}
+        assert bundle.name == WORKSPACE
+        assert bundle.display_name == "Test Workspace"
+        assert len(bundle.agents) == 1
+        assert bundle.agents[0].key.startswith("agent_test_agent_")
+        assert bundle.agents[0].toolsets == ["agentarea/math"]
+        assert bundle.mcps == []
+        assert "provider_configs" not in yaml_text
 
     @pytest.mark.asyncio
-    async def test_export_no_services(self, export_service):
-        """Test export when MCP and provider services are None."""
+    async def test_export_skips_catalog_agents_and_keeps_forked_agents(
+        self, export_service, mock_agent_service
+    ):
+        mock_agent_service.list.return_value = [
+            _agent("Workspace Agent"),
+            _agent("Catalog Agent", is_catalog=True, registry_item_id="ri-catalog"),
+            _agent("Forked Agent", registry_item_id="ri-source"),
+        ]
+
+        bundle = parse_bundle(await export_service.export_workspace())
+
+        assert [agent.name for agent in bundle.agents] == ["Workspace Agent", "Forked Agent"]
+
+    @pytest.mark.asyncio
+    async def test_export_mcp_transport_and_setup_references_never_include_secrets(
+        self, export_service, mock_mcp_instance_service
+    ):
+        instance = SimpleNamespace(
+            id=UUID("a1b2c3d4-e5f6-789a-bcde-123456789abc"),
+            workspace_id=WORKSPACE,
+            registry_item_id=None,
+            is_catalog=False,
+            name="Test Filesystem",
+            server_spec_id="a1b2c3d4-e5f6-789a-bcde-123456789abc",
+            json_spec={"TOKEN": "MCP_SECRET_CANARY"},
+            get_configured_env_vars=lambda: ["ROOT", "TOKEN"],
+        )
+        mock_mcp_instance_service.list.return_value = [instance]
+        mock_mcp_instance_service.get_transport_spec_for_instance.return_value = {
+            "type": "url",
+            "endpoint_url": "https://mcp.example.test/sse",
+            "TOKEN": "MCP_SECRET_CANARY",
+        }
+
+        yaml_text = await export_service.export_workspace()
+        bundle = parse_bundle(yaml_text)
+
+        assert len(bundle.mcps) == 1
+        assert bundle.mcps[0].name == "Test Filesystem"
+        assert bundle.mcps[0].json_spec == {
+            "type": "url",
+            "endpoint_url": "https://mcp.example.test/sse",
+        }
+        assert set(bundle.mcps[0].bindings) == {"ROOT", "TOKEN"}
+        assert all(value.startswith("${setup.") for value in bundle.mcps[0].bindings.values())
+        assert {field.type.value for field in bundle.setup} == {"secret"}
+        assert "MCP_SECRET_CANARY" not in yaml_text
+        assert "server_spec_id" not in yaml_text
+
+    @pytest.mark.asyncio
+    async def test_export_without_optional_services_is_a_valid_bundle(self, export_service):
         service = WorkspaceExportService(
             agent_service=export_service.agent_service,
             repository_factory=export_service.repository_factory,
-            mcp_instance_service=None,
-            provider_service=None,
         )
 
-        export_service.agent_service.list.return_value = []
+        bundle = parse_bundle(await service.export_workspace())
 
-        result = await service.export_workspace()
-        exported = yaml.safe_load(result)
-
-        # With no services, these sections may be missing or empty
-        assert exported.get("mcp_instances", []) == []
-        assert exported.get("provider_configs", []) == []
+        assert bundle.agents == []
+        assert bundle.mcps == []
+        assert bundle.skills == []
+        assert bundle.automations == []
+        assert bundle.channels == []
 
 
 class TestSkillExport:
-    """Skill export behaviour."""
+    @pytest.mark.asyncio
+    async def test_export_skills_as_installable_inline_content(
+        self, export_service, mock_skill_service
+    ):
+        mock_skill_service.list.return_value = [
+            _skill("Export Skill", content="# Export Skill\nContent here"),
+        ]
+
+        bundle = parse_bundle(await export_service.export_workspace())
+
+        assert [skill.name for skill in bundle.skills] == ["Export Skill"]
+        assert bundle.skills[0].source_type == "content"
+        assert bundle.skills[0].content == "# Export Skill\nContent here"
 
     @pytest.mark.asyncio
-    async def test_export_skills(self, export_service, mock_skill_service):
-        """Test exporting skills."""
-        mock_skill = MagicMock()
-        mock_skill.workspace_id = "test-workspace"
-        mock_skill.registry_item_id = None
-        mock_skill.is_catalog = False
-        mock_skill.id = uuid4()
-        mock_skill.name = "Export Skill"
-        mock_skill.description = "A skill to export"
-        mock_skill.content = "# Export Skill\nContent here"
-        mock_skill.source_url = None
+    async def test_github_skill_exports_its_repository_not_a_lossy_copy(
+        self, export_service, mock_skill_service
+    ):
+        # Inline content would carry SKILL.md only and lose the packaged files.
+        url = "https://github.com/owner/repo/tree/main/skills/review"
+        mock_skill_service.list.return_value = [
+            _skill("GitHub Skill", content="# Local copy", source_url=url, source_type="github"),
+        ]
 
-        mock_skill_service.list.return_value = [mock_skill]
+        bundle = parse_bundle(await export_service.export_workspace())
 
-        result = await export_service.export_workspace()
-        exported = yaml.safe_load(result)
-
-        assert "skills" in exported
-        assert len(exported["skills"]) == 1
-        assert exported["skills"][0]["name"] == "Export Skill"
-        assert exported["skills"][0]["description"] == "A skill to export"
-        assert exported["skills"][0]["content"] == "# Export Skill\nContent here"
+        assert bundle.skills[0].source_type == "github"
+        assert bundle.skills[0].source_url == url
+        assert bundle.skills[0].content is None
 
     @pytest.mark.asyncio
-    async def test_export_github_skill(self, export_service, mock_skill_service):
-        """Test exporting a skill that was imported from GitHub."""
-        mock_skill = MagicMock()
-        mock_skill.workspace_id = "test-workspace"
-        mock_skill.registry_item_id = None
-        mock_skill.is_catalog = False
-        mock_skill.id = uuid4()
-        mock_skill.name = "GitHub Skill"
-        mock_skill.description = "From GitHub"
-        mock_skill.content = "# Skill content"
-        mock_skill.source_url = "https://github.com/owner/repo"
+    async def test_export_fails_for_skill_without_installable_content(
+        self, export_service, mock_skill_service
+    ):
+        mock_skill_service.list.return_value = [
+            _skill("Remote Skill", source_url="https://github.com/owner/repo")
+        ]
 
-        mock_skill_service.list.return_value = [mock_skill]
-
-        result = await export_service.export_workspace()
-        exported = yaml.safe_load(result)
-
-        assert "skills" in exported
-        assert len(exported["skills"]) == 1
-        assert exported["skills"][0]["name"] == "GitHub Skill"
-        assert exported["skills"][0]["github"] == "https://github.com/owner/repo"
-        # Should not include content for GitHub-sourced skills
-        assert "content" not in exported["skills"][0]
+        with pytest.raises(ValueError, match="inline content"):
+            await export_service.export_workspace()
 
     @pytest.mark.asyncio
-    async def test_export_agent_with_skills(
+    async def test_agent_references_exported_skill_key(
         self, export_service, mock_agent_service, mock_skill_service
     ):
-        """Test exporting an agent that has skills attached."""
-        skill_id = uuid4()
-        mock_skill = MagicMock()
-        mock_skill.id = skill_id
-        mock_skill.registry_item_id = None
-        mock_skill.is_catalog = False
-        mock_skill.name = "Attached Skill"
-        mock_skill.description = "Attached to agent"
-        mock_skill.content = "# Content"
-        mock_skill.source_url = None
-        mock_skill.workspace_id = "test-workspace"
+        skill = _skill("Attached Skill", content="# Content")
+        mock_skill_service.list.return_value = [skill]
+        mock_agent_service.list.return_value = [_agent("Agent with Skill", skills=[skill])]
 
-        mock_agent = MagicMock()
-        mock_agent.workspace_id = "test-workspace"
-        mock_agent.registry_item_id = None
-        mock_agent.is_catalog = False
-        mock_agent.name = "Agent with Skill"
-        mock_agent.description = "Has skills"
-        mock_agent.instruction = "Instructions"
-        mock_agent.tools = None
-        mock_agent.planning = None
-        mock_agent.a2ui_enabled = None
-        mock_agent.skills = [mock_skill]
+        bundle = parse_bundle(await export_service.export_workspace())
 
-        mock_skill_service.list.return_value = [mock_skill]
-        mock_agent_service.list.return_value = [mock_agent]
+        assert bundle.agents[0].skills == [bundle.skills[0].key]
 
-        result = await export_service.export_workspace()
-        exported = yaml.safe_load(result)
 
-        assert "agents" in exported
-        assert len(exported["agents"]) == 1
-        assert "skill_names" in exported["agents"][0]
-        assert exported["agents"][0]["skill_names"] == ["Attached Skill"]
+class TestMcpExport:
+    @pytest.mark.asyncio
+    async def test_agent_mcp_referenced_by_instance_id_or_name_is_kept(
+        self, export_service, mock_agent_service, mock_mcp_instance_service
+    ):
+        # The webapp stores an attached MCP by instance id; the API also accepts names.
+        github = _mcp_instance("GitHub")
+        search = _mcp_instance("Search")
+        mock_mcp_instance_service.list.return_value = [github, search]
+        mock_mcp_instance_service.get_transport_spec_for_instance.return_value = {
+            "type": "url",
+            "endpoint_url": "https://mcp.example.test/mcp",
+        }
+        mock_agent_service.list.return_value = [
+            _agent(
+                "Agent",
+                tools=[
+                    {"type": "mcp", "name": str(github.id)},
+                    {"type": "mcp", "name": "Search"},
+                ],
+            )
+        ]
+
+        bundle = parse_bundle(await export_service.export_workspace())
+
+        keys = {mcp.name: mcp.key for mcp in bundle.mcps}
+        assert bundle.agents[0].mcps == [keys["GitHub"], keys["Search"]]
+
+    @pytest.mark.asyncio
+    async def test_an_unresolvable_agent_mcp_refuses_the_export(
+        self, export_service, mock_agent_service
+    ):
+        mock_agent_service.list.return_value = [
+            _agent("Agent", tools=[{"type": "mcp", "name": "deleted-connection"}])
+        ]
+
+        with pytest.raises(ValueError, match="deleted-connection"):
+            await export_service.export_workspace()
+
+    @pytest.mark.asyncio
+    async def test_a_builtin_mcp_reference_is_not_an_error(
+        self, export_service, mock_agent_service, mock_mcp_instance_service
+    ):
+        builtin = _mcp_instance("Platform Search")
+        builtin.is_catalog = True
+        mock_mcp_instance_service.list.return_value = [builtin]
+        mock_agent_service.list.return_value = [
+            _agent("Agent", tools=[{"type": "mcp", "name": "Platform Search"}])
+        ]
+
+        bundle = parse_bundle(await export_service.export_workspace())
+
+        assert bundle.mcps == []
+        assert bundle.agents[0].mcps == []
+
+    @pytest.mark.asyncio
+    async def test_plain_configuration_is_exported_and_credentials_become_setup_fields(
+        self, export_service, mock_mcp_instance_service
+    ):
+        mock_mcp_instance_service.list.return_value = [
+            _mcp_instance("Postgres", secret_names=["PGPASSWORD"])
+        ]
+        mock_mcp_instance_service.get_transport_spec_for_instance.return_value = {
+            "type": "command",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-postgres",
+                "postgresql://app:CANARY_URL@db.internal:5432/app",  # pragma: allowlist secret
+                "--api-key=CANARY_FLAG",
+                "--token",
+                "CANARY_NEXT",
+                "--header",
+                "Authorization: Bearer CANARY_HEADER",
+                "--read-only",
+                "https://docs.example.test/schema.json",
+            ],
+            "environment": {
+                "MODE": "readonly",
+                "ROOT": "/data",
+                "SERVICE_TOKEN": "CANARY_ENV_NAME",
+                "UPSTREAM": "https://user:CANARY_ENV_URL@upstream.test",  # pragma: allowlist secret
+            },
+            "env_vars": ["PGPASSWORD"],
+        }
+
+        yaml_text = await export_service.export_workspace()
+        bundle = parse_bundle(yaml_text)
+
+        assert "CANARY" not in yaml_text
+        mcp = bundle.mcps[0]
+        args = mcp.json_spec["args"]
+        assert args[:2] == ["-y", "@modelcontextprotocol/server-postgres"]
+        assert args[2].startswith("${setup.")
+        assert args[3].startswith("--api-key=${setup.")
+        assert args[4] == "--token"
+        assert args[5].startswith("${setup.")
+        assert args[6] == "--header"
+        assert args[7].startswith("Authorization: ${setup.")
+        assert args[8:] == ["--read-only", "https://docs.example.test/schema.json"]
+        assert mcp.json_spec["environment"] == {"MODE": "readonly", "ROOT": "/data"}
+        assert set(mcp.bindings) == {"PGPASSWORD", "SERVICE_TOKEN", "UPSTREAM"}
+
+        secret_keys = {field.key for field in bundle.setup if field.type.value == "secret"}
+        referenced = {ref for value in [*args, *mcp.bindings.values()] for ref in setup_refs(value)}
+        assert referenced == secret_keys
+        assert len(secret_keys) == 7
+        # Deterministic: the same workspace exports the same document.
+        assert await export_service.export_workspace() == yaml_text
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "endpoint_url",
+        [
+            "https://mcp.example.test/sse?api_key=CANARY",
+            "https://user:CANARY@mcp.example.test/sse",  # pragma: allowlist secret
+            "https://mcp.example.test/api/mcp/s/CANARYx9aB3cD4eF5gH6iJ7kL8/mcp",
+        ],
+    )
+    async def test_a_credentialed_endpoint_url_becomes_a_secret_setup_field(
+        self, export_service, mock_mcp_instance_service, endpoint_url
+    ):
+        mock_mcp_instance_service.list.return_value = [_mcp_instance("Hosted")]
+        mock_mcp_instance_service.get_transport_spec_for_instance.return_value = {
+            "type": "url",
+            "endpoint_url": endpoint_url,
+            "headers": {"X-Org": "acme"},
+        }
+
+        yaml_text = await export_service.export_workspace()
+        bundle = parse_bundle(yaml_text)
+
+        assert "CANARY" not in yaml_text
+        (setup_key,) = setup_refs(bundle.mcps[0].json_spec["endpoint_url"])
+        field = bundle.setup_field(setup_key)
+        assert field is not None
+        assert field.type.value == "secret"
+        assert bundle.mcps[0].json_spec["headers"] == {"X-Org": "acme"}
+
+    @pytest.mark.asyncio
+    async def test_a_plain_endpoint_url_is_exported_verbatim(
+        self, export_service, mock_mcp_instance_service
+    ):
+        mock_mcp_instance_service.list.return_value = [_mcp_instance("Docs")]
+        mock_mcp_instance_service.get_transport_spec_for_instance.return_value = {
+            "type": "url",
+            "endpoint_url": "https://mcp.example.test/mcp?format=json",
+        }
+
+        bundle = parse_bundle(await export_service.export_workspace())
+
+        assert (
+            bundle.mcps[0].json_spec["endpoint_url"] == "https://mcp.example.test/mcp?format=json"
+        )
+        assert bundle.setup == []

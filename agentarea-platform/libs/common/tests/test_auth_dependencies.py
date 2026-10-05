@@ -380,11 +380,11 @@ async def test_hydra_token_workspace_claim_is_ignored():
     jwks = Mock()
     jwks.get_signing_key_from_jwt.return_value = Mock(key="public-key")
     settings = Mock()
-    settings.mcp.HYDRA_AUDIENCE = "https://api.example.test"
+    settings.HYDRA_AUDIENCE = "https://api.example.test"
 
     with (
         patch("agentarea_common.auth.dependencies._get_hydra_jwks", return_value=jwks),
-        patch("agentarea_common.config.get_settings", return_value=settings),
+        patch("agentarea_common.config.get_auth_settings", return_value=settings),
         patch(
             "jwt.decode",
             return_value={
@@ -408,11 +408,11 @@ async def test_hydra_token_without_a_user_is_refused():
     jwks = Mock()
     jwks.get_signing_key_from_jwt.return_value = Mock(key="public-key")
     settings = Mock()
-    settings.mcp.HYDRA_AUDIENCE = "https://api.example.test"
+    settings.HYDRA_AUDIENCE = "https://api.example.test"
 
     with (
         patch("agentarea_common.auth.dependencies._get_hydra_jwks", return_value=jwks),
-        patch("agentarea_common.config.get_settings", return_value=settings),
+        patch("agentarea_common.config.get_auth_settings", return_value=settings),
         patch(
             "jwt.decode",
             return_value={
@@ -433,11 +433,11 @@ async def test_hydra_token_issued_to_a_user_through_a_client_is_accepted():
     jwks = Mock()
     jwks.get_signing_key_from_jwt.return_value = Mock(key="public-key")
     settings = Mock()
-    settings.mcp.HYDRA_AUDIENCE = "https://api.example.test"
+    settings.HYDRA_AUDIENCE = "https://api.example.test"
 
     with (
         patch("agentarea_common.auth.dependencies._get_hydra_jwks", return_value=jwks),
-        patch("agentarea_common.config.get_settings", return_value=settings),
+        patch("agentarea_common.config.get_auth_settings", return_value=settings),
         patch("jwt.decode", return_value={"sub": "alice", "client_id": "codex-client"}),
     ):
         context = await _try_hydra_token("oauth-token", Mock(spec=Request))

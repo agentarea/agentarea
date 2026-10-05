@@ -104,6 +104,37 @@ class ContinueExecutionPayload(BaseModel):
     governance_snapshot: dict[str, Any] | None = None
 
 
+class ConversationResumeSnapshot(BaseModel):
+    """Where a completed task's conversation stands, so a later run can continue it.
+
+    The cursors are a ``ConversationWindow`` without the task; the counters are the
+    run's totals, which a resumed run carries on instead of starting from zero.
+    """
+
+    head_seqs: list[int]
+    tail_start: int = Field(ge=0)
+    next_seq: int = Field(ge=0)
+    current_iteration: int = Field(ge=1)
+    tool_calls_used: int = Field(default=0, ge=0)
+    tokens_used: int = Field(default=0, ge=0)
+    last_prompt_tokens: int = Field(default=0, ge=0)
+
+
+class AgentExecutionResume(BaseModel):
+    """A new run of a completed task whose workflow has closed.
+
+    The run initializes normally, then adopts the snapshot instead of seeding a
+    new conversation; the follow-up message arrives as its start signal.
+    ``system_prompt_missing`` marks a log recorded before the system prompt was
+    logged, so the run writes a fresh one at the head of the window.
+    """
+
+    snapshot: ConversationResumeSnapshot
+    total_cost: Money = Field(default=ZERO, ge=ZERO)
+    own_cost: Money | None = Field(default=None, ge=ZERO)
+    system_prompt_missing: bool = False
+
+
 class AgentExecutionRequest(BaseModel):
     """Request to execute an agent task via Temporal workflow."""
 
@@ -131,6 +162,9 @@ class AgentExecutionRequest(BaseModel):
 
     # Continue-as-new state (populated when workflow restarts with fresh event history)
     continued_state: dict[str, Any] | None = None
+
+    # Set when a completed, closed task is continued by a follow-up message.
+    resume: AgentExecutionResume | None = None
 
 
 class AgentExecutionResult(BaseModel):
@@ -383,6 +417,10 @@ class AgentConfigResult(BaseModel):
     runtime_event_data: dict[str, Any] = Field(default_factory=dict)
     # Hash of the agent's declared config as resolved for this run.
     config_hash: str | None = None
+    # OpenAPI attachment config name -> the operation tools it gives the model.
+    # Resolved here so policy can govern a connection's every operation by its
+    # name without workflow code looking the connection up.
+    openapi_operation_tools: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class ToolDiscoveryRequest(BaseModel):
@@ -563,6 +601,11 @@ class MCPToolRequest(BaseModel):
     # Set only by the workflow, after a human approved this exact call following
     # a governance escalation; the escalating gate decides whether it suffices.
     escalation_approved: bool = False
+    # Set only after the workflow policy gate approved this exact tool call.
+    policy_approval_granted: bool = False
+    # The agent config's OpenAPI attachment -> operation tools map, so the
+    # activity's authorization sees the same connection names as the gate.
+    openapi_operation_tools: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class MCPToolResult(BaseModel):
@@ -655,6 +698,8 @@ class UpdateTaskStatusRequest(BaseModel):
     # Entries the run added since its last model call, written with the status.
     conversation: ConversationWindow | None = None
     conversation_pending: list[dict[str, Any]] = Field(default_factory=list)
+    # Set when a conversation ends completed, so a later message can continue it.
+    conversation_resume: ConversationResumeSnapshot | None = None
 
 
 class UpdateTaskStatusResult(BaseModel):

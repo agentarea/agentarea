@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     const uploadUrlEndpoint = fillWorkspace(
-      `${env.API_URL}/v1/workspaces/{workspace}/files/upload-url`,
+      `${env.AGENTAREA_API_URL}/v1/workspaces/{workspace}/files/upload-url`,
       resolveRequestWorkspaceSlug(request)
     );
     const response = await fetch(uploadUrlEndpoint, {

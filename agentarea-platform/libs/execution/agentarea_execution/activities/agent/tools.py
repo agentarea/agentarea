@@ -6,7 +6,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from agentarea_agents_sdk import ToolExecutor
 from agentarea_agents_sdk.tools.decide_toolset import DECIDE_TOOLSET
@@ -25,8 +25,10 @@ from temporalio import activity
 
 from ...interfaces import ActivityDependencies
 from ...models import MCPToolRequest, MCPToolResult, McpToolRoute
+from ...workflows.helpers import tool_config_aliases, tool_policy_aliases
 from ..heartbeat import auto_heartbeater
 from .sandbox import agent_artifact_actor, sandbox_control_auth_secret, sandbox_file_auth_secret
+from .tool_audit import TOOL_CALL_DENIED, argument_keys
 
 if TYPE_CHECKING:
     from ..dependencies import ActivityServiceContainer
@@ -157,6 +159,36 @@ def make_tools_activities(
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext, create_user_context
 
+    async def _audited_denial(request: MCPToolRequest, reason: str) -> MCPToolResult:
+        """Refuse the call and leave its refusal in the workspace's audit trail.
+
+        The row id is the activity's identity, so a retried attempt that
+        refuses again does not record a second denial.
+        """
+        info = activity.info()
+        user_context = create_user_context(request.user_context_data)
+        async with ActivityContext(container, user_context) as ctx:
+            audit = await ctx.get_audit_service()
+            await audit.record_once(
+                uuid5(NAMESPACE_URL, f"tool-denied:{info.workflow_run_id}:{info.activity_id}"),
+                TOOL_CALL_DENIED,
+                "task",
+                request.task_id,
+                actor_type="agent",
+                actor_id=str(request.agent_id) if request.agent_id else None,
+                event_metadata={
+                    "tool": request.tool_name,
+                    "task_id": request.task_id,
+                    "agent_id": str(request.agent_id) if request.agent_id else None,
+                    "tool_call_id": request.tool_call_id,
+                    "decision": "denied",
+                    "reason": reason,
+                    "argument_keys": argument_keys(request.tool_args),
+                    "requested_by": request.user_id,
+                },
+            )
+        return _deny_tool_result(request.tool_name, reason)
+
     @activity.defn
     @auto_heartbeater
     async def execute_mcp_tool_activity(
@@ -170,19 +202,22 @@ def make_tools_activities(
                 user_id=request.user_id,
                 workspace_id=request.workspace_id,
                 effective_policy=request.effective_policy,
-                aliases=request.mcp_route.policy_names(request.tool_name)
-                if request.mcp_route
-                else (),
+                aliases=tool_policy_aliases(request.mcp_route, request.tool_name),
+                restricting_aliases=tool_config_aliases(
+                    request.tool_name, request.tools, request.openapi_operation_tools
+                ),
             )
         )
-        if decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL:
-            return _deny_tool_result(
-                request.tool_name,
+        if decision.action is ToolAuthorizationAction.DENY:
+            return await _audited_denial(request, decision.reason)
+        if (
+            decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL
+            and not request.policy_approval_granted
+        ):
+            return await _audited_denial(
+                request,
                 f"{decision.reason}; approval must be resolved before activity execution",
             )
-        if not decision.allowed:
-            return _deny_tool_result(request.tool_name, decision.reason)
-
         user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             mcp_server_instance_service = await ctx.get_mcp_server_instance_service()
@@ -230,7 +265,7 @@ def make_tools_activities(
 
                         extra_kwargs = {
                             "storage": SandboxFileStore(
-                                mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+                                mcp_manager_url=dependencies.settings.mcp.MANAGER_URL,
                                 workspace_id=str(request.workspace_id),
                                 task_id=str(request.task_id) if request.task_id else "",
                                 auth_secret=sandbox_file_auth_secret(dependencies),
@@ -259,14 +294,14 @@ def make_tools_activities(
                         # client resolves, vets and pins every hop's address, and
                         # with an empty policy it reaches public addresses only:
                         # an agent-supplied URL is less trusted than a member's,
-                        # so OUTBOUND_PRIVATE_ALLOWLIST does not apply to it.
+                        # so AGENTAREA_HTTP_PRIVATE_ALLOWLIST does not apply to it.
                         from agentarea_common.utils.url_safety import (
                             OutboundPolicy,
                             safe_async_client,
                         )
 
                         extra_kwargs = {
-                            "search_base_url": dependencies.settings.app.WEB_SEARCH_BASE_URL,
+                            "search_base_url": dependencies.settings.app.TOOL_SEARCH_URL,
                             "http_client_factory": functools.partial(
                                 safe_async_client, policy=OutboundPolicy()
                             ),
@@ -290,7 +325,7 @@ def make_tools_activities(
                                 call_ref=_payment_call_ref(request),
                             ),
                             "storage": SandboxFileStore(
-                                mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+                                mcp_manager_url=dependencies.settings.mcp.MANAGER_URL,
                                 workspace_id=str(request.workspace_id),
                                 task_id=str(request.task_id) if request.task_id else "",
                                 auth_secret=sandbox_file_auth_secret(dependencies),
@@ -333,7 +368,7 @@ def make_tools_activities(
                         )
 
                         extra_kwargs = {
-                            "mcp_manager_url": dependencies.settings.mcp.MCP_MANAGER_URL,
+                            "mcp_manager_url": dependencies.settings.mcp.MANAGER_URL,
                             "auth_secret": sandbox_control_auth_secret(dependencies),
                             "ctx": ToolInvocationContext(
                                 workflow_id=wf_id or "",
@@ -513,7 +548,7 @@ def make_tools_activities(
                     tc for tc in request.tools if isinstance(tc, dict) and tc.get("type") == "agent"
                 ]
                 if agent_configs:
-                    base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
+                    base_url = f"{dependencies.settings.app.API_URL}/api/v1"
                     agent_service = await ctx.get_agent_service()
 
                     # Create task service for internal delegation

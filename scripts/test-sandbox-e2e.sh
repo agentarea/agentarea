@@ -94,7 +94,7 @@ async def main() -> None:
     if stdout.rstrip(b"\n") != canary:
         raise AssertionError(f"stdout ref mismatch: {stdout!r}")
 
-    redis_client = redis.Redis.from_url(os.environ["REDIS_URL"])
+    redis_client = redis.Redis.from_url(os.environ["AGENTAREA_REDIS_URL"])
     samples: list[bytes] = []
     record_bytes = redis_client.get(f"agentarea:sandbox:execution:{execution_id}")
     if record_bytes:
@@ -123,8 +123,8 @@ async def main() -> None:
         b"input_files",
         b"script_content",
         b"X-Amz-Signature",
-        os.environ.get("AWS_ACCESS_KEY_ID", "").encode(),
-        os.environ.get("AWS_SECRET_ACCESS_KEY", "").encode(),
+        os.environ.get("AGENTAREA_S3_ACCESS_KEY", "").encode(),
+        os.environ.get("AGENTAREA_S3_SECRET_KEY", "").encode(),
     ]
     for value in forbidden:
         if value and value in combined:

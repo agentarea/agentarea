@@ -15,13 +15,10 @@ import (
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
 )
 
-// The instance inspection routes carry no authentication — deliberately, since
-// they only read. Reading, though, used to include the instance's resolved
-// environment, which is where the secret manager puts the credentials the
-// workload runs with: API keys, tokens, a Telegram session string that is by
-// itself full account access. Any workload that could reach the manager's
-// service could therefore read every instance's secrets, which defeats the
-// point of resolving them out of a secret store at all.
+// The manager inspection API is an internal surface protected by the shared
+// MCP gateway bearer. Response redaction remains defense in depth.
+const managerInspectionTestSecret = "mcp-gateway-inspection-secret-for-tests" // pragma: allowlist secret
+
 type disclosureBackendStub struct {
 	status *backends.InstanceStatus
 }
@@ -49,7 +46,8 @@ const disclosedSecret = "1AZWarzwBu32uEudLyEwrynvwayCBkkv-test-session"
 
 func disclosureRouter(t *testing.T) *gin.Engine {
 	t.Helper()
-	t.Setenv("SANDBOX_EXECUTION_RECORD_TTL", "24h")
+	t.Setenv("AGENTAREA_SANDBOX_RECORD_TTL", "24h")
+	t.Setenv("AGENTAREA_MCP_GATEWAY_SECRET", managerInspectionTestSecret)
 	gin.SetMode(gin.TestMode)
 
 	backend := &disclosureBackendStub{status: &backends.InstanceStatus{
@@ -66,7 +64,7 @@ func disclosureRouter(t *testing.T) *gin.Engine {
 	}}
 
 	handler, err := NewHandler(
-		backend, nil,
+		backend, containerDisclosureManager(),
 		slog.New(slog.NewTextHandler(nopWriter{}, nil)),
 		"test",
 		SandboxPolicy{},
@@ -88,20 +86,72 @@ func disclosureRouter(t *testing.T) *gin.Engine {
 	return router
 }
 
+func managerInspectionRequest(method, target string) *http.Request {
+	request := httptest.NewRequest(method, target, nil)
+	request.Header.Set("Authorization", "Bearer "+managerInspectionTestSecret)
+	return request
+}
+
+func TestInstanceInspectionRequiresManagerBearer(t *testing.T) {
+	router := disclosureRouter(t)
+	unauthorized := httptest.NewRecorder()
+	router.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/instances", nil))
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated status = %d, want 401; body=%s", unauthorized.Code, unauthorized.Body.String())
+	}
+
+	authorized := httptest.NewRecorder()
+	router.ServeHTTP(authorized, managerInspectionRequest(http.MethodGet, "/instances"))
+	if authorized.Code != http.StatusOK {
+		t.Fatalf("authenticated status = %d, want 200; body=%s", authorized.Code, authorized.Body.String())
+	}
+}
+
+func TestMonitoringInspectionRequiresManagerBearer(t *testing.T) {
+	router := disclosureRouter(t)
+	unauthorized := httptest.NewRecorder()
+	router.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/monitoring/status", nil))
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated status = %d, want 401; body=%s", unauthorized.Code, unauthorized.Body.String())
+	}
+
+	authorized := httptest.NewRecorder()
+	router.ServeHTTP(authorized, managerInspectionRequest(http.MethodGet, "/monitoring/status"))
+	if authorized.Code != http.StatusOK {
+		t.Fatalf("authenticated status = %d, want 200; body=%s", authorized.Code, authorized.Body.String())
+	}
+}
+func TestContainerInspectionRequiresManagerBearer(t *testing.T) {
+	router := disclosureRouter(t)
+	unauthorized := httptest.NewRecorder()
+	router.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/containers", nil))
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated status = %d, want 401; body=%s", unauthorized.Code, unauthorized.Body.String())
+	}
+
+	authorized := httptest.NewRecorder()
+	router.ServeHTTP(authorized, managerInspectionRequest(http.MethodGet, "/containers"))
+	if authorized.Code != http.StatusOK {
+		t.Fatalf("authenticated status = %d, want 200; body=%s", authorized.Code, authorized.Body.String())
+	}
+}
+
 type nopWriter struct{}
 
 func (nopWriter) Write(p []byte) (int, error) { return len(p), nil }
 
 func TestGetInstanceDoesNotDiscloseTheInstanceEnvironment(t *testing.T) {
+	router := disclosureRouter(t)
 	recorder := httptest.NewRecorder()
-	disclosureRouter(t).ServeHTTP(recorder,
-		httptest.NewRequest(http.MethodGet, "/instances/659b1561-79bf-424d-b707-7897a4304c98", nil))
+	router.ServeHTTP(recorder, managerInspectionRequest(
+		http.MethodGet, "/instances/659b1561-79bf-424d-b707-7897a4304c98",
+	))
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	if strings.Contains(recorder.Body.String(), disclosedSecret) {
-		t.Error("instance inspection returned the workload's credentials to an unauthenticated caller")
+		t.Error("authenticated instance inspection returned the workload's credentials")
 	}
 	// The route still has to be useful: redacting must not empty the response.
 	if !strings.Contains(recorder.Body.String(), "running") {
@@ -110,13 +160,14 @@ func TestGetInstanceDoesNotDiscloseTheInstanceEnvironment(t *testing.T) {
 }
 
 func TestListInstancesDoesNotDiscloseInstanceEnvironments(t *testing.T) {
+	router := disclosureRouter(t)
 	recorder := httptest.NewRecorder()
-	disclosureRouter(t).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/instances", nil))
+	router.ServeHTTP(recorder, managerInspectionRequest(http.MethodGet, "/instances"))
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	if strings.Contains(recorder.Body.String(), disclosedSecret) {
-		t.Error("instance listing returned workload credentials to an unauthenticated caller")
+		t.Error("authenticated instance listing returned workload credentials")
 	}
 }

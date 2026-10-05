@@ -1,6 +1,7 @@
 """Temporal workflow orchestrator implementation."""
 
 import logging
+from datetime import timedelta
 from inspect import isawaitable
 from typing import Any
 from uuid import UUID
@@ -17,6 +18,9 @@ from ..application.execution_service import (
 from ..domain.interfaces import ExecutionRequest
 
 logger = logging.getLogger(__name__)
+
+# The task page reads live state on every load; a stalled worker must not hold it.
+_LIVE_STATE_TIMEOUT = timedelta(seconds=3)
 
 
 def _duration_seconds(value: Any) -> float | None:
@@ -44,18 +48,14 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
     def __init__(
         self,
-        temporal_address: str,
         task_queue: str,
         max_concurrent_activities: int,
         max_concurrent_workflows: int,
     ):
         """Initialize with required configuration - no defaults allowed."""
-        if not temporal_address:
-            raise ValueError("temporal_address must be provided")
         if not task_queue:
             raise ValueError("task_queue must be provided")
 
-        self.temporal_address = temporal_address
         self.task_queue = task_queue
         self.max_concurrent_activities = max_concurrent_activities
         self.max_concurrent_workflows = max_concurrent_workflows
@@ -65,19 +65,20 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         """Get Temporal client, create if needed."""
         if self._client is None:
             try:
-                from agentarea_common.config import ObservabilitySettings
+                from agentarea_common.config import ObservabilitySettings, temporal_connect_config
                 from agentarea_common.observability import get_temporal_plugins, setup_otel
                 from temporalio.client import Client
                 from temporalio.contrib.pydantic import pydantic_data_converter
 
                 observability_settings = ObservabilitySettings()
                 setup_otel("agentarea-agents", observability_settings)
+                connect_config = temporal_connect_config()
                 self._client = await Client.connect(
-                    self.temporal_address,
+                    **connect_config,
                     data_converter=pydantic_data_converter,
                     plugins=get_temporal_plugins(observability_settings),
                 )
-                logger.info(f"Connected to Temporal at {self.temporal_address}")
+                logger.info(f"Connected to Temporal at {connect_config.get('target_host')}")
             except ImportError as e:
                 logger.exception(f"Temporal library not installed: {e}")
                 raise RuntimeError(
@@ -314,25 +315,28 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             )
             raise RuntimeError("Failed to get workflow status") from e
 
-    async def get_workflow_effective_policy(self, execution_id: str) -> dict | None:
-        """Read the effective governance policy from a running/closed workflow.
+    async def get_workflow_live_state(self, execution_id: str) -> dict[str, Any] | None:
+        """The running workflow's own state (its ``get_current_state`` query).
 
-        Best-effort: returns ``None`` when the workflow is not found, has no
-        queryable state, or carries no effective policy. Mirrors the
-        not-found handling of :meth:`get_workflow_status`.
+        Carries what Temporal's execution status cannot, such as a signal-based
+        pause. Best-effort and bounded: ``None`` when the workflow is not found,
+        has no queryable state, or no worker answers in time.
         """
         client = await self._get_client()
 
         try:
             handle = client.get_workflow_handle(execution_id)
-            state = await handle.query("get_current_state")
-            if not isinstance(state, dict):
-                return None
-            return state.get("effective_policy")
+            state = await handle.query("get_current_state", rpc_timeout=_LIVE_STATE_TIMEOUT)
+            return state if isinstance(state, dict) else None
         except Exception as e:
             if "not found" in str(e).lower() or "no execution" in str(e).lower():
                 return None
-            logger.exception(f"Failed to get workflow effective policy: {e}")
+            logger.warning(
+                "Failed to read live state of workflow %s (%s)",
+                execution_id,
+                type(e).__name__,
+                exc_info=True,
+            )
             return None
 
     async def get_workflow_pending_escalations(self, execution_id: str) -> list[dict[str, Any]]:

@@ -8,20 +8,17 @@ import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useCurrency } from "@/hooks/useCurrency";
 import { getTriggerExecutionStatusPresentation } from "@/lib/status";
+import { parseUtcTimestamp } from "@/utils/dateUtils";
 import { formatTriggerCost } from "../../components/triggerDisplay";
 
 interface ExecutionsTableProps {
   executions: TriggerExecutionResponse[];
-  triggerId: string;
-  currentPage: number;
   /** Principal id -> display name, resolved by the page via GET /v1/principals. */
   principalNames?: Record<string, string>;
 }
 
 export default function ExecutionsTable({
   executions,
-  triggerId: _triggerId,
-  currentPage: _currentPage,
   principalNames = {},
 }: ExecutionsTableProps) {
   const t = useTranslations("TriggersPage.detail");
@@ -76,13 +73,14 @@ export default function ExecutionsTable({
     {
       accessor: "executed_at",
       header: "Executed",
-      render: (value: string) => (
-        <span className="text-muted-foreground">
-          {value
-            ? formatDistanceToNow(new Date(value), { addSuffix: true })
-            : "-"}
-        </span>
-      ),
+      render: (value: string) => {
+        const date = parseUtcTimestamp(value);
+        return (
+          <span className="text-muted-foreground">
+            {date ? formatDistanceToNow(date, { addSuffix: true }) : "-"}
+          </span>
+        );
+      },
     },
     {
       accessor: "execution_time_ms",

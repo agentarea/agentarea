@@ -13,6 +13,7 @@ from agentarea_api.api.deps.services import get_read_agent_service, get_read_tas
 from agentarea_api.api.v1.inbox import INBOX_STATUSES
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.base import get_read_repository_factory
 from httpx import ASGITransport, AsyncClient
 
 
@@ -36,10 +37,20 @@ def task_repository():
     app.dependency_overrides[get_read_task_service] = lambda: task_service
     app.dependency_overrides[get_read_agent_service] = lambda: agent_service
     app.dependency_overrides[get_user_context] = lambda: MagicMock()
+    events = MagicMock()
+    events.unanswered_approval_requests = AsyncMock(return_value={})
+    app.dependency_overrides[get_read_repository_factory] = lambda: MagicMock(
+        create_repository=MagicMock(return_value=events)
+    )
     try:
         yield repository
     finally:
-        for dep in (get_read_task_service, get_read_agent_service, get_user_context):
+        for dep in (
+            get_read_task_service,
+            get_read_agent_service,
+            get_user_context,
+            get_read_repository_factory,
+        ):
             app.dependency_overrides.pop(dep, None)
 
 

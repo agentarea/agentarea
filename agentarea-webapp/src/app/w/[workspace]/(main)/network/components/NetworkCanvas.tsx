@@ -150,6 +150,37 @@ function stylesheet(
     return logos.get(node.id()) ?? glyph(kind, scopeColor(node.data("scope")));
   };
 
+  const nodeStyle = {
+    "background-color": palette.background,
+    "background-image": image,
+    "background-width": "52%",
+    "background-height": "52%",
+    "border-width": 2,
+    "border-color": palette.border,
+    label: "data(label)",
+    "font-family": font,
+    "font-size": 11,
+    "font-weight": 500,
+    color: palette.foreground,
+    "text-valign": "bottom",
+    "text-margin-y": 5,
+    "text-background-color": palette.background,
+    "text-background-opacity": 0.85,
+    "text-background-padding": "2px",
+    "text-background-shape": "roundrectangle",
+    "text-wrap": "ellipsis",
+    "text-max-width": "140px",
+    "min-zoomed-font-size": 9,
+    "transition-property":
+      "opacity, border-width, border-color, background-color, underlay-opacity",
+    "transition-duration": transition,
+  } satisfies Extract<StylesheetJson[number], { style: unknown }>["style"];
+  // Cytoscape accepts this sentinel for customer-hosted logos; its typings omit it.
+  Object.defineProperty(nodeStyle, "background-image-crossorigin", {
+    value: "null",
+    enumerable: true,
+  });
+
   return [
     {
       selector: "node[size]",
@@ -157,34 +188,7 @@ function stylesheet(
     },
     {
       selector: "node",
-      style: {
-        "background-color": palette.background,
-        "background-image": image,
-        // Logos come from customer hosts that send no CORS headers; "null"
-        // loads them as plain images. The typings omit this valid value.
-        "background-image-crossorigin": "null" as unknown as "anonymous",
-        "background-width": "52%",
-        "background-height": "52%",
-        "border-width": 2,
-        "border-color": palette.border,
-        label: "data(label)",
-        "font-family": font,
-        "font-size": 11,
-        "font-weight": 500,
-        color: palette.foreground,
-        "text-valign": "bottom",
-        "text-margin-y": 5,
-        "text-background-color": palette.background,
-        "text-background-opacity": 0.85,
-        "text-background-padding": "2px",
-        "text-background-shape": "roundrectangle",
-        "text-wrap": "ellipsis",
-        "text-max-width": "140px",
-        "min-zoomed-font-size": 9,
-        "transition-property":
-          "opacity, border-width, border-color, background-color, underlay-opacity",
-        "transition-duration": transition,
-      },
+      style: nodeStyle,
     },
     {
       selector: "node[kind = 'agent']",

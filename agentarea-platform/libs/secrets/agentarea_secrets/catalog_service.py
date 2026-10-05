@@ -13,6 +13,7 @@ import logging
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
+from agentarea_common.audit import AuditService
 from agentarea_common.auth import UserContext
 from agentarea_common.auth.authorization import is_workspace_admin
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
@@ -249,10 +250,12 @@ class SecretCatalogService:
                     created_by=self._user_context.user_id,
                 )
             )
+        secret = await self.get_by_name(name)
+        await self._audit("secret.create", secret)
         await self._session.commit()
 
         logger.info("Created user secret in workspace %s", self._workspace_id)
-        return await self.get_by_name(name)
+        return secret
 
     async def rotate_user_secret(self, secret_id: UUID, value: str) -> EncryptedSecret:
         secret = await self._require_user_owned(secret_id)
@@ -266,7 +269,11 @@ class SecretCatalogService:
                 .where(EncryptedSecret.id == secret.id)
                 .values(updated_by=self._user_context.user_id)
             )
-            await self._session.commit()
+        # That the value changed is auditable; what it changed to is not.
+        await self._audit(
+            "secret.rotate", secret, changes=[{"field": "value", "before": "***", "after": "***"}]
+        )
+        await self._session.commit()
 
         await self._session.refresh(secret)
         logger.info("Rotated user secret in workspace %s", self._workspace_id)
@@ -274,10 +281,16 @@ class SecretCatalogService:
 
     async def update_description(self, secret_id: UUID, description: str | None) -> EncryptedSecret:
         secret = await self._require_user_owned(secret_id)
+        before = secret.description
         await self._session.execute(
             update(EncryptedSecret)
             .where(EncryptedSecret.id == secret.id)
             .values(description=description, updated_by=self._user_context.user_id)
+        )
+        await self._audit(
+            "secret.update",
+            secret,
+            changes=[{"field": "description", "before": before, "after": description}],
         )
         await self._session.commit()
         return await self.get(secret_id)
@@ -289,6 +302,7 @@ class SecretCatalogService:
             await self._session.execute(
                 delete(EncryptedSecret).where(EncryptedSecret.id == secret.id)
             )
+            await self._audit("secret.delete", secret)
             await self._session.commit()
         except IntegrityError:
             # RESTRICT on secret_references.secret_id. The database is the guard
@@ -313,6 +327,22 @@ class SecretCatalogService:
                 f"{secret.owner_type} {secret.owner_id}. Change it there instead."
             )
         return secret
+
+    async def _audit(
+        self,
+        action: str,
+        secret: EncryptedSecret,
+        *,
+        changes: list[dict] | None = None,
+    ) -> None:
+        """Record a change to a secret in the caller's transaction, by name only."""
+        await AuditService(self._session, self._user_context).record(
+            action,
+            "secret",
+            secret.id,
+            changes=changes,
+            event_metadata={"resource_name": secret.secret_name},
+        )
 
     # ------------------------------------------------------------------
     # References, for consumers that keep theirs inside a JSON document

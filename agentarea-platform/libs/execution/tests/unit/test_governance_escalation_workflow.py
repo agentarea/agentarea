@@ -409,7 +409,7 @@ async def test_delegation_runs_the_child_on_the_parents_task_queue(instance):
         )
     )
     with (
-        patch.object(instance, "_gate_tool_call", new=AsyncMock(return_value=True)),
+        patch.object(instance, "_gate_tool_call", new=AsyncMock(return_value=(True, False))),
         patch(f"{MODULE}.execute_activity", new=AsyncMock(side_effect=run)),
         patch(f"{MODULE}.execute_child_workflow", new=execute_child),
         patch(

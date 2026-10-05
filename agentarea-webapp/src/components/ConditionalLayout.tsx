@@ -2,7 +2,8 @@
 
 import { Suspense } from "react";
 import { usePathname } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import AuthGuard from "@/components/auth/AuthGuard";
 import InvitationDialog from "@/components/InvitationDialog/InvitationDialog";
 import { AppSidebarContent } from "@/components/MainLayout/components/AppSidebar";
@@ -27,11 +28,25 @@ interface ConditionalLayoutProps {
 // one prefix covers it.
 const SETTINGS_ROUTES = ["/settings"];
 
+function SkipToContentLink() {
+  const t = useTranslations("Common");
+
+  return (
+    <a
+      href="#workspace-main"
+      className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-background focus:px-4 focus:py-3 focus:text-foreground focus:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      {t("skipToContent")}
+    </a>
+  );
+}
+
 export default function ConditionalLayout({
   children,
   sidebarDefaultOpen,
   workspaces,
 }: ConditionalLayoutProps) {
+  const shouldReduceMotion = useReducedMotion();
   const pathname = usePathname();
 
   // The layout shell is chosen purely from the route, never from auth state.
@@ -53,6 +68,7 @@ export default function ConditionalLayout({
 
   return (
     <SidebarProvider defaultOpen={sidebarDefaultOpen}>
+      <SkipToContentLink />
       <div className="flex h-screen w-screen flex-row overflow-hidden bg-layoutBackground py-2 pr-2 pl-2 md:pl-0">
         <Sidebar collapsible="icon">
           <div className="relative h-full w-full overflow-hidden">
@@ -62,12 +78,16 @@ export default function ConditionalLayout({
                 initial={{ x: -10, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: -10, opacity: 0 }}
-                transition={{
-                  type: "spring",
-                  stiffness: 260,
-                  damping: 30,
-                  mass: 1,
-                }}
+                transition={
+                  shouldReduceMotion
+                    ? { duration: 0 }
+                    : {
+                        type: "spring",
+                        stiffness: 260,
+                        damping: 30,
+                        mass: 1,
+                      }
+                }
                 className="absolute inset-0 flex flex-col h-full w-full"
               >
                 {isSettings ? (
@@ -82,7 +102,11 @@ export default function ConditionalLayout({
               -right-4 toggle strip is not clipped and stays clickable. */}
           <SidebarRail />
         </Sidebar>
-        <main className="flex-1 rounded-sm overflow-hidden max-h-screen bg-white dark:bg-zinc-800 h-full border border-sidebar-border relative">
+        <main
+          id="workspace-main"
+          tabIndex={-1}
+          className="flex-1 rounded-sm overflow-hidden max-h-screen bg-white dark:bg-zinc-800 h-full border border-sidebar-border relative"
+        >
           <AuthGuard>{children}</AuthGuard>
         </main>
       </div>

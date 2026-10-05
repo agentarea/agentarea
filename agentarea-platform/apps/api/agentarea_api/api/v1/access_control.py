@@ -15,8 +15,10 @@ of the graph.
 The graph backend is OpenFGA.
 """
 
+import asyncio
 import logging
-from typing import Annotated, Literal
+from collections.abc import Collection
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from agentarea_agents.domain.skill_models import Skill
@@ -25,6 +27,7 @@ from agentarea_agents.infrastructure.collection_repository import (
 )
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
+from agentarea_common.audit import AuditService
 from agentarea_common.auth import (
     UserContext,
     UserContextDep,
@@ -55,7 +58,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["access-control"])
 
-DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
 # Stable colour palettes per node kind. Index into them by enumeration order so
 # the same workspace always renders the same colours.
@@ -114,11 +117,11 @@ def get_graph_client() -> OpenFGAClient:
     except ValueError:
         settings = get_settings()
         return OpenFGAClient(
-            api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-            store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-            authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-            timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
-            api_token=settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN or None,
+            api_url=settings.openfga.URL,
+            store_id=settings.openfga.STORE_ID,
+            authorization_model_id=settings.openfga.MODEL_ID,
+            timeout_seconds=settings.openfga.TIMEOUT.total_seconds(),
+            api_token=settings.openfga.API_TOKEN or None,
         )
 
 
@@ -146,7 +149,7 @@ class GraphEdge(BaseModel):
     to: str
     relation: str
 
-    def model_dump(self, **kwargs):  # type: ignore[override]
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
         data = super().model_dump(**kwargs)
         data["from"] = data.pop("from_")
         return data
@@ -243,13 +246,34 @@ class SyncResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def _resource_tuples(client: OpenFGAClient) -> list[RelationTuple]:
-    """Query all ``resource`` tuples, tolerating graph backend outages."""
+# Point reads of one object each; bounded so a large workspace does not open
+# hundreds of concurrent requests to the graph backend.
+_GRAPH_READ_CONCURRENCY = 16
+
+
+async def _resource_tuples(
+    client: OpenFGAClient, object_ids: Collection[str]
+) -> list[RelationTuple]:
+    """The ``resource`` grant tuples on ``object_ids``, tolerating graph outages.
+
+    Read object by object: an unfiltered read of the namespace walks every
+    tenant's tuples page by page, and once the store holds a few thousand it
+    runs past OpenFGA's deadline and the explorer returns 500.
+    """
+    semaphore = asyncio.Semaphore(_GRAPH_READ_CONCURRENCY)
+
+    async def read(object_id: str) -> list[RelationTuple]:
+        async with semaphore:
+            return await client.query_all_tuples(
+                RelationQuery(namespace="resource", object=object_id)
+            )
+
     try:
-        return await client.query_all_tuples(RelationQuery(namespace="resource"))
+        batches = await asyncio.gather(*(read(object_id) for object_id in sorted(set(object_ids))))
     except OpenFGAError:
         logger.exception("Failed to query resource relationships from graph backend")
         return []
+    return [tuple_ for batch in batches for tuple_ in batch]
 
 
 # Frontend node/subject namespaces are workspace-scoped by their DB repository.
@@ -449,7 +473,7 @@ async def get_graph(
     rule_count = 0
     direct_exception_count = 0
 
-    for t in await _resource_tuples(graph_client):
+    for t in await _resource_tuples(graph_client, {*node_id_by_uuid, *skill_ids}):
         if t.relation not in _GRANT_LABEL:
             continue
         obj = str(t.object)
@@ -539,7 +563,14 @@ async def list_relationships(
     workspace_member_ids = await _workspace_member_ids(user_context, db_session)
 
     items: list[RelationshipItem] = []
-    for t in await _resource_tuples(graph_client):
+    for t in await _resource_tuples(
+        graph_client,
+        [
+            object_id
+            for object_id, object_namespace in namespace_by_uuid.items()
+            if namespace is None or object_namespace == namespace
+        ],
+    ):
         if t.relation not in _GRANT_LABEL:
             continue
         object_id = str(t.object)
@@ -613,6 +644,7 @@ async def create_relationship(
     except OpenFGAError as exc:
         logger.exception("Failed to write graph relationship %s", relationship)
         raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
+    await _audit_grant("access.grant", payload, user_context, db_session)
     return {"ok": True}
 
 
@@ -638,6 +670,26 @@ async def delete_relationship(
     except OpenFGAError as exc:
         logger.exception("Failed to delete graph relationship %s", relationship)
         raise HTTPException(status_code=503, detail="Graph authorization delete failed") from exc
+    await _audit_grant("access.revoke", payload, user_context, db_session)
+
+
+async def _audit_grant(
+    action: str,
+    payload: RelationshipWriteRequest,
+    user_context: UserContext,
+    db_session: AsyncSession,
+) -> None:
+    """Record who gave or took a role on which resource, and from whom."""
+    await AuditService(db_session, user_context).record(
+        action,
+        "access_grant",
+        payload.object,
+        event_metadata={
+            "namespace": payload.namespace,
+            "relation": payload.relation,
+            "subject_id": payload.subject_id,
+        },
+    )
 
 
 @router.post(
@@ -749,7 +801,7 @@ async def resolve_access(
     best_rank = 0
     effective_relation: str | None = None
 
-    for t in await _resource_tuples(graph_client):
+    for t in await _resource_tuples(graph_client, [payload.resource_id]):
         if str(t.object) != payload.resource_id:
             continue
         if t.relation not in _GRANT_LABEL:

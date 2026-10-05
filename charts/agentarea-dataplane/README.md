@@ -19,7 +19,7 @@ that confines those servers:
 With `sandboxes.enabled` it also runs the control plane's **agent sandboxes**:
 an [OpenSandbox](https://github.com/opensandbox-group/OpenSandbox) server on its
 Kubernetes runtime, which the control plane creates sandboxes through
-(`SANDBOX_OPENSANDBOX_URL`), with the same confinement in a namespace of their
+(`AGENTAREA_SANDBOX_OSB_URL`), with the same confinement in a namespace of their
 own. Only the server may reach a sandbox, and only on execd's port. The
 BatchSandbox CRDs and controller come from the vendored `opensandbox-controller`
 subchart (`opensandbox-controller.enabled`), one per cluster.
@@ -151,9 +151,9 @@ rejected by the API server.
 | sandboxes.server.auth.existingSecret | string | `""` | Secret holding the API key the control plane sends as OPEN-SANDBOX-API-KEY. |
 | sandboxes.server.auth.existingSecretKey | string | `"api-key"` | Key in existingSecret. |
 | sandboxes.server.auth.apiKey | string | `""` | Creates the Secret from this value when existingSecret is empty. For development only. |
-| sandboxes.server.execdImage | string | `"opensandbox/execd:v1.0.21@sha256:1dc98c7de10b9a73450ac75aa0f200ad7972f2c40f5225f6a8998e166b45d6dd"` | Image the server copies execd from into every sandbox. The runtime identity the control plane pins (SANDBOX_OPENSANDBOX_RUNTIME_IDENTITY) names this digest. |
+| sandboxes.server.execdImage | string | `"opensandbox/execd:v1.0.21@sha256:1dc98c7de10b9a73450ac75aa0f200ad7972f2c40f5225f6a8998e166b45d6dd"` | Image the server copies execd from into every sandbox. The runtime identity the control plane pins (AGENTAREA_SANDBOX_OSB_IDENTITY) names this digest. |
 | sandboxes.server.maxSandboxTimeoutSeconds | int | `21600` | Longest lifetime a sandbox may be created with. |
-| sandboxes.server.createTimeoutSeconds | int | `120` | How long a create waits for the pod to run, image pull included. The control plane's SANDBOX_PROVIDER_PROVISIONING_TIMEOUT should be longer. |
+| sandboxes.server.createTimeoutSeconds | int | `120` | How long a create waits for the pod to run, image pull included. The control plane's AGENTAREA_SANDBOX_PROVISION_TIMEOUT should be longer. |
 | sandboxes.server.resources | object | `{"limits":{"cpu":"1","memory":"1Gi"},"requests":{"cpu":"50m","memory":"128Mi"}}` | Resources of the server itself. |
 | sandboxes.namespace | string | `"agentarea-sandboxes"` | Namespace sandboxes are created in. The server gets write access there and nowhere else. |
 | sandboxes.createNamespace | bool | `true` | Create the namespace. Turn off to manage it yourself; keep its labels. |

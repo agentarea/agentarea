@@ -12,6 +12,7 @@ path.
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Literal
 
 import httpx
 from agentarea_common.config import get_database, get_settings
@@ -20,13 +21,14 @@ from sqlalchemy import select
 
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.domain.transport import CONTAINER_TRANSPORTS, MCPTransport
 from agentarea_mcp.domain.verification_types import (
     VERIFICATION_SCHEMA_VERSION,
     VerificationError,
     VerificationPayload,
 )
 from agentarea_mcp.tool_serialization import serialize_mcp_tool
-from agentarea_mcp.transport_spec import merge_transport_spec, server_transport_spec
+from agentarea_mcp.transport_spec import instance_transport_spec
 
 logger = logging.getLogger(__name__)
 
@@ -42,14 +44,8 @@ _LIST_TOOLS_RETRY_DELAY = 5  # steady poll interval while the container provisio
 _SAFETY_DEADLINE = 600  # seconds
 
 
-def _transport_spec_from_server(server: MCPServer) -> dict:
-    """Build the effective transport fields declared by a server row."""
-    spec = server_transport_spec(server)
-    return spec
-
-
 class _RuntimeInstance:
-    def __init__(self, instance: MCPServerInstance, transport_spec: dict):
+    def __init__(self, instance: MCPServerInstance, server: MCPServer):
         self.id = instance.id
         self.name = instance.name
         self.workspace_id = instance.workspace_id
@@ -58,7 +54,8 @@ class _RuntimeInstance:
         self.last_dispatch = instance.last_dispatch
         self.tools = instance.tools
         self.server_spec_id = instance.server_spec_id
-        self.json_spec = merge_transport_spec(transport_spec, instance.json_spec)
+        self.transport = instance.transport
+        self.json_spec = instance_transport_spec(server, instance)
 
     @property
     def endpoint_url(self) -> str:
@@ -68,10 +65,9 @@ class _RuntimeInstance:
         verify()), so this must never synthesize a workload address — doing so
         would skip the gateway's on-demand start and request lease.
         """
-        instance_type = self.json_spec.get("type", "docker")
-        if instance_type == "url":
+        if self.transport == MCPTransport.URL:
             return self.json_spec.get("endpoint_url", "")
-        if instance_type in ("docker", "command", "kubernetes"):
+        if self.transport in CONTAINER_TRANSPORTS:
             raise ValueError(
                 f"container-backed MCP instance {self.id} has no direct endpoint; "
                 "verification must go through the manager gateway"
@@ -122,12 +118,12 @@ def _now_iso() -> str:
 
 
 def _make_payload(
-    status: str,
+    status: Literal["never_attempted", "in_progress", "succeeded", "failed"],
     error: VerificationError | None = None,
 ) -> VerificationPayload:
     return VerificationPayload(
         schema_version=VERIFICATION_SCHEMA_VERSION,
-        status=status,  # type: ignore[arg-type]
+        status=status,
         at=_now_iso(),
         error=error,
     )
@@ -264,7 +260,7 @@ async def verify(
     Returns:
         VerificationPayload with the final status written to the DB.
     """
-    if (instance.json_spec or {}).get("type") == "bundle":
+    if instance.transport == MCPTransport.BUNDLE:
         raise NotImplementedError("Bundle verification is derived at read time")
 
     settings = get_settings()
@@ -313,10 +309,8 @@ async def verify(
                 await sess.flush()
                 return payload
 
-            runtime_instance = _RuntimeInstance(locked, _transport_spec_from_server(server_spec))
-            instance_type = runtime_instance.json_spec.get("type", "docker")
-            if instance_type == "bundle":
-                raise NotImplementedError("Bundle verification is derived at read time")
+            runtime_instance = _RuntimeInstance(locked, server_spec)
+            instance_type = locked.transport
 
             # If another verify() is genuinely in progress on this row, return its
             # current state — the in-flight caller will write the final result.
@@ -349,7 +343,7 @@ async def verify(
 
         # Container-backed verification is an ordinary request through the
         # manager gateway. Go alone decides whether and where to start it.
-        if instance_type in ("docker", "command"):
+        if instance_type in CONTAINER_TRANSPORTS:
             endpoint_url = settings.mcp.manager_gateway_url(instance_id)
         else:
             endpoint_url = runtime_instance.endpoint_url
@@ -358,7 +352,7 @@ async def verify(
             headers.update(extra_headers)
         # Registry remote servers declare their wire transport; honor it exactly
         # (e.g. Vercel = streamable-http at the root) instead of probing suffixes.
-        if instance_type in ("docker", "command"):
+        if instance_type in CONTAINER_TRANSPORTS:
             headers.update(settings.mcp.manager_gateway_headers())
             remote_transport = "streamable-http"
         else:
@@ -379,7 +373,9 @@ async def verify(
             # A URL-type endpoint is the member's choice of address; the
             # gateway URL of a container-backed one is the platform's.
             client_factory = (
-                pinned_client_factory() if instance_type == "url" else platform_client_factory
+                pinned_client_factory()
+                if instance_type == MCPTransport.URL
+                else platform_client_factory
             )
         deadline = asyncio.get_event_loop().time() + _SAFETY_DEADLINE
         last_error: BaseException | None = None
@@ -439,7 +435,13 @@ async def verify(
 
                 # MCP protocol-level error — fail fast, no retry.
                 message = f"{type(leaf).__name__}: {leaf}" if str(leaf) else type(leaf).__name__
-                if instance_type == "url" and not isinstance(leaf, MCPError):
+                detail = None
+                if instance_type in CONTAINER_TRANSPORTS:
+                    from agentarea_mcp.application.mcp_client import MCPGatewayStartupFailureError
+
+                    if isinstance(leaf, MCPGatewayStartupFailureError):
+                        detail = leaf.detail
+                if instance_type == MCPTransport.URL and not isinstance(leaf, MCPError):
                     # Refusals and connection failures of a member-chosen
                     # address would otherwise say which internal ports answer.
                     logger.warning(
@@ -454,7 +456,7 @@ async def verify(
                     VerificationError(
                         code="mcp_error",
                         message=message,
-                        detail=None,
+                        detail=detail,
                     ),
                 )
                 await _save_verification(locked.id, payload, db)
@@ -476,7 +478,7 @@ async def verify(
         # returns a concrete startup failure when it cannot satisfy demand.
         error_code = "list_tools_timeout"
         error_msg = f"MCP did not become ready within {_SAFETY_DEADLINE}s: {last_error}"
-        if instance_type == "url":
+        if instance_type == MCPTransport.URL:
             logger.warning(
                 "verify: url endpoint never answered: %s",
                 error_msg,

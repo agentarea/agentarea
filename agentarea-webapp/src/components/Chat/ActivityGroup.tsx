@@ -155,7 +155,7 @@ export function ActivityGroup({
           />
         ))}
         {hasUnavailableDetails && (
-          <p className="px-1 pt-1 text-[11px] leading-5 text-muted-foreground/80">
+          <p className="px-1 pt-1 text-[11px] leading-5 text-muted-foreground">
             {TOOL_DETAILS_UNAVAILABLE}
           </p>
         )}

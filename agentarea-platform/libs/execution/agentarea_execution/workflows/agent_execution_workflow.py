@@ -6,6 +6,7 @@ from temporalio import workflow
 from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
+    # Temporal sandbox passthrough imports are intentionally retained.
     # The sandboxed ``..models`` and ``.retry`` build on these, which are not
     # sandbox-safe; they must be passed through before either is imported.
     import agentarea_agents_sdk.tools.mcp_tool_identity  # noqa: F401  # pyright: ignore[reportUnusedImport]

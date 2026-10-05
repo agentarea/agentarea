@@ -37,7 +37,7 @@ def _tool_call(name: str = "shell") -> SimpleNamespace:
 @pytest.mark.parametrize("method_name", CAPABILITY_BRANCHES)
 async def test_branch_calls_gate_and_aborts_on_deny(method_name):
     wf = _workflow()
-    wf._gate_tool_call = AsyncMock(return_value=False)
+    wf._gate_tool_call = AsyncMock(return_value=(False, False))
     tool_call = _tool_call()
 
     if method_name == "_execute_agent_delegation":
@@ -67,7 +67,7 @@ async def test_gate_refuses_a_tool_the_model_was_not_offered():
     wf = _offering("mcp__github__search")
     tool_call = _tool_call("mcp__github__delete_repo")
 
-    assert await wf._gate_tool_call(tool_call) is False
+    assert await wf._gate_tool_call(tool_call) == (False, False)
     wf._deny_tool_call.assert_awaited_once_with(
         tool_call, "mcp__github__delete_repo", "tool is not available to this agent"
     )

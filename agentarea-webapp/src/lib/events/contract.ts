@@ -123,6 +123,9 @@ export function derivePart(eventType: string, data: EventData): Part | null {
   const canonical = canonicalType(eventType);
   const kind = KIND_BY_TYPE[canonical];
   if (!kind) return null;
+  // A compaction call is billed as llm.call.completed but is not an assistant
+  // reply; it must never create or overwrite a transcript part.
+  if (kind === "llm" && data.purpose === "compaction") return null;
   const partId = partIdFor(kind, canonical, data);
   if (partId === null) return null;
   return { partId, kind, eventType: canonical, data };

@@ -18,7 +18,7 @@ export async function GET(
     // NOTE: request the canonical no-trailing-slash path. The trailing-slash
     // variant 307-redirects to this one, and undici throws `TypeError: fetch
     // failed` when it follows a redirect into a long-lived event-stream body.
-    const backendUrl = env.API_URL;
+    const backendUrl = env.AGENTAREA_API_URL;
     const eventsUrl = fillWorkspace(
       `${backendUrl}/v1/workspaces/{workspace}/agents/${agentId}/tasks/${taskId}/events/stream`,
       resolveRequestWorkspaceSlug(request)

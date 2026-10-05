@@ -594,3 +594,60 @@ async def test_tool_call_limit_waits_then_granted_calls_complete_task():
 
     assert result.success is True
     assert result.final_response == "finished after continuation"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("limits", "failure_reason"),
+    [
+        ({"budget_usd": 0.0005}, "budget_exceeded"),
+        ({"max_tokens": 10}, "token_limit"),
+    ],
+    ids=["budget", "tokens"],
+)
+async def test_call_that_crosses_a_limit_is_persisted_before_the_run_stops(
+    limits: dict[str, Any], failure_reason: str
+):
+    """The provider was paid for the call that crossed the limit; its event must exist.
+
+    Usage metering bills from the persisted llm.call.completed, so a stop that
+    raises before publishing it leaves a paid call that nobody is charged for.
+    """
+    env = await WorkflowEnvironment.start_time_skipping(
+        data_converter=pydantic_data_converter,
+    )
+    async with env:
+        task_queue = f"test-{uuid.uuid4()}"
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            async with Worker(
+                env.client,
+                task_queue=task_queue,
+                workflows=[AgentExecutionWorkflow],
+                activities=_ALL_ACTIVITIES,
+                activity_executor=executor,
+            ):
+                handle = await env.client.start_workflow(
+                    AgentExecutionWorkflow.run,
+                    _make_request(
+                        max_iterations=5,
+                        workflow_metadata={"source": "agent_delegation"},
+                        **limits,
+                    ),
+                    id=f"test-{uuid.uuid4()}",
+                    task_queue=task_queue,
+                    execution_timeout=timedelta(minutes=10),
+                )
+                result = await handle.result()
+
+    assert result.success is False
+    assert result.failure_reason == failure_reason
+    assert _llm_calls == 1
+    event_types = [e.get("event_type") for e in _published]
+    completed = [e for e in _published if e.get("event_type") == "llm.call.completed"]
+    assert len(completed) == 1
+    assert to_money(completed[0]["data"]["cost"]) == to_money("0.001")
+    assert completed[0]["data"]["usage"]["usage"]["total_tokens"] == 15
+    assert completed[0]["data"]["model_id"] == "gpt-4o-mini"
+    assert event_types.index("llm.call.completed") < event_types.index("task.failed")
+    # The call succeeded; a failure part would replace it in the transcript.
+    assert "llm.call.failed" not in event_types

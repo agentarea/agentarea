@@ -28,14 +28,17 @@ describe("isPending", () => {
 });
 
 describe("countInbox", () => {
-  it("counts input requests apart from failures", () => {
-    const { counts, unknown } = countInbox([
-      "waiting_for_input",
-      "waiting_for_input",
-      "failed",
-      "waiting_for_approval",
-      "completed",
-    ]);
+  it("counts input requests apart from failures, and decisions apart from tasks", () => {
+    const { counts, unknown } = countInbox(
+      [
+        "waiting_for_input",
+        "waiting_for_input",
+        "failed",
+        "waiting_for_approval",
+        "completed",
+      ],
+      3
+    );
 
     expect(counts).toEqual({
       all: 5,
@@ -43,6 +46,7 @@ describe("countInbox", () => {
       input: 2,
       completed: 1,
       failed: 1,
+      decided: 3,
     });
     expect(unknown).toEqual([]);
   });
@@ -64,6 +68,7 @@ describe("countInbox", () => {
       input: 0,
       completed: 0,
       failed: 0,
+      decided: 0,
     });
     expect(unknown).toEqual(["something_new"]);
   });

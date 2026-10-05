@@ -4,10 +4,14 @@ import asyncio
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
-from agentarea_mcp.application.mcp_client import platform_client_factory
+from agentarea_mcp.application.mcp_client import (
+    MCPGatewayStartupFailureError,
+    platform_client_factory,
+)
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
 from agentarea_mcp.verification import _list_tools, _RuntimeInstance
 
@@ -44,7 +48,8 @@ class _FakeInstance:
     def __init__(self, instance_type="docker", verification=None):
         self.id = uuid.uuid4()
         self.name = "test-inst"
-        self.json_spec = {"type": instance_type}
+        self.transport = instance_type
+        self.json_spec = {}
         self.workspace_id = uuid.uuid4()
         self.created_by = str(uuid.uuid4())
         self.server_spec_id = "test-spec-id"
@@ -54,7 +59,7 @@ class _FakeInstance:
 
     @property
     def endpoint_url(self) -> str:
-        t = self.json_spec.get("type", "")
+        t = self.transport
         if t == "url":
             return self.json_spec.get("endpoint_url", "")
         if t in ("docker", "command"):
@@ -76,15 +81,15 @@ def _make_instance(instance_type="docker", verification=None):
 def test_runtime_instance_uses_converted_transport_as_authority():
     instance = _make_instance("docker")
     instance.json_spec = {
-        "type": "docker",
         "image": "registry.example/server@sha256:" + "f" * 64,
         "command": ["/opt/mcp-pkg/bin/server"],
         "port": 8080,
     }
-
-    runtime = _RuntimeInstance(
-        instance,
-        {
+    server = MagicMock(
+        remote_url=None,
+        cmd=None,
+        docker_image_url=None,
+        json_spec={
             "type": "command",
             "command": "npx",
             "args": ["mcp-server-time"],
@@ -92,12 +97,13 @@ def test_runtime_instance_uses_converted_transport_as_authority():
         },
     )
 
+    runtime = _RuntimeInstance(instance, server)
+
     assert runtime.json_spec["type"] == "docker"
     assert runtime.json_spec["image"] == instance.json_spec["image"]
     assert runtime.json_spec["command"] == ["/opt/mcp-pkg/bin/server"]
     assert "args" not in runtime.json_spec
     assert "endpoint_url" not in runtime.json_spec
-
 
 
 class _AsyncContextManagerMock:
@@ -127,9 +133,7 @@ def _make_db_mock(instance):
                 server = MagicMock()
                 server.id = "test-spec-id"
                 server.remote_url = (
-                    instance.json_spec.get("endpoint_url")
-                    if instance.json_spec.get("type") == "url"
-                    else None
+                    instance.json_spec.get("endpoint_url") if instance.transport == "url" else None
                 )
                 server.cmd = None
                 server.docker_image_url = "test-image:latest"
@@ -199,6 +203,33 @@ async def test_verify_happy_path_sets_succeeded():
     assert result["status"] == "succeeded"
     assert result["error"] is None
     assert result["schema_version"] == 1
+
+
+@pytest.mark.asyncio
+async def test_verify_fails_with_safe_manager_start_failure_detail():
+    inst = _make_instance("docker")
+    db_mock = _make_db_mock(inst)
+
+    async def fail_start(_endpoint_url, headers=None):
+        raise MCPGatewayStartupFailureError("package has no executable")
+
+    with (
+        patch("agentarea_mcp.verification.get_database", return_value=db_mock),
+        patch("agentarea_mcp.verification.get_settings") as mock_settings,
+    ):
+        mock_settings.return_value.mcp.manager_gateway_url.return_value = "http://fake-go/mcp"
+        mock_settings.return_value.mcp.manager_gateway_headers.return_value = {}
+
+        from agentarea_mcp.verification import verify
+
+        result = await verify(cast(Any, inst), _list_tools_fn=fail_start)
+
+    assert result["status"] == "failed"
+    failure = result["error"]
+    assert failure is not None
+    assert failure["detail"] == "package has no executable"
+    assert "package has no executable" in failure["message"]
+    assert "MCPError" not in failure["message"]
 
 
 # ---------------------------------------------------------------------------
@@ -467,7 +498,6 @@ async def test_verify_passes_extra_headers_to_list_tools():
     must be merged with json_spec headers and passed to list_tools."""
     inst = _make_instance("url")
     inst.json_spec = {
-        "type": "url",
         "endpoint_url": "https://mcp.notion.com/sse",
         "headers": {"X-Custom": "value"},
     }
@@ -483,7 +513,7 @@ async def test_verify_passes_extra_headers_to_list_tools():
         patch("agentarea_mcp.verification.get_database", return_value=db_mock),
         patch("agentarea_mcp.verification.get_settings") as mock_settings,
     ):
-        mock_settings.return_value.mcp.MCP_MANAGER_URL = "http://fake-go:7999"
+        mock_settings.return_value.mcp.MANAGER_URL = "http://fake-go:7999"
 
         from agentarea_mcp.verification import verify
 
@@ -522,7 +552,9 @@ async def test_list_tools_uses_shared_client_for_explicit_sse_url():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools("https://mcp.notion.com/sse", httpx_client_factory=platform_client_factory)
+        await _list_tools(
+            "https://mcp.notion.com/sse", httpx_client_factory=platform_client_factory
+        )
 
     assert targets[0][0] == "https://mcp.notion.com/sse"
 
@@ -588,7 +620,12 @@ async def test_list_tools_declared_streamable_uses_shared_client():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools("https://mcp.vercel.com", None, "streamable-http", httpx_client_factory=platform_client_factory)
+        await _list_tools(
+            "https://mcp.vercel.com",
+            None,
+            "streamable-http",
+            httpx_client_factory=platform_client_factory,
+        )
 
     assert targets == [("https://mcp.vercel.com", "streamable-http")]
 
@@ -869,7 +906,8 @@ async def test_monitor_reverify_sweep_enqueues_never_attempted():
         def __init__(self):
             self.id = inst_id
             self.name = "my-inst"
-            self.json_spec = {"type": "docker"}
+            self.transport = "docker"
+            self.json_spec = {}
             self.workspace_id = uuid.uuid4()
             self.created_by = str(uuid.uuid4())
             self.verification = dict(DEFAULT_VERIFICATION)

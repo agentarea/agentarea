@@ -106,9 +106,10 @@ selfservice:
               - read:user
 
 log:
-  level: debug
+  level: info
   format: text
-  leak_sensitive_values: true
+  # Sensitive values (login, recovery and verification codes) never reach logs.
+  leak_sensitive_values: false
 
 # Secrets are intentionally NOT defined here. Kratos reads them from the
 # environment (SECRETS_COOKIE / SECRETS_CIPHER), which the compose files supply
@@ -123,7 +124,7 @@ ciphers:
 hashers:
   algorithm: bcrypt
   bcrypt:
-    cost: 8
+    cost: 12
 
 identity:
   default_schema_id: default

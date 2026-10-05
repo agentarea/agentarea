@@ -20,6 +20,7 @@ from agentarea_api.api.deps.services import (
     get_secret_manager,
     get_task_service,
 )
+from agentarea_api.api.rate_limit import limit_a2a_rpc
 from agentarea_api.api.v1.a2a_auth import (
     A2AAuthContext,
     require_a2a_execute_auth,
@@ -72,7 +73,10 @@ async def _dispatch(
 @router.post(
     "/rpc",
     response_model=None,
-    dependencies=[unrestricted("A2A JSON-RPC surface; the agent card and task auth govern it")],
+    dependencies=[
+        unrestricted("A2A JSON-RPC surface; the agent card and task auth govern it"),
+        Depends(limit_a2a_rpc),
+    ],
 )
 async def handle_agent_jsonrpc(
     agent_id: UUID,
@@ -116,7 +120,10 @@ agent_host_router = APIRouter(dependencies=[Depends(require_a2a_read_auth)])
 @agent_host_router.post(
     "/",
     response_model=None,
-    dependencies=[unrestricted("A2A JSON-RPC surface; the agent card and task auth govern it")],
+    dependencies=[
+        unrestricted("A2A JSON-RPC surface; the agent card and task auth govern it"),
+        Depends(limit_a2a_rpc),
+    ],
 )
 async def handle_agent_host_jsonrpc(
     agent_id: UUID,

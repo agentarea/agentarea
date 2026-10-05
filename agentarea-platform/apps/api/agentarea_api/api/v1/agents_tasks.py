@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import mimetypes
 import re
@@ -45,7 +46,7 @@ from agentarea_common.events.contract import (
     canonical_type,
 )
 from agentarea_common.money import ZERO, Money, serialize_money
-from agentarea_common.utils.types import UtcDatetime
+from agentarea_common.utils.types import UtcDatetime, utc_isoformat
 from agentarea_common.workspaces.lookup import workspace_api_prefix
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
@@ -53,6 +54,7 @@ from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_secrets.naming import has_reserved_prefix
 from agentarea_tasks.domain.exceptions import (
     AgentModelNotConfiguredError,
+    BudgetCapExceededError,
     SchedulingNotSupportedError,
 )
 from agentarea_tasks.domain.statuses import TaskStatus
@@ -60,6 +62,7 @@ from agentarea_tasks.infrastructure.repository import TaskEventRepository
 from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig, require_future_instant
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import text
@@ -673,6 +676,62 @@ async def _tail_task_events_sse(
         )
 
 
+async def _with_sse_heartbeats(
+    source: AsyncGenerator[str, None],
+    *,
+    interval_seconds: float = 15.0,
+) -> AsyncGenerator[str, None]:
+    """Emit ``: ping`` comments while ``source`` has no frame ready.
+
+    One producer task iterates ``source`` for its whole life, so a deadline the
+    source holds across ``yield`` (the event feed's wall-clock ``asyncio.timeout``)
+    stays bound to a live task and still fires. The producer also runs
+    ``source.aclose()``, in the task that iterated it.
+    """
+    frames: asyncio.Queue[str] = asyncio.Queue(maxsize=1)
+
+    async def produce() -> None:
+        try:
+            async for frame in source:
+                await frames.put(frame)
+        finally:
+            await source.aclose()
+
+    producer = asyncio.create_task(produce())
+    next_frame = asyncio.create_task(frames.get())
+    try:
+        while True:
+            done, _ = await asyncio.wait(
+                (next_frame, producer),
+                timeout=interval_seconds,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if next_frame in done:
+                yield next_frame.result()
+                next_frame = asyncio.create_task(frames.get())
+            elif producer in done:
+                break
+            else:
+                yield ": ping\n\n"
+        # Cancelling a pending Queue.get leaves its frame queued for the drain.
+        next_frame.cancel()
+        while not frames.empty():
+            yield frames.get_nowait()
+        # A producer cancelled here was cut by the source's own deadline while
+        # it waited to hand over a frame: the stream ends like a timed-out feed.
+        if not producer.cancelled():
+            producer.result()
+    finally:
+        next_frame.cancel()
+        if not producer.done():
+            producer.cancel()
+            # asyncio.wait, not gather: a repeated cancellation of this task must
+            # not interrupt the producer's source.aclose().
+            await asyncio.wait((producer,))
+            if not producer.cancelled() and (error := producer.exception()) is not None:
+                logger.error("SSE source failed while closing", exc_info=error)
+
+
 @router.post(
     "/",
     dependencies=[
@@ -715,7 +774,7 @@ async def create_task_for_agent_with_stream(
                 task_policy=data.task_policy,
             )
         except ValidationError as exc:
-            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+            raise RequestValidationError(exc.errors()) from exc
 
         try:
             created_task = await task_service.reserve_run(
@@ -745,11 +804,53 @@ async def create_task_for_agent_with_stream(
             user_context.workspace_id, data.attachments, user_context.user_id
         )
 
+    creation_error: tuple[str, str] | None = None
+    creation_error_details: dict[str, str | float] = {}
+    if created_task is None:
+        try:
+            payload = RunCreate(
+                agent_id=agent_id,
+                description=data.description,
+                parameters=data.parameters,
+                execution=data.execution,
+                requires_human_approval=data.requires_human_approval or False,
+                project_id=data.project_id,
+                task_policy=data.task_policy,
+            )
+        except ValidationError as exc:
+            raise RequestValidationError(exc.errors()) from exc
+        try:
+            created_task = await task_service.start_run(
+                payload,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
+            )
+        except PolicyValidationError:
+            creation_error = ("Task policy rejected", "policy_validation_error")
+        except AgentModelNotConfiguredError:
+            creation_error = ("Agent model is not configured", "model_not_configured")
+        except BudgetCapExceededError as exc:
+            creation_error = (
+                f"Workspace monthly spend cap reached ({exc.current_mtd_usd} {exc.currency}/"
+                f"{exc.cap_usd} {exc.currency})",
+                "monthly_spend_cap_exceeded",
+            )
+            creation_error_details = {
+                "current_mtd_usd": float(exc.current_mtd_usd),
+                "cap_usd": float(exc.cap_usd),
+                "currency": exc.currency,
+            }
+        except ValueError:
+            logger.error("Agent validation failed for agent %s", agent_id, exc_info=True)
+            creation_error = ("Agent validation error", "agent_not_found")
+        except Exception:
+            logger.error("Task creation failed for agent %s", agent_id, exc_info=True)
+            creation_error = ("Task creation failed", "creation_failed")
+
     async def task_creation_stream() -> AsyncGenerator[str, None]:
         """Generate Server-Sent Events for task creation and execution."""
         task = created_task
         try:
-            # Send initial connection event
             yield _format_sse_event(
                 "connected",
                 {
@@ -760,24 +861,21 @@ async def create_task_for_agent_with_stream(
                 },
             )
 
+            if creation_error is not None:
+                error, error_type = creation_error
+                error_data: dict[str, str | float | None] = {
+                    **({"task_id": None} if error_type == "creation_failed" else {}),
+                    "agent_id": str(agent_id),
+                    "error": error,
+                    "error_type": error_type,
+                    **creation_error_details,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+                yield _format_sse_event("error", error_data)
+                return
             if task is None:
-                # Create and execute task using service layer
-                payload = RunCreate(
-                    agent_id=agent_id,
-                    description=data.description,
-                    parameters=data.parameters,
-                    execution=data.execution,
-                    requires_human_approval=data.requires_human_approval or False,
-                    project_id=data.project_id,
-                    task_policy=data.task_policy,
-                )
-                task = await task_service.start_run(
-                    payload,
-                    workspace_id=user_context.workspace_id,
-                    user_id=user_context.user_id,
-                )
+                raise RuntimeError("Task creation completed without a task")
 
-            # Send task created event
             yield _format_sse_event(
                 "task_created",
                 {
@@ -786,16 +884,11 @@ async def create_task_for_agent_with_stream(
                     "description": task.description,
                     "status": task.status,
                     "execution_id": task.execution_id,
-                    "created_at": task.created_at.isoformat(),
+                    "created_at": utc_isoformat(task.created_at),
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
 
-            # Stream execution events by tailing the durable event log. We
-            # already emitted "connected" above, so suppress the helper's own.
-            # Tailing the DB (not Redis pub/sub) is what makes a fast task's
-            # events show up: they are published before any subscriber could
-            # attach, but they are durably logged, so replay is lossless.
             if task.execution_id and task.status in ["running", "pending"]:
                 async for chunk in _tail_task_events_sse(
                     task.id,
@@ -806,7 +899,6 @@ async def create_task_for_agent_with_stream(
                 ):
                     yield chunk
             else:
-                # Task failed to start
                 yield _format_sse_event(
                     "task_failed",
                     {
@@ -818,38 +910,6 @@ async def create_task_for_agent_with_stream(
                         "timestamp": datetime.now(UTC).isoformat(),
                     },
                 )
-
-        except PolicyValidationError:
-            yield _format_sse_event(
-                "error",
-                {
-                    "agent_id": str(agent_id),
-                    "error": "Task policy rejected",
-                    "error_type": "policy_validation_error",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            )
-        except AgentModelNotConfiguredError:
-            yield _format_sse_event(
-                "error",
-                {
-                    "agent_id": str(agent_id),
-                    "error": "Agent model is not configured",
-                    "error_type": "model_not_configured",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            )
-        except ValueError:
-            # Agent validation errors
-            yield _format_sse_event(
-                "error",
-                {
-                    "agent_id": str(agent_id),
-                    "error": "Agent validation error",
-                    "error_type": "agent_not_found",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            )
         except Exception:
             logger.error("Task creation failed for agent %s", agent_id, exc_info=True)
             yield _format_sse_event(
@@ -864,13 +924,11 @@ async def create_task_for_agent_with_stream(
             )
 
     return StreamingResponse(
-        task_creation_stream(),
+        _with_sse_heartbeats(task_creation_stream()),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Cache-Control",
         },
     )
 
@@ -939,7 +997,7 @@ async def create_task_for_agent_sync(
         # Convert to API response format
         return TaskResponse.from_agent_task(task)
 
-    except HTTPException:
+    except (HTTPException, BudgetCapExceededError):
         raise
     except PolicyValidationError as exc:
         raise HTTPException(status_code=422, detail="Task policy rejected") from exc
@@ -1033,7 +1091,7 @@ async def schedule_task_for_agent(
 
         return TaskResponse.from_agent_task(task)
 
-    except HTTPException:
+    except (HTTPException, BudgetCapExceededError):
         raise
     except SchedulingNotSupportedError as exc:
         raise HTTPException(
@@ -1184,13 +1242,23 @@ async def get_agent_task_status(
         if stored_artifacts:
             status_artifacts = [item.model_dump() for item in stored_artifacts]
 
+        # A signal-based pause lives in the workflow's own state; Temporal keeps
+        # reporting "running" while the workflow waits, so read it from there.
+        execution_status = status.get("execution_status", status.get("status"))
+        live_state = (
+            await workflow_task_service.get_live_state(execution_id)
+            if execution_status == "running"
+            else None
+        )
+
         return {
             "task_id": str(task_id),
             "agent_id": str(agent_id),
             "execution_id": execution_id,
             # Authoritative lifecycle status/result come from the persisted task.
             "status": task.status,
-            "execution_status": status.get("execution_status", status.get("status")),
+            "execution_status": execution_status,
+            "paused": bool(live_state and live_state.get("paused")),
             "success": status.get("success"),
             "failure_reason": status.get("failure_reason"),
             "start_time": status.get("start_time"),
@@ -1220,7 +1288,7 @@ class TaskArtifactItem(BaseModel):
     size: int
     content_type: str | None
     sha256: str | None
-    created_at: datetime | None
+    created_at: UtcDatetime | None
     download_url: str
 
 
@@ -1257,15 +1325,15 @@ async def _sandbox_manager_request(
     *,
     params: dict[str, str] | None = None,
 ) -> httpx.Response:
-    settings = get_settings().mcp
-    secret = settings.SANDBOX_FILE_AUTH_SECRET
+    settings = get_settings()
+    secret = settings.sandbox.FILE_SECRET
     if secret is None or not secret.get_secret_value():
         raise HTTPException(status_code=503, detail="Sandbox file access is not configured")
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             return await client.request(
                 method,
-                f"{settings.MCP_MANAGER_URL.rstrip('/')}{path}",
+                f"{settings.mcp.MANAGER_URL.rstrip('/')}{path}",
                 params=params,
                 headers={"Authorization": f"Bearer {secret.get_secret_value()}"},
             )
@@ -1281,15 +1349,15 @@ async def _sandbox_manager_stream(
     *,
     params: dict[str, str],
 ) -> tuple[httpx.AsyncClient, httpx.Response]:
-    settings = get_settings().mcp
-    secret = settings.SANDBOX_FILE_AUTH_SECRET
+    settings = get_settings()
+    secret = settings.sandbox.FILE_SECRET
     if secret is None or not secret.get_secret_value():
         raise HTTPException(status_code=503, detail="Sandbox file access is not configured")
 
     client = httpx.AsyncClient(timeout=300)
     request = client.build_request(
         "GET",
-        f"{settings.MCP_MANAGER_URL.rstrip('/')}{path}",
+        f"{settings.mcp.MANAGER_URL.rstrip('/')}{path}",
         params=params,
         headers={"Authorization": f"Bearer {secret.get_secret_value()}"},
     )
@@ -1700,7 +1768,10 @@ async def pause_agent_task(
                 status_code=400, detail=f"Cannot pause task in '{current_status}' state"
             )
 
-        if current_status == "paused":
+        # A pause is a signal the workflow holds in its own state; Temporal's
+        # execution status stays "running" while it waits.
+        live_state = await workflow_task_service.get_live_state(execution_id)
+        if live_state and live_state.get("paused"):
             raise HTTPException(status_code=400, detail="Task is already paused")
 
         # Pause the workflow
@@ -2025,9 +2096,8 @@ async def send_task_command(
         elif payload.command == "queue_message":
             if not payload.message:
                 raise HTTPException(status_code=400, detail="message is required for queue_message")
-            delivered = await workflow_task_service.send_workflow_command(
-                execution_id, "queue_message", {"message": payload.message}
-            )
+            # A completed task whose workflow has closed continues in a new run.
+            delivered = await task_service.queue_follow_up(task_id, payload.message)
 
         elif payload.command == "remove_message":
             if not payload.message_id:
@@ -2065,8 +2135,10 @@ async def send_task_command(
 
         return {"status": "accepted", "command": payload.command}
 
-    except HTTPException:
+    except (HTTPException, BudgetCapExceededError):
         raise
+    except PolicyValidationError as exc:
+        raise HTTPException(status_code=422, detail="Task policy rejected") from exc
     except Exception as e:
         logger.error(
             f"Failed to send command '{payload.command}' for task {task_id}: {e}", exc_info=True
@@ -2296,13 +2368,11 @@ async def stream_task_events(
                 )
 
         return StreamingResponse(
-            event_stream(),
+            _with_sse_heartbeats(event_stream()),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Cache-Control",
             },
         )
 

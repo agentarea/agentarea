@@ -15,6 +15,8 @@ type Column<T> = {
   render?(value: unknown, item?: T): React.ReactNode;
   headerClassName?: string;
   cellClassName?: string;
+  /** Marks the identity cell as the row's native link when `rowHref` is set. */
+  rowLink?: boolean;
 };
 
 /**
@@ -29,9 +31,12 @@ export default function GridAndTableViews<T extends GridItem>({
   columns,
   cardContent,
   itemLink,
+  rowHref,
   cardClassName,
   gridClassName,
+  tableClassName,
   rowProps,
+  wrapCardContent = true,
 }: {
   viewMode?: string;
   /** Required: a generic "no data" card teaches the user nothing. */
@@ -39,11 +44,16 @@ export default function GridAndTableViews<T extends GridItem>({
   data: T[];
   columns: Column<T>[];
   cardContent: (item: T) => React.ReactNode;
+  /** Link the shared card wrapper; table rows use `rowHref` when provided. */
   itemLink?: (item: T) => string;
+  rowHref?: (item: T) => string;
   cardClassName?: string;
   gridClassName?: string;
-  /** Extra attributes for each row and card, e.g. drag source or drop target. */
+  tableClassName?: string;
+  /** Extra attributes for each row and wrapped card. */
   rowProps?: (item: T) => React.HTMLAttributes<HTMLElement>;
+  /** `cardContent` owns its card and link, so do not add a shared wrapper. */
+  wrapCardContent?: boolean;
 }) {
   if (!data.length) return emptyState;
 
@@ -51,12 +61,15 @@ export default function GridAndTableViews<T extends GridItem>({
     return (
       <Table
         data={data}
+        className={tableClassName}
         columns={columns}
         rowProps={rowProps}
         // The row goes where the card goes. Passed as a href rather than a
         // click handler: this component renders on the server, so a closure
         // never reaches the browser and the rows were inert.
-        rowHref={(item) => (item.itemLink ?? itemLink)?.(item) ?? ""}
+        rowHref={(item) =>
+          rowHref?.(item) ?? (item.itemLink ?? itemLink)?.(item) ?? ""
+        }
       />
     );
   }
@@ -64,6 +77,11 @@ export default function GridAndTableViews<T extends GridItem>({
   return (
     <div className={cn(CARD_GRID_LOOSE, gridClassName)}>
       {data.map((item) => {
+        if (!wrapCardContent) {
+          return (
+            <React.Fragment key={item.id}>{cardContent(item)}</React.Fragment>
+          );
+        }
         const linkFunction = item.itemLink || itemLink;
         const { className: extraClassName, ...extraProps } =
           rowProps?.(item) ?? {};

@@ -1,3 +1,4 @@
+import json
 import urllib.parse
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, call
@@ -23,26 +24,32 @@ from agentarea_secrets.catalog_service import SecretCatalogService
 from fastapi import HTTPException
 
 
+def _server(*, remote_url=None, json_spec=None):
+    return SimpleNamespace(
+        remote_url=remote_url, cmd=None, docker_image_url=None, json_spec=json_spec or {}
+    )
+
+
 @pytest.mark.flow(MainFlow.MCP_OAUTH)
 def test_resolve_instance_remote_url_uses_server_spec_remote_url():
-    server_spec = SimpleNamespace(remote_url="https://server.example/mcp", json_spec={})
+    instance = SimpleNamespace(transport="url", json_spec={})
+    server_spec = _server(remote_url="https://server.example/mcp")
 
-    assert _resolve_instance_remote_url(server_spec) == "https://server.example/mcp"
+    assert _resolve_instance_remote_url(instance, server_spec) == "https://server.example/mcp"
 
 
 def test_resolve_instance_remote_url_uses_server_spec_json_fallback():
-    server_spec = SimpleNamespace(
-        remote_url=None,
-        json_spec={"type": "url", "endpoint_url": "https://json-spec.example/mcp"},
-    )
+    instance = SimpleNamespace(transport="url", json_spec={})
+    server_spec = _server(json_spec={"type": "url", "endpoint_url": "https://json-spec.example/mcp"})
 
-    assert _resolve_instance_remote_url(server_spec) == "https://json-spec.example/mcp"
+    assert _resolve_instance_remote_url(instance, server_spec) == "https://json-spec.example/mcp"
 
 
-def test_resolve_instance_remote_url_returns_none_without_remote_url():
-    server_spec = SimpleNamespace(remote_url=None, json_spec={"type": "docker"})
+def test_resolve_instance_remote_url_returns_none_for_a_container_instance():
+    instance = SimpleNamespace(transport="docker", json_spec={})
+    server_spec = _server(remote_url="https://server.example/mcp")
 
-    assert _resolve_instance_remote_url(server_spec) is None
+    assert _resolve_instance_remote_url(instance, server_spec) is None
 
 
 @pytest.mark.flow(MainFlow.MCP_OAUTH)
@@ -95,11 +102,13 @@ def _patch_instance_lookup(
         server_spec_id=uuid4(),
         auth_config_id=auth_config_id,
         name="Gmail",
+        transport="url",
+        json_spec={},
     )
     json_spec: dict = {"type": "url"}
     if spec_metadata is not None:
         json_spec["metadata"] = spec_metadata
-    server_spec = SimpleNamespace(remote_url=remote_url, json_spec=json_spec)
+    server_spec = _server(remote_url=remote_url, json_spec=json_spec)
 
     class _InstanceRepository:
         def __init__(self, *_args, **_kwargs):
@@ -636,7 +645,7 @@ async def test_callback_error_returns_to_the_frontend_with_the_reason_as_data(
     monkeypatch.setattr(
         mcp_oauth_connect,
         "get_settings",
-        lambda: SimpleNamespace(app=SimpleNamespace(FRONTEND_BASE_URL="https://app.agentarea.ai/")),
+        lambda: SimpleNamespace(app=SimpleNamespace(APP_URL="https://app.agentarea.ai/")),
     )
 
     response = await mcp_oauth_connect.oauth_callback(
@@ -717,3 +726,286 @@ async def test_post_oauth_discovery_failure_is_logged_with_traceback(monkeypatch
         )
 
     assert [r for r in caplog.records if r.exc_info and "discovery" in r.getMessage()], caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Platform OAuth apps — one-click Connect for providers without DCR (GitHub)
+# ---------------------------------------------------------------------------
+
+_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
+_GITHUB_ISSUER = "https://github.com/login/oauth"
+
+
+def _github_metadata() -> AuthServerMetadata:
+    """What discovery reports for GitHub — including a token endpoint the
+    platform app must override, as a workspace-controlled server could advertise."""
+    return AuthServerMetadata(
+        issuer=_GITHUB_ISSUER,
+        authorization_endpoint="https://github.com/login/oauth/authorize",
+        token_endpoint="https://token-thief.example/token",  # noqa: S106
+        registration_endpoint=None,
+        scopes_supported=["repo"],
+        resource="https://api.githubcopilot.com/mcp",
+    )
+
+
+def _github_app(**overrides) -> dict:
+    return {
+        "issuer": _GITHUB_ISSUER,
+        "client_id": "Iv1.platform",
+        "client_secret": "platform-secret",  # pragma: allowlist secret
+        "authorization_endpoint": "https://github.com/login/oauth/authorize",
+        "token_endpoint": "https://github.com/login/oauth/access_token",
+        "resource_origins": ["https://api.githubcopilot.com"],
+        **overrides,
+    }
+
+
+@pytest.fixture(autouse=True)
+def platform_apps(monkeypatch):
+    """AGENTAREA_MCP_OAUTH_APPS for these tests: none unless a test configures one."""
+    import agentarea_mcp.application.platform_oauth_app as platform_oauth_app
+    from agentarea_common.config.mcp import MCPSettings
+
+    configured: list[dict] = []
+    monkeypatch.setattr(
+        platform_oauth_app,
+        "get_settings",
+        lambda: SimpleNamespace(mcp=MCPSettings(OAUTH_APPS=configured)),
+    )
+    return configured
+
+
+@pytest.mark.asyncio
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
+async def test_preflight_is_ready_when_the_operator_configured_an_app_for_the_issuer(
+    monkeypatch, platform_apps
+):
+    _patch_instance_lookup(monkeypatch, remote_url=_GITHUB_MCP_URL)
+    _patch_discovery(monkeypatch, _github_metadata())
+    platform_apps.append(_github_app())
+
+    result = await mcp_oauth_connect.oauth_preflight(
+        _user_context(), AsyncMock(), server_id=uuid4()
+    )
+
+    assert result.status == "ready"
+    assert result.issuer == _GITHUB_ISSUER
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "app",
+    [
+        None,
+        _github_app(resource_origins=["https://mcp.other.example"]),
+        _github_app(issuer="https://github.com/login-oauth"),
+    ],
+    ids=["no-app", "origin-not-served", "other-issuer"],
+)
+async def test_preflight_still_requires_an_oauth_app_when_no_platform_app_serves_the_url(
+    monkeypatch, platform_apps, app
+):
+    _patch_instance_lookup(monkeypatch, remote_url=_GITHUB_MCP_URL)
+    _patch_discovery(monkeypatch, _github_metadata())
+    if app is not None:
+        platform_apps.append(app)
+
+    result = await mcp_oauth_connect.oauth_preflight(
+        _user_context(), AsyncMock(), instance_id=uuid4()
+    )
+
+    assert result.status == "oauth_app_required"
+
+
+def _patch_platform_authorize(monkeypatch):
+    auth_create = AsyncMock(return_value=SimpleNamespace(id=uuid4()))
+
+    class _AuthService:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        create = auth_create
+
+    stored_state = AsyncMock()
+    monkeypatch.setattr(mcp_oauth_connect, "MCPAuthService", _AuthService)
+    monkeypatch.setattr(
+        mcp_oauth_connect, "get_real_secret_manager", lambda **_kwargs: SimpleNamespace()
+    )
+    monkeypatch.setattr(mcp_oauth_connect, "_store_state", stored_state)
+    return auth_create, stored_state
+
+
+@pytest.mark.asyncio
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
+async def test_authorize_without_dcr_uses_the_configured_platform_app(monkeypatch, platform_apps):
+    """The auth config names the platform app by issuer and takes its endpoints
+    from it: a spec or a discovery answer pointing elsewhere must not receive the
+    platform secret, and the workspace never holds the app's credentials."""
+    instance = _patch_instance_lookup(monkeypatch, remote_url=_GITHUB_MCP_URL)
+    _patch_discovery(monkeypatch, _github_metadata())
+    platform_apps.append(_github_app())
+    auth_create, stored_state = _patch_platform_authorize(monkeypatch)
+
+    response = await mcp_oauth_connect.oauth_authorize(
+        MCPOAuthAuthorizeRequest(instance_id=instance.id),
+        _user_context(),
+        AsyncMock(),
+        AsyncMock(),
+    )
+
+    authorize_url = urllib.parse.urlparse(response["authorize_url"])
+    assert f"{authorize_url.scheme}://{authorize_url.netloc}{authorize_url.path}" == (
+        "https://github.com/login/oauth/authorize"
+    )
+    assert urllib.parse.parse_qs(authorize_url.query)["client_id"] == ["Iv1.platform"]
+    auth_kwargs = auth_create.await_args.kwargs
+    config = auth_kwargs["config"]
+    assert config["token_url"] == "https://github.com/login/oauth/access_token"  # noqa: S105
+    assert config["authorization_url"] == "https://github.com/login/oauth/authorize"
+    assert config["credential_mode"] == "managed"
+    assert config["platform_oauth_issuer"] == _GITHUB_ISSUER
+    assert "client_id" not in config
+    assert "managed_credentials_key" not in config
+    assert auth_kwargs["credentials"] == {}
+    assert auth_kwargs["allow_managed_credentials"] is True
+    state_payload = stored_state.await_args.args[1]
+    assert (
+        state_payload["as_metadata"]["token_endpoint"]
+        == "https://github.com/login/oauth/access_token"  # noqa: S105
+    )
+    assert "platform-secret" not in json.dumps(state_payload)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "app",
+    [
+        _github_app(issuer="https://github.com/login-oauth"),
+        _github_app(resource_origins=["https://mcp.other.example"]),
+    ],
+    ids=["issuer-mismatch", "origin-not-served"],
+)
+async def test_authorize_refuses_a_platform_app_that_does_not_match(
+    monkeypatch, platform_apps, app
+):
+    instance = _patch_instance_lookup(monkeypatch, remote_url=_GITHUB_MCP_URL)
+    _patch_discovery(monkeypatch, _github_metadata())
+    platform_apps.append(app)
+    auth_create, _ = _patch_platform_authorize(monkeypatch)
+
+    with pytest.raises(HTTPException) as excinfo:
+        await mcp_oauth_connect.oauth_authorize(
+            MCPOAuthAuthorizeRequest(instance_id=instance.id),
+            _user_context(),
+            AsyncMock(),
+            AsyncMock(),
+        )
+
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.detail["code"] == "oauth_app_required"
+    auth_create.assert_not_awaited()
+
+
+def _patch_callback(monkeypatch, auth_config, exchange):
+    class _AuthService:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        get = AsyncMock(return_value=auth_config)
+        get_oauth_client_credentials = AsyncMock(
+            return_value=("Iv1.platform", "platform-secret", {})
+        )
+        update = AsyncMock()
+
+    class _InstanceRepository:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        update = AsyncMock()
+
+    monkeypatch.setattr(
+        mcp_oauth_connect,
+        "_pop_state",
+        AsyncMock(
+            return_value={
+                "instance_id": str(uuid4()),
+                "auth_config_id": str(auth_config.id),
+                "workspace_id": "ws-1",
+                "user_id": "user-1",
+                "code_verifier": "verifier",
+                "return_to": "",
+                "as_metadata": {
+                    "issuer": _GITHUB_ISSUER,
+                    "authorization_endpoint": "https://github.com/login/oauth/authorize",
+                    "token_endpoint": "https://token-thief.example/token",
+                    "resource": "",
+                },
+            }
+        ),
+    )
+    monkeypatch.setattr(mcp_oauth_connect, "workspace_slug_for", AsyncMock(return_value="acme"))
+    monkeypatch.setattr(
+        mcp_oauth_connect, "get_real_secret_manager", lambda **_kwargs: SimpleNamespace()
+    )
+    monkeypatch.setattr(mcp_oauth_connect, "MCPAuthService", _AuthService)
+    monkeypatch.setattr(mcp_oauth_connect, "MCPServerInstanceRepository", _InstanceRepository)
+    monkeypatch.setattr(mcp_oauth_connect, "_discover_after_oauth", AsyncMock())
+    monkeypatch.setattr(mcp_oauth_connect.MCPOAuthClientService, "exchange_code", exchange)
+    monkeypatch.setattr(
+        mcp_oauth_connect,
+        "get_settings",
+        lambda: SimpleNamespace(
+            app=SimpleNamespace(
+                APP_URL="https://app.agentarea.ai",
+                API_URL="https://api.agentarea.ai",
+            )
+        ),
+    )
+
+
+def _managed_github_config():
+    return SimpleNamespace(
+        id=uuid4(),
+        config={
+            "credential_mode": "managed",
+            "platform_oauth_issuer": _GITHUB_ISSUER,
+            "token_url": "https://github.com/login/oauth/access_token",
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_callback_exchanges_a_managed_code_at_the_platform_apps_token_endpoint(
+    monkeypatch, platform_apps
+):
+    platform_apps.append(_github_app())
+    exchange = AsyncMock(return_value={"access_token": "gho_x", "expires_in": 28800})
+    _patch_callback(monkeypatch, _managed_github_config(), exchange)
+
+    response = await mcp_oauth_connect.oauth_callback(
+        db_session=AsyncMock(), code="code", state="state", error=None, error_description=None
+    )
+
+    assert "oauth=success" in response.headers["location"]
+    exchange_kwargs = exchange.await_args.kwargs
+    assert (
+        exchange_kwargs["as_metadata"].token_endpoint
+        == "https://github.com/login/oauth/access_token"  # noqa: S105
+    )
+    assert exchange_kwargs["client_secret"] == "platform-secret"  # noqa: S105  # pragma: allowlist secret
+
+
+@pytest.mark.asyncio
+async def test_callback_fails_loud_when_the_platform_app_is_no_longer_configured(
+    monkeypatch, platform_apps
+):
+    exchange = AsyncMock()
+    _patch_callback(monkeypatch, _managed_github_config(), exchange)
+
+    response = await mcp_oauth_connect.oauth_callback(
+        db_session=AsyncMock(), code="code", state="state", error=None, error_description=None
+    )
+
+    assert "reason=token_exchange_failed" in response.headers["location"]
+    exchange.assert_not_awaited()

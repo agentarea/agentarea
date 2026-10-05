@@ -134,6 +134,15 @@ def mcp_is_unsupported(mcp: BundleMcp) -> str | None:
     return None
 
 
+def _json_spec_setup_refs(json_spec: dict[str, Any]) -> list[str]:
+    """Setup keys referenced from the transport values the installer resolves."""
+    values: list[Any] = [json_spec.get("endpoint_url"), json_spec.get("url")]
+    args = json_spec.get("args")
+    if isinstance(args, list):
+        values.extend(args)
+    return [key for value in values for key in setup_refs(value)]
+
+
 class BundleAnalyzer:
     """Builds an :class:`ImportPreview` from an :class:`Bundle`."""
 
@@ -223,6 +232,15 @@ class BundleAnalyzer:
                                 entity_key=mcp.key,
                             )
                         )
+            for key in _json_spec_setup_refs(mcp.json_spec):
+                if key not in setup_keys:
+                    issues.append(
+                        PreviewIssue(
+                            severity=IssueSeverity.BLOCK,
+                            message=f"mcp '{mcp.key}' json_spec references unknown setup field '{key}'",
+                            entity_key=mcp.key,
+                        )
+                    )
             if reason:
                 unsupported.add(mcp.key)
                 entities.append(

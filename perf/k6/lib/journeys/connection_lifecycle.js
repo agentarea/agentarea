@@ -5,11 +5,13 @@
 // The MCP instance is created from a real catalog entry when one qualifies:
 // browse registry_type=mcp_servers, and take an item whose `spec.env_schema`
 // is empty (no credentials needed — confirmed field name/shape) and whose
-// `spec.connection_type === "url"` with a `spec.url` set, using its
-// `installed_entity_id` as `server_spec_id` (that field IS the id of the
-// already-materialized MCPServer spec row a synced registry creates).
-// A catalog-derived spec is platform/shared state, not ours — only the
-// instance created from it gets deleted, never the spec.
+// `spec.connection_type === "url"` with a `spec.url` set, using the catalog
+// item id as `server_spec_id` — the API resolves built-in specs by catalog
+// item id (ADR-003), the same id the webapp's connect links use.
+// `installed_entity_id` is not usable: it can point at a spec row a
+// migration de-materialized. Connecting copies the catalog spec into the
+// workspace (copy-on-write); that copy belongs to this run and is deleted
+// with the instance — the catalog item itself is never touched.
 //
 // Falls back to creating our own throwaway MCPServerSpec (remote_url set
 // directly) when no such catalog entry is found, or the catalog call fails —
@@ -51,12 +53,10 @@ function findCatalogNoCredSource() {
   const candidate = items.find((item) => {
     const spec = item.spec || {};
     const envSchema = spec.env_schema || [];
-    return (
-      spec.connection_type === "url" && spec.url && envSchema.length === 0 && item.installed_entity_id
-    );
+    return spec.connection_type === "url" && spec.url && envSchema.length === 0;
   });
   if (!candidate) return null;
-  return { serverSpecId: candidate.installed_entity_id, remoteUrl: candidate.spec.url, ownsSpec: false };
+  return { serverSpecId: candidate.id, remoteUrl: candidate.spec.url, ownsSpec: false };
 }
 
 // { serverSpecId, remoteUrl, ownsSpec: true } | null
@@ -98,7 +98,9 @@ function mcpInstanceLifecycle() {
     tag("connection_lifecycle", "create_mcp_instance")
   );
   check(instanceRes, {
-    "mcp instance create -> 200/201": (r) => r.status === 200 || r.status === 201,
+    // URL instances verify synchronously (201); container instances are
+    // accepted and verify in the background (202).
+    "mcp instance create -> 2xx": (r) => r.status >= 200 && r.status < 300,
   });
 
   const listRes = get(
@@ -118,6 +120,18 @@ function mcpInstanceLifecycle() {
     check(deleteInstanceRes, {
       "mcp instance delete -> 204/200": (r) => [200, 204].includes(r.status),
     });
+    // A catalog connect materialized a workspace copy of the spec for this
+    // instance alone; leaving it would grow the workspace every iteration.
+    if (!source.ownsSpec && instance.server_spec_id && instance.server_spec_id !== source.serverSpecId) {
+      const deleteCopyRes = del(
+        ws(`/mcp-servers/${instance.server_spec_id}`),
+        "delete_spec_copy",
+        tag("connection_lifecycle", "delete_mcp_spec_copy")
+      );
+      check(deleteCopyRes, {
+        "mcp spec copy delete -> 204/200": (r) => [200, 204].includes(r.status),
+      });
+    }
   }
 
   // Only delete the spec if this run created it — a catalog-derived spec is

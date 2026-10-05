@@ -22,9 +22,9 @@ MAX_MESSAGE_LENGTH = 4096
 async def set_webhook(bot_token: str, url: str, secret_token: str | None = None) -> bool:
     """Register ``url`` as this bot's webhook with Telegram.
 
-    Best-effort: a failure (including the ConnectTimeout you get when the host
-    cannot reach ``api.telegram.org``) is logged and reported as ``False`` so the
-    caller — trigger creation — is never brought down by an unreachable Telegram.
+    A failure (including the ConnectTimeout you get when the host cannot reach
+    ``api.telegram.org``) is logged and reported as ``False``; the caller —
+    trigger save — then refuses to keep a ``secret_token`` Telegram never got.
     ``secret_token`` is echoed back by Telegram in the ``X-Telegram-Bot-Api-Secret-Token``
     header on every delivery, letting the webhook endpoint reject forged POSTs.
     """

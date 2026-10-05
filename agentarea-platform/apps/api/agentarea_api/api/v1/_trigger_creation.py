@@ -8,6 +8,7 @@ exactly the same steps, so they live here once.
 
 import json
 import logging
+import secrets
 from typing import Any
 from uuid import UUID
 
@@ -26,7 +27,10 @@ from agentarea_triggers.domain.models import TriggerCreate as DomainTriggerCreat
 from agentarea_triggers.extractors import resolves_own_credentials
 from agentarea_triggers.schemas.dto import TriggerSpec
 from agentarea_triggers.trigger_service import TriggerService
-from agentarea_triggers.webhook_verification import channel_credential_secret_name
+from agentarea_triggers.webhook_verification import (
+    SIGNING_SECRET_KEYS,
+    channel_credential_secret_name,
+)
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
@@ -35,12 +39,12 @@ logger = logging.getLogger(__name__)
 def get_channel_webhook_service() -> ChannelWebhookService:
     """Composition root for inbound webhook registration.
 
-    Reads the reachable ingress base (TELEGRAM_WEBHOOK_BASE_URL if set, else
-    API_BASE_URL) and hands the endpoints a service that knows nothing about any
-    specific channel — that lives behind the WebhookRegistrar registry.
+    Reads the reachable ingress base (AGENTAREA_TELEGRAM_WEBHOOK_URL if set, else
+    AGENTAREA_API_URL) and hands the endpoints a service that knows nothing about
+    any specific channel — that lives behind the WebhookRegistrar registry.
     """
     settings = get_app_settings()
-    base = getattr(settings, "TELEGRAM_WEBHOOK_BASE_URL", "") or settings.API_BASE_URL
+    base = settings.TELEGRAM_WEBHOOK_URL or settings.API_URL
     return ChannelWebhookService(base)
 
 
@@ -137,6 +141,95 @@ def _channel_type(spec: TriggerSpec) -> str:
     return spec.webhook_type or extractor.removesuffix("_polling") or "generic"
 
 
+def with_webhook_secret_token(
+    channel_type: str, credentials: dict[str, Any]
+) -> tuple[dict[str, Any], str | None]:
+    """Credentials carrying the token the channel echoes on every webhook, if it has one.
+
+    Telegram repeats the ``secret_token`` given to ``setWebhook`` in a header;
+    it is how the webhook tells Telegram's requests from anyone who learned the
+    URL. A token already in ``credentials`` is kept -- the update path carries
+    the stored one in -- so re-registration does not rotate it under in-flight
+    updates. A new one is generated only when there is none.
+    """
+    if channel_type != "telegram":
+        return credentials, None
+    key = SIGNING_SECRET_KEYS["telegram"]
+    token = credentials.get(key) or secrets.token_urlsafe(32)
+    return {**credentials, key: token}, token
+
+
+async def register_channel_webhook(
+    webhook_service: ChannelWebhookService,
+    *,
+    channel_type: Any,
+    webhook_id: str | None,
+    credentials: dict[str, Any],
+    secret_token: str | None,
+) -> None:
+    """Point the provider at the webhook, or refuse the save with 502.
+
+    Runs before the credentials are stored: a secret token the provider never
+    received would make the webhook reject every genuine update, silently.
+    """
+    registered = await webhook_service.register(
+        channel_type=channel_type,
+        webhook_id=webhook_id,
+        credentials=credentials,
+        secret_token=secret_token,
+    )
+    if registered is False:
+        name = getattr(channel_type, "value", None) or str(channel_type)
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"The {name} webhook could not be registered with the provider, so nothing "
+                "was saved. Check the credentials, and that the public webhook base URL "
+                "(TELEGRAM_WEBHOOK_BASE_URL or API_BASE_URL) is reachable over HTTPS."
+            ),
+        )
+
+
+def needs_generated_signing_secret(spec: TriggerSpec, credentials: dict[str, Any] | None) -> bool:
+    """Whether a new trigger is a generic webhook nobody gave a signing secret.
+
+    Such a webhook would start any agent run for whoever learns its URL, so the
+    platform generates the secret and shows it once.
+    """
+    if spec.trigger_type != "webhook" or _channel_type(spec) != "generic":
+        return False
+    key = SIGNING_SECRET_KEYS["generic"]
+    return not any(
+        source and source.get(key)
+        for source in (
+            spec.validation_rules,
+            spec.webhook_config,
+            credentials,
+        )
+    )
+
+
+async def issue_generic_signing_secret(trigger_id: UUID, secret_manager: BaseSecretManager) -> str:
+    """Generate a generic webhook's signing secret, store it, and return it.
+
+    It is kept in the trigger's channel credentials, where the webhook endpoint
+    resolves it; any other credential stored there is kept. The value is
+    returned so the caller can show it exactly once -- it is never readable
+    through the API afterwards. Replaces any previous secret: senders signing
+    with the old one are refused from now on.
+    """
+    secret_name = channel_credential_secret_name("generic", trigger_id)
+    raw = await secret_manager.get_secret(secret_name)
+    stored = json.loads(raw) if raw else {}
+    if not isinstance(stored, dict):
+        raise ValueError("Stored channel credentials must be an object")
+    signing_secret = secrets.token_urlsafe(32)
+    await secret_manager.set_secret(
+        secret_name, json.dumps({**stored, SIGNING_SECRET_KEYS["generic"]: signing_secret})
+    )
+    return signing_secret
+
+
 async def create_trigger_from_spec(
     spec: TriggerSpec,
     *,
@@ -151,25 +244,32 @@ async def create_trigger_from_spec(
 
     ``credentials`` must already be resolved (see ``resolve_channel_credentials``).
     A spec with ``enabled=False`` is created and then disabled, so a schedule
-    never fires before its owner switches it on.
+    never fires before its owner switches it on. When the provider refuses the
+    webhook registration the trigger is deleted again and the 502 propagates.
     """
     trigger = await trigger_service.create_trigger(
         build_domain_trigger(spec, agent_id, user_context, credentials)
     )
 
     has_creds = False
-    if credentials and secret_manager:
-        secret_name = channel_credential_secret_name(_channel_type(spec), trigger.id)
+    if credentials:
+        channel_type = _channel_type(spec)
+        credentials, secret_token = with_webhook_secret_token(channel_type, credentials)
+        try:
+            await register_channel_webhook(
+                webhook_service,
+                channel_type=getattr(trigger, "webhook_type", None),
+                webhook_id=getattr(trigger, "webhook_id", None),
+                credentials=credentials,
+                secret_token=secret_token,
+            )
+        except HTTPException:
+            await trigger_service.delete_trigger(trigger.id)
+            raise
+        secret_name = channel_credential_secret_name(channel_type, trigger.id)
         await secret_manager.set_secret(secret_name, json.dumps(credentials))
         has_creds = True
         logger.info(f"Stored channel credentials for trigger {trigger.id}")
-
-    if has_creds:
-        await webhook_service.register(
-            channel_type=getattr(trigger, "webhook_type", None),
-            webhook_id=getattr(trigger, "webhook_id", None),
-            credentials=credentials,
-        )
 
     if not spec.enabled:
         await trigger_service.disable_trigger(trigger.id)

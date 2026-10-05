@@ -1,14 +1,17 @@
 """Unit tests for webhook endpoints."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from agentarea_api.api import rate_limit
 from agentarea_api.api.deps.services import get_public_webhook_manager, get_webhook_manager
 from agentarea_api.api.v1.webhooks import router
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.testing.flows import MainFlow
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from redis.exceptions import RedisError
 
 
 @pytest.fixture
@@ -53,6 +56,15 @@ def app_with_webhooks(mock_webhook_manager, mock_user_context):
 def client(app_with_webhooks):
     """Create a test client."""
     return TestClient(app_with_webhooks)
+
+
+@pytest.fixture(autouse=True)
+def rate_limit_redis(monkeypatch):
+    class FakeRedis:
+        async def eval(self, *_args):
+            return [1, 0]
+
+    monkeypatch.setattr(rate_limit, "_get_redis_client", lambda: FakeRedis())
 
 
 @pytest.mark.flow(MainFlow.WEBHOOKS)
@@ -302,3 +314,69 @@ class TestWebhookEndpoints:
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+def test_webhook_rate_limit_returns_429_after_limit(client, mock_webhook_manager, monkeypatch):
+    class FakeRedis:
+        def __init__(self):
+            self.counts = {}
+
+        async def eval(self, _script, _num_keys, key, limit, _ttl):
+            count = self.counts.get(key, 0) + 1
+            self.counts[key] = count
+            allowed = count <= int(limit)
+            return [int(allowed), 0 if allowed else 60]
+
+    fake_redis = FakeRedis()
+    monkeypatch.setattr(rate_limit, "_get_redis_client", lambda: fake_redis)
+    monkeypatch.setattr(
+        rate_limit,
+        "get_settings",
+        lambda: SimpleNamespace(
+            triggers=SimpleNamespace(WEBHOOK_RATE=1),
+        ),
+    )
+    mock_webhook_manager.handle_webhook_request.return_value = {
+        "status_code": 200,
+        "body": {"status": "success"},
+    }
+
+    first = client.post("/webhooks/long-enough-webhook-key", json={"event": "first"})
+    # The bucket is per webhook, not per method: any verb reaching the sink spends it.
+    second = client.put("/webhooks/long-enough-webhook-key", json={"event": "second"})
+    independent = client.post(
+        "/webhooks/another-long-enough-webhook-key",
+        json={"event": "independent"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert int(second.headers["retry-after"]) > 0
+    assert independent.status_code == 200
+    assert mock_webhook_manager.handle_webhook_request.await_count == 2
+
+
+def test_webhook_rate_limit_fails_open_when_redis_is_unavailable(
+    client, mock_webhook_manager, monkeypatch
+):
+    class UnavailableRedis:
+        async def eval(self, *_args):
+            raise RedisError("unavailable")
+
+    monkeypatch.setattr(rate_limit, "_get_redis_client", lambda: UnavailableRedis())
+    monkeypatch.setattr(
+        rate_limit,
+        "get_settings",
+        lambda: SimpleNamespace(
+            triggers=SimpleNamespace(WEBHOOK_RATE=1),
+        ),
+    )
+    mock_webhook_manager.handle_webhook_request.return_value = {
+        "status_code": 200,
+        "body": {"status": "success"},
+    }
+
+    response = client.post("/webhooks/long-enough-webhook-key", json={"event": "request"})
+
+    assert response.status_code == 200
+    mock_webhook_manager.handle_webhook_request.assert_awaited_once()

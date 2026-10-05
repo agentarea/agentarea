@@ -14,11 +14,14 @@ const profileForm = (page: Page) =>
 
 async function openSettings(page: Page, path = "/settings") {
   await page.goto(appHref(page, path));
-  await expect(profileForm(page)).toBeVisible();
+  // /w/{slug}/settings -> Kratos 303 -> /settings?flow= -> /w/{slug}/settings?flow=
+  // takes ~2s idle and more than the default 5s under suite load.
+  await expect(profileForm(page)).toBeVisible({ timeout: 20_000 });
   await expect(page).toHaveURL(
     (url) =>
       url.pathname === appHref(page, "/settings") &&
-      Boolean(url.searchParams.get("flow"))
+      Boolean(url.searchParams.get("flow")),
+    { timeout: 20_000 }
   );
 }
 
@@ -170,8 +173,11 @@ test.describe("Account profile settings through Kratos", () => {
 
       const rejected = await submitProfile(page);
       expect(rejected.status()).toBe(400);
+      // Kratos 4000007: an identity with this email already exists. Ory error
+      // messages render inline in an alert, without a per-message test id.
+      expect(JSON.stringify(await rejected.json())).toContain('"id":4000007');
       await expect(
-        page.getByTestId("ory/message/4000007").first()
+        page.getByRole("alert").filter({ hasText: "exists already" })
       ).toBeVisible();
 
       const after = await request.get(

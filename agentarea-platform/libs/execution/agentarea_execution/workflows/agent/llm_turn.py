@@ -28,7 +28,12 @@ from ..retry import model_call_retry_policy
 from .compaction import CompactionMixin
 from .errors import ErrorReportingMixin
 from .limits import run_limit_reason
-from .patches import COMPACTION_BOUNDS_PAYLOAD_PATCH, THINKING_ONLY_REPLY_PATCH
+from .patches import (
+    COMPACTION_BOUNDS_PAYLOAD_PATCH,
+    GOVERNANCE_DENIAL_BLOCKS_RUN_PATCH,
+    PAID_CALL_PERSISTED_BEFORE_LIMITS_PATCH,
+    THINKING_ONLY_REPLY_PATCH,
+)
 from .tool_dispatch import ToolDispatchMixin
 
 
@@ -143,6 +148,21 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 f"Iteration {iteration} failed: {error_details}",
                 exc_info=True,
             )
+            denial = self._governance_denial(e)
+            if (
+                denial is not None
+                and self._interaction_contract_enabled
+                and workflow.patched(GOVERNANCE_DENIAL_BLOCKS_RUN_PATCH)
+            ):
+                # The gate refuses every retry alike until someone acts on its
+                # reason; the run ends blocked on it. llm.call.failed already
+                # carries the user-facing reason.
+                failure_reason, message = denial
+                self.state.status = ExecutionStatus.BLOCKED
+                self.state.failure_reason = failure_reason
+                self.state.error_message = message
+                self.state.blocked_reason = message
+                return
             self._events.add_event(
                 EventTypes.LLM_CALL_FAILED,
                 {"iteration": iteration, "error": error_details},
@@ -250,6 +270,15 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 self.state.messages.append(
                     Message(role="user", content=self.state.goal.description)
                 )
+            elif self._resume_system_prompt_missing:
+                # A resumed log without a system prompt gets this run's at the
+                # head of the window; the conversation before it stays in the tail.
+                self._resume_system_prompt_missing = False
+                self.state.context_head_seqs = [
+                    self.state.conversation_next_seq + len(self.state.messages),
+                    *self.state.context_head_seqs,
+                ]
+                self.state.messages.append(Message(role="system", content=system_prompt))
             # else:
             #     # Add status update for subsequent iterations (not in system prompt)
             #     # Avoid importing PromptBuilder to prevent Temporal sandbox issues
@@ -346,6 +375,9 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
         )
         await self._publish_events_immediately()
 
+        # The provider is paid once the call returns, so the call is persisted
+        # (and metered) before the run limits it crossed stop the run.
+        billed_first = workflow.patched(PAID_CALL_PERSISTED_BEFORE_LIMITS_PATCH)
         try:
             available_tools = self.state.available_tools
             if not self._questions_available:
@@ -428,11 +460,18 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             total_tokens = usage_payload.get("total_tokens", 0) if usage_payload else 0
             if currency_value:
                 self._budget.currency = currency_value
-            self._record_inference_usage(
-                cost=usage_info["cost"],
-                total_tokens=total_tokens,
-                source="LLM call",
-            )
+            if billed_first:
+                self._account_inference_usage(
+                    cost=usage_info["cost"],
+                    total_tokens=total_tokens,
+                    source="LLM call",
+                )
+            else:
+                self._record_inference_usage(
+                    cost=usage_info["cost"],
+                    total_tokens=total_tokens,
+                    source="LLM call",
+                )
 
             # Update context window manager with actual token usage
             if self.context_manager and usage_payload:
@@ -489,8 +528,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             )
             await self._publish_events_immediately()
 
-            # Return dict for compatibility with existing code
-            return {
+            reply = {
                 "role": role_value,
                 "content": content_value,
                 "tool_call_id": None,  # Not provided by LLM response
@@ -543,6 +581,10 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
 
             await self._publish_events_immediately()
             raise
+
+        if billed_first:
+            self._enforce_inference_limits("LLM call")
+        return reply
 
     async def _process_llm_response(self, response: dict[str, Any]) -> None:
         """Process LLM response and handle tool calls."""

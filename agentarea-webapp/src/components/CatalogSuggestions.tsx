@@ -82,7 +82,7 @@ export default function CatalogSuggestions({
                 <Link
                   key={it.id}
                   href={`/explore?type=${type}&item=${it.id}`}
-                  className="flex min-h-[70px] items-start gap-2.5 rounded-lg border border-border/60 bg-white px-3 py-2.5 text-sm transition-all hover:-translate-y-px hover:border-border hover:shadow-sm dark:bg-zinc-900"
+                  className="flex min-h-[70px] items-start gap-2.5 rounded-lg border border-border/60 bg-white px-3 py-2.5 text-sm transition-[transform,border-color,box-shadow] hover:-translate-y-px hover:border-border hover:shadow-sm dark:bg-zinc-900"
                 >
                   <EntityMark
                     identity={it.identity}
@@ -99,7 +99,7 @@ export default function CatalogSuggestions({
                       </span>
                     )}
                     {(it.source || it.popularityLabel) && (
-                      <span className="mt-1 block truncate text-[10px] text-muted-foreground/80">
+                      <span className="mt-1 block truncate text-[10px] text-muted-foreground">
                         {[it.source, it.popularityLabel]
                           .filter(Boolean)
                           .join(" · ")}

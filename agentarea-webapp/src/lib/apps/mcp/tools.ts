@@ -80,7 +80,7 @@ function entryResourceUri(tool: Tool): string | undefined {
  * no tool list to trust.
  */
 function unavailableReason(instance: McpServerInstanceResponse): string | null {
-  if (instance.json_spec.type === "bundle") {
+  if (instance.transport === "bundle") {
     return "MCP bundle connections cannot serve MCP Apps";
   }
   if (instance.verification.status !== "succeeded") {

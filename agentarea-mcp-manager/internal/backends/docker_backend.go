@@ -54,12 +54,12 @@ type DockerBackend struct {
 // refused to start at all. Sandbox callers hit it here instead, where the
 // weak-isolation decision actually applies.
 func (d *DockerBackend) sharedExecutorBase() (string, error) {
-	if os.Getenv("SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT") != "true" {
-		return "", fmt.Errorf("docker shared sandbox executor is development-only; set SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT=true explicitly")
+	if os.Getenv("AGENTAREA_SANDBOX_ALLOW_WEAK_ISOLATION") != "true" {
+		return "", fmt.Errorf("docker shared sandbox executor is development-only; set AGENTAREA_SANDBOX_ALLOW_WEAK_ISOLATION=true explicitly")
 	}
 	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
 	if base == "" {
-		return "", fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+		return "", fmt.Errorf("sandbox executor not configured (set AGENTAREA_SANDBOX_EXECUTOR_URL)")
 	}
 	return base, nil
 }
@@ -180,10 +180,8 @@ func (d *DockerBackend) ExecuteSandbox(ctx context.Context, req warmpool.Execute
 // the same filesystem ExecuteSandbox (bash) runs against. The control plane
 // signs the ScopeFiles token; the executor secret never reaches the worker.
 //
-// TODO(prod-warm-pool): route per-task file requests to the same warm-pool pod
-// that owns the task's exec session (sticky routing), so files land in the pod
-// bash will actually run in. This dev path targets the single configured
-// executor, matching ExecuteSandbox.
+// The Docker backend has one shared executor, so every task's files and bash
+// meet there; the Kubernetes backend routes both to the task's own pod.
 func (d *DockerBackend) SandboxFilePut(ctx context.Context, req warmpool.FilePutRequest) (*warmpool.FilePutResponse, error) {
 	base, err := d.sharedExecutorBase()
 	if err != nil {
@@ -318,7 +316,7 @@ func (d *DockerBackend) RetireSandboxTask(ctx context.Context, workspaceID, task
 		return err
 	}
 	if strings.TrimRight(d.config.Container.SandboxExecutorURL, "/") == "" {
-		return fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+		return fmt.Errorf("sandbox executor not configured (set AGENTAREA_SANDBOX_EXECUTOR_URL)")
 	}
 	key := dockerTaskKey(workspaceID, taskID)
 	d.retirementMu.Lock()

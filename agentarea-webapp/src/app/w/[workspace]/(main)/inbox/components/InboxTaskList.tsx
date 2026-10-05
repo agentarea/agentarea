@@ -72,47 +72,47 @@ export function InboxTaskList({
             key={id}
             onClick={() => onSelect(id)}
             selected={isSelected}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             contentClassName="gap-3"
             start={
-              <span className="relative">
-                <AgentAvatar
-                  agent={{
-                    id: task.agent_id || task.agent_name || id,
-                    name: agentName,
-                  }}
-                />
-                {pending && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleCheck(id);
-                    }}
-                    onKeyDown={(e) => e.stopPropagation()}
+              <AgentAvatar
+                agent={{
+                  id: task.agent_id || task.agent_name || id,
+                  name: agentName,
+                }}
+              />
+            }
+            leadingAction={
+              pending ? (
+                <button
+                  type="button"
+                  onClick={() => onToggleCheck(id)}
+                  className="grid h-4 w-4 place-items-center rounded-[4px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 max-[767px]:h-11 max-[767px]:w-11"
+                  aria-label={t("row.select")}
+                  aria-checked={isChecked}
+                  role="checkbox"
+                >
+                  <span
                     className={cn(
-                      "absolute -left-1 -top-1 z-10 grid h-4 w-4 place-items-center rounded-[4px] border bg-background/95 transition",
+                      "grid h-4 w-4 place-items-center rounded-[4px] border bg-background/95 transition motion-reduce:transition-none",
                       isChecked
                         ? "border-primary bg-primary text-white opacity-100"
                         : "border-muted-foreground/50 text-transparent",
                       !isChecked &&
                         !anyChecked &&
-                        "opacity-0 group-hover:opacity-100",
-                      "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                        "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-[767px]:opacity-100 [@media(hover:none)]:opacity-100"
                     )}
-                    aria-label={t("row.select")}
-                    aria-checked={isChecked}
-                    role="checkbox"
                   >
                     <Check size={11} strokeWidth={3} />
-                  </button>
-                )}
-              </span>
+                  </span>
+                </button>
+              ) : null
             }
+            leadingActionVisible={isChecked || anyChecked}
             endClassName="flex-col items-end gap-1"
             end={
               <>
                 <TaskStatus status={status} caption="never" />
-                <span className="whitespace-nowrap text-[11.5px] text-muted-foreground/80">
+                <span className="whitespace-nowrap text-[11.5px] text-muted-foreground">
                   {formatRelative(format, now, task.created_at)}
                 </span>
               </>
@@ -124,18 +124,12 @@ export function InboxTaskList({
                   <ActionIcon
                     title={t("approve")}
                     tone="approve"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onResolve(task, true);
-                    }}
+                    onClick={() => onResolve(task, true)}
                   />
                   <ActionIcon
                     title={t("reject")}
                     tone="reject"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onResolve(task, false);
-                    }}
+                    onClick={() => onResolve(task, false)}
                   />
                 </>
               ) : null
@@ -151,7 +145,7 @@ export function InboxTaskList({
                   aria-hidden
                   className="h-[3px] w-[3px] shrink-0 rounded-full bg-muted-foreground/50"
                 />
-                <span className="truncate text-[11px] font-light text-muted-foreground/70">
+                <span className="truncate text-[11px] font-light text-muted-foreground">
                   {actionPreview}
                 </span>
               </div>
@@ -176,9 +170,10 @@ function ActionIcon({
 
   return (
     <Button
+      type="button"
       size="xs"
       variant={tone === "approve" ? "primaryOutline" : "destructiveOutline"}
-      className="w-6 px-0"
+      className="w-6 px-0 motion-reduce:transition-none max-[767px]:h-11 max-[767px]:w-11"
       onClick={onClick}
       title={title}
       aria-label={title}

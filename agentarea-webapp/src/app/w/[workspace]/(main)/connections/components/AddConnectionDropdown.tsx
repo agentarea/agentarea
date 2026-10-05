@@ -108,7 +108,7 @@ export function AddConnectionDropdown() {
                     {t(`${option.id}.description`)}
                   </span>
                 </span>
-                <ArrowUpRight className="relative z-[1] h-[18px] w-[18px] shrink-0 -translate-x-1.5 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0 group-hover:text-primary group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:text-primary group-focus-visible:opacity-100" />
+                <ArrowUpRight className="relative z-[1] h-[18px] w-[18px] shrink-0 -translate-x-1.5 text-muted-foreground opacity-0 transition-[transform,color,opacity] group-hover:translate-x-0 group-hover:text-primary group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:text-primary group-focus-visible:opacity-100" />
               </button>
               <BlueprintDivider />
             </Fragment>

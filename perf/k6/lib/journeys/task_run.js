@@ -6,26 +6,23 @@
 //                     alone isn't enough: temporal_task_manager.py can still
 //                     return HTTP 200 with status "failed" if the workflow
 //                     failed to start (e.g. AgentModelNotConfiguredError path).
-//   task_first_event  TTFB (res.timings.waiting) on the GET .../events/stream
-//                     SSE call. The stream's actual first frame is always a
-//                     synthetic "connected" control frame (the webapp's own
-//                     client treats connected/ping/heartbeat/etc as control,
-//                     never a real event) — TTFB times that control frame,
-//                     not the first domain event after it. k6's http client
-//                     can't see individual SSE frame timings mid-stream, so
-//                     this is the best available proxy, not the literal
-//                     "first meaningful event". Documented, not pretended away.
-//   task_completed    full duration of that same SSE call — the stream closes
-//                     itself at a terminal event (_tail_task_events_sse's
-//                     terminal_types), so this call returning IS completion.
+//   task_first_event  time from acceptance until GET .../events returns the
+//                     first persisted event.
+//   task_completed    time from acceptance until GET .../status reports a
+//                     terminal status.
+//
+// Both are polled, not read off the SSE stream: a web conversation's stream
+// stays open across completed turns while the workflow waits for a follow-up
+// (follow_execution in task_stream.py), so it does not end at task.completed
+// and k6 cannot see frames mid-stream.
 //
 // This is the one journey with a real per-run LLM cost, so it is never part
 // of the random weighted pick — the caller (a dedicated shared-iterations
 // scenario, see scenarios/journeys/*.js) is what caps it at N runs total,
 // independent of VU count.
-import { check, group } from "k6";
+import { check, group, sleep } from "k6";
 import { BASE_URL, WORKSPACE } from "../config.js";
-import { get, postJson, del, getWithTimeout } from "../http.js";
+import { get, postJson, del } from "../http.js";
 import { assertWriteAllowed } from "./guard.js";
 import { resourceName } from "./naming.js";
 import { taskAccepted, taskFirstEvent, taskCompleted, taskRuns } from "./metrics.js";
@@ -53,7 +50,9 @@ function resolveModelInstanceId() {
   return DEFAULT_MODEL_INSTANCE_ID;
 }
 
-const EVENTS_TIMEOUT = __ENV.TASK_EVENTS_TIMEOUT || "90s";
+const COMPLETION_TIMEOUT_S = Number(__ENV.TASK_COMPLETION_TIMEOUT_S || 90);
+const POLL_INTERVAL_S = 0.25;
+const TERMINAL = ["completed", "failed", "cancelled"];
 
 export const taskRunJourney = {
   name: "task_run",
@@ -90,28 +89,31 @@ export const taskRunJourney = {
         taskRuns.add(1, { journey: "task_run" });
         const task = createTaskRes.json();
 
-        const eventsRes = getWithTimeout(
-          `${ws(`/agents/${agent.id}/tasks/${task.id}/events/stream`)}?include_chunks=false`,
-          "events",
-          EVENTS_TIMEOUT,
-          tag("task_run", "events")
-        );
-        const streamed = check(eventsRes, { "task events stream -> 200": (r) => r.status === 200 });
-        if (streamed) {
-          taskFirstEvent.add(eventsRes.timings.waiting, { journey: "task_run" });
-          taskCompleted.add(eventsRes.timings.duration, { journey: "task_run" });
+        const taskPath = `/agents/${agent.id}/tasks/${task.id}`;
+        const acceptedAt = Date.now();
+        let firstEventAt = null;
+        let finalStatus = null;
+        while ((Date.now() - acceptedAt) / 1000 < COMPLETION_TIMEOUT_S) {
+          if (firstEventAt === null) {
+            const eventsRes = get(ws(`${taskPath}/events`), "events", tag("task_run", "events"));
+            if (eventsRes.status === 200 && (eventsRes.json("events") || []).length > 0) {
+              firstEventAt = Date.now();
+              taskFirstEvent.add(firstEventAt - acceptedAt, { journey: "task_run" });
+            }
+          }
+          const statusRes = get(ws(`${taskPath}/status`), "status", tag("task_run", "status"));
+          if (statusRes.status === 200 && TERMINAL.includes(statusRes.json("status"))) {
+            finalStatus = statusRes.json("status");
+            break;
+          }
+          sleep(POLL_INTERVAL_S);
         }
-
-        // Best-effort: confirm it actually reached a terminal state rather
-        // than the stream just dropping mid-run.
-        const statusRes = get(
-          ws(`/agents/${agent.id}/tasks/${task.id}`),
-          "final_status",
-          tag("task_run", "final_status")
-        );
-        check(statusRes, {
-          "task reached a terminal state": (r) =>
-            r.status === 200 && ["completed", "failed", "cancelled"].includes(r.json("status")),
+        if (finalStatus !== null) {
+          taskCompleted.add(Date.now() - acceptedAt, { journey: "task_run" });
+        }
+        check(finalStatus, {
+          "task reached a terminal state": (status) => status !== null,
+          "task completed": (status) => status === "completed",
         });
       }
 

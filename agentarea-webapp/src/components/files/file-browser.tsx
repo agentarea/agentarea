@@ -249,7 +249,7 @@ export function FileBrowser({
               className={cn(
                 "flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
                 !folder
-                  ? "bg-primary/10 font-medium text-primary"
+                  ? "bg-primary/10 font-medium text-primary dark:text-primary-foreground"
                   : "hover:bg-muted",
                 dnd.hoveredFolder === "" && "outline outline-2 outline-primary"
               )}
@@ -292,7 +292,7 @@ export function FileBrowser({
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-9 w-9 shrink-0 rounded-none border-r md:hidden"
+                className="size-11 md:size-9 shrink-0 rounded-none border-r md:hidden"
                 aria-label={t("toggleTree")}
                 aria-expanded={showTree}
                 onClick={() => setShowTree(!showTree)}

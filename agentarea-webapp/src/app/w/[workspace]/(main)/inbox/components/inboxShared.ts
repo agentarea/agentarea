@@ -1,7 +1,9 @@
 import type { useFormatter } from "next-intl";
 import type { GetInboxItemsV1InboxGetData } from "@/api/client";
+import type { ApprovalDecision } from "@/api/client/types.gen";
 import type { TaskWithAgent } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
+import { parseUtcTimestamp } from "@/utils/dateUtils";
 
 export const FILTER_KEYS = [
   "all",
@@ -9,17 +11,23 @@ export const FILTER_KEYS = [
   "input",
   "completed",
   "failed",
+  "decided",
 ] as const;
 export type FilterValue = (typeof FILTER_KEYS)[number];
 export type InboxCounts = Record<FilterValue, number>;
 export type InboxTask = TaskWithAgent & {
   total_cost?: number | null;
 };
+/** A recorded approval decision with its decider resolved to a name. */
+export type InboxDecision = ApprovalDecision & {
+  decided_by_name: string | null;
+};
 
 type InboxStatus = NonNullable<
   NonNullable<GetInboxItemsV1InboxGetData["query"]>["status"]
 >;
-type InboxBucket = Exclude<FilterValue, "all">;
+/** Task-status buckets; "decided" lists approval decisions, not tasks. */
+type InboxBucket = Exclude<FilterValue, "all" | "decided">;
 
 const BUCKET_BY_STATUS: Record<InboxStatus, InboxBucket> = {
   waiting_for_approval: "pending",
@@ -41,8 +49,15 @@ export function isPending(status: string): boolean {
   return inboxBucket(status) === "pending";
 }
 
-/** Counts per filter, plus the statuses no filter can hold. */
-export function countInbox(statuses: string[]): {
+/**
+ * Counts per filter, plus the statuses no filter can hold. `decided` is the
+ * number of recorded approval decisions; those are not tasks, so `all` leaves
+ * them out.
+ */
+export function countInbox(
+  statuses: string[],
+  decided = 0
+): {
   counts: InboxCounts;
   unknown: string[];
 } {
@@ -52,6 +67,7 @@ export function countInbox(statuses: string[]): {
     input: 0,
     completed: 0,
     failed: 0,
+    decided,
   };
   const unknown: string[] = [];
   for (const status of statuses) {
@@ -71,9 +87,8 @@ export function formatRelative(
   now: Date,
   dateStr?: string | null
 ): string {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  return Number.isNaN(date.getTime()) ? "" : format.relativeTime(date, now);
+  const date = parseUtcTimestamp(dateStr);
+  return date ? format.relativeTime(date, now) : "";
 }
 
 export function fmtCost(

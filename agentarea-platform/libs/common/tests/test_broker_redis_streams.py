@@ -1,5 +1,5 @@
 """Integration tests for RedisStreamsBroker against a live Redis (from
-docker-compose). Skipped if REDIS_URL is unavailable.
+docker-compose). Skipped if AGENTAREA_REDIS_URL is unavailable.
 
 Each test uses a unique stream name so parallel runs don't collide.
 """
@@ -21,7 +21,7 @@ from agentarea_common.broker import (
 
 pytestmark = pytest.mark.asyncio
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.getenv("AGENTAREA_REDIS_URL", "redis://localhost:6379")
 GROUP = "test-group"
 
 

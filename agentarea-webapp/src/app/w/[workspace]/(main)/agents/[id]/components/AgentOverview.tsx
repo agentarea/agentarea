@@ -21,7 +21,7 @@ import { apiErrorMessage, isApiNotFound } from "@/lib/api-errors";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
 import { getAgentStatusPresentation } from "@/lib/status";
 import { getViewerCapabilities } from "@/lib/workspace-context";
-import type { Agent } from "@/types/agent";
+import { agentSkillViews } from "@/types/agent";
 import type { Policy, PolicyEffect } from "@/types/policies";
 import {
   resolveAgentToolIcons,
@@ -43,7 +43,7 @@ const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
  */
 export async function AgentOverview({ agentId }: { agentId: string }) {
   const agentRes = await getAgent(agentId);
-  const agent = agentRes.data as Agent | undefined;
+  const agent = agentRes.data;
   if (!agent) notFound();
 
   // Canonical ref for in-page links: keep URLs on the slug when available,
@@ -138,8 +138,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     // no raw error to feed apiErrorMessage — just the one translated line.
     currency: !pricingCurrency.ok ? t("currencyLoadFailed") : undefined,
   };
-  // The hero label falls back to the agent's own model info; a deleted
-  // instance (404) is expected, anything else is worth a log line.
+  // A deleted model instance is an expected stale reference; only log other errors.
   if (modelInstanceRes.error && !isApiNotFound(modelInstanceRes)) {
     console.error("Failed to load model instance", modelInstanceRes.error);
   }
@@ -215,19 +214,13 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     status: getAgentStatusPresentation(agent.status || "inactive"),
     model: {
       label:
-        agent.model_info?.model_display_name ||
         modelInstance?.model_display_name ||
         modelInstance?.name ||
-        agent.model_info?.config_name ||
         modelInstance?.config_name ||
         agent.model_id ||
         null,
-      provider:
-        agent.model_info?.provider_name || modelInstance?.provider_name || null,
-      iconUrl:
-        agent.model_info?.provider_icon_url ||
-        modelInstance?.provider_icon_url ||
-        null,
+      provider: modelInstance?.provider_name || null,
+      iconUrl: modelInstance?.provider_icon_url || null,
     },
     triggers: {
       count: triggers.length,
@@ -240,8 +233,12 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
       throughput7d: sum(completedValues.slice(-7)) / 7,
       throughputPrev: sum(completedValues.slice(-14, -7)) / 7,
       maxDaily: Math.max(...completedValues, 0),
-      costMtd: overview?.cost_mtd_usd ?? 0,
-      cap: settings?.monthly_cap_usd ?? null,
+      // Money arrives as decimal strings; the view formats numbers.
+      costMtd: Number(overview?.cost_mtd_usd ?? 0),
+      cap:
+        settings?.monthly_cap_usd == null
+          ? null
+          : Number(settings.monthly_cap_usd),
       doneToday: overview?.tasks_done_today ?? 0,
       failedToday: overview?.tasks_failed_today ?? 0,
     },
@@ -269,7 +266,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
       )
       .slice(0, 5),
     pendingApprovals: tasks.filter(isAwaitingUserTask),
-    skills: (agent.skills ?? []).map((s) => s.name),
+    skills: agentSkillViews(agent.skills).map((skill) => skill.name),
     connections: toolIcons.map((tool) => tool.label),
     policies,
     loadErrors,

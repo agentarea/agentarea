@@ -1,18 +1,14 @@
-"use client";
-
-import { useLocale, useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
+import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { AgentLink } from "@/components/AgentIdentity";
-import Table from "@/components/Table/Table";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { TaskItem } from "@/components/TaskItem";
 import { TaskSourceBadge } from "@/components/TaskSourceBadge";
 import { TaskStatus } from "@/components/TaskStatus";
-import { useCurrency } from "@/hooks/useCurrency";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { TaskWithAgent } from "@/lib/api";
+import type { TaskWithAgent } from "@/lib/api";
 import { CARD_GRID_WIDE } from "@/lib/collectionGrids";
-import { formatMoney } from "@/lib/money";
+import TaskCostDisplay, { TaskCostProvider } from "./TaskCostDisplay";
 
 interface TasksListProps {
   initialTasks: TaskWithAgent[];
@@ -33,25 +29,21 @@ interface TasksListProps {
   showAgent?: boolean;
 }
 
-export default function TasksList({
+export default async function TasksList({
   initialTasks,
   viewMode = "table",
   catalog = [],
   principalNames = {},
   showAgent = true,
 }: TasksListProps) {
-  const t = useTranslations("TasksPage");
-  const router = useWorkspaceRouter();
-  const locale = useLocale();
-  const { currency } = useCurrency();
+  const t = await getTranslations("TasksPage");
 
-  // Define table columns for tasks
   const taskColumns = [
     {
       accessor: "status",
       header: t("statusLabel"),
       headerClassName: "w-[140px]",
-      cellClassName: "whitespace-nowrap",
+      cellClassName: "w-[140px]",
       render: (value: string, row: TaskWithAgent) => (
         <div className="flex flex-col gap-1">
           <TaskStatus
@@ -70,9 +62,10 @@ export default function TasksList({
       accessor: "description",
       header: t("description"),
       headerClassName: "w-auto",
-      cellClassName: "max-w-[460px]",
+      cellClassName: "min-w-0 md:max-w-[460px]",
+      rowLink: true,
       render: (value: string) => (
-        <p className="line-clamp-2 text-[13px] font-semibold leading-5 text-foreground">
+        <p className="line-clamp-2 break-words text-[13px] font-semibold leading-5 text-foreground">
           {value || t("noDescription")}
         </p>
       ),
@@ -82,13 +75,12 @@ export default function TasksList({
           {
             accessor: "agent_name",
             header: t("agent"),
-            headerClassName: "w-[190px]",
-            cellClassName: "w-[190px] max-w-[190px]",
+            headerClassName: "hidden w-[190px] md:table-cell",
+            cellClassName: "hidden w-[190px] max-w-[190px] md:table-cell",
             render: (value: string, row: TaskWithAgent) => (
               <AgentLink
                 agent={{ id: row.agent_id, name: value || "Unknown Agent" }}
                 size="xs"
-                onClick={(event) => event.stopPropagation()}
                 nameClassName="text-xs"
               />
             ),
@@ -98,8 +90,8 @@ export default function TasksList({
     {
       accessor: "parameters",
       header: t("source"),
-      headerClassName: "w-[180px]",
-      cellClassName: "w-[180px] max-w-[180px]",
+      headerClassName: "hidden w-[180px] md:table-cell",
+      cellClassName: "hidden w-[180px] max-w-[180px] md:table-cell",
       // One column, not two: where a task came from and who it belongs to are
       // the same question asked of different task kinds. A task nobody
       // automated renders as its person; an automated one keeps its badge and
@@ -116,14 +108,14 @@ export default function TasksList({
     {
       accessor: "total_cost",
       header: t("cost"),
-      headerClassName: "w-[110px] text-right",
-      cellClassName: "text-right",
+      headerClassName: "hidden w-[110px] text-right md:table-cell",
+      cellClassName: "hidden text-right md:table-cell",
       render: (value: string | number | null | undefined) => {
         const num = value != null ? Number(value) : null;
         return (
           <div className="font-mono text-xs tabular-nums text-muted-foreground">
             {num != null && !isNaN(num) ? (
-              <span>{formatMoney(num, currency, locale)}</span>
+              <TaskCostDisplay amount={num} />
             ) : (
               <span>—</span>
             )}
@@ -134,38 +126,26 @@ export default function TasksList({
     {
       accessor: "created_at",
       header: t("created"),
-      headerClassName: "w-[150px]",
-      cellClassName: "whitespace-nowrap",
+      headerClassName: "hidden w-[150px] md:table-cell",
+      cellClassName: "hidden whitespace-nowrap md:table-cell",
       render: (value: string) => <TableDateDisplay dateString={value} />,
     },
   ];
 
-  // Render table view
-  if (viewMode === "table") {
-    return (
-      <div>
-        <Table
-          className={
-            showAgent
-              ? "min-w-[1060px] table-fixed"
-              : "min-w-[870px] table-fixed"
-          }
-          data={initialTasks}
-          columns={taskColumns}
-          onRowClick={(task) => {
-            router.push(`/tasks/${task.id}`);
-          }}
-        />
-      </div>
-    );
-  }
-
-  // Render grid view (default)
   return (
-    <div className={CARD_GRID_WIDE}>
-      {initialTasks.map((task) => (
-        <TaskItem key={task.id} task={task} />
-      ))}
-    </div>
+    <TaskCostProvider>
+      <GridAndTableViews
+        viewMode={viewMode}
+        data={initialTasks}
+        columns={taskColumns}
+        rowHref={(task) => `/tasks/${task.id}`}
+        wrapCardContent={false}
+        gridClassName={CARD_GRID_WIDE}
+        emptyState={null}
+        cardContent={(task) => (
+          <TaskItem task={task} showAgentName={showAgent} />
+        )}
+      />
+    </TaskCostProvider>
   );
 }

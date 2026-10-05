@@ -134,6 +134,7 @@ class ToolDisclosureMixin(ToolApprovalMixin):
             self.state.effective_policy,
             self._tool_catalog.activate(source_name),
             self.state.mcp_tool_routes,
+            *self._policy_tool_configs(),
         )
         if new_tools:
             self.state.available_tools.extend(new_tools)
@@ -174,7 +175,8 @@ class ToolDisclosureMixin(ToolApprovalMixin):
 
     async def _execute_skill_activation(self, tool_call: ToolCall) -> None:
         """Execute skill activation locally (no Temporal activity needed)."""
-        if not await self._gate_tool_call(tool_call):
+        allowed, _ = await self._gate_tool_call(tool_call)
+        if not allowed:
             return
         try:
             args = json.loads(tool_call.function["arguments"])

@@ -12,7 +12,7 @@ export function HoverLink({ text, className, leadingIcon }: HoverLinkProps) {
   return (
     <span
       className={cn(
-        "small-link flex items-center gap-1 text-[9px] text-muted-foreground/70 opacity-70 group-hover:text-primary group-focus-visible:text-primary",
+        "small-link flex items-center gap-1 text-[9px] text-muted-foreground group-hover:text-primary group-focus-visible:text-primary dark:group-hover:text-accent-foreground dark:group-focus-visible:text-accent-foreground [&>svg]:opacity-50",
         className
       )}
     >

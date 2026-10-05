@@ -22,35 +22,31 @@ async def bootstrap_openfga(
     client: httpx.AsyncClient | None = None,
 ) -> None:
     """Populate OpenFGA store/model ids on ``settings`` when bootstrap is enabled."""
-    if not settings.ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP:
+    if not settings.BOOTSTRAP:
         return
 
-    api_url = settings.ACCESS_CONTROL_OPENFGA_API_URL.rstrip("/")
-    timeout = settings.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS
-    headers = (
-        {"Authorization": f"Bearer {settings.ACCESS_CONTROL_OPENFGA_API_TOKEN}"}
-        if settings.ACCESS_CONTROL_OPENFGA_API_TOKEN
-        else {}
-    )
+    api_url = settings.URL.rstrip("/")
+    timeout = settings.TIMEOUT.total_seconds()
+    headers = {"Authorization": f"Bearer {settings.API_TOKEN}"} if settings.API_TOKEN else {}
     owns_client = client is None
     if client is None:
         client = httpx.AsyncClient(timeout=timeout)
     try:
-        store_id = settings.ACCESS_CONTROL_OPENFGA_STORE_ID.strip()
+        store_id = settings.STORE_ID.strip()
         if not store_id:
             store_id = await _get_or_create_store(
                 client=client,
                 api_url=api_url,
-                store_name=settings.ACCESS_CONTROL_OPENFGA_STORE_NAME,
+                store_name=settings.STORE_NAME,
                 headers=headers,
             )
-            settings.ACCESS_CONTROL_OPENFGA_STORE_ID = store_id
+            settings.STORE_ID = store_id
 
-        if settings.ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL:
-            model_path = settings.ACCESS_CONTROL_OPENFGA_MODEL_PATH
+        if settings.APPLY_MODEL:
+            model_path = settings.MODEL_PATH
             if not model_path:
                 raise OpenFGAError(
-                    "ACCESS_CONTROL_OPENFGA_MODEL_PATH is required when model auto-apply is enabled"
+                    "AGENTAREA_AUTHZ_FGA_MODEL_PATH is required when model auto-apply is enabled"
                 )
             model = _load_authorization_model(Path(model_path))
             model_id = await _find_authorization_model(client, api_url, store_id, model, headers)
@@ -58,7 +54,7 @@ async def bootstrap_openfga(
                 model_id = await _write_authorization_model(
                     client, api_url, store_id, model, headers
                 )
-            settings.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID = model_id
+            settings.MODEL_ID = model_id
     finally:
         if owns_client:
             await client.aclose()

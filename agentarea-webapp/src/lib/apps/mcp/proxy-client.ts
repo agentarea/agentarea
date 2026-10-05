@@ -15,7 +15,7 @@ import {
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/app-bridge";
 import { EXTENSION_ID } from "@modelcontextprotocol/ext-apps/server";
 import { env } from "@/env";
-import { MCP_APP_TIMEOUT_MS } from "@/lib/server-timeouts";
+import { AGENTAREA_MCP_APP_TIMEOUT } from "@/lib/server-timeouts";
 import { workspaceFetch } from "@/lib/workspace-request";
 import { uiResourceFromReadResult, type McpAppUiResource } from "./tools";
 
@@ -76,7 +76,7 @@ async function connectAndRun<T>(
 ): Promise<T> {
   const transport = new StreamableHTTPClientTransport(
     new URL(
-      `${env.API_URL.replace(/\/+$/, "")}/v1/mcp/${encodeURIComponent(instanceId)}/mcp`
+      `${env.AGENTAREA_API_URL.replace(/\/+$/, "")}/v1/mcp/${encodeURIComponent(instanceId)}/mcp`
     ),
     { fetch: proxyFetch(deadline) }
   );
@@ -84,7 +84,7 @@ async function connectAndRun<T>(
   // Each request carries both bounds: `signal` ends it at the deadline (and
   // tells the server it was cancelled), `timeout` lifts the SDK's 60s default,
   // which the request that cold-starts an npx workload can exceed.
-  const bounds = { timeout: MCP_APP_TIMEOUT_MS, signal: deadline };
+  const bounds = { timeout: AGENTAREA_MCP_APP_TIMEOUT, signal: deadline };
   try {
     await client.connect(transport, { ...bounds, prior });
     const discover = client.getDiscoverResult();
@@ -109,7 +109,7 @@ async function withProxyClient<T>(
     bounds: { timeout: number; signal: AbortSignal }
   ) => Promise<T>
 ): Promise<T> {
-  const deadline = AbortSignal.timeout(MCP_APP_TIMEOUT_MS);
+  const deadline = AbortSignal.timeout(AGENTAREA_MCP_APP_TIMEOUT);
   const prior = eraVerdicts.get(instanceId);
   try {
     return await connectAndRun(instanceId, deadline, prior, operation);

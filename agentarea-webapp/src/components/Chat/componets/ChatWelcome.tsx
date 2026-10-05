@@ -75,7 +75,7 @@ export function ChatWelcome({
               "rounded-sm mb-1",
               iconWrapperSize,
               iconWrapperBase,
-              effectiveAnimate && "animate-bounce-slow",
+              effectiveAnimate && "motion-safe:animate-bounce-slow",
               iconWrapperClassName
             )}
           >
@@ -89,7 +89,7 @@ export function ChatWelcome({
           </div>
         )}
 
-        <h1 className={cn(titleBase, titleClassName)}>{title}</h1>
+        <h2 className={cn(titleBase, titleClassName)}>{title}</h2>
         {subtitle ? (
           <p
             className={cn(

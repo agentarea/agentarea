@@ -4,19 +4,19 @@ from ...interfaces import ActivityDependencies
 
 
 def sandbox_file_auth_secret(dependencies: ActivityDependencies) -> str:
-    secret = dependencies.settings.mcp.SANDBOX_FILE_AUTH_SECRET
+    secret = dependencies.settings.sandbox.FILE_SECRET
     if secret is None or not secret.get_secret_value():
-        raise ValueError("SANDBOX_FILE_AUTH_SECRET is required for sandbox file access")
+        raise ValueError("AGENTAREA_SANDBOX_FILE_SECRET is required for sandbox file access")
     return secret.get_secret_value()
 
 
 def sandbox_control_auth_secret(dependencies: ActivityDependencies) -> str:
-    secret = dependencies.settings.mcp.SANDBOX_CONTROL_AUTH_SECRET
+    secret = dependencies.settings.sandbox.CONTROL_SECRET
     if secret is None:
-        raise ValueError("SANDBOX_CONTROL_AUTH_SECRET is required for sandbox execution")
+        raise ValueError("AGENTAREA_SANDBOX_CONTROL_SECRET is required for sandbox execution")
     value = secret.get_secret_value()
     if len(value.encode()) < 32:
-        raise ValueError("SANDBOX_CONTROL_AUTH_SECRET must contain at least 32 bytes")
+        raise ValueError("AGENTAREA_SANDBOX_CONTROL_SECRET must contain at least 32 bytes")
     return value
 
 

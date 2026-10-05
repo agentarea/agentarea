@@ -82,7 +82,7 @@ func NewService(options Options) (*Service, error) {
 	// The same credential as the demand gateway, held to the same bar: an
 	// empty secret would accept a bare "Bearer " header.
 	if len(options.AuthSecret) < 32 {
-		return nil, fmt.Errorf("package importer requires MCP_GATEWAY_AUTH_SECRET of at least 32 characters")
+		return nil, fmt.Errorf("package importer requires AGENTAREA_MCP_GATEWAY_SECRET of at least 32 characters")
 	}
 	if options.ImportTimeout <= 0 {
 		options.ImportTimeout = 15 * time.Minute
@@ -416,7 +416,7 @@ func (s *Service) imageStore() (ImageStore, error) {
 		case s.backendType == "docker" || s.backendType == "podman":
 			s.store = NewLocalStore(s.dockerRuntime)
 		default:
-			s.storeErr = fmt.Errorf("package images need MCP_PACKAGE_REPOSITORY")
+			s.storeErr = fmt.Errorf("package images need AGENTAREA_MCP_PACKAGE_REPO")
 		}
 	})
 	if s.storeErr != nil {

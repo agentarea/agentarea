@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { Grid2x2, Plus, Share2, Zap } from "lucide-react";
+import { Plus, Share2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   AccessControlGraph,
@@ -11,7 +10,6 @@ import type {
   AccessControlRelationshipsResponse,
   SkillCollection,
 } from "@/types/access-control";
-import { ACCESS_VIEW_PARAM, parseAccessView } from "./AccessViewTabs";
 import GraphPane from "./GraphPane";
 import ResolveAccessCard from "./ResolveAccessCard";
 import {
@@ -62,8 +60,6 @@ export default function AccessControlExplorer({
   collections,
 }: AccessControlExplorerProps) {
   const router = useWorkspaceRouter();
-  // Switched by AccessViewTabs in the page subheader.
-  const view = parseAccessView(useSearchParams().get(ACCESS_VIEW_PARAM));
 
   const agents = useMemo(
     () => graph.nodes.filter((n) => n.kind === "agent"),
@@ -271,21 +267,6 @@ export default function AccessControlExplorer({
         </div>
       </div>
 
-      {view === "matrix" ? (
-        <div className={styles.body} style={{ display: "block" }}>
-          <div className={styles.emptyPane}>
-            <div>
-              <Grid2x2
-                className="mx-auto mb-3 h-8 w-8"
-                style={{ color: "var(--access-muted2)" }}
-              />
-              <div style={{ fontWeight: 600, color: "hsl(var(--foreground))" }}>
-                Matrix view coming soon
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
         <div className={styles.body}>
           <GraphPane
             layout={layout}
@@ -452,7 +433,6 @@ export default function AccessControlExplorer({
             </div>
           </aside>
         </div>
-      )}
     </div>
   );
 }

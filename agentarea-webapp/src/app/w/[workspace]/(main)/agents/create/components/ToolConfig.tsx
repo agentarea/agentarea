@@ -594,7 +594,7 @@ const ToolConfig = ({
     if (!tool) return;
     setEditError(null);
     try {
-      const instanceId = tool.mcp_server_id as unknown as string;
+      const instanceId = tool.mcp_server_id;
       const result = await getMCPServerInstance(instanceId);
       const instance = result.data;
       if (result.error || !instance) {
@@ -1258,7 +1258,7 @@ const ToolConfig = ({
           {(!builtinToolFields || builtinToolFields.length === 0) &&
             toolFields.length === 0 &&
             (!openapiFields || openapiFields.length === 0) && (
-            <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground/50">
+            <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground">
               <p>{t("create.agentToolsDescription")}</p>  
               <p>{t("create.agentToolsNote")}</p>
             </Note>

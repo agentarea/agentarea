@@ -18,7 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { apiErrorMessage } from "@/lib/api-errors";
@@ -63,7 +62,6 @@ const BaseMCPServerSchema = z.object({
   headers: z.array(HeaderSchema),
   env: z.array(EnvVarSchema),
   tags: z.string().optional(),
-  isPublic: z.boolean(),
 });
 
 const MCPServerSchema = BaseMCPServerSchema.refine(
@@ -99,7 +97,6 @@ const initialState: MCPServerFormState = {
     endpointUrl: "",
     headers: [],
     tags: [],
-    isPublic: true,
   },
 };
 
@@ -214,7 +211,6 @@ export function AddMCPServerForm() {
       headers: [],
       env: [],
       tags: "",
-      isPublic: true,
     },
   });
 
@@ -435,7 +431,9 @@ export function AddMCPServerForm() {
         {/* Server Type Selector — hidden in JSON mode (auto-detected) */}
         {!jsonMode && (
           <div className="space-y-2">
-            <FormLabel htmlFor="type" icon={Server} required>Server Type</FormLabel>
+            <FormLabel htmlFor="type" icon={Server} required>
+              <span id="server-type-label">Server Type</span>
+            </FormLabel>
             <Controller
               control={control}
               name="type"
@@ -446,7 +444,11 @@ export function AddMCPServerForm() {
                     field.onChange(value);
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger
+                    id="type"
+                    aria-labelledby="server-type-label"
+                    aria-required="true"
+                  >
                     <SelectValue placeholder="Select server type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -909,37 +911,6 @@ export function AddMCPServerForm() {
               placeholder="e.g. files, database, web"
             />
           </div>
-        )}
-
-        {/* Common Fields - Public Switch */}
-        {!jsonMode && (
-          <Controller
-            control={control}
-            name="isPublic"
-            render={({ field }) => (
-              <div className="flex items-center justify-between pt-4">
-                <div className="space-y-0.5">
-                  <Label htmlFor="public-switch" className="cursor-pointer">
-                    Public Server
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Make this MCP server available to other users
-                  </p>
-                </div>
-                <Switch
-                  id="public-switch"
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                  aria-invalid={!!combinedErrors.isPublic}
-                />
-              </div>
-            )}
-          />
-        )}
-        {combinedErrors.isPublic && (
-          <p className="form-error">
-            {getErrorMessage(combinedErrors.isPublic)}
-          </p>
         )}
 
         {/* Display success/failure message */}

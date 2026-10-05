@@ -30,7 +30,7 @@ import {
 } from "../state";
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 import type { ConnectionUsage } from "../usage";
-import { getMCPInstanceToolCount } from "../utils";
+import { getMCPInstanceToolCount, TRANSPORT_LABEL } from "../utils";
 import {
   MCPInstanceCard,
   OpenAPIConnectionCard,
@@ -139,11 +139,7 @@ export function MyMCPsSection({
     if (item._type === "openapi" && item._connection) {
       return hostOf(item._connection.base_url) || "OpenAPI";
     }
-    const type = (item._instance?.json_spec?.type as string) || "";
-    if (type === "url") return "Remote MCP";
-    if (type === "bundle") return "Bundle";
-    if (type === "docker") return "Docker";
-    return "MCP server";
+    return item._instance ? TRANSPORT_LABEL[item._instance.transport] : "";
   };
 
   // Define table columns for instances
@@ -223,7 +219,7 @@ export function MyMCPsSection({
 
         if (!connectionUsage) {
           return (
-            <span className="font-mono text-[12px] text-muted-foreground/60 tabular-nums">
+            <span className="font-mono text-[12px] text-muted-foreground tabular-nums">
               {total > 0 ? t("table.toolsTotal", { total }) : "—"}
             </span>
           );
@@ -239,7 +235,7 @@ export function MyMCPsSection({
             <span
               className={
                 connectionUsage.agents === 0
-                  ? "text-[12px] text-muted-foreground/60"
+                  ? "text-[12px] text-muted-foreground"
                   : "text-[12px] text-foreground/80"
               }
             >
@@ -409,7 +405,7 @@ export function MyMCPsSection({
       {sections.map((section, index) => (
         <div key={section.key}>
           {showSectionHeadings && (
-            <h5 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground/80">
+            <h5 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
               {t(`sections.${section.key}`)} ({section.rows.length})
             </h5>
           )}

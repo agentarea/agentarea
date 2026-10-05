@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney, getCurrencySymbol } from "./money";
+import {
+  formatMoney,
+  getCurrencySymbol,
+  isPositiveMoneyInput,
+  parseMoneyInput,
+} from "./money";
 
 /** Intl output for a locale/currency pair, to compare against without
  * hardcoding locale-specific whitespace (Intl uses a narrow no-break space
@@ -155,5 +160,22 @@ describe("getCurrencySymbol", () => {
     // is the code itself — the fallback in getCurrencySymbol never triggers
     // in practice, but the function must still return a non-empty string.
     expect(getCurrencySymbol("KES", "en-US")).toBeTruthy();
+  });
+});
+
+describe("money input", () => {
+  it("preserves sub-cent decimal precision", () => {
+    expect(parseMoneyInput("0.000001")).toBe("0.000001");
+    expect(isPositiveMoneyInput("0.000001")).toBe(true);
+  });
+
+  it("rejects invalid, zero, negative, and non-decimal amounts", () => {
+    expect(parseMoneyInput("not money")).toBeNull();
+    expect(parseMoneyInput("Infinity")).toBeNull();
+    expect(parseMoneyInput("0x10")).toBeNull();
+    expect(isPositiveMoneyInput("0")).toBe(false);
+    expect(isPositiveMoneyInput("-0.000001")).toBe(false);
+    expect(isPositiveMoneyInput("0e10")).toBe(false);
+    expect(isPositiveMoneyInput("1e-400")).toBe(true);
   });
 });

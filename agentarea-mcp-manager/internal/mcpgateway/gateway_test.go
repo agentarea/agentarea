@@ -151,6 +151,34 @@ func TestGatewayAuthenticatesStartsAndObservesWholeRequest(t *testing.T) {
 	}
 }
 
+func TestGatewayStripsReservedLifecycleHeadersFromWorkloadResponse(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set(StartingHeader, "1")
+		w.Header().Set(StartFailureHeader, "workload-supplied classification")
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer upstream.Close()
+
+	instanceID := "8ca9f331-9cc9-4a51-9933-27d7bb73860b"
+	repository := &gatewayRepositoryStub{instance: &models.MCPServerInstance{
+		InstanceID: instanceID,
+		JSONSpec:   map[string]any{"type": "docker"},
+	}}
+	runtime := &runtimeStub{endpoint: upstream.URL + "/mcp"}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mcp/"+instanceID+"/mcp", nil)
+	request.Header.Set("X-AgentArea-Manager-Authorization", "Bearer "+testGatewaySecret)
+
+	testGateway(t, repository, runtime).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("workload response status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	if recorder.Header().Get(StartingHeader) != "" || recorder.Header().Get(StartFailureHeader) != "" {
+		t.Fatalf("workload response spoofed gateway lifecycle headers: %v", recorder.Header())
+	}
+}
+
 func TestGatewayRejectsMissingCredentialBeforeLifecycle(t *testing.T) {
 	repository := &gatewayRepositoryStub{}
 	runtime := &runtimeStub{}
@@ -176,6 +204,35 @@ func TestGatewayRecordsFailedColdStart(t *testing.T) {
 
 	if recorder.Code != http.StatusBadGateway || repository.failed != 1 || repository.started != 0 {
 		t.Fatalf("failed start response=%d failed=%d started=%d", recorder.Code, repository.failed, repository.started)
+	}
+}
+
+func TestGatewayReturnsClassifiedStartupFailureAsRetryable(t *testing.T) {
+	instanceID := "8ca9f331-9cc9-4a51-9933-27d7bb73860b"
+	reason := "workload exited with code 17 during startup"
+	repository := &gatewayRepositoryStub{instance: &models.MCPServerInstance{InstanceID: instanceID}}
+	runtime := &runtimeStub{err: &StartupFailureError{
+		reason:     reason,
+		cause:      errors.New("token=secret"),
+		retryDelay: 1500 * time.Millisecond,
+	}}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mcp/"+instanceID+"/mcp", nil)
+	request.Header.Set("X-AgentArea-Manager-Authorization", "Bearer "+testGatewaySecret)
+
+	testGateway(t, repository, runtime).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("classified start failure response = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	if got := recorder.Header().Get(StartFailureHeader); got != reason {
+		t.Fatalf("%s = %q, want %q", StartFailureHeader, got, reason)
+	}
+	if got := recorder.Header().Get("Retry-After"); got != "2" {
+		t.Fatalf("Retry-After = %q, want rounded-up cooldown", got)
+	}
+	if strings.Contains(recorder.Body.String(), "secret") {
+		t.Fatalf("startup response leaked underlying error: %q", recorder.Body.String())
 	}
 }
 
@@ -340,11 +397,11 @@ func TestGatewayRefusesRetirementWithActiveLease(t *testing.T) {
 }
 
 func TestLoadPolicyFromEnvRequiresExplicitOperationalValues(t *testing.T) {
-	t.Setenv("MCP_REQUEST_LEASE_TTL", "90s")
-	t.Setenv("MCP_GATEWAY_STARTUP_TIMEOUT", "5m")
-	t.Setenv("MCP_IDLE_TIMEOUT", "0")
-	t.Setenv("MCP_IDLE_SWEEP_INTERVAL", "1m")
-	t.Setenv("MCP_GATEWAY_AUTH_SECRET", testGatewaySecret)
+	t.Setenv("AGENTAREA_MCP_LEASE_TTL", "90s")
+	t.Setenv("AGENTAREA_MCP_STARTUP_TIMEOUT", "5m")
+	t.Setenv("AGENTAREA_MCP_IDLE_TIMEOUT", "0")
+	t.Setenv("AGENTAREA_MCP_SWEEP_INTERVAL", "1m")
+	t.Setenv("AGENTAREA_MCP_GATEWAY_SECRET", testGatewaySecret)
 
 	policy, err := LoadPolicyFromEnv()
 	if err != nil {
@@ -354,7 +411,7 @@ func TestLoadPolicyFromEnvRequiresExplicitOperationalValues(t *testing.T) {
 		t.Fatalf("unexpected policy: %+v", policy)
 	}
 
-	t.Setenv("MCP_REQUEST_LEASE_TTL", "invalid")
+	t.Setenv("AGENTAREA_MCP_LEASE_TTL", "invalid")
 	if _, err := LoadPolicyFromEnv(); err == nil {
 		t.Fatal("malformed duration was accepted")
 	}

@@ -105,6 +105,7 @@ async def main(workspace_id: str, created_by: str) -> None:
                 name=f"{name}-{suffix}",
                 description=f"Demo MCP server: {name}",
                 server_spec_id=str(spec.id),
+                transport="url",
                 json_spec={},
                 network_scope=scope,
                 workspace_id=workspace_id,

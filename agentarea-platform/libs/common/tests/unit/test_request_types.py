@@ -2,8 +2,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import pytest
-from agentarea_common.utils.types import NaiveUtcDatetime, NotNull
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from agentarea_common.utils.types import NaiveUtcDatetime, NotNull, UtcDatetime
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 
 class _Patch(BaseModel):
@@ -51,3 +51,10 @@ def test_an_offset_datetime_becomes_naive_utc() -> None:
 def test_a_naive_datetime_is_taken_as_utc() -> None:
     assert _Window(since=datetime(2026, 1, 1, 12, 0)).since == datetime(2026, 1, 1, 12, 0)
     assert _Window(since="2026-01-01T12:00:00Z").since == datetime(2026, 1, 1, 12, 0)
+
+
+def test_utc_datetime_serialization_schema_keeps_date_time_format() -> None:
+    assert TypeAdapter(UtcDatetime).json_schema(mode="serialization") == {
+        "format": "date-time",
+        "type": "string",
+    }

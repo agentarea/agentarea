@@ -50,7 +50,13 @@ test.describe("Scenario 05 MP - create a policy and verify enforcement", () => {
 
     await gotoCommitted(page, "/policies/new");
     await expect(page.getByText("Policy Control Plane")).toBeVisible();
-    await page.getByLabel("Amount").fill(amount);
+    // A fill before hydration is wiped when React takes over the controlled
+    // input. The compiled-output panel reflects the amount only once React
+    // handled the change, so re-fill until it does.
+    await expect(async () => {
+      await page.getByLabel("Amount").fill(amount);
+      await expect(page.getByText(/amount=\$?17\.13/).first()).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
     await page.getByRole("button", { name: "Create rule" }).click();
 
     await expect

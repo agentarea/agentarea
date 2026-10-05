@@ -71,6 +71,21 @@ global:
       sandboxInspection: "sandbox-inspection-token"
       sandboxCleanup: "sandbox-cleanup-token"
 
+  # Platform OAuth apps for remote MCP servers whose authorization server has
+  # no Dynamic Client Registration (GitHub). Off by default: without them such
+  # providers need the workspace's own OAuth app. When existingSecret is set,
+  # backend and worker read AGENTAREA_MCP_OAUTH_APPS from its key: a JSON list of
+  #   {"issuer": "https://github.com/login/oauth", "client_id": "...",
+  #    "client_secret": "...",
+  #    "authorization_endpoint": "https://github.com/login/oauth/authorize",
+  #    "token_endpoint": "https://github.com/login/oauth/access_token",
+  #    "resource_origins": ["https://api.githubcopilot.com"]}
+  # Tokens minted through an app are only ever sent to its resource_origins.
+  # A malformed value fails startup.
+  mcpOAuthApps:
+    existingSecret: ""
+    existingSecretKey: "mcp-oauth-apps"  # pragma: allowlist secret
+
   # Database configuration
   database:
     # Secret name where database credentials are stored
@@ -106,11 +121,11 @@ global:
   # `Chart.yaml` dependency `condition: redis.enabled`, which toggles the
   # bundled Valkey subchart on/off.
   #
-  # Precedence for REDIS_URL injection (see templates/_redis-url.tpl):
-  #   1. existingSecret set -> REDIS_URL from secretKeyRef (recommended for
+  # Precedence for AGENTAREA_REDIS_URL injection (see templates/_redis-url.tpl):
+  #   1. existingSecret set -> AGENTAREA_REDIS_URL from secretKeyRef (recommended for
   #      production: managed Redis URLs carry credentials).
-  #   2. url set            -> REDIS_URL literal value (quick-start / dev).
-  #   3. neither set        -> derived redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)
+  #   2. url set            -> AGENTAREA_REDIS_URL literal value (quick-start / dev).
+  #   3. neither set        -> derived redis://:$(AGENTAREA_REDIS_PASSWORD)@$(AGENTAREA_REDIS_HOST):$(AGENTAREA_REDIS_PORT)
   #      using the in-cluster Valkey subchart (default behavior).
   redis:
     host: ""  # auto-derived from bundled Valkey service when empty
@@ -118,7 +133,7 @@ global:
     # External Redis URL (full connection string, e.g. rediss://user:pass@host:6379).
     # Takes precedence over host/port when set.
     url: ""
-    # Pre-existing Secret containing the full REDIS_URL (takes precedence over url).
+    # Pre-existing Secret containing the full AGENTAREA_REDIS_URL (takes precedence over url).
     existingSecret: ""
     existingSecretKey: "url"
     database: 0
@@ -328,6 +343,12 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    # MinIO-compatible object storage, for presigned browser uploads/downloads.
+    rustfs:
+      host: ""  # e.g., s3.example.com
+      paths:
+        - path: /
+          pathType: Prefix
     # Dedicated host for the Apps sandbox proxy; set it to the host of
     # global.webapp.appsSandboxUrl. Only the sandbox path is routed.
     appsSandbox:
@@ -364,7 +385,6 @@ backend:
   # -- Total budget the kubelet allows for the two above before SIGKILL. Keep it
   # above preStopDelay + shutdownTimeout, or draining is cut short.
   terminationGracePeriodSeconds: 30
-
   image:
     repository: agentarea/agentarea-api
     tag: "latest"
@@ -497,7 +517,7 @@ worker:
     pullPolicy: ""  # Overrides global.image.pullPolicy if set
 
   # -- Port of the worker's health endpoint, passed to the container as
-  # AGENTAREA_WF_HEALTH_PORT. /readyz answers 200 once the database, the
+  # AGENTAREA_WORKER_HEALTH_PORT. /readyz answers 200 once the database, the
   # authorization backend and Redis are reachable and every Temporal worker is
   # polling; /livez answers 200 while the event loop responds.
   healthPort: 8081
@@ -670,7 +690,7 @@ mcpManager:
   # Image that runs `command` connections (`npx -y <pkg>`, `uvx <pkg>`): its
   # bridge starts the stdio server and serves it as Streamable HTTP on port
   # 8080 once the server has initialized. Pin the tag to the release in
-  # production; the manager passes it as MCP_BASE_IMAGE.
+  # production; the manager passes it as AGENTAREA_MCP_BASE_IMAGE.
   mcpBase:
     image:
       repository: agentarea/agentarea-mcp-base
@@ -688,13 +708,13 @@ mcpManager:
 
   # Run MCP containers on a remote host instead of in this cluster.
   #
-  # That host runs this same image with MCP_MANAGER_MODE=dataplane, which builds
+  # That host runs this same image with AGENTAREA_MCP_MODE=dataplane, which builds
   # only a container backend — no database, no Redis, no secret manager. It is
   # the arrangement that keeps user-supplied MCP images off the control plane's
   # nodes without requiring a second Kubernetes cluster, and the data plane can
   # only touch instances it created itself.
   #
-  # Setting url switches BACKEND_TYPE to dataplane. All three fields go together
+  # Setting url switches AGENTAREA_MCP_BACKEND to dataplane. All three fields go together
   # or none do; a partial set stops the render rather than silently falling back
   # to running containers here.
   dataPlane:
@@ -746,7 +766,7 @@ mcpManager:
   # are optional; empty = no change. Platform security invariants (managed-by
   # label, securityContext/seccomp, withheld SA token, runtime-class clamp) are
   # always applied on top and cannot be weakened from here. Passed to the manager
-  # as a single JSON env var (KUBERNETES_INSTANCE_POD); tolerations/affinity use
+  # as a single JSON env var (AGENTAREA_K8S_INSTANCE_POD); tolerations/affinity use
   # the standard Kubernetes object shape.
   instancePod:
     labels: {}
@@ -876,7 +896,8 @@ mcpManager:
 
     # Explicit zero disables process-local idle exit; pod retirement is owned
     # by the manager's fenced task lifecycle.
-    idleTimeoutSeconds: 0
+    # Activation process exits after this long with no request. "0s" disables.
+    idleTimeout: "0s"
     
     # Number of warm pods per node
     size: 1
@@ -1372,7 +1393,7 @@ kratos:
     hashers:
       algorithm: bcrypt
       bcrypt:
-        cost: 8
+        cost: 12
     identity:
       default_schema_id: default
       schemas:

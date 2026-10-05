@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { mcpIdentity } from "@/lib/entity-identity";
-import { getMCPInstanceConsumers, type MCPInstanceConsumer } from "@/lib/api";
+import type { MCPInstanceConsumer } from "@/lib/api";
 import { getMcpVerificationStatusPresentation } from "@/lib/status";
 import { discoverMCPInstanceToolsAction as discoverMCPInstanceTools } from "@/lib/server-actions";
 import { OAuthConnectPanel } from "../OAuthConnectPanel";
@@ -47,14 +47,9 @@ interface Props {
   instance: MCPInstance;
   serverSpec: MCPServer | null;
   memberNames?: Record<string, string>;
+  consumers: MCPInstanceConsumer[] | null;
+  consumersError: string | null;
 }
-
-const MCP_TRANSPORT = {
-  url: "url",
-  bundle: "bundle",
-  command: "command",
-  docker: "docker",
-} as const;
 
 interface McpHeaderField {
   name: string;
@@ -64,7 +59,6 @@ interface McpHeaderField {
 }
 
 interface McpServerJsonSpec {
-  type?: string;
   remotes?: Array<{ url?: string; headers?: McpHeaderField[] }>;
   repository?: { url?: string; source?: string };
   websiteUrl?: string;
@@ -117,6 +111,8 @@ export default function MCPInstanceDetail({
   instance,
   serverSpec,
   memberNames = {},
+  consumers,
+  consumersError,
 }: Props) {
   const t = useTranslations("MCPServersPage.instanceDetail");
   const tCommon = useTranslations("Common");
@@ -156,38 +152,7 @@ export default function MCPInstanceDetail({
   const [isVerifying, setIsVerifying] = useState(false);
   const [oauthState, setOauthState] = useState<OAuthConnectState | undefined>();
 
-  // One fetch for both the tools table (principals per tool) and the consumers
-  // section (tools per agent) — the endpoint scans every agent in the
-  // workspace, so it must not be called twice for the same page.
-  const [consumers, setConsumers] = useState<MCPInstanceConsumer[] | null>(null);
-  const [consumersError, setConsumersError] = useState<string | null>(null);
-  const [consumersAttempt, setConsumersAttempt] = useState(0);
-  useEffect(() => {
-    let active = true;
-    setConsumersError(null);
-    getMCPInstanceConsumers(instance.id)
-      .then((result) => {
-        if (!active) return;
-        if (result.error || !result.data) {
-          setConsumersError(
-            apiErrorMessage(result, t("errors.consumersLoadFailed"))
-          );
-          return;
-        }
-        setConsumers(result.data);
-      })
-      .catch((err) => {
-        console.error("Failed to load MCP instance consumers", err);
-        if (active) {
-          setConsumersError(
-            `${t("errors.consumersLoadFailed")}: ${formatApiError(err)}`
-          );
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [instance.id, consumersAttempt, t]);
+
 
   const handleVerify = async () => {
     setIsVerifying(true);
@@ -303,19 +268,6 @@ export default function MCPInstanceDetail({
     return () => clearInterval(interval);
   }, [verification?.status, router]);
 
-  // Derive transport type. After PR #151 transport moved to MCPServer columns,
-  // so instance.json_spec.type is empty for newly-created instances — fall back
-  // to the parent server spec (remote_url → url, cmd → command, else docker).
-  const derivedTransportType = ((): string => {
-    const fromInstance = instance.json_spec?.type as string | undefined;
-    if (fromInstance) return fromInstance;
-    if (serverSpec?.remote_url) return MCP_TRANSPORT.url;
-    const specJson = serverSpec?.json_spec as McpServerJsonSpec | undefined;
-    if (specJson?.type) return specJson.type;
-    if (serverSpec?.cmd) return MCP_TRANSPORT.command;
-    return MCP_TRANSPORT.docker;
-  })();
-
   const plainEnvVars = (instance.json_spec?.environment ?? {}) as Record<
     string,
     string
@@ -334,11 +286,9 @@ export default function MCPInstanceDetail({
     instance.json_spec?.available_tools ??
     []) as Array<{ name: string; description: string }>;
 
-  // Determine MCP type (uses derivedTransportType — see above)
-  const specType = derivedTransportType;
-  const isUrlType = specType === MCP_TRANSPORT.url;
-  const isCommandType = specType === MCP_TRANSPORT.command;
-  const isBundleType = specType === MCP_TRANSPORT.bundle;
+  const isUrlType = instance.transport === "url";
+  const isCommandType = instance.transport === "command";
+  const isBundleType = instance.transport === "bundle";
   const bundleMembers = (instance.json_spec?.members ?? []) as string[];
 
   const authorization = summarizeAuthorization({
@@ -352,9 +302,9 @@ export default function MCPInstanceDetail({
   const commandStr = instance.json_spec?.command as string | undefined;
   const commandArgs = (instance.json_spec?.args ?? []) as string[];
 
-  // URL-type fields. Like derivedTransportType above, the endpoint lives on the
-  // parent server spec for catalog instances (remote_url / remotes[].url), not in
-  // the instance json_spec — fall back so the External Server card isn't empty.
+  // URL-type fields. The endpoint lives on the parent server spec for catalog
+  // instances (remote_url / remotes[].url), not in the instance json_spec —
+  // fall back so the External Server card isn't empty.
   const endpointUrl = (instance.json_spec?.endpoint_url ||
     serverSpec?.remote_url ||
     (serverSpec?.json_spec as McpServerJsonSpec | undefined)?.remotes?.[0]
@@ -371,7 +321,7 @@ export default function MCPInstanceDetail({
   // top-row so it stays discoverable without dominating the layout.
   const apiBaseUrl =
     typeof window !== "undefined"
-      ? (window as unknown as { __ENV__?: { CLIENT_API_URL?: string } })
+      ? (window as Window & { __ENV__?: { CLIENT_API_URL?: string } })
           .__ENV__?.CLIENT_API_URL || ""
       : "";
   const agentareaProxyUrl = `${apiBaseUrl}/v1/mcp/${instance.id}/mcp`;
@@ -793,7 +743,7 @@ export default function MCPInstanceDetail({
                   size="xs"
                   variant="outline"
                   className="self-start"
-                  onClick={() => setConsumersAttempt((n) => n + 1)}
+                  onClick={() => router.refresh()}
                 >
                   <RefreshCw />
                   {tCommon("retry")}

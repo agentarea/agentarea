@@ -26,11 +26,10 @@ npm start
 ## Quick Start
 
 ```bash
-$ agentarea-cli
+$ agentarea login --api-url=http://localhost:8000
+# Opens the browser to sign in (OAuth + PKCE)
 
-# First time: You'll be prompted to login
-[?] Email: your.email@example.com
-[?] Password: ••••••••
+$ agentarea-cli
 
 # Then: Select an agent and submit a task
 [?] Select agent: Agent-1 (online)
@@ -48,9 +47,12 @@ Processing: 50%
 ### Login
 
 ```bash
-$ agentarea-cli
-# Prompts for email and password
+$ agentarea login --api-url=http://localhost:8000
+# Signs in through the browser (OAuth + PKCE)
 # Token stored securely in OS keychain
+
+$ agentarea logout
+# Clears the stored session
 ```
 
 ### List Agents
@@ -86,15 +88,15 @@ Create a `.env` file based on `.env.example`:
 
 ```bash
 # API Configuration
-API_URL=http://localhost:3000
-API_TIMEOUT=30000
-MAX_RETRIES=3
+AGENTAREA_API_URL=http://localhost:3000
+AGENTAREA_API_TIMEOUT=30000
+AGENTAREA_MAX_RETRIES=3
 
 # Logging
-LOG_LEVEL=info
+AGENTAREA_LOG_LEVEL=info
 
 # UI
-THEME=auto
+AGENTAREA_THEME=auto
 ```
 
 ## Development
@@ -125,7 +127,6 @@ source/
 ├── components/          # Ink UI components
 ├── services/            # API clients and business logic
 ├── hooks/               # React hooks for state management
-├── context/             # React context providers
 ├── utils/               # Utility functions
 └── types/               # TypeScript type definitions
 ```
@@ -136,9 +137,9 @@ The CLI expects the following API endpoints:
 
 ### Authentication
 
-- `POST /auth/login` - Login with credentials
-- `POST /auth/refresh` - Refresh access token
-- `POST /auth/logout` - Logout and invalidate token
+`agentarea login` uses the API's OAuth authorization server
+(`/.well-known/oauth-authorization-server`): PKCE sign-in in the browser, and
+the token endpoint to refresh an expiring access token.
 
 ### Agents
 
@@ -212,10 +213,10 @@ npm rebuild
 
 ### API connection errors
 
-1. Check API_URL in .env
+1. Check AGENTAREA_API_URL in .env
 2. Verify API server is running
 3. Check network connectivity
-4. Enable debug logging: `LOG_LEVEL=debug`
+4. Enable debug logging: `AGENTAREA_LOG_LEVEL=debug`
 
 ## License
 

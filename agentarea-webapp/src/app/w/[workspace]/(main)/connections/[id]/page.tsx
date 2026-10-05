@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import type { McpServerInstanceResponse } from "@/api/client/types.gen";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
-import { getMCPServer, getMCPServerInstance } from "@/lib/api";
+import { getMCPInstanceConsumers, getMCPServer, getMCPServerInstance } from "@/lib/api";
+import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { optionalApiData, requireApiData } from "@/lib/server-resource";
 import MCPInstanceHeaderControls from "./HeaderControls";
 import MCPInstanceDetail from "./MCPInstanceDetail";
@@ -29,17 +30,39 @@ export default async function MCPInstancePage({ params }: Props) {
     "MCP instance"
   );
 
-  const serverSpec = instance.server_spec_id
-    ? optionalApiData(
-        await getMCPServer(instance.server_spec_id),
-        `MCP server ${instance.server_spec_id}`
-      )
-    : null;
+  const consumersPromise = getMCPInstanceConsumers(instance.id)
+    .then((result) =>
+      result.error || !result.data
+        ? {
+            consumers: null,
+            error: apiErrorMessage(
+              result,
+              t("instanceDetail.errors.consumersLoadFailed")
+            ),
+          }
+        : { consumers: result.data, error: null }
+    )
+    .catch((error) => ({
+      consumers: null,
+      error: `${t("instanceDetail.errors.consumersLoadFailed")}: ${formatApiError(error)}`,
+    }));
+  const [serverSpecResult, consumerResult] = await Promise.all([
+    instance.server_spec_id ? getMCPServer(instance.server_spec_id) : null,
+    consumersPromise,
+  ]);
+  const serverSpec =
+    serverSpecResult && instance.server_spec_id
+      ? optionalApiData(
+          serverSpecResult,
+          `MCP server ${instance.server_spec_id}`
+        )
+      : null;
+  const { consumers, error: consumersError } = consumerResult;
 
   // Resolve bundle member names
   const memberNames: Record<string, string> = {};
   const jsonSpec = instance.json_spec;
-  if (jsonSpec?.type === "bundle" && Array.isArray(jsonSpec.members)) {
+  if (instance.transport === "bundle" && Array.isArray(jsonSpec.members)) {
     const results = await Promise.all(
       jsonSpec.members.map((memberId: string) => getMCPServerInstance(memberId))
     );
@@ -73,6 +96,8 @@ export default async function MCPInstancePage({ params }: Props) {
         instance={instance}
         serverSpec={serverSpec}
         memberNames={memberNames}
+        consumers={consumers}
+        consumersError={consumersError}
       />
     </ContentBlock>
   );

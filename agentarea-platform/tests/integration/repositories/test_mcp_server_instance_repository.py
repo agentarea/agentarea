@@ -13,9 +13,7 @@ class TestMCPServerInstanceRepository:
     @pytest.fixture
     def user_context(self):
         """Create a test user context."""
-        return UserContext(
-            user_id="test-user-123", workspace_id="test-workspace-456"
-        )
+        return UserContext(user_id="test-user-123", workspace_id="test-workspace-456")
 
     def create_test_instance(
         self,
@@ -31,6 +29,7 @@ class TestMCPServerInstanceRepository:
             name=name,
             description=description,
             server_spec_id=server_spec_id,
+            transport="docker",
             json_spec=json_spec or {"env_vars": ["API_KEY", "SECRET_TOKEN"]},
             workspace_id=workspace_id,
             created_by=created_by,
@@ -48,6 +47,7 @@ class TestMCPServerInstanceRepository:
             name="OpenAI MCP Server",
             description="OpenAI integration server",
             server_spec_id="openai_spec_v1",
+            transport="docker",
             json_spec={"env_vars": ["OPENAI_API_KEY"], "config": {"model": "gpt-4"}},
         )
 
@@ -80,13 +80,22 @@ class TestMCPServerInstanceRepository:
 
         # Create multiple instances using the new workspace-scoped create method
         await repository.create(
-            name="GitHub MCP Server", description="GitHub integration", server_spec_id="github_v1"
+            name="GitHub MCP Server",
+            description="GitHub integration",
+            server_spec_id="github_v1",
+            transport="docker",
         )
         await repository.create(
-            name="Slack MCP Server", description="Slack integration", server_spec_id="slack_v1"
+            name="Slack MCP Server",
+            description="Slack integration",
+            server_spec_id="slack_v1",
+            transport="docker",
         )
         await repository.create(
-            name="Database MCP Server", description="Database connector", server_spec_id="db_v1"
+            name="Database MCP Server",
+            description="Database connector",
+            server_spec_id="db_v1",
+            transport="docker",
         )
 
         # List all instances
@@ -108,6 +117,7 @@ class TestMCPServerInstanceRepository:
             name="Original Server",
             description="Original description",
             server_spec_id="original_spec_v1",
+            transport="docker",
             json_spec={"env_vars": ["OLD_KEY"]},
         )
 
@@ -136,7 +146,10 @@ class TestMCPServerInstanceRepository:
 
         # Create instance using the new workspace-scoped create method
         created_instance = await repository.create(
-            name="Temporary Server", description="Will be deleted", server_spec_id="temp_spec_v1"
+            name="Temporary Server",
+            description="Will be deleted",
+            server_spec_id="temp_spec_v1",
+            transport="docker",
         )
 
         # Delete the instance
@@ -179,9 +192,15 @@ class TestMCPServerInstanceRepository:
         repository = MCPServerInstanceRepository(db_session, user_context)
 
         # Create instances with different server_spec_ids using the new workspace-scoped create method
-        await repository.create(name="OpenAI Server 1", server_spec_id="openai_v1")
-        await repository.create(name="OpenAI Server 2", server_spec_id="openai_v1")
-        await repository.create(name="GitHub Server", server_spec_id="github_v1")
+        await repository.create(
+            name="OpenAI Server 1", server_spec_id="openai_v1", transport="docker"
+        )
+        await repository.create(
+            name="OpenAI Server 2", server_spec_id="openai_v1", transport="docker"
+        )
+        await repository.create(
+            name="GitHub Server", server_spec_id="github_v1", transport="docker"
+        )
 
         # Filter by openai_v1 spec using the new method
         openai_instances = await repository.list_by_server_spec("openai_v1")
@@ -198,12 +217,20 @@ class TestMCPServerInstanceRepository:
         repository = MCPServerInstanceRepository(db_session, user_context)
 
         # Create various instances using the new workspace-scoped create method
-        await repository.create(name="Target Server", server_spec_id="target_spec")
-        await repository.create(name="Non-matching 1", server_spec_id="other_spec")
-        await repository.create(name="Non-matching 2", server_spec_id="other_spec")
+        await repository.create(
+            name="Target Server", server_spec_id="target_spec", transport="docker"
+        )
+        await repository.create(
+            name="Non-matching 1", server_spec_id="other_spec", transport="docker"
+        )
+        await repository.create(
+            name="Non-matching 2", server_spec_id="other_spec", transport="docker"
+        )
 
         # Filter by server_spec_id using list_all
-        filtered_instances = await repository.list_all(server_spec_id="target_spec")
+        filtered_instances = await repository.list_all(
+            server_spec_id="target_spec", transport="docker"
+        )
 
         assert len(filtered_instances) == 1
         assert filtered_instances[0].name == "Target Server"
@@ -221,7 +248,10 @@ class TestMCPServerInstanceRepository:
         }
 
         created_instance = await repository.create(
-            name="JSON Test Server", server_spec_id="json_test_spec_v1", json_spec=complex_json_spec
+            name="JSON Test Server",
+            server_spec_id="json_test_spec_v1",
+            transport="docker",
+            json_spec=complex_json_spec,
         )
 
         # Verify JSON spec is stored and retrieved correctly

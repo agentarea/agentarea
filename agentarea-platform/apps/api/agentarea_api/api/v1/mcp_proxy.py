@@ -4,8 +4,9 @@ Each MCP instance gets a stable governed endpoint:
 
     POST/GET/DELETE  /v1/mcp/{instance_id}/mcp
 
-The proxy resolves the instance, determines the upstream URL, injects
-outbound auth headers (OAuth2 bearer with auto-refresh, API key, etc.), and
+The proxy resolves the instance, determines the upstream URL, injects the
+instance's own headers (secret ones from the secret store) and outbound auth
+headers (OAuth2 bearer with auto-refresh, API key, etc.), and
 streams the request/response transparently. AgentArea owns access control
 (workspace scoping today; access-control next) and audit centrally; downstream MCP
 servers see only governed traffic.
@@ -39,7 +40,7 @@ from agentarea_common.auth.dependencies import (
     bind_request_workspace,
     binds_workspace,
 )
-from agentarea_common.auth.route_authz import requires, unrestricted
+from agentarea_common.auth.route_authz import requires
 from agentarea_common.auth.tool_authorization import decide_tool_policy
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.base.tenant_scope import unscoped
@@ -54,11 +55,13 @@ from agentarea_mcp.application.mcp_client import (
     gateway_start_retry_delay,
 )
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.domain.transport import CONTAINER_TRANSPORTS, MCPTransport
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
+from agentarea_mcp.transport_spec import instance_transport_spec
 from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -88,25 +91,31 @@ _HOP_BY_HOP = frozenset(
 )
 
 
+# The upstream is member-supplied: it receives the MCP protocol headers
+# (``Mcp-*`` plus the content negotiation and resume headers the transport uses)
+# and nothing else of the caller's -- not cookies, not forwarding headers, not
+# the caller's own auth (we inject the instance's).
+_FORWARDED_REQUEST_HEADERS = frozenset({"accept", "content-type", "last-event-id"})
+
+
 def _filter_inbound_headers(headers) -> dict[str, str]:
-    """Headers we forward upstream (drop hop-by-hop, host, our own auth)."""
-    out: dict[str, str] = {}
-    for k, v in headers.items():
-        lk = k.lower()
-        if lk in _HOP_BY_HOP:
-            continue
-        # Don't forward the user's auth to upstream — we inject our own.
-        if lk == "authorization":
-            continue
-        out[k] = v
-    return out
+    """The MCP protocol headers of the caller's request, for the upstream."""
+    return {
+        k: v
+        for k, v in headers.items()
+        if k.lower() in _FORWARDED_REQUEST_HEADERS or k.lower().startswith("mcp-")
+    }
 
 
 def _filter_outbound_headers(headers) -> dict[str, str]:
-    """Headers we forward back to the client (drop hop-by-hop)."""
+    """Upstream response headers for the client, minus hop-by-hop and cookies.
+
+    An upstream's ``Set-Cookie`` would be replayed on the API origin.
+    """
     out: dict[str, str] = {}
     for k, v in headers.items():
-        if k.lower() in _HOP_BY_HOP:
+        lk = k.lower()
+        if lk in _HOP_BY_HOP or lk == "set-cookie":
             continue
         out[k] = v
     return out
@@ -277,35 +286,22 @@ async def _authorize_mcp_tool_calls(
         )
 
 
-async def _resolve_upstream_url(instance, server_spec) -> tuple[str, str | None]:
-    """Compute the upstream MCP endpoint URL and the instance type.
+async def _resolve_upstream_url(instance, server_spec) -> tuple[str, MCPTransport]:
+    """Compute the upstream MCP endpoint URL and the instance's transport.
 
-    URL-type instances carry their full endpoint URL on the parent server
-    spec (remote_url). Container-backed instances expose MCP at ``/mcp`` on
-    the resolved internal URL. The returned type drives SSRF handling: only
-    ``url`` upstreams are user-controlled and must be validated/pinned.
+    URL-type instances connect to the endpoint their server spec declares.
+    Container-backed instances go through the manager gateway. The transport
+    drives SSRF handling: only ``url`` upstreams are user-controlled and must be
+    validated/pinned.
     """
-    json_spec: dict[str, Any] = instance.json_spec or {}
-    instance_type = json_spec.get("type") or json_spec.get("server_type")
-    if not instance_type and server_spec is not None:
-        if getattr(server_spec, "remote_url", None):
-            instance_type = "url"
-        elif getattr(server_spec, "cmd", None):
-            instance_type = "command"
-        else:
-            instance_type = "docker"
-
-    if instance_type == "url":
-        if server_spec is not None and getattr(server_spec, "remote_url", None):
-            return server_spec.remote_url, instance_type
-        spec_json = getattr(server_spec, "json_spec", None) or {}
-        if spec_json.get("type") == "url":
-            return spec_json.get("endpoint_url") or spec_json.get("url") or "", instance_type
-        return "", instance_type
-
-    if instance_type in ("docker", "command"):
-        return get_settings().mcp.manager_gateway_url(instance.id), instance_type
-    return "", instance_type
+    transport = MCPTransport(instance.transport)
+    if transport == MCPTransport.URL:
+        if server_spec is None:
+            return "", transport
+        return instance_transport_spec(server_spec, instance).get("endpoint_url") or "", transport
+    if transport in CONTAINER_TRANSPORTS:
+        return get_settings().mcp.manager_gateway_url(instance.id), transport
+    return "", transport
 
 
 def _no_proxy_bypasses(host: str) -> bool:
@@ -336,7 +332,7 @@ def _egress_is_proxied(upstream_url: str) -> bool:
 
 
 def _guard_and_pin_upstream(
-    upstream_url: str, instance_type: str | None, *, policy: OutboundPolicy
+    upstream_url: str, instance_type: MCPTransport, *, policy: OutboundPolicy
 ) -> tuple[str | httpx.URL, str | None, dict | None]:
     """SSRF chokepoint for outbound proxy requests.
 
@@ -359,7 +355,7 @@ def _guard_and_pin_upstream(
     Raises:
         ValueError: If a URL-type upstream is not safe to fetch.
     """
-    if instance_type != "url":
+    if instance_type != MCPTransport.URL:
         return upstream_url, None, None
 
     resolved_ips = validate_url(upstream_url, policy=policy)
@@ -383,7 +379,7 @@ async def bind_mcp_instance_workspace(
     request: Request,
     instance_id: str,
     principal: PrincipalDep,
-    db_session: AsyncSession = Depends(get_read_db_session),
+    db_session: AsyncSession = Depends(get_read_db_session, scope="function"),
 ) -> None:
     """Act in the workspace of the instance the URL names.
 
@@ -410,7 +406,7 @@ async def bind_mcp_instance_workspace(
 @router.get(
     "/{instance_id}/mcp",
     operation_id="proxy_instance_v1_mcp__instance_id__mcp_get",
-    dependencies=[unrestricted("proxies to an MCP instance the caller's workspace already owns")],
+    dependencies=[requires("use", "mcp_instance", id_param="instance_id")],
 )
 @router.post(
     "/{instance_id}/mcp",
@@ -468,13 +464,18 @@ async def proxy_instance(
     if pinned_host:
         # Connect to the pinned IP but present the original hostname upstream.
         outbound_headers.setdefault("Host", pinned_host)
+    try:
+        outbound_headers.update(await instance_service.outbound_headers(instance))
+    except Exception as exc:
+        logger.exception("Failed to build outbound headers for instance %s", instance_id)
+        raise HTTPException(status_code=502, detail="Upstream auth failed") from exc
     if instance.auth_config_id:
         auth_repo = MCPAuthConfigRepository(db_session, user_context)
         auth_config = await auth_repo.get_by_id(instance.auth_config_id)
         if auth_config is not None:
             auth_service = MCPAuthService(auth_repo, secret_manager)
             try:
-                injected = await auth_service.get_auth_headers(auth_config)
+                injected = await auth_service.get_auth_headers_for(auth_config, upstream_url)
                 outbound_headers.update(injected)
             except Exception as exc:
                 logger.exception(
@@ -482,7 +483,7 @@ async def proxy_instance(
                 )
                 raise HTTPException(status_code=502, detail="Upstream auth failed") from exc
 
-    if instance_type in ("docker", "command"):
+    if instance_type in CONTAINER_TRANSPORTS:
         try:
             outbound_headers.update(get_settings().mcp.manager_gateway_headers())
         except RuntimeError as exc:
@@ -515,7 +516,7 @@ async def proxy_instance(
             extensions=extensions or {},
         )
         upstream_resp = await client.send(upstream_req, stream=True)
-        if instance_type in ("docker", "command"):
+        if instance_type in CONTAINER_TRANSPORTS:
             upstream_resp = await _wait_out_gateway_start(
                 client, upstream_req, upstream_resp, request
             )

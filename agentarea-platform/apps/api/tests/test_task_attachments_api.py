@@ -650,7 +650,7 @@ async def test_task_status_hides_raw_workflow_error(monkeypatch):
         get_workflow_status=AsyncMock(
             return_value={
                 "status": "failed",
-                "error": "upstream failure: SECRET_MANAGER_ACCESS_KEY=private-value",
+                "error": "upstream failure: AGENTAREA_SECRET_CLIENT_ID=private-value",
             }
         )
     )
@@ -704,7 +704,9 @@ async def test_task_status_exposes_business_state_separately_from_execution(
             raise LookupError(execution_id)
         return {"status": business_status, "execution_status": execution_status}
 
-    workflow_service = SimpleNamespace(get_workflow_status=execution_detail)
+    workflow_service = SimpleNamespace(
+        get_workflow_status=execution_detail, get_live_state=AsyncMock(return_value=None)
+    )
     app = FastAPI()
     app.include_router(agents_tasks.router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_user_context] = lambda: context

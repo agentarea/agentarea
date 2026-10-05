@@ -323,9 +323,9 @@ class MCPServersToolset(Toolset):
 
         Args:
             name: Display name for the instance (unique per workspace).
-            json_spec_json: JSON-encoded connection configuration. Must include
-                ``type`` (``url`` | ``docker`` | ``command``);
-                other keys depend on type.
+            json_spec_json: JSON-encoded instance configuration (environment,
+                env_vars, headers). The transport comes from the server spec;
+                transport keys such as ``type`` are ignored.
             description: Optional human-readable description.
             server_spec_id: ID of an existing MCP server spec.
             auth_config_id: Optional MCPAuthConfig UUID for OAuth/credentials.

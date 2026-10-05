@@ -53,9 +53,9 @@ type InfisicalSecretResolver struct {
 	environment string
 }
 
-// NewSecretResolver creates the appropriate secret resolver based on SECRET_MANAGER_TYPE
+// NewSecretResolver creates the appropriate secret resolver based on AGENTAREA_SECRET_BACKEND
 func NewSecretResolver(logger *slog.Logger) (SecretResolver, error) {
-	secretManagerType := os.Getenv("SECRET_MANAGER_TYPE")
+	secretManagerType := os.Getenv("AGENTAREA_SECRET_BACKEND")
 	if secretManagerType == "" {
 		secretManagerType = "database" // Default to database
 	}
@@ -69,20 +69,20 @@ func NewSecretResolver(logger *slog.Logger) (SecretResolver, error) {
 	case "infisical":
 		return newInfisicalSecretResolver(logger)
 	default:
-		return nil, fmt.Errorf("unsupported SECRET_MANAGER_TYPE: %s (supported: database, infisical)", secretManagerType)
+		return nil, fmt.Errorf("unsupported AGENTAREA_SECRET_BACKEND: %s (supported: database, infisical)", secretManagerType)
 	}
 }
 
 // newInfisicalSecretResolver creates a new Infisical secret resolver
 func newInfisicalSecretResolver(logger *slog.Logger) (*InfisicalSecretResolver, error) {
 	// Get Infisical configuration from environment
-	infisicalURL := os.Getenv("INFISICAL_URL")
+	infisicalURL := os.Getenv("AGENTAREA_SECRET_ENDPOINT")
 	if infisicalURL == "" {
 		infisicalURL = "http://infisical:8080" // Default for docker-compose
 	}
 
 	// Load bootstrap token from config file
-	tokenPath := os.Getenv("INFISICAL_TOKEN_PATH")
+	tokenPath := os.Getenv("AGENTAREA_SECRET_TOKEN_PATH")
 	if tokenPath == "" {
 		tokenPath = "/app/bootstrap/data/infisical_config.json"
 	}
@@ -122,12 +122,12 @@ func newInfisicalSecretResolver(logger *slog.Logger) (*InfisicalSecretResolver, 
 	client.Auth().SetAccessToken(config.Identity.Credentials.Token)
 
 	// Get project and environment from config or environment variables
-	projectID := os.Getenv("INFISICAL_PROJECT_ID")
+	projectID := os.Getenv("AGENTAREA_SECRET_PROJECT_ID")
 	if projectID == "" {
 		projectID = config.Organization.ID // Use organization ID as project ID
 	}
 
-	environment := os.Getenv("INFISICAL_ENVIRONMENT")
+	environment := os.Getenv("AGENTAREA_SECRET_ENV")
 	if environment == "" {
 		environment = "dev" // Default environment
 	}
@@ -202,9 +202,9 @@ func (sr *InfisicalSecretResolver) ResolveInstanceEnvVars(instanceID string, env
 	return resolved, nil
 }
 
-// Close closes the secret resolver
+// Close closes the secret resolver. The Infisical SDK client holds no
+// connection or goroutine of its own, so there is nothing to release.
 func (sr *InfisicalSecretResolver) Close() error {
 	sr.logger.Info("Closing Infisical secret resolver")
-	// TODO: Close Infisical client if needed
 	return nil
 }

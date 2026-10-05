@@ -6,7 +6,7 @@
 set -e
 
 # Configuration
-KRATOS_PUBLIC_URL="http://localhost:4433"
+AGENTAREA_AUTH_KRATOS_URL="http://localhost:4433"
 AGENTAREA_API_URL="http://localhost:8000"
 
 # Global variables
@@ -54,7 +54,7 @@ login_to_kratos() {
 
     # Step 1: Initialize login flow
     local flow_response
-    flow_response=$(curl -s -X GET "${KRATOS_PUBLIC_URL}/self-service/login/api" \
+    flow_response=$(curl -s -X GET "${AGENTAREA_AUTH_KRATOS_URL}/self-service/login/api" \
         -H "Accept: application/json")
 
     local flow_id
@@ -70,7 +70,7 @@ login_to_kratos() {
 
     # Step 2: Submit login credentials
     local login_response
-    login_response=$(curl -s -X POST "${KRATOS_PUBLIC_URL}/self-service/login?flow=${flow_id}" \
+    login_response=$(curl -s -X POST "${AGENTAREA_AUTH_KRATOS_URL}/self-service/login?flow=${flow_id}" \
         -H "Content-Type: application/json" \
         -H "Accept: application/json" \
         -d "{
@@ -115,7 +115,7 @@ get_jwt_token() {
     
     echo -e "${YELLOW}Requesting JWT token with tokenize_as parameter...${NC}"
     local whoami_response
-    whoami_response=$(curl -s -X GET "${KRATOS_PUBLIC_URL}/sessions/whoami?tokenize_as=agentarea_jwt" \
+    whoami_response=$(curl -s -X GET "${AGENTAREA_AUTH_KRATOS_URL}/sessions/whoami?tokenize_as=agentarea_jwt" \
         -H "Accept: application/json" \
         -H "X-Session-Token: ${SESSION_TOKEN}")
     

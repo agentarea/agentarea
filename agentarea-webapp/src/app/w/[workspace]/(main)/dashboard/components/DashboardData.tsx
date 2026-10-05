@@ -3,10 +3,10 @@ import { BoardGrid } from "@/components/board";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { getDashboard, getPricingCurrency } from "@/lib/api-dashboard";
 import { apiErrorMessage } from "@/lib/api-errors";
-import { ActivityStrip } from "./ActivityStrip";
-import { AgentRows } from "./AgentRows";
 import { BlockersPanel } from "./BlockersPanel";
+import { ScheduleCalendar } from "./ScheduleCalendar";
 import { SpendCard } from "./SpendCard";
+import { TasksPanel } from "./TasksPanel";
 
 export async function DashboardData() {
   const [result, pricing] = await Promise.all([
@@ -39,12 +39,20 @@ export async function DashboardData() {
           spend={data.spend}
           trend={data.daily_spend}
           currency={currency}
+          compact
         />
       }
-      topRight={<ActivityStrip data={data.daily_tasks} />}
-      bottomLeft={<AgentRows agents={data.agents} currency={currency} />}
-      bottomRight={
+      topRight={
         <BlockersPanel blockers={data.blockers} currency={currency} />
+      }
+      topRightPadded={false}
+      bottomLeft={<ScheduleCalendar schedule={data.schedule} />}
+      bottomRight={
+        <TasksPanel
+          active={data.active_tasks}
+          recent={data.recent_tasks}
+          currency={currency}
+        />
       }
     />
   );

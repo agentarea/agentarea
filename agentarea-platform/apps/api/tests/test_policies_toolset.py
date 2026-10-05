@@ -74,8 +74,8 @@ class FakePolicyService:
     async def get_rule(self, *, rule_id):
         return self.rule
 
-    async def create_rule(self, *, rule, subject_id):
-        self.created.append((rule, subject_id))
+    async def create_rule(self, *, rule):
+        self.created.append(rule)
         return rule
 
     async def update_rule(self, *, rule_id, **fields):
@@ -135,9 +135,9 @@ async def test_create_writes_an_enforceable_rule(harness):
     )
 
     assert result["effect"] == "deny"
-    written, subject_id = harness.service.created[0]
+    written = harness.service.created[0]
     assert written.target == "tool:shell"
-    assert subject_id == "agent-1"
+    assert written.subject_id == "agent-1"
 
 
 async def test_create_refuses_a_rule_the_engine_would_ignore(harness):

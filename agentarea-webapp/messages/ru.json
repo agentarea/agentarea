@@ -120,7 +120,14 @@
     "saved": "Сохранено",
     "deleteFailed": "Не удалось удалить {itemName}",
     "confirm": "Подтвердить",
-    "display": "Вид"
+    "display": "Вид",
+    "skipToContent": "Перейти к основному содержимому",
+    "switchToDarkTheme": "Переключить на тёмную тему",
+    "switchToLightTheme": "Переключить на светлую тему",
+    "scrollToLatestMessage": "Прокрутить к последнему сообщению",
+    "previousPage": "Назад",
+    "nextPage": "Вперёд",
+    "pageNumber": "Страница {page}"
   },
   "admin": {
     "title": "Панель администратора",
@@ -201,7 +208,9 @@
     "policies": "Политики",
     "settings": "Настройки",
     "logout": "Выйти",
-    "workspaceSettings": "Настройки воркспейса"
+    "workspaceSettings": "Настройки воркспейса",
+    "inboxPending": "{count, plural, one {Входящие, # согласование ждёт} few {Входящие, # согласования ждут} other {Входящие, # согласований ждут}}",
+    "audit": "Аудит"
   },
   "MembersPage": {
     "title": "Участники",
@@ -429,6 +438,21 @@
       "switchLanguage": "Сменить язык",
       "theme": "Тема",
       "themeDescription": "Измените тему приложения"
+    },
+    "workspace": {
+      "title": "Рабочее пространство",
+      "description": "Администрирование этого рабочего пространства",
+      "exportTitle": "Экспорт рабочего пространства",
+      "exportDescription": "Скачайте агентов, MCP-подключения, навыки и триггеры одним YAML-бандлом, который можно импортировать в другое рабочее пространство. Учётные данные заменяются полями настройки — их заполнит тот, кто импортирует.",
+      "export": "Экспортировать",
+      "exportFailed": "Не удалось экспортировать рабочее пространство",
+      "logoTitle": "Логотип",
+      "logoDescription": "Показывается в переключателе рабочих пространств всем участникам. PNG, JPEG или WebP, до 1 МБ.",
+      "logoUpload": "Загрузить логотип",
+      "logoRemove": "Удалить",
+      "logoTooLarge": "Логотип должен быть не больше 1 МБ",
+      "logoUploadFailed": "Не удалось загрузить логотип",
+      "logoRemoveFailed": "Не удалось удалить логотип"
     },
     "subscription": {
       "title": "Подписка",
@@ -1096,6 +1120,8 @@
     "modelCount": "{count, plural, =0 {} one {+ # модель} few {+ # модели} many {+ # моделей} other {+ # модели}}",
     "endpointUrl": "URL-адрес конечной точки",
     "apiKey": "Ключ API",
+    "editApiKey": "Изменить API-ключ",
+    "cancelEditing": "Отменить редактирование",
     "modelInstances": "Экземпляры моделей",
     "providerConfigurationUpdatedSuccessfully": "Конфигурация провайдера успешно обновлена",
     "providerConfigurationCreatedSuccessfully": "Конфигурация провайдера успешно создана",
@@ -1222,9 +1248,6 @@
     "noTasksByCreatorDescription": "Под этот фильтр не попала ни одна задача",
     "noTasksOnPageDescription": "Эта страница за последней задачей",
     "firstPage": "Первая страница",
-    "previousPage": "Назад",
-    "nextPage": "Вперёд",
-    "pageNumber": "Страница {page}",
     "unknownCreator": "Неизвестно",
     "showTasksBy": "Показать задачи, запущенные {name}",
     "taskRunning": "Задача выполняется",
@@ -1263,11 +1286,27 @@
       "memory": "Память",
       "metrics": "Метрики"
     },
-    "startTaskAction": "Выбрать агента"
+    "startTaskAction": "Выбрать агента",
+    "controls": {
+      "pause": "Пауза",
+      "resume": "Продолжить",
+      "cancel": "Отменить задачу",
+      "pauseFailed": "Не удалось поставить задачу на паузу",
+      "resumeFailed": "Не удалось продолжить задачу",
+      "cancelFailed": "Не удалось отменить задачу",
+      "cancelTitle": "Отменить задачу?",
+      "cancelDescription": "Агент сразу остановится, а задача завершится как отменённая. Это действие нельзя отменить.",
+      "keepRunning": "Не отменять",
+      "cancelConfirm": "Отменить задачу"
+    }
   },
   "SkillsPage": {
     "title": "Навыки",
     "description": "Управление многоразовыми навыками агентов.",
+    "rowActions": {
+      "favorite": "В избранное",
+      "duplicate": "Создать копию"
+    },
     "addSkill": "Добавить навык",
     "backToSkills": "Назад к навыкам",
     "skill": "Навык",
@@ -1318,7 +1357,8 @@
         "ingress": "Входящая",
         "egress": "Исходящая"
       },
-      "filter": "Фильтр"
+      "filter": "Фильтр",
+      "accessibleLabel": "Фильтровать навыки"
     },
     "table": {
       "name": "Имя",
@@ -1445,7 +1485,8 @@
       "none": "Без группировки",
       "ordering": "Сортировка",
       "name": "Имя",
-      "created": "Создано"
+      "created": "Создано",
+      "accessibleLabel": "Параметры отображения"
     },
     "emptyHere": "Здесь нет навыков",
     "emptyHereDescription": "Под этот вид пока ничего не подходит.",
@@ -1542,7 +1583,9 @@
     "modelsLoadFailed": "Не удалось загрузить модели",
     "modelChangeFailed": "Не удалось сменить модель",
     "selectModel": "Выберите модель",
-    "changeModel": "Сменить"
+    "changeModel": "Сменить",
+    "executionInProgress": "Выполняется",
+    "executionAwaitingFollowUp": "Ждёт продолжения"
   },
   "Workplace": {
     "hero": {
@@ -1781,7 +1824,8 @@
       "selectSecret": "Выбрать секрет",
       "keepExistingSecret": "Оставить текущий секрет",
       "noSecrets": "Секретов пока нет.",
-      "newSecret": "Новый секрет"
+      "newSecret": "Новый секрет",
+      "createdWithSecretTitle": "Вебхук создан"
     },
     "detail": {
       "overview": "Обзор",
@@ -1840,6 +1884,7 @@
       "failureWarning": "{count, plural, one {# сбой} few {# сбоя} other {# сбоев}} подряд из {threshold}",
       "noSchedule": "Ожидает входящий запрос",
       "metricsLoadFailed": "Не удалось загрузить метрики",
+      "executionsLoadFailed": "Не удалось загрузить список выполнений",
       "periodHours": "За последние {hours} ч",
       "durationRange": "разброс {min}s — {max}s",
       "failures": "Сбои",
@@ -1847,7 +1892,19 @@
       "spend": "Расходы",
       "spendPerRun": "{cost} за запуск",
       "noCostedRuns": "Оплаченных запусков ещё не было",
-      "cost": "Стоимость"
+      "cost": "Стоимость",
+      "firstPage": "Первая страница",
+      "noExecutionsOnPage": "На этой странице запусков нет",
+      "signing": "Подпись запросов",
+      "signingStatus": {
+        "signed": "Подписан",
+        "unsigned": "Без подписи",
+        "unsupported": "Не проверяется"
+      },
+      "signingSignedHint": "Запросы без правильной подписи отклоняются.",
+      "signingUnsignedHint": "Любой, кто знает этот адрес, может запустить агента. Создайте секрет подписи и подписывайте им каждый запрос.",
+      "signingUnsignedChannelHint": "Любой, кто знает этот адрес, может запустить агента. Сохраните учётные данные канала ещё раз, чтобы зарегистрировать секрет.",
+      "signingUnsupportedHint": "AgentArea пока не проверяет запросы этого провайдера, поэтому любой, кто знает адрес, может запустить агента. Не публикуйте адрес."
     },
     "error": {
       "createFailed": "Не удалось создать триггер",
@@ -1856,10 +1913,39 @@
       "loadFailed": "Не удалось загрузить триггер",
       "enableFailed": "Не удалось включить триггер",
       "disableFailed": "Не удалось отключить триггер",
-      "runFailed": "Не удалось запустить триггер"
+      "runFailed": "Не удалось запустить триггер",
+      "rotateSigningSecretFailed": "Не удалось создать секрет подписи"
+    },
+    "signing": {
+      "sign": "Создать секрет подписи",
+      "rotate": "Сменить секрет",
+      "signTitle": "Требовать подпись запросов?",
+      "signDescription": "С этого момента запросы без правильной подписи будут отклоняться. Настройте всех отправителей на подпись новым секретом.",
+      "signConfirm": "Создать секрет",
+      "rotateTitle": "Сменить секрет подписи?",
+      "rotateDescription": "Запросы, подписанные текущим секретом, начнут отклоняться сразу после создания нового. Сразу обновите всех отправителей.",
+      "rotateConfirm": "Сменить секрет",
+      "issuedTitle": "Секрет подписи создан",
+      "issuedDescription": "Подписывайте этим секретом каждый запрос к вебхуку. Запросы без подписи отклоняются.",
+      "secretLabel": "Секрет подписи",
+      "secretWarning": "Показывается один раз. Скопируйте его сейчас и сохраните там, где работает отправитель.",
+      "headerLabel": "Заголовок",
+      "valueLabel": "Подпись",
+      "valueText": "HMAC-{algorithm} от исходного тела запроса с этим секретом, в шестнадцатеричном виде.",
+      "valueTextWithPrefix": "HMAC-{algorithm} от исходного тела запроса с этим секретом, в шестнадцатеричном виде, после префикса {prefix}.",
+      "exampleLabel": "Пример",
+      "done": "Готово"
     }
   },
   "NetworkPage": {
+    "graphSelection": {
+      "title": "Узлы и связи",
+      "nodes": "Узлы ({count})",
+      "relationships": "Связи ({count})",
+      "relationshipLabel": "{source} → {target}: {relation}",
+      "showMore": "Показать ещё",
+      "showLess": "Показать меньше"
+    },
     "orgChart": {
       "types": {
         "agent": "Агент",
@@ -2073,6 +2159,7 @@
     "name": "Имя",
     "baseUrl": "Базовый URL",
     "baseUrlHint": "Базовый URL для API запросов",
+    "baseUrlAbsoluteRequired": "Введите абсолютный базовый URL с HTTP или HTTPS.",
     "description": "Описание (необязательно)",
     "customHeaders": "Пользовательские заголовки (необязательно)",
     "addHeader": "Добавить заголовок",
@@ -2207,19 +2294,6 @@
     "hint": "Нажмите, чтобы включить инструменты для вашего агента",
     "toolsEnabled": "{count, plural, =1 {# инструмент включён} few {# инструмента включено} many {# инструментов включено} other {# инструмента включено}}"
   },
-  "ApprovalRequestMessage": {
-    "approvalRequired": "Требуется подтверждение:",
-    "approved": "Одобрено",
-    "denied": "Отклонено",
-    "waiting": "Ожидание...",
-    "arguments": "Аргументы",
-    "approve": "Одобрить",
-    "deny": "Отклонить",
-    "denyReasonPlaceholder": "Причина отклонения (необязательно)",
-    "cancel": "Отмена",
-    "sendingDecision": "Отправка решения...",
-    "reason": "Причина:"
-  },
   "ErrorMessage": {
     "error": "Ошибка",
     "type": "Тип:",
@@ -2231,15 +2305,6 @@
     "description": "Отслеживайте, кто, что и когда делал в вашем рабочем пространстве",
     "noEvents": "События аудита отсутствуют.",
     "loadMore": "Загрузить ещё",
-    "filter": {
-      "all": "Все ресурсы",
-      "agent": "Агенты",
-      "mcp_server": "MCP серверы",
-      "mcp_instance": "MCP экземпляры",
-      "task": "Задачи",
-      "trigger": "Триггеры",
-      "skill": "Навыки"
-    },
     "table": {
       "action": "Действие",
       "resource": "Ресурс",
@@ -2247,7 +2312,54 @@
       "ip": "IP",
       "when": "Когда"
     },
-    "loadFailed": "Не удалось загрузить журнал аудита"
+    "loadFailed": "Не удалось загрузить журнал аудита",
+    "noMatches": "Нет событий, подходящих под фильтры.",
+    "filters": {
+      "resourceType": "Тип ресурса",
+      "action": "Действие",
+      "actor": "Исполнитель",
+      "since": "С даты",
+      "until": "По дату",
+      "allResources": "Все ресурсы",
+      "allActions": "Все действия",
+      "anyone": "Любой",
+      "people": "Люди",
+      "agents": "Агенты",
+      "reset": "Сбросить фильтры"
+    },
+    "actionGroups": {
+      "toolCalls": "Вызовы инструментов и согласования",
+      "access": "Доступ и учётные данные",
+      "config": "Конфигурация"
+    },
+    "resourceTypes": {
+      "task": "Задачи",
+      "agent": "Агенты",
+      "skill": "Навыки",
+      "trigger": "Триггеры",
+      "mcp_server": "MCP-серверы",
+      "mcp_instance": "MCP-подключения",
+      "client": "Harnesses",
+      "governance_policy": "Политики",
+      "secret": "Секреты",
+      "api_key": "API-ключи",
+      "member": "Участники",
+      "invitation": "Приглашения",
+      "access_grant": "Права доступа"
+    },
+    "export": {
+      "button": "Экспорт в CSV",
+      "working": "Экспортируем…",
+      "failed": "Не удалось экспортировать журнал аудита",
+      "truncated": "Выгружены последние {count} событий. Сузьте фильтры, чтобы выгрузить более ранние."
+    },
+    "details": {
+      "tool": "Инструмент",
+      "decision": "Решение",
+      "reason": "Причина",
+      "comment": "Комментарий",
+      "arguments": "Аргументы"
+    }
   },
   "AuthConsent": {
     "title": "Разрешить доступ для {clientName}",
@@ -2279,39 +2391,18 @@
     "today": "Сегодня",
     "vsPrevDay": "к пред. дню",
     "budgetUsage": "{pct}% от бюджета {cap}",
-    "activity": "Активность",
-    "activityMeta": "За 14 дней · UTC",
-    "completed": "Завершено",
-    "failed": "Ошибки",
-    "awaiting": "Ожидание",
-    "agents": "Агенты",
-    "agentsActive": "{count} активн.",
-    "statDone": "{count} готово",
-    "statFailed": "{count} с ошибкой",
-    "statMtd": "{amount} MTD",
-    "viewAllAgents": "Все агенты",
-    "noAgents": "Пока нет агентов.",
-    "noAgentsHint": "Создайте — и он появится здесь с активностью.",
-    "createFirstAgent": "Создайте первого агента",
     "blockers": "Блокеры",
-    "healthy": "Всё в порядке",
     "nothingBlocking": "Сейчас ничего не блокирует работу.",
     "allClearHint": "Все агенты работают без сбоёв.",
     "awaitingInput": "Ожидают ввода",
+    "awaitingContinuation": "Ожидают продолжения",
+    "blocked": "Заблокированы",
     "walletExhausted": "Бюджет исчерпан",
     "failed24h": "Ошибки (24ч)",
     "budgetExhausted": "Бюджет исчерпан — {amount} / {period}",
     "taskFailed": "Задача завершилась ошибкой",
+    "taskBlocked": "Задача заблокирована",
     "timeAgo": "{time} назад",
-    "relJustNow": "только что",
-    "relMinutes": "{count} мин",
-    "relHours": "{count} ч",
-    "relDays": "{count} д",
-    "period": "Период",
-    "periodLast7": "7 дней",
-    "periodLast30": "30 дней",
-    "periodMonthToDate": "С начала месяца",
-    "periodLast90": "90 дней",
     "tasks": "Задачи",
     "allTasks": "Все задачи",
     "runningNow": "Выполняются",
@@ -2324,7 +2415,9 @@
     "nothingScheduled": "Ничего не запланировано — добавьте триггер",
     "throughoutTheDay": "Весь день:",
     "perDay": "×{count}/день",
-    "moreRuns": "ещё {count}"
+    "fromDate": "с {date}",
+    "moreRuns": "ещё {count}",
+    "runCount": "Запланировано запусков: {count}"
   },
   "BudgetsPage": {
     "couldntLoadTitle": "Не удалось загрузить данные бюджета",
@@ -2489,7 +2582,8 @@
       "pending": "Ждут одобрения",
       "input": "Ждут ответа",
       "completed": "Завершённые",
-      "failed": "С ошибкой"
+      "failed": "С ошибкой",
+      "decided": "Решения"
     },
     "row": {
       "untitled": "Задача без названия",
@@ -2514,8 +2608,6 @@
       "openChat": "Открыть чат",
       "close": "Закрыть панель",
       "requestedRecently": "Запрошено недавно",
-      "willRun": "После одобрения агент выполнит <b>{tool}</b>.",
-      "requestedAction": "запрошенное действие",
       "outputPending": "Результат появится после выполнения действия.",
       "noOutput": "Задача не вернула результат."
     },
@@ -2547,7 +2639,11 @@
       },
       "viewAll": "Показать все",
       "taskHistory": "История задач",
-      "triggers": "Проверить триггеры"
+      "triggers": "Проверить триггеры",
+      "decided": {
+        "title": "Решений пока нет",
+        "description": "Здесь появятся согласованные и отклонённые вызовы — с тем, кто и когда принял решение."
+      }
     },
     "detailEmpty": {
       "title": "Выберите задачу",
@@ -2556,7 +2652,26 @@
       "openNext": "Открыть следующую"
     },
     "resolveFailed": "Не удалось обработать «{task}»",
-    "resolveManyFailed": "Не удалось обработать {failed} из {total}"
+    "resolveManyFailed": "Не удалось обработать {failed} из {total}",
+    "batch": {
+      "approveTitle": "{count, plural, one {Согласовать # вызов?} few {Согласовать # вызова?} other {Согласовать # вызовов?}}",
+      "rejectTitle": "{count, plural, one {Отклонить # вызов?} few {Отклонить # вызова?} other {Отклонить # вызовов?}}",
+      "approveDescription": "Каждый агент выполнит показанный ниже вызов. Проверьте аргументы перед подтверждением.",
+      "rejectDescription": "Ни один из вызовов ниже не будет выполнен. Каждый агент узнает, что вызов отклонён.",
+      "commentLabel": "Комментарий (необязательно, уйдёт с каждым решением)",
+      "commentPlaceholder": "Почему вы согласуете или отклоняете",
+      "cancel": "Отмена",
+      "approveConfirm": "{count, plural, one {Согласовать # вызов} few {Согласовать # вызова} other {Согласовать # вызовов}}",
+      "rejectConfirm": "{count, plural, one {Отклонить # вызов} few {Отклонить # вызова} other {Отклонить # вызовов}}"
+    },
+    "decisions": {
+      "loadFailed": "Не удалось загрузить решения по согласованиям",
+      "approved": "Согласовано",
+      "rejected": "Отклонено",
+      "resolved": "Решено",
+      "by": "решил(а): {name}",
+      "comment": "«{comment}»"
+    }
   },
   "AppsPage": {
     "title": "Приложения",
@@ -2642,10 +2757,6 @@
       "policies": "Политики",
       "access": "Доступ"
     },
-    "accessView": {
-      "matrix": "Матрица",
-      "relationships": "Связи"
-    },
     "empty": {
       "title": "Политик пока нет — агенты работают без ограничений",
       "description": "Политика задаёт, что агентам можно: какие инструменты вызывать, сколько тратить, что требует подтверждения."
@@ -2660,7 +2771,139 @@
     },
     "editor": {
       "loadFailedTitle": "Не удалось загрузить политику",
-      "loadFailed": "Ошибка загрузки политик"
+      "loadFailed": "Ошибка загрузки политик",
+      "breadcrumbPolicies": "Политики",
+      "titles": {
+        "edit": "Изменить правило политики",
+        "newPolicy": "Новое правило политики",
+        "newAgent": "Политика агента",
+        "newWorkspace": "Новое правило для пространства"
+      },
+      "actions": {
+        "addRule": "Добавить правило",
+        "cancel": "Отмена",
+        "createRule": "{count, plural, one {Создать правило} few {Создать правила} many {Создать правил} other {Создать правило}}",
+        "delete": "Удалить",
+        "deleteFailed": "Не удалось удалить правило",
+        "saveFailed": "Не удалось сохранить правило",
+        "saveRule": "Сохранить правило"
+      },
+      "sections": {
+        "controlPlane": "Управление политиками",
+        "rules": "Правила политики",
+        "configuration": "Настройки правила",
+        "ruleType": "Тип правила",
+        "ruleTypeFixed": "Тип правила нельзя изменить после его создания.",
+        "enabled": "Включено",
+        "disabled": "Выключено",
+        "impactRail": "Область влияния"
+      },
+      "effects": {
+        "allow": "Разрешение",
+        "cap": "Лимит",
+        "approval": "Согласование",
+        "deny": "Запрет",
+        "safety": "Безопасность"
+      },
+      "scope": {
+        "policyDescription": "Политика распространяется на {scope}. Выдача доступа к инструментам настраивается на странице <accessView>«Доступ»</accessView>.",
+        "allAgentsInWorkspace": "всех агентов в этом рабочем пространстве",
+        "selectedAgent": "выбранного агента",
+        "selectedAgents": "выбранных агентов",
+        "target": "Цель",
+        "workspace": "Рабочее пространство",
+        "allAgentsOption": "Все агенты",
+        "selectedAgentsOption": "Выбранные агенты",
+        "selectAgentPlaceholder": "Выберите агента",
+        "addAgent": "Добавить агента",
+        "removeAgent": "Удалить агента «{agent}»",
+        "addAgentsPrompt": "Добавьте агентов, на которых должна распространяться политика.",
+        "toolAccessManaged": "Выдача доступа к инструментам настраивается в разделе",
+        "accessView": "Доступ",
+        "affectedAgents": "Затронутые агенты",
+        "workspaceAgentCount": "{count, plural, one {# агент в рабочем пространстве} few {# агента в рабочем пространстве} many {# агентов в рабочем пространстве} other {# агента в рабочем пространстве}}",
+        "selectedAgentCount": "{count, plural, one {# выбранный агент} few {# выбранных агента} many {# выбранных агентов} other {# выбранного агента}}",
+        "noAgentsSelected": "Агенты не выбраны",
+        "agent": "Агент",
+        "noAgentsInWorkspace": "В этом рабочем пространстве пока нет агентов.",
+        "selectAgentPreview": "Выберите агента, чтобы увидеть охват политики.",
+        "moreAgents": "{count, plural, one {Ещё # агент} few {Ещё # агента} many {Ещё # агентов} other {Ещё # агента}}"
+      },
+      "ruleIndex": "Правило № {number}",
+      "removeRule": "Удалить правило № {number}",
+      "budget": {
+        "type": "Тип бюджета",
+        "spend": "Бюджет расходов",
+        "perService": "Бюджет на сервис",
+        "tokens": "Бюджет токенов",
+        "maxTokens": "Максимум токенов",
+        "maxTokensPerCall": "Максимум токенов за вызов",
+        "amount": "Сумма",
+        "period": "Период",
+        "perMonth": "В месяц",
+        "perTask": "На задачу",
+        "moneyPlaceholder": "0,00",
+        "numberPlaceholder": "необязательно"
+      },
+      "tools": {
+        "deniedTools": "Запрещённые инструменты",
+        "approvalRequiredTools": "Инструменты, требующие согласования",
+        "noToolsAttached": "У затронутых агентов пока нет подключённых инструментов.",
+        "agentCount": "{count, plural, one {# агент} few {# агента} many {# агентов} other {# агента}}",
+        "notInAgentCatalog": "нет в текущем каталоге агента",
+        "mcpSource": "MCP",
+        "mcpSourceNamed": "MCP · {name}",
+        "openApiSource": "OpenAPI",
+        "openApiSourceNamed": "OpenAPI · {name}",
+        "builtInSource": "Встроенный",
+        "customSource": "Пользовательский",
+        "genericSource": "Инструмент",
+        "advancedSelector": "Расширенный выбор",
+        "namePlaceholder": "Название инструмента",
+        "everyCallHint": "Правило действует на каждый вызов выбранных инструментов. Условия по аргументам инструментов пока не поддерживаются."
+      },
+      "approvers": {
+        "label": "Согласующие",
+        "emptyHelp": "Оставьте поле пустым, чтобы согласовать могли любые участники рабочего пространства.",
+        "unsupportedHint": "Роли и группы пока не могут согласовывать. Удалите их из согласующих (сейчас: {count}), чтобы сохранить правило."
+      },
+      "tagInput": {
+        "add": "Добавить",
+        "removeValue": "Удалить {value}"
+      },
+      "safety": {
+        "promptInjection": "Обнаружение инъекций в промпт",
+        "outputSanitizer": "Очистка вывода"
+      },
+      "validation": {
+        "agentRequired": "Добавьте хотя бы одного агента для этой политики.",
+        "workspaceRequired": "Контекст рабочего пространства недоступен.",
+        "tokenBudgetRequired": "Укажите бюджет токенов.",
+        "amountInvalid": "Введите корректную сумму.",
+        "amountMustBePositive": "Сумма должна быть больше 0.",
+        "amountMustNotBeNegative": "Сумма не может быть отрицательной.",
+        "atLeastOneToolRequired": "Добавьте хотя бы один инструмент.",
+        "toolRequired": "Добавьте инструмент.",
+        "safetyCheckRequired": "Включите хотя бы одну проверку безопасности.",
+        "approverUnsupported": "Согласовывать могут только участники рабочего пространства — удалите роли и группы из согласующих.",
+        "ruleInvalid": "Правило № {number} («{effect}»): {error}"
+      },
+      "summary": {
+        "agentScopePending": "агенты не выбраны",
+        "workspaceScopeMissing": "пространство не выбрано",
+        "scope": "Охват",
+        "workspace": "Рабочее пространство",
+        "agentCount": "{count, plural, one {# агент} few {# агента} many {# агентов} other {# агента}}",
+        "drafts": "Черновики",
+        "active": "Активные",
+        "activeCount": "{enabled}/{total} включено",
+        "selected": "Действие",
+        "target": "Цель",
+        "params": "Парам.",
+        "rules": "Правила",
+        "pending": "ожидает",
+        "compiledOutput": "Сформированная политика"
+      }
     }
   },
   "ProjectSettingsPage": {
@@ -2777,10 +3020,39 @@
     "agentInstallFailed": "Не удалось добавить агента",
     "agentsLoadFailed": "Не удалось загрузить агентов воркспейса",
     "skillInstallFailed": "Не удалось добавить навык",
-    "skillAttachFailed": "Не удалось добавить навык агенту {agent}"
+    "skillAttachFailed": "Не удалось добавить навык агенту {agent}",
+    "start": "Запустить",
+    "installBundle": "Установить бандл"
   },
   "ProjectOverviewPage": {
     "loadFailed": "Не удалось загрузить проект",
     "agentsLoadFailed": "Не удалось загрузить агентов воркспейса"
+  },
+  "Approvals": {
+    "cardLabel": "Ожидает согласования",
+    "required": "Нужно согласование",
+    "requiredForTool": "Нужно согласование: {tool}",
+    "willRun": "Если согласовать, агент выполнит <b>{tool}</b> с этими аргументами.",
+    "requestedAction": "запрошенное действие",
+    "argumentsLoading": "Загружаем вызов на согласование…",
+    "argumentsFailed": "Не удалось загрузить вызов на согласование",
+    "notAnApprover": "Согласовать может только назначенный согласующий.",
+    "noArguments": "У вызова нет аргументов.",
+    "commentLabel": "Комментарий (необязательно)",
+    "commentPlaceholder": "Почему вы согласуете или отклоняете — сохранится вместе с решением",
+    "approve": "Согласовать",
+    "reject": "Отклонить",
+    "decisionFailed": "Не удалось отправить решение",
+    "approved": "Согласовано",
+    "rejected": "Отклонено",
+    "resolved": "Решено",
+    "outcomeForTool": "{outcome}: {tool}",
+    "decidedBy": "{name}",
+    "decidedByAt": "{name} · {time}",
+    "comment": "«{comment}»"
+  },
+  "ToolPart": {
+    "blockedByPolicy": "Заблокировано политикой",
+    "rejectedByApprover": "Отклонено согласующим"
   }
 }

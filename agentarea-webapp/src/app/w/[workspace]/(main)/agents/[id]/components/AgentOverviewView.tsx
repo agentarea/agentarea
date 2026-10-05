@@ -224,9 +224,9 @@ export async function AgentOverviewView({
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="m-0 text-[18px] font-semibold tracking-[-0.022em] md:text-[18px]">
+                <h2 className="m-0 text-[18px] font-semibold tracking-[-0.022em] md:text-[18px]">
                   {model.name}
-                </h1>
+                </h2>
                 <StatusIndicator
                   kind={model.status.kind}
                   className="whitespace-nowrap text-[13px] font-medium"

@@ -60,17 +60,7 @@ import {
 } from "./catalog-data";
 
 export type AgentLite = { id: string; name: string };
-export type WorkspaceModel = Pick<
-  ModelInstanceResponse,
-  | "id"
-  | "model_name"
-  | "model_display_name"
-  | "provider_name"
-  | "provider_icon_url"
-  | "is_active"
-  | "managed_by"
-  | "tags"
->;
+export type WorkspaceModel = ModelInstanceResponse;
 
 // The reusable-secret list lives in @/lib/server-actions, where every Connect
 // flow imports it from directly. Re-exporting it through here is illegal in a
@@ -230,18 +220,7 @@ export async function listWorkspaceAgentsAction(): Promise<
 export async function listActiveModelInstancesAction() {
   const result = await listModelInstances({ is_active: true, kind: "chat" });
   const data: WorkspaceModel[] | undefined = result.data
-    ? zListModelInstancesV1ModelInstancesGetResponse
-        .parse(result.data)
-        .map((model) => ({
-          id: model.id,
-          model_name: model.model_name,
-          model_display_name: model.model_display_name,
-          provider_name: model.provider_name,
-          provider_icon_url: model.provider_icon_url,
-          is_active: model.is_active,
-          managed_by: model.managed_by,
-          tags: model.tags,
-        }))
+    ? zListModelInstancesV1ModelInstancesGetResponse.parse(result.data)
     : undefined;
   return { data, error: result.error, status: result.status };
 }

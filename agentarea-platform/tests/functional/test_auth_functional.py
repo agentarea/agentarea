@@ -13,7 +13,7 @@ import pytest
 from httpx import AsyncClient
 
 # Test configuration
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+AGENTAREA_API_URL = os.getenv("AGENTAREA_API_URL", "http://localhost:8000")
 
 
 class TestAuthenticationEnforcement:
@@ -23,7 +23,7 @@ class TestAuthenticationEnforcement:
     @pytest.mark.integration
     async def test_list_agents_without_auth_returns_403(self):
         """Test that listing agents without authentication returns 403."""
-        async with AsyncClient(base_url=API_BASE_URL) as client:
+        async with AsyncClient(base_url=AGENTAREA_API_URL) as client:
             response = await client.get("/v1/workspaces/acme/agents/")
 
             assert response.status_code == 403, f"Expected 403, got {response.status_code}: {response.text}"
@@ -33,7 +33,7 @@ class TestAuthenticationEnforcement:
     @pytest.mark.integration
     async def test_create_agent_without_auth_returns_403(self):
         """Test that creating an agent without authentication returns 403."""
-        async with AsyncClient(base_url=API_BASE_URL) as client:
+        async with AsyncClient(base_url=AGENTAREA_API_URL) as client:
             response = await client.post(
                 "/v1/workspaces/acme/agents/",
                 json={
@@ -51,7 +51,7 @@ class TestAuthenticationEnforcement:
     @pytest.mark.integration
     async def test_list_agents_with_invalid_token_returns_401(self):
         """Test that listing agents with invalid token returns 401."""
-        async with AsyncClient(base_url=API_BASE_URL) as client:
+        async with AsyncClient(base_url=AGENTAREA_API_URL) as client:
             response = await client.get(
                 "/v1/workspaces/acme/agents/",
                 headers={"Authorization": "Bearer invalid_token_here"},
@@ -71,7 +71,7 @@ class TestAuthenticationEnforcement:
             expired=True,
         )
 
-        async with AsyncClient(base_url=API_BASE_URL) as client:
+        async with AsyncClient(base_url=AGENTAREA_API_URL) as client:
             response = await client.get(
                 "/v1/workspaces/acme/agents/",
                 headers={"Authorization": f"Bearer {expired_token}"},
@@ -92,7 +92,7 @@ class TestAuthenticationEnforcement:
         ]
 
         for token in malformed_tokens:
-            async with AsyncClient(base_url=API_BASE_URL) as client:
+            async with AsyncClient(base_url=AGENTAREA_API_URL) as client:
                 response = await client.get(
                     "/v1/workspaces/acme/agents/",
                     headers={"Authorization": f"Bearer {token}"},
@@ -113,7 +113,7 @@ class TestAuthenticationEnforcement:
             ("GET", "/v1/workspaces/acme/triggers/"),
         ]
 
-        async with AsyncClient(base_url=API_BASE_URL) as client:
+        async with AsyncClient(base_url=AGENTAREA_API_URL) as client:
             for method, endpoint in protected_endpoints:
                 if method == "GET":
                     response = await client.get(endpoint)
@@ -131,7 +131,7 @@ class TestAuthenticatedAccess:
 
     @pytest.mark.asyncio
     @pytest.mark.skipif(
-        not os.getenv("KRATOS_JWKS_B64"),
+        not os.getenv("AGENTAREA_AUTH_JWKS_B64"),
         reason="Requires valid Kratos configuration",
     )
     async def test_list_agents_with_valid_token_returns_200(self):
@@ -143,7 +143,7 @@ class TestAuthenticatedAccess:
         if not valid_token:
             pytest.skip("No valid token available for testing")
 
-        async with AsyncClient(base_url=API_BASE_URL) as client:
+        async with AsyncClient(base_url=AGENTAREA_API_URL) as client:
             response = await client.get(
                 "/v1/workspaces/acme/agents/",
                 headers={"Authorization": f"Bearer {valid_token}"},
@@ -154,7 +154,7 @@ class TestAuthenticatedAccess:
 
     @pytest.mark.asyncio
     @pytest.mark.skipif(
-        not os.getenv("KRATOS_JWKS_B64"),
+        not os.getenv("AGENTAREA_AUTH_JWKS_B64"),
         reason="Requires valid Kratos configuration",
     )
     async def test_create_agent_with_valid_token_succeeds(self):
@@ -164,7 +164,7 @@ class TestAuthenticatedAccess:
         if not valid_token:
             pytest.skip("No valid token available for testing")
 
-        async with AsyncClient(base_url=API_BASE_URL) as client:
+        async with AsyncClient(base_url=AGENTAREA_API_URL) as client:
             response = await client.post(
                 "/v1/workspaces/acme/agents/",
                 headers={"Authorization": f"Bearer {valid_token}"},
@@ -185,7 +185,7 @@ class TestWorkspaceIsolation:
 
     @pytest.mark.asyncio
     @pytest.mark.skipif(
-        not os.getenv("KRATOS_JWKS_B64"),
+        not os.getenv("AGENTAREA_AUTH_JWKS_B64"),
         reason="Requires valid Kratos configuration",
     )
     async def test_user_can_only_see_own_workspace_agents(self):

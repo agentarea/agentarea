@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   appPath,
+  authedRequest,
   createKratosUser,
   deleteKratosUser,
   installBrowserSession,
@@ -10,6 +11,7 @@ import {
 import {
   deleteAgent,
   deleteSkill,
+  expectHydrated,
   expectRedirectedAwayFrom,
   gotoCommitted,
   runRealStack,
@@ -37,6 +39,7 @@ test.describe("Scenario 09 MP - create and attach a skill", () => {
   test("creates a direct-content skill, edits it, and attaches it to an agent", async ({
     context,
     page,
+    request,
   }) => {
     test.setTimeout(90_000);
     await installBrowserSession(context, user);
@@ -45,6 +48,9 @@ test.describe("Scenario 09 MP - create and attach a skill", () => {
     const edited = `Scenario 09 edited instructions ${Date.now()}`;
 
     await gotoCommitted(page, "/skills/create");
+    // The create fields are controlled inputs: text typed before hydration is
+    // reset when React takes over.
+    await expectHydrated(page.locator("#skill-name"));
     await page.locator("#skill-name").fill(name);
     await page.locator("#skill-description").fill("Scenario 09 skill");
     await page.locator("#content-markdown").fill(`# ${name}\n\nInstructions.`);
@@ -62,9 +68,25 @@ test.describe("Scenario 09 MP - create and attach a skill", () => {
       .toMatch(/^\/skills\/[^/]+$/);
     skillId = appPath(page).split("/").pop();
 
-    await page.getByRole("button", { name: /edit/i }).click();
-    await page.getByRole("textbox").fill(`# ${name}\n\n${edited}`);
-    await page.getByRole("button", { name: /^save$/i }).first().click();
+    // The detail page loads through several serialized server actions (twice in
+    // dev), and a late load re-seeds the editor, wiping an edit or masking a
+    // finished save. Retry edit+save until the API holds the edited content;
+    // reloading earlier would also abort the queued save.
+    const savedContent = async () => {
+      const res = await authedRequest(request, user, "get", `/v1/skills/${skillId}/content`);
+      if (!res.ok()) return "";
+      const body: unknown = await res.json();
+      return body && typeof body === "object" && "content" in body && typeof body.content === "string"
+        ? body.content
+        : "";
+    };
+    await expect(async () => {
+      if (!(await page.getByRole("textbox").count()))
+        await page.getByRole("button", { name: "Edit", exact: true }).click({ timeout: 2_000 });
+      await page.getByRole("textbox").fill(`# ${name}\n\n${edited}`, { timeout: 2_000 });
+      await page.getByRole("button", { name: /^save$/i }).first().click({ timeout: 2_000 });
+      await expect.poll(savedContent, { timeout: 8_000 }).toContain(edited);
+    }).toPass({ timeout: 60_000 });
     await page.reload({ waitUntil: "commit" });
     await expect(page.getByText(edited, { exact: false })).toBeVisible({
       timeout: 15_000,

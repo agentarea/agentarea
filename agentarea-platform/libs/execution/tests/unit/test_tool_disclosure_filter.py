@@ -86,3 +86,11 @@ def test_order_is_preserved():
     policy = {"tools": {"allowed": ["*"]}}
     tools = [fn("completion"), fn("a"), fn("b")]
     assert names(filter_disclosed_tools(policy, tools)) == ["completion", "a", "b"]
+
+
+def test_disclosure_honors_deny_rule_on_configured_code_toolset():
+    policy = {"tools": {"denied": ["agentarea/shell"]}}
+    tools = [fn("shell"), fn("web_search")]
+    config = [{"type": "code", "name": "agentarea/shell"}]
+
+    assert names(filter_disclosed_tools(policy, tools, tool_configs=config)) == ["web_search"]

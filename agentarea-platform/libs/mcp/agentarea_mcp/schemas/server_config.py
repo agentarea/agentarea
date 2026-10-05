@@ -1,10 +1,10 @@
 """MCP configuration and request schemas."""
 
-from datetime import datetime
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.utils.types import UtcDatetime
 from pydantic import BaseModel, Field
 
 
@@ -83,15 +83,14 @@ class MCPServerDeployment(BaseModel):
     internal_endpoint: str | None = Field(None, description="Internal service endpoint")
     health_check_url: str | None = Field(None, description="Health check endpoint")
     error: str | None = Field(None, description="Error message if failed")
-    created_at: datetime = Field(..., description="Deployment creation time")
-    updated_at: datetime = Field(..., description="Last update time")
+    created_at: UtcDatetime = Field(..., description="Deployment creation time")
+    updated_at: UtcDatetime = Field(..., description="Last update time")
 
     class Config:
         """Pydantic config."""
 
         json_encoders = {  # noqa: RUF012
             UUID: str,
-            datetime: lambda v: v.isoformat(),  # type: ignore
         }
 
 

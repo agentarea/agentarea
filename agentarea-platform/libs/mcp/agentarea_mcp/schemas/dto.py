@@ -20,12 +20,16 @@ from pydantic import (
     ConfigDict,
     Field,
     field_validator,
-    model_validator,
 )
+
+from .image_reference import validate_optional_image_reference, validate_spec_image
 
 # json_spec is read back in SQL (``json_spec->>'type'``); a NUL or unpaired
 # surrogate stored there broke every such query, so refuse it at the edge.
 JsonSpec = Annotated[dict[str, Any], AfterValidator(require_pg_text)]
+# A spec or instance json_spec whose ``image`` reaches ``docker run``.
+ContainerJsonSpec = Annotated[JsonSpec, AfterValidator(validate_spec_image)]
+ImageReference = Annotated[str | None, AfterValidator(validate_optional_image_reference)]
 
 INSTANCE_TRANSPORT_FIELDS = frozenset(
     {"type", "endpoint_url", "image", "command", "args", "port", "package", "source"}
@@ -57,7 +61,7 @@ class MCPServerCreate(BaseModel):
     description: str = Field(
         description="Short summary of what this MCP server provides.",
     )
-    docker_image_url: str | None = Field(
+    docker_image_url: ImageReference = Field(
         default=None,
         description="Docker image URL for container-based MCP servers.",
     )
@@ -92,7 +96,7 @@ class MCPServerCreate(BaseModel):
             "between stdio and HTTP modes)."
         ),
     )
-    json_spec: JsonSpec | None = Field(
+    json_spec: ContainerJsonSpec | None = Field(
         default=None,
         description="Raw ServerJSON spec as published by the MCP registry.",
     )
@@ -117,7 +121,7 @@ class MCPServerUpdate(BaseModel):
 
     name: Annotated[str | None, NotNull] = Field(default=None, min_length=1, max_length=255)
     description: Annotated[str | None, NotNull] = None
-    docker_image_url: str | None = None
+    docker_image_url: ImageReference = None
     remote_url: str | None = None
     version: Annotated[str | None, NotNull] = None
     tags: Annotated[list[str] | None, NotNull] = None
@@ -128,7 +132,7 @@ class MCPServerUpdate(BaseModel):
     )
     env_schema: Annotated[list[dict[str, Any]] | None, NotNull] = None
     cmd: list[str] | None = None
-    json_spec: JsonSpec | None = None
+    json_spec: ContainerJsonSpec | None = None
     registry_url: str | None = None
 
 
@@ -140,11 +144,11 @@ class MCPServerUpdate(BaseModel):
 class MCPServerInstanceCreate(BaseModel):
     """Payload for creating an MCP server instance.
 
-    ``json_spec`` carries the connection configuration. Common shapes:
-
-    - ``{"type": "url", "endpoint_url": "https://..."}``
-    - ``{"type": "docker", "environment": {...}, "env_vars": [...]}``
-    - ``{"type": "command", "command": [...], "environment": {...}}``
+    The instance's transport (url, docker or command) is the one its server
+    spec declares; the response carries it as ``transport``. ``json_spec``
+    carries the instance's own configuration, e.g.
+    ``{"environment": {...}, "env_vars": [...]}`` or ``{"headers": {...}}``;
+    transport keys in it are ignored.
     For URL-type instances the service synchronously verifies the endpoint;
     docker/command kick off background verification.
     """
@@ -166,10 +170,10 @@ class MCPServerInstanceCreate(BaseModel):
             "(env_schema, secret routing, etc.)."
         ),
     )
-    json_spec: JsonSpec = Field(
+    json_spec: ContainerJsonSpec = Field(
         description=(
-            "Connection configuration. Must include 'type' "
-            "('url' | 'docker' | 'command'); other keys depend on type."
+            "Instance configuration (environment, env_vars, headers). Transport "
+            "keys such as 'type' are ignored: the server spec declares the transport."
         ),
     )
     auth_config_id: str | None = Field(
@@ -184,12 +188,6 @@ class MCPServerInstanceCreate(BaseModel):
         if not v:
             raise ValueError("name cannot be empty or whitespace")
         return v
-
-    @model_validator(mode="after")
-    def _reject_bundle_instances(self) -> MCPServerInstanceCreate:
-        if (self.json_spec or {}).get("type") == "bundle":
-            raise ValueError("bundle is not a valid MCP server instance type")
-        return self
 
 
 class MCPServerInstanceUpdate(BaseModel):

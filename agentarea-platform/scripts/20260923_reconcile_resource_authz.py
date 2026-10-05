@@ -479,18 +479,18 @@ async def main() -> None:
     args = parser.parse_args()
 
     settings = get_settings()
-    if settings.access_control.ACCESS_CONTROL_BACKEND != "openfga":
+    if settings.access_control.BACKEND != "openfga":
         raise SystemExit(
-            f"ACCESS_CONTROL_BACKEND={settings.access_control.ACCESS_CONTROL_BACKEND!r}; "
+            f"AGENTAREA_AUTHZ_BACKEND={settings.access_control.BACKEND!r}; "
             "this reconcile targets OpenFGA."
         )
 
     await bootstrap_openfga(settings.openfga)
     client = OpenFGAClient(
-        api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-        store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-        authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-        timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
+        api_url=settings.openfga.URL,
+        store_id=settings.openfga.STORE_ID,
+        authorization_model_id=settings.openfga.MODEL_ID,
+        timeout_seconds=settings.openfga.TIMEOUT.total_seconds(),
     )
     writer = _Writer(client, args.dry_run)
     models = load_governed_models()

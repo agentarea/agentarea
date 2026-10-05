@@ -50,6 +50,7 @@ class _Session:
 def _url_instance_db(endpoint_url: str):
     instance = MagicMock(
         id=uuid.uuid4(),
+        transport="url",
         json_spec={},
         verification=dict(DEFAULT_VERIFICATION),
         last_dispatch=None,
@@ -72,8 +73,8 @@ def _resolver(table: dict[str, list[str]]):
 def _closed_policy(monkeypatch):
     from agentarea_common.config import get_settings
 
-    monkeypatch.delenv("ALLOW_PRIVATE_URLS", raising=False)
-    monkeypatch.delenv("OUTBOUND_PRIVATE_ALLOWLIST", raising=False)
+    monkeypatch.delenv("AGENTAREA_HTTP_ALLOW_PRIVATE", raising=False)
+    monkeypatch.delenv("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", raising=False)
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
@@ -179,7 +180,7 @@ def _capture_factory():
 @pytest.mark.asyncio
 async def test_execute_tool_dials_a_url_instance_through_the_pinned_transport():
     service = _service()
-    instance = MagicMock(id=uuid.uuid4(), auth_config_id=None, json_spec={"type": "url"})
+    instance = MagicMock(id=uuid.uuid4(), auth_config_id=None, transport="url", json_spec={})
     instance.name = "remote"
     service.repository = MagicMock()
     service.repository.get_by_id = AsyncMock(return_value=instance)
@@ -187,7 +188,7 @@ async def test_execute_tool_dials_a_url_instance_through_the_pinned_transport():
     captured, fake_connected = _capture_factory()
 
     with (
-        patch.object(service, "_get_transport_spec_for_instance", new=AsyncMock(return_value=spec)),
+        patch.object(service, "get_transport_spec_for_instance", new=AsyncMock(return_value=spec)),
         patch("agentarea_mcp.application.service.connected_mcp_client", fake_connected),
         patch("agentarea_execution.activities.agent_execution_activities._enqueue_last_dispatch"),
     ):

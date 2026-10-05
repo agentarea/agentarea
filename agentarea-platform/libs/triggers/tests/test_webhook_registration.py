@@ -45,7 +45,8 @@ async def test_service_builds_url_and_delegates_to_registrar():
 async def test_service_is_noop_for_unregistered_channel():
     svc = ChannelWebhookService(base_url="https://gw.example")
     ok = await svc.register(channel_type="nope", webhook_id="wh1", credentials={})
-    assert ok is False
+    # Nothing to register is not a refusal: callers persist on None, not on False.
+    assert ok is None
 
 
 @pytest.mark.asyncio
@@ -54,7 +55,7 @@ async def test_service_is_noop_without_base_url():
     register_webhook_registrar("faketg2", fake)
     svc = ChannelWebhookService(base_url="")
     ok = await svc.register(channel_type="faketg2", webhook_id="wh1", credentials={})
-    assert ok is False
+    assert ok is None
     assert fake.registered is None
 
 

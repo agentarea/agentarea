@@ -76,9 +76,9 @@ oidc:
     enabled: false
 
 log:
-  level: debug
+  level: info
   format: text
-  leak_sensitive_values: true
+  leak_sensitive_values: false
 
 ttl:
   login_consent_request: 1h

@@ -21,6 +21,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
@@ -42,6 +43,11 @@ type RepositoryConfig struct {
 	MaxFileBytes   int64
 	MaxBytes       int64
 	ForcePathStyle bool
+	// AccessKey and SecretKey are AGENTAREA_S3_ACCESS_KEY / _SECRET_KEY, the
+	// object store's own credentials. The store is usually not AWS, so the AWS
+	// SDK's AWS_* chain is used only when both are unset (an IAM role).
+	AccessKey string
+	SecretKey string
 }
 
 type s3Client interface {
@@ -84,45 +90,47 @@ type hydrationRevisionRecord struct {
 }
 
 func LoadConfigFromEnv() (RepositoryConfig, error) {
-	maxFiles, err := requiredPositiveInt("SANDBOX_WORKSPACE_MAX_FILES")
+	maxFiles, err := requiredPositiveInt("AGENTAREA_SANDBOX_MAX_FILES")
 	if err != nil {
 		return RepositoryConfig{}, err
 	}
-	maxFileBytes, err := requiredPositiveInt64("SANDBOX_WORKSPACE_MAX_FILE_BYTES")
+	maxFileBytes, err := requiredPositiveInt64("AGENTAREA_SANDBOX_MAX_FILE_SIZE")
 	if err != nil {
 		return RepositoryConfig{}, err
 	}
-	maxBytes, err := requiredPositiveInt64("SANDBOX_WORKSPACE_MAX_BYTES")
+	maxBytes, err := requiredPositiveInt64("AGENTAREA_SANDBOX_MAX_TOTAL_SIZE")
 	if err != nil {
 		return RepositoryConfig{}, err
 	}
-	ttl, err := time.ParseDuration(os.Getenv("SANDBOX_WORKSPACE_SIGNED_URL_TTL"))
+	ttl, err := time.ParseDuration(os.Getenv("AGENTAREA_SANDBOX_S3_URL_TTL"))
 	if err != nil || ttl <= 0 {
-		return RepositoryConfig{}, fmt.Errorf("SANDBOX_WORKSPACE_SIGNED_URL_TTL must be a positive duration")
+		return RepositoryConfig{}, fmt.Errorf("AGENTAREA_SANDBOX_S3_URL_TTL must be a positive duration")
 	}
-	forcePathStyle, err := strconv.ParseBool(os.Getenv("SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE"))
+	forcePathStyle, err := strconv.ParseBool(os.Getenv("AGENTAREA_SANDBOX_S3_PATH_STYLE"))
 	if err != nil {
-		return RepositoryConfig{}, fmt.Errorf("SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE must be true or false")
+		return RepositoryConfig{}, fmt.Errorf("AGENTAREA_SANDBOX_S3_PATH_STYLE must be true or false")
 	}
 	cfg := RepositoryConfig{
-		Bucket:         firstEnv("SANDBOX_WORKSPACE_S3_BUCKET", "ARTIFACTS_BUCKET_NAME"),
-		Prefix:         strings.Trim(os.Getenv("SANDBOX_WORKSPACE_S3_PREFIX"), "/"),
-		Region:         firstEnvOr("us-east-1", "SANDBOX_WORKSPACE_S3_REGION", "AWS_REGION"),
-		Endpoint:       strings.TrimRight(firstEnv("SANDBOX_WORKSPACE_S3_ENDPOINT", "AWS_ENDPOINT_URL"), "/"),
+		Bucket:         firstEnv("AGENTAREA_SANDBOX_S3_BUCKET", "AGENTAREA_S3_ARTIFACTS_BUCKET"),
+		Prefix:         strings.Trim(os.Getenv("AGENTAREA_SANDBOX_S3_PREFIX"), "/"),
+		Region:         firstEnvOr("us-east-1", "AGENTAREA_SANDBOX_S3_REGION", "AGENTAREA_S3_REGION"),
+		Endpoint:       strings.TrimRight(firstEnv("AGENTAREA_SANDBOX_S3_ENDPOINT", "AGENTAREA_S3_ENDPOINT"), "/"),
 		SignedURLTTL:   ttl,
 		MaxFiles:       maxFiles,
 		MaxFileBytes:   maxFileBytes,
 		MaxBytes:       maxBytes,
 		ForcePathStyle: forcePathStyle,
+		AccessKey:      os.Getenv("AGENTAREA_S3_ACCESS_KEY"),
+		SecretKey:      os.Getenv("AGENTAREA_S3_SECRET_KEY"),
 	}
 	if cfg.Bucket == "" {
-		return RepositoryConfig{}, fmt.Errorf("workspace S3 bucket is required; set SANDBOX_WORKSPACE_S3_BUCKET or ARTIFACTS_BUCKET_NAME")
+		return RepositoryConfig{}, fmt.Errorf("workspace S3 bucket is required; set AGENTAREA_SANDBOX_S3_BUCKET or AGENTAREA_S3_ARTIFACTS_BUCKET")
 	}
 	return cfg, nil
 }
 
 func NewRepositoryFromConfig(ctx context.Context, cfg RepositoryConfig) (*Repository, error) {
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.Region))
+	awsCfg, err := S3Config(ctx, cfg.Region, cfg.AccessKey, cfg.SecretKey)
 	if err != nil {
 		return nil, fmt.Errorf("load workspace S3 configuration: %w", err)
 	}
@@ -133,6 +141,22 @@ func NewRepositoryFromConfig(ctx context.Context, cfg RepositoryConfig) (*Reposi
 		}
 	})
 	return NewRepository(cfg, client, s3.NewPresignClient(client))
+}
+
+// S3Config builds the AWS SDK configuration for the platform's object store:
+// static credentials when the platform names them, the SDK's own chain when it
+// names neither.
+func S3Config(ctx context.Context, region, accessKey, secretKey string) (aws.Config, error) {
+	options := []func(*awsconfig.LoadOptions) error{awsconfig.WithRegion(region)}
+	if accessKey != "" || secretKey != "" {
+		if accessKey == "" || secretKey == "" {
+			return aws.Config{}, fmt.Errorf("set both AGENTAREA_S3_ACCESS_KEY and AGENTAREA_S3_SECRET_KEY, or neither")
+		}
+		options = append(options, awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(accessKey, secretKey, ""),
+		))
+	}
+	return awsconfig.LoadDefaultConfig(ctx, options...)
 }
 
 func requiredPositiveInt(name string) (int, error) {

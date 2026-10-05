@@ -166,11 +166,12 @@ class TestEnforceBudgetCap:
 
         await service._enforce_budget_cap(workspace_id)
 
-    async def test_error_message_contains_workspace_and_spend_info(
+    async def test_error_message_states_amounts_at_their_own_precision(
         self, workspace_id, mock_task_repo
     ):
-        policy_repo = _policy_repo_with_cap("10.0")
-        mock_task_repo.sum_spend_mtd.return_value = 10.0
+        """A sub-cent cap must not read as "0.00 of 0.00"."""
+        policy_repo = _policy_repo_with_cap("0.000001")
+        mock_task_repo.sum_spend_mtd.return_value = "0.000058"
 
         service = _make_service(
             governance_policy_repository=policy_repo, task_repository=mock_task_repo
@@ -181,7 +182,9 @@ class TestEnforceBudgetCap:
 
         message = str(exc_info.value)
         assert workspace_id in message
-        assert "10.00" in message
+        assert "0.000058 USD" in message
+        assert "0.000001 USD" in message
+        assert "0.00 USD" not in message
 
 
 class TestCreationEntryPointsInvokeBudgetCap:
@@ -337,4 +340,4 @@ async def test_cap_error_names_the_billing_currency(rub_pricing, workspace_id, m
 
     assert exc_info.value.currency == "RUB"
     assert "$" not in str(exc_info.value)
-    assert "75.50 RUB" in str(exc_info.value)
+    assert "75.5 RUB" in str(exc_info.value)

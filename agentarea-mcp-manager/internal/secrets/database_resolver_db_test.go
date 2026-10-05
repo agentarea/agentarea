@@ -112,9 +112,9 @@ func insertInstance(t *testing.T, db *sql.DB, instanceID, workspaceID string) {
 	t.Helper()
 	_, err := db.Exec(`
 		INSERT INTO mcp_server_instances
-			(id, name, server_spec_id, json_spec, verification, network_scope,
+			(id, name, server_spec_id, transport, json_spec, verification, network_scope,
 			 workspace_id, created_by, created_at, updated_at)
-		VALUES ($1::uuid, $2, 'spec-under-test', '{}'::json, '{}'::json, 'private',
+		VALUES ($1::uuid, $2, 'spec-under-test', 'docker', '{}'::json, '{}'::json, 'private',
 			 $3, 'resolver-test', now(), now())`,
 		instanceID, "instance-"+instanceID[:8], workspaceID)
 	if err != nil {

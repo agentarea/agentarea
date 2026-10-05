@@ -26,6 +26,9 @@ Stay up to date with the latest AgentArea releases, bug fixes, and new features.
 ### Changed
 - MCP manager proxy layer refactored for direct container routing (removed intermediate registry)
 - Skill repository updated to support member-based access control
+- Generic webhook triggers created from the trigger form get a signing secret and refuse unsigned requests. Existing generic webhooks keep accepting unsigned requests until a signing secret is generated for them.
+- A Telegram trigger is saved only after Telegram accepts the webhook registration; a refused or unreachable registration fails the save with 502.
+- Workspace billing routes moved under the workspace: `/v1/workspaces/{workspace}/billing/*`.
 
 ---
 
@@ -334,7 +337,7 @@ Stay up to date with the latest AgentArea releases, bug fixes, and new features.
     cd agentarea-platform/apps/api && alembic upgrade head
 
     # 3. Update MCP manager config
-    # Remove MCP_REGISTRY_URL; set MCP_MANAGER_URL instead
+    # Remove MCP_REGISTRY_URL; set AGENTAREA_MCP_MANAGER_URL instead
 
     # 4. Restart all services
     make down-dev && make up-dev

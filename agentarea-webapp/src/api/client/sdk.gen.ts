@@ -214,6 +214,9 @@ import type {
   DeleteWorkspaceFileV1FilesFilePathDeleteData,
   DeleteWorkspaceFileV1FilesFilePathDeleteErrors,
   DeleteWorkspaceFileV1FilesFilePathDeleteResponses,
+  DeleteWorkspaceLogoV1LogoDeleteData,
+  DeleteWorkspaceLogoV1LogoDeleteErrors,
+  DeleteWorkspaceLogoV1LogoDeleteResponses,
   DeployMcpServerV1McpServersServerIdDeployPostData,
   DeployMcpServerV1McpServersServerIdDeployPostErrors,
   DeployMcpServerV1McpServersServerIdDeployPostResponses,
@@ -497,6 +500,9 @@ import type {
   ListApiKeysV1ApiKeysGetData,
   ListApiKeysV1ApiKeysGetErrors,
   ListApiKeysV1ApiKeysGetResponses,
+  ListApprovalDecisionsV1InboxDecisionsGetData,
+  ListApprovalDecisionsV1InboxDecisionsGetErrors,
+  ListApprovalDecisionsV1InboxDecisionsGetResponses,
   ListAuditLogsV1AuditLogsGetData,
   ListAuditLogsV1AuditLogsGetErrors,
   ListAuditLogsV1AuditLogsGetResponses,
@@ -725,6 +731,9 @@ import type {
   RotateSecretV1SecretsSecretIdValuePutData,
   RotateSecretV1SecretsSecretIdValuePutErrors,
   RotateSecretV1SecretsSecretIdValuePutResponses,
+  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostData,
+  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors,
+  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
@@ -827,6 +836,9 @@ import type {
   UploadSkillV1SkillsUploadPostData,
   UploadSkillV1SkillsUploadPostErrors,
   UploadSkillV1SkillsUploadPostResponses,
+  UploadWorkspaceLogoV1LogoPutData,
+  UploadWorkspaceLogoV1LogoPutErrors,
+  UploadWorkspaceLogoV1LogoPutResponses,
   UpsertModelSpecV1ModelSpecsUpsertPostData,
   UpsertModelSpecV1ModelSpecsUpsertPostErrors,
   UpsertModelSpecV1ModelSpecsUpsertPostResponses,
@@ -1071,7 +1083,7 @@ export const hydraAuthRedirectOauth2AuthGet = <
  *
  * We inject server-side defaults:
  * - skip_consent: true — MCP clients accessing their own workspace don't need consent
- * - audience: [API_BASE_URL] — ensures issued JWTs have the correct audience for validation
+ * - audience: [AGENTAREA_API_URL] — ensures issued JWTs have the correct audience for validation
  * - grant_types / scope — so the client can refresh instead of re-authorizing
  */
 export const hydraDcrProxyOauth2RegisterPost = <
@@ -4072,27 +4084,16 @@ export const getDashboardV1DashboardGet = <
 /**
  * Export Workspace Config
  *
- * Export current workspace configuration as YAML.
+ * Export the current workspace in the canonical Bundle YAML format.
  *
- * This endpoint exports all workspace-scoped resources:
- * - Agents (excluding system default agent)
- * - MCP server instances
- * - Provider configurations
+ * The output is accepted by the bundle Analyze and Install flow and can
+ * include agents, MCPs, skills, cron automations, and supported webhook
+ * channels. MCP credentials and Telegram tokens are setup-field references,
+ * never exported values. Provider configurations are not represented by the
+ * Bundle schema; configure them separately in the destination workspace.
  *
- * **Important Notes:**
- * - Secrets (API keys, passwords) are replaced with placeholders
- * - Built-in/catalog resources (carrying registry_item_id) are excluded
- * - Only resources in the current workspace are exported
- * - References to specs are included (server_spec_id, provider_spec_id)
- *
- * There is no matching import endpoint. Recreating a workspace goes through
- * the platform toolsets (``agentarea/agents``, ``agentarea/mcp_servers``,
- * ``agentarea/providers``, ``agentarea/skills``, ...) or bundle install,
- * both of which handle secrets as first-class inputs instead of smuggling
- * placeholders through a YAML file.
- *
- * **Returns:**
- * YAML file content describing the workspace
+ * The response is served as ``text/plain`` so generated API clients receive
+ * the YAML body as a string.
  */
 export const exportWorkspaceConfigV1ExportGet = <
   ThrowOnError extends boolean = false,
@@ -4576,6 +4577,36 @@ export const getInboxItemsV1InboxGet = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * List Approval Decisions
+ *
+ * Answered approval requests, newest first: who decided what, and when.
+ */
+export const listApprovalDecisionsV1InboxDecisionsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListApprovalDecisionsV1InboxDecisionsGetData, ThrowOnError>
+): RequestResult<
+  ListApprovalDecisionsV1InboxDecisionsGetResponses,
+  ListApprovalDecisionsV1InboxDecisionsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListApprovalDecisionsV1InboxDecisionsGetResponses,
+    ListApprovalDecisionsV1InboxDecisionsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/inbox/decisions",
+    ...options,
+  });
+
+/**
  * List Invitations
  *
  * List pending invitations for the workspace. Tokens are NOT returned.
@@ -4673,6 +4704,71 @@ export const revokeInvitationV1InvitationsInvitationIdDelete = <
     ],
     url: "/v1/workspaces/{workspace}/invitations/{invitation_id}",
     ...options,
+  });
+
+/**
+ * Delete Workspace Logo
+ *
+ * Remove the workspace logo; the workspace shows its initials again.
+ */
+export const deleteWorkspaceLogoV1LogoDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<DeleteWorkspaceLogoV1LogoDeleteData, ThrowOnError>
+): RequestResult<
+  DeleteWorkspaceLogoV1LogoDeleteResponses,
+  DeleteWorkspaceLogoV1LogoDeleteErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).delete<
+    DeleteWorkspaceLogoV1LogoDeleteResponses,
+    DeleteWorkspaceLogoV1LogoDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/logo",
+    ...options,
+  });
+
+/**
+ * Upload Workspace Logo
+ *
+ * Set the workspace logo, replacing and deleting any previous one.
+ */
+export const uploadWorkspaceLogoV1LogoPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UploadWorkspaceLogoV1LogoPutData, ThrowOnError>
+): RequestResult<
+  UploadWorkspaceLogoV1LogoPutResponses,
+  UploadWorkspaceLogoV1LogoPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    UploadWorkspaceLogoV1LogoPutResponses,
+    UploadWorkspaceLogoV1LogoPutErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/logo",
+    ...options,
+    headers: {
+      "Content-Type": null,
+      ...options.headers,
+    },
   });
 
 /**
@@ -9490,6 +9586,10 @@ export const listTriggersV1TriggersGet = <ThrowOnError extends boolean = false>(
  * If channel_credentials are provided, they are stored encrypted in the secret
  * store under key ``channel_cred:{webhook_type}:{trigger_id}``.
  *
+ * A generic webhook created without a signing secret gets a generated one,
+ * returned once in ``signing_secret``; requests must then be signed as
+ * ``signature_scheme`` describes.
+ *
  * Args:
  * payload: Trigger creation DTO (single source of truth shared with MCP toolset).
  * user_context: Authentication context.
@@ -9732,7 +9832,10 @@ export const getTriggerV1TriggersTriggerIdGet = <
  *
  * Updates the specified trigger with the provided data. Only non-null fields
  * in the request will be updated. Secret selections preserve unselected
- * credential fields; legacy raw credentials replace the stored bundle.
+ * credential fields; legacy raw credentials replace the stored bundle, except
+ * the Telegram secret token, which is kept. A channel webhook is registered
+ * with its provider before anything is saved; if the provider refuses, the
+ * call fails with 502 and nothing changes.
  *
  * Args:
  * trigger_id: The unique identifier of the trigger.
@@ -10119,6 +10222,49 @@ export const runTriggerNowV1TriggersTriggerIdRunPost = <
       },
     ],
     url: "/v1/workspaces/{workspace}/triggers/{trigger_id}/run",
+    ...options,
+  });
+
+/**
+ * Rotate Signing Secret
+ *
+ * Generate a new signing secret for a generic webhook and return it once.
+ *
+ * Signs an unsigned webhook, or replaces the secret of a signed one: from
+ * this call on, requests signed with any previous secret, or not signed, are
+ * refused. The secret is in ``signing_secret`` of this response only.
+ *
+ * Raises:
+ * HTTPException: 404 if the trigger does not exist; 400 if it is not a
+ * generic webhook (other channels are signed with their provider's
+ * secret); 409 if its secret is set inline in ``validation_rules`` or
+ * ``webhook_config``, which this call cannot replace.
+ */
+export const rotateSigningSecretV1TriggersTriggerIdSigningSecretPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RotateSigningSecretV1TriggersTriggerIdSigningSecretPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses,
+  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses,
+    RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/triggers/{trigger_id}/signing-secret",
     ...options,
   });
 

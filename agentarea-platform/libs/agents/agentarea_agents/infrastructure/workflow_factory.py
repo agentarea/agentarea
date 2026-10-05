@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 class WorkflowConfig(Protocol):
     """Protocol for workflow configuration."""
 
-    temporal_address: str
     task_queue: str
     max_concurrent_activities: int
     max_concurrent_workflows: int
@@ -31,24 +30,19 @@ class WorkflowFactory:
 
     def create_temporal_orchestrator(self) -> WorkflowOrchestratorInterface:
         """Create Temporal workflow orchestrator using injected config."""
-        # Use configuration from injected config - no defaults
-        address = self._config.temporal_address
-
-        # Use cached orchestrator if available
-        cache_key = f"temporal_{address}"
+        cache_key = "temporal"
         if cache_key in self._orchestrator_cache:
             return self._orchestrator_cache[cache_key]
 
         # Create new orchestrator with injected config
         orchestrator = TemporalWorkflowOrchestrator(
-            temporal_address=address,
             task_queue=self._config.task_queue,
             max_concurrent_activities=self._config.max_concurrent_activities,
             max_concurrent_workflows=self._config.max_concurrent_workflows,
         )
         self._orchestrator_cache[cache_key] = orchestrator
 
-        logger.info(f"Created Temporal orchestrator with injected config: {address}")
+        logger.info("Created Temporal orchestrator with injected config")
         return orchestrator
 
     # def create_default_orchestrator(self) -> WorkflowOrchestratorInterface:

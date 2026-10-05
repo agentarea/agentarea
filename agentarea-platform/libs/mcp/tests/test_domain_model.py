@@ -60,10 +60,13 @@ class TestMCPAuthConfigModel:
 
 
 class TestMCPServerInstanceModel:
-    def _make_instance(self, json_spec=None, server_spec_id="test-spec-id", **kwargs):
+    def _make_instance(
+        self, json_spec=None, server_spec_id="test-spec-id", transport="docker", **kwargs
+    ):
         return MCPServerInstance(
             name="test-instance",
             server_spec_id=server_spec_id,
+            transport=transport,
             json_spec=json_spec or {},
             **kwargs,
         )
@@ -106,46 +109,52 @@ class TestMCPServerInstanceModel:
 
     def test_endpoint_url_url_type(self):
         instance = self._make_instance(
-            json_spec={"type": "url", "endpoint_url": "https://example.com/mcp"}
+            transport="url", json_spec={"endpoint_url": "https://example.com/mcp"}
         )
         assert instance.endpoint_url == "https://example.com/mcp"
 
     @pytest.mark.parametrize(
-        "json_spec",
+        ("transport", "json_spec"),
         [
-            {"type": "docker", "port": 9000},
-            {"type": "docker"},
-            {"type": "command"},
-            {"type": "kubernetes"},
+            ("docker", {"port": 9000}),
+            ("docker", {}),
+            ("command", {}),
             # Even an address the Go manager once reported must not be handed
             # back: reaching it directly skips the gateway that starts the
             # workload on demand and holds a request lease for the call.
-            {
-                "type": "docker",
-                "port": 9000,
-                "internal_url": "http://mcp-foo.agentarea.svc.cluster.local:8000",
-            },
-            {"type": "docker", "port": 9000, "internal_url": "/mcp/abc"},
+            (
+                "docker",
+                {
+                    "port": 9000,
+                    "internal_url": "http://mcp-foo.agentarea.svc.cluster.local:8000",
+                },
+            ),
+            ("docker", {"port": 9000, "internal_url": "/mcp/abc"}),
         ],
     )
-    def test_container_backed_instances_have_no_direct_endpoint(self, json_spec):
+    def test_container_backed_instances_have_no_direct_endpoint(self, transport, json_spec):
         """Python must not know how to address a container-backed workload.
 
         This property used to rebuild the manager's `mcp-<id>` naming scheme (and
         pass through Kubernetes Service DNS), which is a route around the gateway
         — no on-demand start, no request lease, no idle reclamation.
         """
-        instance = self._make_instance(json_spec=json_spec)
+        instance = self._make_instance(transport=transport, json_spec=json_spec)
         instance.id = "abc-123"
         with pytest.raises(ValueError, match="no direct endpoint"):
             _ = instance.endpoint_url
 
     def test_endpoint_url_bundle_raises(self):
-        instance = self._make_instance(json_spec={"type": "bundle"})
+        instance = self._make_instance(transport="bundle")
         with pytest.raises(ValueError, match="bundle has no endpoint_url"):
             _ = instance.endpoint_url
 
-    def test_endpoint_url_unknown_type_raises(self):
-        instance = self._make_instance(json_spec={"type": "unknown"})
-        with pytest.raises(ValueError, match="no endpoint_url"):
+    def test_an_unknown_transport_is_refused_at_construction(self):
+        with pytest.raises(ValueError, match="kubernetes"):
+            self._make_instance(transport="kubernetes")
+
+    def test_a_type_left_in_json_spec_does_not_change_the_transport(self):
+        instance = self._make_instance(transport="docker", json_spec={"type": "url"})
+        instance.id = "abc-123"
+        with pytest.raises(ValueError, match="no direct endpoint"):
             _ = instance.endpoint_url

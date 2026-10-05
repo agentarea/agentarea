@@ -6,9 +6,9 @@ import { DollarSign, Gauge } from "lucide-react";
 import { AdminOnlyHint } from "@/components/AdminOnlyState";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Button } from "@/components/ui/button";
-import { StatusIndicator } from "@/components/ui/status-indicator";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { Input } from "@/components/ui/input";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
@@ -92,10 +92,11 @@ export function BudgetCapPanel({
         return;
       }
 
-      setCap(data.monthly_cap_usd);
-      setCapInput(
-        data.monthly_cap_usd == null ? "" : String(data.monthly_cap_usd)
+      // The API returns the cap as a decimal string.
+      setCap(
+        data.monthly_cap_usd == null ? null : Number(data.monthly_cap_usd)
       );
+      setCapInput(data.monthly_cap_usd ?? "");
       setStatus("success");
       setMessage(t("capUpdated"));
       router.refresh();

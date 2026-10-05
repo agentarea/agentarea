@@ -17,12 +17,12 @@ from .base import platform_read_context
     plane="build",
 )
 class WorkspaceConfigToolset(Toolset):
-    """Export the workspace's agents, MCP instances, and provider configs as YAML."""
+    """Export a canonical bundle of agents, MCPs, skills, and supported triggers as YAML."""
 
     @tool_method(effect="read")
     @requires_workspace_admin()
     async def export(self) -> str:
-        """Export current workspace configuration as YAML (secrets are placeholders)."""
+        """Export a canonical importable workspace bundle as YAML."""
         async with platform_read_context() as (_session, user_ctx, repo_factory, broker, secret):
             from agentarea_agents.application.agent_service import AgentService
             from agentarea_agents.application.skill_service import SkillService
@@ -31,18 +31,8 @@ class WorkspaceConfigToolset(Toolset):
             )
             from agentarea_common.auth.authorization import AuthorizationService
             from agentarea_common.di.container import resolve
-            from agentarea_llm.application.provider_service import ProviderService
-            from agentarea_llm.infrastructure.model_instance_repository import (
-                ModelInstanceRepository,
-            )
-            from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
-            from agentarea_llm.infrastructure.provider_config_repository import (
-                ProviderConfigRepository,
-            )
-            from agentarea_llm.infrastructure.provider_spec_repository import (
-                ProviderSpecRepository,
-            )
             from agentarea_mcp.application.service import MCPServerInstanceService
+            from agentarea_triggers.infrastructure.repository import TriggerRepository
 
             authz = resolve(AuthorizationService)
             agent_service = AgentService(repo_factory, broker, authorization_service=authz)
@@ -51,21 +41,13 @@ class WorkspaceConfigToolset(Toolset):
                 event_broker=broker,
                 secret_manager=secret,
             )
-            provider_service = ProviderService(
-                provider_spec_repo=ProviderSpecRepository(_session, user_ctx),
-                provider_config_repo=ProviderConfigRepository(_session, user_ctx),
-                model_spec_repo=ModelSpecRepository(_session, user_ctx),
-                model_instance_repo=ModelInstanceRepository(_session, user_ctx),
-                event_broker=broker,
-                secret_manager=secret,
-            )
             skill_service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
             service = WorkspaceExportService(
                 agent_service=agent_service,
                 repository_factory=repo_factory,
                 mcp_instance_service=mcp_instance_service,
-                provider_service=provider_service,
                 skill_service=skill_service,
+                trigger_repository=repo_factory.create_repository(TriggerRepository),
             )
             yaml_text = await service.export_workspace()
             return json.dumps({"yaml": yaml_text})

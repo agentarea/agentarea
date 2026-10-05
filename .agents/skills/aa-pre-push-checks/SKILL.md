@@ -107,6 +107,25 @@ is the surface exercised: run the app and drive the changed screen, or
 `pnpm test:e2e:smoke` against a stand already on :3000 when the diff moves a
 whole flow.
 
+A UI diff also owes a conventions pass. Lint and build accept a page that
+hand-rolls a search box, header button or table its sibling page gets from a
+shared component, so the mismatch only shows on screen:
+
+1. Check every changed screen against `agentarea-webapp/Design.md`
+   §"New-component checklist" and `agentarea-webapp/AGENTS.md` §CONVENTIONS and
+   §ANTI-PATTERNS. Done when each item holds or the diff is fixed to hold it.
+2. Open the sibling screen that renders the same kind of thing — the other tab
+   of the same section, the neighbouring list page — and compare header, primary
+   button, search, view toggle and table. Done when each shared element is the
+   same component, in the same place, at the same size.
+
+To drive a screen logged in on a local stand, `createKratosUser` and
+`installBrowserSession` in `agentarea-webapp/tests/e2e/helpers/real-stack.ts`
+mint a session cookie through Kratos admin on `:4434`; `deleteKratosUser`
+removes the identity afterwards. That user lands in its own empty personal
+workspace, so a screen whose look depends on data — a populated list, a
+connected provider — needs that data created first.
+
 **`cli-test`**:
 
 ```sh

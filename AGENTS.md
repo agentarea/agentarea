@@ -89,6 +89,8 @@ go test ./...       # Test all
 - **NEVER** run migrations from project root → `cd apps/api && alembic upgrade head`
 - **NEVER** use "SIMPLE" in code/comments
 - **NEVER** add a frontend test by default → a webapp change gets **no test**. Only two things earn one: a pure `.ts` module (no React, no DOM), or an e2e flow. Never `renderToStaticMarkup` + `expect(markup).toContain(...)`, never a test that mocks the pieces the component is made of and then asserts the markup those mocks produced. If UI logic feels worth testing, that is the signal it is not UI — lift it into a pure function and test the function. Full rule: `agentarea-webapp/AGENTS.md` → "TESTS (THIS DIR)"
+- **NEVER** start UI work in `agentarea-webapp/src/**` from a blank file → first read `agentarea-webapp/AGENTS.md` (CONVENTIONS, ANTI-PATTERNS) and `agentarea-webapp/Design.md` (Patterns & Conventions), then find the shared component or sibling screen that already renders the same thing and reuse it. Lint and build pass a page that hand-rolls its own search, header button or table, so the drift only shows on screen.
+- **NEVER** add, rename or remove an environment variable without `.agents/skills/aa-env-vars/SKILL.md` → names are `AGENTAREA_<DOMAIN>_<KEY>` unless a library reads its own standard name, one variable per value, no aliases, wired into the chart/compose/docs/migration table, and `python scripts/check_env_naming.py` must pass.
 
 ## SUBMODULE GUIDES
 

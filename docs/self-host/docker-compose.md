@@ -9,7 +9,7 @@ related:
   - /self-host/configuration
   - /self-host/secrets-backends
   - /self-host/troubleshooting
-last_updated: 2026-07-29
+last_updated: 2026-10-03
 ---
 
 Use Compose when the whole platform fits on one host and you do not need
@@ -19,6 +19,15 @@ system and the one the repository exercises most. Use
 of anything, or when you want MCP server instances and agent sandboxes confined
 by a RuntimeClass — the Compose stack drives MCP containers through the host
 Docker socket, which offers no kernel isolation.
+
+<Warning>
+Compose is a single-tenant deployment. Every workspace's agent code runs in one
+shared `sandbox-executor` container on the host kernel
+(`SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT`), and MCP
+containers share the host Docker daemon. Do not open sign-up to people you do
+not trust on a Compose install; run untrusted, multi-tenant workloads on
+Kubernetes with a gVisor RuntimeClass.
+</Warning>
 
 Two Compose files sit at the repository root:
 
@@ -58,7 +67,7 @@ This guide covers `docker-compose.yaml`.
   </Step>
 
   <Step title="Generate the secrets that must not stay at their defaults">
-    `SECRET_MANAGER_ENCRYPTION_KEY` is the Fernet key that encrypts every stored
+    `AGENTAREA_SECRET_ENCRYPTION_KEY` is the Fernet key that encrypts every stored
     credential — LLM provider keys, MCP server secrets — in the `agentarea`
     database. It must be a valid Fernet key, and it must not change after data
     exists, or the ciphertext already written becomes unreadable.
@@ -70,7 +79,7 @@ This guide covers `docker-compose.yaml`.
     Set it in `.env`, together with real database and object-store credentials:
 
     ```bash
-    SECRET_MANAGER_ENCRYPTION_KEY=<fernet key from above>
+    AGENTAREA_SECRET_ENCRYPTION_KEY=<fernet key from above>
     POSTGRES_USER=agentarea
     POSTGRES_PASSWORD=<a real password>
     POSTGRES_DB=agentarea
@@ -90,7 +99,7 @@ This guide covers `docker-compose.yaml`.
 
     1. `db` becomes healthy (`pg_isready`), and `rustfs` becomes healthy.
     2. `postgres_init` creates the `agentarea`, `temporal`, and `kratos` databases. It is idempotent.
-    3. `app_migrations` runs `agentarea-api migrate` with working directory `/app/apps/api`, and `kratos-migrate` runs the Kratos schema migration. `bucket-init` creates the two object-storage buckets and gives them the CORS allowlist browsers need for direct uploads (`STORAGE_CORS_ALLOWED_ORIGINS`, default `http://localhost:3000`).
+    3. `app_migrations` runs `agentarea-api migrate` with working directory `/app/apps/api`, and `kratos-migrate` runs the Kratos schema migration. `bucket-init` creates the two object-storage buckets and gives them the CORS allowlist browsers need for direct uploads (`AGENTAREA_S3_CORS_ORIGINS`, default `http://localhost:3000`).
     4. `app`, `frontend`, `agentarea-worker`, `agentarea-events`, `agentarea-mcp-manager`, `sandbox-executor`, `temporal`, and `kratos` start.
 
     The one-shot containers (`postgres_init`, `app_migrations`, `kratos-migrate`,
@@ -109,6 +118,10 @@ This guide covers `docker-compose.yaml`.
     | API and OpenAPI docs | http://localhost:8000/docs |
     | MCP Manager | http://localhost:7999 |
     | Kratos public API | http://localhost:4433 |
+
+    Compose exposes Kratos directly and does not install a reverse proxy. Before
+    exposing the host, place Kratos behind an operator-managed proxy and rate-limit
+    `/self-service/*` by client IP.
 
     The Compose file publishes no ports for PostgreSQL, Valkey, RustFS, Temporal, or
     the event service. They are reachable only on the Compose networks.
@@ -153,7 +166,7 @@ recorded the current head without replaying migrations.
 ## Troubleshooting
 
 <AccordionGroup>
-  <Accordion title="`docker compose` exits immediately with `SANDBOX_ACTIVATION_AUTH_SECRET must be set`">
+  <Accordion title="`docker compose` exits immediately with `AGENTAREA_SANDBOX_ACTIVATION_SECRET must be set`">
     The Compose file uses `${VAR:?message}` for the sandbox and MCP gateway
     secrets, so an empty value aborts the run rather than starting an
     unauthenticated sandbox path. Run `./scripts/gen-dev-secrets.sh` to fill them.
@@ -164,7 +177,7 @@ recorded the current head without replaying migrations.
     `./scripts/gen-dev-secrets.sh`, which replaces it, then restart the stack so
     every service picks up the new value.
   </Accordion>
-  <Accordion title="The API container restarts in a loop with `SECRET_MANAGER_ENCRYPTION_KEY environment variable must be set`">
+  <Accordion title="The API container restarts in a loop with `AGENTAREA_SECRET_ENCRYPTION_KEY environment variable must be set`">
     The default secret backend is `database` , which requires a Fernet key.
     `SecretManagerFactory` validates this at construction time and raises, so
     the process exits at startup instead of failing later on the first secret

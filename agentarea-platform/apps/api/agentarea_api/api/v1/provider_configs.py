@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, cast
 from uuid import UUID
 
-from agentarea_api.api.deps.services import (  # type: ignore
+from agentarea_api.api.deps.services import (
     get_model_spec_repository,
     get_model_spec_service,
     get_provider_service,
@@ -17,8 +17,8 @@ from agentarea_common.money import Money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.model_discovery_service import DiscoveredModel, ModelDiscoveryService
 from agentarea_llm.application.model_spec_service import ModelSpecService
-from agentarea_llm.application.provider_service import ProviderService  # type: ignore
-from agentarea_llm.domain.models import (  # type: ignore
+from agentarea_llm.application.provider_service import ProviderService
+from agentarea_llm.domain.models import (
     MANAGED_BY_PLATFORM,
     ModelKind,
     ProviderConfig,
@@ -401,7 +401,7 @@ async def discover_models_preview(
     provider_spec_id = str(provider_spec.id)
 
     discovery_service = ModelDiscoveryService(
-        allow_private_endpoints=get_settings().mcp.ALLOW_PRIVATE_URLS,
+        allow_private_endpoints=get_settings().http.ALLOW_PRIVATE,
     )
     discovered = await discovery_service.discover(
         provider_key=data.provider_key,
