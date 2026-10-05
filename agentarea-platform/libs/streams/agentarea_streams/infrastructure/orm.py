@@ -47,8 +47,10 @@ class StreamSourceORM(BaseModel, WorkspaceScopedMixin):
     __tablename__ = "stream_sources"
     __table_args__ = (
         CheckConstraint(
-            "kind <> 'webhook' OR (webhook_id IS NOT NULL AND webhook_type IS NOT NULL "
-            "AND credential_key IS NOT NULL)",
+            (
+                "kind <> 'webhook' OR (webhook_id IS NOT NULL AND webhook_type IS NOT NULL "
+                + "AND credential_key IS NOT NULL)"
+            ),
             name="ck_stream_sources_webhook",
         ),
     )
@@ -75,6 +77,10 @@ class StreamEventORM(JournalBase, WorkspaceScopedMixin):
         Index("ix_stream_events_workspace_received", "workspace_id", "received_at"),
         {"postgresql_partition_by": "RANGE (received_at)"},
     )
+
+    # Not indexed alone: ix_stream_events_workspace_received leads with workspace_id.
+    workspace_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
 
     sequence: Mapped[int] = mapped_column(
         BigInteger,

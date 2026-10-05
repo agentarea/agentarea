@@ -70,8 +70,10 @@ def upgrade() -> None:
         sa.Column("webhook_config", sa.JSON(), nullable=True),
         sa.Column("credential_key", postgresql.UUID(as_uuid=True), nullable=True),
         sa.CheckConstraint(
-            "kind <> 'webhook' OR (webhook_id IS NOT NULL AND webhook_type IS NOT NULL "
-            "AND credential_key IS NOT NULL)",
+            (
+                "kind <> 'webhook' OR (webhook_id IS NOT NULL AND webhook_type IS NOT NULL "
+                + "AND credential_key IS NOT NULL)"
+            ),
             name="ck_stream_sources_webhook",
         ),
     )
@@ -104,8 +106,6 @@ def upgrade() -> None:
     op.create_index(
         "ix_stream_events_workspace_received", "stream_events", ["workspace_id", "received_at"]
     )
-    op.create_index("ix_stream_events_workspace_id", "stream_events", ["workspace_id"])
-    op.create_index("ix_stream_events_created_by", "stream_events", ["created_by"])
     today = datetime.now(UTC).date()
     for offset in range(-1, 15):
         op.execute(_partition_ddl(today + timedelta(days=offset)))

@@ -2,20 +2,14 @@ import re
 from datetime import datetime
 from logging.config import fileConfig
 
+import agentarea_streams.infrastructure.orm  # noqa: F401
 from agentarea_common.artifacts import ArtifactEvent  # noqa: F401
 from agentarea_common.base.models import BaseModel
 from agentarea_common.config import get_db_settings
 from agentarea_common.events.outbox_orm import EventOutbox  # noqa: F401
-from agentarea_streams.infrastructure.orm import (  # noqa: F401
-    StreamEventKeyORM,
-    StreamEventORM,
-    StreamORM,
-    StreamSourceORM,
-    StreamSubscriptionORM,
-    SubscriptionOutcomeORM,
-)
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import ForeignKeyConstraint, engine_from_config, pool
+from sqlalchemy.sql.schema import SchemaItem
 
 # Import all ORM models to ensure they're registered with metadata
 try:
@@ -45,6 +39,31 @@ if config.config_file_name is not None:
 
 target_metadata = BaseModel.metadata
 
+# Objects that exist only in the database, never in the metadata: the journal's
+# daily partitions (the worker adds them) and the subscription -> trigger foreign
+# key (streams cannot import the triggers library to declare it). Without this,
+# autogenerate proposes dropping them.
+_JOURNAL_PARTITION = re.compile(r"^stream_events_p\d{8}$")
+
+
+def include_object(
+    obj: SchemaItem,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: SchemaItem | None,
+) -> bool:
+    if type_ == "table" and name is not None and _JOURNAL_PARTITION.match(name):
+        return False
+    if (
+        isinstance(obj, ForeignKeyConstraint)
+        and reflected
+        and obj.table.name == "stream_subscriptions"
+        and obj.referred_table.name == "triggers"
+    ):
+        return False
+    return True
+
 
 def get_url() -> str:
     return get_db_settings().sync_url.render_as_string(hide_password=False)
@@ -71,6 +90,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         process_revision_directives=process_revision_directives,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -91,6 +111,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             process_revision_directives=process_revision_directives,
+            include_object=include_object,
         )
 
         with context.begin_transaction():
