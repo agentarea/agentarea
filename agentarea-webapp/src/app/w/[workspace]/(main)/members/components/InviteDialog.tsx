@@ -48,7 +48,12 @@ export function InviteButton({
 }) {
   const t = useTranslations("MembersPage");
   return (
-    <Button size="sm" onClick={onClick} disabled={disabled}>
+    <Button
+      size="xs"
+      className="shrink-0"
+      onClick={onClick}
+      disabled={disabled}
+    >
       <UserPlus />
       {t("invitePeople")}
     </Button>

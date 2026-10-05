@@ -1,37 +1,43 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Network, ShieldCheck } from "lucide-react";
-import Link from "@/components/WorkspaceLink";
-import { cn } from "@/lib/utils";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 
 type PoliciesView = "policies" | "access";
 
-const TABS: { value: PoliciesView; label: string; icon: typeof ShieldCheck }[] = [
-  { value: "policies", label: "Policies", icon: ShieldCheck },
-  { value: "access", label: "Access", icon: Network },
+const TABS: { value: PoliciesView; icon: typeof ShieldCheck }[] = [
+  { value: "policies", icon: ShieldCheck },
+  { value: "access", icon: Network },
 ];
 
+/**
+ * Policies / Access switch of the policies page subheader. Two sections of the
+ * page rather than a filter over one list, so it takes the solid pill, like
+ * the Models sections.
+ */
 export function PoliciesViewTabs({ current }: { current: PoliciesView }) {
+  const t = useTranslations("PoliciesPage.tabs");
+  const router = useWorkspaceRouter();
+
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg bg-muted p-1">
-      {TABS.map(({ value, label, icon: Icon }) => {
-        const active = value === current;
-        return (
-          <Link
-            key={value}
-            href={value === "policies" ? "/policies" : "/policies?view=access"}
-            className={cn(
-              "inline-flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors",
-              active
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
-          </Link>
-        );
-      })}
-    </div>
+    <CountSegmentedControl<PoliciesView>
+      items={TABS.map(({ value, icon: Icon }) => ({
+        value,
+        label: (
+          <span className="flex items-center gap-1.5 whitespace-nowrap">
+            <Icon className="h-4 w-4" />
+            {t(value)}
+          </span>
+        ),
+      }))}
+      value={current}
+      onChange={(next) =>
+        router.push(next === "policies" ? "/policies" : "/policies?view=access")
+      }
+      variant="solid"
+      layoutId="policies-view-control"
+    />
   );
 }

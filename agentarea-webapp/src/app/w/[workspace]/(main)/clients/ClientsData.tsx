@@ -8,11 +8,14 @@ import ClientsClient from "./ClientsClient";
 
 export default async function ClientsData({
   initialResult,
+  initialView,
   loadFailedLabel,
 }: {
   initialResult: Promise<
     { apiResult: ApiResultLike<ClientResponse[]> } | { exception: unknown }
   >;
+  /** The view the page resolved from `?tab=` or the `tab_clients` cookie. */
+  initialView: "grid" | "table";
   loadFailedLabel: string;
 }) {
   let initialData: ClientResponse[] = [];
@@ -31,6 +34,7 @@ export default async function ClientsData({
   return (
     <ClientsClient
       initialData={initialData}
+      initialView={initialView}
       initialLoadError={initialLoadError}
     />
   );

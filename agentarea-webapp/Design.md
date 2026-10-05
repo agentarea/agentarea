@@ -385,20 +385,29 @@ Pick one of two header shapes:
   index pages and dashboards.
 
 `<ContentBlock>` already wraps in `flex h-full flex-col overflow-hidden`
-— **do not double-wrap**. Children either go directly inside, or wrap
-in a single `<div className="main-content">` (`h-full space-y-2
-overflow-auto px-4 py-5`) for scrollable lists / dashboards.
+and pads its content area (`px-4 py-5`) — **do not double-wrap**.
+Children go directly inside; a `<div className="main-content">` or a
+`p-4` wrapper on top doubles the padding. A page that needs the content
+edge to edge (a split pane, a file manager) passes `className="p-0"`.
 
-For RSC data, lazy-load with `<Suspense>` + a small `LoadingSpinner`:
+List pages put their controls in the `subheader` band through
+`SubheaderToolbar` (categories, search, then controls on the right) —
+see "List page chrome" in `AGENTS.md`. The subheader is shown even
+when the list is empty.
+
+For RSC data, lazy-load with `<Suspense>` and a skeleton of what is
+coming — never a spinner. The header and subheader stay outside the
+boundary:
 
 ```tsx
-<Suspense fallback={<div className="flex h-32 items-center justify-center"><LoadingSpinner /></div>}>
-  <FooData />
+<Suspense key={`${search}-${tab}`} fallback={<FooSkeleton viewMode={tab} />}>
+  <FooContent search={search} viewMode={tab} />
 </Suspense>
 ```
 
-Reference: `src/app/(main)/inbox/page.tsx` (minimal RSC page),
-`src/app/(main)/agents/page.tsx` (page with subheader + controls).
+Reference: `src/app/w/[workspace]/(main)/triggers/page.tsx` (page with
+subheader + controls), `src/app/w/[workspace]/(main)/inbox/page.tsx`
+(page skeleton shared with `loading.tsx`).
 
 ### Surfaces — pick the right one
 
@@ -595,10 +604,13 @@ button renders the spinner; don't hand-roll.
 
 ### Loading
 
-`LoadingSpinner` from `src/components/LoadingSpinner.tsx`. For RSC
-boundaries, use the small spinner pattern from the page-shell section
-above. Don't render large skeleton stacks — the existing UX is
-"spinner → content"; matches the dense-info aesthetic.
+Content loads behind a skeleton of itself, never a spinner: the page
+keeps its header and subheader, and the content area shows the shape
+of the view the user picked — `CollectionSkeleton` (cards or table,
+from `@/components/Skeleton`) fed the page's real grid classes and
+column headers, or a page-level skeleton that `loading.tsx` and the
+page's `<Suspense>` fallback share. `LoadingSpinner` is for an action
+in flight inside a control (`Button isLoading`), not for a page.
 
 ### Dark mode is mandatory
 
@@ -652,7 +664,10 @@ ship a "we'll do dark mode later" component.
       for panel sub-sections).
 - [ ] Lucide icon, sized `h-4 w-4` or `h-5 w-5` inline with text.
 - [ ] Strings keyed in `messages/en.json` and `messages/ru.json`.
-- [ ] Page-level component wrapped in `<ContentBlock>`.
+- [ ] Page-level component wrapped in `<ContentBlock>`; a list page's
+      subheader goes through `SubheaderToolbar` (see "List page chrome"
+      in `AGENTS.md`).
+- [ ] Loading shows a skeleton of the content, with the header kept.
 - [ ] Surface choice is intentional — clickable card vs static panel.
 - [ ] Searched `src/components/` first — reused the existing component
       instead of a second variant of it.

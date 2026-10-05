@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTranslations } from "next-intl";
+import EmptyState from "@/components/EmptyState";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import type { Policy } from "@/types/policies";
 import PoliciesList from "./PoliciesList";
@@ -22,6 +24,7 @@ export default function PoliciesEditableView({
   agents,
 }: PoliciesEditableViewProps) {
   const router = useWorkspaceRouter();
+  const t = useTranslations("PoliciesPage");
 
   const policyById = useMemo(
     () => new Map(policies.map((p) => [p.id, p])),
@@ -37,15 +40,12 @@ export default function PoliciesEditableView({
   return (
     <>
       {policies.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border px-6 py-12 text-center">
-          <p className="text-sm font-medium text-foreground">
-            No policies yet — agents run unrestricted
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Create a policy to start governing agent behavior. Use the New
-            policy action above.
-          </p>
-        </div>
+        <EmptyState
+          title={t("empty.title")}
+          description={t("empty.description")}
+          iconsType="audit"
+          action={{ label: t("newPolicy"), href: "/policies/new" }}
+        />
       ) : (
         <PoliciesList
           policies={policies}

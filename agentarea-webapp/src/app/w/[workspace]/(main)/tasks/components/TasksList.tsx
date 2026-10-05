@@ -13,7 +13,6 @@ import TaskCostDisplay, { TaskCostProvider } from "./TaskCostDisplay";
 interface TasksListProps {
   initialTasks: TaskWithAgent[];
   viewMode?: string;
-  searchParams?: { [key: string]: string | string[] | undefined };
   /** Names and draws the channel each task came from. */
   catalog?: TriggerCatalogEntry[];
   /**
@@ -33,7 +32,6 @@ interface TasksListProps {
 export default async function TasksList({
   initialTasks,
   viewMode = "table",
-  searchParams = {},
   catalog = [],
   principalNames = {},
   showAgent = true,
@@ -137,10 +135,7 @@ export default async function TasksList({
   return (
     <TaskCostProvider>
       <GridAndTableViews
-        searchParams={searchParams}
-        selectedTab={viewMode}
-        showViewToggle={false}
-        routeChange="/tasks"
+        viewMode={viewMode}
         data={initialTasks}
         columns={taskColumns}
         rowHref={(task) => `/tasks/${task.id}`}

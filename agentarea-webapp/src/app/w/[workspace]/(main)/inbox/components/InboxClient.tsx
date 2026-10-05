@@ -32,6 +32,7 @@ import type { ApprovalDecisionResult } from "@/components/Approvals/ApprovalDeci
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import FormError from "@/components/FormError";
+import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -281,12 +282,14 @@ export function InboxClient({
 
   const approveAll =
     filter === "pending" && pendingTasks.length > 0 ? (
-      <button
+      <Button
+        size="xs"
+        className="shrink-0"
         onClick={() => confirmBatch(pendingTasks, true)}
-        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-[12.5px] font-semibold text-primary-foreground shadow-sm transition hover:brightness-95"
       >
-        <Check size={14} strokeWidth={2.4} /> {t("approveAll")}
-      </button>
+        <Check />
+        {t("approveAll")}
+      </Button>
     ) : null;
 
   return (

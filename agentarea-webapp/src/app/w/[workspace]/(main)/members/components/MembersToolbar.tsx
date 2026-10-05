@@ -1,19 +1,12 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import {
-  ArrowDownAZ,
-  Clock,
-  Link2,
-  Mail,
-  Shield,
-  Users,
-} from "lucide-react";
+import { ArrowDownAZ, Clock, Link2, Mail, Shield, Users } from "lucide-react";
 import DisplayMenu from "@/components/DisplayMenu";
 import SearchInput from "@/components/SearchInput";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
-import { ToolbarDivider } from "@/components/ui/toolbar";
 import type {
   InvitationsOrder,
   MembersOrder,
@@ -50,81 +43,83 @@ export function MembersToolbar({
   const t = useTranslations("MembersPage");
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-1.5">
-      <CountSegmentedControl<MembersTab>
-        items={[
-          {
-            value: "members",
-            label: (
-              <span className="flex items-center gap-1.5 whitespace-nowrap">
-                <Users className="h-4 w-4" strokeWidth={1.8} />
-                {t("tabMembers")}
-              </span>
-            ),
-            count: counts.members,
-          },
-          ...(showInvitations
-            ? [
-                {
-                  value: "invitations" as const,
-                  label: (
-                    <span className="flex items-center gap-1.5 whitespace-nowrap">
-                      <Link2 className="h-4 w-4" strokeWidth={1.8} />
-                      {t("tabInvitations")}
-                    </span>
-                  ),
-                  count: counts.invitations,
-                },
-              ]
-            : []),
-        ]}
-        value={tab}
-        onChange={onTabChange}
-        layoutId="members-tab-control"
-      />
-      <ToolbarDivider />
-      <div className="w-[280px] min-w-0 max-w-full">
+    <SubheaderToolbar
+      categories={
+        <CountSegmentedControl<MembersTab>
+          items={[
+            {
+              value: "members",
+              label: (
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
+                  <Users className="h-4 w-4" strokeWidth={1.8} />
+                  {t("tabMembers")}
+                </span>
+              ),
+              count: counts.members,
+            },
+            ...(showInvitations
+              ? [
+                  {
+                    value: "invitations" as const,
+                    label: (
+                      <span className="flex items-center gap-1.5 whitespace-nowrap">
+                        <Link2 className="h-4 w-4" strokeWidth={1.8} />
+                        {t("tabInvitations")}
+                      </span>
+                    ),
+                    count: counts.invitations,
+                  },
+                ]
+              : []),
+          ]}
+          value={tab}
+          onChange={onTabChange}
+          layoutId="members-tab-control"
+        />
+      }
+      search={
         <SearchInput
           delay={250}
           placeholder={t("searchPlaceholder")}
           onDebouncedChange={onQueryChange}
         />
-      </div>
-      <div className="flex-1" />
-      <DisplayMenu>
-        <MenuSectionLabel>{t("ordering")}</MenuSectionLabel>
-        {tab === "members" ? (
-          <>
-            <MenuRow
-              icon={<Shield className="h-3.5 w-3.5" />}
-              label={t("orderAccess")}
-              selected={order === "access"}
-              onClick={() => onOrderChange("access")}
-            />
-            <MenuRow
-              icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
-              label={t("orderUserId")}
-              selected={order === "id"}
-              onClick={() => onOrderChange("id")}
-            />
-          </>
-        ) : (
-          <>
-            <MenuRow
-              icon={<Clock className="h-3.5 w-3.5" />}
-              label={t("orderExpires")}
-              selected={invitationsOrder === "expires"}
-              onClick={() => onInvitationsOrderChange("expires")}
-            />
-            <MenuRow
-              icon={<Mail className="h-3.5 w-3.5" />}
-              label={t("orderRecipient")}
-              selected={invitationsOrder === "recipient"}
-              onClick={() => onInvitationsOrderChange("recipient")}
-            />
-          </>
-        )}
-      </DisplayMenu>
-    </div>
+      }
+      controls={
+        <DisplayMenu>
+          <MenuSectionLabel>{t("ordering")}</MenuSectionLabel>
+          {tab === "members" ? (
+            <>
+              <MenuRow
+                icon={<Shield className="h-3.5 w-3.5" />}
+                label={t("orderAccess")}
+                selected={order === "access"}
+                onClick={() => onOrderChange("access")}
+              />
+              <MenuRow
+                icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
+                label={t("orderUserId")}
+                selected={order === "id"}
+                onClick={() => onOrderChange("id")}
+              />
+            </>
+          ) : (
+            <>
+              <MenuRow
+                icon={<Clock className="h-3.5 w-3.5" />}
+                label={t("orderExpires")}
+                selected={invitationsOrder === "expires"}
+                onClick={() => onInvitationsOrderChange("expires")}
+              />
+              <MenuRow
+                icon={<Mail className="h-3.5 w-3.5" />}
+                label={t("orderRecipient")}
+                selected={invitationsOrder === "recipient"}
+                onClick={() => onInvitationsOrderChange("recipient")}
+              />
+            </>
+          )}
+        </DisplayMenu>
+      }
+    />
   );
 }

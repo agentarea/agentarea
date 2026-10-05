@@ -163,7 +163,6 @@ export async function TasksData({
         initialTasks={tasks}
         viewMode={viewMode}
         catalog={catalog}
-        searchParams={searchParams}
       />
       <OffsetPagination
         path="/tasks"

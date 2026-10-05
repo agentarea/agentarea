@@ -170,12 +170,6 @@
       display: none;
     }
   }
-  /* Toolbar button text collapses to icons when narrow. */
-  @container skills (max-width: 560px) {
-    .skills-btn-label {
-      display: none;
-    }
-  }
 }
 
 @layer base {

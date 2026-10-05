@@ -10,6 +10,8 @@ import EmptyState from "@/components/EmptyState/EmptyState";
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
+import { ViewModeTabs } from "@/components/HeaderTabs";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { createClientAction, listClientsAction } from "@/lib/server-actions";
+import { ClientsListSkeleton } from "./ClientsSkeleton";
 import { HARNESS_OPTIONS, HarnessBadge, HarnessIcon } from "./harnesses";
 
 const McpIcon = ENTITY_ICONS.mcp;
@@ -66,14 +69,20 @@ function NameChips({
 
 export default function ClientsClient({
   initialData,
+  initialView,
   initialLoadError = null,
 }: {
   initialData: ClientResponse[];
+  /** The view the page resolved from `?tab=` or the `tab_clients` cookie. */
+  initialView: "grid" | "table";
   initialLoadError?: string | null;
 }) {
   const searchParams = useSearchParams();
   const t = useTranslations("ClientsPage");
   const tCommon = useTranslations("Common");
+  const tabParam = searchParams.get("tab");
+  const viewMode =
+    tabParam === "table" || tabParam === "grid" ? tabParam : initialView;
   const [clients, setClients] = useState<ClientResponse[]>(initialData);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(initialLoadError);
@@ -186,12 +195,13 @@ export default function ClientsClient({
           </Button>
         ),
       }}
+      subheader={
+        <SubheaderToolbar controls={<ViewModeTabs currentTab={viewMode} />} />
+      }
     >
       <div>
         {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
+          <ClientsListSkeleton viewMode={viewMode} />
         ) : loadError ? (
           <EmptyState
             title={t("loadFailed")}
@@ -200,8 +210,7 @@ export default function ClientsClient({
           />
         ) : (
           <GridAndTableViews
-            searchParams={{ tab: searchParams.get("tab") ?? undefined }}
-            routeChange="/clients"
+            viewMode={viewMode}
             data={clients}
             columns={columns}
             itemLink={(client: ClientResponse) => `/clients/${client.id}`}

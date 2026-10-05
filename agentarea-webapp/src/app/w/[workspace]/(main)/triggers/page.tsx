@@ -2,9 +2,10 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
+import { ViewModeTabs } from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import TriggersContent from "./components/TriggersContent";
-import TriggersHeaderTabs from "./components/TriggersHeaderTabs";
 import TriggersSkeleton from "./components/TriggersSkeleton";
 import TriggersDisplayMenu from "./components/TriggersDisplayMenu";
 import TriggersTypeFilterSection from "./components/TriggersTypeFilterSection";
@@ -52,20 +53,26 @@ export default async function TriggersPage({
         controls: <CreateTriggerButton />,
       }}
       subheader={
-        <>
-          <Suspense fallback={<div className="h-7" />}>
-            <TriggersTypeFilterSection currentType={typeFilter} />
-          </Suspense>
-          <div className="flex flex-1 items-center justify-end gap-3">
+        <SubheaderToolbar
+          categories={
+            <Suspense fallback={<div className="h-7" />}>
+              <TriggersTypeFilterSection currentType={typeFilter} />
+            </Suspense>
+          }
+          search={
             <SearchInput
               urlParamName="search"
               urlPath="/triggers"
               placeholder={t("searchPlaceholder")}
             />
-            <TriggersDisplayMenu currentGroup={groupBy} />
-            <TriggersHeaderTabs currentTab={viewMode} />
-          </div>
-        </>
+          }
+          controls={
+            <>
+              <TriggersDisplayMenu currentGroup={groupBy} />
+              <ViewModeTabs currentTab={viewMode} defaultTab="table" />
+            </>
+          }
+        />
       }
     >
       <Suspense

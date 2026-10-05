@@ -22,13 +22,11 @@ import AgentsList from "./AgentsList";
 interface AgentsContentProps {
   searchQuery?: string;
   viewMode?: string;
-  searchParams?: { [key: string]: string | string[] | undefined };
 }
 
 export default async function AgentsContent({
   searchQuery = "",
   viewMode = "grid",
-  searchParams = {},
 }: AgentsContentProps) {
   const t = await getTranslations("AgentsPage");
   const tCommon = await getTranslations("Common");
@@ -185,7 +183,6 @@ export default async function AgentsContent({
         <AgentsList
           initialAgents={filteredAgents}
           viewMode={viewMode}
-          searchParams={searchParams}
         />
       </div>
     );
@@ -195,7 +192,6 @@ export default async function AgentsContent({
     <AgentsList
       initialAgents={filteredAgents}
       viewMode={viewMode}
-      searchParams={searchParams}
     />
   );
 }

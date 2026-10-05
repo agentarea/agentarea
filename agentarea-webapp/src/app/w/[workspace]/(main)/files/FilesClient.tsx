@@ -11,6 +11,7 @@ import {
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { ChevronDown, FolderUp, Upload } from "lucide-react";
+import type { WorkspaceFileListResponse } from "@/api/client/types.gen";
 import BaseModal from "@/components/BaseModal";
 import ContentBlock from "@/components/ContentBlock";
 import {
@@ -18,7 +19,6 @@ import {
   type FileBrowserState,
 } from "@/components/files/file-browser";
 import type { BrowsedFile } from "@/components/files/file-tree";
-import type { WorkspaceFileListResponse } from "@/api/client/types.gen";
 import { useFileTabs } from "@/components/files/use-file-tabs";
 import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
@@ -334,7 +334,50 @@ export default function WorkspaceFilesClient({
 
   return (
     <ContentBlock
-      header={{ breadcrumb: [{ label: t("title") }] }}
+      header={{
+        breadcrumb: [{ label: t("title") }],
+        // The page's primary action sits in the header, like every other
+        // list page; FileBrowser's own action bar stays for the embedded
+        // task / project file views.
+        controls: (
+          <div className="flex shrink-0 items-center">
+            <Button
+              size="xs"
+              className="rounded-r-none"
+              disabled={loading || creating || Boolean(loadError)}
+              isLoading={uploading}
+              onClick={() => chooseUpload(false)}
+            >
+              {!uploading && <Upload />}
+              {uploading ? t("uploading") : t("uploadFiles")}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="xs"
+                  className="rounded-l-none border-l border-primary-foreground/25"
+                  disabled={
+                    loading || uploading || creating || Boolean(loadError)
+                  }
+                  aria-label={t("uploadOptions")}
+                >
+                  <ChevronDown />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => chooseUpload(false)}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  {t("uploadFiles")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => chooseUpload(true)}>
+                  <FolderUp className="mr-2 h-4 w-4" />
+                  {t("uploadFolder")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ),
+      }}
       className="min-h-0 overflow-hidden p-0"
     >
       {actionError && <FormError className="m-3 mb-0">{actionError}</FormError>}
@@ -359,44 +402,6 @@ export default function WorkspaceFilesClient({
         onBrowseFolder={() => chooseUpload(true)}
         onNewFolder={openNewFolder}
         busy={uploading || moving}
-        actions={
-          <div className="flex items-center">
-            <Button
-              size="sm"
-              className="rounded-r-none"
-              disabled={loading || creating || Boolean(loadError)}
-              isLoading={uploading}
-              onClick={() => chooseUpload(false)}
-            >
-              {!uploading && <Upload />}
-              {uploading ? t("uploading") : t("uploadFiles")}
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="sm"
-                  className="rounded-l-none border-l border-primary-foreground/25 px-2"
-                  disabled={
-                    loading || uploading || creating || Boolean(loadError)
-                  }
-                  aria-label={t("uploadOptions")}
-                >
-                  <ChevronDown />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => chooseUpload(false)}>
-                  <Upload className="mr-2 h-4 w-4" />
-                  {t("uploadFiles")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => chooseUpload(true)}>
-                  <FolderUp className="mr-2 h-4 w-4" />
-                  {t("uploadFolder")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        }
       />
       <input
         ref={fileInputRef}

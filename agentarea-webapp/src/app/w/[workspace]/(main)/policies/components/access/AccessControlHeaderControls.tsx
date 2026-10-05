@@ -1,9 +1,12 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function AccessControlHeaderControls() {
+  const t = useTranslations("PoliciesPage");
+
   // Rule creation flow is handled by the relationship rules card; this primary
   // action scrolls the inspector to the add-relationship affordance.
   const handleClick = () => {
@@ -14,9 +17,9 @@ export default function AccessControlHeaderControls() {
   };
 
   return (
-    <Button size="sm" className="shrink-0 gap-2" onClick={handleClick}>
+    <Button size="xs" className="shrink-0" onClick={handleClick}>
       <Plus />
-      New rule
+      {t("newRule")}
     </Button>
   );
 }

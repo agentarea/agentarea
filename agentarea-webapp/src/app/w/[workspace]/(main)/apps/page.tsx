@@ -1,11 +1,14 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
+import { cookies } from "next/headers";
 import type { McpServerInstanceResponse } from "@/api/client/types.gen";
 import ContentBlock from "@/components/ContentBlock";
 import EmptyState from "@/components/EmptyState/EmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
+import { ViewModeTabs } from "@/components/HeaderTabs";
 import { CollectionSkeleton, type SkeletonColumn } from "@/components/Skeleton";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import type { ApiResultLike } from "@/lib/api-errors";
@@ -64,9 +67,6 @@ function AppsListSkeleton({
 }) {
   return (
     <div aria-hidden="true">
-      <div className="mb-3 flex items-center justify-end">
-        <Skeleton className="h-7 w-28 motion-reduce:animate-none" />
-      </div>
       <CollectionSkeleton
         viewMode={viewMode}
         columns={columns}
@@ -81,11 +81,11 @@ function AppsListSkeleton({
 
 async function AppsList({
   instancesPromise,
-  searchParams,
+  viewMode,
   labels,
 }: {
   instancesPromise: AppsInstancesResult;
-  searchParams: AppSearchParams;
+  viewMode: string;
   labels: AppsLabels;
 }) {
   const result = await instancesPromise;
@@ -137,10 +137,9 @@ async function AppsList({
 
   return (
     <GridAndTableViews
-      searchParams={searchParams}
+      viewMode={viewMode}
       data={items}
       columns={columns}
-      routeChange="/apps"
       gridClassName={APPS_GRID_CLASS}
       itemLink={appLink}
       emptyState={
@@ -187,14 +186,16 @@ export default async function AppsPage({
     (apiResult) => ({ apiResult }),
     (exception: unknown) => ({ exception })
   );
-  const [t, resolvedSearchParams] = await Promise.all([
+  const [t, resolvedSearchParams, cookieStore] = await Promise.all([
     getTranslations("AppsPage"),
     searchParams,
+    cookies(),
   ]);
+  // Read tab from URL or fallback to cookie
   const viewMode =
     typeof resolvedSearchParams.tab === "string"
       ? resolvedSearchParams.tab
-      : "grid";
+      : cookieStore.get("tab_apps")?.value || "grid";
   const labels: AppsLabels = {
     title: t("title"),
     description: t("description"),
@@ -223,6 +224,9 @@ export default async function AppsPage({
         breadcrumb: [{ label: labels.title }],
         description: labels.description,
       }}
+      subheader={
+        <SubheaderToolbar controls={<ViewModeTabs currentTab={viewMode} />} />
+      }
     >
       <Suspense
         fallback={
@@ -231,7 +235,7 @@ export default async function AppsPage({
       >
         <AppsList
           instancesPromise={instancesPromise}
-          searchParams={resolvedSearchParams}
+          viewMode={viewMode}
           labels={labels}
         />
       </Suspense>

@@ -13,17 +13,18 @@ import { CreateSecretDialog } from "./CreateSecretDialog";
 export function SecretsEmptyState() {
   const [open, setOpen] = useState(false);
   const { canAdminister } = useViewerCapabilities();
+  const t = useTranslations("SecretsPage.empty");
   const tAdmin = useTranslations("AdminOnly");
 
   return (
     <>
       <EmptyState
-        title="No secrets yet"
-        description="Nothing here holds a credential. Create a secret to reuse it across LLM providers and API connections, instead of pasting the same key into each one."
+        title={t("title")}
+        description={t("description")}
         iconsType="mcp"
         action={
           canAdminister
-            ? { label: "Create secret", onClick: () => setOpen(true) }
+            ? { label: t("action"), onClick: () => setOpen(true) }
             : undefined
         }
         hints={

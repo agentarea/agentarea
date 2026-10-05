@@ -1350,6 +1350,7 @@
       "allSources": "All sources",
       "scope": "Scope",
       "allScopes": "All scopes",
+      "all": "All",
       "clear": "Clear",
       "scopeValues": {
         "private": "Private",
@@ -1696,6 +1697,9 @@
     "noTriggersHintHistory": "Every fire is recorded, so you can see what ran and why",
     "noMatchingTriggers": "No triggers match your search",
     "noMatchingTriggersDescription": "No triggers match your search \"{query}\"",
+    "noTriggersOfType": "No triggers of this type",
+    "noTriggersOfTypeDescription": "The rest of your triggers are under All.",
+    "showAllTriggers": "Show all",
     "table": {
       "name": "Name",
       "type": "Type",
@@ -2512,6 +2516,14 @@
     "currencyLoadFailed": "Couldn't load the billing currency"
   },
   "SecretsPage": {
+    "title": "Secrets",
+    "loadFailedTitle": "Couldn't load secrets",
+    "loadFailed": "Failed to load secrets",
+    "empty": {
+      "title": "No secrets yet",
+      "description": "Nothing here holds a credential. Create a secret to reuse it across LLM providers and API connections, instead of pasting the same key into each one.",
+      "action": "Create secret"
+    },
     "newSecret": "New secret",
     "createDialog": {
       "title": "New secret",
@@ -2738,6 +2750,17 @@
     }
   },
   "PoliciesPage": {
+    "title": "Policies",
+    "newPolicy": "New policy",
+    "newRule": "New rule",
+    "tabs": {
+      "policies": "Policies",
+      "access": "Access"
+    },
+    "empty": {
+      "title": "No policies yet — agents run unrestricted",
+      "description": "A policy governs what agents may do: which tools they call, what they spend, what needs approval."
+    },
     "accessControl": {
       "loadFailedTitle": "Couldn't load access control",
       "loadFailed": "Failed to load access control",
@@ -2927,6 +2950,64 @@
   "AttachmentSection": {
     "addFailed": "Couldn’t add {item}",
     "removeFailed": "Couldn’t remove {item}"
+  },
+  "CatalogPage": {
+    "title": "Catalog",
+    "description": "Browse the catalog. Filter by type, use case, or integration, then add to your workspace.",
+    "types": {
+      "bundles": "Bundles",
+      "agents": "Agents",
+      "skills": "Skills",
+      "connections": "Connections"
+    },
+    "search": {
+      "bundles": "Search bundles…",
+      "agents": "Search agents…",
+      "skills": "Search skills…",
+      "connections": "Search connections…"
+    },
+    "allOfType": {
+      "bundles": "All bundles",
+      "agents": "All agents",
+      "skills": "All skills",
+      "connections": "All connections"
+    },
+    "inCatalog": "{count} in the catalog.",
+    "display": {
+      "ordering": "Ordering",
+      "recommended": "Recommended",
+      "name": "Name A–Z"
+    },
+    "empty": {
+      "noMatchesTitle": "No matches",
+      "noMatchesDescription": "Nothing matches your search and filters.",
+      "nothingTitle": "Nothing published yet",
+      "nothingDescription": "The catalog is synced from the platform registry. Entries of this type appear here once they are published.",
+      "clearFilters": "Clear filters",
+      "notFoundTitle": "Item not found",
+      "notFoundDescription": "This item may have been removed or isn't available.",
+      "backToCatalog": "Back to catalog"
+    },
+    "bringYourOwn": {
+      "connections": {
+        "mcp": "Connect your own MCP server",
+        "openapi": "Point at any REST API you already have",
+        "agent": "Or describe it to an agent and have it wire the connection up",
+        "action": "Add your own"
+      },
+      "skills": {
+        "write": "Write the skill yourself",
+        "action": "Create a skill"
+      },
+      "agents": {
+        "build": "Build the agent yourself",
+        "action": "Create an agent"
+      },
+      "bundles": {
+        "import": "Import a bundle you already have",
+        "action": "Import a bundle"
+      }
+    }
   },
   "BundleInstall": {
     "modelsLoadFailed": "Couldn't load workspace models",

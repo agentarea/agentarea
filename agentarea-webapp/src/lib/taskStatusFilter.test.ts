@@ -3,6 +3,7 @@ import { getTaskStatusPresentation } from "./status";
 import {
   filterValueFor,
   statusesForFilter,
+  TASK_STATUS_FILTER_GROUPS,
   TASK_STATUS_FILTER_OPTIONS,
   TASK_STATUS_VALUES,
 } from "./taskStatusFilter";
@@ -23,11 +24,39 @@ describe("TASK_STATUS_FILTER_OPTIONS", () => {
     expect([...filed].sort()).toEqual([...TASK_STATUS_VALUES].sort());
   });
 
-  it("offers one option per status as it reads on screen", () => {
-    const labels = TASK_STATUS_FILTER_OPTIONS.map(
-      (option) => getTaskStatusPresentation(option.value).label
+  it("offers one option per name", () => {
+    const names = TASK_STATUS_FILTER_OPTIONS.map(
+      (option) => option.labelKey ?? option.label
     );
-    expect(new Set(labels).size).toBe(labels.length);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("keeps apart the statuses that all read as Needs action on screen", () => {
+    const attention = TASK_STATUS_FILTER_OPTIONS.filter(
+      (option) => option.group === "attention"
+    );
+    expect(attention.map((option) => option.labelKey)).toEqual([
+      "inputRequired",
+      "approvalRequired",
+      "continuationRequired",
+      "blocked",
+    ]);
+    for (const option of attention) {
+      expect(option.statuses).toHaveLength(1);
+      expect(getTaskStatusPresentation(option.value).kind).toBe("attention");
+    }
+  });
+
+  it("lists in-flight, then waiting, then finished statuses", () => {
+    const groups = TASK_STATUS_FILTER_OPTIONS.map((option) => option.group);
+    const order = TASK_STATUS_FILTER_GROUPS.map((group) =>
+      groups.indexOf(group)
+    );
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(
+      TASK_STATUS_FILTER_OPTIONS.filter((option) => option.group === "finished")
+        .map((option) => option.value)
+    ).toEqual(["completed", "failed", "cancelled"]);
   });
 
   it("groups the statuses that read as Pending, and those that read as Running", () => {

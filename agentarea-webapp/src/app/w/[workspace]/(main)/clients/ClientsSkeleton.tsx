@@ -1,56 +1,79 @@
+import { useTranslations } from "next-intl";
 import ContentBlock from "@/components/ContentBlock";
-import { CollectionSkeleton, type SkeletonColumn } from "@/components/Skeleton";
+import { ViewModeTabs } from "@/components/HeaderTabs";
+import { CollectionSkeleton } from "@/components/Skeleton";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CARD_GRID_LOOSE } from "@/lib/collectionGrids";
 
-const CLIENTS_GRID_CLASS =
-  "grid grid-cols-1 gap-[12px] md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5";
-
+// Mirrors the harness card on the Clients page: icon + name with the type
+// badge on the right, a 2-line description, then the connection / skill counts.
 function ClientCardSkeleton() {
   return (
-    <div className="card card-shadow group flex min-h-[150px] flex-col gap-3 p-4">
-      <Skeleton className="h-5 w-2/3 motion-reduce:animate-none" />
-      <Skeleton className="h-3 w-full motion-reduce:animate-none" />
-      <Skeleton className="mt-auto h-3 w-1/2 motion-reduce:animate-none" />
+    <div
+      className="card card-shadow flex h-full cursor-default flex-col gap-2 hover:shadow-none"
+      aria-hidden="true"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Skeleton className="h-5 w-5 shrink-0 rounded-sm motion-reduce:animate-none" />
+          <Skeleton className="h-4 w-32 motion-reduce:animate-none" />
+        </div>
+        <Skeleton className="h-5 w-16 shrink-0 rounded-full motion-reduce:animate-none" />
+      </div>
+      <div className="space-y-1.5">
+        <Skeleton className="h-3.5 w-full motion-reduce:animate-none" />
+        <Skeleton className="h-3.5 w-3/4 motion-reduce:animate-none" />
+      </div>
+      <div className="mt-auto flex items-center gap-3 pt-2">
+        <Skeleton className="h-3.5 w-24 motion-reduce:animate-none" />
+        <Skeleton className="h-3.5 w-16 motion-reduce:animate-none" />
+      </div>
     </div>
   );
 }
 
-export default function ClientsSkeleton({
-  title,
-  description,
-  viewMode,
-}: {
-  title: string;
-  description: string;
-  viewMode?: string;
-}) {
-  const columns: SkeletonColumn[] = [
-    { barClassName: "h-7 w-40 motion-reduce:animate-none" },
-    { barClassName: "w-20 motion-reduce:animate-none" },
-    { barClassName: "w-24 motion-reduce:animate-none" },
-    { barClassName: "w-24 motion-reduce:animate-none" },
-  ];
+/** The harness list while it (re)loads, in the view the user picked. */
+export function ClientsListSkeleton({ viewMode }: { viewMode?: string }) {
+  const t = useTranslations("ClientsPage");
+
+  return (
+    <CollectionSkeleton
+      viewMode={viewMode}
+      // The table columns of ClientsClient.
+      columns={[
+        { header: t("columnHarness"), barClassName: "h-4 w-40" },
+        { header: t("type"), barClassName: "h-5 w-16 rounded-full" },
+        { header: "MCP", barClassName: "h-4 w-20 rounded-full" },
+        { header: t("columnSkills"), barClassName: "h-4 w-20 rounded-full" },
+      ]}
+      rows={6}
+      gridClassName={CARD_GRID_LOOSE}
+      count={8}
+      Card={ClientCardSkeleton}
+    />
+  );
+}
+
+/** The whole page while the harnesses load on the server. */
+export default function ClientsSkeleton({ viewMode }: { viewMode?: string }) {
+  const t = useTranslations("ClientsPage");
 
   return (
     <ContentBlock
       header={{
-        breadcrumb: [{ label: title }],
-        description,
-        controls: <Skeleton className="h-8 w-24 motion-reduce:animate-none" />,
+        breadcrumb: [{ label: t("title") }],
+        description: t("description"),
+        controls: (
+          <Skeleton className="h-6 w-32 motion-reduce:animate-none" />
+        ),
       }}
+      subheader={
+        <SubheaderToolbar controls={<ViewModeTabs currentTab={viewMode} />} />
+      }
     >
       <div aria-hidden="true">
-        <div className="mb-3 flex items-center justify-end">
-          <Skeleton className="h-7 w-28 motion-reduce:animate-none" />
-        </div>
-        <CollectionSkeleton
-          viewMode={viewMode}
-          columns={columns}
-          rows={8}
-          gridClassName={CLIENTS_GRID_CLASS}
-          count={10}
-          Card={ClientCardSkeleton}
-        />
+        <ClientsListSkeleton viewMode={viewMode} />
       </div>
     </ContentBlock>
   );

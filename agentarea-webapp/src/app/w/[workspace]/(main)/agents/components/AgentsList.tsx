@@ -15,13 +15,11 @@ type AgentWithToolIcons = Agent & { tool_icons?: AgentToolIcon[] };
 interface AgentsListProps {
   initialAgents: AgentWithToolIcons[];
   viewMode?: string;
-  searchParams?: { [key: string]: string | string[] | undefined };
 }
 
 export default async function AgentsList({
   initialAgents,
   viewMode = "grid",
-  searchParams = {},
 }: AgentsListProps) {
   const t = await getTranslations("AgentsPage");
 
@@ -97,10 +95,7 @@ export default async function AgentsList({
   // Built-in catalog agents are discovered via Explore, not mixed into this list.
   return (
     <GridAndTableViews
-      searchParams={searchParams}
-      selectedTab={viewMode}
-      showViewToggle={false}
-      routeChange="/agents"
+      viewMode={viewMode}
       data={initialAgents}
       columns={agentColumns}
       rowHref={agentPath}

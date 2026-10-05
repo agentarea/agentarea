@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Check, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface InboxSelectionBarProps {
   checkedCount: number;
@@ -23,24 +24,27 @@ export function InboxSelectionBar({
       <span className="mr-auto text-[12.5px] font-semibold text-primary">
         {t("selection.count", { count: checkedCount })}
       </span>
-      <button
-        onClick={onApprove}
-        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 text-[12px] font-semibold text-white transition hover:brightness-95"
-      >
-        <Check size={14} strokeWidth={2.4} /> {t("approve")}
-      </button>
-      <button
+      <Button size="xs" className="shrink-0" onClick={onApprove}>
+        <Check />
+        {t("approve")}
+      </Button>
+      <Button
+        size="xs"
+        variant="destructiveOutline"
+        className="shrink-0"
         onClick={onReject}
-        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[12px] font-semibold text-red-500 transition hover:bg-red-500/5"
       >
-        <X size={14} strokeWidth={2.4} /> {t("reject")}
-      </button>
-      <button
+        <X />
+        {t("reject")}
+      </Button>
+      <Button
+        size="xs"
+        variant="ghost"
+        className="shrink-0 text-muted-foreground"
         onClick={onClear}
-        className="shrink-0 px-1 text-[12px] font-medium text-muted-foreground hover:text-foreground"
       >
         {t("selection.clear")}
-      </button>
+      </Button>
     </div>
   );
 }

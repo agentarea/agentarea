@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import SearchInput from "@/components/SearchInput";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { listProviderConfigs, listProviderSpecsWithModels } from "@/lib/api";
 import AddProviderButton from "../components/AddProviderButton";
 import ModelsSectionTabs from "../components/ModelsSectionTabs";
@@ -43,17 +44,15 @@ export default async function ModelsSectionsLayout({
         controls: <AddProviderButton />,
       }}
       subheader={
-        <>
-          <Suspense fallback={<ModelsSectionTabs />}>
-            <CountedSectionTabs />
-          </Suspense>
-          {/* Keeps room for a usable search box when the row is narrow; the
-              section switch scrolls instead. */}
-          <div className="flex min-w-[11rem] flex-1 items-center justify-end gap-3">
-            <SearchInput urlParamName="search" />
-            <ProviderHeaderTabs initialView={initialView} />
-          </div>
-        </>
+        <SubheaderToolbar
+          categories={
+            <Suspense fallback={<ModelsSectionTabs />}>
+              <CountedSectionTabs />
+            </Suspense>
+          }
+          search={<SearchInput urlParamName="search" />}
+          controls={<ProviderHeaderTabs initialView={initialView} />}
+        />
       }
     >
       {children}

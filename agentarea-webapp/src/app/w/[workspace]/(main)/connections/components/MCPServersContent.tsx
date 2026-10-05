@@ -2,27 +2,24 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
-import {
-  listAgents,
-  listMCPServerInstances,
-  listMCPServerSpecs,
-  listOpenAPIConnections,
-} from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import MCPSkeleton, { mcpSkeletonColumns } from "./MCPSkeleton";
 import { MyMCPsSection } from "./MyMCPsSection";
 import SectionLoadError from "@/components/SectionLoadError";
-import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
-import { buildConnectionUsage } from "../usage";
+import type { ListFilter } from "../list-sections";
+import { MCPServer } from "../types";
+import { getConnectionsCached } from "./connectionsData";
 
 interface MCPServersContentProps {
   searchQuery?: string;
   viewMode?: string;
+  filter?: ListFilter;
 }
 
 export default async function MCPServersContent({
   searchQuery = "",
   viewMode = "grid",
+  filter = "all",
 }: MCPServersContentProps) {
   const t = await getTranslations("MCPServersPage");
 
@@ -31,14 +28,14 @@ export default async function MCPServersContent({
     <div id="my-connections">
       <Suspense
         fallback={
-          <MCPSkeleton
-            viewMode={viewMode}
-            columns={mcpSkeletonColumns(t)}
-            headerLabel={t("myConnections")}
-          />
+          <MCPSkeleton viewMode={viewMode} columns={mcpSkeletonColumns(t)} />
         }
       >
-        <MyConnectionsSectionServer searchQuery={searchQuery} viewMode={viewMode} />
+        <MyConnectionsSectionServer
+          searchQuery={searchQuery}
+          viewMode={viewMode}
+          filter={filter}
+        />
       </Suspense>
     </div>
   );
@@ -47,21 +44,23 @@ export default async function MCPServersContent({
 async function MyConnectionsSectionServer({
   searchQuery,
   viewMode,
+  filter,
 }: {
   searchQuery: string;
   viewMode: string;
+  filter: ListFilter;
 }) {
   const t = await getTranslations("MCPServersPage");
 
-  // Instances, OpenAPI connections and agents in parallel. Agents are fetched
-  // once and inverted locally into per-connection usage — the per-instance
-  // consumers endpoint scans every agent, so calling it per row would be a
-  // full scan per connection.
-  const [instancesResponse, openApiResponse, agentsResponse] = await Promise.all([
-    listMCPServerInstances(),
-    listOpenAPIConnections(),
-    listAgents(),
-  ]);
+  const {
+    instancesResponse,
+    openApiResponse,
+    agentsResponse,
+    specsResponse,
+    instances: mcpInstances,
+    openApiConnections,
+    usage,
+  } = await getConnectionsCached();
 
   if (instancesResponse.error) {
     return (
@@ -83,14 +82,7 @@ async function MyConnectionsSectionServer({
       ? apiErrorMessage(agentsResponse, t("loadErrors.usage"))
       : null;
 
-  const mcpInstances = (instancesResponse.data || []) as MCPInstance[];
-
-  // Exactly the specs these instances use: the paged spec list would leave out
-  // any whose spec is not on its first page, and with it their icon.
-  const specsResponse = await listMCPServerSpecs(
-    mcpInstances.map((instance) => instance.server_spec_id)
-  );
-  if (specsResponse.error) {
+  if (specsResponse?.error) {
     return (
       <RetryEmptyState
         title={t("loadErrors.title")}
@@ -99,19 +91,7 @@ async function MyConnectionsSectionServer({
       />
     );
   }
-  const mcpServers = (specsResponse.data ?? []) as MCPServer[];
-  const openApiConnections = (openApiResponse.data || []) as OpenAPIConnection[];
-  // Without the agents there is no usage to show: no row may read "unused".
-  const usage =
-    agentsResponse.error || !agentsResponse.data
-      ? {}
-      : buildConnectionUsage(
-          agentsResponse.data,
-          mcpInstances.map((instance) => ({
-            id: instance.id,
-            name: instance.name,
-          }))
-        );
+  const mcpServers = (specsResponse?.data ?? []) as MCPServer[];
   const loadErrors = (
     <>
       {openApiError && <SectionLoadError message={openApiError} />}
@@ -148,23 +128,12 @@ async function MyConnectionsSectionServer({
   const totalConnections = filteredInstances.length + filteredOpenApi.length;
 
   if (openApiError && mcpInstances.length === 0) {
-    return (
-      <>
-        <h4 className="mb-3 text-xs uppercase text-muted-foreground">
-          {t("myConnections")}
-        </h4>
-        {loadErrors}
-      </>
-    );
+    return loadErrors;
   }
 
   if (searchQuery.trim() && totalConnections === 0) {
     return (
       <div className="py-1">
-        <h4 className="mb-3 text-xs uppercase text-muted-foreground">
-          {t("myConnections")}
-          {!openApiError && " (0)"}
-        </h4>
         {loadErrors}
         <EmptyState
           title="No matching connections"
@@ -178,10 +147,6 @@ async function MyConnectionsSectionServer({
 
   return (
     <>
-      <h4 className="mb-3 text-xs uppercase text-muted-foreground">
-        {t("myConnections")}
-        {!openApiError && ` (${totalConnections})`}
-      </h4>
       {loadErrors}
       <MyMCPsSection
         mcpInstances={filteredInstances}
@@ -189,6 +154,7 @@ async function MyConnectionsSectionServer({
         openApiConnections={filteredOpenApi}
         usage={usage}
         viewMode={viewMode}
+        filter={filter}
         searchQuery={searchQuery}
         hasNoData={mcpInstances.length === 0 && openApiConnections.length === 0}
       />
