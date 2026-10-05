@@ -4,11 +4,18 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.auth.permission import PermissionService
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.config.streams import EventStreamSettings
+from agentarea_common.di.container import resolve
 
 from ..domain.enums import StreamKind, SubscriptionKind
-from ..domain.errors import ForwardLoopError, StreamNotFoundError, TriggerSubscriptionNotFoundError
+from ..domain.errors import (
+    ForwardLoopError,
+    StreamNameTakenError,
+    StreamNotFoundError,
+    TriggerSubscriptionNotFoundError,
+)
 from ..domain.filters import EventFilter
 from ..domain.models import JournaledEvent, TriggerBinding
 from ..infrastructure.journal_repository import StreamJournal
@@ -104,12 +111,23 @@ class StreamService:
         webhook_config: dict[str, Any] | None,
         event_types: list[str],
     ) -> tuple[StreamORM, StreamSourceORM, StreamSubscriptionORM]:
-        stream = await self._streams().add_stream(
-            name=webhook_stream_name(trigger_name, webhook_id),
-            description=f"Webhook {webhook_type}",
-            kind=StreamKind.CUSTOM,
-            retention_days=self.settings.RETENTION.days,
-        )
+        """The trigger's stream, source and subscription.
+
+        A stream a deleted trigger with the same name and webhook left behind is
+        taken over, so the webhook's history continues; the new subscription
+        starts after the events already there.
+        """
+        stream = await self.reusable_webhook_stream(trigger_name, webhook_id)
+        cursor = 0
+        if stream is None:
+            stream = await self._streams().add_stream(
+                name=webhook_stream_name(trigger_name, webhook_id),
+                description=f"Webhook {webhook_type}",
+                kind=StreamKind.CUSTOM,
+                retention_days=self.settings.RETENTION.days,
+            )
+        else:
+            cursor = await self._journal().last_sequence(stream.id)
         source = await self._sources().add_webhook_source(
             stream_id=stream.id,
             webhook_id=webhook_id,
@@ -125,9 +143,36 @@ class StreamService:
             trigger_id=trigger_id,
             filter=EventFilter.from_trigger_event_types(event_types),
             output_stream_ids=[],
-            cursor_sequence=0,
+            cursor_sequence=cursor,
         )
         return stream, source, subscription
+
+    async def reusable_webhook_stream(self, trigger_name: str, webhook_id: str) -> StreamORM | None:
+        """The stream a webhook trigger with this name and webhook would take over, if any.
+
+        Deleting a webhook trigger keeps its stream for the history. Re-creating
+        it under the same name and webhook id (to keep the sender's URL) lands on
+        that stream's name. It is taken over only while no webhook feeds it and
+        the caller may write to it; otherwise the name conflict is refused.
+        """
+        name = webhook_stream_name(trigger_name, webhook_id)
+        existing = await self._streams().get_by_name(name)
+        if existing is None:
+            return None
+        if await self._sources().list_for_stream(existing.id):
+            raise StreamNameTakenError(
+                name,
+                f"Stream {name!r} ({existing.id}) already exists and another source feeds "
+                "it; give the trigger another name",
+            )
+        user_id = self.repository_factory.user_context.user_id
+        if not await resolve(PermissionService).check(user_id, "edit", "stream", str(existing.id)):
+            raise StreamNameTakenError(
+                name,
+                f"Stream {name!r} ({existing.id}) is left from a deleted trigger with this "
+                "webhook and you may not write to it; give the trigger another name",
+            )
+        return existing
 
     async def subscribe_trigger(
         self, *, stream_id: UUID, trigger_id: UUID, event_filter: EventFilter

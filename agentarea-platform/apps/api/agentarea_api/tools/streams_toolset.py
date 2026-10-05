@@ -93,11 +93,14 @@ class StreamsToolset(Toolset):
         """Create a stream. retention_days defaults to the deployment's retention."""
         payload = StreamCreate(name=name, description=description, retention_days=retention_days)
         async with platform_context() as (_s, _u, repo_factory, _b, _sec):
-            row = await _service(repo_factory).create_stream(
-                name=payload.name,
-                description=payload.description,
-                retention_days=payload.retention_days,
-            )
+            try:
+                row = await _service(repo_factory).create_stream(
+                    name=payload.name,
+                    description=payload.description,
+                    retention_days=payload.retention_days,
+                )
+            except StreamError as error:
+                return json.dumps({"error": str(error)})
             return StreamResponse.model_validate(row).model_dump_json()
 
     @tool_method(effect="destructive")

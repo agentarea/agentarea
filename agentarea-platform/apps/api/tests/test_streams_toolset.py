@@ -60,6 +60,22 @@ async def test_create_forward_refuses_an_output_the_caller_may_not_edit(monkeypa
     service.create_forward.assert_not_called()
 
 
+async def test_create_reports_a_taken_name_instead_of_failing(monkeypatch):
+    from agentarea_streams.domain import StreamNameTakenError
+
+    service = AsyncMock()
+    service.create_stream.side_effect = StreamNameTakenError("orders")
+
+    @asynccontextmanager
+    async def ctx():
+        yield (AsyncMock(), SimpleNamespace(user_id="u", workspace_id="w"), object(), None, None)
+
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset.platform_context", ctx)
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
+    result = json.loads(await StreamsToolset().create(name="orders"))
+    assert result == {"error": "A stream named 'orders' already exists in this workspace"}
+
+
 def test_the_streams_toolset_is_declared_where_its_writes_belong():
     (meta,) = [
         t.metadata

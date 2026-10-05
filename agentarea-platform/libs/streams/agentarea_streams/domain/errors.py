@@ -29,6 +29,14 @@ class StreamNotFoundError(StreamError):
         self.stream_id = stream_id
 
 
+class StreamNameTakenError(StreamError):
+    """Another stream in the workspace already has this name."""
+
+    def __init__(self, name: str, message: str | None = None):
+        super().__init__(message or f"A stream named {name!r} already exists in this workspace")
+        self.name = name
+
+
 class TriggerSubscriptionNotFoundError(StreamError):
     def __init__(self, trigger_id: UUID | str):
         super().__init__(f"No stream subscription for trigger {trigger_id}")

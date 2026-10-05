@@ -13,7 +13,12 @@ from agentarea_common.base.pagination import MAX_OFFSET
 from agentarea_common.config import get_settings
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_streams.application.stream_service import StreamService
-from agentarea_streams.domain import ForwardLoopError, JournaledEvent, StreamNotFoundError
+from agentarea_streams.domain import (
+    ForwardLoopError,
+    JournaledEvent,
+    StreamNameTakenError,
+    StreamNotFoundError,
+)
 from agentarea_streams.schemas import ForwardCreate, StreamCreate
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
@@ -196,9 +201,12 @@ async def list_streams(
     ],
 )
 async def create_stream(data: StreamCreate, service: StreamServiceDep):
-    return await service.create_stream(
-        name=data.name, description=data.description, retention_days=data.retention_days
-    )
+    try:
+        return await service.create_stream(
+            name=data.name, description=data.description, retention_days=data.retention_days
+        )
+    except StreamNameTakenError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.get(

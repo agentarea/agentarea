@@ -9,10 +9,11 @@ from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from sqlalchemy import ColumnElement, CursorResult, delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.exc import NoResultFound
+from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.enums import SourceKind, StreamKind, SubscriptionKind, SubscriptionStatus, Verdict
+from ..domain.errors import StreamNameTakenError
 from ..domain.filters import EventFilter
 from .orm import StreamORM, StreamSourceORM, StreamSubscriptionORM, SubscriptionOutcomeORM
 
@@ -50,8 +51,14 @@ class StreamRepository(WorkspaceScopedRepository[StreamORM]):
             workspace_id=self.user_context.workspace_id,
             created_by=self.user_context.user_id,
         )
-        self.session.add(stream)
-        await self.session.flush()
+        try:
+            async with self.session.begin_nested():
+                self.session.add(stream)
+                await self.session.flush()
+        except IntegrityError as error:
+            if "uq_streams_workspace_name" not in str(error.orig):
+                raise
+            raise StreamNameTakenError(name) from error
         # Bypasses WorkspaceScopedRepository.create, so grant ownership explicitly.
         await self._record_graph_ownership(stream)
         return stream

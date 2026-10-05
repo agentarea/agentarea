@@ -14,7 +14,11 @@ from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config.streams import EventStreamSettings
 from agentarea_common.events.ports import IntegrationEvent
 from agentarea_streams.application.stream_service import StreamService
-from agentarea_streams.domain import EventFilter, TriggerSubscriptionNotFoundError
+from agentarea_streams.domain import (
+    EventFilter,
+    StreamNameTakenError,
+    TriggerSubscriptionNotFoundError,
+)
 from agentarea_streams.infrastructure.journal_repository import StreamJournal
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -63,7 +67,8 @@ async def test_a_webhook_trigger_gets_a_stream_a_source_and_a_subscription():
             assert source.credential_key == trigger_id
             assert sub.trigger_id == trigger_id
             assert EventFilter.model_validate(sub.filter).kinds == ["push"]
-            assert (await service.webhook_source_for_trigger(trigger_id)).id == source.id
+            found = await service.webhook_source_for_trigger(trigger_id)
+            assert found is not None and found.id == source.id
             await service.remove_trigger_webhook_sources(trigger_id)
             await session.commit()
             assert await service.webhook_source_for_trigger(trigger_id) is None
@@ -89,6 +94,23 @@ async def test_a_new_subscription_starts_after_the_events_already_there():
             )
             await session.commit()
             assert sub.cursor_sequence == appended.sequence
+    await engine.dispose()
+
+
+async def test_a_second_stream_with_a_taken_name_is_refused_and_the_session_survives():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
+    async with maker() as session:
+        with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
+            service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
+            first = await service.create_stream(name="orders", description="", retention_days=7)
+            with pytest.raises(StreamNameTakenError, match="orders"):
+                await service.create_stream(name="orders", description="", retention_days=7)
+            other = await service.create_stream(name="refunds", description="", retention_days=7)
+            await session.commit()
+            assert (await service.get_stream(first.id)).name == "orders"
+            assert (await service.get_stream(other.id)).name == "refunds"
     await engine.dispose()
 
 

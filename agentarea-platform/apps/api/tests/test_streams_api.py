@@ -14,7 +14,7 @@ from agentarea_common.auth.permission import PermissionService
 from agentarea_common.config.database import get_db_session
 from agentarea_common.di.container import get_container
 from agentarea_common.rebac.openfga_client import OpenFGAClient
-from agentarea_streams.domain import ForwardLoopError, JournaledEvent
+from agentarea_streams.domain import ForwardLoopError, JournaledEvent, StreamNameTakenError
 from httpx import ASGITransport, AsyncClient
 
 NOW = datetime(2026, 10, 6, 12, 0, tzinfo=UTC)
@@ -163,3 +163,11 @@ async def test_a_webhook_source_shows_its_public_url(client, service, graph, mon
     ]
     response = await client.get(f"/v1/workspaces/acme/streams/{stream.id}/sources")
     assert response.json()[0]["webhook_url"] == "https://api.example/webhooks/abc"
+
+
+@pytest.mark.asyncio
+async def test_a_stream_name_already_taken_is_a_conflict(client, service, graph):
+    service.create_stream.side_effect = StreamNameTakenError("orders")
+    response = await client.post("/v1/workspaces/acme/streams/", json={"name": "orders"})
+    assert response.status_code == 409, response.text
+    assert "orders" in response.json()["detail"]

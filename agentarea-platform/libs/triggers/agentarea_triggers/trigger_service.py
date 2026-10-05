@@ -20,7 +20,7 @@ from agentarea_common.config import get_settings
 from agentarea_common.events.base_events import EventEnvelope
 from agentarea_common.events.broker import EventBroker
 from agentarea_streams.application.stream_service import StreamService
-from agentarea_streams.domain import EventFilter, StreamNotFoundError
+from agentarea_streams.domain import EventFilter, StreamNameTakenError, StreamNotFoundError
 from agentarea_streams.infrastructure.repository import find_webhook_source
 from pydantic import ValidationError
 
@@ -1061,6 +1061,13 @@ class TriggerService:
             and await find_webhook_source(self.repository_factory.session, trigger_data.webhook_id)
         ):
             raise TriggerValidationError("Webhook ID is already in use")
+        if trigger_data.trigger_type == TriggerType.WEBHOOK and trigger_data.webhook_id:
+            try:
+                await self.stream_service.reusable_webhook_stream(
+                    trigger_data.name, trigger_data.webhook_id
+                )
+            except StreamNameTakenError as error:
+                raise TriggerValidationError(str(error)) from error
         if trigger_data.trigger_type == TriggerType.STREAM and trigger_data.stream_id:
             try:
                 await self.stream_service.get_stream(trigger_data.stream_id)

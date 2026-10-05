@@ -134,7 +134,11 @@ deadlock. A forward that hits the write quota fails and retries exactly like a
 webhook delivery would — it is never silently dropped.
 
 **Any trigger can subscribe to any stream, not only its own.** `webhook`
-triggers keep auto-creating their stream as before. A `stream` trigger has no
+triggers keep auto-creating their stream as before. Deleting one keeps the
+stream and its history; re-creating it under the same name and `webhook_id`
+(to keep the sender's URL) takes that stream over, starting after the events
+already in it, provided nothing else feeds it and the creator may edit it.
+Stream names are unique per workspace; a taken name is a `409`. A `stream` trigger has no
 intake of its own: it names an existing `stream_id` and `event_filter`
 directly and rides the same dispatcher path. Firing still checks that the
 person who configured the trigger can still run its agent — a configurer who
