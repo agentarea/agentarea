@@ -2995,7 +2995,9 @@
   },
   "AttachmentSection": {
     "addFailed": "Couldn’t add {item}",
-    "removeFailed": "Couldn’t remove {item}"
+    "removeFailed": "Couldn’t remove {item}",
+    "remove": "Remove {item}",
+    "loading": "Loading…"
   },
   "CatalogPage": {
     "title": "Catalog",

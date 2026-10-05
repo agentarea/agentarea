@@ -2995,7 +2995,9 @@
   },
   "AttachmentSection": {
     "addFailed": "Не удалось добавить {item}",
-    "removeFailed": "Не удалось убрать {item}"
+    "removeFailed": "Не удалось убрать {item}",
+    "remove": "Убрать {item}",
+    "loading": "Загрузка…"
   },
   "CatalogPage": {
     "title": "Каталог",

@@ -16,7 +16,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { formatRelTime } from "@/app/w/[workspace]/(main)/dashboard/components/relTime";
-import { HeroDescription } from "@/components/Overview/HeroDescription";
 import {
   EmptyRow,
   GlanceRow,
@@ -27,6 +26,7 @@ import {
   Stat,
   StatStrip,
 } from "@/components/Overview/OverviewCard";
+import { OverviewHero } from "@/components/Overview/OverviewHero";
 import SectionLoadError from "@/components/SectionLoadError";
 import { TaskStatus, useTaskStatusLabel } from "@/components/TaskStatus";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
@@ -206,84 +206,67 @@ export async function AgentOverviewView({
   return (
     <div className="font-inter md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden">
       {/* ===== hero ===== */}
-      <header className="relative overflow-hidden border-b border-border bg-gradient-to-b from-muted/30 to-background md:shrink-0">
-        <span
-          aria-hidden
-          className="bg-hatch-soft pointer-events-none absolute inset-y-0 right-0 w-[300px] opacity-[0.35] [-webkit-mask-image:linear-gradient(90deg,transparent,#000_88%)] [mask-image:linear-gradient(90deg,transparent,#000_88%)]"
-        />
-        <div className="relative w-full px-4 pb-[14px] pt-[13px]">
-          <div className="flex items-start gap-3">
-            <EntityAvatar
-              size={34}
-              rounded={9}
-              hue={model.hue}
-              icon={createElement(HeroIcon, { strokeWidth: 1.85 })}
-              className="mt-0.5"
-              aria-hidden
-            />
-
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h2 className="m-0 text-[18px] font-semibold tracking-[-0.022em] md:text-[18px]">
-                  {model.name}
-                </h2>
-                <StatusIndicator
-                  kind={model.status.kind}
-                  className="whitespace-nowrap text-[13px] font-medium"
-                >
-                  {model.status.label}
-                </StatusIndicator>
-              </div>
-
-              {model.description && (
-                <HeroDescription
-                  text={model.description}
-                  showMoreLabel={t("showMore")}
-                  showLessLabel={t("showLess")}
-                />
-              )}
-
-              <div className="mt-1.5 flex flex-wrap items-center gap-y-1.5 text-[12px] text-muted-foreground">
-                {model.model.label && (
-                  <HeroMeta
-                    icon={
-                      <span className="grid h-[18px] w-[18px] place-items-center rounded-[3px] bg-muted">
-                        {model.model.iconUrl ? (
-                          <ProviderIcon
-                            iconUrl={model.model.iconUrl}
-                            name={model.model.provider || model.model.label}
-                            size="sm"
-                            className="h-3.5 w-3.5"
-                          />
-                        ) : (
-                          <Boxes className="h-3 w-3 text-foreground" />
-                        )}
-                      </span>
-                    }
-                  >
-                    <b className="font-medium text-foreground/80">
-                      {model.model.label}
-                    </b>
-                    {model.model.provider && <> · {model.model.provider}</>}
-                  </HeroMeta>
-                )}
-                {model.triggers.count > 0 && (
-                  <HeroMeta icon={<Zap />}>{triggerText}</HeroMeta>
-                )}
-                {!loadErrors.overview && (
-                  <HeroMeta icon={<Clock />}>
-                    {t("lastActive")}{" "}
-                    <b className="font-medium text-foreground/80">
-                      {lastActive}
-                    </b>
-                    {lastActiveHasAgo && <> {t("ago")}</>}
-                  </HeroMeta>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <OverviewHero
+        mark={
+          <EntityAvatar
+            size={34}
+            rounded={9}
+            hue={model.hue}
+            icon={createElement(HeroIcon, { strokeWidth: 1.85 })}
+            className="mt-0.5"
+            aria-hidden
+          />
+        }
+        title={model.name}
+        status={
+          <StatusIndicator
+            kind={model.status.kind}
+            className="whitespace-nowrap text-[13px] font-medium"
+          >
+            {model.status.label}
+          </StatusIndicator>
+        }
+        description={model.description}
+        showMoreLabel={t("showMore")}
+        showLessLabel={t("showLess")}
+        meta={
+          <>
+            {model.model.label && (
+              <HeroMeta
+                icon={
+                  <span className="grid h-[18px] w-[18px] place-items-center rounded-[3px] bg-muted">
+                    {model.model.iconUrl ? (
+                      <ProviderIcon
+                        iconUrl={model.model.iconUrl}
+                        name={model.model.provider || model.model.label}
+                        size="sm"
+                        className="h-3.5 w-3.5"
+                      />
+                    ) : (
+                      <Boxes className="h-3 w-3 text-foreground" />
+                    )}
+                  </span>
+                }
+              >
+                <b className="font-medium text-foreground/80">
+                  {model.model.label}
+                </b>
+                {model.model.provider && <> · {model.model.provider}</>}
+              </HeroMeta>
+            )}
+            {model.triggers.count > 0 && (
+              <HeroMeta icon={<Zap />}>{triggerText}</HeroMeta>
+            )}
+            {!loadErrors.overview && (
+              <HeroMeta icon={<Clock />}>
+                {t("lastActive")}{" "}
+                <b className="font-medium text-foreground/80">{lastActive}</b>
+                {lastActiveHasAgo && <> {t("ago")}</>}
+              </HeroMeta>
+            )}
+          </>
+        }
+      />
 
       <div className="w-full bg-muted/20 px-4 pb-11 pt-[18px] md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
         {/* ===== stat strip ===== */}

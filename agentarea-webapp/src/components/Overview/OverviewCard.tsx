@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import Link from "@/components/WorkspaceLink";
 import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { BoardCrossMark } from "@/components/board";
 import { Button } from "@/components/ui/button";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
+import Link from "@/components/WorkspaceLink";
 import { cn } from "@/lib/utils";
 
 /**
@@ -31,18 +31,32 @@ export function SectionCard({
 export function SectionCardHead({
   icon,
   title,
+  count,
   link,
+  action,
 }: {
   icon: ReactNode;
   title: string;
+  /** How many rows the card lists, shown muted after the title. */
+  count?: number;
   link?: { label: string; href: string };
+  /** A control of the card's own, e.g. an "Add" trigger, at the right edge. */
+  action?: ReactNode;
 }) {
   return (
     <div className="flex items-center gap-[9px] border-b border-border/60 bg-muted/20 px-[15px] py-[11px]">
       <span className="grid h-[23px] w-[23px] shrink-0 place-items-center rounded bg-muted/80 text-foreground/75 ring-1 ring-inset ring-border/50 [&>svg]:h-3.5 [&>svg]:w-3.5">
         {icon}
       </span>
-      <span className="flex-1 text-[13px] font-semibold">{title}</span>
+      <span className="flex flex-1 items-baseline gap-1.5 text-[13px] font-semibold">
+        {title}
+        {count != null && (
+          <span className="text-[12px] font-normal tabular-nums text-muted-foreground">
+            {count}
+          </span>
+        )}
+      </span>
+      {action}
       {link && (
         <Button
           asChild
