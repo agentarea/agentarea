@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from agentarea_common.events.ports import IntegrationEvent
 from agentarea_streams.domain import AppendResult, StreamError, WebhookSourceSpec
-from agentarea_streams.infrastructure.journal import StreamJournal
+from agentarea_streams.infrastructure.journal_repository import StreamJournal
 from agentarea_streams.infrastructure.orm import StreamSourceORM
 
 from .webhook_manager import WebhookExecutionCallback

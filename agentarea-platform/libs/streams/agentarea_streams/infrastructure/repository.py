@@ -1,16 +1,18 @@
 """Workspace-scoped repositories for streams, sources, subscriptions and outcomes."""
 
+from datetime import datetime
 from typing import Any, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import CursorResult, select, update
+from sqlalchemy import CursorResult, delete, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..domain.enums import SourceKind, StreamKind, SubscriptionKind, SubscriptionStatus
+from ..domain.enums import SourceKind, StreamKind, SubscriptionKind, SubscriptionStatus, Verdict
 from ..domain.filters import EventFilter
 from .orm import StreamORM, StreamSourceORM, StreamSubscriptionORM, SubscriptionOutcomeORM
 
@@ -60,6 +62,12 @@ class StreamRepository(WorkspaceScopedRepository[StreamORM]):
         )
         return result.scalar_one_or_none()
 
+    async def delete_in_workspace(self, stream_id: UUID) -> bool:
+        result = await self.session.execute(
+            delete(StreamORM).where(StreamORM.id == stream_id, self._get_workspace_filter())
+        )
+        return cast(CursorResult[Any], result).rowcount == 1
+
 
 class StreamSourceRepository(WorkspaceScopedRepository[StreamSourceORM]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
@@ -107,6 +115,21 @@ class StreamSourceRepository(WorkspaceScopedRepository[StreamSourceORM]):
             )
         )
         return list(result.scalars().all())
+
+    async def find_by_credential_keys(self, keys: list[UUID]) -> list[StreamSourceORM]:
+        result = await self.session.execute(
+            select(StreamSourceORM).where(
+                StreamSourceORM.credential_key.in_(keys), self._get_workspace_filter()
+            )
+        )
+        return list(result.scalars().all())
+
+    async def delete_by_credential_key(self, key: UUID) -> None:
+        await self.session.execute(
+            delete(StreamSourceORM).where(
+                StreamSourceORM.credential_key == key, self._get_workspace_filter()
+            )
+        )
 
     async def update_webhook_fields(self, source_id: UUID, **fields: Any) -> None:
         unknown = sorted(set(fields) - WEBHOOK_FIELDS)
@@ -159,6 +182,22 @@ class StreamSubscriptionRepository(WorkspaceScopedRepository[StreamSubscriptionO
         )
         return result.scalar_one_or_none()
 
+    async def list_for_triggers(self, trigger_ids: list[UUID]) -> list[StreamSubscriptionORM]:
+        result = await self.session.execute(
+            select(StreamSubscriptionORM).where(
+                StreamSubscriptionORM.trigger_id.in_(trigger_ids), self._get_workspace_filter()
+            )
+        )
+        return list(result.scalars().all())
+
+    async def update_filter_for_trigger(self, trigger_id: UUID, event_filter: EventFilter) -> bool:
+        result = await self.session.execute(
+            update(StreamSubscriptionORM)
+            .where(StreamSubscriptionORM.trigger_id == trigger_id, self._get_workspace_filter())
+            .values(filter=event_filter.model_dump())
+        )
+        return cast(CursorResult[Any], result).rowcount == 1
+
     async def list_for_stream(self, stream_id: UUID) -> list[StreamSubscriptionORM]:
         result = await self.session.execute(
             select(StreamSubscriptionORM)
@@ -169,8 +208,67 @@ class StreamSubscriptionRepository(WorkspaceScopedRepository[StreamSubscriptionO
 
 
 class SubscriptionOutcomeRepository(WorkspaceScopedRepository[SubscriptionOutcomeORM]):
+    """Outcomes are unique per (subscription, event); the first one recorded stands."""
+
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, SubscriptionOutcomeORM, user_context)
+
+    def _of_event(self, subscription_id: UUID, event_sequence: int):
+        return (
+            SubscriptionOutcomeORM.subscription_id == subscription_id,
+            SubscriptionOutcomeORM.event_sequence == event_sequence,
+            self._get_workspace_filter(),
+        )
+
+    async def record_once(
+        self,
+        *,
+        subscription_id: UUID,
+        stream_id: UUID,
+        event_sequence: int,
+        verdict: Verdict,
+        reason: str | None,
+        score: float | None,
+        task_id: UUID | None,
+        derived_sequences: list[int],
+        now: datetime,
+    ) -> bool:
+        """Insert unless the event already has an outcome; True when this call wrote it."""
+        inserted = await self.session.execute(
+            pg_insert(SubscriptionOutcomeORM)
+            .values(
+                id=uuid4(),
+                subscription_id=subscription_id,
+                stream_id=stream_id,
+                event_sequence=event_sequence,
+                verdict=verdict.value,
+                reason=reason,
+                score=score,
+                task_id=task_id,
+                derived_sequences=derived_sequences,
+                workspace_id=self.user_context.workspace_id,
+                created_by=self.user_context.user_id,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_nothing(constraint="uq_subscription_outcomes_event")
+            .returning(SubscriptionOutcomeORM.id)
+        )
+        return inserted.scalar_one_or_none() is not None
+
+    async def reacted_task(self, subscription_id: UUID, event_sequence: int) -> UUID | None:
+        result = await self.session.execute(
+            select(SubscriptionOutcomeORM.task_id).where(
+                *self._of_event(subscription_id, event_sequence),
+                SubscriptionOutcomeORM.verdict == Verdict.REACTED.value,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def delete_for_event(self, subscription_id: UUID, event_sequence: int) -> None:
+        await self.session.execute(
+            delete(SubscriptionOutcomeORM).where(*self._of_event(subscription_id, event_sequence))
+        )
 
     async def list_for_events(
         self, stream_id: UUID, sequences: list[int]

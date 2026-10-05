@@ -24,7 +24,7 @@ from agentarea_streams.domain import (
     SubscriptionKind,
     TriggerSubscriptionNotFoundError,
 )
-from agentarea_streams.infrastructure.journal import StreamJournal
+from agentarea_streams.infrastructure.journal_repository import StreamJournal
 from agentarea_streams.infrastructure.repository import (
     StreamRepository,
     StreamSourceRepository,

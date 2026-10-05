@@ -1,20 +1,18 @@
 """Streams, their sources and subscriptions, as one workspace sees them. Never commits."""
 
 from datetime import datetime
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.config.streams import EventStreamSettings
-from sqlalchemy import CursorResult, delete, func, select, update
 
 from ..domain.enums import StreamKind, SubscriptionKind
 from ..domain.errors import ForwardLoopError, StreamNotFoundError, TriggerSubscriptionNotFoundError
 from ..domain.filters import EventFilter
 from ..domain.models import JournaledEvent, TriggerBinding
-from ..infrastructure.journal import StreamJournal
+from ..infrastructure.journal_repository import StreamJournal
 from ..infrastructure.orm import (
-    StreamEventKeyORM,
     StreamORM,
     StreamSourceORM,
     StreamSubscriptionORM,
@@ -55,10 +53,6 @@ class StreamService:
     def _session(self):
         return self.repository_factory.session
 
-    @property
-    def _workspace_id(self) -> str:
-        return self.repository_factory.user_context.workspace_id
-
     def _streams(self) -> StreamRepository:
         return self.repository_factory.create_repository(StreamRepository)
 
@@ -95,12 +89,7 @@ class StreamService:
         return await self._streams().list_all(limit=limit, offset=offset, ids=ids)
 
     async def delete_stream(self, stream_id: UUID) -> None:
-        result = await self._session.execute(
-            delete(StreamORM).where(
-                StreamORM.id == stream_id, StreamORM.workspace_id == self._workspace_id
-            )
-        )
-        if cast(CursorResult[Any], result).rowcount != 1:
+        if not await self._streams().delete_in_workspace(stream_id):
             raise StreamNotFoundError(stream_id)
 
     async def create_webhook_stream_for_trigger(
@@ -154,15 +143,7 @@ class StreamService:
         )
 
     async def update_trigger_filter(self, trigger_id: UUID, event_filter: EventFilter) -> None:
-        result = await self._session.execute(
-            update(StreamSubscriptionORM)
-            .where(
-                StreamSubscriptionORM.trigger_id == trigger_id,
-                StreamSubscriptionORM.workspace_id == self._workspace_id,
-            )
-            .values(filter=event_filter.model_dump())
-        )
-        if cast(CursorResult[Any], result).rowcount != 1:
+        if not await self._subscriptions().update_filter_for_trigger(trigger_id, event_filter):
             raise TriggerSubscriptionNotFoundError(trigger_id)
 
     async def sync_trigger_webhook_source(self, trigger_id: UUID, **fields: Any) -> None:
@@ -171,12 +152,7 @@ class StreamService:
             await self._sources().update_webhook_fields(source.id, **fields)
 
     async def remove_trigger_webhook_sources(self, trigger_id: UUID) -> None:
-        await self._session.execute(
-            delete(StreamSourceORM).where(
-                StreamSourceORM.credential_key == trigger_id,
-                StreamSourceORM.workspace_id == self._workspace_id,
-            )
-        )
+        await self._sources().delete_by_credential_key(trigger_id)
 
     async def create_forward(
         self, *, stream_id: UUID, output_stream_ids: list[UUID], event_filter: EventFilter
@@ -206,50 +182,17 @@ class StreamService:
 
     async def last_received_at(self, stream_id: UUID) -> datetime | None:
         await self.get_stream(stream_id)
-        result = await self._session.execute(
-            select(func.max(StreamEventKeyORM.received_at)).where(
-                StreamEventKeyORM.stream_id == stream_id
-            )
-        )
-        return result.scalar_one()
+        return await self._journal().last_received_at(stream_id)
 
     async def trigger_bindings(self, trigger_ids: list[UUID]) -> dict[UUID, TriggerBinding]:
         """Stream, filter, webhook id and last event of each trigger, in three queries."""
         if not trigger_ids:
             return {}
-        subscriptions = (
-            (
-                await self._session.execute(
-                    select(StreamSubscriptionORM).where(
-                        StreamSubscriptionORM.trigger_id.in_(trigger_ids),
-                        StreamSubscriptionORM.workspace_id == self._workspace_id,
-                    )
-                )
-            )
-            .scalars()
-            .all()
+        subscriptions = await self._subscriptions().list_for_triggers(trigger_ids)
+        sources = await self._sources().find_by_credential_keys(trigger_ids)
+        last_by_stream = await self._journal().last_received_by_stream(
+            list({s.stream_id for s in subscriptions})
         )
-        sources = (
-            (
-                await self._session.execute(
-                    select(StreamSourceORM).where(
-                        StreamSourceORM.credential_key.in_(trigger_ids),
-                        StreamSourceORM.workspace_id == self._workspace_id,
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        stream_ids = list({s.stream_id for s in subscriptions})
-        last_by_stream: dict[UUID, datetime] = {}
-        if stream_ids:
-            rows = await self._session.execute(
-                select(StreamEventKeyORM.stream_id, func.max(StreamEventKeyORM.received_at))
-                .where(StreamEventKeyORM.stream_id.in_(stream_ids))
-                .group_by(StreamEventKeyORM.stream_id)
-            )
-            last_by_stream = dict(rows.tuples().all())
         webhook_by_trigger = {s.credential_key: s.webhook_id for s in sources}
         return {
             s.trigger_id: TriggerBinding(

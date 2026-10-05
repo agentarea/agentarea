@@ -10,7 +10,7 @@ from agentarea_common.config.streams import EventStreamSettings
 from agentarea_common.events.ports import IntegrationEvent
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from .journal import StreamJournal
+from .journal_repository import StreamJournal
 
 
 class PgJournalEventStream:

@@ -15,7 +15,7 @@ from agentarea_streams.domain import (
     StreamQuotaExceededError,
 )
 from agentarea_streams.domain.ports import StreamWaker
-from agentarea_streams.infrastructure.journal import StreamJournal
+from agentarea_streams.infrastructure.journal_repository import StreamJournal
 from agentarea_streams.infrastructure.repository import find_webhook_source
 from agentarea_triggers.channels.secret_reader import SecretReader
 from agentarea_triggers.webhook_intake import JournalAppendCallback, spec_from_source

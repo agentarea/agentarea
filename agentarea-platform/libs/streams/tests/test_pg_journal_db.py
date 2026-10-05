@@ -16,7 +16,7 @@ from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config.streams import EventStreamSettings
 from agentarea_common.events.ports import EventStream, IntegrationEvent
 from agentarea_streams.application.stream_service import StreamService
-from agentarea_streams.infrastructure.journal import StreamJournal
+from agentarea_streams.infrastructure.journal_repository import StreamJournal
 from agentarea_streams.infrastructure.pg_journal import PgJournalEventStream
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 

@@ -30,7 +30,7 @@ from agentarea_streams.application.forward import ForwardHandler
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import EventFilter, HandlerResult, SubscriptionKind, Verdict
 from agentarea_streams.domain.ports import StreamWaker
-from agentarea_streams.infrastructure.journal import StreamJournal
+from agentarea_streams.infrastructure.journal_repository import StreamJournal
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 

@@ -1,7 +1,8 @@
 """Keep daily journal partitions ahead of today and drop or trim expired days.
 
-Runs inside the worker. Infrastructure across every workspace, so its SQL is
-Core on purpose and declares why it is unscoped.
+Runs inside the worker. Infrastructure across every workspace, so it declares
+why it is unscoped. Partition DDL, the advisory lock and the partition listing
+from the catalog have no ORM form and stay textual SQL.
 """
 
 import asyncio
@@ -10,11 +11,14 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
+from typing import cast
 
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.config.streams import EventStreamSettings
-from sqlalchemy import text
+from sqlalchemy import Integer, Table, delete, func, literal_column, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from .orm import StreamEventKeyORM, StreamEventORM, StreamORM
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +78,7 @@ class PartitionMaintainer:
                     day = today + timedelta(days=offset)
                     if await self._create(session, day):
                         report.created.append(partition_name(day))
-                longest = await session.execute(text("SELECT max(retention_days) FROM streams"))
+                longest = await session.execute(select(func.max(StreamORM.retention_days)))
                 keep_days = max(longest.scalar_one() or 0, self._settings.RETENTION.days)
                 horizon = today - timedelta(days=keep_days)
                 for name, day in await self._partitions(session):
@@ -82,8 +86,10 @@ class PartitionMaintainer:
                         await session.execute(text(f'DROP TABLE IF EXISTS "{name}"'))
                         report.dropped.append(name)
                 await session.execute(
-                    text("DELETE FROM stream_event_keys WHERE received_at < :h"),
-                    {"h": datetime.combine(horizon, datetime.min.time(), tzinfo=UTC)},
+                    delete(StreamEventKeyORM).where(
+                        StreamEventKeyORM.received_at
+                        < datetime.combine(horizon, datetime.min.time(), tzinfo=UTC)
+                    )
                 )
                 report.trimmed_events = await self._trim_short_streams(session)
                 await session.commit()
@@ -98,7 +104,7 @@ class PartitionMaintainer:
 
     async def _create(self, session: AsyncSession, day: date) -> bool:
         name = partition_name(day)
-        exists = await session.execute(text("SELECT to_regclass(:n) IS NOT NULL"), {"n": name})
+        exists = await session.execute(select(func.to_regclass(name).is_not(None)))
         if exists.scalar_one():
             return False
         following = day + timedelta(days=1)
@@ -126,17 +132,24 @@ class PartitionMaintainer:
         return found
 
     async def _trim_short_streams(self, session: AsyncSession) -> int:
-        trimmed = await session.execute(
-            text(
-                "WITH expired AS ("
-                " DELETE FROM stream_events e USING streams s"
-                " WHERE e.stream_id = s.id"
-                "   AND e.received_at < now() - make_interval(days => s.retention_days)"
-                " RETURNING e.stream_id, e.event_key) "
-                "DELETE FROM stream_event_keys k USING expired x"
-                " WHERE k.stream_id = x.stream_id AND k.event_key = x.event_key"
-                " RETURNING 1"
+        # Core on the tables: the ORM-enabled form of this DELETE returns no rows.
+        events, keys, streams = (
+            cast(Table, model.__table__) for model in (StreamEventORM, StreamEventKeyORM, StreamORM)
+        )
+        expired = (
+            delete(events)
+            .where(
+                events.c.stream_id == streams.c.id,
+                events.c.received_at
+                < func.now() - func.make_interval(0, 0, 0, streams.c.retention_days),
             )
+            .returning(events.c.stream_id, events.c.event_key)
+            .cte("expired")
+        )
+        trimmed = await session.execute(
+            delete(keys)
+            .where(keys.c.stream_id == expired.c.stream_id, keys.c.event_key == expired.c.event_key)
+            .returning(literal_column("1", Integer))
         )
         return len(trimmed.all())
 

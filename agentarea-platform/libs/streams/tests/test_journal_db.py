@@ -15,7 +15,7 @@ from agentarea_common.config.streams import EventStreamSettings
 from agentarea_common.events.ports import IntegrationEvent
 from agentarea_streams.domain import PayloadTooLargeError, StreamKind, StreamQuotaExceededError
 from agentarea_streams.domain.keys import event_id_for
-from agentarea_streams.infrastructure.journal import StreamJournal
+from agentarea_streams.infrastructure.journal_repository import StreamJournal
 from agentarea_streams.infrastructure.repository import StreamRepository
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -68,7 +68,7 @@ async def test_a_repeated_key_is_a_no_op_even_after_the_first_landed_in_another_
         stream = await _stream(session, ctx)
         journal = StreamJournal(session, ctx, EventStreamSettings())
         yesterday = datetime.now(UTC) - timedelta(days=1)
-        with patch("agentarea_streams.infrastructure.journal._now", return_value=yesterday):
+        with patch("agentarea_streams.infrastructure.journal_repository._now", return_value=yesterday):
             await journal.append(stream.id, _event(), event_key="k")
         await session.commit()
         again = await journal.append(stream.id, _event(), event_key="k")

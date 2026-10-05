@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.permission import PermissionService
@@ -18,9 +18,7 @@ from agentarea_common.workspaces.memberships import (
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
 from agentarea_streams.domain import HandlerResult, JournaledEvent, SubscriptionView, Verdict
 from agentarea_streams.domain.keys import task_id_for
-from agentarea_streams.infrastructure.orm import SubscriptionOutcomeORM
-from sqlalchemy import delete, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from agentarea_streams.infrastructure.repository import SubscriptionOutcomeRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .llm_condition_evaluator import build_condition_evaluator
@@ -53,51 +51,32 @@ class SubscriptionFollowUpClaim:
         self._session = session
         self._subscription = subscription
         self._event = event
-
-    def _this_event(self):
-        return (
-            SubscriptionOutcomeORM.subscription_id == self._subscription.id,
-            SubscriptionOutcomeORM.event_sequence == self._event.sequence,
-            SubscriptionOutcomeORM.workspace_id == self._subscription.workspace_id,
+        self._outcomes = SubscriptionOutcomeRepository(
+            session,
+            UserContext(user_id=subscription.created_by, workspace_id=subscription.workspace_id),
         )
 
     async def delivered_to(self) -> UUID | None:
         """The task an earlier attempt routed this event's follow-up into, if any."""
-        result = await self._session.execute(
-            select(SubscriptionOutcomeORM.task_id).where(
-                *self._this_event(),
-                SubscriptionOutcomeORM.verdict == Verdict.REACTED.value,
-            )
-        )
-        return result.scalar_one_or_none()
+        return await self._outcomes.reacted_task(self._subscription.id, self._event.sequence)
 
     async def claim(self, task_id: UUID) -> bool:
-        now = _utcnow()
-        claimed = await self._session.execute(
-            pg_insert(SubscriptionOutcomeORM)
-            .values(
-                id=uuid4(),
-                subscription_id=self._subscription.id,
-                stream_id=self._subscription.stream_id,
-                event_sequence=self._event.sequence,
-                verdict=Verdict.REACTED.value,
-                reason=f"follow-up queued into running task {task_id}",
-                task_id=task_id,
-                derived_sequences=[],
-                workspace_id=self._subscription.workspace_id,
-                created_by=self._subscription.created_by,
-                created_at=now,
-                updated_at=now,
-            )
-            .on_conflict_do_nothing(constraint="uq_subscription_outcomes_event")
-            .returning(SubscriptionOutcomeORM.id)
+        inserted = await self._outcomes.record_once(
+            subscription_id=self._subscription.id,
+            stream_id=self._subscription.stream_id,
+            event_sequence=self._event.sequence,
+            verdict=Verdict.REACTED,
+            reason=f"follow-up queued into running task {task_id}",
+            score=None,
+            task_id=task_id,
+            derived_sequences=[],
+            now=_utcnow(),
         )
-        inserted = claimed.scalar_one_or_none() is not None
         await self._session.commit()
         return inserted
 
     async def release(self) -> None:
-        await self._session.execute(delete(SubscriptionOutcomeORM).where(*self._this_event()))
+        await self._outcomes.delete_for_event(self._subscription.id, self._event.sequence)
         await self._session.commit()
 
 

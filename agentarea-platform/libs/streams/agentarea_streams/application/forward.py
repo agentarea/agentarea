@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..domain.enums import Verdict
 from ..domain.keys import forward_event_key
 from ..domain.models import HandlerResult, JournaledEvent, SubscriptionView
-from ..infrastructure.journal import StreamJournal
+from ..infrastructure.journal_repository import StreamJournal
 
 
 class ForwardHandler:
