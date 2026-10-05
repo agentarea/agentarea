@@ -200,6 +200,7 @@
     "workspace": "Workspace",
     "modelSpecs": "Model Specs",
     "automation": "Automation",
+    "events": "Events",
     "network": "Network",
     "members": "Members",
     "budgets": "Budgets",
@@ -1719,7 +1720,8 @@
       "active": "Active",
       "inactive": "Inactive",
       "paused": "Paused",
-      "error": "Error"
+      "error": "Error",
+      "needs_owner": "Needs a new owner"
     },
     "create": {
       "title": "Create Trigger",
@@ -1825,7 +1827,10 @@
       "keepExistingSecret": "Keep existing secret",
       "noSecrets": "No workspace secrets yet.",
       "newSecret": "New secret",
-      "createdWithSecretTitle": "Webhook created"
+      "createdWithSecretTitle": "Webhook created",
+      "stream": "Stream",
+      "streamHint": "Fires on events that arrive in this stream after the trigger is created.",
+      "noStreams": "No streams yet"
     },
     "detail": {
       "overview": "Overview",
@@ -1904,7 +1909,11 @@
       "signingSignedHint": "Requests without a valid signature are refused.",
       "signingUnsignedHint": "Anyone who knows this URL can start the agent. Generate a signing secret, then sign every request with it.",
       "signingUnsignedChannelHint": "Anyone who knows this URL can start the agent. Save the channel credentials again to register a secret.",
-      "signingUnsupportedHint": "AgentArea does not verify this provider's requests yet, so anyone who knows this URL can start the agent. Keep the URL private."
+      "signingUnsupportedHint": "AgentArea does not verify this provider's requests yet, so anyone who knows this URL can start the agent. Keep the URL private.",
+      "lastEvent": "Last event",
+      "noEventsYet": "No events yet",
+      "needsOwnerTitle": "This trigger stopped",
+      "needsOwnerBody": "The person who set it up can no longer run this agent. Recreate it from an account that can."
     },
     "error": {
       "createFailed": "Failed to create trigger",
@@ -1935,6 +1944,49 @@
       "valueTextWithPrefix": "Hex-encoded HMAC-{algorithm} of the raw request body, keyed with this secret, after the prefix {prefix}.",
       "exampleLabel": "Example",
       "done": "Done"
+    }
+  },
+  "EventsPage": {
+    "title": "Events",
+    "description": "Everything that arrived, and what each subscriber did with it",
+    "searchPlaceholder": "Search streams",
+    "streams": {
+      "name": "Stream",
+      "kind": "Kind",
+      "retention": "Kept for",
+      "retentionDays": "{count, plural, one {# day} other {# days}}",
+      "created": "Created"
+    },
+    "noStreams": "No streams yet",
+    "noStreamsDescription": "A stream appears for every webhook trigger, and you can create your own.",
+    "noMatchingStreams": "No matching streams",
+    "feed": {
+      "received": "Received",
+      "kind": "Event",
+      "key": "Key",
+      "outcome": "Outcome",
+      "older": "Older events",
+      "empty": "Nothing has arrived on this stream yet."
+    },
+    "filter": {
+      "all": "All",
+      "reacted": "Reacted",
+      "skipped": "Skipped",
+      "error": "Error",
+      "unheard": "Nobody listened"
+    },
+    "detail": {
+      "title": "Event {sequence}",
+      "data": "Payload",
+      "subscribers": "Subscribers",
+      "trigger": "Trigger",
+      "forward": "Forward",
+      "task": "Task",
+      "score": "Score",
+      "derived": "Forwarded as",
+      "noOutcomes": "No subscription took this event.",
+      "causedBy": "Caused by",
+      "close": "Close"
     }
   },
   "NetworkPage": {

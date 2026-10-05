@@ -233,8 +233,32 @@ export function getTriggerStatusPresentation(
     case "error":
     case "failed":
       return { label: "Error", kind: "failed" };
+    case "needs_owner":
+      return {
+        label: "Needs a new owner",
+        labelKey: "needsOwner",
+        kind: "attention",
+      };
     default:
       return fallbackStatusPresentation(status);
+  }
+}
+
+/** A stream subscriber's verdict on one event, or none at all. */
+export function getStreamOutcomeStatusPresentation(
+  verdict: string
+): StatusPresentation {
+  switch (normalizeStatus(verdict)) {
+    case "reacted":
+      return { label: "Reacted", labelKey: "reacted", kind: "done" };
+    case "skipped":
+      return { label: "Skipped", labelKey: "skipped", kind: "off" };
+    case "error":
+      return { label: "Error", labelKey: "error", kind: "failed" };
+    case "unheard":
+      return { label: "Nobody listened", labelKey: "unheard", kind: "draft" };
+    default:
+      return fallbackStatusPresentation(verdict);
   }
 }
 
