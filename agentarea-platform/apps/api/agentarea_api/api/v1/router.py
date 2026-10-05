@@ -160,6 +160,9 @@ workspace_v1_router.include_router(triggers.router)
 # Workspace configuration export
 workspace_v1_router.include_router(workspace_config.router)
 
+# The workspace's own settings (logo)
+workspace_v1_router.include_router(workspaces.workspace_router)
+
 # Workspace invitations + memberships
 workspace_v1_router.include_router(workspace_invitations.router)
 

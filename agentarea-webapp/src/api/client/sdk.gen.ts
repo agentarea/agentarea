@@ -214,6 +214,9 @@ import type {
   DeleteWorkspaceFileV1FilesFilePathDeleteData,
   DeleteWorkspaceFileV1FilesFilePathDeleteErrors,
   DeleteWorkspaceFileV1FilesFilePathDeleteResponses,
+  DeleteWorkspaceLogoV1LogoDeleteData,
+  DeleteWorkspaceLogoV1LogoDeleteErrors,
+  DeleteWorkspaceLogoV1LogoDeleteResponses,
   DeployMcpServerV1McpServersServerIdDeployPostData,
   DeployMcpServerV1McpServersServerIdDeployPostErrors,
   DeployMcpServerV1McpServersServerIdDeployPostResponses,
@@ -833,6 +836,9 @@ import type {
   UploadSkillV1SkillsUploadPostData,
   UploadSkillV1SkillsUploadPostErrors,
   UploadSkillV1SkillsUploadPostResponses,
+  UploadWorkspaceLogoV1LogoPutData,
+  UploadWorkspaceLogoV1LogoPutErrors,
+  UploadWorkspaceLogoV1LogoPutResponses,
   UpsertModelSpecV1ModelSpecsUpsertPostData,
   UpsertModelSpecV1ModelSpecsUpsertPostErrors,
   UpsertModelSpecV1ModelSpecsUpsertPostResponses,
@@ -4698,6 +4704,71 @@ export const revokeInvitationV1InvitationsInvitationIdDelete = <
     ],
     url: "/v1/workspaces/{workspace}/invitations/{invitation_id}",
     ...options,
+  });
+
+/**
+ * Delete Workspace Logo
+ *
+ * Remove the workspace logo; the workspace shows its initials again.
+ */
+export const deleteWorkspaceLogoV1LogoDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<DeleteWorkspaceLogoV1LogoDeleteData, ThrowOnError>
+): RequestResult<
+  DeleteWorkspaceLogoV1LogoDeleteResponses,
+  DeleteWorkspaceLogoV1LogoDeleteErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).delete<
+    DeleteWorkspaceLogoV1LogoDeleteResponses,
+    DeleteWorkspaceLogoV1LogoDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/logo",
+    ...options,
+  });
+
+/**
+ * Upload Workspace Logo
+ *
+ * Set the workspace logo, replacing and deleting any previous one.
+ */
+export const uploadWorkspaceLogoV1LogoPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UploadWorkspaceLogoV1LogoPutData, ThrowOnError>
+): RequestResult<
+  UploadWorkspaceLogoV1LogoPutResponses,
+  UploadWorkspaceLogoV1LogoPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    UploadWorkspaceLogoV1LogoPutResponses,
+    UploadWorkspaceLogoV1LogoPutErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/logo",
+    ...options,
+    headers: {
+      "Content-Type": null,
+      ...options.headers,
+    },
   });
 
 /**

@@ -1619,6 +1619,21 @@
         "title": "Body_upload_skill_v1_skills_upload_post",
         "type": "object"
       },
+      "Body_upload_workspace_logo_v1_logo_put": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "PNG, JPEG or WebP image, at most 1 MB",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_workspace_logo_v1_logo_put",
+        "type": "object"
+      },
       "BudgetPolicy-Input": {
         "additionalProperties": false,
         "description": "Budget-related ceilings.",
@@ -14236,6 +14251,17 @@
             "title": "Id",
             "type": "string"
           },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -22134,6 +22160,122 @@
           "v1",
           "protected",
           "workspace-invitations"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/logo": {
+      "delete": {
+        "description": "Remove the workspace logo; the workspace shows its initials again.",
+        "operationId": "delete_workspace_logo_v1_logo_delete",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Workspace Logo",
+        "tags": [
+          "v1",
+          "protected",
+          "workspaces"
+        ]
+      },
+      "put": {
+        "description": "Set the workspace logo, replacing and deleting any previous one.",
+        "operationId": "upload_workspace_logo_v1_logo_put",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_workspace_logo_v1_logo_put"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Workspace Logo",
+        "tags": [
+          "v1",
+          "protected",
+          "workspaces"
         ]
       }
     },

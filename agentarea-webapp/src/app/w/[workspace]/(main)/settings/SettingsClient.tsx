@@ -3,24 +3,28 @@
 import { useTranslations } from "next-intl";
 import type { SettingsFlow } from "@ory/client-fetch";
 import type { OryClientConfiguration } from "@ory/elements-react";
-import { FileDown, Globe, LogOut, Moon } from "lucide-react";
+import { FileDown, Globe, ImageIcon, LogOut, Moon } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
+import type { Workspace } from "@/lib/workspaces";
 import ExportWorkspaceButton from "./components/ExportWorkspaceButton";
 import LanguageSelect from "./components/LanguageSelect";
 import ProfileForm from "./components/ProfileForm";
 import SettingsRow from "./components/SettingsRow";
+import WorkspaceLogoControl from "./components/WorkspaceLogoControl";
 
 export default function SettingsClient({
   flow,
   config,
   canAdminister,
+  workspace,
 }: {
   flow: SettingsFlow;
   config: OryClientConfiguration;
   canAdminister: boolean;
+  workspace: Workspace;
 }) {
   const t = useTranslations("SettingsPage");
   const { signOut } = useAuth();
@@ -94,6 +98,13 @@ export default function SettingsClient({
                 </p>
               </div>
               <div className="grid grid-cols-1 gap-3 p-4">
+                <SettingsRow
+                  icon={ImageIcon}
+                  title={t("workspace.logoTitle")}
+                  description={t("workspace.logoDescription")}
+                >
+                  <WorkspaceLogoControl workspace={workspace} />
+                </SettingsRow>
                 <SettingsRow
                   icon={FileDown}
                   title={t("workspace.exportTitle")}

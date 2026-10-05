@@ -445,7 +445,14 @@
       "exportTitle": "Export workspace",
       "exportDescription": "Download agents, MCP connections, skills and triggers as a bundle YAML you can import into another workspace. Credentials are replaced by setup fields the importer fills in.",
       "export": "Export",
-      "exportFailed": "Could not export the workspace"
+      "exportFailed": "Could not export the workspace",
+      "logoTitle": "Logo",
+      "logoDescription": "Shown in the workspace switcher for everyone in this workspace. PNG, JPEG or WebP, up to 1 MB.",
+      "logoUpload": "Upload logo",
+      "logoRemove": "Remove",
+      "logoTooLarge": "The logo must be at most 1 MB",
+      "logoUploadFailed": "Could not upload the logo",
+      "logoRemoveFailed": "Could not remove the logo"
     },
     "subscription": {
       "title": "Subscription",

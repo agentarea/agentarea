@@ -20,7 +20,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,9 +28,9 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { WorkspaceIcon } from "@/components/WorkspaceIcon";
 import { resetCurrencyCache } from "@/hooks/useCurrency";
 import { useWorkspaceSlug } from "@/hooks/useWorkspaceNavigation";
-import { deterministicHue } from "@/lib/avatar-hue";
 import { createWorkspaceAction } from "@/lib/workspace-actions";
 import {
   WORKSPACE_HOME,
@@ -39,24 +38,6 @@ import {
   workspaceSection,
 } from "@/lib/workspace-routes";
 import type { Workspace } from "@/lib/workspaces";
-
-function WorkspaceIcon({
-  workspace,
-  size,
-}: {
-  workspace: Workspace;
-  size: number;
-}) {
-  return (
-    <EntityAvatar
-      size={size}
-      variant="pigment"
-      hue={deterministicHue(workspace.id)}
-      alt={workspace.name}
-      text={nameInitials(workspace.name)}
-    />
-  );
-}
 
 export function TeamSwitcher({ workspaces }: { workspaces: Workspace[] }) {
   const { isMobile } = useSidebar();

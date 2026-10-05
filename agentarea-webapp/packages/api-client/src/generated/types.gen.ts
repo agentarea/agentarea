@@ -892,6 +892,18 @@ export type BodyUploadSkillV1SkillsUploadPost = {
 };
 
 /**
+ * Body_upload_workspace_logo_v1_logo_put
+ */
+export type BodyUploadWorkspaceLogoV1LogoPut = {
+    /**
+     * File
+     *
+     * PNG, JPEG or WebP image, at most 1 MB
+     */
+    file: Blob | File;
+};
+
+/**
  * BudgetPolicy
  *
  * Budget-related ceilings.
@@ -8299,6 +8311,10 @@ export type WorkspaceResponse = {
      */
     id: string;
     /**
+     * Logo Url
+     */
+    logo_url?: string | null;
+    /**
      * Name
      */
     name: string;
@@ -11952,6 +11968,56 @@ export type RevokeInvitationV1InvitationsInvitationIdDeleteResponses = {
 };
 
 export type RevokeInvitationV1InvitationsInvitationIdDeleteResponse = RevokeInvitationV1InvitationsInvitationIdDeleteResponses[keyof RevokeInvitationV1InvitationsInvitationIdDeleteResponses];
+
+export type DeleteWorkspaceLogoV1LogoDeleteData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/logo';
+};
+
+export type DeleteWorkspaceLogoV1LogoDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteWorkspaceLogoV1LogoDeleteError = DeleteWorkspaceLogoV1LogoDeleteErrors[keyof DeleteWorkspaceLogoV1LogoDeleteErrors];
+
+export type DeleteWorkspaceLogoV1LogoDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: WorkspaceResponse;
+};
+
+export type DeleteWorkspaceLogoV1LogoDeleteResponse = DeleteWorkspaceLogoV1LogoDeleteResponses[keyof DeleteWorkspaceLogoV1LogoDeleteResponses];
+
+export type UploadWorkspaceLogoV1LogoPutData = {
+    body: BodyUploadWorkspaceLogoV1LogoPut;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/logo';
+};
+
+export type UploadWorkspaceLogoV1LogoPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UploadWorkspaceLogoV1LogoPutError = UploadWorkspaceLogoV1LogoPutErrors[keyof UploadWorkspaceLogoV1LogoPutErrors];
+
+export type UploadWorkspaceLogoV1LogoPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: WorkspaceResponse;
+};
+
+export type UploadWorkspaceLogoV1LogoPutResponse = UploadWorkspaceLogoV1LogoPutResponses[keyof UploadWorkspaceLogoV1LogoPutResponses];
 
 export type ListMcpAuthConfigsV1McpAuthConfigsGetData = {
     body?: never;
