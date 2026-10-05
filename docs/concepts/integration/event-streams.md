@@ -7,6 +7,7 @@ prerequisites:
 related:
   - /guides/triggers/trigger-from-a-webhook
   - /concepts/execution/tasks
+  - /concepts/execution/events
 last_updated: 2026-10-06
 ---
 
@@ -61,11 +62,11 @@ no endpoint to attach a webhook source to a stream you created yourself — see
 
 **Appending is idempotent, size-capped, and quota-limited.**
 `StreamJournal.append` requires an `event_key` naming what makes this event
-new. For a webhook, that is the provider's own delivery id when it sends one —
-`X-GitHub-Delivery`, Stripe's `id`, Telegram's `update_id`, Slack's
-`event_id`, Linear's `webhookId`, a generic `webhook-id` or `Idempotency-Key`
-header — and a fresh `recv:<uuid4()>` otherwise, which is explicitly never
-recognized as a repeat. The key is enforced with `INSERT ... ON CONFLICT DO
+new. For a webhook, that is the provider's own delivery id when it sends
+one — a header (GitHub's `X-GitHub-Delivery`, Linear's `linear-delivery`, or
+a generic `webhook-id` or `Idempotency-Key`) or, failing that, a body field
+(Stripe's `id`, Telegram's `update_id`, Slack's `event_id`) — and a fresh
+`recv:<uuid4()>` otherwise, which is explicitly never recognized as a repeat. The key is enforced with `INSERT ... ON CONFLICT DO
 NOTHING` on `(stream_id, event_key)`, so a redelivered id lands once: the
 first attempt gets `sequence` and `appended: true`, every later one gets the
 same `sequence` and `appended: false`. The event's own id is deterministic too
@@ -197,5 +198,8 @@ request that is answered before anything has actually reacted to it.
   </Card>
   <Card title="Tasks" icon="diagram-project" href="/concepts/execution/tasks">
     What a `reacted` outcome's `task_id` points at.
+  </Card>
+  <Card title="Events" icon="diagram-project" href="/concepts/execution/events">
+    The task execution feed this journal is not.
   </Card>
 </Columns>
