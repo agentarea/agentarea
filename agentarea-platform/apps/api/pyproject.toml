@@ -23,6 +23,7 @@ dependencies = [
     "agentarea-projects",
     "agentarea-wallet",
     "agentarea-bundles",
+    "agentarea-streams",
     "a2a-sdk[http-server]>=1.1.5",
     "alembic>=1.15.2",
     "uvicorn>=0.34.0",
@@ -55,6 +56,7 @@ agentarea-openapi = { workspace = true }
 agentarea-projects = { workspace = true }
 agentarea-wallet = { workspace = true }
 agentarea-bundles = { workspace = true }
+agentarea-streams = { workspace = true }
 
 [project.scripts]
 agentarea-api = "agentarea_api.cli:cli"
