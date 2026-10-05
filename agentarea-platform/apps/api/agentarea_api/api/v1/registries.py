@@ -145,7 +145,7 @@ class RegistryItemResponse(BaseModel):
             installed_version=item.installed_version,
             category=item.category,
             featured=item.featured,
-            hosting=item.hosting,
+            hosting=getattr(item, "hosting", None),
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
