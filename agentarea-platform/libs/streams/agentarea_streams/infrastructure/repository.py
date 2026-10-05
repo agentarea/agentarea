@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import CursorResult, delete, select, update
+from sqlalchemy import ColumnElement, CursorResult, delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -198,6 +198,72 @@ class StreamSubscriptionRepository(WorkspaceScopedRepository[StreamSubscriptionO
         )
         return cast(CursorResult[Any], result).rowcount == 1
 
+    def _leased_by(self, subscription_id: UUID, owner: str) -> tuple[ColumnElement[bool], ...]:
+        return (
+            StreamSubscriptionORM.id == subscription_id,
+            self._get_workspace_filter(),
+            StreamSubscriptionORM.lease_owner == owner,
+        )
+
+    async def renew_lease(
+        self, subscription_id: UUID, owner: str, *, now: datetime, until: datetime
+    ) -> bool:
+        """Extend a lease still ``owner``'s and unexpired; False when it lapsed."""
+        renewed = await self.session.execute(
+            update(StreamSubscriptionORM)
+            .where(
+                *self._leased_by(subscription_id, owner), StreamSubscriptionORM.leased_until > now
+            )
+            .values(leased_until=until)
+        )
+        return cast(CursorResult[Any], renewed).rowcount == 1
+
+    async def cursor_of(self, subscription_id: UUID) -> int:
+        result = await self.session.execute(
+            select(StreamSubscriptionORM.cursor_sequence).where(
+                StreamSubscriptionORM.id == subscription_id, self._get_workspace_filter()
+            )
+        )
+        return result.scalar_one()
+
+    async def advance_cursor(
+        self, subscription_id: UUID, owner: str, sequence: int, *, now: datetime, until: datetime
+    ) -> bool:
+        """Move the cursor and clear the failure state; False when the lease is not ``owner``'s."""
+        moved = await self.session.execute(
+            update(StreamSubscriptionORM)
+            .where(*self._leased_by(subscription_id, owner))
+            .values(
+                cursor_sequence=sequence,
+                attempts=0,
+                next_attempt_at=None,
+                last_error=None,
+                leased_until=until,
+                updated_at=now,
+            )
+        )
+        return cast(CursorResult[Any], moved).rowcount != 0
+
+    async def lock_if_leased(
+        self, subscription_id: UUID, owner: str
+    ) -> StreamSubscriptionORM | None:
+        """The row, locked until commit, while ``owner`` still holds its lease."""
+        result = await self.session.execute(
+            select(StreamSubscriptionORM)
+            .where(*self._leased_by(subscription_id, owner))
+            # Held until commit: a claimer skips the row instead of taking it
+            # between this read and the caller's write.
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def release_lease(self, subscription_id: UUID, owner: str) -> None:
+        await self.session.execute(
+            update(StreamSubscriptionORM)
+            .where(*self._leased_by(subscription_id, owner))
+            .values(leased_until=None, lease_owner=None)
+        )
+
     async def list_for_stream(self, stream_id: UUID) -> list[StreamSubscriptionORM]:
         result = await self.session.execute(
             select(StreamSubscriptionORM)
@@ -213,7 +279,9 @@ class SubscriptionOutcomeRepository(WorkspaceScopedRepository[SubscriptionOutcom
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, SubscriptionOutcomeORM, user_context)
 
-    def _of_event(self, subscription_id: UUID, event_sequence: int):
+    def _of_event(
+        self, subscription_id: UUID, event_sequence: int
+    ) -> tuple[ColumnElement[bool], ...]:
         return (
             SubscriptionOutcomeORM.subscription_id == subscription_id,
             SubscriptionOutcomeORM.event_sequence == event_sequence,

@@ -8,8 +8,7 @@
     "libs/agents/agentarea_agents/domain/skill_models.py": 1,
     "libs/mcp/agentarea_mcp/container_monitor.py": 2,
     "libs/registry/agentarea_registry/domain/models.py": 7,
-    "libs/streams/agentarea_streams/infrastructure/orm.py": 1,
-    "libs/streams/agentarea_streams/infrastructure/partitions.py": 4,
+    "libs/streams/agentarea_streams/infrastructure/partitions.py": 1,
     "libs/tasks/agentarea_tasks/infrastructure/orm.py": 1,
     "libs/wallet/agentarea_wallet/domain/models.py": 1
   },
@@ -40,6 +39,7 @@
     "libs/mcp/agentarea_mcp/container_monitor.py": 2,
     "libs/secrets/agentarea_secrets/catalog_service.py": 13,
     "libs/secrets/agentarea_secrets/database_secret_manager.py": 5,
+    "libs/streams/agentarea_streams/infrastructure/cross_workspace_leases.py": 2,
     "libs/streams/agentarea_streams/infrastructure/partitions.py": 8
   },
   "unscoped": {

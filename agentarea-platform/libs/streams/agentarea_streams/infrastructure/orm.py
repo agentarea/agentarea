@@ -14,14 +14,18 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Sequence,
     String,
     Text,
     UniqueConstraint,
-    text,
+    func,
+    literal,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+STREAM_EVENTS_SEQUENCE = Sequence("stream_events_sequence_seq")
 
 
 class JournalBase(DeclarativeBase):
@@ -85,7 +89,8 @@ class StreamEventORM(JournalBase, WorkspaceScopedMixin):
     sequence: Mapped[int] = mapped_column(
         BigInteger,
         primary_key=True,
-        server_default=text("nextval('stream_events_sequence_seq')"),
+        # func, not Sequence.next_value(): the tenant-scope suite also builds this on SQLite.
+        server_default=func.nextval(literal(STREAM_EVENTS_SEQUENCE.name, String)),
     )
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
     stream_id: Mapped[UUID] = mapped_column(

@@ -1,8 +1,8 @@
 """Keep daily journal partitions ahead of today and drop or trim expired days.
 
 Runs inside the worker. Infrastructure across every workspace, so it declares
-why it is unscoped. Partition DDL, the advisory lock and the partition listing
-from the catalog have no ORM form and stay textual SQL.
+why it is unscoped. ``CREATE TABLE ... PARTITION OF`` has no SQLAlchemy
+construct and is the one statement written as text.
 """
 
 import asyncio
@@ -15,8 +15,20 @@ from typing import cast
 
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.config.streams import EventStreamSettings
-from sqlalchemy import Integer, Table, delete, func, literal_column, select, text
+from sqlalchemy import (
+    Integer,
+    MetaData,
+    Table,
+    column,
+    delete,
+    func,
+    literal_column,
+    select,
+    table,
+    text,
+)
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.schema import DropTable
 
 from .orm import StreamEventKeyORM, StreamEventORM, StreamORM
 
@@ -64,14 +76,13 @@ class PartitionMaintainer:
             async with self._session_factory() as session:
                 acquired = (
                     await session.execute(
-                        text("SELECT pg_try_advisory_xact_lock(:key)"),
-                        {"key": _ADVISORY_LOCK_KEY},
+                        select(func.pg_try_advisory_xact_lock(_ADVISORY_LOCK_KEY))
                     )
                 ).scalar_one()
                 if not acquired:
                     logger.info(
                         "Journal partition maintenance already running in another process; "
-                        "skipping this pass"
+                        + "skipping this pass"
                     )
                     return report
                 for offset in range(-1, self._settings.PARTITIONS_AHEAD + 1):
@@ -83,7 +94,7 @@ class PartitionMaintainer:
                 horizon = today - timedelta(days=keep_days)
                 for name, day in await self._partitions(session):
                     if day < horizon:
-                        await session.execute(text(f'DROP TABLE IF EXISTS "{name}"'))
+                        await session.execute(DropTable(Table(name, MetaData()), if_exists=True))
                         report.dropped.append(name)
                 await session.execute(
                     delete(StreamEventKeyORM).where(
@@ -111,17 +122,23 @@ class PartitionMaintainer:
         await session.execute(
             text(
                 f'CREATE TABLE IF NOT EXISTS "{name}" PARTITION OF stream_events FOR VALUES FROM '
-                f"('{day.isoformat()} 00:00:00+00') TO ('{following.isoformat()} 00:00:00+00')"
+                + f"('{day.isoformat()} 00:00:00+00') TO ('{following.isoformat()} 00:00:00+00')"
             )
         )
         return True
 
     async def _partitions(self, session: AsyncSession) -> list[tuple[str, date]]:
+        inherits = table("pg_inherits", column("inhrelid"), column("inhparent"))
+        child = table("pg_class", column("oid"), column("relname")).alias("c")
+        parent = table("pg_class", column("oid"), column("relname")).alias("p")
         result = await session.execute(
-            text(
-                "SELECT c.relname FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid "
-                "JOIN pg_class p ON p.oid = i.inhparent WHERE p.relname = 'stream_events'"
+            select(child.c.relname)
+            .select_from(
+                inherits.join(child, child.c.oid == inherits.c.inhrelid).join(
+                    parent, parent.c.oid == inherits.c.inhparent
+                )
             )
+            .where(parent.c.relname == "stream_events")
         )
         found: list[tuple[str, date]] = []
         for (name,) in result.all():

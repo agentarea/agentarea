@@ -27,10 +27,10 @@ from ..domain.errors import LeaseLostError
 from ..domain.filters import EventFilter
 from ..domain.models import HandlerResult, JournaledEvent, SubscriptionView
 from ..domain.ports import StreamWaker, SubscriptionHandler
+from ..infrastructure.cross_workspace_leases import CrossWorkspaceLeases
 from ..infrastructure.journal_repository import StreamJournal
 from ..infrastructure.orm import StreamSubscriptionORM
-from ..infrastructure.repository import SubscriptionOutcomeRepository
-from ..infrastructure.subscription_lease_repository import SubscriptionLeaseRepository
+from ..infrastructure.repository import StreamSubscriptionRepository, SubscriptionOutcomeRepository
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,10 @@ def _utcnow() -> datetime:
 
 def backoff(attempts: int) -> timedelta:
     return timedelta(seconds=min(2 ** min(attempts - 1, 30), 300))
+
+
+def _context(view: SubscriptionView) -> UserContext:
+    return UserContext(user_id=view.created_by, workspace_id=view.workspace_id)
 
 
 def _view(row: StreamSubscriptionORM) -> SubscriptionView:
@@ -79,8 +83,14 @@ class StreamDispatcher:
         self._wakeup = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
 
-    def _leases(self, session: AsyncSession) -> SubscriptionLeaseRepository:
-        return SubscriptionLeaseRepository(session, self._owner)
+    def _every_workspace(self, session: AsyncSession) -> CrossWorkspaceLeases:
+        return CrossWorkspaceLeases(session, self._owner)
+
+    @staticmethod
+    def _subscriptions(
+        session: AsyncSession, view: SubscriptionView
+    ) -> StreamSubscriptionRepository:
+        return StreamSubscriptionRepository(session, _context(view))
 
     def notify(self, stream_id: UUID) -> None:
         self._wakeup.set()
@@ -99,7 +109,7 @@ class StreamDispatcher:
             self._task = None
         with unscoped("a stopping dispatcher hands back its leases in every workspace"):
             async with self._session_factory() as session:
-                await self._leases(session).release_all()
+                await self._every_workspace(session).release_all()
                 await session.commit()
 
     async def _loop(self) -> None:
@@ -140,7 +150,7 @@ class StreamDispatcher:
         now = self._clock()
         with unscoped("the dispatcher serves the subscriptions of every workspace"):
             async with self._session_factory() as session:
-                rows = await self._leases(session).claim_due(
+                rows = await self._every_workspace(session).claim_due(
                     now=now,
                     # A kind this worker has no handler for (a newer release's) is
                     # left for a worker that has one.
@@ -169,7 +179,7 @@ class StreamDispatcher:
 
     async def _drain(self, view: SubscriptionView) -> int:
         handler = self._handlers[view.kind]
-        context = UserContext(user_id=view.created_by, workspace_id=view.workspace_id)
+        context = _context(view)
         handled = 0
         with workspace_scope(view.workspace_id):
             if not await self._renew(view):
@@ -179,7 +189,7 @@ class StreamDispatcher:
                 )
                 return handled
             async with self._session_factory() as session:
-                cursor = await self._leases(session).cursor(view)
+                cursor = await self._subscriptions(session, view).cursor_of(view.id)
                 events = await StreamJournal(session, context, self._settings).read_after(
                     view.stream_id, cursor, self._settings.DISPATCH_BATCH
                 )
@@ -227,8 +237,8 @@ class StreamDispatcher:
         """Extend a lease still ours and unexpired; False when it lapsed while queued."""
         now = self._clock()
         async with self._session_factory() as session:
-            renewed = await self._leases(session).renew(
-                view, now=now, until=now + self._settings.LEASE
+            renewed = await self._subscriptions(session, view).renew_lease(
+                view.id, self._owner, now=now, until=now + self._settings.LEASE
             )
             await session.commit()
         return renewed
@@ -240,10 +250,7 @@ class StreamDispatcher:
         event: JournaledEvent,
         result: HandlerResult,
     ) -> None:
-        outcomes = SubscriptionOutcomeRepository(
-            session, UserContext(user_id=view.created_by, workspace_id=view.workspace_id)
-        )
-        await outcomes.record_once(
+        await SubscriptionOutcomeRepository(session, _context(view)).record_once(
             subscription_id=view.id,
             stream_id=view.stream_id,
             event_sequence=event.sequence,
@@ -257,8 +264,8 @@ class StreamDispatcher:
 
     async def _advance(self, session: AsyncSession, view: SubscriptionView, sequence: int) -> None:
         now = self._clock()
-        moved = await self._leases(session).advance(
-            view, sequence, now=now, until=now + self._settings.LEASE
+        moved = await self._subscriptions(session, view).advance_cursor(
+            view.id, self._owner, sequence, now=now, until=now + self._settings.LEASE
         )
         if not moved:
             await session.rollback()
@@ -268,7 +275,7 @@ class StreamDispatcher:
         self, view: SubscriptionView, event: JournaledEvent, error: Exception
     ) -> None:
         async with self._session_factory() as session:
-            row = await self._leases(session).lock_if_held(view)
+            row = await self._subscriptions(session, view).lock_if_leased(view.id, self._owner)
             if row is None:
                 logger.warning(
                     "Subscription %s failed on event %s after losing its lease; the holder retries",
@@ -311,5 +318,5 @@ class StreamDispatcher:
 
     async def _release(self, view: SubscriptionView) -> None:
         async with self._session_factory() as session:
-            await self._leases(session).release(view)
+            await self._subscriptions(session, view).release_lease(view.id, self._owner)
             await session.commit()

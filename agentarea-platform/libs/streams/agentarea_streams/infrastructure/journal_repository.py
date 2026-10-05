@@ -6,16 +6,14 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from agentarea_common.config.streams import EventStreamSettings
 from agentarea_common.events.ports import IntegrationEvent
-from sqlalchemy import ColumnElement, Sequence, func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.errors import PayloadTooLargeError, StreamNotFoundError, StreamQuotaExceededError
 from ..domain.keys import MAX_EVENT_BYTES, encoded_size, event_id_for
 from ..domain.models import AppendResult, JournaledEvent
-from .orm import StreamEventKeyORM, StreamEventORM, StreamORM
-
-_SEQUENCE = Sequence("stream_events_sequence_seq")
+from .orm import STREAM_EVENTS_SEQUENCE, StreamEventKeyORM, StreamEventORM, StreamORM
 
 
 def _now() -> datetime:
@@ -66,7 +64,9 @@ class StreamJournal:
         workspace_id = self.user_context.workspace_id
         received_at = _now()
         await self._enforce_quota(workspace_id, received_at)
-        sequence = (await self.session.execute(select(_SEQUENCE.next_value()))).scalar_one()
+        sequence = (
+            await self.session.execute(select(STREAM_EVENTS_SEQUENCE.next_value()))
+        ).scalar_one()
         claimed = await self.session.execute(
             pg_insert(StreamEventKeyORM)
             .values(
@@ -183,6 +183,7 @@ class StreamJournal:
         return 0 if last is None else last
 
     async def last_received_at(self, stream_id: UUID) -> datetime | None:
+        await self._require_stream(stream_id, lock=False)
         result = await self.session.execute(
             select(func.max(StreamEventKeyORM.received_at)).where(
                 StreamEventKeyORM.stream_id == stream_id
@@ -191,11 +192,16 @@ class StreamJournal:
         return result.scalar_one()
 
     async def last_received_by_stream(self, stream_ids: list[UUID]) -> dict[UUID, datetime]:
+        """Last event time of each of these streams that belongs to this workspace."""
         if not stream_ids:
             return {}
         rows = await self.session.execute(
             select(StreamEventKeyORM.stream_id, func.max(StreamEventKeyORM.received_at))
-            .where(StreamEventKeyORM.stream_id.in_(stream_ids))
+            .join(StreamORM, StreamORM.id == StreamEventKeyORM.stream_id)
+            .where(
+                StreamEventKeyORM.stream_id.in_(stream_ids),
+                StreamORM.workspace_id == self.user_context.workspace_id,
+            )
             .group_by(StreamEventKeyORM.stream_id)
         )
         return dict(rows.tuples().all())

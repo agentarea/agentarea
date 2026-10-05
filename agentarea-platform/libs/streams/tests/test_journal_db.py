@@ -68,7 +68,9 @@ async def test_a_repeated_key_is_a_no_op_even_after_the_first_landed_in_another_
         stream = await _stream(session, ctx)
         journal = StreamJournal(session, ctx, EventStreamSettings())
         yesterday = datetime.now(UTC) - timedelta(days=1)
-        with patch("agentarea_streams.infrastructure.journal_repository._now", return_value=yesterday):
+        with patch(
+            "agentarea_streams.infrastructure.journal_repository._now", return_value=yesterday
+        ):
             await journal.append(stream.id, _event(), event_key="k")
         await session.commit()
         again = await journal.append(stream.id, _event(), event_key="k")
