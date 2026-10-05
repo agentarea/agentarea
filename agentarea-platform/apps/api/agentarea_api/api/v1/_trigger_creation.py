@@ -48,6 +48,11 @@ def get_channel_webhook_service() -> ChannelWebhookService:
     return ChannelWebhookService(base)
 
 
+def public_webhook_url(webhook_id: str) -> str:
+    """Where external senders post: the same base the provider registration uses."""
+    return get_channel_webhook_service().webhook_url(webhook_id)
+
+
 async def resolve_channel_credentials(
     credentials: dict[str, Any] | None,
     secret_catalog: SecretCatalogService,

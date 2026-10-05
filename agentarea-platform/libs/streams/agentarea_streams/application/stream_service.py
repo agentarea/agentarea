@@ -233,3 +233,9 @@ class StreamService:
     ) -> list[SubscriptionOutcomeORM]:
         repo = self.repository_factory.create_repository(SubscriptionOutcomeRepository)
         return await repo.list_for_events(stream_id, sequences)
+
+    async def outcomes_of_subscription(
+        self, subscription_id: UUID, limit: int
+    ) -> list[SubscriptionOutcomeORM]:
+        repo = self.repository_factory.create_repository(SubscriptionOutcomeRepository)
+        return await repo.list_for_subscription(subscription_id, limit)
