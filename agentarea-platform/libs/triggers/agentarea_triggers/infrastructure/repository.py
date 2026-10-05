@@ -212,7 +212,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         """Update a trigger by ID with TriggerUpdate data."""
         # Build update dict excluding None values
         update_data = {}
-        for field, value in trigger_update.dict(exclude_unset=True).items():
+        # event_filter lives on the trigger's stream subscription, not on the row.
+        for field, value in trigger_update.dict(
+            exclude_unset=True, exclude={"event_filter"}
+        ).items():
             if value is not None:
                 if field == "webhook_type" and hasattr(value, "value"):
                     update_data[field] = value.value
@@ -365,6 +368,21 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
 
         return cast(CursorResult[Any], result).rowcount > 0
 
+    async def mark_needs_new_owner(self, trigger_id: UUID) -> bool:
+        """Stop a trigger whose configurer can no longer run its agent, and say why."""
+        stmt = (
+            update(TriggerORM)
+            .where(TriggerORM.id == trigger_id, self._get_workspace_filter())
+            .values(
+                is_active=False,
+                needs_new_owner_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+        )
+        result = await self.session.execute(stmt)
+        await self.session.flush()
+        return cast(CursorResult[Any], result).rowcount > 0
+
     def _orm_to_domain(self, trigger_orm: TriggerORM) -> Trigger:
         """Convert ORM model to domain model."""
         base_data = {
@@ -383,6 +401,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             "failure_threshold": trigger_orm.failure_threshold,
             "consecutive_failures": trigger_orm.consecutive_failures,
             "last_execution_at": trigger_orm.last_execution_at,
+            "needs_new_owner_at": trigger_orm.needs_new_owner_at,
         }
 
         if trigger_orm.trigger_type == TriggerType.CRON.value:

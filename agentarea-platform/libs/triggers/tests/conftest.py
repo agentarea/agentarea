@@ -80,6 +80,11 @@ def make_trigger_repository_factory(trigger_repo=None, execution_repo=None, agen
 
     factory = MagicMock()
     factory.create_repository.side_effect = lambda cls, *a, **k: mapping.get(cls, AsyncMock())
+    # Read directly by find_webhook_source; no stream source answers on any webhook id.
+    factory.session = AsyncMock()
+    factory.session.execute.return_value = MagicMock(
+        scalar_one_or_none=MagicMock(return_value=None)
+    )
     return factory
 
 

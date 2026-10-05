@@ -11,13 +11,17 @@ High-level service that orchestrates trigger management by:
 
 import time
 from datetime import datetime
-from typing import Any
-from uuid import UUID
+from typing import TYPE_CHECKING, Any
+from uuid import UUID, uuid4
 
 from agentarea_common.audit import audited
 from agentarea_common.channel_origin import CHANNEL_ORIGIN_PARAMETER
+from agentarea_common.config import get_settings
 from agentarea_common.events.base_events import EventEnvelope
 from agentarea_common.events.broker import EventBroker
+from agentarea_streams.application.stream_service import StreamService
+from agentarea_streams.domain import EventFilter, StreamNotFoundError
+from agentarea_streams.infrastructure.repository import find_webhook_source
 
 from .condition_models import validate_condition_models
 from .domain.enums import ExecutionStatus, TriggerType
@@ -27,6 +31,7 @@ from .domain.models import (
     Trigger,
     TriggerCreate,
     TriggerExecution,
+    TriggerFiring,
     TriggerUpdate,
     WebhookTrigger,
 )
@@ -47,6 +52,9 @@ from .schemas.dto import TriggerUpdate as TriggerUpdatePayload
 from .temporal_schedule_manager import TemporalScheduleManager
 from .trigger_validation import validate_trigger_configuration
 from .webhook_verification import keep_stored_secret_fields
+
+if TYPE_CHECKING:
+    from agentarea_tasks.domain.models import TaskProvenance
 
 logger = TriggerLogger(__name__)
 
@@ -141,6 +149,7 @@ class TriggerService:
         self.task_service = task_service
         self.llm_condition_evaluator = llm_condition_evaluator
         self.temporal_schedule_manager = temporal_schedule_manager
+        self.stream_service = StreamService(repository_factory, get_settings().streams)
 
         # The model instances an LLM condition may name, read as this workspace.
         from agentarea_llm.infrastructure.model_instance_repository import (
@@ -193,6 +202,7 @@ class TriggerService:
 
             # Create the trigger
             trigger = await self.trigger_repository.create_from_model(trigger_data)
+            await self._bind_stream(trigger, trigger_data)
 
             logger.info(
                 f"Successfully created trigger '{trigger.name}'",
@@ -243,6 +253,56 @@ class TriggerService:
                 trigger_name=trigger_data.name,
                 agent_id=str(trigger_data.agent_id),
             ) from None
+
+    async def _bind_stream(self, trigger: Trigger, trigger_data: TriggerCreate) -> None:
+        """Give a webhook trigger its own stream, or subscribe a stream trigger to its stream."""
+        if isinstance(trigger, WebhookTrigger):
+            await self.stream_service.create_webhook_stream_for_trigger(
+                trigger_id=trigger.id,
+                trigger_name=trigger.name,
+                webhook_id=trigger.webhook_id,
+                webhook_type=str(trigger.webhook_type),
+                allowed_methods=trigger.allowed_methods,
+                validation_rules=trigger.validation_rules,
+                webhook_config=trigger.webhook_config,
+                event_types=trigger.event_types,
+            )
+        elif trigger_data.trigger_type == TriggerType.STREAM:
+            if trigger_data.stream_id is None:
+                raise TriggerValidationError("stream_id is required for STREAM triggers")
+            await self.stream_service.subscribe_trigger(
+                stream_id=trigger_data.stream_id,
+                trigger_id=trigger.id,
+                event_filter=EventFilter.model_validate(trigger_data.event_filter or {}),
+            )
+
+    async def _sync_stream_binding(
+        self, trigger_id: UUID, trigger: Trigger, trigger_update: TriggerUpdate
+    ) -> None:
+        if isinstance(trigger, WebhookTrigger):
+            fields = {
+                name: value
+                for name, value in (
+                    ("allowed_methods", trigger_update.allowed_methods),
+                    (
+                        "webhook_type",
+                        str(trigger.webhook_type) if trigger_update.webhook_type else None,
+                    ),
+                    ("validation_rules", trigger_update.validation_rules),
+                    ("webhook_config", trigger_update.webhook_config),
+                )
+                if value is not None
+            }
+            if fields:
+                await self.stream_service.sync_trigger_webhook_source(trigger_id, **fields)
+            if trigger_update.event_types is not None:
+                await self.stream_service.update_trigger_filter(
+                    trigger_id, EventFilter.from_trigger_event_types(trigger_update.event_types)
+                )
+        if trigger_update.event_filter is not None:
+            await self.stream_service.update_trigger_filter(
+                trigger_id, EventFilter.model_validate(trigger_update.event_filter)
+            )
 
     async def create_trigger_from_payload(
         self, payload: TriggerCreatePayload, created_by: str, workspace_id: str | None = None
@@ -325,6 +385,7 @@ class TriggerService:
 
         if updated_trigger:
             logger.info(f"Updated trigger {trigger_id}")
+            await self._sync_stream_binding(trigger_id, updated_trigger, trigger_update)
 
             # Update schedule if it's a cron trigger
             if updated_trigger.trigger_type == TriggerType.CRON and isinstance(
@@ -377,6 +438,10 @@ class TriggerService:
                 logger.error(
                     f"Failed to delete schedule for cron trigger {trigger_id}: {e}", exc_info=True
                 )
+
+        if isinstance(existing_trigger, WebhookTrigger):
+            # The URL dies with the trigger, as before; the stream and its history stay.
+            await self.stream_service.remove_trigger_webhook_sources(trigger_id)
 
         # Delete the trigger (cascade will handle executions)
         success = await self.trigger_repository.delete(trigger_id)
@@ -983,6 +1048,19 @@ class TriggerService:
             and await self.trigger_repository.webhook_id_in_use(trigger_data.webhook_id)
         ):
             raise TriggerValidationError("Webhook ID is already in use")
+        if (
+            trigger_data.trigger_type == TriggerType.WEBHOOK
+            and trigger_data.webhook_id
+            and await find_webhook_source(self.repository_factory.session, trigger_data.webhook_id)
+        ):
+            raise TriggerValidationError("Webhook ID is already in use")
+        if trigger_data.trigger_type == TriggerType.STREAM and trigger_data.stream_id:
+            try:
+                await self.stream_service.get_stream(trigger_data.stream_id)
+            except StreamNotFoundError as error:
+                raise TriggerValidationError(
+                    f"Stream {trigger_data.stream_id} does not exist in this workspace"
+                ) from error
 
     async def _validate_trigger_update(
         self, existing_trigger: Trigger, trigger_update: TriggerUpdate
@@ -1102,21 +1180,29 @@ class TriggerService:
     async def execute_trigger(
         self, trigger_id: UUID, trigger_data: dict[str, Any], fired_by: str | None = None
     ) -> TriggerExecution | None:
-        """Execute a trigger.
+        """Execute a trigger; see ``fire`` for what each outcome means."""
+        return (await self.fire(trigger_id, trigger_data, fired_by)).execution
 
-        Args:
-            trigger_id: The ID of the trigger to execute
-            trigger_data: Additional data for trigger execution
-            fired_by: Principal who asked for this one run. Set only when a person
-                pressed "run now"; the schedule and inbound webhooks leave it empty.
+    async def fire(
+        self,
+        trigger_id: UUID,
+        trigger_data: dict[str, Any],
+        fired_by: str | None = None,
+        *,
+        task_id: UUID | None = None,
+        provenance: "TaskProvenance | None" = None,
+    ) -> TriggerFiring:
+        """Run a trigger once and say what happened.
 
-        Returns:
-            Execution record
+        ``fired_by`` is set only when a person pressed "run now"; the schedule,
+        inbound webhooks and stream subscriptions leave it empty. ``task_id``
+        makes a retried firing idempotent: when a task with that id already
+        exists, the firing reports it instead of starting another run.
+        ``provenance`` is stamped on the task it creates.
 
         Raises:
             TriggerNotFoundError: If trigger doesn't exist
         """
-        # Get the trigger
         trigger = await self.get_trigger(trigger_id)
         if not trigger:
             raise TriggerNotFoundError(f"Trigger {trigger_id} not found")
@@ -1127,44 +1213,58 @@ class TriggerService:
         # switched on yet) is most of why they would ask.
         if not trigger.is_active and fired_by is None:
             logger.warning(f"Attempted to execute inactive trigger {trigger_id}")
-            return await self._record_execution_failure(
+            execution = await self._record_execution_failure(
                 trigger_id, "Trigger is inactive", trigger_data
             )
+            return TriggerFiring(
+                outcome="skipped", reason="trigger is inactive", execution=execution
+            )
 
-        # Rate limiting is handled at infrastructure layer (ingress/load balancer)
+        if task_id is not None and self.task_service:
+            existing = await self.task_service.get_task(task_id)
+            if existing is not None:
+                return TriggerFiring(
+                    outcome="reacted", reason="task already started", task_id=task_id
+                )
 
-        # Start execution timing
         start_time = time.time()
-
+        verdict: ConditionVerdict | None = None
         try:
-            # Evaluate conditions if any
             if trigger.conditions:
-                conditions_met = await self.evaluate_trigger_conditions(trigger, trigger_data)
-                if not conditions_met:
+                verdict = await self.evaluate_trigger_verdict(trigger, trigger_data)
+                if not verdict.met:
                     logger.info(f"Trigger {trigger_id} conditions not met, skipping execution")
-                    return await self._record_execution_failure(
+                    execution = await self._record_execution_failure(
                         trigger_id, "Trigger conditions not met", trigger_data, fired_by=fired_by
                     )
+                    return TriggerFiring(
+                        outcome="skipped",
+                        reason=verdict.reason,
+                        verdict=verdict,
+                        execution=execution,
+                    )
 
-            # Create task from trigger
-            task_id = None
+            created_task_id = None
             if self.task_service:
                 query = resolve_task_query(trigger, trigger_data)
                 if query is None:
-                    return await self._record_execution_failure(
+                    execution = await self._record_execution_failure(
                         trigger_id,
                         NO_TASK_TEXT,
                         trigger_data,
                         int((time.time() - start_time) * 1000),
                         fired_by=fired_by,
                     )
+                    return TriggerFiring(
+                        outcome="error", reason=NO_TASK_TEXT, verdict=verdict, execution=execution
+                    )
 
                 task_params = await self._build_task_parameters(trigger, trigger_data, fired_by)
 
-                # Route to active workflow or create new task
-                from agentarea_tasks.domain.models import AgentTask
+                from agentarea_tasks.domain.models import AgentTask, TaskProvenance
 
                 task = AgentTask(
+                    id=task_id if task_id is not None else uuid4(),
                     title=f"Trigger: {trigger.name}",
                     description=query,
                     query=query,
@@ -1175,27 +1275,26 @@ class TriggerService:
                     agent_id=trigger.agent_id,
                     task_parameters=task_params,
                     status="submitted",
+                    provenance=provenance
+                    or TaskProvenance(origin_type="trigger", origin_id=str(trigger.id)),
                 )
                 task = await self.task_service.route_or_submit_task(task)
 
-                task_id = task.id
+                created_task_id = task.id
                 if task.status == "routed":
                     logger.info(f"Routed follow-up to existing workflow for trigger {trigger_id}")
                 else:
-                    logger.info(f"Submitted task {task_id} for trigger {trigger_id}")
+                    logger.info(f"Submitted task {created_task_id} for trigger {trigger_id}")
             else:
                 logger.warning(
                     f"Task service not available, skipping task creation for trigger {trigger_id}"
                 )
 
-            # Calculate execution time
             execution_time_ms = int((time.time() - start_time) * 1000)
-
-            # Record successful execution (non-fatal — task was already created)
             execution = None
             try:
                 execution = await self._record_execution_success(
-                    trigger_id, execution_time_ms, task_id, trigger_data, fired_by=fired_by
+                    trigger_id, execution_time_ms, created_task_id, trigger_data, fired_by=fired_by
                 )
                 trigger.record_execution_success()
                 await self.trigger_repository.update_execution_tracking(
@@ -1208,17 +1307,17 @@ class TriggerService:
                     f"Failed to record execution history (task was created successfully): {rec_err}",
                     exc_info=True,
                 )
-
-            return execution
+            return TriggerFiring(
+                outcome="reacted",
+                reason=verdict.reason if verdict else None,
+                verdict=verdict,
+                task_id=created_task_id,
+                execution=execution,
+            )
 
         except Exception as e:
-            # Calculate execution time
             execution_time_ms = int((time.time() - start_time) * 1000)
-
-            # Log error
             logger.error(f"Error executing trigger {trigger_id}: {e}", exc_info=True)
-
-            # Record failed execution (non-fatal)
             execution = None
             try:
                 execution = await self._record_execution_failure(
@@ -1230,7 +1329,6 @@ class TriggerService:
                     last_execution_at=trigger.last_execution_at,
                     consecutive_failures=trigger.consecutive_failures,
                 )
-
                 if trigger.should_disable_due_to_failures():
                     logger.warning(
                         f"Disabling trigger {trigger_id} due to consecutive failures", exc_info=True
@@ -1238,8 +1336,9 @@ class TriggerService:
                     await self.disable_trigger(trigger_id)
             except Exception as rec_err:
                 logger.warning(f"Failed to record execution failure: {rec_err}", exc_info=True)
-
-            return execution
+            return TriggerFiring(
+                outcome="error", reason=str(e), verdict=verdict, execution=execution
+            )
 
     async def _record_execution_success(
         self,

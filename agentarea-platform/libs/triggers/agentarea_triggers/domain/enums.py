@@ -9,6 +9,7 @@ class TriggerType(StrEnum):
     CRON = "cron"
     WEBHOOK = "webhook"
     POLLING = "polling"
+    STREAM = "stream"
 
 
 class ConditionType(StrEnum):
@@ -26,6 +27,7 @@ class TriggerStatus(StrEnum):
     INACTIVE = "inactive"
     DISABLED = "disabled"
     FAILED = "failed"
+    NEEDS_OWNER = "needs_owner"
 
 
 class ExecutionStatus(StrEnum):

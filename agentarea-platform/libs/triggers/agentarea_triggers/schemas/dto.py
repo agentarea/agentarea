@@ -30,7 +30,7 @@ from agentarea_triggers.domain.models import (
     TriggerUpdate as _DomainTriggerUpdate,
 )
 
-TriggerTypeLiteral = Literal["cron", "webhook", "polling"]
+TriggerTypeLiteral = Literal["cron", "webhook", "polling", "stream"]
 
 
 class TriggerSpec(BaseModel):
@@ -56,7 +56,10 @@ class TriggerSpec(BaseModel):
         description="Short summary of what this trigger does.",
     )
     trigger_type: TriggerTypeLiteral = Field(
-        description="'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven.",
+        description=(
+            "'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven, "
+            "'stream' to run on events from an existing stream."
+        ),
     )
     task_parameters: dict[str, Any] = Field(
         default_factory=dict,
@@ -133,6 +136,19 @@ class TriggerSpec(BaseModel):
         description="Event types to filter on (empty list = accept all events).",
     )
 
+    # Stream-specific
+    stream_id: UUID | None = Field(
+        default=None,
+        description="Stream whose events fire this trigger (required when trigger_type='stream').",
+    )
+    event_filter: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            'Which events of the stream fire it: {"kinds": ["push"], "fields": {"raw_data.action": '
+            '"opened"}}. Empty means every event.'
+        ),
+    )
+
     # Channel credentials — written to the secret store, never returned in responses
     channel_credentials: dict[str, Any] | None = Field(
         default=None,
@@ -147,7 +163,7 @@ class TriggerSpec(BaseModel):
     def _normalize_trigger_type(cls, v: Any) -> Any:
         if isinstance(v, str):
             normalized = v.lower()
-            valid = {"cron", "webhook", "polling"}
+            valid = {"cron", "webhook", "polling", "stream"}
             if normalized not in valid:
                 # Friendly message preserved for REST clients (the Literal
                 # auto-message would otherwise read "Input should be 'cron',
@@ -167,9 +183,11 @@ class TriggerSpec(BaseModel):
         return v.lower()
 
     @model_validator(mode="after")
-    def _require_cron_expression(self) -> TriggerSpec:
+    def _require_type_fields(self) -> TriggerSpec:
         if self.trigger_type == "cron" and not self.cron_expression:
             raise ValueError("cron_expression is required when trigger_type is 'cron'")
+        if self.trigger_type == "stream" and not self.stream_id:
+            raise ValueError("stream_id is required when trigger_type is 'stream'")
         return self
 
     def to_domain_for(
@@ -184,6 +202,8 @@ class TriggerSpec(BaseModel):
             domain_type = TriggerType.CRON
         elif self.trigger_type == "polling":
             domain_type = TriggerType.POLLING
+        elif self.trigger_type == "stream":
+            domain_type = TriggerType.STREAM
         else:
             domain_type = TriggerType.WEBHOOK
 
@@ -212,6 +232,8 @@ class TriggerSpec(BaseModel):
             validation_rules=self.validation_rules,
             webhook_config=self.webhook_config,
             event_types=self.event_types,
+            stream_id=self.stream_id,
+            event_filter=self.event_filter,
         )
         # Workspace id is server-assigned and may be ``None`` until auth resolves.
         # Set post-construction so callers can pass through ad-hoc values
@@ -261,6 +283,7 @@ class TriggerUpdate(BaseModel):
     validation_rules: dict[str, Any] | None = None
     webhook_config: dict[str, Any] | None = None
     event_types: list[str] | None = None
+    event_filter: dict[str, Any] | None = None
 
     channel_credentials: dict[str, Any] | None = Field(
         default=None,
@@ -295,4 +318,5 @@ class TriggerUpdate(BaseModel):
             validation_rules=self.validation_rules,
             webhook_config=self.webhook_config,
             event_types=self.event_types,
+            event_filter=self.event_filter,
         )

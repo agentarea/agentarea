@@ -35,6 +35,8 @@ async def validate_trigger_configuration(
         await _validate_cron_configuration(trigger_data)
     elif trigger_data.trigger_type == TriggerType.WEBHOOK:
         await _validate_webhook_configuration(trigger_data)
+    elif trigger_data.trigger_type == TriggerType.STREAM:
+        _validate_stream_configuration(trigger_data)
 
 
 async def _validate_cron_configuration(trigger_data: TriggerCreate) -> None:
@@ -89,3 +91,15 @@ async def _validate_webhook_configuration(trigger_data: TriggerCreate) -> None:
     for method in trigger_data.allowed_methods:
         if method.upper() not in valid_methods:
             raise TriggerValidationError(f"Invalid HTTP method: {method}")
+
+
+def _validate_stream_configuration(trigger_data: TriggerCreate) -> None:
+    from agentarea_streams.domain import EventFilter
+    from pydantic import ValidationError
+
+    if not trigger_data.stream_id:
+        raise TriggerValidationError("stream_id is required for STREAM triggers")
+    try:
+        EventFilter.model_validate(trigger_data.event_filter or {})
+    except ValidationError as error:
+        raise TriggerValidationError(f"event_filter: {error}") from error

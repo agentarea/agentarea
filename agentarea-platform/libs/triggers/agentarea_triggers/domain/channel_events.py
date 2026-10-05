@@ -194,6 +194,14 @@ TRIGGER_CATALOG: list[dict[str, Any]] = [
         "webhook_type": "generic",
         "default_methods": ["POST"],
     },
+    {
+        "id": "stream",
+        "name": "Stream",
+        "icon": "stream",
+        "description": "Run your agent on events another source already records",
+        "kind": "event",
+        "backend_type": "stream",
+    },
 ]
 
 
