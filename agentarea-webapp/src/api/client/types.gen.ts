@@ -7980,7 +7980,7 @@ export type TriggerResponse = {
   /**
    * Status
    *
-   * 'needs_owner' when the person who configured it can no longer run its agent; the trigger stays stopped until someone who can takes it over.
+   * 'needs_owner' when the person who configured it can no longer run its agent; the trigger stays stopped until it is enabled again, and the next event re-checks that person's access.
    */
   status: "active" | "inactive" | "needs_owner";
   /**
