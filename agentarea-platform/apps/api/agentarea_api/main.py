@@ -141,6 +141,10 @@ async def initialize_services():
         event_broker = create_event_broker(settings.broker)
         register_singleton(EventBroker, event_broker)
 
+        from agentarea_streams.infrastructure.di_container import setup_streams_di
+
+        setup_streams_di(settings)
+
         # Secret manager is created per-request with session and user_context
         # Not registered as singleton during startup
         # secret_manager = get_real_secret_manager()
