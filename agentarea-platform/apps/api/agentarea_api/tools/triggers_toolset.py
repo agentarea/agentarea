@@ -1,7 +1,7 @@
-"""TriggersToolset — manage cron and webhook triggers.
+"""TriggersToolset — manage cron, webhook and stream triggers.
 
 Tool method signatures are explicit kwargs (MCP-idiomatic flat wire schema)
-but the source of truth for ``create_cron``/``create_webhook`` is the
+but the source of truth for ``create_cron``/``create_webhook``/``create_stream`` is the
 Pydantic DTO ``TriggerCreate`` in ``agentarea_triggers.schemas.dto``. The
 contract test in ``tests/unit/test_mcp_rest_parity.py`` enforces parity
 between toolset kwargs and DTO fields.
@@ -57,6 +57,13 @@ def _trigger_summary(trigger: Any) -> dict[str, Any]:
         "is_active": trigger.is_active,
         "cron_expression": getattr(trigger, "cron_expression", None),
         "webhook_id": getattr(trigger, "webhook_id", None),
+        "stream_id": getattr(trigger, "stream_id", None),
+        "needs_new_owner": getattr(trigger, "needs_new_owner_at", None) is not None,
+        "status": (
+            "needs_owner"
+            if getattr(trigger, "needs_new_owner_at", None) is not None
+            else ("active" if trigger.is_active else "inactive")
+        ),
     }
 
 
@@ -190,6 +197,47 @@ class TriggersToolset(Toolset):
                 enabled=enabled,
                 failure_threshold=failure_threshold,
                 event_types=event_types or [],
+            )
+            trigger = await service.create_trigger_from_payload(
+                payload,
+                created_by=user_ctx.user_id,
+                workspace_id=user_ctx.workspace_id,
+            )
+            return json.dumps(_trigger_summary(trigger), default=str)
+
+    @tool_method(effect="write")
+    @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
+    async def create_stream(
+        self,
+        name: str,
+        agent_id: str,
+        stream_id: str,
+        description: str = "",
+        event_filter: dict[str, Any] | None = None,
+        task_parameters: dict[str, Any] | None = None,
+        conditions: dict[str, Any] | None = None,
+        enabled: bool = True,
+        failure_threshold: int = 5,
+    ) -> str:
+        """Create a trigger that fires the agent on events of an existing stream.
+
+        ``event_filter`` picks events: {"kinds": ["push"], "fields": {"raw_data.action":
+        "opened"}}; empty fires on every event. Only events that arrive after the
+        trigger is created fire it.
+        """
+        async with platform_context() as (_session, user_ctx, repo_factory, broker, secret):
+            service = await _build_trigger_service(repo_factory, broker, secret)
+            payload = TriggerCreate(
+                name=name,
+                description=description,
+                agent_id=UUID(agent_id),
+                trigger_type="stream",
+                stream_id=UUID(stream_id),
+                event_filter=event_filter,
+                task_parameters=task_parameters or {},
+                conditions=conditions or {},
+                enabled=enabled,
+                failure_threshold=failure_threshold,
             )
             trigger = await service.create_trigger_from_payload(
                 payload,

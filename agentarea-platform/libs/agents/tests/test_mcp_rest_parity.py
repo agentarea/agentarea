@@ -41,6 +41,7 @@ from agentarea_api.tools.projects_toolset import ProjectsToolset
 from agentarea_api.tools.providers_toolset import ProvidersToolset
 from agentarea_api.tools.runs_toolset import RunsToolset
 from agentarea_api.tools.skills_toolset import SkillsToolset
+from agentarea_api.tools.streams_toolset import StreamsToolset
 from agentarea_api.tools.triggers_toolset import TriggersToolset
 from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
 from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
@@ -55,6 +56,7 @@ from agentarea_openapi.schemas.dto import (
     OpenAPIConnectionUpdate,
 )
 from agentarea_projects.schemas.dto import ProjectCreate, ProjectUpdate
+from agentarea_streams.schemas import ForwardCreate, StreamCreate
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_triggers.schemas.dto import TriggerCreate
 
@@ -106,6 +108,9 @@ PAIRS: list[Pair] = [
     Pair("skills.edit_content", SkillsToolset.edit_content, SkillEditContent),
     Pair("triggers.create_cron", TriggersToolset.create_cron, TriggerCreate),
     Pair("triggers.create_webhook", TriggersToolset.create_webhook, TriggerCreate),
+    Pair("triggers.create_stream", TriggersToolset.create_stream, TriggerCreate),
+    Pair("streams.create", StreamsToolset.create, StreamCreate),
+    Pair("streams.create_forward", StreamsToolset.create_forward, ForwardCreate),
 ]
 
 # DTO fields intentionally NOT exposed as toolset kwargs. Per-pair so omissions
@@ -188,6 +193,22 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
         "stream_id",
         "event_filter",
     },
+    "triggers.create_stream": {
+        "trigger_type",
+        "cron_expression",
+        "timezone",
+        "data_extractor",
+        "data_extractor_config",
+        "webhook_id",
+        "allowed_methods",
+        "webhook_type",
+        "validation_rules",
+        "webhook_config",
+        "event_types",
+        "channel_credentials",
+    },
+    "streams.create": set(),
+    "streams.create_forward": set(),
 }
 
 # Path-like kwargs that name an entity ID rather than a body field. Allowed
@@ -205,6 +226,7 @@ PATH_LIKE_KWARGS = {
     "run_id",
     "skill_id",
     "spec_id",
+    "stream_id",
     "trigger_id",
 }
 
