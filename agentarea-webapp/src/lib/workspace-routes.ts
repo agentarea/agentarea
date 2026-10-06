@@ -18,6 +18,7 @@ export const WORKSPACE_ROUTES = [
   "connect",
   "connections",
   "dashboard",
+  "events",
   "explore",
   "files",
   "inbox",

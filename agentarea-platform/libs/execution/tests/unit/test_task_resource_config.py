@@ -1,6 +1,7 @@
 """Run resource selections affect execution without editing the saved agent."""
 
 import hashlib
+import json
 from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -20,6 +21,7 @@ from agentarea_execution.models import (
     ToolDiscoveryRequest,
     ToolDiscoveryResult,
 )
+from agentarea_execution.workflows.agent.llm_turn import _render_workspace_attachment_prompt
 from temporalio.exceptions import ApplicationError
 
 
@@ -454,6 +456,109 @@ async def test_config_returns_trusted_attachment_descriptors(activity_context, f
     assert result.execution_context["project_id"] == "project"
     assert result.execution_context["workspace_attachments"][0]["size"] == 5
     assert request.execution_context == {"project_id": "project"}
+
+
+def event_file_request(event_data, filename="trigger-event-9.json"):
+    # trigger_data is the raw firing input; the file is written from trigger_event alone.
+    return AgentConfigRequest(
+        agent_id=uuid4(),
+        task_id=uuid4(),
+        task_parameters={
+            "trigger_data": {"headers": {"Authorization": "Bearer raw"}},
+            "trigger_event": event_data,
+            "trigger_event_file": filename,
+        },
+        user_context_data={"user_id": "user", "workspace_id": "workspace"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_large_trigger_event_is_written_whole_into_the_runs_own_inputs(file_storage):
+    repository, _, stored, _ = file_storage
+    data = {"order": {"id": "A-1003"}, "lines": ["x" * 1024 for _ in range(40)]}
+    request = event_file_request(data)
+    user = UserContext(user_id="user", workspace_id="workspace")
+
+    first = await config_activities._prepare_trigger_event_file(request, user)
+    second = await config_activities._prepare_trigger_event_file(request, user)
+
+    content, content_type = stored[
+        ("workspace", str(request.task_id), "inputs/attachments/trigger-event-9.json")
+    ]
+    assert json.loads(content) == data
+    assert content_type == "application/json"
+    assert first == second == [
+        {
+            "relative_path": "inputs/attachments/trigger-event-9.json",
+            "filename": "trigger-event-9.json",
+            "size": len(content),
+            "content_type": "application/json",
+            "sha256": hashlib.sha256(content).hexdigest(),
+        }
+    ]
+    assert repository.put_files.await_count == 1
+    assert "inputs/attachments/trigger-event-9.json" in _render_workspace_attachment_prompt(first)
+
+
+@pytest.mark.asyncio
+async def test_a_run_without_an_event_file_provisions_none(file_storage):
+    repository, _, _, _ = file_storage
+    request = file_request([])
+    assert (
+        await config_activities._prepare_trigger_event_file(
+            request, UserContext(user_id="user", workspace_id="workspace")
+        )
+        == []
+    )
+    repository.get.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("filename", "trigger_data"),
+    [
+        ("../escape.json", {"a": 1}),
+        ("notes.txt", {"a": 1}),
+        ("trigger-event-1.json/x", {"a": 1}),
+        ("trigger-event-1.json", None),
+    ],
+)
+async def test_an_event_file_must_be_ours_and_have_its_data(file_storage, filename, trigger_data):
+    repository, _, _, _ = file_storage
+    with pytest.raises(ApplicationError) as error:
+        await config_activities._prepare_trigger_event_file(
+            event_file_request(trigger_data, filename),
+            UserContext(user_id="user", workspace_id="workspace"),
+        )
+    assert error.value.non_retryable
+    repository.put_files.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_event_file_is_written_but_kept_out_of_the_system_prompt_list(
+    activity_context, file_storage
+):
+    """The first message names the file; the system prompt stays the same from run to run."""
+    _, _, stored, _ = file_storage
+    ctx, functions = activity_context
+    saved = agent()
+    ctx.get_agent_service.return_value.get_with_skills.return_value = saved
+    ctx.get_model_instance_service.return_value.get.return_value = SimpleNamespace(
+        model_spec=SimpleNamespace(
+            kind="chat", context_window=64000, default_context_strategy="static"
+        )
+    )
+    request = event_file_request({"big": "y" * 20000})
+    request.agent_id = saved.id
+
+    result = await functions["build_agent_config_activity"](request)
+
+    assert "workspace_attachments" not in (result.execution_context or {})
+    assert (
+        "workspace",
+        str(request.task_id),
+        "inputs/attachments/trigger-event-9.json",
+    ) in stored
 
 
 @pytest.mark.asyncio

@@ -1,3 +1,5 @@
+import type { TaskProvenance } from "@/api/client/types.gen";
+
 export interface Task {
   id: string;
   description?: string;
@@ -8,4 +10,6 @@ export interface Task {
   execution_id?: string | null;
   result?: Record<string, unknown>;
   parameters?: Record<string, unknown>;
+  /** Who or what started this task — a trigger, a delegating task, or a person. */
+  provenance?: TaskProvenance | null;
 }

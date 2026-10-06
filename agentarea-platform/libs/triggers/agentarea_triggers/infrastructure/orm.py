@@ -33,6 +33,9 @@ class TriggerORM(BaseModel, WorkspaceScopedMixin, AuditMixin):
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_execution_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # Set when the person who configured this trigger can no longer run its agent.
+    needs_new_owner_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     # Cron-specific fields
     cron_expression: Mapped[str | None] = mapped_column(String(255), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(100), nullable=True, default="UTC")

@@ -38,7 +38,7 @@ const zTriggerCatalogEntry = z.object({
   icon_url: z.string().nullish(),
   description: z.string(),
   kind: z.enum(["messaging", "event", "schedule"]),
-  backend_type: z.enum(["cron", "webhook", "polling"]),
+  backend_type: z.enum(["cron", "webhook", "polling", "stream"]),
   webhook_type: z.string().optional(),
   default_methods: z.array(z.string()).optional(),
   default_cron: z.string().optional(),
@@ -263,6 +263,8 @@ function buildTriggerCreate(formData: FormData): TriggerCreate {
     body.webhook_type = webhook_type || "generic";
     body.allowed_methods = methods.length > 0 ? methods : ["POST"];
     body.event_types = parseStringArray(formData.get("event_types") as string);
+  } else if (trigger_type === "stream") {
+    body.stream_id = formData.get("stream_id") as string;
   }
 
   if (Object.keys(credentials.data).length > 0) {

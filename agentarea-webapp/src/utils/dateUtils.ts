@@ -24,6 +24,30 @@ export function formatDate(value: string | null | undefined, locale: string) {
   });
 }
 
+/**
+ * Calendar date + time in the active locale ("23 Sept 2026, 14:05 UTC"); "—"
+ * when missing. Pinned to UTC with the zone labelled, not the server's local
+ * zone: this runs in server components, so an unlabelled local time would be
+ * the server's, not the viewer's (there is no viewer time zone available
+ * here to render in instead).
+ */
+export function formatDateTime(
+  value: string | null | undefined,
+  locale: string
+) {
+  const date = parseUtcTimestamp(value);
+  if (!date) return "—";
+  return date.toLocaleString(locale, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+    timeZoneName: "short",
+  });
+}
+
 export const getValidTimestamp = (timestamp?: string | null): number | null =>
   parseUtcTimestamp(timestamp)?.getTime() ?? null;
 

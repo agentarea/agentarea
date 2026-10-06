@@ -32,7 +32,7 @@ async def webhook_health_check(
     "/{webhook_id}",
     operation_id="handle_webhook_webhooks__webhook_id__get",
     summary="Handle webhook requests",
-    description="Process incoming webhook requests for registered triggers",
+    description="Record an incoming webhook in its stream",
     dependencies=[
         unrestricted(
             "the webhook id is the credential; external senders carry no workspace session"
@@ -43,7 +43,7 @@ async def webhook_health_check(
     "/{webhook_id}",
     operation_id="handle_webhook_webhooks__webhook_id__post",
     summary="Handle webhook requests",
-    description="Process incoming webhook requests for registered triggers",
+    description="Record an incoming webhook in its stream",
     dependencies=[
         unrestricted("public webhook sink; authenticity is the signed payload, not a session")
     ],
@@ -52,7 +52,7 @@ async def webhook_health_check(
     "/{webhook_id}",
     operation_id="handle_webhook_webhooks__webhook_id__put",
     summary="Handle webhook requests",
-    description="Process incoming webhook requests for registered triggers",
+    description="Record an incoming webhook in its stream",
     dependencies=[
         unrestricted("public webhook sink; authenticity is the signed payload, not a session")
     ],
@@ -61,7 +61,7 @@ async def webhook_health_check(
     "/{webhook_id}",
     operation_id="handle_webhook_webhooks__webhook_id__patch",
     summary="Handle webhook requests",
-    description="Process incoming webhook requests for registered triggers",
+    description="Record an incoming webhook in its stream",
     dependencies=[
         unrestricted("public webhook sink; authenticity is the signed payload, not a session")
     ],
@@ -70,7 +70,7 @@ async def webhook_health_check(
     "/{webhook_id}",
     operation_id="handle_webhook_webhooks__webhook_id__delete",
     summary="Handle webhook requests",
-    description="Process incoming webhook requests for registered triggers",
+    description="Record an incoming webhook in its stream",
     dependencies=[
         unrestricted("public webhook sink; authenticity is the signed payload, not a session")
     ],
@@ -79,7 +79,7 @@ async def webhook_health_check(
     "/{webhook_id}",
     operation_id="handle_webhook_webhooks__webhook_id__head",
     summary="Handle webhook requests",
-    description="Process incoming webhook requests for registered triggers",
+    description="Record an incoming webhook in its stream",
     dependencies=[
         unrestricted("public webhook sink; authenticity is the signed payload, not a session")
     ],
@@ -88,7 +88,7 @@ async def webhook_health_check(
     "/{webhook_id}",
     operation_id="handle_webhook_webhooks__webhook_id__options",
     summary="Handle webhook requests",
-    description="Process incoming webhook requests for registered triggers",
+    description="Record an incoming webhook in its stream",
     dependencies=[
         unrestricted("public webhook sink; authenticity is the signed payload, not a session")
     ],

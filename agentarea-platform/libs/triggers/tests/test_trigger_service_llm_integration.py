@@ -7,7 +7,12 @@ from uuid import uuid4
 
 import pytest
 from agentarea_triggers.domain.enums import TriggerType
-from agentarea_triggers.domain.models import CronTrigger, TriggerCreate, WebhookTrigger
+from agentarea_triggers.domain.models import (
+    ConditionVerdict,
+    CronTrigger,
+    TriggerCreate,
+    WebhookTrigger,
+)
 from agentarea_triggers.trigger_service import TriggerService
 
 from .conftest import make_trigger_repository_factory
@@ -56,7 +61,7 @@ def mock_task_service():
 def mock_llm_condition_evaluator():
     """Mock LLM condition evaluator."""
     evaluator = AsyncMock()
-    evaluator.evaluate_condition.return_value = True
+    evaluator.evaluate_structured.return_value = ConditionVerdict(verdict="met", reason="r")
     evaluator.validate_condition_syntax.return_value = []
     evaluator.extract_task_parameters.return_value = {"extracted": "parameters"}
     return evaluator
@@ -163,15 +168,17 @@ class TestTriggerServiceLLMIntegration:
         }
 
         # Mock LLM evaluator to return True
-        mock_llm_condition_evaluator.evaluate_condition.return_value = True
+        mock_llm_condition_evaluator.evaluate_structured.return_value = ConditionVerdict(
+            verdict="met", reason="r"
+        )
 
         result = await trigger_service.evaluate_trigger_conditions(trigger, event_data)
 
         assert result is True
 
         # Verify LLM evaluator was called with correct parameters
-        mock_llm_condition_evaluator.evaluate_condition.assert_called_once()
-        call_args = mock_llm_condition_evaluator.evaluate_condition.call_args
+        mock_llm_condition_evaluator.evaluate_structured.assert_called_once()
+        call_args = mock_llm_condition_evaluator.evaluate_structured.call_args
         assert call_args[1]["condition"] == trigger.conditions
         assert call_args[1]["event_data"] == event_data
         assert "trigger_id" in call_args[1]["trigger_context"]
@@ -195,7 +202,7 @@ class TestTriggerServiceLLMIntegration:
         # Mock LLM evaluator to raise an exception
         from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluationError
 
-        mock_llm_condition_evaluator.evaluate_condition.side_effect = LLMConditionEvaluationError(
+        mock_llm_condition_evaluator.evaluate_structured.side_effect = LLMConditionEvaluationError(
             "LLM failed"
         )
 
@@ -242,7 +249,7 @@ class TestTriggerServiceLLMIntegration:
             created_by="test_user",
         )
         mock_trigger_repository.get_trigger.return_value = trigger
-        mock_llm_condition_evaluator.evaluate_condition.side_effect = (
+        mock_llm_condition_evaluator.evaluate_structured.side_effect = (
             LLMConditionEvaluationError("model unavailable")
             if error == "LLMConditionEvaluationError"
             else RuntimeError("boom")
@@ -340,7 +347,9 @@ class TestTriggerServiceLLMIntegration:
         trigger_service.trigger_repository.get_trigger.return_value = trigger
 
         # Mock condition evaluation to return True
-        mock_llm_condition_evaluator.evaluate_condition.return_value = True
+        mock_llm_condition_evaluator.evaluate_structured.return_value = ConditionVerdict(
+            verdict="met", reason="r"
+        )
 
         # Mock parameter extraction
         mock_llm_condition_evaluator.extract_task_parameters.return_value = {
@@ -361,7 +370,7 @@ class TestTriggerServiceLLMIntegration:
         await trigger_service.execute_trigger(trigger_id, trigger_data)
 
         # Verify condition was evaluated
-        mock_llm_condition_evaluator.evaluate_condition.assert_called_once()
+        mock_llm_condition_evaluator.evaluate_structured.assert_called_once()
 
         # Verify task was created with enhanced parameters
         mock_task_service.route_or_submit_task.assert_called_once()
@@ -392,7 +401,9 @@ class TestTriggerServiceLLMIntegration:
         trigger_service.trigger_repository.get_trigger.return_value = trigger
 
         # Mock condition evaluation to return False
-        mock_llm_condition_evaluator.evaluate_condition.return_value = False
+        mock_llm_condition_evaluator.evaluate_structured.return_value = ConditionVerdict(
+            verdict="not_met", reason="r"
+        )
 
         # Mock execution recording
         trigger_service.trigger_execution_repository.create.return_value = MagicMock()
@@ -403,7 +414,7 @@ class TestTriggerServiceLLMIntegration:
         assert result is not None
 
         # Verify condition was evaluated
-        mock_llm_condition_evaluator.evaluate_condition.assert_called_once()
+        mock_llm_condition_evaluator.evaluate_structured.assert_called_once()
 
         # Verify task was NOT created
         trigger_service.task_service.route_or_submit_task.assert_not_called()
@@ -490,7 +501,9 @@ class TestTriggerServiceLLMIntegration:
             mock_datetime.side_effect = lambda *args, **kw: datetime(*args, **kw)
 
             # Mock LLM evaluation
-            mock_llm_condition_evaluator.evaluate_condition.return_value = True
+            mock_llm_condition_evaluator.evaluate_structured.return_value = ConditionVerdict(
+                verdict="met", reason="r"
+            )
 
             event_data = {"execution_time": "2024-01-15T10:00:00Z"}
 

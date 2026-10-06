@@ -25,9 +25,10 @@ class TestTriggerType:
     def test_trigger_type_iteration(self):
         """Test TriggerType iteration."""
         types = list(TriggerType)
-        assert len(types) == 3
+        assert len(types) == 4
         assert TriggerType.CRON in types
         assert TriggerType.WEBHOOK in types
+        assert TriggerType.STREAM in types
 
 
 class TestTriggerStatus:

@@ -4,6 +4,7 @@ import {
   Boxes,
   FolderTree,
   Plug,
+  Radio,
   Server,
   Sparkles,
   UserRound,
@@ -27,6 +28,7 @@ export const ENTITY_ICONS = {
   client: Plug,
   tool: Wrench,
   trigger: Zap,
+  stream: Radio,
   sandbox: Boxes,
   app: AppWindow,
 } satisfies Record<string, LucideIcon>;

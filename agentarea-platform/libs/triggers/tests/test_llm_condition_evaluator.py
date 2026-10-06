@@ -41,7 +41,6 @@ def llm_evaluator(mock_model_instance_service, mock_secret_manager):
         model_instance_service=mock_model_instance_service,
         secret_manager=mock_secret_manager,
         model_service=AsyncMock(),
-        default_model_id=uuid4(),
     )
 
 
@@ -119,6 +118,7 @@ class TestLLMConditionEvaluator:
         condition = {
             "type": "rule",
             "rules": [{"field": "request.body.message", "operator": "contains", "value": "file"}],
+            "logic": "AND",
         }
 
         event_data = {"request": {"body": {"message": "I have a file to upload"}}}
@@ -130,6 +130,7 @@ class TestLLMConditionEvaluator:
         condition = {
             "type": "rule",
             "rules": [{"field": "request.body.attachment", "operator": "exists"}],
+            "logic": "AND",
         }
 
         event_data = {"request": {"body": {"attachment": {"name": "file.pdf"}}}}
@@ -144,7 +145,9 @@ class TestLLMConditionEvaluator:
         # Mock LLM response
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "true"
+        mock_response.choices[0].message.content = (
+            '{"verdict": "met", "score": 0.9, "reason": "matches"}'
+        )
         mock_completion.return_value = mock_response
 
         condition = {
@@ -173,7 +176,9 @@ class TestLLMConditionEvaluator:
         # Mock LLM response
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "false"
+        mock_response.choices[0].message.content = (
+            '{"verdict": "not_met", "score": 0.9, "reason": "does not match"}'
+        )
         mock_completion.return_value = mock_response
 
         condition = {
@@ -197,10 +202,12 @@ class TestLLMConditionEvaluator:
                 {
                     "type": "rule",
                     "rules": [{"field": "request.method", "operator": "eq", "value": "POST"}],
+                    "logic": "AND",
                 },
                 {
                     "type": "rule",
                     "rules": [{"field": "request.body.type", "operator": "eq", "value": "file"}],
+                    "logic": "AND",
                 },
             ],
             "logic": "AND",
@@ -222,10 +229,12 @@ class TestLLMConditionEvaluator:
                 {
                     "type": "rule",
                     "rules": [{"field": "request.method", "operator": "eq", "value": "GET"}],
+                    "logic": "AND",
                 },
                 {
                     "type": "rule",
                     "rules": [{"field": "request.body.type", "operator": "eq", "value": "file"}],
+                    "logic": "AND",
                 },
             ],
             "logic": "OR",
@@ -255,7 +264,9 @@ class TestLLMConditionEvaluator:
             "request": {"body": {"user": {"id": "123"}, "document": {"file_name": "report.pdf"}}}
         }
 
-        result = await llm_evaluator.extract_task_parameters(instruction, event_data)
+        result = await llm_evaluator.extract_task_parameters(
+            instruction, event_data, model_id=uuid4()
+        )
 
         assert result["user_id"] == "123"
         assert result["file_name"] == "report.pdf"
@@ -274,7 +285,9 @@ class TestLLMConditionEvaluator:
         instruction = "extract parameters"
         event_data = {"test": "data"}
 
-        result = await llm_evaluator.extract_task_parameters(instruction, event_data)
+        result = await llm_evaluator.extract_task_parameters(
+            instruction, event_data, model_id=uuid4()
+        )
 
         # Should fallback to basic parameters
         assert "event_data" in result
@@ -334,23 +347,6 @@ class TestLLMConditionEvaluator:
         assert llm_evaluator._get_nested_value(data, "request.body.nonexistent") is None
         assert llm_evaluator._get_nested_value(data, "nonexistent.path") is None
 
-    def test_parse_evaluation_response(self, llm_evaluator):
-        """Test parsing of LLM evaluation responses."""
-        # Direct boolean responses
-        assert llm_evaluator._parse_evaluation_response("true") is True
-        assert llm_evaluator._parse_evaluation_response("false") is False
-
-        # Positive indicators
-        assert llm_evaluator._parse_evaluation_response("yes, condition is met") is True
-        assert llm_evaluator._parse_evaluation_response("The condition matches") is True
-
-        # Negative indicators
-        assert llm_evaluator._parse_evaluation_response("no, condition not met") is False
-        assert llm_evaluator._parse_evaluation_response("does not match") is False
-
-        # Unclear response defaults to False
-        assert llm_evaluator._parse_evaluation_response("unclear response") is False
-
     @pytest.mark.asyncio
     async def test_llm_call_failure(self, llm_evaluator):
         """Test handling of LLM call failures."""
@@ -381,7 +377,11 @@ class TestLLMConditionEvaluator:
         valid_condition = {
             "type": "combined",
             "conditions": [
-                {"type": "rule", "rules": [{"field": "test", "operator": "eq", "value": "value"}]},
+                {
+                    "type": "rule",
+                    "rules": [{"field": "test", "operator": "eq", "value": "value"}],
+                    "logic": "AND",
+                },
                 {"type": "llm", "description": "test description", "model_id": str(uuid4())},
             ],
             "logic": "AND",

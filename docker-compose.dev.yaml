@@ -156,6 +156,15 @@ services:
       - AGENTAREA_DB_HOST=db
       - AGENTAREA_DB_PORT=5432
       - AGENTAREA_DB_TENANT_SCOPE=${AGENTAREA_DB_TENANT_SCOPE:?AGENTAREA_DB_TENANT_SCOPE is required (log|enforce)}
+      # Reconcile also writes graph ownership for rows a migration inserted by
+      # SQL; the app has applied the model by the time it is healthy.
+      - AGENTAREA_AUTHZ_BACKEND=${AGENTAREA_AUTHZ_BACKEND:-openfga}
+      - AGENTAREA_AUTHZ_FGA_URL=${AGENTAREA_AUTHZ_FGA_URL:-http://openfga:8080}
+      - AGENTAREA_AUTHZ_FGA_STORE_ID=${AGENTAREA_AUTHZ_FGA_STORE_ID:-}
+      - AGENTAREA_AUTHZ_FGA_MODEL_ID=${AGENTAREA_AUTHZ_FGA_MODEL_ID:-}
+      - AGENTAREA_AUTHZ_FGA_BOOTSTRAP=${AGENTAREA_AUTHZ_FGA_BOOTSTRAP:-true}
+      - AGENTAREA_AUTHZ_FGA_STORE_NAME=${AGENTAREA_AUTHZ_FGA_STORE_NAME:-agentarea}
+      - AGENTAREA_AUTHZ_FGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
     volumes:
       - ./agentarea-platform/libs:/app/libs
     depends_on:

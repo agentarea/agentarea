@@ -93,6 +93,11 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             "scheduled_at": entity.scheduled_at,
             "execution_id": entity.execution_id,
             "task_metadata": metadata,
+            "origin_type": entity.provenance.origin_type,
+            "origin_id": entity.provenance.origin_id,
+            "correlation_id": entity.provenance.correlation_id,
+            "causation_id": entity.provenance.causation_id,
+            "parent_task_id": entity.provenance.parent_task_id,
         }
 
         # Remove None values and system fields that will be auto-populated
@@ -406,6 +411,13 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
                 "user_id": task_orm.created_by,
                 "workspace_id": task_orm.workspace_id,
                 "metadata": task_metadata,
+                "provenance": {
+                    "origin_type": task_orm.origin_type,
+                    "origin_id": task_orm.origin_id,
+                    "correlation_id": task_orm.correlation_id,
+                    "causation_id": task_orm.causation_id,
+                    "parent_task_id": task_orm.parent_task_id,
+                },
             }
         )
 

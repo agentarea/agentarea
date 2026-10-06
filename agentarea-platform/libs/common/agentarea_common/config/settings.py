@@ -17,6 +17,7 @@ from .observability import ObservabilitySettings
 from .openfga import OpenFGASettings
 from .sandbox import SandboxSettings
 from .secrets import SecretManagerSettings
+from .streams import EventStreamSettings
 from .temporal import TemporalSettings
 from .triggers import TriggerSettings
 
@@ -38,6 +39,7 @@ class Settings(BaseSettings):
     channel_delivery: ChannelDeliverySettings = Field(default_factory=ChannelDeliverySettings)
     access_control: AccessControlSettings = Field(default_factory=AccessControlSettings)
     openfga: OpenFGASettings = Field(default_factory=OpenFGASettings)
+    streams: EventStreamSettings = Field(default_factory=EventStreamSettings)
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -63,4 +65,5 @@ def get_settings() -> Settings:
         channel_delivery=ChannelDeliverySettings(),
         access_control=AccessControlSettings(),
         openfga=OpenFGASettings(),
+        streams=EventStreamSettings(),
     )

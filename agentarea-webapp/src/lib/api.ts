@@ -1286,6 +1286,58 @@ export const getTriggerCorrelations = async (triggerId: string) => {
   return { data, error };
 };
 
+export const listStreams = async () => {
+  const result = await sdk.listStreamsV1StreamsGet({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
+export const getStream = async (streamId: string) => {
+  const result = await sdk.getStreamV1StreamsStreamIdGet({
+    client: serverClient,
+    path: { stream_id: streamId },
+  });
+  return withStatus(result);
+};
+
+export const listStreamEvents = async (
+  streamId: string,
+  query: { before?: number; limit?: number }
+) => {
+  const { data, error } = await sdk.listEventsV1StreamsStreamIdEventsGet({
+    client: serverClient,
+    path: { stream_id: streamId },
+    query,
+  });
+  return { data, error };
+};
+
+export const getStreamEvent = async (streamId: string, sequence: number) => {
+  const result = await sdk.getEventV1StreamsStreamIdEventsSequenceGet({
+    client: serverClient,
+    path: { stream_id: streamId, sequence },
+  });
+  return withStatus(result);
+};
+
+export const listStreamSubscriptions = async (streamId: string) => {
+  const { data, error } =
+    await sdk.listSubscriptionsV1StreamsStreamIdSubscriptionsGet({
+      client: serverClient,
+      path: { stream_id: streamId },
+    });
+  return { data, error };
+};
+
+export const listStreamSources = async (streamId: string) => {
+  const { data, error } = await sdk.listSourcesV1StreamsStreamIdSourcesGet({
+    client: serverClient,
+    path: { stream_id: streamId },
+  });
+  return { data, error };
+};
+
 // Listing workspaces deliberately lives outside this client — see
 // getWorkspaceContext(), which must not send X-AgentArea-Workspace.
 export const createWorkspace = async (name: string) => {

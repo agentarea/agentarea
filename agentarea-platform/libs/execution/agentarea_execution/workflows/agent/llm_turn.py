@@ -26,15 +26,20 @@ from ..constants import (
 )
 from ..retry import model_call_retry_policy
 from .compaction import CompactionMixin
-from .errors import ErrorReportingMixin
+from .errors import RUN_INPUT_EXCEEDS_CONTEXT_WINDOW, ErrorReportingMixin
 from .limits import run_limit_reason
 from .patches import (
     COMPACTION_BOUNDS_PAYLOAD_PATCH,
     GOVERNANCE_DENIAL_BLOCKS_RUN_PATCH,
     PAID_CALL_PERSISTED_BEFORE_LIMITS_PATCH,
+    RUN_INPUT_IN_FIRST_MESSAGE_PATCH,
     THINKING_ONLY_REPLY_PATCH,
 )
 from .tool_dispatch import ToolDispatchMixin
+
+FIRST_MESSAGE_IS_THE_TASK = (
+    "The task is the first user message of this conversation. It stays in view for the whole run."
+)
 
 
 def _render_workspace_attachment_prompt(value: Any) -> str:
@@ -171,6 +176,32 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
 
         await self._publish_events_immediately()
 
+    def _refuse_a_head_the_window_cannot_hold(self, system_prompt: str) -> None:
+        """Fail the run when its pinned head alone overflows the model's window.
+
+        The system prompt and the first message stay in view for the whole run;
+        compaction cannot make room for them, so such a run could never call
+        the model.
+        """
+        if not self.context_manager or not self.state.goal:
+            return
+        pinned = estimate_tokens_for_messages(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": self.state.goal.description},
+            ]
+        )
+        limit = self.context_manager.effective_limit
+        if pinned > limit:
+            raise ApplicationError(
+                f"The run's input and system prompt take about {pinned} tokens, more than "
+                f"the {limit} this model's context window leaves for them. They stay in "
+                "view for the whole run, so the run cannot start: shorten the input or "
+                "use a model with a larger context window.",
+                type=RUN_INPUT_EXCEEDS_CONTEXT_WINDOW,
+                non_retryable=True,
+            )
+
     async def _execute_traditional_iteration(self) -> None:
         """Execute iteration using traditional LLM + tool approach."""
         iteration = self.state.current_iteration
@@ -254,10 +285,20 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                         "native request_user_input form without surface_id, never A2UI."
                     )
 
+            # The run's input -- for a trigger, the instruction and the event it
+            # fired on -- is the first user message, pinned in the window's head
+            # so compaction never summarizes it away; the system prompt stays the
+            # agent's own and the same from run to run. A resumed log pins no
+            # first message, so its system prompt keeps the goal.
+            input_in_first_message = iteration == 1 and workflow.patched(
+                RUN_INPUT_IN_FIRST_MESSAGE_PATCH
+            )
             system_prompt = MessageBuilder.build_system_prompt(
                 agent_name=self.state.agent_config.get("name", "AI Agent"),
                 agent_instruction=agent_instruction,
-                goal_description=self.state.goal.description,
+                goal_description=FIRST_MESSAGE_IS_THE_TASK
+                if input_in_first_message
+                else self.state.goal.description,
                 success_criteria=self.state.goal.success_criteria,
                 available_tools=self.state.available_tools,
                 a2ui_enabled=self._a2ui_available,
@@ -265,11 +306,17 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
 
             # Add system message and user message if first iteration
             if iteration == 1:
-                # Create messages directly using the Message class
+                first_seq = self.state.conversation_next_seq + len(self.state.messages)
                 self.state.messages.append(Message(role="system", content=system_prompt))
                 self.state.messages.append(
                     Message(role="user", content=self.state.goal.description)
                 )
+                if input_in_first_message:
+                    self._refuse_a_head_the_window_cannot_hold(system_prompt)
+                    self.state.context_head_seqs = [
+                        *self.state.context_head_seqs,
+                        first_seq + 1,
+                    ]
             elif self._resume_system_prompt_missing:
                 # A resumed log without a system prompt gets this run's at the
                 # head of the window; the conversation before it stays in the tail.

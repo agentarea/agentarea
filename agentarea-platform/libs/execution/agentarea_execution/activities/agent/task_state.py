@@ -170,6 +170,7 @@ def make_task_state_activities(
                 PolicyDocument,
                 effective_policy_from_json,
             )
+            from agentarea_tasks.domain.models import TaskProvenance
             from agentarea_tasks.infrastructure.repository import TaskRepository
             from agentarea_tasks.task_service import TaskService
             from agentarea_tasks.temporal_task_manager import TemporalTaskManager
@@ -227,6 +228,12 @@ def make_task_state_activities(
                     ),
                     upper_bound_policy=parent_effective_policy,
                     require_model=True,
+                    provenance=TaskProvenance(
+                        origin_type="agent",
+                        origin_id=request.parent_task_id,
+                        causation_id=request.parent_task_id,
+                        parent_task_id=UUID(request.parent_task_id),
+                    ),
                 )
 
                 logger.info(

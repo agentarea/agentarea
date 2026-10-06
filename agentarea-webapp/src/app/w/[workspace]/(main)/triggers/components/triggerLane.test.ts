@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getTriggerLane } from "./triggerDisplay";
+import {
+  findTriggerCatalogEntry,
+  getTriggerHealth,
+  getTriggerLane,
+} from "./triggerDisplay";
 
 describe("which lane an automation belongs to", () => {
   it("takes the catalog's word over anything inferred", () => {
@@ -41,8 +45,33 @@ describe("which lane an automation belongs to", () => {
   });
 
   it("ignores a catalog entry that claims no kind", () => {
+    expect(getTriggerLane({ trigger_type: "cron" }, { name: "Schedule" })).toBe(
+      "schedule"
+    );
+  });
+});
+
+describe("a trigger whose configurer left", () => {
+  it("reads as needing a new owner, not merely paused", () => {
+    expect(getTriggerHealth({ is_active: false, status: "needs_owner" })).toBe(
+      "needs_owner"
+    );
+  });
+
+  it("sits in the event lane when it listens to a stream", () => {
+    expect(getTriggerLane({ trigger_type: "stream" })).toBe("event");
+  });
+});
+
+describe("which catalog entry draws a trigger", () => {
+  it("draws a stream trigger as the stream source, not the first entry without a webhook type", () => {
+    const catalog = [
+      { id: "cron", kind: "schedule" },
+      { id: "webhook", kind: "event", webhook_type: "generic" },
+      { id: "stream", kind: "event" },
+    ];
     expect(
-      getTriggerLane({ trigger_type: "cron" }, { name: "Schedule" })
-    ).toBe("schedule");
+      findTriggerCatalogEntry({ trigger_type: "stream" }, catalog)?.id
+    ).toBe("stream");
   });
 });

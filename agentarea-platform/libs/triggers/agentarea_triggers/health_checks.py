@@ -2,15 +2,18 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Protocol
 
 from agentarea_common.config import get_settings, temporal_connect_config
 
 from .infrastructure.repository import TriggerExecutionRepository, TriggerRepository
 from .temporal_schedule_manager import TemporalScheduleManager
-from .webhook_manager import WebhookManager
 
 logger = logging.getLogger(__name__)
+
+
+class WebhookHealth(Protocol):
+    async def is_healthy(self) -> bool: ...
 
 
 class TriggerSystemHealthCheck:
@@ -21,7 +24,7 @@ class TriggerSystemHealthCheck:
         trigger_repository: TriggerRepository | None = None,
         trigger_execution_repository: TriggerExecutionRepository | None = None,
         temporal_schedule_manager: TemporalScheduleManager | None = None,
-        webhook_manager: WebhookManager | None = None,
+        webhook_manager: WebhookHealth | None = None,
     ):
         self.trigger_repository = trigger_repository
         self.trigger_execution_repository = trigger_execution_repository

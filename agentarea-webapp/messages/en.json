@@ -200,6 +200,7 @@
     "workspace": "Workspace",
     "modelSpecs": "Model Specs",
     "automation": "Automation",
+    "events": "Events",
     "network": "Network",
     "members": "Members",
     "budgets": "Budgets",
@@ -1558,6 +1559,9 @@
     "roleRequester": "Requester",
     "rolePrimaryAgent": "Primary agent",
     "roleDelegated": "Delegated agent",
+    "roleTrigger": "Trigger",
+    "roleDelegatingTask": "Delegating task",
+    "startedBy": "Started by",
     "quickActions": "Quick actions",
     "viewTaskEvents": "View task events",
     "openAgentDetails": "Open agent details",
@@ -1702,6 +1706,7 @@
     "description": "Configure triggers to automate agent task execution",
     "createTrigger": "Create Trigger",
     "searchPlaceholder": "Search triggers & agents…",
+    "onStreamEvents": "On stream events",
     "filter": {
       "all": "All",
       "channels": "Channels",
@@ -1742,7 +1747,8 @@
       "active": "Active",
       "inactive": "Inactive",
       "paused": "Paused",
-      "error": "Error"
+      "error": "Error",
+      "needs_owner": "Needs a new owner"
     },
     "create": {
       "title": "Create Trigger",
@@ -1831,8 +1837,9 @@
       "taskFilesPlaceholder": "Select files",
       "taskSkills": "Additional skills",
       "taskMcps": "Additional MCP",
-      "taskTextFromChannel": "The incoming message is the task. Text here is a fallback, used only when a message arrives carrying none.",
-      "taskTextFromCall": "The call supplies the task. Text here is a fallback, used only when a call arrives carrying none.",
+      "taskTextFromChannel": "This is the instruction the agent follows; the incoming message is attached as the event. Leave it empty to make the message itself the ask.",
+      "taskTextFromCall": "This is the instruction the agent follows; the incoming call is attached as the event. Leave it empty to make the call itself the ask.",
+      "taskTextFromStream": "The event's data is attached to the task automatically. The text here is the instruction the agent follows.",
       "taskFilesHint": "Select workspace files to include in every task.",
       "searchFiles": "Search files",
       "noFiles": "No more files to select.",
@@ -1848,7 +1855,11 @@
       "keepExistingSecret": "Keep existing secret",
       "noSecrets": "No workspace secrets yet.",
       "newSecret": "New secret",
-      "createdWithSecretTitle": "Webhook created"
+      "createdWithSecretTitle": "Webhook created",
+      "stream": "Stream",
+      "streamHint": "Fires on events that arrive in this stream after the trigger is created.",
+      "noStreams": "No streams yet",
+      "streamsLoadFailed": "Could not load streams"
     },
     "detail": {
       "overview": "Overview",
@@ -1906,6 +1917,17 @@
       "failedRuns": "{count} failed",
       "failureWarning": "{count, plural, one {# consecutive failure} other {# consecutive failures}} of {threshold}",
       "noSchedule": "Waiting for an incoming request",
+      "noScheduleStream": "Waiting for stream events",
+      "executionStatus": {
+        "completed": "Completed",
+        "success": "Success",
+        "running": "Running",
+        "pending": "Pending",
+        "failed": "Failed",
+        "error": "Error",
+        "timeout": "Timed out",
+        "cancelled": "Cancelled"
+      },
       "metricsLoadFailed": "Failed to load metrics",
       "executionsLoadFailed": "Failed to load executions",
       "periodHours": "Over the last {hours}h",
@@ -1927,7 +1949,11 @@
       "signingSignedHint": "Requests without a valid signature are refused.",
       "signingUnsignedHint": "Anyone who knows this URL can start the agent. Generate a signing secret, then sign every request with it.",
       "signingUnsignedChannelHint": "Anyone who knows this URL can start the agent. Save the channel credentials again to register a secret.",
-      "signingUnsupportedHint": "AgentArea does not verify this provider's requests yet, so anyone who knows this URL can start the agent. Keep the URL private."
+      "signingUnsupportedHint": "AgentArea does not verify this provider's requests yet, so anyone who knows this URL can start the agent. Keep the URL private.",
+      "lastEvent": "Last event",
+      "noEventsYet": "No events yet",
+      "needsOwnerTitle": "This trigger stopped",
+      "needsOwnerBody": "The person who set it up can no longer run this agent. Restore their access and enable it again, or recreate it from an account that can."
     },
     "error": {
       "createFailed": "Failed to create trigger",
@@ -1958,6 +1984,54 @@
       "valueTextWithPrefix": "Hex-encoded HMAC-{algorithm} of the raw request body, keyed with this secret, after the prefix {prefix}.",
       "exampleLabel": "Example",
       "done": "Done"
+    }
+  },
+  "EventsPage": {
+    "title": "Events",
+    "description": "Everything that arrived, and what each subscriber did with it",
+    "searchPlaceholder": "Search streams",
+    "streams": {
+      "name": "Stream",
+      "retention": "Kept for",
+      "retentionDays": "{count, plural, one {# day} other {# days}}",
+      "created": "Created"
+    },
+    "noStreams": "No streams yet",
+    "noStreamsDescription": "A stream appears for every webhook trigger, and you can create your own.",
+    "noMatchingStreams": "No matching streams",
+    "feed": {
+      "received": "Received",
+      "kind": "Event",
+      "key": "Key",
+      "outcome": "Outcome",
+      "older": "Older events",
+      "empty": "Nothing has arrived on this stream yet.",
+      "noneMatching": "No events on this page have that outcome."
+    },
+    "filter": {
+      "all": "All",
+      "reacted": "Reacted",
+      "skipped": "Skipped",
+      "error": "Error",
+      "unheard": "Nobody listened",
+      "unknown": "Unknown outcome"
+    },
+    "detail": {
+      "title": "Event {sequence}",
+      "data": "Payload",
+      "subscribers": "Subscribers",
+      "trigger": "Trigger",
+      "forward": "Forward",
+      "task": "Task",
+      "score": "Score",
+      "derived": "Forwarded as",
+      "noOutcomes": "No subscription took this event.",
+      "causedBy": "Caused by",
+      "close": "Close",
+      "gone": "This event is no longer kept.",
+      "triggersLoadFailed": "Could not load trigger names",
+      "subscriptionsLoadFailed": "Could not load forward links",
+      "streamsLoadFailed": "Could not load stream names"
     }
   },
   "NetworkPage": {

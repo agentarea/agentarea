@@ -39,7 +39,8 @@ members = [
     "libs/openapi",
     "libs/projects",
     "libs/registry",
-    "libs/bundles"
+    "libs/bundles",
+    "libs/streams"
 ]
 
 [tool.uv]
@@ -83,6 +84,7 @@ agentarea-openapi = { workspace = true }
 agentarea-projects = { workspace = true }
 agentarea-registry = { workspace = true }
 agentarea-bundles = { workspace = true }
+agentarea-streams = { workspace = true }
 agentarea-api = { workspace = true }
 agentarea-worker = { workspace = true }
 
@@ -106,6 +108,7 @@ dev = [
     "agentarea-payment",
     "agentarea-execution",
     "agentarea-triggers",
+    "agentarea-streams",
     "agentarea-api",
     "agentarea-worker",
     "pytest-env>=1.1.5",
@@ -218,6 +221,7 @@ addopts = [
     "--cov=agentarea_wallet",
     "--cov=agentarea_payment",
     "--cov=agentarea_triggers",
+    "--cov=agentarea_streams",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-report=xml",
@@ -265,6 +269,7 @@ source = [
     "libs/payment/agentarea_payment",
     "libs/execution/agentarea_execution",
     "libs/triggers/agentarea_triggers",
+    "libs/streams/agentarea_streams",
     "apps/api/agentarea_api",
     "apps/worker/agentarea_worker",
 ]

@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   Network,
   Plug,
+  Radio,
   ScrollText,
   ShieldCheck,
   Sparkles,
@@ -66,12 +67,6 @@ export const navData = {
           icon: GalleryVerticalEnd,
         },
         {
-          title: "Automation",
-          titleKey: "automation",
-          url: "/triggers",
-          icon: Zap,
-        },
-        {
           title: "Catalog",
           titleKey: "explore",
           url: "/explore",
@@ -88,6 +83,12 @@ export const navData = {
           titleKey: "context",
           url: "/files",
           icon: FileText,
+        },
+        {
+          title: "Events",
+          titleKey: "events",
+          url: "/events",
+          icon: Radio,
         },
       ],
     },
@@ -112,6 +113,12 @@ export const navData = {
           titleKey: "connections",
           url: "/connections",
           icon: Plug,
+        },
+        {
+          title: "Automation",
+          titleKey: "automation",
+          url: "/triggers",
+          icon: Zap,
         },
         {
           title: "Harnesses",

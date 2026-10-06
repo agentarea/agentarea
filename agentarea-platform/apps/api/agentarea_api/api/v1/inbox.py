@@ -127,6 +127,7 @@ async def get_inbox_items(
                     ),
                     escalation_id=request.data.get("escalation_id") if request else None,
                     escalation_tool_name=request.data.get("tool_name") if request else None,
+                    provenance=task.provenance,
                 )
             )
 

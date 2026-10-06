@@ -90,7 +90,13 @@ async def test_a_decision_model_answers_the_condition(choice, expected):
 async def test_a_chat_model_keeps_the_completion_path():
     decisions = _Decisions("true")
     response = MagicMock()
-    response.choices = [MagicMock(message=MagicMock(content="true"))]
+    response.choices = [
+        MagicMock(
+            message=MagicMock(
+                content='{"verdict": "met", "score": 0.9, "reason": "refund"}'
+            )
+        )
+    ]
 
     with patch(
         "agentarea_triggers.llm_condition_evaluator.litellm.acompletion",

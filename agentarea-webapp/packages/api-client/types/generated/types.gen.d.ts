@@ -2204,6 +2204,23 @@ export type EscalationResolution = {
     escalation_id: string;
 };
 /**
+ * EventFilter
+ *
+ * Empty kinds and fields match every event.
+ */
+export type EventFilter = {
+    /**
+     * Fields
+     */
+    fields?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Kinds
+     */
+    kinds?: Array<string>;
+};
+/**
  * ExecutionCorrelationResponse
  *
  * Response model for execution correlation data.
@@ -2398,6 +2415,21 @@ export type FailedTaskBlocker = {
      * Task Id
      */
     task_id: string;
+};
+/**
+ * ForwardCreate
+ */
+export type ForwardCreate = {
+    /**
+     * Which events are copied; empty copies all.
+     */
+    event_filter?: EventFilter;
+    /**
+     * Output Stream Ids
+     *
+     * Streams every matching event is copied into; never the input.
+     */
+    output_stream_ids: Array<string>;
 };
 /**
  * FrequentSchedule
@@ -4462,6 +4494,53 @@ export type OpenApiToolSettings = {
     requires_user_confirmation?: boolean | null;
 };
 /**
+ * OutcomeResponse
+ */
+export type OutcomeResponse = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Derived Sequences
+     */
+    derived_sequences: Array<number>;
+    /**
+     * Event Sequence
+     */
+    event_sequence: number;
+    /**
+     * Reason
+     */
+    reason: string | null;
+    /**
+     * Score
+     */
+    score: number | null;
+    /**
+     * Subscription Id
+     */
+    subscription_id: string;
+    /**
+     * Subscription Kind
+     */
+    subscription_kind: string;
+    /**
+     * Task Id
+     */
+    task_id: string | null;
+    /**
+     * Trigger Id
+     */
+    trigger_id: string | null;
+    /**
+     * Verdict
+     *
+     * reacted, skipped or error
+     */
+    verdict: string;
+};
+/**
  * PaginatedPaymentsResponse
  */
 export type PaginatedPaymentsResponse = {
@@ -6488,6 +6567,177 @@ export type SpendCard = {
     today_usd: string;
 };
 /**
+ * StreamCreate
+ */
+export type StreamCreate = {
+    /**
+     * Description
+     */
+    description?: string;
+    /**
+     * Name
+     *
+     * Name, unique in the workspace.
+     */
+    name: string;
+    /**
+     * Retention Days
+     *
+     * Days events are kept; omitted means the deployment's AGENTAREA_EVENT_RETENTION.
+     */
+    retention_days?: number | null;
+};
+/**
+ * StreamEventPage
+ */
+export type StreamEventPage = {
+    /**
+     * Events
+     */
+    events: Array<StreamEventResponse>;
+    /**
+     * Next After
+     *
+     * With ?after=: pass as ?after= for the next page; null at the end.
+     */
+    next_after?: number | null;
+    /**
+     * Next Before
+     *
+     * Without ?after=: pass as ?before= for older events; null at the start.
+     */
+    next_before?: number | null;
+};
+/**
+ * StreamEventResponse
+ */
+export type StreamEventResponse = {
+    /**
+     * Causation Id
+     */
+    causation_id: string | null;
+    /**
+     * Correlation Id
+     */
+    correlation_id: string | null;
+    /**
+     * Data
+     */
+    data: {
+        [key: string]: unknown;
+    };
+    /**
+     * Depth
+     */
+    depth: number;
+    /**
+     * Event Id
+     */
+    event_id: string;
+    /**
+     * Event Key
+     */
+    event_key: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Occurred At
+     */
+    occurred_at: string;
+    /**
+     * Outcomes
+     *
+     * One per subscription that took the event; empty means nobody listened.
+     */
+    outcomes: Array<OutcomeResponse>;
+    /**
+     * Received At
+     */
+    received_at: string;
+    /**
+     * Sequence
+     */
+    sequence: number;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Subject
+     */
+    subject: string | null;
+};
+/**
+ * StreamResponse
+ */
+export type StreamResponse = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Created By
+     */
+    created_by: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Retention Days
+     */
+    retention_days: number;
+};
+/**
+ * StreamSourceResponse
+ */
+export type StreamSourceResponse = {
+    /**
+     * Allowed Methods
+     */
+    allowed_methods: Array<string> | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Webhook Id
+     */
+    webhook_id: string | null;
+    /**
+     * Webhook Type
+     */
+    webhook_type: string | null;
+    /**
+     * Webhook Url
+     *
+     * Public URL senders post to; null for non-webhook sources.
+     */
+    webhook_url: string | null;
+};
+/**
  * SubjectSetBody
  */
 export type SubjectSetBody = {
@@ -6503,6 +6753,57 @@ export type SubjectSetBody = {
      * Relation
      */
     relation: string;
+};
+/**
+ * SubscriptionResponse
+ */
+export type SubscriptionResponse = {
+    /**
+     * Attempts
+     */
+    attempts: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Cursor Sequence
+     */
+    cursor_sequence: number;
+    /**
+     * Filter
+     */
+    filter: {
+        [key: string]: unknown;
+    };
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Last Error
+     */
+    last_error: string | null;
+    /**
+     * Next Attempt At
+     */
+    next_attempt_at: string | null;
+    /**
+     * Output Stream Ids
+     */
+    output_stream_ids: Array<string>;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Trigger Id
+     */
+    trigger_id: string | null;
 };
 /**
  * TaskArtifactItem
@@ -6689,6 +6990,33 @@ export type TaskInputSubmission = {
     };
 };
 /**
+ * TaskProvenance
+ *
+ * Why a task exists: who or what started it, and the event that caused it.
+ */
+export type TaskProvenance = {
+    /**
+     * Causation Id
+     */
+    causation_id?: string | null;
+    /**
+     * Correlation Id
+     */
+    correlation_id?: string | null;
+    /**
+     * Origin Id
+     */
+    origin_id?: string | null;
+    /**
+     * Origin Type
+     */
+    origin_type?: 'user' | 'trigger' | 'agent' | 'api' | null;
+    /**
+     * Parent Task Id
+     */
+    parent_task_id?: string | null;
+};
+/**
  * TaskResponse
  */
 export type TaskResponse = {
@@ -6730,6 +7058,7 @@ export type TaskResponse = {
     parameters: {
         [key: string]: unknown;
     };
+    provenance?: TaskProvenance;
     /**
      * Result
      */
@@ -6890,6 +7219,7 @@ export type TaskWithAgent = {
     parameters: {
         [key: string]: unknown;
     };
+    provenance?: TaskProvenance;
     /**
      * Result
      */
@@ -7095,6 +7425,14 @@ export type TriggerCreate = {
      */
     enabled?: boolean;
     /**
+     * Event Filter
+     *
+     * Which events of the stream fire it: {"kinds": ["push"], "fields": {"raw_data.action": "opened"}}. Empty means every event.
+     */
+    event_filter?: {
+        [key: string]: unknown;
+    } | null;
+    /**
      * Event Types
      *
      * Event types to filter on (empty list = accept all events).
@@ -7113,6 +7451,12 @@ export type TriggerCreate = {
      */
     name: string;
     /**
+     * Stream Id
+     *
+     * Stream whose events fire this trigger (required when trigger_type='stream').
+     */
+    stream_id?: string | null;
+    /**
      * Task Parameters
      *
      * Parameters merged into the task created when the trigger fires.
@@ -7129,9 +7473,9 @@ export type TriggerCreate = {
     /**
      * Trigger Type
      *
-     * 'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven.
+     * 'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven, 'stream' to run on events from an existing stream.
      */
-    trigger_type: 'cron' | 'webhook' | 'polling';
+    trigger_type: 'cron' | 'webhook' | 'polling' | 'stream';
     /**
      * Validation Rules
      *
@@ -7286,6 +7630,14 @@ export type TriggerResponse = {
      */
     description: string;
     /**
+     * Event Filter
+     *
+     * Which events fire it.
+     */
+    event_filter?: {
+        [key: string]: unknown;
+    } | null;
+    /**
      * Event Types
      */
     event_types?: Array<string>;
@@ -7306,6 +7658,12 @@ export type TriggerResponse = {
      */
     is_active: boolean;
     /**
+     * Last Event At
+     *
+     * When the trigger's stream last recorded an event.
+     */
+    last_event_at?: string | null;
+    /**
      * Last Execution At
      */
     last_execution_at?: string | null;
@@ -7313,6 +7671,10 @@ export type TriggerResponse = {
      * Name
      */
     name: string;
+    /**
+     * Needs New Owner At
+     */
+    needs_new_owner_at?: string | null;
     /**
      * Next Run Time
      */
@@ -7327,6 +7689,18 @@ export type TriggerResponse = {
      * Generated signing secret of a generic webhook. Returned only by the create and rotate calls that generated it; never readable afterwards.
      */
     signing_secret?: string | null;
+    /**
+     * Status
+     *
+     * 'needs_owner' when the person who configured it can no longer run its agent; the trigger stays stopped until it is enabled again, and the next event re-checks that person's access.
+     */
+    status: 'active' | 'inactive' | 'needs_owner';
+    /**
+     * Stream Id
+     *
+     * Stream whose events fire this trigger.
+     */
+    stream_id?: string | null;
     /**
      * Task Parameters
      */
@@ -7371,6 +7745,12 @@ export type TriggerResponse = {
      * Webhook Type
      */
     webhook_type?: string | null;
+    /**
+     * Webhook Url
+     *
+     * Public URL a sender posts to; set for webhook triggers.
+     */
+    webhook_url?: string | null;
 };
 /**
  * TriggerRunResponse
@@ -7472,6 +7852,14 @@ export type TriggerSpec = {
      */
     enabled?: boolean;
     /**
+     * Event Filter
+     *
+     * Which events of the stream fire it: {"kinds": ["push"], "fields": {"raw_data.action": "opened"}}. Empty means every event.
+     */
+    event_filter?: {
+        [key: string]: unknown;
+    } | null;
+    /**
      * Event Types
      *
      * Event types to filter on (empty list = accept all events).
@@ -7490,6 +7878,12 @@ export type TriggerSpec = {
      */
     name: string;
     /**
+     * Stream Id
+     *
+     * Stream whose events fire this trigger (required when trigger_type='stream').
+     */
+    stream_id?: string | null;
+    /**
      * Task Parameters
      *
      * Parameters merged into the task created when the trigger fires.
@@ -7506,9 +7900,9 @@ export type TriggerSpec = {
     /**
      * Trigger Type
      *
-     * 'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven.
+     * 'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven, 'stream' to run on events from an existing stream.
      */
-    trigger_type: 'cron' | 'webhook' | 'polling';
+    trigger_type: 'cron' | 'webhook' | 'polling' | 'stream';
     /**
      * Validation Rules
      *
@@ -7613,6 +8007,12 @@ export type TriggerUpdate = {
      * Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (alias).
      */
     enabled?: boolean | null;
+    /**
+     * Event Filter
+     */
+    event_filter?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Event Types
      */
@@ -14865,6 +15265,293 @@ export type RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteResponses =
      */
     200: unknown;
 };
+export type ListStreamsV1StreamsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/v1/workspaces/{workspace}/streams/';
+};
+export type ListStreamsV1StreamsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListStreamsV1StreamsGetError = ListStreamsV1StreamsGetErrors[keyof ListStreamsV1StreamsGetErrors];
+export type ListStreamsV1StreamsGetResponses = {
+    /**
+     * Response List Streams V1 Streams  Get
+     *
+     * Successful Response
+     */
+    200: Array<StreamResponse>;
+};
+export type ListStreamsV1StreamsGetResponse = ListStreamsV1StreamsGetResponses[keyof ListStreamsV1StreamsGetResponses];
+export type CreateStreamV1StreamsPostData = {
+    body: StreamCreate;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/';
+};
+export type CreateStreamV1StreamsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateStreamV1StreamsPostError = CreateStreamV1StreamsPostErrors[keyof CreateStreamV1StreamsPostErrors];
+export type CreateStreamV1StreamsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: StreamResponse;
+};
+export type CreateStreamV1StreamsPostResponse = CreateStreamV1StreamsPostResponses[keyof CreateStreamV1StreamsPostResponses];
+export type DeleteStreamV1StreamsStreamIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}';
+};
+export type DeleteStreamV1StreamsStreamIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DeleteStreamV1StreamsStreamIdDeleteError = DeleteStreamV1StreamsStreamIdDeleteErrors[keyof DeleteStreamV1StreamsStreamIdDeleteErrors];
+export type DeleteStreamV1StreamsStreamIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type DeleteStreamV1StreamsStreamIdDeleteResponse = DeleteStreamV1StreamsStreamIdDeleteResponses[keyof DeleteStreamV1StreamsStreamIdDeleteResponses];
+export type GetStreamV1StreamsStreamIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}';
+};
+export type GetStreamV1StreamsStreamIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetStreamV1StreamsStreamIdGetError = GetStreamV1StreamsStreamIdGetErrors[keyof GetStreamV1StreamsStreamIdGetErrors];
+export type GetStreamV1StreamsStreamIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: StreamResponse;
+};
+export type GetStreamV1StreamsStreamIdGetResponse = GetStreamV1StreamsStreamIdGetResponses[keyof GetStreamV1StreamsStreamIdGetResponses];
+export type ListEventsV1StreamsStreamIdEventsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+    };
+    query?: {
+        /**
+         * After
+         *
+         * Oldest first, after this sequence.
+         */
+        after?: number | null;
+        /**
+         * Before
+         *
+         * Newest first, before this sequence.
+         */
+        before?: number | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/events';
+};
+export type ListEventsV1StreamsStreamIdEventsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListEventsV1StreamsStreamIdEventsGetError = ListEventsV1StreamsStreamIdEventsGetErrors[keyof ListEventsV1StreamsStreamIdEventsGetErrors];
+export type ListEventsV1StreamsStreamIdEventsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: StreamEventPage;
+};
+export type ListEventsV1StreamsStreamIdEventsGetResponse = ListEventsV1StreamsStreamIdEventsGetResponses[keyof ListEventsV1StreamsStreamIdEventsGetResponses];
+export type GetEventV1StreamsStreamIdEventsSequenceGetData = {
+    body?: never;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+        /**
+         * Sequence
+         */
+        sequence: number;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/events/{sequence}';
+};
+export type GetEventV1StreamsStreamIdEventsSequenceGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetEventV1StreamsStreamIdEventsSequenceGetError = GetEventV1StreamsStreamIdEventsSequenceGetErrors[keyof GetEventV1StreamsStreamIdEventsSequenceGetErrors];
+export type GetEventV1StreamsStreamIdEventsSequenceGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: StreamEventResponse;
+};
+export type GetEventV1StreamsStreamIdEventsSequenceGetResponse = GetEventV1StreamsStreamIdEventsSequenceGetResponses[keyof GetEventV1StreamsStreamIdEventsSequenceGetResponses];
+export type CreateForwardV1StreamsStreamIdForwardsPostData = {
+    body: ForwardCreate;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/forwards';
+};
+export type CreateForwardV1StreamsStreamIdForwardsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateForwardV1StreamsStreamIdForwardsPostError = CreateForwardV1StreamsStreamIdForwardsPostErrors[keyof CreateForwardV1StreamsStreamIdForwardsPostErrors];
+export type CreateForwardV1StreamsStreamIdForwardsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: SubscriptionResponse;
+};
+export type CreateForwardV1StreamsStreamIdForwardsPostResponse = CreateForwardV1StreamsStreamIdForwardsPostResponses[keyof CreateForwardV1StreamsStreamIdForwardsPostResponses];
+export type ListSourcesV1StreamsStreamIdSourcesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/sources';
+};
+export type ListSourcesV1StreamsStreamIdSourcesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListSourcesV1StreamsStreamIdSourcesGetError = ListSourcesV1StreamsStreamIdSourcesGetErrors[keyof ListSourcesV1StreamsStreamIdSourcesGetErrors];
+export type ListSourcesV1StreamsStreamIdSourcesGetResponses = {
+    /**
+     * Response List Sources V1 Streams  Stream Id  Sources Get
+     *
+     * Successful Response
+     */
+    200: Array<StreamSourceResponse>;
+};
+export type ListSourcesV1StreamsStreamIdSourcesGetResponse = ListSourcesV1StreamsStreamIdSourcesGetResponses[keyof ListSourcesV1StreamsStreamIdSourcesGetResponses];
+export type ListSubscriptionsV1StreamsStreamIdSubscriptionsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions';
+};
+export type ListSubscriptionsV1StreamsStreamIdSubscriptionsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListSubscriptionsV1StreamsStreamIdSubscriptionsGetError = ListSubscriptionsV1StreamsStreamIdSubscriptionsGetErrors[keyof ListSubscriptionsV1StreamsStreamIdSubscriptionsGetErrors];
+export type ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponses = {
+    /**
+     * Response List Subscriptions V1 Streams  Stream Id  Subscriptions Get
+     *
+     * Successful Response
+     */
+    200: Array<SubscriptionResponse>;
+};
+export type ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponse = ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponses[keyof ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponses];
+export type ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+        /**
+         * Subscription Id
+         */
+        subscription_id: string;
+    };
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions/{subscription_id}/outcomes';
+};
+export type ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetError = ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetErrors[keyof ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetErrors];
+export type ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetResponses = {
+    /**
+     * Response List Outcomes V1 Streams  Stream Id  Subscriptions  Subscription Id  Outcomes Get
+     *
+     * Successful Response
+     */
+    200: Array<OutcomeResponse>;
+};
+export type ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetResponse = ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetResponses[keyof ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetResponses];
 export type GetAllTasksV1TasksGetData = {
     body?: never;
     path?: never;
@@ -14980,7 +15667,7 @@ export type ListTriggersV1TriggersGetData = {
         /**
          * Trigger Type
          *
-         * Filter by trigger type (cron, webhook)
+         * Filter by trigger type (cron, webhook, stream)
          */
         trigger_type?: string | null;
         /**

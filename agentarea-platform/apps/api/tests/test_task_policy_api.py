@@ -10,6 +10,7 @@ from agentarea_api.api.v1 import agents_tasks
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_governance.domain.policies import PolicyValidationError
+from agentarea_tasks.domain.models import TaskProvenance
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -28,6 +29,7 @@ def _task(agent_id):
         scheduled_at=None,
         # The creator the response reports as `created_by`.
         user_id="user-1",
+        provenance=TaskProvenance(),
     )
 
 

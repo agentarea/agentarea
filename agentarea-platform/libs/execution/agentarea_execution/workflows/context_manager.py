@@ -235,6 +235,11 @@ class ContextWindowManager:
         self._compaction_count = compaction_count
 
     @property
+    def effective_limit(self) -> int:
+        """Tokens a prompt may take: the window less the share kept for output."""
+        return self._effective_limit
+
+    @property
     def warning_sent(self) -> bool:
         return self._warning_sent
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from agentarea_common.config import get_settings
 from agentarea_common.di.container import get_container
 from agentarea_common.rebac import (
@@ -11,6 +13,9 @@ from agentarea_common.rebac import (
     RelationQuery,
     RelationTuple,
 )
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def get_workspace_membership_graph() -> OpenFGAClient:
@@ -50,6 +55,16 @@ async def check_workspace_membership(
         subject_id=_user_subject(user_id),
     )
     return result.allowed
+
+
+async def is_workspace_owner(session: AsyncSession, user_id: str, workspace_id: str) -> bool:
+    """Whether ``workspace_id`` is ``user_id``'s personal workspace or one they own."""
+    from agentarea_common.workspaces.repository import WorkspaceRepository
+
+    if workspace_id == user_id:
+        return True
+    workspace = await WorkspaceRepository(session).get(workspace_id)
+    return workspace is not None and workspace.owner_user_id == user_id
 
 
 async def list_workspace_member_ids(graph: OpenFGAClient, workspace_id: str) -> list[str]:

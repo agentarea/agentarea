@@ -8,8 +8,9 @@ related:
   - /concepts/execution/events
   - /concepts/execution/durable-execution
   - /concepts/integration/mcp
+  - /concepts/integration/event-streams
   - /concepts/governance/budgets-and-quotas
-last_updated: 2026-09-13
+last_updated: 2026-10-06
 ---
 
 Everything else in AgentArea assumes a person made a request. A trigger is what
@@ -51,6 +52,21 @@ block, and its own safety counters. Two concrete types subclass it:
 |---|---|---|
 | `cron` | `cron_expression`, `timezone`, optional `data_extractor` | The schedule matches |
 | `webhook` | `webhook_id`, `allowed_methods`, `webhook_type`, `validation_rules` | A request arrives at that webhook's URL |
+| `stream` | `stream_id`, `event_filter` | An event in that stream matches the filter |
+
+**A webhook trigger's intake belongs to its stream, not the trigger itself.**
+Creating a `webhook` trigger auto-creates an [event
+stream](/concepts/integration/event-streams), a webhook source on it carrying
+the same `webhook_id`, `allowed_methods`, `webhook_type` and
+`validation_rules`, and a subscription that fires the trigger for events
+matching `event_types`. The trigger API stays the surface you edit —
+`TriggerService` mirrors every change onto the source in the same request —
+but a request that arrives at the webhook URL is recorded in the stream and
+answered first; the trigger fires moments later, when the dispatcher next
+reaches that event, not inline with the HTTP response. A `stream` trigger
+skips the auto-created stream and `event_types` entirely: it names an
+existing `stream_id` and `event_filter` directly, so it can react to events
+a different trigger's webhook — or a forward — already put there.
 
 **Cron triggers are Temporal schedules, not in-process timers.** Creating one
 calls `create_schedule` with id `cron-trigger-<trigger_id>` and a
@@ -81,6 +97,20 @@ payload and the condition text to a model instance through litellm and acts on
 the verdict. The point is filtering noise without writing a parser per provider;
 the cost is a model call per candidate event, which the [Limits](#limits)
 section revisits.
+
+**The agent is told what started it.** A task's first message is the ask —
+the trigger's task text when it has one, which says what to do; only a trigger
+without one, such as a chat channel, takes the incoming message's text as the
+ask — followed by one block, the same for every source: the trigger's name and type, the stream,
+the event's kind, key, received time (UTC) and stream sequence, then the
+event's data as JSON. The data is what the stream recorded, with credential
+headers and query parameters already removed. Data over 16 KiB is never cut:
+the block names a task input file, `inputs/attachments/trigger-event-<sequence>.json`,
+which the run writes into the task's own workspace before the agent starts,
+never into the workspace's shared files. A schedule tick carries no event, so
+its message is the task text alone. All of this is the run's first user
+message, kept in view through compaction; the system prompt stays the agent's
+own. A follow-up delivered into a running chat sends only the person's message.
 
 **Every attempt is recorded, whether or not it produced a task.**
 `TriggerExecution` stores `status` (`success`, `failed`, `timeout`,
@@ -140,7 +170,7 @@ still available by setting an explicit condition `type`.
 
 ## Limits
 
-Verified against the code on 2026-09-13. Where this section and the model above
+Verified against the code on 2026-10-06. Where this section and the model above
 disagree, this section describes what a deployment actually gets.
 
 <Warning>
@@ -154,8 +184,9 @@ periodic fetching.
 
 **Condition evaluation costs a model call per candidate event.** With the
 default `llm` condition type, a high-volume webhook pays for one inference per
-delivery *before* any task exists, so the spend does not appear against the
-agent's task budget. Size the source, not the agent.
+delivery once the dispatcher reaches it — after the webhook's `202`, not
+during it, but still before any task exists — so the spend does not appear
+against the agent's task budget. Size the source, not the agent.
 
 **The adapter registry is per-process.** Adapters register on import and on a
 configuration call, into an in-memory dict. A channel is available to a process
@@ -170,6 +201,13 @@ nothing in the platform reports that this step was skipped.
 **A trigger that disables itself stays disabled.** Crossing `failure_threshold`
 stops the trigger; nothing re-enables it when the underlying problem is fixed.
 Re-enable it explicitly after fixing the cause, or the schedule stays silent.
+
+**A disabled webhook trigger's URL keeps answering `202`.** Disabling a
+trigger — by hand, or by crossing `failure_threshold` — does not touch its
+stream's webhook source: deliveries are still recorded and still answered
+normally. Only the firing is skipped; the dispatcher records a `skipped`
+outcome and creates no task. Re-enabling the trigger does not replay what was
+skipped while it was off — only events the dispatcher reaches afterward fire.
 
 **Signature verification is opt-in, for every type — including `github` and
 `stripe`.** `verify_webhook_signature` first resolves a signing secret from the
@@ -193,6 +231,9 @@ configured secret with no raw body to check.
   </Card>
   <Card title="Events" icon="diagram-project" href="/concepts/execution/events">
     What a channel formats and delivers.
+  </Card>
+  <Card title="Event streams" icon="plug" href="/concepts/integration/event-streams">
+    The journal a webhook trigger's intake records into, and who else can read it.
   </Card>
   <Card title="Durable execution" icon="diagram-project" href="/concepts/execution/durable-execution">
     The Temporal machinery cron triggers reuse.

@@ -66,9 +66,16 @@ def make_trigger_repository_factory(trigger_repo=None, execution_repo=None, agen
     # "this webhook id is taken" for every webhook a test creates.
     trigger_repo.webhook_id_in_use = AsyncMock(return_value=False)
 
+    from agentarea_streams.infrastructure.repository import StreamRepository
+
+    # Likewise no stream already has the name a new webhook trigger's stream takes.
+    stream_repo = AsyncMock()
+    stream_repo.get_by_name = AsyncMock(return_value=None)
+
     mapping = {
         TriggerRepository: trigger_repo,
         TriggerExecutionRepository: execution_repo,
+        StreamRepository: stream_repo,
     }
 
     try:
@@ -80,6 +87,11 @@ def make_trigger_repository_factory(trigger_repo=None, execution_repo=None, agen
 
     factory = MagicMock()
     factory.create_repository.side_effect = lambda cls, *a, **k: mapping.get(cls, AsyncMock())
+    # Read directly by find_webhook_source; no stream source answers on any webhook id.
+    factory.session = AsyncMock()
+    factory.session.execute.return_value = MagicMock(
+        scalar_one_or_none=MagicMock(return_value=None)
+    )
     return factory
 
 

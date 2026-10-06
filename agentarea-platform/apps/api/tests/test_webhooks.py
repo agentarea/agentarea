@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from agentarea_api.api import rate_limit
-from agentarea_api.api.deps.services import get_public_webhook_manager, get_webhook_manager
+from agentarea_api.api.deps.services import get_public_webhook_manager
 from agentarea_api.api.v1.webhooks import router
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.testing.flows import MainFlow
@@ -45,7 +45,6 @@ def app_with_webhooks(mock_webhook_manager, mock_user_context):
 
     # Include router with dependency override
     app.include_router(router)
-    app.dependency_overrides[get_webhook_manager] = get_mock_webhook_manager
     app.dependency_overrides[get_public_webhook_manager] = get_mock_webhook_manager
     app.dependency_overrides[get_user_context] = get_mock_user_context
 

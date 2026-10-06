@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentarea-streams"
+version = "0.1.0"
+description = "Event streams: named journals, sources, fan-out subscriptions"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.12"
+dependencies = [
+    "agentarea-common",
+    "pydantic>=2.4.2",
+    "redis>=5.0.0",
+    "sqlalchemy[asyncio]>=2.0.23",
+]
+
+[tool.uv.sources]
+agentarea-common = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentarea_streams"]

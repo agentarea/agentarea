@@ -116,7 +116,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             from agentarea_triggers.trigger_service import (
                 NO_TASK_TEXT,
                 TriggerService,
-                resolve_task_query,
+                compose_task_input,
             )
 
             database = get_database()
@@ -275,8 +275,8 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 # Create task from trigger
                 task_id = None
                 task_failure = None
-                query = resolve_task_query(trigger, execution_data)
-                if query is None:
+                task_input = compose_task_input(trigger, execution_data)
+                if task_input is None:
                     # Nothing to ask the agent. Recorded as a failure rather than
                     # skipped so it shows up in the trigger's history and counts
                     # toward the auto-disable threshold -- a schedule that cannot
@@ -323,15 +323,15 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
                     # Carries the channel_origin replies are routed by, built from
                     # the trigger rather than copied from the extracted event.
-                    task_params = await trigger_service._build_task_parameters(
-                        trigger, execution_data
+                    task_params = task_input.stamp(
+                        await trigger_service._build_task_parameters(trigger, execution_data)
                     )
 
                     # Submit task (creates DB record AND starts Temporal workflow)
                     task = AgentTask(
                         title=f"Trigger: {trigger.name}",
-                        description=query,
-                        query=query,
+                        description=task_input.ask,
+                        query=task_input.message,
                         user_id=str(trigger.created_by),
                         workspace_id=str(user_context.workspace_id),
                         agent_id=trigger.agent_id,
@@ -565,7 +565,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             from agentarea_triggers.trigger_service import (
                 NO_TASK_TEXT,
                 TriggerService,
-                resolve_task_query,
+                compose_task_input,
             )
 
             database = get_database()
@@ -610,8 +610,8 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 # Build task parameters
                 task_params = await trigger_service._build_task_parameters(trigger, execution_data)
 
-                query = resolve_task_query(trigger, execution_data)
-                if query is None:
+                task_input = compose_task_input(trigger, execution_data)
+                if task_input is None:
                     return CreateTaskFromTriggerResult(
                         task_id=None,
                         trigger_id=trigger_id,
@@ -620,10 +620,11 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         error=NO_TASK_TEXT,
                     )
 
+                task_params = task_input.stamp(task_params)
                 task = AgentTask(
                     title=f"Trigger: {trigger.name}",
-                    description=query,
-                    query=query,
+                    description=task_input.ask,
+                    query=task_input.message,
                     user_id=str(trigger.created_by),
                     workspace_id=str(user_context.workspace_id),
                     agent_id=trigger.agent_id,

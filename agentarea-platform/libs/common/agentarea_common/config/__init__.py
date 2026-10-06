@@ -28,6 +28,7 @@ from .openfga import OpenFGASettings
 from .sandbox import SandboxSettings
 from .secrets import SecretManagerSettings, get_secret_manager_settings
 from .settings import Settings, get_settings
+from .streams import EventStreamSettings
 from .temporal import TemporalSettings, temporal_connect_config
 from .triggers import TriggerSettings
 
@@ -41,6 +42,7 @@ __all__ = [
     "Database",
     "DatabaseSettings",
     "Duration",
+    "EventStreamSettings",
     "HttpSettings",
     "KafkaSettings",
     "MCPOAuthApp",

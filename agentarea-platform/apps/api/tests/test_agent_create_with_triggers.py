@@ -64,6 +64,8 @@ async def _real_validation(trigger_data):
         webhook_id_in_use=AsyncMock(return_value=False)
     )
     service.model_instance_repository = _ModelInstances()
+    service.repository_factory = SimpleNamespace(session=None)
+    service.stream_service = AsyncMock()
     await TriggerService._validate_trigger_configuration(service, trigger_data)
 
 
@@ -114,6 +116,9 @@ def harness(monkeypatch):
         webhook_service
     )
     app.dependency_overrides[get_db_session] = lambda: None
+    monkeypatch.setattr(
+        "agentarea_triggers.trigger_service.find_webhook_source", AsyncMock(return_value=None)
+    )
     monkeypatch.setattr(agents, "_grant_agent_owner", AsyncMock())
     monkeypatch.setattr(agents, "_overlay_approval_flags", AsyncMock())
 

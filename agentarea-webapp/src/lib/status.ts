@@ -224,17 +224,49 @@ export function getTriggerStatusPresentation(
 ): StatusPresentation {
   switch (normalizeStatus(status)) {
     case "active":
-      return { label: "Active", kind: "active" };
+      return { label: "Active", labelKey: "active", kind: "active" };
     case "inactive":
     case "disabled":
-      return { label: "Inactive", kind: "off" };
+      return { label: "Inactive", labelKey: "inactive", kind: "off" };
     case "paused":
-      return { label: "Paused", kind: "paused" };
+      return { label: "Paused", labelKey: "paused", kind: "paused" };
     case "error":
     case "failed":
-      return { label: "Error", kind: "failed" };
+      return { label: "Error", labelKey: "error", kind: "failed" };
+    case "needs_owner":
+      return {
+        label: "Needs a new owner",
+        labelKey: "needs_owner",
+        kind: "attention",
+      };
     default:
       return fallbackStatusPresentation(status);
+  }
+}
+
+/**
+ * A stream subscriber's verdict on one event, or none at all. A verdict this
+ * build does not know reads as "unknown" and asks for a look, never as a
+ * neutral state.
+ */
+export function getStreamOutcomeStatusPresentation(
+  verdict: string
+): StatusPresentation {
+  switch (normalizeStatus(verdict)) {
+    case "reacted":
+      return { label: "Reacted", labelKey: "reacted", kind: "done" };
+    case "skipped":
+      return { label: "Skipped", labelKey: "skipped", kind: "off" };
+    case "error":
+      return { label: "Error", labelKey: "error", kind: "failed" };
+    case "unheard":
+      return { label: "Nobody listened", labelKey: "unheard", kind: "draft" };
+    default:
+      return {
+        label: "Unknown outcome",
+        labelKey: "unknown",
+        kind: "attention",
+      };
   }
 }
 
@@ -266,22 +298,22 @@ export function getTriggerExecutionStatusPresentation(
 ): StatusPresentation {
   switch (normalizeStatus(status)) {
     case "completed":
-      return { label: "Completed", kind: "done" };
+      return { label: "Completed", labelKey: "completed", kind: "done" };
     case "success":
-      return { label: "Success", kind: "done" };
+      return { label: "Success", labelKey: "success", kind: "done" };
     case "running":
     case "in_progress":
-      return { label: "Running", kind: "running" };
+      return { label: "Running", labelKey: "running", kind: "running" };
     case "pending":
-      return { label: "Pending", kind: "queued" };
+      return { label: "Pending", labelKey: "pending", kind: "queued" };
     case "failed":
-      return { label: "Failed", kind: "failed" };
+      return { label: "Failed", labelKey: "failed", kind: "failed" };
     case "error":
-      return { label: "Error", kind: "failed" };
+      return { label: "Error", labelKey: "error", kind: "failed" };
     case "timeout":
-      return { label: "Timed out", kind: "failed" };
+      return { label: "Timed out", labelKey: "timeout", kind: "failed" };
     case "cancelled":
-      return { label: "Cancelled", kind: "cancelled" };
+      return { label: "Cancelled", labelKey: "cancelled", kind: "cancelled" };
     default:
       return fallbackStatusPresentation(status);
   }

@@ -18,6 +18,7 @@ from agentarea_llm.infrastructure.model_clients import (
     ModelCallError,
     ModelCostUnavailableError,
     ModelEndpoint,
+    ModelProviderUnavailableError,
     VideoModel,
 )
 from litellm.llms.custom_httpx.http_handler import HTTPHandler
@@ -437,3 +438,27 @@ async def test_a_decision_without_token_usage_fails_loud():
 
     with pytest.raises(ModelCallError, match="input_tokens"):
         await model.evaluate("state", _QUESTIONS)
+
+
+@pytest.mark.parametrize("status", [408, 429, 500, 502, 503])
+async def test_a_provider_that_may_answer_later_is_told_apart(status):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, json={"error": {"message": "busy"}})
+
+    model = DecisionModel(_endpoint(), http_client_factory=_client_factory(handler))
+
+    with pytest.raises(ModelProviderUnavailableError) as raised:
+        await model.evaluate("state", _QUESTIONS)
+    assert raised.value.status_code == status
+
+
+@pytest.mark.parametrize("status", [400, 401, 402, 404])
+async def test_a_refused_call_is_not_mistaken_for_an_outage(status):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, json={"error": {"message": "no"}})
+
+    model = DecisionModel(_endpoint(), http_client_factory=_client_factory(handler))
+
+    with pytest.raises(ModelCallError) as raised:
+        await model.evaluate("state", _QUESTIONS)
+    assert not isinstance(raised.value, ModelProviderUnavailableError)

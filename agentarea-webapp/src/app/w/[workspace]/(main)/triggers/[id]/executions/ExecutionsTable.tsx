@@ -47,7 +47,7 @@ export default function ExecutionsTable({
             kind={status.kind}
             className="whitespace-nowrap"
           >
-            {status.label}
+            {status.labelKey ? t(`executionStatus.${status.labelKey}`) : status.label}
           </StatusIndicator>
         );
       },

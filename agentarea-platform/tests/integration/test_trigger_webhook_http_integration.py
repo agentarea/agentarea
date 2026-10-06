@@ -1,7 +1,9 @@
-"""Integration tests for webhook trigger processing with real HTTP requests.
+"""Integration tests for webhook intake with real HTTP requests.
 
-This module tests webhook triggers with actual HTTP requests, including
-different webhook types, validation, rate limiting, and error handling.
+A request to ``/webhooks/{id}`` is verified and parsed against the trigger's
+stream source and recorded as one stream event, answered ``202``. Firing the
+trigger from that event is the dispatcher's job; these tests play that part with
+``TriggerService.fire`` on the recorded event wherever they check the task.
 """
 
 import asyncio
@@ -23,29 +25,20 @@ try:
     from agentarea_triggers.domain.enums import TriggerType, WebhookType
     from agentarea_triggers.domain.models import TriggerCreate
     from agentarea_triggers.trigger_service import TriggerService
-    from agentarea_triggers.webhook_manager import DefaultWebhookManager
 
     TRIGGERS_AVAILABLE = True
 except ImportError:
     TRIGGERS_AVAILABLE = False
     pytest.skip("Triggers not available", allow_module_level=True)
 
-from agentarea_api.api.deps.services import TriggerServiceWebhookCallback
 from agentarea_common.auth.test_utils import create_test_user_context
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.events.broker import EventBroker
 from agentarea_tasks.task_service import TaskService
 
+from tests.integration.webhook_intake_harness import intake, journal  # noqa: F401
+
 pytestmark = pytest.mark.asyncio
-
-
-class _FakeSecretReader:
-    """In-memory SecretReader stand-in for DefaultWebhookManager's required
-    secret_reader. Every test below that needs a signing secret configures
-    it via validation_rules, so this never has to hold real values."""
-
-    async def get_secret(self, name: str) -> str | None:
-        return None
 
 
 class TestWebhookHTTPIntegration:
@@ -113,18 +106,7 @@ class TestWebhookHTTPIntegration:
         return service
 
     @pytest.fixture
-    async def webhook_manager(self, trigger_service, mock_event_broker):
-        """Create webhook manager for testing."""
-        execution_callback = TriggerServiceWebhookCallback(trigger_service)
-        return DefaultWebhookManager(
-            execution_callback=execution_callback,
-            event_broker=mock_event_broker,
-            trigger_service=trigger_service,
-            secret_reader=_FakeSecretReader(),
-        )
-
-    @pytest.fixture
-    def webhook_app(self, webhook_manager):
+    def webhook_app(self, intake):
         """Create FastAPI app with webhook endpoints."""
         app = FastAPI()
 
@@ -154,7 +136,7 @@ class TestWebhookHTTPIntegration:
                 body = {}
 
             # Process webhook
-            response = await webhook_manager.handle_webhook_request(
+            response = await intake.handle_webhook_request(
                 webhook_id, method, headers, body, query_params, raw_body=raw_body
             )
 
@@ -167,7 +149,7 @@ class TestWebhookHTTPIntegration:
             headers = dict(request.headers)
             query_params = dict(request.query_params)
 
-            response = await webhook_manager.handle_webhook_request(
+            response = await intake.handle_webhook_request(
                 webhook_id, method, headers, {}, query_params
             )
 
@@ -188,10 +170,9 @@ class TestWebhookHTTPIntegration:
     # Generic Webhook Tests
 
     async def test_generic_webhook_post_request(
-        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
+        self, webhook_client, trigger_service, mock_task_service, journal, sample_agent_id
     ):
-        """Test generic webhook with POST request."""
-        # Create generic webhook trigger
+        """A generic POST is recorded with its request, and fires the trigger from it."""
         trigger_data = TriggerCreate(
             name="Generic POST Webhook",
             description="Test generic webhook with POST",
@@ -212,7 +193,6 @@ class TestWebhookHTTPIntegration:
         trigger = await trigger_service.create_trigger(trigger_data)
         webhook_id = trigger.webhook_id
 
-        # Send POST request
         payload = {
             "message": "Hello webhook",
             "timestamp": datetime.utcnow().isoformat(),
@@ -229,32 +209,28 @@ class TestWebhookHTTPIntegration:
             },
         )
 
-        # Verify response
-        assert response.status_code == 200
-        result = response.json()
-        assert result["status"] == "success"
+        assert response.status_code == 202
+        assert response.json() == {"status": "accepted", "sequence": 1}
 
-        # Verify task was created with correct parameters
+        event = journal.data()
+        assert event["method"] == "POST"
+        assert event["body"]["message"] == "Hello webhook"
+        assert event["headers"]["x-custom-header"] == "test-value"
+
+        # What the dispatcher does with the recorded event.
+        await trigger_service.fire(trigger.id, event)
         mock_task_service.route_or_submit_task.assert_called_once()
-        call_args = mock_task_service.route_or_submit_task.call_args
-
-        task_params = call_args.args[0].task_parameters
+        task_params = mock_task_service.route_or_submit_task.call_args.args[0].task_parameters
         assert task_params["trigger_id"] == str(trigger.id)
         assert task_params["trigger_type"] == "webhook"
         assert task_params["webhook_type"] == "generic"
         assert task_params["action"] == "process"
-
-        # Verify webhook request data is preserved
-        trigger_data = task_params["trigger_data"]
-        assert trigger_data["method"] == "POST"
-        assert trigger_data["body"]["message"] == "Hello webhook"
-        assert trigger_data["headers"]["x-custom-header"] == "test-value"
+        assert task_params["trigger_data"]["body"]["message"] == "Hello webhook"
 
     async def test_generic_webhook_multiple_methods(
-        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
+        self, webhook_client, trigger_service, journal, sample_agent_id
     ):
-        """Test generic webhook supporting multiple HTTP methods."""
-        # Create webhook trigger supporting multiple methods
+        """Every allowed method is recorded; a method the source does not allow is refused."""
         trigger_data = TriggerCreate(
             name="Multi-Method Webhook",
             agent_id=sample_agent_id,
@@ -273,45 +249,40 @@ class TestWebhookHTTPIntegration:
         trigger = await trigger_service.create_trigger(trigger_data)
         webhook_id = trigger.webhook_id
 
-        # Test POST
         post_response = webhook_client.post(
             f"/webhooks/{webhook_id}", json={"method": "POST", "data": "post_data"}
         )
-        assert post_response.status_code == 200
+        assert post_response.status_code == 202
 
-        # Test PUT
         put_response = webhook_client.put(
             f"/webhooks/{webhook_id}", json={"method": "PUT", "data": "put_data"}
         )
-        assert put_response.status_code == 200
+        assert put_response.status_code == 202
 
-        # Test PATCH
         patch_response = webhook_client.patch(
             f"/webhooks/{webhook_id}", json={"method": "PATCH", "data": "patch_data"}
         )
-        assert patch_response.status_code == 200
+        assert patch_response.status_code == 202
 
-        # Test unsupported method (GET). All webhook failures currently
-        # collapse to a generic 400 (no distinct 404/405), so check the
-        # message instead of a dedicated status code.
+        assert [data.data["method"] for _, data, _ in journal.events] == ["POST", "PUT", "PATCH"]
+
+        # All webhook refusals collapse to a generic 400 (no distinct 405), so
+        # check the message instead of a dedicated status code.
         get_response = webhook_client.get(f"/webhooks/{webhook_id}")
         assert get_response.status_code == 400
         assert "not allowed" in get_response.json()["message"].lower()
-
-        # Verify all supported methods created tasks
-        assert mock_task_service.route_or_submit_task.call_count == 3
+        assert len(journal.events) == 3
 
     # GitHub Webhook Tests
 
     async def test_github_webhook_push_event(
-        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
+        self, webhook_client, trigger_service, mock_task_service, journal, sample_agent_id
     ):
-        """Test GitHub webhook with push event."""
+        """A signed GitHub push is recorded once under its delivery id, and fires the trigger."""
         # A GitHub trigger has a registered signature scheme, so an unresolvable
-        # secret now fails closed; a real webhook_secret + matching signature is
+        # secret fails closed; a real webhook_secret + matching signature is
         # required for the request to reach the parser under test.
         secret = "github-webhook-secret"  # noqa: S105  # pragma: allowlist secret
-        # Create GitHub webhook trigger
         trigger_data = TriggerCreate(
             name="GitHub Push Webhook",
             description="Handle GitHub push events",
@@ -333,7 +304,6 @@ class TestWebhookHTTPIntegration:
         trigger = await trigger_service.create_trigger(trigger_data)
         webhook_id = trigger.webhook_id
 
-        # GitHub push payload
         github_payload = {
             "ref": "refs/heads/main",
             "before": "abc123",
@@ -356,47 +326,46 @@ class TestWebhookHTTPIntegration:
         }
         raw_body = json.dumps(github_payload).encode("utf-8")
         signature = "sha256=" + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+        headers = {
+            "Content-Type": "application/json",
+            "X-GitHub-Event": "push",
+            "X-GitHub-Delivery": "12345-67890",
+            "X-Hub-Signature-256": signature,
+            "User-Agent": "GitHub-Hookshot/abc123",
+        }
 
-        # Send GitHub webhook request
-        response = webhook_client.post(
-            f"/webhooks/{webhook_id}",
-            content=raw_body,
-            headers={
-                "Content-Type": "application/json",
-                "X-GitHub-Event": "push",
-                "X-GitHub-Delivery": "12345-67890",
-                "X-Hub-Signature-256": signature,
-                "User-Agent": "GitHub-Hookshot/abc123",
-            },
-        )
+        response = webhook_client.post(f"/webhooks/{webhook_id}", content=raw_body, headers=headers)
+        assert response.status_code == 202
+        assert response.json()["status"] == "accepted"
 
-        # Verify response
-        assert response.status_code == 200
-        result = response.json()
-        assert result["status"] == "success"
+        # GitHub redelivers with the same delivery id: recorded once.
+        again = webhook_client.post(f"/webhooks/{webhook_id}", content=raw_body, headers=headers)
+        assert again.status_code == 202
+        assert again.json() == {"status": "duplicate", "sequence": response.json()["sequence"]}
 
-        # Verify task was created with GitHub-specific data
+        [(_, event, event_key)] = journal.events
+        assert event_key == "x-github-delivery:12345-67890"
+        assert event.type == "push"
+        assert event.data["ref"] == "refs/heads/main"
+        assert event.data["raw_data"]["repository"]["name"] == "test-repo"
+        assert event.data["headers"]["x-github-event"] == "push"
+        # A signature over the body is a credential's output; it is not kept.
+        assert "x-hub-signature-256" not in event.data["headers"]
+
+        await trigger_service.fire(trigger.id, event.data)
         mock_task_service.route_or_submit_task.assert_called_once()
-        call_args = mock_task_service.route_or_submit_task.call_args
-
-        task_params = call_args.args[0].task_parameters
+        task_params = mock_task_service.route_or_submit_task.call_args.args[0].task_parameters
         assert task_params["action"] == "deploy"
         assert task_params["environment"] == "staging"
-
-        # Verify GitHub webhook data is preserved
-        trigger_data = task_params["trigger_data"]
-        assert trigger_data["ref"] == "refs/heads/main"
-        assert trigger_data["raw_data"]["repository"]["name"] == "test-repo"
-        assert trigger_data["headers"]["x-github-event"] == "push"
+        assert task_params["trigger_data"]["ref"] == "refs/heads/main"
 
     async def test_github_webhook_validation_failure(
-        self, webhook_client, trigger_service, sample_agent_id
+        self, webhook_client, trigger_service, journal, sample_agent_id
     ):
-        """Test GitHub webhook with validation failure."""
+        """A GitHub request missing a required header is refused and not recorded."""
         # A valid signature is required to reach the (separate) header
-        # validation this test targets — github fails closed without one.
+        # validation this test targets -- github fails closed without one.
         secret = "github-webhook-secret"  # noqa: S105  # pragma: allowlist secret
-        # Create GitHub webhook trigger with validation
         trigger_data = TriggerCreate(
             name="GitHub Webhook with Validation",
             agent_id=sample_agent_id,
@@ -414,7 +383,6 @@ class TestWebhookHTTPIntegration:
         trigger = await trigger_service.create_trigger(trigger_data)
         webhook_id = trigger.webhook_id
 
-        # Send request missing required header
         raw_body = json.dumps({"ref": "refs/heads/main"}).encode("utf-8")
         signature = "sha256=" + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
         response = webhook_client.post(
@@ -428,22 +396,20 @@ class TestWebhookHTTPIntegration:
             },
         )
 
-        # Verify validation failure
         assert response.status_code == 400
-        result = response.json()
-        assert "validation failed" in result["message"].lower()
+        assert "validation failed" in response.json()["message"].lower()
+        assert journal.events == []
 
     # Slack Webhook Tests
 
     async def test_slack_webhook_slash_command(
-        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
+        self, webhook_client, trigger_service, mock_task_service, journal, sample_agent_id
     ):
-        """Test Slack webhook with slash command."""
+        """A signed Slack slash command is recorded, and its text is what the agent is asked."""
         # Slack has a registered signature scheme, so a real signing_secret
         # plus a matching X-Slack-Signature are required to get past the
-        # (now fail-closed) verification step.
+        # (fail-closed) verification step.
         secret = "slack-signing-secret"  # noqa: S105  # pragma: allowlist secret
-        # Create Slack webhook trigger
         trigger_data = TriggerCreate(
             name="Slack Slash Command",
             description="Handle Slack slash commands",
@@ -461,7 +427,6 @@ class TestWebhookHTTPIntegration:
         trigger = await trigger_service.create_trigger(trigger_data)
         webhook_id = trigger.webhook_id
 
-        # Slack slash command payload (form-encoded)
         slack_payload = {
             "token": "verification_token",
             "team_id": "T1234567890",
@@ -484,7 +449,6 @@ class TestWebhookHTTPIntegration:
             "v0=" + hmac.new(secret.encode(), sig_basestring.encode(), hashlib.sha256).hexdigest()
         )
 
-        # Send Slack webhook request
         response = webhook_client.post(
             f"/webhooks/{webhook_id}",
             content=raw_body,
@@ -496,34 +460,25 @@ class TestWebhookHTTPIntegration:
             },
         )
 
-        # Verify response
-        assert response.status_code == 200
-        result = response.json()
-        assert result["status"] == "success"
+        assert response.status_code == 202
+        assert response.json()["status"] == "accepted"
+        event = journal.data()
+        assert event["method"] == "POST"
 
-        # Verify task was created with Slack-specific data
+        await trigger_service.fire(trigger.id, event)
         mock_task_service.route_or_submit_task.assert_called_once()
-        call_args = mock_task_service.route_or_submit_task.call_args
-
+        submitted = mock_task_service.route_or_submit_task.call_args.args[0]
         # The slash command's own text is the ask; nothing is set on the trigger.
-        assert call_args.args[0].query == "staging main"
-
-        task_params = call_args.args[0].task_parameters
-        assert task_params["platform"] == "slack"
-        assert task_params["response_type"] == "ephemeral"
-
-        # Verify Slack data is preserved
-        trigger_data = task_params["trigger_data"]
-        # Note: Form data gets parsed differently than JSON
-        assert trigger_data["method"] == "POST"
+        assert submitted.query == "staging main"
+        assert submitted.task_parameters["platform"] == "slack"
+        assert submitted.task_parameters["response_type"] == "ephemeral"
 
     # Telegram Webhook Tests
 
     async def test_telegram_webhook_message(
-        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
+        self, webhook_client, trigger_service, mock_task_service, journal, sample_agent_id
     ):
-        """Test Telegram webhook with message update."""
-        # Create Telegram webhook trigger
+        """A Telegram update is recorded under its update_id, and fires the trigger."""
         trigger_data = TriggerCreate(
             name="Telegram Bot Webhook",
             description="Handle Telegram bot updates",
@@ -540,7 +495,6 @@ class TestWebhookHTTPIntegration:
         trigger = await trigger_service.create_trigger(trigger_data)
         webhook_id = trigger.webhook_id
 
-        # Telegram update payload
         telegram_payload = {
             "update_id": 123456789,
             "message": {
@@ -564,7 +518,6 @@ class TestWebhookHTTPIntegration:
             },
         }
 
-        # Send Telegram webhook request
         response = webhook_client.post(
             f"/webhooks/{webhook_id}",
             json=telegram_payload,
@@ -574,43 +527,38 @@ class TestWebhookHTTPIntegration:
             },
         )
 
-        # Verify response
-        assert response.status_code == 200
-        result = response.json()
-        assert result["status"] == "success"
+        assert response.status_code == 202
+        assert response.json()["status"] == "accepted"
+        [(_, event, event_key)] = journal.events
+        assert event_key == "telegram:123456789"
+        assert event.data["text"] == "Hello bot! Can you help me?"
+        assert event.data["username"] == "testuser"
 
-        # Verify task was created with Telegram-specific data
+        await trigger_service.fire(trigger.id, event.data)
         mock_task_service.route_or_submit_task.assert_called_once()
-        call_args = mock_task_service.route_or_submit_task.call_args
-
-        task_params = call_args.args[0].task_parameters
+        task_params = mock_task_service.route_or_submit_task.call_args.args[0].task_parameters
         assert task_params["platform"] == "telegram"
         assert task_params["auto_reply"] is True
-
-        # Verify Telegram data is preserved
-        trigger_data = task_params["trigger_data"]
-        assert trigger_data["text"] == "Hello bot! Can you help me?"
-        assert trigger_data["username"] == "testuser"
+        assert task_params["trigger_data"]["text"] == "Hello bot! Can you help me?"
 
     # Error Handling and Edge Cases
 
-    async def test_webhook_not_found(self, webhook_client):
-        """Test webhook request to non-existent webhook."""
+    async def test_webhook_not_found(self, webhook_client, journal):
+        """A request for a webhook no source answers on is refused."""
         fake_webhook_id = f"fake_{uuid4().hex[:8]}"
 
         response = webhook_client.post(f"/webhooks/{fake_webhook_id}", json={"test": "data"})
 
-        # All webhook failures currently collapse to a generic 400 (no
-        # distinct 404), so check the message instead of a dedicated status.
+        # All webhook refusals collapse to a generic 400 (no distinct 404), so
+        # check the message instead of a dedicated status.
         assert response.status_code == 400
-        result = response.json()
-        assert "not found" in result["message"].lower()
+        assert "not found" in response.json()["message"].lower()
+        assert journal.events == []
 
     async def test_webhook_method_not_allowed(
-        self, webhook_client, trigger_service, sample_agent_id
+        self, webhook_client, trigger_service, journal, sample_agent_id
     ):
-        """Test webhook with unsupported HTTP method."""
-        # Create webhook that only allows POST
+        """A method the source does not allow is refused and not recorded."""
         trigger_data = TriggerCreate(
             name="POST Only Webhook",
             agent_id=sample_agent_id,
@@ -624,18 +572,16 @@ class TestWebhookHTTPIntegration:
         trigger = await trigger_service.create_trigger(trigger_data)
         webhook_id = trigger.webhook_id
 
-        # Try GET request (not allowed)
         response = webhook_client.get(f"/webhooks/{webhook_id}")
 
-        # All webhook failures currently collapse to a generic 400 (no
-        # distinct 405), so check the message instead of a dedicated status.
+        # All webhook refusals collapse to a generic 400 (no distinct 405), so
+        # check the message instead of a dedicated status.
         assert response.status_code == 400
-        result = response.json()
-        assert "not allowed" in result["message"].lower()
+        assert "not allowed" in response.json()["message"].lower()
+        assert journal.events == []
 
     async def test_webhook_malformed_json(self, webhook_client, trigger_service, sample_agent_id):
         """Test webhook with malformed JSON payload."""
-        # Create webhook trigger
         trigger_data = TriggerCreate(
             name="JSON Webhook",
             agent_id=sample_agent_id,
@@ -648,21 +594,19 @@ class TestWebhookHTTPIntegration:
         trigger = await trigger_service.create_trigger(trigger_data)
         webhook_id = trigger.webhook_id
 
-        # Send malformed JSON
         response = webhook_client.post(
             f"/webhooks/{webhook_id}",
             data='{"invalid": json}',  # Malformed JSON
             headers={"Content-Type": "application/json"},
         )
 
-        # Should handle gracefully and still process
-        assert response.status_code in [200, 400]  # Depends on implementation
+        # Should handle gracefully: recorded as received, or refused.
+        assert response.status_code in [202, 400]
 
     async def test_webhook_large_payload(
-        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
+        self, webhook_client, trigger_service, journal, sample_agent_id
     ):
-        """Test webhook with large payload."""
-        # Create webhook trigger
+        """A large payload under the event size limit is recorded whole."""
         trigger_data = TriggerCreate(
             name="Large Payload Webhook",
             agent_id=sample_agent_id,
@@ -676,7 +620,6 @@ class TestWebhookHTTPIntegration:
         trigger = await trigger_service.create_trigger(trigger_data)
         webhook_id = trigger.webhook_id
 
-        # Create large payload (but not too large to cause issues)
         large_data = {
             "message": "Large payload test",
             "data": ["item_" + str(i) for i in range(1000)],  # 1000 items
@@ -687,19 +630,14 @@ class TestWebhookHTTPIntegration:
             f"/webhooks/{webhook_id}", json=large_data, headers={"Content-Type": "application/json"}
         )
 
-        # Should handle large payload successfully
-        assert response.status_code == 200
-        result = response.json()
-        assert result["status"] == "success"
-
-        # Verify task was created
-        mock_task_service.route_or_submit_task.assert_called_once()
+        assert response.status_code == 202
+        assert response.json()["status"] == "accepted"
+        assert len(journal.data()["body"]["data"]) == 1000
 
     async def test_concurrent_webhook_requests(
-        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
+        self, webhook_client, trigger_service, journal, sample_agent_id
     ):
-        """Test concurrent webhook requests to the same endpoint."""
-        # Create webhook trigger
+        """Requests with no delivery id are each recorded: none is mistaken for a repeat."""
         trigger_data = TriggerCreate(
             name="Concurrent Webhook",
             agent_id=sample_agent_id,
@@ -713,31 +651,24 @@ class TestWebhookHTTPIntegration:
         trigger = await trigger_service.create_trigger(trigger_data)
         webhook_id = trigger.webhook_id
 
-        # Send multiple concurrent requests
         async def send_request(request_id: int):
             return webhook_client.post(
                 f"/webhooks/{webhook_id}",
                 json={"request_id": request_id, "timestamp": datetime.utcnow().isoformat()},
             )
 
-        # Send 5 concurrent requests
-        tasks = [send_request(i) for i in range(5)]
-        responses = await asyncio.gather(*tasks)
+        responses = await asyncio.gather(*[send_request(i) for i in range(5)])
 
-        # Verify all requests were processed successfully
         for response in responses:
-            assert response.status_code == 200
-            result = response.json()
-            assert result["status"] == "success"
-
-        # Verify all tasks were created
-        assert mock_task_service.route_or_submit_task.call_count == 5
+            assert response.status_code == 202
+            assert response.json()["status"] == "accepted"
+        assert sorted(response.json()["sequence"] for response in responses) == [1, 2, 3, 4, 5]
+        assert all(key.startswith("recv:") for _, _, key in journal.events)
 
     async def test_webhook_with_query_parameters(
-        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
+        self, webhook_client, trigger_service, journal, sample_agent_id
     ):
-        """Test webhook with query parameters."""
-        # Create webhook trigger
+        """Query parameters are recorded with the event; a credential among them is not."""
         trigger_data = TriggerCreate(
             name="Query Params Webhook",
             agent_id=sample_agent_id,
@@ -751,36 +682,23 @@ class TestWebhookHTTPIntegration:
         trigger = await trigger_service.create_trigger(trigger_data)
         webhook_id = trigger.webhook_id
 
-        # Send request with query parameters
         response = webhook_client.post(
-            f"/webhooks/{webhook_id}?source=external&version=1.0&debug=true",
+            f"/webhooks/{webhook_id}?source=external&version=1.0&debug=true&token=s3cret",
             json={"message": "Test with query params"},
             headers={"Content-Type": "application/json"},
         )
 
-        # Verify response
-        assert response.status_code == 200
-        result = response.json()
-        assert result["status"] == "success"
-
-        # Verify task was created with query parameters
-        mock_task_service.route_or_submit_task.assert_called_once()
-        call_args = mock_task_service.route_or_submit_task.call_args
-
-        task_params = call_args.args[0].task_parameters
-        trigger_data = task_params["trigger_data"]
-
-        # Verify query parameters are preserved
-        query_params = trigger_data["query_params"]
-        assert query_params["source"] == "external"
-        assert query_params["version"] == "1.0"
-        assert query_params["debug"] == "true"
+        assert response.status_code == 202
+        assert journal.data()["query_params"] == {
+            "source": "external",
+            "version": "1.0",
+            "debug": "true",
+        }
 
     async def test_webhook_custom_headers_preservation(
-        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
+        self, webhook_client, trigger_service, journal, sample_agent_id
     ):
-        """Test that custom headers are preserved in webhook processing."""
-        # Create webhook trigger
+        """Custom headers are recorded with the event; credentials among them are not."""
         trigger_data = TriggerCreate(
             name="Custom Headers Webhook",
             agent_id=sample_agent_id,
@@ -794,7 +712,6 @@ class TestWebhookHTTPIntegration:
         trigger = await trigger_service.create_trigger(trigger_data)
         webhook_id = trigger.webhook_id
 
-        # Send request with custom headers
         custom_headers = {
             "Content-Type": "application/json",
             "X-Custom-Source": "external-system",
@@ -810,19 +727,11 @@ class TestWebhookHTTPIntegration:
             headers=custom_headers,
         )
 
-        # Verify response
-        assert response.status_code == 200
+        assert response.status_code == 202
 
-        # Verify custom headers are preserved
-        mock_task_service.route_or_submit_task.assert_called_once()
-        call_args = mock_task_service.route_or_submit_task.call_args
-
-        task_params = call_args.args[0].task_parameters
-        trigger_data = task_params["trigger_data"]
-
-        # Verify headers are preserved (note: FastAPI lowercases header names)
-        headers = trigger_data["headers"]
+        # Header names arrive lowercased from the ASGI layer.
+        headers = journal.data()["headers"]
         assert headers["x-custom-source"] == "external-system"
         assert headers["x-request-id"] == "req-12345"
-        assert headers["authorization"] == "Bearer token123"
         assert headers["user-agent"] == "CustomClient/2.0"
+        assert "authorization" not in headers

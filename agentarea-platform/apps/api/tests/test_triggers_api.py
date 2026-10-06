@@ -127,6 +127,8 @@ async def async_client():
 def mock_trigger_service():
     """Create mock trigger service."""
     service = AsyncMock(spec=TriggerService)
+    service.stream_service = AsyncMock()
+    service.stream_service.trigger_bindings.return_value = {}
     return service
 
 
@@ -1027,3 +1029,71 @@ class TestRunTriggerNow:
         response = client.post(f"/v1/workspaces/acme/triggers/{trigger_id}/run")
 
         assert response.status_code == 404
+
+
+class _StreamReaders:
+    """Allows everything except reading the streams in ``unreadable``; records each check."""
+
+    def __init__(self, *unreadable: str) -> None:
+        self.unreadable = set(unreadable)
+        self.checks: list[tuple[str, str, str, str]] = []
+
+    async def check(self, user_id: str, permission: str, resource_type: str, resource_id: str):
+        self.checks.append((user_id, permission, resource_type, resource_id))
+        return not (
+            permission == "read" and resource_type == "stream" and resource_id in self.unreadable
+        )
+
+
+def _stream_trigger_body(stream_id: str) -> dict:
+    return {
+        "name": "On push",
+        "agent_id": str(uuid4()),
+        "trigger_type": "stream",
+        "stream_id": stream_id,
+        "task_parameters": {"text": "Summarise the push"},
+    }
+
+
+async def test_a_stream_trigger_on_a_stream_its_creator_may_not_read_is_refused(
+    async_client, mock_trigger_service
+):
+    from agentarea_common.auth.permission import PermissionService
+    from agentarea_common.di.container import register_singleton
+
+    stream_id = str(uuid4())
+    register_singleton(PermissionService, _StreamReaders(stream_id))
+
+    response = await async_client.post(
+        "/v1/workspaces/acme/triggers/", json=_stream_trigger_body(stream_id)
+    )
+
+    assert response.status_code == 403, response.text
+    mock_trigger_service.create_trigger.assert_not_called()
+
+
+async def test_a_stream_trigger_checks_its_creator_may_read_the_stream(
+    async_client, mock_trigger_service
+):
+    from agentarea_common.auth.permission import PermissionService
+    from agentarea_common.di.container import register_singleton
+    from agentarea_triggers.domain.enums import TriggerType as DomainTriggerType
+    from agentarea_triggers.domain.models import Trigger as DomainTrigger
+
+    stream_id = str(uuid4())
+    pdp = _StreamReaders()
+    register_singleton(PermissionService, pdp)
+    mock_trigger_service.create_trigger.return_value = DomainTrigger(
+        name="On push",
+        agent_id=uuid4(),
+        trigger_type=DomainTriggerType.STREAM,
+        created_by="test_user",
+        workspace_id="w",
+    )
+
+    response = await async_client.post(
+        "/v1/workspaces/acme/triggers/", json=_stream_trigger_body(stream_id)
+    )
+
+    assert response.status_code == 201, response.text
+    assert ("test_user", "read", "stream", stream_id) in pdp.checks

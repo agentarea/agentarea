@@ -23,6 +23,7 @@ members = [
     "agentarea-projects",
     "agentarea-registry",
     "agentarea-secrets",
+    "agentarea-streams",
     "agentarea-tasks",
     "agentarea-triggers",
     "agentarea-wallet",
@@ -154,6 +155,7 @@ dependencies = [
     { name = "agentarea-projects" },
     { name = "agentarea-registry" },
     { name = "agentarea-secrets" },
+    { name = "agentarea-streams" },
     { name = "agentarea-tasks" },
     { name = "agentarea-triggers" },
     { name = "agentarea-wallet" },
@@ -187,6 +189,7 @@ requires-dist = [
     { name = "agentarea-projects", editable = "libs/projects" },
     { name = "agentarea-registry", editable = "libs/registry" },
     { name = "agentarea-secrets", editable = "libs/secrets" },
+    { name = "agentarea-streams", editable = "libs/streams" },
     { name = "agentarea-tasks", editable = "libs/tasks" },
     { name = "agentarea-triggers", editable = "libs/triggers" },
     { name = "agentarea-wallet", editable = "libs/wallet" },
@@ -497,6 +500,25 @@ requires-dist = [
 ]
 
 [[package]]
+name = "agentarea-streams"
+version = "0.1.0"
+source = { editable = "libs/streams" }
+dependencies = [
+    { name = "agentarea-common" },
+    { name = "pydantic" },
+    { name = "redis" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agentarea-common", editable = "libs/common" },
+    { name = "pydantic", specifier = ">=2.4.2" },
+    { name = "redis", specifier = ">=5.0.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.23" },
+]
+
+[[package]]
 name = "agentarea-tasks"
 version = "0.1.0"
 source = { editable = "libs/tasks" }
@@ -522,6 +544,7 @@ source = { editable = "libs/triggers" }
 dependencies = [
     { name = "agentarea-common" },
     { name = "agentarea-llm" },
+    { name = "agentarea-streams" },
     { name = "aiosmtplib" },
     { name = "pydantic" },
     { name = "temporalio" },
@@ -531,6 +554,7 @@ dependencies = [
 requires-dist = [
     { name = "agentarea-common", editable = "libs/common" },
     { name = "agentarea-llm", editable = "libs/llm" },
+    { name = "agentarea-streams", editable = "libs/streams" },
     { name = "aiosmtplib", specifier = ">=3.0" },
     { name = "pydantic", specifier = ">=2.4.2" },
     { name = "temporalio", specifier = ">=1.0.0" },
@@ -563,6 +587,7 @@ dependencies = [
     { name = "agentarea-common" },
     { name = "agentarea-execution" },
     { name = "agentarea-governance" },
+    { name = "agentarea-streams" },
     { name = "agentarea-tasks" },
     { name = "agentarea-triggers" },
     { name = "click" },
@@ -578,6 +603,7 @@ requires-dist = [
     { name = "agentarea-common", editable = "libs/common" },
     { name = "agentarea-execution", editable = "libs/execution" },
     { name = "agentarea-governance", editable = "libs/governance" },
+    { name = "agentarea-streams", editable = "libs/streams" },
     { name = "agentarea-tasks", editable = "libs/tasks" },
     { name = "agentarea-triggers", editable = "libs/triggers" },
     { name = "click", specifier = ">=8.0.0" },
@@ -608,6 +634,7 @@ dev = [
     { name = "agentarea-mcp" },
     { name = "agentarea-payment" },
     { name = "agentarea-secrets" },
+    { name = "agentarea-streams" },
     { name = "agentarea-tasks" },
     { name = "agentarea-triggers" },
     { name = "agentarea-wallet" },
@@ -653,6 +680,7 @@ dev = [
     { name = "agentarea-mcp", editable = "libs/mcp" },
     { name = "agentarea-payment", editable = "libs/payment" },
     { name = "agentarea-secrets", editable = "libs/secrets" },
+    { name = "agentarea-streams", editable = "libs/streams" },
     { name = "agentarea-tasks", editable = "libs/tasks" },
     { name = "agentarea-triggers", editable = "libs/triggers" },
     { name = "agentarea-wallet", editable = "libs/wallet" },

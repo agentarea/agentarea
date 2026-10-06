@@ -25,6 +25,7 @@ class TaskORM(BaseModel, WorkspaceScopedMixin):  # SoftDeleteMixin commented out
             "scheduled_at",
             postgresql_where=text("status = 'scheduled'"),
         ),
+        Index("ix_tasks_origin", "origin_type", "origin_id"),
     )
 
     agent_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
@@ -41,6 +42,13 @@ class TaskORM(BaseModel, WorkspaceScopedMixin):  # SoftDeleteMixin commented out
     execution_id: Mapped[str] = mapped_column(String(255), nullable=True)
     task_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True)
     project_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    origin_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    origin_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    causation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    parent_task_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=True, index=True
+    )
 
 
 class TaskEventORM(EventBaseModel, WorkspaceScopedMixin):
