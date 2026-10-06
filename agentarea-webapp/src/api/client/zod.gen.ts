@@ -3010,6 +3010,19 @@ export const zTaskInputSubmission = z.object({
 });
 
 /**
+ * TaskProvenance
+ *
+ * Why a task exists: who or what started it, and the event that caused it.
+ */
+export const zTaskProvenance = z.object({
+  causation_id: z.string().nullish(),
+  correlation_id: z.string().nullish(),
+  origin_id: z.string().nullish(),
+  origin_type: z.enum(["user", "trigger", "agent", "api"]).nullish(),
+  parent_task_id: z.string().uuid().nullish(),
+});
+
+/**
  * TaskResponse
  */
 export const zTaskResponse = z.object({
@@ -3022,6 +3035,7 @@ export const zTaskResponse = z.object({
   failure_reason: z.string().nullish(),
   id: z.string().uuid(),
   parameters: z.record(z.unknown()),
+  provenance: zTaskProvenance.optional(),
   result: z.union([z.record(z.unknown()), z.string()]).nullish(),
   scheduled_at: z.string().datetime().nullish(),
   status: z.string(),
@@ -3078,6 +3092,7 @@ export const zTaskWithAgent = z.object({
   failure_reason: z.string().nullish(),
   id: z.string().uuid(),
   parameters: z.record(z.unknown()),
+  provenance: zTaskProvenance.optional(),
   result: z.union([z.record(z.unknown()), z.string()]).nullish(),
   scheduled_at: z.string().datetime().nullish(),
   status: z.string(),

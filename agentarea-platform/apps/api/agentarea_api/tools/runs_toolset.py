@@ -213,6 +213,7 @@ class RunsToolset(Toolset):
                     "status": task.status,
                     "agent_id": str(task.agent_id) if task.agent_id else None,
                     "query": task.query,
+                    "provenance": task.provenance.model_dump(mode="json"),
                 },
                 default=str,
             )

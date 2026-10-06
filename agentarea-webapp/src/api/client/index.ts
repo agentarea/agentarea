@@ -1819,6 +1819,7 @@ export type {
   TaskEvent,
   TaskEventResponse,
   TaskInputSubmission,
+  TaskProvenance,
   TaskResponse,
   TaskSummary,
   TaskWithAgent,

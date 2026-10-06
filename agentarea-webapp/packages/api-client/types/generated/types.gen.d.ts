@@ -6990,6 +6990,33 @@ export type TaskInputSubmission = {
     };
 };
 /**
+ * TaskProvenance
+ *
+ * Why a task exists: who or what started it, and the event that caused it.
+ */
+export type TaskProvenance = {
+    /**
+     * Causation Id
+     */
+    causation_id?: string | null;
+    /**
+     * Correlation Id
+     */
+    correlation_id?: string | null;
+    /**
+     * Origin Id
+     */
+    origin_id?: string | null;
+    /**
+     * Origin Type
+     */
+    origin_type?: 'user' | 'trigger' | 'agent' | 'api' | null;
+    /**
+     * Parent Task Id
+     */
+    parent_task_id?: string | null;
+};
+/**
  * TaskResponse
  */
 export type TaskResponse = {
@@ -7031,6 +7058,7 @@ export type TaskResponse = {
     parameters: {
         [key: string]: unknown;
     };
+    provenance?: TaskProvenance;
     /**
      * Result
      */
@@ -7191,6 +7219,7 @@ export type TaskWithAgent = {
     parameters: {
         [key: string]: unknown;
     };
+    provenance?: TaskProvenance;
     /**
      * Result
      */

@@ -57,6 +57,7 @@ from agentarea_tasks.domain.exceptions import (
     BudgetCapExceededError,
     SchedulingNotSupportedError,
 )
+from agentarea_tasks.domain.models import TaskProvenance
 from agentarea_tasks.domain.statuses import TaskStatus
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
 from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig, require_future_instant
@@ -359,6 +360,9 @@ class TaskResponse(BaseModel):
     # Who started the task. Distinct from `parameters`-derived source: a
     # trigger-fired task is still owned by whoever created the trigger.
     created_by: str | None = None
+    # Who or what started the task and the event that caused it: a trigger and
+    # its stream event, a delegating agent, a person, the API.
+    provenance: TaskProvenance = Field(default_factory=TaskProvenance)
 
     @classmethod
     def create_new(
@@ -397,6 +401,7 @@ class TaskResponse(BaseModel):
             execution_id=task.execution_id,
             scheduled_at=task.scheduled_at,
             created_by=task.user_id,
+            provenance=task.provenance,
         )
 
 
@@ -427,6 +432,9 @@ class TaskWithAgent(BaseModel):
     # is GET /v1/principals' job, so a task never fails to load because the
     # identity provider is slow.
     created_by: str | None = None
+    # Who or what started the task and the event that caused it: a trigger and
+    # its stream event, a delegating agent, a person, the API.
+    provenance: TaskProvenance = Field(default_factory=TaskProvenance)
 
     @classmethod
     def from_task_response(
@@ -450,6 +458,7 @@ class TaskWithAgent(BaseModel):
             total_cost=task.total_cost,
             scheduled_at=task.scheduled_at,
             created_by=task.created_by,
+            provenance=task.provenance,
         )
 
 
@@ -520,6 +529,7 @@ async def get_all_tasks(
                     execution_id=task.execution_id,
                     total_cost=total_cost,
                     created_by=task.user_id,
+                    provenance=task.provenance,
                 )
             )
         return all_tasks
@@ -567,6 +577,7 @@ async def get_task_by_id(
             execution_id=task.execution_id,
             total_cost=total_cost,
             created_by=task.user_id,
+            provenance=task.provenance,
         )
     except HTTPException:
         raise

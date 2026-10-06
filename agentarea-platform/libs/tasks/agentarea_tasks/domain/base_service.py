@@ -367,6 +367,7 @@ class BaseTaskService(ABC):
             scheduled_at=task.scheduled_at,
             workspace_id=task.workspace_id,
             metadata=task.metadata,
+            provenance=task.provenance,
         )
 
     async def _validate_task(self, task: AgentTask) -> None:

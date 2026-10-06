@@ -12482,6 +12482,75 @@
         "title": "TaskInputSubmission",
         "type": "object"
       },
+      "TaskProvenance": {
+        "description": "Why a task exists: who or what started it, and the event that caused it.",
+        "properties": {
+          "causation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causation Id"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "origin_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Id"
+          },
+          "origin_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "user",
+                  "trigger",
+                  "agent",
+                  "api"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Type"
+          },
+          "parent_task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Task Id"
+          }
+        },
+        "title": "TaskProvenance",
+        "type": "object"
+      },
       "TaskResponse": {
         "properties": {
           "agent_id": {
@@ -12551,6 +12620,9 @@
             "additionalProperties": true,
             "title": "Parameters",
             "type": "object"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/TaskProvenance"
           },
           "result": {
             "anyOf": [
@@ -12842,6 +12914,9 @@
             "additionalProperties": true,
             "title": "Parameters",
             "type": "object"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/TaskProvenance"
           },
           "result": {
             "anyOf": [
