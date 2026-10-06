@@ -12,6 +12,7 @@ dependencies = [
     "agentarea-governance",
     "agentarea-wallet",
     "agentarea-payment",
+    "agentarea-projects",
 ]
 
 [project.optional-dependencies]
