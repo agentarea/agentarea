@@ -53,7 +53,13 @@ export default function ToolbarSelect<T extends string>({
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/70" />
         </ToolbarButton>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-56 p-1.5" aria-label={label}>
+      <PopoverContent
+        align="end"
+        // As wide as its longest label within bounds; a long list scrolls
+        // instead of running off the screen.
+        className="max-h-[var(--radix-popover-content-available-height)] w-max min-w-56 max-w-80 overflow-y-auto p-1.5"
+        aria-label={label}
+      >
         {groups
           .filter((group) => group.length > 0)
           .map((group, index) => (

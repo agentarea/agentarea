@@ -129,7 +129,9 @@
     "nextPage": "Вперёд",
     "pageNumber": "Страница {page}",
     "showPassword": "Показать пароль",
-    "hidePassword": "Скрыть пароль"
+    "hidePassword": "Скрыть пароль",
+    "previousMonth": "Предыдущий месяц",
+    "nextMonth": "Следующий месяц"
   },
   "admin": {
     "title": "Панель администратора",
@@ -2338,14 +2340,25 @@
       "resourceType": "Тип ресурса",
       "action": "Действие",
       "actor": "Исполнитель",
-      "since": "С даты",
-      "until": "По дату",
       "allResources": "Все ресурсы",
       "allActions": "Все действия",
       "anyone": "Любой",
       "people": "Люди",
       "agents": "Агенты",
-      "reset": "Сбросить фильтры"
+      "reset": "Сбросить фильтры",
+      "period": "Период",
+      "anyTime": "За всё время",
+      "periods": {
+        "24h": "За 24 часа",
+        "7d": "За 7 дней",
+        "30d": "За 30 дней",
+        "90d": "За 90 дней"
+      },
+      "range": "{from} – {to}",
+      "fromDate": "С {date}",
+      "untilDate": "По {date}",
+      "pickStart": "Выберите первый день периода",
+      "pickEnd": "С {date} — теперь выберите последний день"
     },
     "actionGroups": {
       "toolCalls": "Вызовы инструментов и согласования",

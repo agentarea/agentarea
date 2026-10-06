@@ -129,7 +129,9 @@
     "nextPage": "Next",
     "pageNumber": "Page {page}",
     "showPassword": "Show password",
-    "hidePassword": "Hide password"
+    "hidePassword": "Hide password",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -2338,14 +2340,25 @@
       "resourceType": "Resource type",
       "action": "Action",
       "actor": "Actor",
-      "since": "From date",
-      "until": "To date",
       "allResources": "All resources",
       "allActions": "All actions",
       "anyone": "Anyone",
       "people": "People",
       "agents": "Agents",
-      "reset": "Reset filters"
+      "reset": "Reset filters",
+      "period": "Period",
+      "anyTime": "Any time",
+      "periods": {
+        "24h": "Last 24 hours",
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "90d": "Last 90 days"
+      },
+      "range": "{from} – {to}",
+      "fromDate": "From {date}",
+      "untilDate": "Until {date}",
+      "pickStart": "Pick the first day of a range",
+      "pickEnd": "From {date} — now pick the last day"
     },
     "actionGroups": {
       "toolCalls": "Tool calls and approvals",

@@ -2,33 +2,19 @@
 
 import { createElement, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import Link from "@/components/WorkspaceLink";
 import {
-  exportAuditLogs,
   fetchAuditLogs,
-  type AuditActorOption,
   type AuditEvent,
-  type AuditLogFilters as AuditLogFiltersQuery,
+  type AuditLogFilters as AuditQuery,
 } from "./actions";
 import { AuditChangeList } from "./AuditChangeList";
-import { auditEventsToCsv } from "./auditCsv";
-import {
-  ALL,
-  AuditLogFilters,
-  EMPTY_FILTERS,
-  isFiltered,
-  type AuditFilterState,
-} from "./AuditLogFilters";
-import {
-  auditActorIcon,
-  auditResourceIcon,
-  auditVerbIcon,
-} from "./auditIcons";
+import { auditActorIcon, auditResourceIcon, auditVerbIcon } from "./auditIcons";
 import { auditActionColor, auditVerb, formatAuditTime } from "./format";
 
 /** Metadata keys worth a line under the resource, with their label keys. */
@@ -160,63 +146,29 @@ function ActorCell({ event }: { event: AuditEvent }) {
 interface Props {
   initialEvents: AuditEvent[];
   initialCursor: string | null;
-  actorOptions: AuditActorOption[];
-}
-
-/** The API query a filter state stands for; dates cover whole local days. */
-function toQuery(filters: AuditFilterState): AuditLogFiltersQuery {
-  return {
-    resource_type:
-      filters.resourceType === ALL ? undefined : filters.resourceType,
-    action: filters.action === ALL ? undefined : filters.action,
-    actor_id: filters.actorId === ALL ? undefined : filters.actorId,
-    since: filters.since
-      ? new Date(`${filters.since}T00:00:00`).toISOString()
-      : undefined,
-    until: filters.until
-      ? new Date(`${filters.until}T23:59:59.999`).toISOString()
-      : undefined,
-  };
+  /** The API query the page loaded with, for the next pages. */
+  query: AuditQuery;
+  filtered: boolean;
 }
 
 export default function AuditLogClient({
   initialEvents,
   initialCursor,
-  actorOptions,
+  query,
+  filtered,
 }: Props) {
   const t = useTranslations("AuditLogPage");
   const [events, setEvents] = useState<AuditEvent[]>(initialEvents);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
-  const [filters, setFilters] = useState<AuditFilterState>(EMPTY_FILTERS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
-  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [isExporting, startExport] = useTransition();
-
-  const applyFilters = (next: AuditFilterState) => {
-    setFilters(next);
-    setExpandedId(null);
-    startTransition(async () => {
-      const { data, error } = await fetchAuditLogs({
-        ...toQuery(next),
-        limit: 50,
-      });
-      if (!data) {
-        setLoadMoreError(error);
-        return;
-      }
-      setLoadMoreError(null);
-      setEvents(data.events);
-      setCursor(data.next_cursor ?? null);
-    });
-  };
 
   const loadMore = () => {
     if (!cursor) return;
     startTransition(async () => {
       const { data, error } = await fetchAuditLogs({
-        ...toQuery(filters),
+        ...query,
         cursor,
         limit: 50,
       });
@@ -229,39 +181,6 @@ export default function AuditLogClient({
       setCursor(data.next_cursor ?? null);
     });
   };
-
-  const exportCsv = () => {
-    setExportNotice(null);
-    startExport(async () => {
-      const { data, error } = await exportAuditLogs(toQuery(filters));
-      if (!data) {
-        setExportNotice(`${t("export.failed")}: ${error}`);
-        return;
-      }
-      const blob = new Blob([auditEventsToCsv(data.events)], {
-        type: "text/csv;charset=utf-8",
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
-      link.click();
-      URL.revokeObjectURL(url);
-      if (data.truncated) {
-        setExportNotice(t("export.truncated", { count: data.events.length }));
-      }
-    });
-  };
-
-  const filterBar = (
-    <AuditLogFilters
-      value={filters}
-      onChange={applyFilters}
-      actorOptions={actorOptions}
-      onExport={exportCsv}
-      exporting={isExporting}
-    />
-  );
 
   const columns = [
     {
@@ -311,8 +230,7 @@ export default function AuditLogClient({
         <ResourceCell
           event={{
             ...event,
-            changes:
-              expandedId === event.id ? (event.changes ?? null) : null,
+            changes: expandedId === event.id ? (event.changes ?? null) : null,
           }}
         />
       ),
@@ -349,15 +267,9 @@ export default function AuditLogClient({
 
   return (
     <>
-      {filterBar}
-      {exportNotice && (
-        <p role="status" className="mb-3 text-sm text-muted-foreground">
-          {exportNotice}
-        </p>
-      )}
       {events.length === 0 ? (
         <EmptyState
-          title={isFiltered(filters) ? t("noMatches") : t("noEvents")}
+          title={filtered ? t("noMatches") : t("noEvents")}
           iconsType="audit"
         />
       ) : (
@@ -387,9 +299,7 @@ export default function AuditLogClient({
             onClick={loadMore}
             disabled={isPending}
           >
-            {isPending ? (
-              <Loader2 className="mr-2 animate-spin" />
-            ) : null}
+            {isPending ? <Loader2 className="mr-2 animate-spin" /> : null}
             {t("loadMore")}
           </Button>
         </div>
