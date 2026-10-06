@@ -743,3 +743,19 @@ async def test_the_run_input_is_one_pinned_user_message_through_compaction(long_
     assert any("[Previous conversation summary]" in (m.get("content") or "") for m in last)
     assert last[1]["content"] == task_query
     assert sum((m.get("content") or "").count("A-1003-PAYLOAD") for m in last) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_run_input_the_window_cannot_hold_fails_before_calling_the_model(long_run_env):
+    """The pinned head can never be compacted, so a run it would overflow stops at once."""
+    scenario = Scenario(iterations=3, context_window=2_000)
+    async with _Run(long_run_env.client, scenario) as run:
+        handle = await run.start(_request(scenario, task_query="x" * 40_000))
+        with pytest.raises(WorkflowFailureError) as failure:
+            await asyncio.wait_for(handle.result(), timeout=60)
+
+    assert "RunInputExceedsContextWindow" in repr(failure.value.cause)
+    assert scenario.llm_requests == []
+    [failed] = scenario.published("task.failed")
+    assert failed["data"]["error_type"] == "ContextWindowExceeded"
+    assert "larger context window" in failed["data"]["error"]

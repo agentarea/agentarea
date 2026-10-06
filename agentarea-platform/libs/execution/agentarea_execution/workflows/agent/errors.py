@@ -15,6 +15,10 @@ GOVERNANCE_DENIED_FAILURE_REASON = "governance_denied"
 
 _BILLING_UNAVAILABLE = "Billing is temporarily unavailable. Please try again later."
 
+# A run whose pinned input alone overflows the model's window; its message says
+# what to change, so it is shown as it is.
+RUN_INPUT_EXCEEDS_CONTEXT_WINDOW = "RunInputExceedsContextWindow"
+
 # What the user can do about each plan entitlement refusal, by its stable code.
 _ENTITLEMENT_MESSAGES = {
     "no_credits": "No credits remaining. Top up your balance to continue.",
@@ -64,6 +68,8 @@ class ErrorReportingMixin(AgentWorkflowBase):
         denial = ErrorReportingMixin._governance_denial(error)
         if denial is not None:
             return denial[1]
+        if isinstance(error, ApplicationError) and error.type == RUN_INPUT_EXCEEDS_CONTEXT_WINDOW:
+            return error.message
 
         msg = str(error).lower()
         cause_msg = ""
@@ -111,6 +117,8 @@ class ErrorReportingMixin(AgentWorkflowBase):
         """Return a human-readable error category instead of raw Python class names."""
         if ErrorReportingMixin._governance_denial(error) is not None:
             return "GovernanceDenied"
+        if isinstance(error, ApplicationError) and error.type == RUN_INPUT_EXCEEDS_CONTEXT_WINDOW:
+            return "ContextWindowExceeded"
         combined = str(error).lower()
         if isinstance(error, ActivityError):
             if error.cause:

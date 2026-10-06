@@ -26,7 +26,7 @@ from ..constants import (
 )
 from ..retry import model_call_retry_policy
 from .compaction import CompactionMixin
-from .errors import ErrorReportingMixin
+from .errors import RUN_INPUT_EXCEEDS_CONTEXT_WINDOW, ErrorReportingMixin
 from .limits import run_limit_reason
 from .patches import (
     COMPACTION_BOUNDS_PAYLOAD_PATCH,
@@ -176,6 +176,32 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
 
         await self._publish_events_immediately()
 
+    def _refuse_a_head_the_window_cannot_hold(self, system_prompt: str) -> None:
+        """Fail the run when its pinned head alone overflows the model's window.
+
+        The system prompt and the first message stay in view for the whole run;
+        compaction cannot make room for them, so such a run could never call
+        the model.
+        """
+        if not self.context_manager or not self.state.goal:
+            return
+        pinned = estimate_tokens_for_messages(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": self.state.goal.description},
+            ]
+        )
+        limit = self.context_manager.effective_limit
+        if pinned > limit:
+            raise ApplicationError(
+                f"The run's input and system prompt take about {pinned} tokens, more than "
+                f"the {limit} this model's context window leaves for them. They stay in "
+                "view for the whole run, so the run cannot start: shorten the input or "
+                "use a model with a larger context window.",
+                type=RUN_INPUT_EXCEEDS_CONTEXT_WINDOW,
+                non_retryable=True,
+            )
+
     async def _execute_traditional_iteration(self) -> None:
         """Execute iteration using traditional LLM + tool approach."""
         iteration = self.state.current_iteration
@@ -262,9 +288,9 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             # The run's input -- for a trigger, the instruction and the event it
             # fired on -- is the first user message, pinned in the window's head
             # so compaction never summarizes it away; the system prompt stays the
-            # agent's own and the same from run to run.
-            seeds_system_prompt = iteration == 1 or self._resume_system_prompt_missing
-            input_in_first_message = seeds_system_prompt and workflow.patched(
+            # agent's own and the same from run to run. A resumed log pins no
+            # first message, so its system prompt keeps the goal.
+            input_in_first_message = iteration == 1 and workflow.patched(
                 RUN_INPUT_IN_FIRST_MESSAGE_PATCH
             )
             system_prompt = MessageBuilder.build_system_prompt(
@@ -286,6 +312,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                     Message(role="user", content=self.state.goal.description)
                 )
                 if input_in_first_message:
+                    self._refuse_a_head_the_window_cannot_hold(system_prompt)
                     self.state.context_head_seqs = [
                         *self.state.context_head_seqs,
                         first_seq + 1,
