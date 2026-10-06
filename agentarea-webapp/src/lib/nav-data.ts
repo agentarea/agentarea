@@ -84,6 +84,12 @@ export const navData = {
           url: "/files",
           icon: FileText,
         },
+        {
+          title: "Events",
+          titleKey: "events",
+          url: "/events",
+          icon: Radio,
+        },
       ],
     },
     {
@@ -113,12 +119,6 @@ export const navData = {
           titleKey: "automation",
           url: "/triggers",
           icon: Zap,
-        },
-        {
-          title: "Events",
-          titleKey: "events",
-          url: "/events",
-          icon: Radio,
         },
         {
           title: "Harnesses",
