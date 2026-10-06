@@ -24,6 +24,22 @@ export function formatDate(value: string | null | undefined, locale: string) {
   });
 }
 
+/** Calendar date + time in the active locale ("23 Sept 2026, 14:05"); "—" when missing. */
+export function formatDateTime(
+  value: string | null | undefined,
+  locale: string
+) {
+  const date = parseUtcTimestamp(value);
+  if (!date) return "—";
+  return date.toLocaleString(locale, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export const getValidTimestamp = (timestamp?: string | null): number | null =>
   parseUtcTimestamp(timestamp)?.getTime() ?? null;
 

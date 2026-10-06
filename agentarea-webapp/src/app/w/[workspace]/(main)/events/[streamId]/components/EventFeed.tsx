@@ -12,7 +12,7 @@ import {
   summarizeOutcomes,
   type DispositionFilter,
 } from "@/lib/streamOutcome";
-import { formatDate } from "@/utils/dateUtils";
+import { formatDateTime } from "@/utils/dateUtils";
 import { eventRowId, feedHref } from "../feedHref";
 
 const PAGE = 50;
@@ -75,7 +75,7 @@ export default async function EventFeed({
               accessor: "received_at",
               rowLink: true,
               cellClassName: "whitespace-nowrap tabular-nums",
-              render: (value) => formatDate(String(value), locale),
+              render: (value) => formatDateTime(String(value), locale),
             },
             { header: t("kind"), accessor: "kind" },
             {

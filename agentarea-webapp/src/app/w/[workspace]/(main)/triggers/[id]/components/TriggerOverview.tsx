@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import type {
   AgentResponse,
   ExecutionHistoryResponse,
@@ -6,12 +7,13 @@ import type {
 } from "@/api/client/types.gen";
 import {
   getAgent,
+  getStream,
   getTrigger,
   getTriggerExecutions,
   getTriggerMetrics,
   listTriggerCatalog,
 } from "@/lib/api";
-import { requireApiData } from "@/lib/server-resource";
+import { optionalApiData, requireApiData } from "@/lib/server-resource";
 import { getTriggerStatusPresentation } from "@/lib/status";
 import { normalizeTaskParameters } from "../../components/taskParameters";
 import {
@@ -41,20 +43,35 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
     "trigger"
   );
 
+  const isStream = trigger.trigger_type === "stream";
+
   // Metrics and history are supporting detail: a trigger that has never run
   // still has an overview, so their failures degrade the page instead of
   // taking it down. No `hours` means the whole history — the page answers
   // "what has this automation done and cost", not "what did it do today".
-  const [catalogResponse, metricsResponse, executionsResponse, agentResponse] =
-    await Promise.all([
-      listTriggerCatalog(),
-      getTriggerMetrics(triggerId),
-      getTriggerExecutions(triggerId, {
-        page: 1,
-        page_size: RECENT_EXECUTIONS,
-      }),
-      getAgent(trigger.agent_id),
-    ]);
+  const [
+    catalogResponse,
+    metricsResponse,
+    executionsResponse,
+    agentResponse,
+    streamResponse,
+    t,
+  ] = await Promise.all([
+    listTriggerCatalog(),
+    getTriggerMetrics(triggerId),
+    getTriggerExecutions(triggerId, {
+      page: 1,
+      page_size: RECENT_EXECUTIONS,
+    }),
+    getAgent(trigger.agent_id),
+    // Only a stream trigger's header and "When to run" card name the stream
+    // (U4) — a webhook trigger's own backing stream stays unnamed, since only
+    // "Last event" ever points at it there.
+    isStream && trigger.stream_id
+      ? getStream(trigger.stream_id)
+      : Promise.resolve(null),
+    getTranslations("TriggersPage.detail"),
+  ]);
 
   const catalog = (catalogResponse.data ?? []) as TriggerCatalogEntry[];
   const entry = findTriggerCatalogEntry(trigger, catalog);
@@ -63,12 +80,15 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
     (executionsResponse.data as ExecutionHistoryResponse | undefined)
       ?.executions ?? [];
   const agent = agentResponse.data as AgentResponse | undefined;
+  const streamName = streamResponse
+    ? optionalApiData(streamResponse, "stream")?.name ?? null
+    : null;
 
   const taskParameters = normalizeTaskParameters(trigger.task_parameters);
   const isCron = trigger.trigger_type === "cron";
   // A stream trigger has no intake of its own: it listens to a stream that
   // something else feeds.
-  const hasWebhook = !isCron && trigger.trigger_type !== "stream";
+  const hasWebhook = !isCron && !isStream;
   const webhookEndpoint = trigger.webhook_url ?? null;
 
   const model: TriggerOverviewModel = {
@@ -77,7 +97,12 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
     description: trigger.description,
     iconUrl: entry?.icon_url ?? null,
     sourceName: getTriggerDisplayName(trigger, entry),
-    scheduleText: describeTriggerSchedule(trigger),
+    // The catalog's own phrase ("On stream events") is hardcoded English —
+    // overridden here, not in triggerDisplay.tsx, which a concurrent change
+    // owns right now (U9).
+    scheduleText: isStream
+      ? t("onStreamEvents")
+      : describeTriggerSchedule(trigger),
     status: getTriggerStatusPresentation(getTriggerHealth(trigger)),
     agent: agent ? { id: agent.slug || agent.id, name: agent.name } : null,
     taskText: taskParameters.text,
@@ -106,8 +131,13 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
       threshold: trigger.failure_threshold,
     },
     needsOwner: trigger.status === "needs_owner",
+    isStream,
     stream: trigger.stream_id
-      ? { id: trigger.stream_id, lastEventAt: trigger.last_event_at ?? null }
+      ? {
+          id: trigger.stream_id,
+          name: streamName,
+          lastEventAt: trigger.last_event_at ?? null,
+        }
       : null,
     lastExecutionAt: trigger.last_execution_at ?? null,
     nextRunTime: trigger.next_run_time ?? null,

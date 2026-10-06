@@ -1,13 +1,23 @@
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { StreamEventResponse } from "@/api/client/types.gen";
 import SectionLoadError from "@/components/SectionLoadError";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import WorkspaceLink from "@/components/WorkspaceLink";
-import { getStreamEvent, listTriggers } from "@/lib/api";
+import {
+  getStreamEvent,
+  listStreams,
+  listStreamSubscriptions,
+  listTriggers,
+} from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { optionalApiData } from "@/lib/server-resource";
 import { getStreamOutcomeStatusPresentation } from "@/lib/status";
-import type { DispositionFilter } from "@/lib/streamOutcome";
+import {
+  resolveForwardSource,
+  sortedForwardTargets,
+  type DispositionFilter,
+} from "@/lib/streamOutcome";
+import { formatDateTime } from "@/utils/dateUtils";
 import { eventRowId, feedHref } from "../feedHref";
 import FocusOnMount from "./FocusOnMount";
 
@@ -27,16 +37,32 @@ export default async function EventDetail({
   outcome: DispositionFilter;
   before?: number;
 }) {
-  const [t, tFilter, eventResult, triggersResult] = await Promise.all([
-    getTranslations("EventsPage.detail"),
-    getTranslations("EventsPage.filter"),
-    getStreamEvent(streamId, sequence),
-    listTriggers(),
-  ]);
+  const [t, tFilter, locale, eventResult, triggersResult, subscriptionsResult, streamsResult] =
+    await Promise.all([
+      getTranslations("EventsPage.detail"),
+      getTranslations("EventsPage.filter"),
+      getLocale(),
+      getStreamEvent(streamId, sequence),
+      listTriggers(),
+      listStreamSubscriptions(streamId),
+      listStreams(),
+    ]);
   // Gone past retention, or never existed: the feed is still there, so only
   // this panel says so.
   const event = optionalApiData(eventResult, "stream event");
   const closeHref = `${feedHref(streamId, { outcome, before })}#${eventRowId(sequence)}`;
+  // Target streams of this stream's own forward subscriptions, sorted the way
+  // ForwardHandler appended derived events — only needed to turn "Forwarded
+  // as: N" into a link, so a 403/empty read just falls back to plain text.
+  const forwardTargets = new Map(
+    (subscriptionsResult.data ?? []).map((sub) => [
+      sub.id,
+      sortedForwardTargets(sub.output_stream_ids),
+    ])
+  );
+  const streamNames = new Map(
+    (streamsResult.data ?? []).map((stream) => [stream.id, stream.name])
+  );
 
   return (
     <section
@@ -46,11 +72,27 @@ export default async function EventDetail({
       className="rounded-md border border-zinc-200 bg-white card-shadow outline-none dark:border-zinc-700 dark:bg-zinc-800 lg:sticky lg:top-0 lg:self-start"
     >
       <FocusOnMount key={sequence} targetId={PANEL_ID} />
-      <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
-        <h2 id={TITLE_ID} className="text-base font-semibold">
-          {t("title", { sequence })}
-        </h2>
-        <WorkspaceLink href={closeHref} className="note hover:underline">
+      <header className="flex items-start justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
+        <div className="min-w-0">
+          <h2 id={TITLE_ID} className="text-base font-semibold">
+            {t("title", { sequence })}
+          </h2>
+          {event && (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              <span className="font-medium text-foreground/80">
+                {event.kind}
+              </span>
+              {" · "}
+              <span className="font-mono">{event.event_key}</span>
+              {" · "}
+              {formatDateTime(event.received_at, locale)}
+            </p>
+          )}
+        </div>
+        <WorkspaceLink
+          href={closeHref}
+          className="note shrink-0 hover:underline"
+        >
           {t("close")}
         </WorkspaceLink>
       </header>
@@ -72,6 +114,8 @@ export default async function EventDetail({
               ? apiErrorMessage(triggersResult, t("triggersLoadFailed"))
               : null
           }
+          forwardTargets={forwardTargets}
+          streamNames={streamNames}
         />
       ) : (
         <div className="py-6 text-center text-sm text-muted-foreground">
@@ -88,13 +132,18 @@ function EventBody({
   tFilter,
   triggerNames,
   triggersError,
+  forwardTargets,
+  streamNames,
 }: {
   event: StreamEventResponse;
   t: Translator;
   tFilter: Translator;
   triggerNames: Map<string, string>;
   triggersError: string | null;
+  forwardTargets: Map<string, string[]>;
+  streamNames: Map<string, string>;
 }) {
+  const causedBy = resolveForwardSource(event);
   return (
     <div className="space-y-4 p-4">
       <div>
@@ -112,6 +161,9 @@ function EventBody({
               const presentation = getStreamOutcomeStatusPresentation(
                 o.verdict
               );
+              // Only a forward's own targets, in append order — a derived
+              // sequence pairs with the target stream at the same index.
+              const targets = forwardTargets.get(o.subscription_id) ?? [];
               return (
                 <li
                   key={o.subscription_id}
@@ -126,7 +178,25 @@ function EventBody({
                         {triggerNames.get(o.trigger_id) ?? t("trigger")}
                       </WorkspaceLink>
                     ) : (
-                      <span className="font-medium">{t("forward")}</span>
+                      <span className="truncate font-medium">
+                        {t("forward")}
+                        {targets.length > 0 && (
+                          <>
+                            {": "}
+                            {targets.map((targetId, index) => (
+                              <span key={targetId} className="font-normal">
+                                {index > 0 && ", "}
+                                <WorkspaceLink
+                                  href={`/events/${targetId}`}
+                                  className="text-primary hover:underline"
+                                >
+                                  {streamNames.get(targetId) ?? targetId}
+                                </WorkspaceLink>
+                              </span>
+                            ))}
+                          </>
+                        )}
+                      </span>
                     )}
                     <StatusIndicator size="sm" kind={presentation.kind}>
                       {presentation.labelKey
@@ -144,7 +214,7 @@ function EventBody({
                       {o.reason}
                     </p>
                   )}
-                  <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     {o.score != null && (
                       <span className="tabular-nums">
                         {t("score")}: {o.score.toFixed(2)}
@@ -159,8 +229,29 @@ function EventBody({
                       </WorkspaceLink>
                     )}
                     {o.derived_sequences.length > 0 && (
-                      <span className="tabular-nums">
-                        {t("derived")}: {o.derived_sequences.join(", ")}
+                      <span className="flex items-center gap-1 tabular-nums">
+                        {t("derived")}:{" "}
+                        {o.derived_sequences.map((sequence, index) => {
+                          const targetId = targets[index];
+                          return (
+                            <span key={sequence}>
+                              {index > 0 && ", "}
+                              {targetId ? (
+                                <WorkspaceLink
+                                  href={feedHref(targetId, {
+                                    outcome: "all",
+                                    event: sequence,
+                                  })}
+                                  className="text-primary hover:underline"
+                                >
+                                  {sequence}
+                                </WorkspaceLink>
+                              ) : (
+                                sequence
+                              )}
+                            </span>
+                          );
+                        })}
                       </span>
                     )}
                   </div>
@@ -173,7 +264,21 @@ function EventBody({
       {event.causation_id && (
         <div className="text-xs text-muted-foreground">
           {t("causedBy")}:{" "}
-          <span className="break-all font-mono">{event.causation_id}</span>
+          {causedBy ? (
+            <WorkspaceLink
+              href={feedHref(causedBy.streamId, {
+                outcome: "all",
+                event: causedBy.sequence,
+              })}
+              className="text-primary hover:underline"
+            >
+              {streamNames.get(causedBy.streamId)
+                ? `${streamNames.get(causedBy.streamId)} · ${t("title", { sequence: causedBy.sequence })}`
+                : t("title", { sequence: causedBy.sequence })}
+            </WorkspaceLink>
+          ) : (
+            <span className="break-all font-mono">{event.causation_id}</span>
+          )}
         </div>
       )}
       <div>

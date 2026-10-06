@@ -298,22 +298,22 @@ export function getTriggerExecutionStatusPresentation(
 ): StatusPresentation {
   switch (normalizeStatus(status)) {
     case "completed":
-      return { label: "Completed", kind: "done" };
+      return { label: "Completed", labelKey: "completed", kind: "done" };
     case "success":
-      return { label: "Success", kind: "done" };
+      return { label: "Success", labelKey: "success", kind: "done" };
     case "running":
     case "in_progress":
-      return { label: "Running", kind: "running" };
+      return { label: "Running", labelKey: "running", kind: "running" };
     case "pending":
-      return { label: "Pending", kind: "queued" };
+      return { label: "Pending", labelKey: "pending", kind: "queued" };
     case "failed":
-      return { label: "Failed", kind: "failed" };
+      return { label: "Failed", labelKey: "failed", kind: "failed" };
     case "error":
-      return { label: "Error", kind: "failed" };
+      return { label: "Error", labelKey: "error", kind: "failed" };
     case "timeout":
-      return { label: "Timed out", kind: "failed" };
+      return { label: "Timed out", labelKey: "timeout", kind: "failed" };
     case "cancelled":
-      return { label: "Cancelled", kind: "cancelled" };
+      return { label: "Cancelled", labelKey: "cancelled", kind: "cancelled" };
     default:
       return fallbackStatusPresentation(status);
   }

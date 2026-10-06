@@ -82,8 +82,11 @@ export type TriggerOverviewModel = {
   failure: { consecutive: number; threshold: number };
   /** The person who configured it can no longer run its agent; it is stopped. */
   needsOwner: boolean;
+  /** Whether this is a stream trigger — decides whether the stream's name is
+   * shown (header, "When to run") and how "Next run" reads while idle. */
+  isStream: boolean;
   /** The stream whose events fire it, and when that stream last received one. */
-  stream: { id: string; lastEventAt: string | null } | null;
+  stream: { id: string; name: string | null; lastEventAt: string | null } | null;
   lastExecutionAt: string | null;
   nextRunTime: string | null;
   metrics: {
@@ -122,6 +125,30 @@ function relUnit(
 ): string | undefined {
   if (!parts || parts.future === null) return undefined;
   return parts.future ? t("fromNow") : t("ago");
+}
+
+/** "{value} {unit}" in the active locale, or just the value for "now". */
+function relLabel(
+  parts: ReturnType<typeof relParts>,
+  t: Translator
+): string | null {
+  if (!parts) return null;
+  if (parts.future === null) return parts.value;
+  return `${parts.value} ${relUnit(parts, t)}`;
+}
+
+/**
+ * `getTriggerExecutionStatusPresentation()` returns an English `label` with
+ * no `labelKey` by default; the `executionStatus.*` keys translate it. A
+ * status this build doesn't recognise falls back to the raw status string.
+ */
+function executionStatusLabel(
+  presentation: StatusPresentation,
+  t: Translator
+): string {
+  return presentation.labelKey
+    ? t(`executionStatus.${presentation.labelKey}`)
+    : presentation.label;
 }
 
 /** "a, b +3" — the first `max` names and a count of the rest. */
@@ -227,6 +254,16 @@ export async function TriggerOverviewView({
                     {model.scheduleText}
                   </b>
                 </HeroMeta>
+                {model.isStream && model.stream?.name && (
+                  <HeroMeta icon={<ENTITY_ICONS.stream />}>
+                    <Link
+                      href={`/events/${model.stream.id}`}
+                      className="font-medium text-foreground/80 underline-offset-2 hover:underline"
+                    >
+                      {model.stream.name}
+                    </Link>
+                  </HeroMeta>
+                )}
                 {model.agent && (
                   <HeroMeta icon={<ENTITY_ICONS.agent />}>
                     <Link
@@ -240,11 +277,7 @@ export async function TriggerOverviewView({
                 <HeroMeta icon={<Clock />}>
                   {t("lastRun")}{" "}
                   <b className="font-medium text-foreground/80">
-                    {last
-                      ? last.future === null
-                        ? last.value
-                        : `${last.value} ${relUnit(last, t)}`
-                      : t("never")}
+                    {relLabel(last, t) ?? t("never")}
                   </b>
                 </HeroMeta>
               </div>
@@ -309,7 +342,7 @@ export async function TriggerOverviewView({
             sub={
               lastStatus ? (
                 <StatusIndicator kind={lastStatus.kind} size="sm">
-                  {lastStatus.label}
+                  {executionStatusLabel(lastStatus, t)}
                 </StatusIndicator>
               ) : (
                 t("noExecutions")
@@ -322,7 +355,13 @@ export async function TriggerOverviewView({
             value={next ? next.value : "—"}
             unit={relUnit(next, t)}
             bar={null}
-            sub={model.cron ? model.scheduleText : t("noSchedule")}
+            sub={
+              model.cron
+                ? model.scheduleText
+                : model.isStream
+                  ? t("noScheduleStream")
+                  : t("noSchedule")
+            }
           />
         </StatStrip>
 
@@ -425,7 +464,18 @@ export async function TriggerOverviewView({
               />
               <FactRow
                 title={model.scheduleText}
-                sub={model.sourceName}
+                sub={
+                  model.isStream && model.stream?.name ? (
+                    <Link
+                      href={`/events/${model.stream.id}`}
+                      className="hover:text-foreground hover:underline"
+                    >
+                      {model.stream.name}
+                    </Link>
+                  ) : (
+                    model.sourceName
+                  )
+                }
                 trailing={
                   model.cron?.expression ? (
                     <code className="font-mono text-[11px]">
@@ -573,7 +623,9 @@ function ExecutionRow({
   locale: string;
 }) {
   const presentation = getTriggerExecutionStatusPresentation(execution.status);
-  const when = formatCompactDistance(execution.executed_at);
+  // relParts/relLabel translate the "ago"/"in" suffix; formatCompactDistance's
+  // own return value is raw English and must never reach the screen directly.
+  const when = relLabel(relParts(execution.executed_at), t) ?? "—";
   const duration =
     execution.execution_time_ms > 0
       ? `${(execution.execution_time_ms / 1000).toFixed(2)}s`
@@ -608,7 +660,7 @@ function ExecutionRow({
             kind={presentation.kind}
             className="shrink-0 whitespace-nowrap text-[12px] font-medium"
           >
-            {presentation.label}
+            {executionStatusLabel(presentation, t)}
           </StatusIndicator>
         </span>
       }

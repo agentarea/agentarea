@@ -545,7 +545,13 @@ export function CreateTriggerForm({
                 </FormLabel>
                 {Boolean(triggerType) && !taskTextRequired && (
                   <p className="text-xs text-muted-foreground">
-                    {t(isChannel ? "taskTextFromChannel" : "taskTextFromCall")}
+                    {t(
+                      triggerType === "stream"
+                        ? "taskTextFromStream"
+                        : isChannel
+                          ? "taskTextFromChannel"
+                          : "taskTextFromCall"
+                    )}
                   </p>
                 )}
                 <Textarea
