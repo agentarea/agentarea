@@ -1,3 +1,4 @@
+{{- if .Values.registryReconcile.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -11,9 +12,10 @@ metadata:
   annotations:
     # Standard resource (not a Helm hook) that waits for the database, mirroring
     # the db-migration Job. ttlSecondsAfterFinished clears it so a later upgrade
-    # recreates and re-runs it (reconcile is idempotent). Runs even with
-    # registryReconcile disabled: it also writes the graph ownership of rows a
-    # migration inserted by SQL, once the schema reaches the migration head.
+    # recreates and re-runs it (reconcile is idempotent). Once the schema reaches
+    # the migration head it also grants graph ownership of rows a migration
+    # inserted by SQL. A deployment that disables it runs `agentarea-api
+    # reconcile` its own way.
 spec:
   ttlSecondsAfterFinished: 300
   template:
@@ -81,15 +83,15 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.postgresql }}
                   key: password
-            {{- if .Values.registryReconcile.enabled }}
             # Registry definitions consumed by `agentarea-api reconcile`
             # (JSON array; bound to the --registries-config option via envvar).
             - name: REGISTRIES_CONFIG
               value: {{ .Values.registryReconcile.registries | toJson | quote }}
-            {{- end }}
+            {{- /* The model is the API's to apply and its file is not mounted here, so
+                   these two are set once, last, and dropped from every other source. */}}
+            {{- $forced := list "AGENTAREA_AUTHZ_FGA_APPLY_MODEL" "AGENTAREA_AUTHZ_FGA_MODEL_PATH" }}
             {{- if .Values.openfga.enabled }}
-            # The authorization graph, as the backend reaches it. The model is the
-            # API's to apply; this Job only resolves the store.
+            # The authorization graph, as the backend reaches it.
             - name: AGENTAREA_AUTHZ_BACKEND
               value: "openfga"
             - name: AGENTAREA_AUTHZ_FGA_URL
@@ -100,8 +102,6 @@ spec:
               value: {{ .Values.openfga.accessControl.authorizationModelId | quote }}
             - name: AGENTAREA_AUTHZ_FGA_BOOTSTRAP
               value: {{ .Values.openfga.accessControl.autoBootstrap | quote }}
-            - name: AGENTAREA_AUTHZ_FGA_APPLY_MODEL
-              value: "false"
             - name: AGENTAREA_AUTHZ_FGA_STORE_NAME
               value: {{ .Values.openfga.accessControl.storeName | default "agentarea" | quote }}
             {{- end }}
@@ -109,10 +109,35 @@ spec:
             {{- $backendEnv := deepCopy (default dict .Values.backend.envVars) -}}
             {{- $globalEnv := default dict .Values.global.envVars -}}
             {{- range $k, $v := mergeOverwrite $backendEnv $globalEnv }}
+            {{- if not (has $k $forced) }}
             - name: {{ $k }}
               value: {{ $v | quote }}
             {{- end }}
             {{- end }}
+            {{- end }}
+            {{- if .Values.backend.secrets }}
+            {{- $secretName := ( .Values.backend.secretsName | default (printf "%s-backend-secrets" .Release.Name) ) }}
+            {{- range $k, $v := .Values.backend.secrets }}
+            {{- if not (has $k $forced) }}
+            - name: {{ $k }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: {{ $k }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- $extraEnv := list }}
+            {{- range .Values.backend.extraEnv }}
+            {{- if not (has .name $forced) }}
+            {{- $extraEnv = append $extraEnv . }}
+            {{- end }}
+            {{- end }}
+            {{- if $extraEnv }}
+            {{- toYaml $extraEnv | nindent 12 }}
+            {{- end }}
+            - name: AGENTAREA_AUTHZ_FGA_APPLY_MODEL
+              value: "false"
           {{- if or .Values.global.jobs.kube.resources .Values.backend.resources }}
           resources:
             {{- if .Values.global.jobs.kube.resources }}
@@ -134,3 +159,4 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
   backoffLimit: 3
+{{- end }}

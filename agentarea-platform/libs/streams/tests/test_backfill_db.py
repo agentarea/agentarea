@@ -327,3 +327,38 @@ async def test_a_backfilled_stream_is_readable_once_the_post_migration_reconcile
         assert second.written == 0
         await session.rollback()
     await engine.dispose()
+
+
+async def test_the_automatic_reconcile_never_restores_a_revoked_creator_grant():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    migration = _migration()
+    ws = str(uuid4())
+    async with maker() as session:
+        revoked_trigger = await _add_trigger(session, ws=ws, webhook_id=f"wh{uuid4().hex}")
+        inserted_trigger = await _add_trigger(session, ws=ws, webhook_id=f"wh{uuid4().hex}")
+        await _run(session, migration.UPGRADE_SQL)
+        revoked = (await _rows_for(session, revoked_trigger)).stream_id
+        inserted = (await _rows_for(session, inserted_trigger)).stream_id
+        # The repository attached it and granted its creator; an admin then revoked the grants.
+        graph = _Graph(
+            [
+                RelationTuple(
+                    namespace="resource",
+                    object=str(revoked),
+                    relation="project",
+                    subject_id=f"project:{ws}-root",
+                )
+            ]
+        )
+
+        await reconcile_graph_ownership(session, graph)
+
+        assert not graph.can_read("User:owner", revoked)
+        assert not any(
+            t.object == str(revoked) and t.subject_id == "User:owner"
+            for t in graph.tuples.values()
+        )
+        assert graph.can_read("User:owner", inserted)
+        await session.rollback()
+    await engine.dispose()

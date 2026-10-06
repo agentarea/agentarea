@@ -1205,9 +1205,10 @@ jobs:
 # A post-migration Job runs `agentarea-api reconcile`, which ensures each
 # registry exists and syncs it via the platform RegistryService (the same code
 # path the API and CLI use). Idempotent: re-runs on every install/upgrade.
-# Disable to bring your own catalog or start empty. The Job still runs: once
-# the schema reaches the migration head it writes the authorization-graph
-# ownership of every row a migration inserted by SQL.
+# Once the schema reaches the migration head it also grants authorization-graph
+# ownership of rows a migration inserted by SQL. Disable to bring your own
+# catalog or start empty, or to run `agentarea-api reconcile` from a hook of your
+# own; either way something must run it after each migration.
 registryReconcile:
   enabled: true
   # Each entry needs `name` + `source_url`; the catalog type is auto-detected
