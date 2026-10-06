@@ -2326,7 +2326,7 @@
     "title": "Audit Log",
     "description": "Track who did what, when, and from where across your workspace",
     "noEvents": "No audit events found.",
-    "loadMore": "Load more",
+    "loadingMore": "Loading more…",
     "table": {
       "action": "Action",
       "resource": "Resource",

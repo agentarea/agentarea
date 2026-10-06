@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { Button } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { useOnVisible } from "@/hooks/use-on-visible";
 import {
   fetchAuditLogs,
   type AuditEvent,
@@ -92,6 +94,7 @@ export default function AuditLogClient({
   filtered,
 }: Props) {
   const t = useTranslations("AuditLogPage");
+  const tCommon = useTranslations("Common");
   const [events, setEvents] = useState<AuditEvent[]>(initialEvents);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -99,7 +102,7 @@ export default function AuditLogClient({
   const [isPending, startTransition] = useTransition();
 
   const loadMore = () => {
-    if (!cursor) return;
+    if (!cursor || isPending) return;
     startTransition(async () => {
       const { data, error } = await fetchAuditLogs({
         ...query,
@@ -115,6 +118,10 @@ export default function AuditLogClient({
       setCursor(data.next_cursor ?? null);
     });
   };
+
+  const sentinelRef = useOnVisible(loadMore, {
+    enabled: Boolean(cursor) && !isPending && !loadMoreError,
+  });
 
   const columns = [
     {
@@ -188,23 +195,31 @@ export default function AuditLogClient({
         />
       )}
 
-      {loadMoreError && (
-        <p role="alert" className="mt-4 text-center text-sm text-destructive">
-          {loadMoreError}
-        </p>
-      )}
-
+      {/* The next page loads as the end of the list scrolls into view. After a
+          failure it waits for a retry instead of asking again on every scroll. */}
       {cursor && (
-        <div className="flex justify-center mt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadMore}
-            disabled={isPending}
-          >
-            {isPending ? <Loader2 className="mr-2 animate-spin" /> : null}
-            {t("loadMore")}
-          </Button>
+        <div
+          ref={sentinelRef}
+          className="flex min-h-12 flex-col items-center justify-center gap-2 pt-4"
+        >
+          {loadMoreError ? (
+            <>
+              <p role="alert" className="text-sm text-destructive">
+                {loadMoreError}
+              </p>
+              <Button variant="outline" size="sm" onClick={loadMore}>
+                {tCommon("retry")}
+              </Button>
+            </>
+          ) : (
+            isPending && (
+              <StatusIndicator
+                kind="running"
+                aria-label={t("loadingMore")}
+                title={t("loadingMore")}
+              />
+            )
+          )}
         </div>
       )}
     </>
