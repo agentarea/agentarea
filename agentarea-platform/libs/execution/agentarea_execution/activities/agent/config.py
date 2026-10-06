@@ -229,9 +229,9 @@ async def _prepare_trigger_event_file(
         WorkspaceRepository,
     )
     from agentarea_common.trigger_event_file import (
-        TRIGGER_DATA_PARAMETER,
         TRIGGER_EVENT_FILE_CONTENT_TYPE,
         TRIGGER_EVENT_FILE_PARAMETER,
+        TRIGGER_EVENT_PARAMETER,
         event_data_json,
         is_trigger_event_file_name,
         trigger_event_file_path,
@@ -240,12 +240,12 @@ async def _prepare_trigger_event_file(
     filename = request.task_parameters.get(TRIGGER_EVENT_FILE_PARAMETER)
     if filename is None:
         return []
-    data = request.task_parameters.get(TRIGGER_DATA_PARAMETER)
+    data = request.task_parameters.get(TRIGGER_EVENT_PARAMETER)
     if not is_trigger_event_file_name(filename) or request.task_id is None:
         raise ApplicationError("Invalid trigger event file", non_retryable=True)
     if not isinstance(data, dict):
         raise ApplicationError(
-            "Trigger event file named without the trigger data to fill it", non_retryable=True
+            "Trigger event file named without the event data to fill it", non_retryable=True
         )
 
     workspace_id = user_context.workspace_id
@@ -399,10 +399,10 @@ def make_config_activities(
                 await _record_task_config_hash(ctx, request.task_id, config_hash)
 
             execution_context = deepcopy(request.execution_context)
-            attachments = [
-                *await _prepare_task_files(request, user_context),
-                *await _prepare_trigger_event_file(request, user_context),
-            ]
+            attachments = await _prepare_task_files(request, user_context)
+            # Named in the run's first message, not in the system prompt's list,
+            # which stays the same from run to run.
+            await _prepare_trigger_event_file(request, user_context)
             if attachments:
                 execution_context = execution_context or {}
                 execution_context["workspace_attachments"] = [

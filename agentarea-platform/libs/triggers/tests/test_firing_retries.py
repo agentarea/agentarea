@@ -265,3 +265,20 @@ async def test_a_restarted_task_is_told_the_event_again():
     )
     assert stored.query.startswith("Ship the order\n\n## What started this run")
     assert '"order": "A-7"' in stored.query
+
+
+async def test_a_retry_whose_trigger_lost_its_instruction_does_not_run_the_stale_ask():
+    """No fallback to the ask the first attempt stored: the firing reports why it stopped."""
+    trigger = _trigger(task_parameters={})
+    service = _service(trigger)
+    task_id = uuid4()
+    stored = _not_started(task_id)
+    stored.query = "Ship the order"
+    service.task_service.get_task.return_value = stored
+    firing = await service.fire(
+        trigger.id, {"events": [{"order": "A-7"}]}, task_id=task_id, raise_retryable=True
+    )
+    assert firing.outcome == "error"
+    assert "no task text" in (firing.reason or "")
+    service.task_service.restart_undispatched_task.assert_not_awaited()
+    assert stored.query == "Ship the order"

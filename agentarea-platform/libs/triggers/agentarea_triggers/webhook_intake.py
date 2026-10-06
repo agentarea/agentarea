@@ -9,27 +9,13 @@ from agentarea_streams.domain import AppendResult, StreamError, WebhookSourceSpe
 from agentarea_streams.infrastructure.journal_repository import StreamJournal
 from agentarea_streams.infrastructure.orm import StreamSourceORM
 
+from .event_scrub import journal_data
 from .webhook_manager import WebhookExecutionCallback
 
 logger = logging.getLogger(__name__)
 
 _DELIVERY_HEADERS = ("webhook-id", "x-github-delivery", "linear-delivery", "idempotency-key")
 _BODY_KEYS = {"telegram": "update_id", "stripe": "id", "slack": "event_id", "discord": "id"}
-# A header or query parameter whose name carries one of these is a credential (or
-# a signature over one) and never reaches the journal.
-_SECRET_NAME_PARTS = (
-    "auth",
-    "cookie",
-    "token",
-    "secret",
-    "password",
-    "passwd",
-    "signature",
-    "api-key",
-    "api_key",
-    "apikey",
-)
-_SECRET_NAMES = frozenset({"key", "sig", "code"})
 
 
 def webhook_event_key(webhook_type: str, parsed: dict[str, Any]) -> str:
@@ -48,23 +34,6 @@ def webhook_event_key(webhook_type: str, parsed: dict[str, Any]) -> str:
 def webhook_event_kind(webhook_type: str, parsed: dict[str, Any]) -> str:
     event_type = parsed.get("event_type")
     return str(event_type) if event_type else f"webhook.{webhook_type}"
-
-
-def is_secret_name(name: str) -> bool:
-    lowered = str(name).lower()
-    return lowered in _SECRET_NAMES or any(part in lowered for part in _SECRET_NAME_PARTS)
-
-
-def _without_secrets(values: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in values.items() if not is_secret_name(k)}
-
-
-def journal_data(parsed: dict[str, Any]) -> dict[str, Any]:
-    return {
-        **parsed,
-        "headers": _without_secrets(parsed.get("headers") or {}),
-        "query_params": _without_secrets(parsed.get("query_params") or {}),
-    }
 
 
 def spec_from_source(source: StreamSourceORM) -> WebhookSourceSpec:

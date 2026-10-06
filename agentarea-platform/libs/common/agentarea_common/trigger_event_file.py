@@ -1,9 +1,9 @@
 """The run input that holds a trigger's event when it is too large to quote.
 
-The trigger service names the file in ``task_parameters``; the run's config
-activity writes the event (``task_parameters["trigger_data"]``) there, in the
-task's own ``inputs/attachments`` scope, before the agent starts -- the scope
-uploaded attachments use, never the workspace's shared files.
+The trigger service names the file and stores the event's scrubbed data beside
+it in ``task_parameters``; the run's config activity writes that data there, in
+the task's own ``inputs/attachments`` scope, before the agent starts -- the
+scope uploaded attachments use, never the workspace's shared files.
 """
 
 import json
@@ -11,7 +11,7 @@ import re
 from typing import Any
 
 TRIGGER_EVENT_FILE_PARAMETER = "trigger_event_file"
-TRIGGER_DATA_PARAMETER = "trigger_data"
+TRIGGER_EVENT_PARAMETER = "trigger_event"
 TRIGGER_EVENT_FILE_CONTENT_TYPE = "application/json"
 
 _FILE_NAME = re.compile(r"^trigger-event(?:-\d+)?\.json$")

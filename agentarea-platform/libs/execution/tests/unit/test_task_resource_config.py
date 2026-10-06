@@ -457,11 +457,16 @@ async def test_config_returns_trusted_attachment_descriptors(activity_context, f
     assert request.execution_context == {"project_id": "project"}
 
 
-def event_file_request(trigger_data, filename="trigger-event-9.json"):
+def event_file_request(event_data, filename="trigger-event-9.json"):
+    # trigger_data is the raw firing input; the file is written from trigger_event alone.
     return AgentConfigRequest(
         agent_id=uuid4(),
         task_id=uuid4(),
-        task_parameters={"trigger_data": trigger_data, "trigger_event_file": filename},
+        task_parameters={
+            "trigger_data": {"headers": {"Authorization": "Bearer raw"}},
+            "trigger_event": event_data,
+            "trigger_event_file": filename,
+        },
         user_context_data={"user_id": "user", "workspace_id": "workspace"},
     )
 
@@ -529,9 +534,11 @@ async def test_an_event_file_must_be_ours_and_have_its_data(file_storage, filena
 
 
 @pytest.mark.asyncio
-async def test_config_lists_the_trigger_event_file_with_the_runs_attachments(
+async def test_the_event_file_is_written_but_kept_out_of_the_system_prompt_list(
     activity_context, file_storage
 ):
+    """The first message names the file; the system prompt stays the same from run to run."""
+    _, _, stored, _ = file_storage
     ctx, functions = activity_context
     saved = agent()
     ctx.get_agent_service.return_value.get_with_skills.return_value = saved
@@ -545,9 +552,12 @@ async def test_config_lists_the_trigger_event_file_with_the_runs_attachments(
 
     result = await functions["build_agent_config_activity"](request)
 
-    assert [a["relative_path"] for a in result.execution_context["workspace_attachments"]] == [
-        "inputs/attachments/trigger-event-9.json"
-    ]
+    assert "workspace_attachments" not in (result.execution_context or {})
+    assert (
+        "workspace",
+        str(request.task_id),
+        "inputs/attachments/trigger-event-9.json",
+    ) in stored
 
 
 @pytest.mark.asyncio

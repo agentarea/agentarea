@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
-from agentarea_common.channel_origin import drop_channel_origin, reject_channel_origin
+from agentarea_common.channel_origin import drop_reserved_parameters, reject_reserved_parameters
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from .enums import ExecutionStatus, TriggerType, WebhookType
@@ -263,7 +263,7 @@ class TriggerCreate(BaseModel):
     stream_id: UUID | None = None
     event_filter: dict[str, Any] | None = None
 
-    _reject_channel_origin = field_validator("task_parameters")(reject_channel_origin)
+    _reject_reserved_parameters = field_validator("task_parameters")(reject_reserved_parameters)
 
     @model_validator(mode="after")
     def validate_trigger_type_fields(self) -> "TriggerCreate":
@@ -284,7 +284,7 @@ class TriggerCreate(BaseModel):
 class TriggerUpdate(BaseModel):
     """Model for updating an existing trigger."""
 
-    _drop_channel_origin = field_validator("task_parameters")(drop_channel_origin)
+    _drop_reserved_parameters = field_validator("task_parameters")(drop_reserved_parameters)
 
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, max_length=1000)

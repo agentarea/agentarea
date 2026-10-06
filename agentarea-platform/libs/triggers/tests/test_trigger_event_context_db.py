@@ -164,8 +164,8 @@ async def test_the_runs_first_message_carries_the_order_that_fired_it(world):
     assert "A-1003" in task.query
     assert "- Trigger: Order paid (stream)" in task.query
     assert "- Stream: shop orders" in task.query
-    assert "- Event kind: order.paid" in task.query
-    assert "- Event key: order-A-1003" in task.query
+    assert '- Event kind: "order.paid"' in task.query
+    assert '- Event key: "order-A-1003"' in task.query
     assert f"- Stream sequence: {event.sequence}" in task.query
     assert "trigger_event_file" not in task.task_parameters
 

@@ -11,16 +11,23 @@ High-level service that orchestrates trigger management by:
 
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from agentarea_common.audit import audited
-from agentarea_common.channel_origin import CHANNEL_ORIGIN_PARAMETER, FOLLOW_UP_MESSAGE_PARAMETER
+from agentarea_common.channel_origin import (
+    FOLLOW_UP_MESSAGE_PARAMETER,
+    RESERVED_TASK_PARAMETERS,
+    drop_reserved_parameters,
+)
 from agentarea_common.config import get_settings
 from agentarea_common.events.base_events import EventEnvelope
 from agentarea_common.events.broker import EventBroker
-from agentarea_common.trigger_event_file import TRIGGER_EVENT_FILE_PARAMETER
+from agentarea_common.trigger_event_file import (
+    TRIGGER_EVENT_FILE_PARAMETER,
+    TRIGGER_EVENT_PARAMETER,
+)
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import EventFilter, StreamNameTakenError, StreamNotFoundError
 from agentarea_streams.infrastructure.repository import find_webhook_source
@@ -147,6 +154,8 @@ class TriggerTaskInput:
     ask: str
     message: str
     event_file: str | None = None
+    # The scrubbed data the event file holds; set with event_file.
+    event_data: dict[str, Any] | None = None
     # The event's own text, which is all a follow-up into a running chat sends.
     follow_up: str | None = None
 
@@ -154,6 +163,7 @@ class TriggerTaskInput:
         """Name the input file the run must provision, and what a follow-up delivers."""
         if self.event_file is not None:
             parameters[TRIGGER_EVENT_FILE_PARAMETER] = self.event_file
+            parameters[TRIGGER_EVENT_PARAMETER] = self.event_data
         if self.follow_up is not None:
             parameters[FOLLOW_UP_MESSAGE_PARAMETER] = self.follow_up
         return parameters
@@ -166,16 +176,15 @@ def compose_task_input(
 
     Every path that fires a trigger comes through here, so the agent sees what
     started it the same way whatever the source. ``event`` is what a stream
-    delivered; without one the events a channel, poller or replay carried in
-    ``trigger_data`` stand in, and a schedule tick carries none. The event's
-    data must be ``trigger_data``: an event file is written from the task's
-    copy of it.
+    delivered, whose data is ``trigger_data``; without one the events a
+    channel, poller or replay carried in ``trigger_data`` stand in, scrubbed,
+    and a schedule tick carries none.
     """
     ask = resolve_task_query(trigger, trigger_data)
     if ask is None:
         return None
     if event is None:
-        event = TriggerEvent.from_trigger_data(trigger_data, received_at=datetime.now(UTC))
+        event = TriggerEvent.from_trigger_data(trigger_data)
     elif event.data != trigger_data:
         raise ValueError("the event a trigger fired on must carry the trigger data it was given")
     if event is None:
@@ -187,6 +196,7 @@ def compose_task_input(
         ask=ask,
         message=f"{ask}\n\n{block.text}",
         event_file=block.event_file,
+        event_data=event.data if block.event_file is not None else None,
         follow_up=event_text(trigger_data),
     )
 
@@ -1338,8 +1348,20 @@ class TriggerService:
                     # The stored row keeps only the ask, so the message is composed
                     # again from the same event.
                     retried_input = compose_task_input(trigger, trigger_data, event)
-                    if retried_input is not None:
-                        existing.query = retried_input.message
+                    if retried_input is None:
+                        # The trigger lost its instruction since the first attempt;
+                        # the stored ask is no longer what it would run.
+                        logger.warning(
+                            f"Not restarting task {task_id} for trigger {trigger_id}: "
+                            f"{NO_TASK_TEXT}"
+                        )
+                        execution = await self._record_execution_failure(
+                            trigger_id, NO_TASK_TEXT, trigger_data, fired_by=fired_by
+                        )
+                        return TriggerFiring(
+                            outcome="error", reason=NO_TASK_TEXT, execution=execution
+                        )
+                    existing.query = retried_input.message
                     await self.task_service.restart_undispatched_task(existing)
                     logger.info(f"Started task {task_id} for trigger {trigger_id} on retry")
                     return TriggerFiring(
@@ -1551,14 +1573,11 @@ class TriggerService:
         Returns:
             Task parameters
         """
-        # Start with trigger's task parameters. A channel_origin stored there
-        # predates the create/update check; only _build_channel_origin below
-        # may name the trigger replies are sent through. Likewise only
-        # compose_task_input names an event file or a follow-up message.
-        params = dict(trigger.task_parameters)
-        params.pop(CHANNEL_ORIGIN_PARAMETER, None)
-        params.pop(TRIGGER_EVENT_FILE_PARAMETER, None)
-        params.pop(FOLLOW_UP_MESSAGE_PARAMETER, None)
+        # Start with trigger's task parameters. Reserved keys stored there
+        # predate the create/update check; only _build_channel_origin below
+        # may name the trigger replies are sent through, and only
+        # compose_task_input the event file and the follow-up message.
+        params = dict(drop_reserved_parameters(trigger.task_parameters) or {})
 
         # Add trigger metadata
         params.update(
@@ -1608,17 +1627,13 @@ class TriggerService:
                 )
 
                 # Event-derived data cannot grant new capabilities or file access.
-                resource_keys = {
-                    "mcps",
-                    "mcp",
-                    "mcp_servers",
-                    "skills",
-                    "files",
-                    TRIGGER_EVENT_FILE_PARAMETER,
-                    FOLLOW_UP_MESSAGE_PARAMETER,
-                }
+                resource_keys = {"mcps", "mcp", "mcp_servers", "skills", "files"}
                 for key, value in llm_params.items():
-                    if key not in params and key not in resource_keys:
+                    if (
+                        key not in params
+                        and key not in resource_keys
+                        and key not in RESERVED_TASK_PARAMETERS
+                    ):
                         params[key] = value
 
                 logger.info(

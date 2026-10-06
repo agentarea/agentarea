@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Any, Literal
 from uuid import UUID
 
-from agentarea_common.channel_origin import drop_channel_origin, reject_channel_origin
+from agentarea_common.channel_origin import drop_reserved_parameters, reject_reserved_parameters
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS
@@ -74,7 +74,7 @@ class TriggerSpec(BaseModel):
             "of a combined condition names its own."
         ),
     )
-    _reject_channel_origin = field_validator("task_parameters")(reject_channel_origin)
+    _reject_reserved_parameters = field_validator("task_parameters")(reject_reserved_parameters)
     enabled: bool = Field(
         default=True,
         description="Whether the trigger is active immediately on creation.",
@@ -273,7 +273,7 @@ class TriggerUpdate(BaseModel):
     task_parameters: dict[str, Any] | None = None
     conditions: dict[str, Any] | None = None
     failure_threshold: int | None = Field(default=None, ge=1, le=100)
-    _drop_channel_origin = field_validator("task_parameters")(drop_channel_origin)
+    _drop_reserved_parameters = field_validator("task_parameters")(drop_reserved_parameters)
 
     cron_expression: str | None = None
     timezone: str | None = None

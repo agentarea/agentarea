@@ -35,7 +35,7 @@ from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.auth.tool_authorization import caller_can_approve
 from agentarea_common.base import ReadRepositoryFactoryDep
 from agentarea_common.base.pagination import MAX_OFFSET, MAX_PAGE
-from agentarea_common.channel_origin import reject_channel_origin
+from agentarea_common.channel_origin import reject_reserved_parameters
 from agentarea_common.config import get_settings
 from agentarea_common.events.contract import (
     EXECUTION_FINISHED,
@@ -112,7 +112,7 @@ global_tasks_router = APIRouter(prefix="/tasks", tags=["tasks"])
 class TaskCreate(BaseModel):
     description: str
     parameters: dict[str, Any] = Field(default_factory=dict)
-    _reject_channel_origin = field_validator("parameters")(reject_channel_origin)
+    _reject_reserved_parameters = field_validator("parameters")(reject_reserved_parameters)
     execution: RunExecutionConfig | None = None
     requires_human_approval: bool | None = False
     project_id: str | None = None
