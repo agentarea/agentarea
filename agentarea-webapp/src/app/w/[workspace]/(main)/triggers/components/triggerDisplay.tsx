@@ -282,7 +282,12 @@ const WEBHOOK_SCHEDULE_LABEL: Record<string, string> = {
   generic: "On incoming request",
 };
 
-/** Human description of when a trigger fires, shown in the listing. */
+/**
+ * Human description of when a trigger fires, shown in the listing. Does not
+ * cover stream triggers: that phrase is translated, and this module has no
+ * translator to call, so a caller that may see one resolves it itself from
+ * `TriggersPage.onStreamEvents`.
+ */
 export function describeTriggerSchedule(trigger: TriggerLike): string {
   if (trigger?.trigger_type === "cron") {
     return describeCronExpression(
@@ -291,9 +296,6 @@ export function describeTriggerSchedule(trigger: TriggerLike): string {
   }
   if (trigger?.trigger_type === "polling") {
     return "Polls for updates";
-  }
-  if (trigger?.trigger_type === "stream") {
-    return "On stream events";
   }
   const webhookType = (
     trigger?.webhook_type ||

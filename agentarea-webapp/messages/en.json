@@ -1536,6 +1536,9 @@
     "roleRequester": "Requester",
     "rolePrimaryAgent": "Primary agent",
     "roleDelegated": "Delegated agent",
+    "roleTrigger": "Trigger",
+    "roleDelegatingTask": "Delegating task",
+    "startedBy": "Started by",
     "quickActions": "Quick actions",
     "viewTaskEvents": "View task events",
     "openAgentDetails": "Open agent details",
@@ -1680,6 +1683,7 @@
     "description": "Configure triggers to automate agent task execution",
     "createTrigger": "Create Trigger",
     "searchPlaceholder": "Search triggers & agents…",
+    "onStreamEvents": "On stream events",
     "filter": {
       "all": "All",
       "channels": "Channels",
@@ -1810,8 +1814,8 @@
       "taskFilesPlaceholder": "Select files",
       "taskSkills": "Additional skills",
       "taskMcps": "Additional MCP",
-      "taskTextFromChannel": "The incoming message is the task. Text here is a fallback, used only when a message arrives carrying none.",
-      "taskTextFromCall": "The call supplies the task. Text here is a fallback, used only when a call arrives carrying none.",
+      "taskTextFromChannel": "This is the instruction the agent follows; the incoming message is attached as the event. Leave it empty to make the message itself the ask.",
+      "taskTextFromCall": "This is the instruction the agent follows; the incoming call is attached as the event. Leave it empty to make the call itself the ask.",
       "taskTextFromStream": "The event's data is attached to the task automatically. The text here is the instruction the agent follows.",
       "taskFilesHint": "Select workspace files to include in every task.",
       "searchFiles": "Search files",
@@ -1891,7 +1895,6 @@
       "failureWarning": "{count, plural, one {# consecutive failure} other {# consecutive failures}} of {threshold}",
       "noSchedule": "Waiting for an incoming request",
       "noScheduleStream": "Waiting for stream events",
-      "onStreamEvents": "On stream events",
       "executionStatus": {
         "completed": "Completed",
         "success": "Success",
@@ -2003,7 +2006,9 @@
       "causedBy": "Caused by",
       "close": "Close",
       "gone": "This event is no longer kept.",
-      "triggersLoadFailed": "Could not load trigger names"
+      "triggersLoadFailed": "Could not load trigger names",
+      "subscriptionsLoadFailed": "Could not load forward links",
+      "streamsLoadFailed": "Could not load stream names"
     }
   },
   "NetworkPage": {

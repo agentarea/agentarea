@@ -52,8 +52,8 @@ export default async function EventDetail({
   const event = optionalApiData(eventResult, "stream event");
   const closeHref = `${feedHref(streamId, { outcome, before })}#${eventRowId(sequence)}`;
   // Target streams of this stream's own forward subscriptions, sorted the way
-  // ForwardHandler appended derived events — only needed to turn "Forwarded
-  // as: N" into a link, so a 403/empty read just falls back to plain text.
+  // ForwardHandler appended derived events — turns "Forwarded as: N" into a
+  // link when it resolves.
   const forwardTargets = new Map(
     (subscriptionsResult.data ?? []).map((sub) => [
       sub.id,
@@ -63,6 +63,14 @@ export default async function EventDetail({
   const streamNames = new Map(
     (streamsResult.data ?? []).map((stream) => [stream.id, stream.name])
   );
+  const subscriptionsError =
+    subscriptionsResult.error || !subscriptionsResult.data
+      ? apiErrorMessage(subscriptionsResult, t("subscriptionsLoadFailed"))
+      : null;
+  const streamsError =
+    streamsResult.error || !streamsResult.data
+      ? apiErrorMessage(streamsResult, t("streamsLoadFailed"))
+      : null;
 
   return (
     <section
@@ -114,6 +122,8 @@ export default async function EventDetail({
               ? apiErrorMessage(triggersResult, t("triggersLoadFailed"))
               : null
           }
+          subscriptionsError={subscriptionsError}
+          streamsError={streamsError}
           forwardTargets={forwardTargets}
           streamNames={streamNames}
         />
@@ -132,6 +142,8 @@ function EventBody({
   tFilter,
   triggerNames,
   triggersError,
+  subscriptionsError,
+  streamsError,
   forwardTargets,
   streamNames,
 }: {
@@ -140,6 +152,8 @@ function EventBody({
   tFilter: Translator;
   triggerNames: Map<string, string>;
   triggersError: string | null;
+  subscriptionsError: string | null;
+  streamsError: string | null;
   forwardTargets: Map<string, string[]>;
   streamNames: Map<string, string>;
 }) {
@@ -151,6 +165,8 @@ function EventBody({
           {t("subscribers")}
         </h3>
         {triggersError && <SectionLoadError message={triggersError} />}
+        {subscriptionsError && <SectionLoadError message={subscriptionsError} />}
+        {streamsError && <SectionLoadError message={streamsError} />}
         {event.outcomes.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
             {t("noOutcomes")}

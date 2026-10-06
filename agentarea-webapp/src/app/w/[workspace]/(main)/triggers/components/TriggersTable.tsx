@@ -31,6 +31,7 @@ export default function TriggersTable({
 }: TriggersTableProps) {
   const t = useTranslations("TriggersPage.table");
   const tStatus = useTranslations("TriggersPage.status");
+  const tCommon = useTranslations("TriggersPage");
   const router = useWorkspaceRouter();
 
   const columns: Column<EnrichedTrigger>[] = [
@@ -47,7 +48,9 @@ export default function TriggersTable({
           <span className="flex min-w-0 items-center gap-2.5">
             <TriggerSourceMark entry={entry} trigger={trigger} size={28} />
             <span className="truncate text-[13px] text-muted-foreground">
-              {describeTriggerSchedule(trigger)}
+              {trigger.trigger_type === "stream"
+                ? tCommon("onStreamEvents")
+                : describeTriggerSchedule(trigger)}
             </span>
           </span>
         );

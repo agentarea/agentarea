@@ -55,7 +55,7 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
     executionsResponse,
     agentResponse,
     streamResponse,
-    t,
+    tCommon,
   ] = await Promise.all([
     listTriggerCatalog(),
     getTriggerMetrics(triggerId),
@@ -64,13 +64,12 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
       page_size: RECENT_EXECUTIONS,
     }),
     getAgent(trigger.agent_id),
-    // Only a stream trigger's header and "When to run" card name the stream
-    // (U4) — a webhook trigger's own backing stream stays unnamed, since only
-    // "Last event" ever points at it there.
+    // A webhook trigger's own backing stream stays unnamed here — only "Last
+    // event" ever points at it, so there is nothing to look up.
     isStream && trigger.stream_id
       ? getStream(trigger.stream_id)
       : Promise.resolve(null),
-    getTranslations("TriggersPage.detail"),
+    getTranslations("TriggersPage"),
   ]);
 
   const catalog = (catalogResponse.data ?? []) as TriggerCatalogEntry[];
@@ -97,11 +96,10 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
     description: trigger.description,
     iconUrl: entry?.icon_url ?? null,
     sourceName: getTriggerDisplayName(trigger, entry),
-    // The catalog's own phrase ("On stream events") is hardcoded English —
-    // overridden here, not in triggerDisplay.tsx, which a concurrent change
-    // owns right now (U9).
+    // describeTriggerSchedule has no translator to call, so it does not
+    // cover stream triggers; the phrase is resolved here instead.
     scheduleText: isStream
-      ? t("onStreamEvents")
+      ? tCommon("onStreamEvents")
       : describeTriggerSchedule(trigger),
     status: getTriggerStatusPresentation(getTriggerHealth(trigger)),
     agent: agent ? { id: agent.slug || agent.id, name: agent.name } : null,

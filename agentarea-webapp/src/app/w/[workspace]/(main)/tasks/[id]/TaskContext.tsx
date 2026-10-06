@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { useTranslations } from "next-intl";
-import type { TaskSummary } from "@/api/client/types.gen";
+import type { TaskProvenance, TaskSummary } from "@/api/client/types.gen";
 import {
   apiErrorMessage,
   formatApiError,
@@ -38,6 +38,7 @@ interface TaskData {
   agent_description?: string;
   result?: Record<string, unknown>;
   parameters?: Record<string, unknown>;
+  provenance?: TaskProvenance | null;
 }
 
 interface TaskStatus {
@@ -100,6 +101,10 @@ function parseTaskData(raw: unknown): TaskData | null {
     parameters:
       typeof r.parameters === "object" && r.parameters !== null
         ? (r.parameters as Record<string, unknown>)
+        : undefined,
+    provenance:
+      typeof r.provenance === "object" && r.provenance !== null
+        ? (r.provenance as TaskProvenance)
         : undefined,
   };
 }

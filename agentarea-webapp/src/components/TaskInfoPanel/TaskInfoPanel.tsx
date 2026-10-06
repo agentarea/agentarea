@@ -132,6 +132,7 @@ export default function TaskInfoPanel({
               agentId={task.agent_id}
               agentName={task.agent_name}
               delegatedAgents={activitySummary?.delegatedAgents}
+              provenance={task.provenance}
             />
             <Files files={activitySummary?.files} />
             <Documents artifacts={artifacts} />
