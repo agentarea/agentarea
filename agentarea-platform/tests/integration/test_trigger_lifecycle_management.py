@@ -34,6 +34,10 @@ from agentarea_tasks.task_service import TaskService
 pytestmark = pytest.mark.asyncio
 
 
+def _rule(field: str, value: object) -> dict:
+    return {"type": "rule", "logic": "AND", "rules": [{"field": field, "operator": "eq", "value": value}]}
+
+
 class TestTriggerLifecycleManagement:
     """Integration tests for trigger lifecycle management."""
 
@@ -128,7 +132,7 @@ class TestTriggerLifecycleManagement:
             cron_expression="0 9 * * 1-5",  # 9 AM weekdays
             timezone="UTC",
             task_parameters={"text": "Summarize the open support tickets", "lifecycle_test": True},
-            conditions={"business_hours": True},
+            conditions=_rule("business_hours", True),
             created_by="lifecycle_test",
             workspace_id="lifecycle-test-workspace",
         )
@@ -171,7 +175,7 @@ class TestTriggerLifecycleManagement:
             webhook_type=WebhookType.GITHUB,
             allowed_methods=["POST", "PUT"],
             task_parameters={"webhook_lifecycle_test": True},
-            conditions={"branch": "main"},
+            conditions=_rule("branch", "main"),
             validation_rules={"required_headers": ["X-GitHub-Event"]},
             webhook_config={"secret": "webhook_secret"},
             created_by="lifecycle_test",
@@ -215,7 +219,7 @@ class TestTriggerLifecycleManagement:
             cron_expression="0 9 * * *",
             timezone="UTC",
             task_parameters={"text": "Summarize the open support tickets", "original": True},
-            conditions={"original_condition": True},
+            conditions=_rule("original_condition", True),
             failure_threshold=5,
             created_by="update_test",
             workspace_id="lifecycle-test-workspace",
@@ -232,7 +236,7 @@ class TestTriggerLifecycleManagement:
             cron_expression="0 10 * * *",  # Changed time
             timezone="America/New_York",  # Changed timezone
             task_parameters={"text": "Summarize the closed support tickets", "version": 2},
-            conditions={"updated_condition": True},
+            conditions=_rule("updated_condition", True),
             failure_threshold=3,  # Changed threshold
         )
 
@@ -248,7 +252,7 @@ class TestTriggerLifecycleManagement:
             "text": "Summarize the closed support tickets",
             "version": 2,
         }
-        assert updated_trigger.conditions == {"updated_condition": True}
+        assert updated_trigger.conditions == _rule("updated_condition", True)
         assert updated_trigger.failure_threshold == 3
 
         # Verify timestamps
