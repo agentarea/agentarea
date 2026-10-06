@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from typing_extensions import TypedDict
 
@@ -15,7 +15,7 @@ DEFAULT_VERIFICATION: dict = {
 class VerificationError(TypedDict):
     code: str
     message: str
-    detail: str | None
+    detail: str | dict[str, Any] | None
 
 
 class VerificationPayload(TypedDict):

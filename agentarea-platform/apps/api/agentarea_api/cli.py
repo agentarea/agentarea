@@ -5,10 +5,12 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 
 import click
 import uvicorn
 from agentarea_common.config import Database, get_db_settings
+from agentarea_common.rebac.openfga_client import OpenFGAClient
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
@@ -20,6 +22,21 @@ def get_engine():
     """Get database engine for migrations."""
     db = Database(get_db_settings())
     return db.sync_engine
+
+
+def reload_dirs(cli_file: Path) -> list[str]:
+    """The directories ``serve --reload`` watches: the API package and the workspace libs.
+
+    *cli_file* sits at ``<root>/apps/api/agentarea_api/cli.py``, the libs at
+    ``<root>/libs``, both in a checkout and in the image.
+    """
+    package_dir = cli_file.resolve().parent
+    libs_dir = package_dir.parents[2] / "libs"
+    if not libs_dir.is_dir():
+        raise click.UsageError(
+            f"--reload watches the workspace libs, but {libs_dir} does not exist"
+        )
+    return [str(package_dir), str(libs_dir)]
 
 
 @click.group()
@@ -89,6 +106,7 @@ def serve(host: str, port: int, reload: bool, log_level: str, workers: int, shut
         host=host,
         port=port,
         reload=reload,
+        reload_dirs=reload_dirs(Path(__file__)) if reload else None,
         workers=workers if not reload else 1,  # Workers > 1 incompatible with reload
         log_level=log_level,
         # Bounded, always. The API serves SSE, and those connections never end
@@ -246,14 +264,58 @@ def validate():
     default=None,
     help="Path to a YAML/JSON manifest listing registry sources.",
 )
-def reconcile(registries_config: str | None, source: tuple[str, ...], config_file: str | None):
-    """Idempotent reconcile — ensure registries exist and sync them."""
+@click.option(
+    "--wait-for-schema",
+    default=None,
+    help="Wait up to this long (e.g. 300s) for the database to reach the migration head.",
+)
+def reconcile(
+    registries_config: str | None,
+    source: tuple[str, ...],
+    config_file: str | None,
+    wait_for_schema: str | None,
+):
+    """Idempotent reconcile — graph ownership of every governed row, then registries."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
+    if wait_for_schema is not None:
+        from agentarea_common.config.duration import parse_duration
+
+        _wait_for_schema_head(parse_duration(wait_for_schema).total_seconds())
     asyncio.run(_reconcile(registries_config, source, config_file))
 
 
-async def _register_graph_client() -> None:
+def _wait_for_schema_head(timeout_seconds: float, poll_seconds: float = 5.0) -> None:
+    """Block until the database is at the migration head.
+
+    The chart starts this Job alongside the migration Job. Rows a data migration
+    writes by SQL get no graph tuples, so the ownership pass has to run after the
+    migration commits or it walks the tables before those rows exist.
+    """
+    import time
+
+    from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+
+    head = ScriptDirectory.from_config(Config("alembic.ini")).get_current_head()
+    deadline = time.monotonic() + timeout_seconds
+    engine = get_engine()
+    while True:
+        with engine.connect() as connection:
+            current = MigrationContext.configure(connection).get_current_revision()
+        if current == head:
+            click.echo(f"Database at migration head {head}")
+            return
+        if time.monotonic() >= deadline:
+            raise click.ClickException(
+                f"database is at revision {current}, not the head {head}, "
+                f"after waiting {timeout_seconds:.0f}s for the migration Job"
+            )
+        click.echo(f"Waiting for migrations: at {current}, head is {head}")
+        time.sleep(poll_seconds)
+
+
+async def _register_graph_client() -> OpenFGAClient:
     """Register the authorization-graph client the API and worker register.
 
     Materializing a catalog skill creates a Skill row, and
@@ -268,22 +330,37 @@ async def _register_graph_client() -> None:
     from agentarea_common.config.openfga import OpenFGASettings
     from agentarea_common.di.container import register_singleton
     from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
-    from agentarea_common.rebac.openfga_client import OpenFGAClient
 
     backend = AccessControlSettings().BACKEND
     openfga = OpenFGASettings()
     await bootstrap_openfga(openfga)
-    register_singleton(
-        OpenFGAClient,
-        OpenFGAClient(
-            api_url=openfga.URL,
-            store_id=openfga.STORE_ID,
-            authorization_model_id=openfga.MODEL_ID,
-            timeout_seconds=openfga.TIMEOUT.total_seconds(),
-            api_token=openfga.API_TOKEN or None,
-        ),
+    client = OpenFGAClient(
+        api_url=openfga.URL,
+        store_id=openfga.STORE_ID,
+        authorization_model_id=openfga.MODEL_ID,
+        timeout_seconds=openfga.TIMEOUT.total_seconds(),
+        api_token=openfga.API_TOKEN or None,
     )
+    register_singleton(OpenFGAClient, client)
     click.echo(f"Authorization graph: {backend}")
+    return client
+
+
+async def _reconcile_graph_ownership(db: Database, client: OpenFGAClient) -> None:
+    """Give every governed row the ownership tuples it lacks.
+
+    Rows a data migration inserts by SQL never pass through the repository that
+    grants ownership, so without this they stay invisible to everyone until
+    someone runs the reconcile script by hand.
+    """
+    from agentarea_common.rebac.ownership_reconcile import reconcile_graph_ownership
+
+    async with db.async_session_factory() as session:
+        result = await reconcile_graph_ownership(session, client)
+    click.echo(
+        f"Graph ownership: wrote {result.written} tuples across {result.resources} resources, "
+        f"{result.workspaces} workspaces and {result.memberships} memberships"
+    )
 
 
 async def _reconcile(
@@ -342,11 +419,12 @@ async def _reconcile(
         )
         configs.append({"name": name, "source_url": src})
 
+    client = await _register_graph_client()
+    await _reconcile_graph_ownership(db, client)
+
     if not configs:
         click.echo("No registry config provided (set REGISTRIES_CONFIG or use --source)")
         return
-
-    await _register_graph_client()
 
     # Validate up front so a malformed entry reports a clear message instead of
     # failing deep inside the per-registry loop with a bare KeyError.

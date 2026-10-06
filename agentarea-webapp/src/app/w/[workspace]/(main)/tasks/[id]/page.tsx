@@ -148,6 +148,7 @@ export default function TaskDetailsPage() {
                 created_at: task.created_at || "",
                 execution_id: task.execution_id || null,
                 result: task.result,
+                provenance: task.provenance,
               }}
               currentStatus={currentStatus}
               executionStatus={executionStatus}

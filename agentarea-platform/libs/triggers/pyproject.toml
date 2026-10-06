@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "agentarea-common",
     "agentarea-llm",
+    "agentarea-streams",
     "pydantic>=2.4.2",
     "temporalio>=1.0.0",
     "aiosmtplib>=3.0",
@@ -19,6 +20,7 @@ dependencies = [
 [tool.uv.sources]
 agentarea-common = { workspace = true }
 agentarea-llm = { workspace = true }
+agentarea-streams = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["agentarea_triggers"] 

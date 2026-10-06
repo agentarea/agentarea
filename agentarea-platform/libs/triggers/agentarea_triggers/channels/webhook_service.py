@@ -33,6 +33,13 @@ class ChannelWebhookService:
             return None
         return f"{self._base}/webhooks/{webhook_id}"
 
+    def webhook_url(self, webhook_id: str) -> str:
+        """The public URL senders call; refuses when no public base URL is configured."""
+        url = self._webhook_url(webhook_id)
+        if url is None:
+            raise ValueError("No public webhook base URL is configured (AGENTAREA_API_URL)")
+        return url
+
     async def register(
         self,
         *,

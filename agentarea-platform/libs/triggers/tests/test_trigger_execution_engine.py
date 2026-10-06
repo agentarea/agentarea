@@ -7,7 +7,11 @@ from uuid import uuid4
 import pytest
 from agentarea_triggers.domain.enums import ExecutionStatus
 from agentarea_triggers.domain.models import CronTrigger, TriggerExecution, WebhookTrigger
-from agentarea_triggers.trigger_service import TriggerNotFoundError, TriggerService
+from agentarea_triggers.trigger_service import (
+    TriggerConditionError,
+    TriggerNotFoundError,
+    TriggerService,
+)
 
 from .conftest import make_trigger_repository_factory
 
@@ -241,7 +245,7 @@ class TestTriggerExecutionEngine:
             sample_webhook_trigger.conditions, event_data
         )
 
-        assert result is True
+        assert result.met is True
 
     async def test_evaluate_trigger_conditions_field_mismatch(
         self, trigger_service, sample_webhook_trigger
@@ -253,7 +257,7 @@ class TestTriggerExecutionEngine:
             sample_webhook_trigger.conditions, event_data
         )
 
-        assert result is False
+        assert result.met is False
 
     # NOTE: ``test_evaluate_trigger_conditions_time_based`` and
     # ``test_evaluate_trigger_conditions_weekdays_only`` were removed. Time-based
@@ -330,13 +334,10 @@ class TestTriggerExecutionEngine:
 
     async def test_condition_evaluation_error_handling(self, trigger_service, sample_cron_trigger):
         """Test condition evaluation error handling."""
-        # Set up conditions that will cause an error
+        # Conditions this fallback cannot read must not be reported as met.
         sample_cron_trigger.conditions = {"invalid_condition_type": {"bad": "config"}}
 
-        # Should return True (default) when condition evaluation fails
-        result = await trigger_service._evaluate_simple_conditions(
-            sample_cron_trigger.conditions, {}
-        )
-        assert result is True
+        with pytest.raises(TriggerConditionError):
+            await trigger_service._evaluate_simple_conditions(sample_cron_trigger.conditions, {})
 
 

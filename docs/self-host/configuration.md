@@ -10,7 +10,7 @@ related:
   - /self-host/docker-compose
   - /self-host/secrets-backends
   - /self-host/networking
-last_updated: 2026-10-03
+last_updated: 2026-10-06
 ---
 
 The environment variables each service reads, grouped by service, with the Helm
@@ -341,6 +341,35 @@ Read by `SecretManagerSettings` in the platform. On Kubernetes, set these throug
 | `AGENTAREA_SECRET_CLIENT_ID` | string | unset | Infisical client ID. Required when type is `infisical`. |
 | `AGENTAREA_SECRET_CLIENT_SECRET` | string | unset | Infisical client secret. Required when type is `infisical`. |
 
+### Event streams (not in `config.yaml`)
+
+Read by `EventStreamSettings` inside both the backend (webhook intake, the
+`/streams` routes) and the worker (the dispatcher and the partition
+maintainer). Not wired into any Helm group yet — set these through
+`backend.extraEnv` and `worker.extraEnv`, matching values on both, the same
+way as the secret manager settings just above.
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `AGENTAREA_EVENT_WRITE_QUOTA` | integer | `600` | Events one workspace may append per rolling minute, counted across every stream it owns. Exceeding it answers a webhook `429`. |
+| `AGENTAREA_EVENT_RETENTION` | duration | `30d` | Age past which a whole daily journal partition is dropped; the floor under every stream's own `retention_days`. |
+| `AGENTAREA_EVENT_PARTITIONS_AHEAD` | integer | `7` | Daily journal partitions kept created ahead of today. |
+| `AGENTAREA_EVENT_DISPATCH_EVERY` | duration | `2s` | How often the dispatcher polls when no Redis wake signal arrives. |
+| `AGENTAREA_EVENT_DISPATCH_BATCH` | integer | `50` | Events one subscription is handed per lease. |
+| `AGENTAREA_EVENT_FORWARD_DEPTH` | integer | `8` | Longest causation chain a forward may extend. |
+| `AGENTAREA_EVENT_MAX_ATTEMPTS` | integer | `10` | Retries of one event before its outcome is recorded `error`. |
+| `AGENTAREA_EVENT_LEASE` | duration | `5m` | How long the dispatcher holds a subscription before another instance may take it over. |
+
+These share the `EVENT` domain with `AGENTAREA_EVENT_POLL_INTERVAL` and
+`AGENTAREA_EVENT_MAX_POLLERS` just below, but are unrelated settings: those
+two configure the channel-inbound poller; the eight above configure the
+event-stream journal and its dispatcher. See [Event
+streams](/concepts/integration/event-streams).
+
+The API and the worker wake the dispatcher over Redis, so both refuse to start
+unless `AGENTAREA_BROKER=redis` (the default, and what every chart and Compose
+file sets).
+
 ### Event service (group `eventService` values, chart keys only)
 
 | Setting | Helm value | Default |
@@ -405,6 +434,8 @@ than starting with them empty.
 | `docker compose` aborts before starting anything | A `${VAR:?}` variable is empty | Set the sandbox secrets |
 | Presigned upload URLs point at an unreachable host | `AGENTAREA_S3_PUBLIC_ENDPOINT` empty with a cluster-only object store | Set `global.storage.publicEndpoint` |
 | CI fails on a Helm change with a configs diff | `templates/configs/` is stale relative to `config.yaml` | Run `make helm-gen` and commit |
+| A webhook answers `429` | The workspace crossed `AGENTAREA_EVENT_WRITE_QUOTA` events in the trailing minute, across every stream it owns | Raise `AGENTAREA_EVENT_WRITE_QUOTA`; it is workspace-wide, not per stream |
+| A webhook answers `413` | The request body is over the fixed 256 KiB event size cap | Send a reference to a workspace file instead of the content itself |
 
 ## Example
 

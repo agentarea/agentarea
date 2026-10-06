@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from agentarea_common.channel_origin import reject_channel_origin
+from agentarea_common.channel_origin import reject_reserved_parameters
 from agentarea_governance.domain.policies import PolicyDocument
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -107,4 +107,4 @@ class RunCreate(BaseModel):
     )
 
     _validate_scheduled_at = field_validator("scheduled_at")(require_future_instant)
-    _reject_channel_origin = field_validator("parameters")(reject_channel_origin)
+    _reject_reserved_parameters = field_validator("parameters")(reject_reserved_parameters)

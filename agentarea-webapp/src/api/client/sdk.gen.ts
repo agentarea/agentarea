@@ -82,6 +82,9 @@ import type {
   CreateConnectionV1OpenapiConnectionsPostData,
   CreateConnectionV1OpenapiConnectionsPostErrors,
   CreateConnectionV1OpenapiConnectionsPostResponses,
+  CreateForwardV1StreamsStreamIdForwardsPostData,
+  CreateForwardV1StreamsStreamIdForwardsPostErrors,
+  CreateForwardV1StreamsStreamIdForwardsPostResponses,
   CreateInvitationV1InvitationsPostData,
   CreateInvitationV1InvitationsPostErrors,
   CreateInvitationV1InvitationsPostResponses,
@@ -133,6 +136,9 @@ import type {
   CreateSkillV1SkillsPostData,
   CreateSkillV1SkillsPostErrors,
   CreateSkillV1SkillsPostResponses,
+  CreateStreamV1StreamsPostData,
+  CreateStreamV1StreamsPostErrors,
+  CreateStreamV1StreamsPostResponses,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostData,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostErrors,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostResponses,
@@ -205,6 +211,9 @@ import type {
   DeleteSkillV1SkillsSkillIdDeleteData,
   DeleteSkillV1SkillsSkillIdDeleteErrors,
   DeleteSkillV1SkillsSkillIdDeleteResponses,
+  DeleteStreamV1StreamsStreamIdDeleteData,
+  DeleteStreamV1StreamsStreamIdDeleteErrors,
+  DeleteStreamV1StreamsStreamIdDeleteResponses,
   DeleteTriggerV1TriggersTriggerIdDeleteData,
   DeleteTriggerV1TriggersTriggerIdDeleteErrors,
   DeleteTriggerV1TriggersTriggerIdDeleteResponses,
@@ -316,6 +325,9 @@ import type {
   GetDashboardV1DashboardGetData,
   GetDashboardV1DashboardGetErrors,
   GetDashboardV1DashboardGetResponses,
+  GetEventV1StreamsStreamIdEventsSequenceGetData,
+  GetEventV1StreamsStreamIdEventsSequenceGetErrors,
+  GetEventV1StreamsStreamIdEventsSequenceGetResponses,
   GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetData,
   GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetErrors,
   GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetResponses,
@@ -402,6 +414,9 @@ import type {
   GetSkillV1SkillsSkillIdGetData,
   GetSkillV1SkillsSkillIdGetErrors,
   GetSkillV1SkillsSkillIdGetResponses,
+  GetStreamV1StreamsStreamIdGetData,
+  GetStreamV1StreamsStreamIdGetErrors,
+  GetStreamV1StreamsStreamIdGetResponses,
   GetTaskByIdV1TasksTaskIdGetData,
   GetTaskByIdV1TasksTaskIdGetErrors,
   GetTaskByIdV1TasksTaskIdGetResponses,
@@ -515,6 +530,9 @@ import type {
   ListConnectionsV1OpenapiConnectionsGetData,
   ListConnectionsV1OpenapiConnectionsGetErrors,
   ListConnectionsV1OpenapiConnectionsGetResponses,
+  ListEventsV1StreamsStreamIdEventsGetData,
+  ListEventsV1StreamsStreamIdEventsGetErrors,
+  ListEventsV1StreamsStreamIdEventsGetResponses,
   ListInvitationsV1InvitationsGetData,
   ListInvitationsV1InvitationsGetErrors,
   ListInvitationsV1InvitationsGetResponses,
@@ -548,6 +566,9 @@ import type {
   ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetData,
   ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetErrors,
   ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetResponses,
+  ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetData,
+  ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetErrors,
+  ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetResponses,
   ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetData,
   ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetErrors,
   ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetResponses,
@@ -599,6 +620,15 @@ import type {
   ListSkillsV1SkillsGetData,
   ListSkillsV1SkillsGetErrors,
   ListSkillsV1SkillsGetResponses,
+  ListSourcesV1StreamsStreamIdSourcesGetData,
+  ListSourcesV1StreamsStreamIdSourcesGetErrors,
+  ListSourcesV1StreamsStreamIdSourcesGetResponses,
+  ListStreamsV1StreamsGetData,
+  ListStreamsV1StreamsGetErrors,
+  ListStreamsV1StreamsGetResponses,
+  ListSubscriptionsV1StreamsStreamIdSubscriptionsGetData,
+  ListSubscriptionsV1StreamsStreamIdSubscriptionsGetErrors,
+  ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponses,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetData,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetErrors,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetResponses,
@@ -9430,6 +9460,295 @@ export const removeSkillMemberV1SkillsSkillIdMembersChildSkillIdDelete = <
   });
 
 /**
+ * List Streams
+ */
+export const listStreamsV1StreamsGet = <ThrowOnError extends boolean = false>(
+  options?: Options<ListStreamsV1StreamsGetData, ThrowOnError>
+): RequestResult<
+  ListStreamsV1StreamsGetResponses,
+  ListStreamsV1StreamsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListStreamsV1StreamsGetResponses,
+    ListStreamsV1StreamsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/",
+    ...options,
+  });
+
+/**
+ * Create Stream
+ */
+export const createStreamV1StreamsPost = <ThrowOnError extends boolean = false>(
+  options: Options<CreateStreamV1StreamsPostData, ThrowOnError>
+): RequestResult<
+  CreateStreamV1StreamsPostResponses,
+  CreateStreamV1StreamsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateStreamV1StreamsPostResponses,
+    CreateStreamV1StreamsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Stream
+ */
+export const deleteStreamV1StreamsStreamIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DeleteStreamV1StreamsStreamIdDeleteData, ThrowOnError>
+): RequestResult<
+  DeleteStreamV1StreamsStreamIdDeleteResponses,
+  DeleteStreamV1StreamsStreamIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteStreamV1StreamsStreamIdDeleteResponses,
+    DeleteStreamV1StreamsStreamIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}",
+    ...options,
+  });
+
+/**
+ * Get Stream
+ */
+export const getStreamV1StreamsStreamIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetStreamV1StreamsStreamIdGetData, ThrowOnError>
+): RequestResult<
+  GetStreamV1StreamsStreamIdGetResponses,
+  GetStreamV1StreamsStreamIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetStreamV1StreamsStreamIdGetResponses,
+    GetStreamV1StreamsStreamIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}",
+    ...options,
+  });
+
+/**
+ * List Events
+ */
+export const listEventsV1StreamsStreamIdEventsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<ListEventsV1StreamsStreamIdEventsGetData, ThrowOnError>
+): RequestResult<
+  ListEventsV1StreamsStreamIdEventsGetResponses,
+  ListEventsV1StreamsStreamIdEventsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListEventsV1StreamsStreamIdEventsGetResponses,
+    ListEventsV1StreamsStreamIdEventsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/events",
+    ...options,
+  });
+
+/**
+ * Get Event
+ */
+export const getEventV1StreamsStreamIdEventsSequenceGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetEventV1StreamsStreamIdEventsSequenceGetData, ThrowOnError>
+): RequestResult<
+  GetEventV1StreamsStreamIdEventsSequenceGetResponses,
+  GetEventV1StreamsStreamIdEventsSequenceGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetEventV1StreamsStreamIdEventsSequenceGetResponses,
+    GetEventV1StreamsStreamIdEventsSequenceGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/events/{sequence}",
+    ...options,
+  });
+
+/**
+ * Create Forward
+ */
+export const createForwardV1StreamsStreamIdForwardsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreateForwardV1StreamsStreamIdForwardsPostData, ThrowOnError>
+): RequestResult<
+  CreateForwardV1StreamsStreamIdForwardsPostResponses,
+  CreateForwardV1StreamsStreamIdForwardsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateForwardV1StreamsStreamIdForwardsPostResponses,
+    CreateForwardV1StreamsStreamIdForwardsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/forwards",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Sources
+ */
+export const listSourcesV1StreamsStreamIdSourcesGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<ListSourcesV1StreamsStreamIdSourcesGetData, ThrowOnError>
+): RequestResult<
+  ListSourcesV1StreamsStreamIdSourcesGetResponses,
+  ListSourcesV1StreamsStreamIdSourcesGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListSourcesV1StreamsStreamIdSourcesGetResponses,
+    ListSourcesV1StreamsStreamIdSourcesGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/sources",
+    ...options,
+  });
+
+/**
+ * List Subscriptions
+ */
+export const listSubscriptionsV1StreamsStreamIdSubscriptionsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ListSubscriptionsV1StreamsStreamIdSubscriptionsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponses,
+  ListSubscriptionsV1StreamsStreamIdSubscriptionsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponses,
+    ListSubscriptionsV1StreamsStreamIdSubscriptionsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions",
+    ...options,
+  });
+
+/**
+ * List Outcomes
+ */
+export const listOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGet =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetResponses,
+    ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).get<
+      ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetResponses,
+      ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions/{subscription_id}/outcomes",
+      ...options,
+    });
+
+/**
  * Get All Tasks
  *
  * Get one page of the workspace's tasks across all agents, newest first.
@@ -10397,7 +10716,7 @@ export const webhookHealthCheckWebhooksHealthGet = <
 /**
  * Handle webhook requests
  *
- * Process incoming webhook requests for registered triggers
+ * Record an incoming webhook in its stream
  */
 export const handleWebhookWebhooksWebhookIdDelete = <
   ThrowOnError extends boolean = false,
@@ -10427,7 +10746,7 @@ export const handleWebhookWebhooksWebhookIdDelete = <
 /**
  * Handle webhook requests
  *
- * Process incoming webhook requests for registered triggers
+ * Record an incoming webhook in its stream
  */
 export const handleWebhookWebhooksWebhookIdGet = <
   ThrowOnError extends boolean = false,
@@ -10457,7 +10776,7 @@ export const handleWebhookWebhooksWebhookIdGet = <
 /**
  * Handle webhook requests
  *
- * Process incoming webhook requests for registered triggers
+ * Record an incoming webhook in its stream
  */
 export const handleWebhookWebhooksWebhookIdHead = <
   ThrowOnError extends boolean = false,
@@ -10487,7 +10806,7 @@ export const handleWebhookWebhooksWebhookIdHead = <
 /**
  * Handle webhook requests
  *
- * Process incoming webhook requests for registered triggers
+ * Record an incoming webhook in its stream
  */
 export const handleWebhookWebhooksWebhookIdOptions = <
   ThrowOnError extends boolean = false,
@@ -10517,7 +10836,7 @@ export const handleWebhookWebhooksWebhookIdOptions = <
 /**
  * Handle webhook requests
  *
- * Process incoming webhook requests for registered triggers
+ * Record an incoming webhook in its stream
  */
 export const handleWebhookWebhooksWebhookIdPatch = <
   ThrowOnError extends boolean = false,
@@ -10547,7 +10866,7 @@ export const handleWebhookWebhooksWebhookIdPatch = <
 /**
  * Handle webhook requests
  *
- * Process incoming webhook requests for registered triggers
+ * Record an incoming webhook in its stream
  */
 export const handleWebhookWebhooksWebhookIdPost = <
   ThrowOnError extends boolean = false,
@@ -10577,7 +10896,7 @@ export const handleWebhookWebhooksWebhookIdPost = <
 /**
  * Handle webhook requests
  *
- * Process incoming webhook requests for registered triggers
+ * Record an incoming webhook in its stream
  */
 export const handleWebhookWebhooksWebhookIdPut = <
   ThrowOnError extends boolean = false,

@@ -7,14 +7,13 @@ import time
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import UUID
 
 import yaml
 from agentarea_common.events.broker import EventBroker
 
 from .domain.enums import WebhookType
-from .domain.models import TriggerExecution, WebhookTrigger
 from .logging_utils import (
     TriggerLogger,
     WebhookValidationError,
@@ -27,6 +26,19 @@ if TYPE_CHECKING:
     from .channels.secret_reader import SecretReader
 
 logger = TriggerLogger(__name__)
+
+
+class WebhookIntakeSpec(Protocol):
+    """What intake reads about a webhook: a trigger used to be the only thing that had it."""
+
+    id: UUID
+    webhook_id: str
+    webhook_type: str
+    allowed_methods: list[str]
+    validation_rules: dict[str, Any]
+    webhook_config: dict[str, Any] | None
+    event_types: list[str]
+    is_active: bool
 
 
 class WebhookRequestData:
@@ -77,8 +89,8 @@ class WebhookExecutionCallback(ABC):
     @abstractmethod
     async def execute_webhook_trigger(
         self, webhook_id: str, request_data: dict[str, Any]
-    ) -> TriggerExecution:
-        """Called when a webhook trigger should be executed."""
+    ) -> object:
+        """Called with the parsed request; returns what the caller logs."""
         pass
 
 
@@ -91,7 +103,7 @@ class WebhookManager(ABC):
         pass
 
     @abstractmethod
-    async def register_webhook(self, trigger: WebhookTrigger) -> None:
+    async def register_webhook(self, trigger: WebhookIntakeSpec) -> None:
         """Register webhook trigger for incoming requests."""
         pass
 
@@ -119,13 +131,13 @@ class WebhookManager(ABC):
         pass
 
     @abstractmethod
-    async def validate_webhook_method(self, trigger: WebhookTrigger, method: str) -> bool:
+    async def validate_webhook_method(self, trigger: WebhookIntakeSpec, method: str) -> bool:
         """Validate HTTP method against trigger's allowed methods."""
         pass
 
     @abstractmethod
     async def apply_validation_rules(
-        self, trigger: WebhookTrigger, headers: dict[str, str], body: Any
+        self, trigger: WebhookIntakeSpec, headers: dict[str, str], body: Any
     ) -> bool:
         """Apply trigger-specific validation rules to webhook request."""
         pass
@@ -153,7 +165,6 @@ class DefaultWebhookManager(WebhookManager):
         secret_reader: SecretReader,
         event_broker: EventBroker | None = None,
         base_url: str = "/webhooks",
-        trigger_service: Any = None,
     ):
         # secret_reader is required, not `| None`: it is what resolves signing
         # secrets for signature verification, and an optional security
@@ -163,9 +174,8 @@ class DefaultWebhookManager(WebhookManager):
         self.execution_callback = execution_callback
         self.event_broker = event_broker
         self.base_url = base_url.rstrip("/")
-        self.trigger_service = trigger_service
         self.secret_reader = secret_reader
-        self._registered_webhooks: dict[str, WebhookTrigger] = {}
+        self._registered_webhooks: dict[str, WebhookIntakeSpec] = {}
         self._load_provider_config()
 
     def _load_provider_config(self):
@@ -219,7 +229,7 @@ class DefaultWebhookManager(WebhookManager):
         webhook_id = str(trigger_id).replace("-", "")[:16]  # Shorter ID
         return f"{self.base_url}/{webhook_id}"
 
-    async def register_webhook(self, trigger: WebhookTrigger) -> None:
+    async def register_webhook(self, trigger: WebhookIntakeSpec) -> None:
         """Register webhook trigger for incoming requests."""
         self._registered_webhooks[trigger.webhook_id] = trigger
         logger.info(f"Registered webhook {trigger.webhook_id} for trigger {trigger.id}")
@@ -252,39 +262,7 @@ class DefaultWebhookManager(WebhookManager):
                 content_type=headers.get("content-type", "unknown"),
             )
 
-            # Find the trigger (in-memory cache first, then DB fallback)
             trigger = self._registered_webhooks.get(webhook_id)
-            if not trigger and self.trigger_service:
-                try:
-                    db_trigger = await self.trigger_service.get_trigger_by_webhook_id(webhook_id)
-                    if db_trigger:
-                        trigger = db_trigger
-                        # Cache for future requests
-                        self._registered_webhooks[webhook_id] = trigger
-                        # Update the service's workspace context to match the trigger's workspace
-                        if (
-                            hasattr(self.trigger_service, "trigger_repository")
-                            and db_trigger.workspace_id
-                        ):
-                            repo = self.trigger_service.trigger_repository
-                            if hasattr(repo, "user_context") and hasattr(
-                                repo.user_context, "workspace_id"
-                            ):
-                                # Re-point the repository at the trigger's owner. Keeping
-                                # the previous principal when the trigger has none would
-                                # run someone else's trigger under this caller's authority.
-                                if not db_trigger.created_by:
-                                    raise ValueError(
-                                        f"trigger for webhook {webhook_id} has no creator; "
-                                        "refusing to run it under the calling principal"
-                                    )
-                                repo.user_context.workspace_id = db_trigger.workspace_id
-                                repo.user_context.user_id = db_trigger.created_by
-                        logger.info(f"Loaded trigger from DB for webhook {webhook_id}")
-                except Exception as db_err:
-                    logger.warning(
-                        f"DB lookup failed for webhook {webhook_id}: {db_err}", exc_info=True
-                    )
             if not trigger:
                 error_msg = f"Webhook {webhook_id} not found"
                 logger.warning(error_msg, webhook_id=webhook_id)
@@ -441,12 +419,12 @@ class DefaultWebhookManager(WebhookManager):
             )
             return await self.get_webhook_response(False, "Internal server error")
 
-    async def validate_webhook_method(self, trigger: WebhookTrigger, method: str) -> bool:
+    async def validate_webhook_method(self, trigger: WebhookIntakeSpec, method: str) -> bool:
         """Validate HTTP method against trigger's allowed methods."""
         return method.upper() in [m.upper() for m in trigger.allowed_methods]
 
     async def apply_validation_rules(
-        self, trigger: WebhookTrigger, headers: dict[str, str], body: Any
+        self, trigger: WebhookIntakeSpec, headers: dict[str, str], body: Any
     ) -> bool:
         """Apply trigger-specific validation rules to webhook request."""
         if not trigger.validation_rules:
@@ -560,7 +538,7 @@ class DefaultWebhookManager(WebhookManager):
             return False
 
     def _extract_event_type(
-        self, trigger: WebhookTrigger, parsed_data: dict[str, Any]
+        self, trigger: WebhookIntakeSpec, parsed_data: dict[str, Any]
     ) -> str | None:
         """Extract the event type from parsed webhook data based on channel."""
         webhook_type = trigger.webhook_type
@@ -618,7 +596,7 @@ class DefaultWebhookManager(WebhookManager):
         return False
 
     async def _parse_webhook_data(
-        self, trigger: WebhookTrigger, request_data: WebhookRequestData
+        self, trigger: WebhookIntakeSpec, request_data: WebhookRequestData
     ) -> dict[str, Any]:
         """Parse webhook data based on webhook type."""
         base_data = {

@@ -91,6 +91,7 @@
             "pages": [
               "concepts/integration/mcp",
               "concepts/integration/triggers",
+              "concepts/integration/event-streams",
               "concepts/integration/bundles",
               "concepts/integration/registry-and-catalog"
             ]

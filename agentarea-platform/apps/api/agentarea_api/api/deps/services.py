@@ -16,7 +16,6 @@ from agentarea_agents.domain.interfaces import ExecutionServiceInterface
 from agentarea_common.audit.service import AuditService
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base import ReadRepositoryFactoryDep, RepositoryFactoryDep
-from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.events.broker import EventBroker
@@ -47,10 +46,6 @@ from agentarea_triggers.infrastructure.repository import (
 )
 from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
 from agentarea_triggers.trigger_service import TriggerService
-from agentarea_triggers.webhook_manager import (
-    DefaultWebhookManager,
-    WebhookExecutionCallback,
-)
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -411,51 +406,6 @@ async def get_model_spec_service(
 # Trigger Service dependencies
 
 
-class TriggerServiceWebhookCallback(WebhookExecutionCallback):
-    """Webhook execution callback that delegates to TriggerService."""
-
-    def __init__(self, trigger_service):
-        self.trigger_service = trigger_service
-
-    async def execute_webhook_trigger(self, webhook_id: str, request_data: dict):
-        """Execute webhook trigger via TriggerService."""
-        if not TRIGGERS_AVAILABLE:
-            # Return a mock failed execution
-            from datetime import datetime
-            from uuid import uuid4
-
-            return {
-                "id": str(uuid4()),
-                "trigger_id": str(uuid4()),
-                "executed_at": datetime.utcnow().isoformat(),
-                "status": "failed",
-                "execution_time_ms": 0,
-                "error_message": "Triggers service not available",
-            }
-
-        # Find trigger by webhook_id
-        trigger = await self.trigger_service.get_trigger_by_webhook_id(webhook_id)
-        if not trigger:
-            from datetime import datetime
-            from uuid import uuid4
-
-            from agentarea_triggers.domain.enums import ExecutionStatus
-            from agentarea_triggers.domain.models import TriggerExecution
-
-            # Return failed execution for unknown webhook
-            return TriggerExecution(
-                id=uuid4(),
-                trigger_id=uuid4(),  # Dummy ID
-                executed_at=datetime.utcnow(),
-                status=ExecutionStatus.FAILED,
-                execution_time_ms=0,
-                error_message=f"Webhook {webhook_id} not found",
-            )
-
-        # Execute the trigger
-        return await self.trigger_service.execute_trigger(trigger.id, request_data)
-
-
 async def get_trigger_service(
     repository_factory: RepositoryFactoryDep,
     event_broker: EventBrokerDep,
@@ -517,25 +467,6 @@ async def get_trigger_service(
     )
 
 
-async def get_webhook_manager(
-    event_broker: EventBrokerDep,
-    repository_factory: RepositoryFactoryDep,
-    secret_manager: BaseSecretManagerDep,
-) -> DefaultWebhookManager:
-    """Get a WebhookManager instance for the current request."""
-    settings = get_settings()
-    trigger_service = await get_trigger_service(repository_factory, event_broker, secret_manager)
-    execution_callback = TriggerServiceWebhookCallback(trigger_service)
-
-    return DefaultWebhookManager(
-        execution_callback=execution_callback,
-        event_broker=event_broker,
-        base_url=settings.triggers.WEBHOOK_URL,
-        trigger_service=trigger_service,
-        secret_reader=secret_manager,
-    )
-
-
 async def get_public_webhook_manager(
     db_session: DatabaseSessionDep,
     event_broker: EventBrokerDep,
@@ -560,95 +491,21 @@ async def get_public_webhook_manager(
 
         return MockWebhookManager()
 
-    from agentarea_common.auth.context import UserContext
-    from agentarea_common.base import RepositoryFactory
-    from agentarea_common.config.secrets import get_secret_manager_settings
-    from agentarea_secrets.secret_manager_factory import get_real_secret_manager
+    from agentarea_api.api.v1._webhook_intake import WebhookSourceIntake
+    from agentarea_common.config.database import get_database
+    from agentarea_common.di.container import resolve
+    from agentarea_streams.domain.ports import StreamWaker
 
-    settings = get_settings()
-    get_secret_manager_settings()
-
-    # An inbound webhook carries no session, so the tenant is unknown until the
-    # trigger is found. The lookup is unscoped by design; everything after it
-    # runs as the trigger's creator.
-    from agentarea_triggers.domain.models import WebhookTrigger
-    from agentarea_triggers.infrastructure.repository import (
-        TriggerRepository,
-        find_trigger_by_webhook_id,
+    return WebhookSourceIntake(
+        lookup_session=db_session,
+        session_scope=get_database().session,
+        secret_reader_for=lambda session, context: get_real_secret_manager(
+            session=session, user_context=context
+        ),
+        waker=resolve(StreamWaker),
+        event_broker=event_broker,
+        settings=get_settings(),
     )
-
-    class WebhookManagerWithLookup:
-        """Wraps DefaultWebhookManager with dynamic workspace resolution."""
-
-        def __init__(self, db_session, event_broker, settings):
-            self._db_session = db_session
-            self._event_broker = event_broker
-            self._settings = settings
-
-        async def handle_webhook_request(
-            self, webhook_id, method, headers, body, query_params, raw_body=None
-        ):
-            # Deliberately unscoped: the tenant is not known until the trigger is found.
-            trigger_row = await find_trigger_by_webhook_id(self._db_session, webhook_id)
-            if not trigger_row:
-                return {
-                    "status_code": 400,
-                    "body": {"status": "error", "message": f"Webhook {webhook_id} not found"},
-                }
-
-            # Create a FRESH session for the execution phase to avoid greenlet reuse issues
-            from agentarea_common.config.database import get_database
-
-            async with get_database().session() as fresh_session:
-                # The trigger's creator is the authority the run executes with.
-                # A trigger row without one is corrupt, not a case to default.
-                if not trigger_row.workspace_id or not trigger_row.created_by:
-                    raise ValueError(
-                        f"trigger {webhook_id} has no workspace or creator; "
-                        "refusing to execute it under a fabricated principal"
-                    )
-                ctx = UserContext(
-                    user_id=str(trigger_row.created_by),
-                    workspace_id=str(trigger_row.workspace_id),
-                )
-                with workspace_scope(ctx.workspace_id):
-                    repo_factory = RepositoryFactory(session=fresh_session, user_context=ctx)
-                    sec_manager = get_real_secret_manager(session=fresh_session, user_context=ctx)
-
-                    svc = await get_trigger_service(repo_factory, self._event_broker, sec_manager)
-                    callback = TriggerServiceWebhookCallback(svc)
-                    mgr = DefaultWebhookManager(
-                        execution_callback=callback,
-                        event_broker=self._event_broker,
-                        base_url=self._settings.triggers.WEBHOOK_URL,
-                        trigger_service=svc,
-                        secret_reader=sec_manager,
-                    )
-                    # Pre-register the trigger so the manager doesn't need another lookup.
-                    # Re-read through the workspace-scoped repository: the unscoped
-                    # lookup above only established which tenant this webhook belongs to.
-                    scoped_repo = repo_factory.create_repository(TriggerRepository)
-                    trigger = await scoped_repo.get_by_webhook_id(webhook_id)
-                    # Only a webhook trigger can be served here; a cron trigger that
-                    # somehow carries a webhook_id is corrupt, not a thing to deliver to.
-                    if not isinstance(trigger, WebhookTrigger):
-                        return {
-                            "status_code": 400,
-                            "body": {
-                                "status": "error",
-                                "message": f"Webhook {webhook_id} not found",
-                            },
-                        }
-                    mgr._registered_webhooks[webhook_id] = trigger
-
-                    return await mgr.handle_webhook_request(
-                        webhook_id, method, headers, body, query_params, raw_body=raw_body
-                    )
-
-        async def is_healthy(self):
-            return True
-
-    return WebhookManagerWithLookup(db_session, event_broker, settings)
 
 
 async def get_trigger_health_check(
@@ -678,7 +535,7 @@ async def get_trigger_health_check(
 
     trigger_repository = repository_factory.create_repository(TriggerRepository)
     trigger_execution_repository = repository_factory.create_repository(TriggerExecutionRepository)
-    webhook_manager = await get_webhook_manager(event_broker, repository_factory, secret_manager)
+    webhook_manager = await get_public_webhook_manager(repository_factory.session, event_broker)
 
     # Get temporal schedule manager
     temporal_schedule_manager = None
@@ -703,7 +560,6 @@ async def get_trigger_health_check(
 # Type hints for trigger services (conditional)
 if TRIGGERS_AVAILABLE:
     TriggerServiceDep = Annotated[TriggerService, Depends(get_trigger_service)]
-    WebhookManagerDep = Annotated[DefaultWebhookManager, Depends(get_webhook_manager)]
 
     from agentarea_triggers.health_checks import TriggerSystemHealthCheck
 
@@ -711,7 +567,6 @@ if TRIGGERS_AVAILABLE:
 else:
     # Create dummy type hints when triggers are not available
     TriggerServiceDep = None
-    WebhookManagerDep = None
     TriggerHealthCheckDep = None
 
 

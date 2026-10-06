@@ -6,8 +6,8 @@
 
 export const WORKSPACE_PATH_PREFIX = "/w";
 
-// Top-level segments under src/app/w/[workspace]/(main). Kept in step with the
-// directory by workspace-routes.test.ts.
+// Top-level segments under the route groups of src/app/w/[workspace]. Kept in
+// step with the directories by workspace-routes.test.ts.
 export const WORKSPACE_ROUTES = [
   "admin",
   "agents",
@@ -15,8 +15,10 @@ export const WORKSPACE_ROUTES = [
   "budgets",
   "bundles",
   "clients",
+  "connect",
   "connections",
   "dashboard",
+  "events",
   "explore",
   "files",
   "inbox",

@@ -2,7 +2,7 @@
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
@@ -20,6 +20,16 @@ def _require_aware(v: datetime | None) -> datetime | None:
     if v is not None and v.tzinfo is None:
         raise ValueError("scheduled_at must be timezone-aware")
     return v
+
+
+class TaskProvenance(BaseModel):
+    """Why a task exists: who or what started it, and the event that caused it."""
+
+    origin_type: Literal["user", "trigger", "agent", "api"] | None = None
+    origin_id: str | None = None
+    correlation_id: str | None = None
+    causation_id: str | None = None
+    parent_task_id: UUID | None = None
 
 
 class Task(BaseModel):
@@ -41,6 +51,7 @@ class Task(BaseModel):
     workspace_id: str | None = None
     scheduled_at: datetime | None = None  # One-shot future run; None means run now
     metadata: dict[str, Any] = Field(default_factory=dict)
+    provenance: TaskProvenance = Field(default_factory=TaskProvenance)
 
     _validate_scheduled_at = field_validator("scheduled_at")(_require_aware)
 
@@ -193,6 +204,7 @@ class AgentTask(BaseModel):
     scheduled_at: datetime | None = None  # One-shot future run; None means run now
     metadata: dict[str, Any] = Field(default_factory=dict)  # Additional task metadata
     effective_policy: dict[str, Any] | None = None  # Resolved governance policy passed to execution
+    provenance: TaskProvenance = Field(default_factory=TaskProvenance)
 
     _validate_scheduled_at = field_validator("scheduled_at")(_require_aware)
 

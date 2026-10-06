@@ -54,6 +54,12 @@ export function OAuthConnectPanel({
   onStateChange,
   onConnectStart,
   compact,
+  bare,
+  returnPath,
+  title,
+  actionLabel,
+  onAuthorizeError,
+  preflight: givenPreflight,
 }: {
   target: OAuthConnectTarget;
   isUrlType: boolean;
@@ -62,9 +68,25 @@ export function OAuthConnectPanel({
   /** A new attempt supersedes the page's report of the previous one. */
   onConnectStart?: () => void;
   compact?: boolean;
+  /** Inside a surface that already frames it: no box of its own, full-width action. */
+  bare?: boolean;
+  /** Page on this origin the provider sends the user back to; default: origin. */
+  returnPath?: string;
+  /** Heading of the sign-in step before it is authorized; default: generic. */
+  title?: string;
+  /** The action before it is authorized; default: "Connect with OAuth". */
+  actionLabel?: string;
+  /** Authorization could not start; `code` is the API's problem code. */
+  onAuthorizeError?: (code: string | null) => void;
+  /** The page already asked the API; the panel then does not ask again. */
+  preflight?: MCPOAuthPreflight;
 }) {
   const t = useTranslations("MCPServersPage.instanceDetail.oauth");
-  const [preflight, setPreflight] = useState<MCPOAuthPreflight | null>(null);
+  const [fetchedPreflight, setPreflight] = useState<MCPOAuthPreflight | null>(
+    null
+  );
+  const preflight = givenPreflight ?? fetchedPreflight;
+  const hasGivenPreflight = givenPreflight !== undefined;
   const [preflightError, setPreflightError] = useState<string | null>(null);
   const [credentials, setCredentials] =
     useState<CustomOAuthAppCredentials | null>(null);
@@ -79,7 +101,7 @@ export function OAuthConnectPanel({
         : target.serverId;
 
   useEffect(() => {
-    if (!isUrlType) return;
+    if (!isUrlType || hasGivenPreflight) return;
     let active = true;
     if (targetKind === "catalog") {
       catalogConnectionPreflightAction(targetKey).then((result) => {
@@ -109,7 +131,7 @@ export function OAuthConnectPanel({
     return () => {
       active = false;
     };
-  }, [targetKind, targetKey, isUrlType, t]);
+  }, [targetKind, targetKey, isUrlType, hasGivenPreflight, t]);
 
   const state = deriveOAuthConnectState({
     isUrlType,
@@ -131,13 +153,14 @@ export function OAuthConnectPanel({
     setIsConnecting(true);
     setConnectError(null);
     onConnectStart?.();
+    const returnTo = `${window.location.origin}${returnPath ?? ""}`;
     try {
       let authorizeUrl: string;
       if (target.kind === "catalog") {
         const request = buildCatalogConnectRequest({
           state,
           credentials,
-          returnTo: window.location.origin,
+          returnTo,
         });
         if (!request) return;
         const result = await connectCatalogConnectionAction(
@@ -158,12 +181,13 @@ export function OAuthConnectPanel({
           instanceId,
           state,
           credentials,
-          returnTo: window.location.origin,
+          returnTo,
         });
         if (!request) return;
-        const { data, error } = await oauthAuthorizeAction(request);
+        const { data, error, code } = await oauthAuthorizeAction(request);
         if (error || !data?.authorize_url) {
           setConnectError(error || t("startFailed"));
+          onAuthorizeError?.(code);
           return;
         }
         authorizeUrl = data.authorize_url;
@@ -178,13 +202,21 @@ export function OAuthConnectPanel({
     } finally {
       setIsConnecting(false);
     }
-  }, [credentials, state, t, target, onConnectStart]);
+  }, [
+    credentials,
+    state,
+    t,
+    target,
+    onConnectStart,
+    onAuthorizeError,
+    returnPath,
+  ]);
 
   if (state.kind === "hidden") return null;
 
   if (state.kind === "loading") {
     return (
-      <Row>
+      <Row bare={bare}>
         <StatusIndicator
           kind="running"
           size="sm"
@@ -203,7 +235,7 @@ export function OAuthConnectPanel({
 
   if (state.kind === "unsupported") {
     return (
-      <Row>
+      <Row bare={bare}>
         <StatusIndicator
           kind="attention"
           size="sm"
@@ -219,13 +251,28 @@ export function OAuthConnectPanel({
     );
   }
 
-  const connectLabel = state.connected ? t("reconnect") : t("connect");
+  const connectLabel = state.connected
+    ? t("reconnect")
+    : (actionLabel ?? t("connect"));
   const canConnect = canAuthorize({ state, credentials });
+  const buttonSize = bare ? "lg" : compact ? "xs" : "sm";
 
   if (state.kind === "ready") {
+    const button = (
+      <Button
+        size={buttonSize}
+        variant={state.connected ? "outline" : "default"}
+        className={bare ? "w-full" : undefined}
+        onClick={handleConnect}
+        isLoading={isConnecting}
+        disabled={isConnecting}
+      >
+        {connectLabel}
+      </Button>
+    );
     return (
-      <div className="space-y-2">
-        <Row>
+      <div className={bare ? "space-y-4" : "space-y-2"}>
+        <Row bare={bare}>
           {state.connected ? (
             <StatusIndicator
               kind="active"
@@ -241,35 +288,36 @@ export function OAuthConnectPanel({
               size="sm"
               className="mt-0.5 shrink-0"
               iconClassName="h-4 w-4"
-              aria-label={t("readyTitle")}
-              title={t("readyTitle")}
+              aria-label={title ?? t("readyTitle")}
+              title={title ?? t("readyTitle")}
             />
           )}
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">
-              {state.connected ? t("authorizedTitle") : t("readyTitle")}
+              {state.connected
+                ? t("authorizedTitle")
+                : (title ?? t("readyTitle"))}
             </p>
             <p className="text-xs text-muted-foreground">
               {state.connected ? t("authorizedDetail") : t("readyDetail")}
             </p>
           </div>
-          <Button
-            size={compact ? "xs" : "sm"}
-            variant={state.connected ? "outline" : "default"}
-            onClick={handleConnect}
-            isLoading={isConnecting}
-            disabled={isConnecting}
-          >
-            {connectLabel}
-          </Button>
+          {!bare && button}
         </Row>
+        {bare && button}
         {connectError && <ErrorLine message={connectError} />}
       </div>
     );
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-3">
+    <div
+      className={
+        bare
+          ? "space-y-3"
+          : "space-y-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-3"
+      }
+    >
       <div className="flex items-start gap-2">
         <StatusIndicator
           kind="attention"
@@ -298,9 +346,14 @@ export function OAuthConnectPanel({
         onChange={setCredentials}
         disabled={isConnecting}
       />
-      <div className="flex items-center gap-2">
+      <div
+        className={
+          bare ? "flex flex-col gap-2" : "flex items-center gap-2"
+        }
+      >
         <Button
-          size={compact ? "xs" : "sm"}
+          size={buttonSize}
+          className={bare ? "w-full" : undefined}
           onClick={handleConnect}
           isLoading={isConnecting}
           disabled={isConnecting || !canConnect}
@@ -318,9 +371,21 @@ export function OAuthConnectPanel({
   );
 }
 
-function Row({ children }: { children: React.ReactNode }) {
+function Row({
+  bare,
+  children,
+}: {
+  bare?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
+    <div
+      className={
+        bare
+          ? "flex items-start gap-2"
+          : "flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5"
+      }
+    >
       {children}
     </div>
   );

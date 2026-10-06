@@ -87,6 +87,7 @@ def _trigger(webhook_type: str, validation_rules: dict | None = None):
 
 def _app(trigger, secrets: _MemorySecrets):
     service = AsyncMock()
+    service.stream_service.trigger_bindings.return_value = {}
     service.create_trigger.return_value = trigger
     service.get_trigger.return_value = trigger
     app = FastAPI()

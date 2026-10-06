@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, call
 from uuid import uuid4
 
+import httpx
 import pytest
 from agentarea_api.api.v1 import mcp_oauth_connect
 from agentarea_api.api.v1.mcp_oauth_connect import (
@@ -15,6 +16,7 @@ from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.di.container import register_singleton
+from agentarea_common.exceptions import AppError
 from agentarea_common.testing.flows import MainFlow
 from agentarea_mcp.application.oauth_client_service import (
     AuthServerMetadata,
@@ -40,7 +42,9 @@ def test_resolve_instance_remote_url_uses_server_spec_remote_url():
 
 def test_resolve_instance_remote_url_uses_server_spec_json_fallback():
     instance = SimpleNamespace(transport="url", json_spec={})
-    server_spec = _server(json_spec={"type": "url", "endpoint_url": "https://json-spec.example/mcp"})
+    server_spec = _server(
+        json_spec={"type": "url", "endpoint_url": "https://json-spec.example/mcp"}
+    )
 
     assert _resolve_instance_remote_url(instance, server_spec) == "https://json-spec.example/mcp"
 
@@ -330,9 +334,7 @@ async def test_authorize_refuses_a_member_who_cannot_edit_the_instance(monkeypat
         )
 
     assert excinfo.value.status_code == 403
-    deny.assert_awaited_once_with(
-        "edit", "mcp_instance", str(instance.id), user_context.user_id
-    )
+    deny.assert_awaited_once_with("edit", "mcp_instance", str(instance.id), user_context.user_id)
     discover.assert_not_awaited()
 
 
@@ -346,7 +348,7 @@ async def test_authorize_without_dcr_asks_for_an_oauth_app_not_for_server_env_va
     _patch_instance_lookup(monkeypatch)
     _patch_discovery(monkeypatch, _google_metadata())
 
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(AppError) as excinfo:
         await mcp_oauth_connect.oauth_authorize(
             MCPOAuthAuthorizeRequest(instance_id=uuid4()),
             _user_context(),
@@ -355,8 +357,8 @@ async def test_authorize_without_dcr_asks_for_an_oauth_app_not_for_server_env_va
         )
 
     assert excinfo.value.status_code == 422
-    assert excinfo.value.detail["code"] == "oauth_app_required"
-    assert "MCP_OAUTH_CLIENT_ID" not in str(excinfo.value.detail)
+    assert excinfo.value.code == "oauth_app_required"
+    assert "MCP_OAUTH_CLIENT_ID" not in excinfo.value.detail
 
 
 @pytest.mark.asyncio
@@ -894,7 +896,7 @@ async def test_authorize_refuses_a_platform_app_that_does_not_match(
     platform_apps.append(app)
     auth_create, _ = _patch_platform_authorize(monkeypatch)
 
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(AppError) as excinfo:
         await mcp_oauth_connect.oauth_authorize(
             MCPOAuthAuthorizeRequest(instance_id=instance.id),
             _user_context(),
@@ -903,11 +905,11 @@ async def test_authorize_refuses_a_platform_app_that_does_not_match(
         )
 
     assert excinfo.value.status_code == 422
-    assert excinfo.value.detail["code"] == "oauth_app_required"
+    assert excinfo.value.code == "oauth_app_required"
     auth_create.assert_not_awaited()
 
 
-def _patch_callback(monkeypatch, auth_config, exchange):
+def _patch_callback(monkeypatch, auth_config, exchange, *, return_to="", instance_id=None):
     class _AuthService:
         def __init__(self, *_args, **_kwargs):
             pass
@@ -929,12 +931,12 @@ def _patch_callback(monkeypatch, auth_config, exchange):
         "_pop_state",
         AsyncMock(
             return_value={
-                "instance_id": str(uuid4()),
+                "instance_id": instance_id or str(uuid4()),
                 "auth_config_id": str(auth_config.id),
                 "workspace_id": "ws-1",
                 "user_id": "user-1",
                 "code_verifier": "verifier",
-                "return_to": "",
+                "return_to": return_to,
                 "as_metadata": {
                     "issuer": _GITHUB_ISSUER,
                     "authorization_endpoint": "https://github.com/login/oauth/authorize",
@@ -1009,3 +1011,210 @@ async def test_callback_fails_loud_when_the_platform_app_is_no_longer_configured
 
     assert "reason=token_exchange_failed" in response.headers["location"]
     exchange.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Connect page — an agent's connect link brings the user back to where it started
+# ---------------------------------------------------------------------------
+
+_INSTANCE_ID = "d50241d7-eafe-4011-8479-b40f7a2aab3c"
+_CONNECT_PAGE = f"https://app.agentarea.ai/w/acme/connect/{_INSTANCE_ID}"
+
+
+def _dcr_config():
+    return SimpleNamespace(id=uuid4(), config={"credential_mode": "auto"})
+
+
+async def _land(monkeypatch, return_to: str, exchange=None) -> str:
+    exchange = exchange or AsyncMock(return_value={"access_token": "tok", "expires_in": 3600})
+    _patch_callback(
+        monkeypatch, _dcr_config(), exchange, return_to=return_to, instance_id=_INSTANCE_ID
+    )
+    response = await mcp_oauth_connect.oauth_callback(
+        db_session=AsyncMock(), code="code", state="state", error=None, error_description=None
+    )
+    return response.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_connect_link_returns_to_the_connect_page_it_started_from(monkeypatch):
+    assert await _land(monkeypatch, _CONNECT_PAGE) == f"{_CONNECT_PAGE}?oauth=success"
+
+
+@pytest.mark.asyncio
+async def test_connect_page_query_and_fragment_are_not_carried_back(monkeypatch):
+    location = await _land(monkeypatch, f"{_CONNECT_PAGE}?oauth=error&next=https://evil.example#x")
+
+    assert location == f"{_CONNECT_PAGE}?oauth=success"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "return_to",
+    [
+        f"https://app.agentarea.ai/w/other/connect/{_INSTANCE_ID}",
+        f"https://app.agentarea.ai/w/acme/connect/{uuid4()}",
+        f"https://evil.example/w/acme/connect/{_INSTANCE_ID}",
+        f"https://app.agentarea.ai/w/acme/connect/{_INSTANCE_ID}/../../settings",
+        f"https://app.agentarea.ai/w/acme/connect/{_INSTANCE_ID}/extra",
+        "https://app.agentarea.ai/w/acme/agents",
+    ],
+)
+async def test_any_other_return_to_lands_on_the_connection_page(monkeypatch, return_to):
+    location = await _land(monkeypatch, return_to)
+
+    assert location == (f"https://app.agentarea.ai/w/acme/connections/{_INSTANCE_ID}?oauth=success")
+
+
+@pytest.mark.asyncio
+async def test_a_failed_exchange_returns_to_the_connect_page_with_the_reason(monkeypatch):
+    exchange = AsyncMock(side_effect=RuntimeError("token endpoint down"))
+
+    location = await _land(monkeypatch, _CONNECT_PAGE, exchange=exchange)
+
+    assert location == f"{_CONNECT_PAGE}?oauth=error&reason=token_exchange_failed"
+
+
+def test_connect_page_url_names_the_workspace_and_instance(monkeypatch):
+    monkeypatch.setattr(
+        mcp_oauth_connect,
+        "get_settings",
+        lambda: SimpleNamespace(app=SimpleNamespace(APP_URL="https://app.agentarea.ai/")),
+    )
+
+    assert mcp_oauth_connect.connect_page_url("acme", _INSTANCE_ID) == _CONNECT_PAGE
+
+
+def test_connect_page_url_fails_loud_without_a_frontend_url(monkeypatch):
+    monkeypatch.setattr(
+        mcp_oauth_connect,
+        "get_settings",
+        lambda: SimpleNamespace(app=SimpleNamespace(APP_URL="")),
+    )
+
+    with pytest.raises(RuntimeError, match="AGENTAREA_APP_URL"):
+        mcp_oauth_connect.connect_page_url("acme", _INSTANCE_ID)
+
+
+async def _deny(monkeypatch, return_to: str, *, state: str | None = "state") -> str:
+    exchange = AsyncMock()
+    _patch_callback(
+        monkeypatch, _dcr_config(), exchange, return_to=return_to, instance_id=_INSTANCE_ID
+    )
+    response = await mcp_oauth_connect.oauth_callback(
+        db_session=AsyncMock(),
+        code=None,
+        state=state,
+        error="access_denied",
+        error_description="The user denied the request",
+    )
+    exchange.assert_not_awaited()
+    return response.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_a_denied_sign_in_returns_to_the_connect_page_it_started_from(monkeypatch):
+    location = await _deny(monkeypatch, _CONNECT_PAGE)
+
+    assert location == (f"{_CONNECT_PAGE}?oauth=error&reason=The+user+denied+the+request")
+    mcp_oauth_connect._pop_state.assert_awaited_once_with("state")
+
+
+@pytest.mark.asyncio
+async def test_a_denied_sign_in_from_elsewhere_lands_on_the_connection_page(monkeypatch):
+    location = await _deny(monkeypatch, "https://app.agentarea.ai/w/acme/agents")
+
+    assert location == (
+        f"https://app.agentarea.ai/w/acme/connections/{_INSTANCE_ID}"
+        "?oauth=error&reason=The+user+denied+the+request"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_denied_sign_in_without_the_reason_names_the_error(monkeypatch):
+    _patch_callback(
+        monkeypatch, _dcr_config(), AsyncMock(), return_to=_CONNECT_PAGE, instance_id=_INSTANCE_ID
+    )
+    response = await mcp_oauth_connect.oauth_callback(
+        db_session=AsyncMock(),
+        code=None,
+        state="state",
+        error="access_denied",
+        error_description=None,
+    )
+
+    assert response.headers["location"] == f"{_CONNECT_PAGE}?oauth=error&reason=access_denied"
+
+
+@pytest.mark.asyncio
+async def test_a_denied_sign_in_with_an_unknown_state_lands_on_the_frontend_root(monkeypatch):
+    _patch_callback(monkeypatch, _dcr_config(), AsyncMock(), return_to=_CONNECT_PAGE)
+    monkeypatch.setattr(mcp_oauth_connect, "_pop_state", AsyncMock(return_value=None))
+
+    response = await mcp_oauth_connect.oauth_callback(
+        db_session=AsyncMock(),
+        code=None,
+        state="replayed",
+        error="access_denied",
+        error_description=None,
+    )
+
+    assert response.headers["location"] == (
+        "https://app.agentarea.ai/?oauth=error&reason=access_denied"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Rejected registration — an AS that advertises DCR and then refuses it
+# ---------------------------------------------------------------------------
+
+_INSTANTLY_URL = "https://mcp.instantly.ai/mcp"
+_INSTANTLY_ISSUER = "https://api.instantly.ai"
+
+
+def _instantly_metadata() -> AuthServerMetadata:
+    return AuthServerMetadata(
+        issuer=_INSTANTLY_ISSUER,
+        authorization_endpoint="https://api.instantly.ai/oauth/authorize",
+        token_endpoint="https://api.instantly.ai/oauth/token",  # noqa: S106
+        registration_endpoint="https://api.instantly.ai/oauth/register",
+        resource=_INSTANTLY_URL,
+    )
+
+
+def _dcr_refused(status_code: int = 400) -> httpx.HTTPStatusError:
+    request = httpx.Request("POST", "https://api.instantly.ai/oauth/register")
+    return httpx.HTTPStatusError(
+        f"Client error '{status_code}'",
+        request=request,
+        response=httpx.Response(status_code, request=request),
+    )
+
+
+async def _authorize_against_a_refusing_as(monkeypatch, error: Exception):
+    instance = _patch_instance_lookup(monkeypatch, remote_url=_INSTANTLY_URL)
+    _patch_discovery(monkeypatch, _instantly_metadata())
+    _patch_platform_authorize(monkeypatch)
+    register = AsyncMock(side_effect=error)
+    monkeypatch.setattr(mcp_oauth_connect.MCPOAuthClientService, "register_client", register)
+    with pytest.raises(AppError) as excinfo:
+        await mcp_oauth_connect.oauth_authorize(
+            MCPOAuthAuthorizeRequest(instance_id=instance.id),
+            _user_context(),
+            AsyncMock(),
+            AsyncMock(),
+        )
+    return excinfo.value, register
+
+
+@pytest.mark.asyncio
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
+async def test_a_refused_registration_answers_with_the_oauth_app_required_code(monkeypatch):
+    """The UI switches to the key form on this code, so it has to reach the
+    client as the problem's ``code``, not inside a stringified dict."""
+    error, _ = await _authorize_against_a_refusing_as(monkeypatch, _dcr_refused())
+
+    assert error.status_code == 422
+    assert error.code == "oauth_app_required"
+    assert error.extra == {"issuer": _INSTANTLY_ISSUER}
+    assert "api.instantly.ai" in error.detail

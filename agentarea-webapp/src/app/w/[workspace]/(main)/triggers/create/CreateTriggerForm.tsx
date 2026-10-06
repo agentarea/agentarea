@@ -16,6 +16,7 @@ import ConfigSheet from "@/components/ConfigSheet";
 import { FileTree } from "@/components/files/file-tree";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { SecretSelect } from "@/components/SecretSelect";
+import SectionLoadError from "@/components/SectionLoadError";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -49,12 +50,14 @@ import {
   type TriggerFormState,
 } from "./actions";
 import { CronScheduler } from "./CronScheduler";
+import type { StreamOptions } from "./streamOptions";
 import { TIMEZONES } from "./timezones";
 import { TriggerExecutionContext } from "./TriggerExecutionContext";
 import { triggerShape } from "./triggerShape";
 
 interface CreateTriggerFormProps {
   agents: AgentResponse[];
+  streams: StreamOptions;
   initialData?: TriggerResponse;
 }
 
@@ -74,6 +77,7 @@ const INLINE_ERROR_FIELDS = new Set([
   "cron_expression",
   "description",
   "agent_id",
+  "stream_id",
 ]);
 const KIND_ORDER: TriggerCatalogEntry["kind"][] = [
   "schedule",
@@ -98,6 +102,7 @@ function resolveInitialId(
       )?.id ?? "cron"
     );
   }
+  if (initialData.trigger_type === "stream") return "stream";
   const wt = initialData.webhook_type;
   if (!wt) return "webhook";
   return catalog.find((e) => e.webhook_type === wt)?.id ?? "webhook";
@@ -105,6 +110,7 @@ function resolveInitialId(
 
 export function CreateTriggerForm({
   agents,
+  streams,
   initialData,
 }: CreateTriggerFormProps) {
   const router = useWorkspaceRouter();
@@ -539,7 +545,13 @@ export function CreateTriggerForm({
                 </FormLabel>
                 {Boolean(triggerType) && !taskTextRequired && (
                   <p className="text-xs text-muted-foreground">
-                    {t(isChannel ? "taskTextFromChannel" : "taskTextFromCall")}
+                    {t(
+                      triggerType === "stream"
+                        ? "taskTextFromStream"
+                        : isChannel
+                          ? "taskTextFromChannel"
+                          : "taskTextFromCall"
+                    )}
                   </p>
                 )}
                 <Textarea
@@ -568,6 +580,49 @@ export function CreateTriggerForm({
               >
                 {t("whenToRun")}
               </h2>
+              {triggerType === "stream" && (
+                <div className="grid gap-2 md:max-w-sm">
+                  <FormLabel htmlFor="stream_id" required>
+                    {t("stream")}
+                  </FormLabel>
+                  {/* The binding is fixed once saved: an update cannot move a
+                      trigger to another stream. */}
+                  <Select
+                    name="stream_id"
+                    defaultValue={initialData?.stream_id ?? undefined}
+                    disabled={isEditing || streams.error !== null}
+                    required
+                  >
+                    <SelectTrigger id="stream_id">
+                      <SelectValue
+                        placeholder={
+                          streams.error === null && streams.items.length === 0
+                            ? t("noStreams")
+                            : undefined
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {streams.items.map((stream) => (
+                        <SelectItem key={stream.id} value={stream.id}>
+                          {stream.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {streams.error && (
+                    <SectionLoadError message={streams.error} />
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {t("streamHint")}
+                  </p>
+                  {state.errors?.stream_id && (
+                    <p className="text-sm text-destructive">
+                      {state.errors.stream_id[0]}
+                    </p>
+                  )}
+                </div>
+              )}
               {triggerType === "cron" && (
                 <>
                   <div className="grid gap-2">

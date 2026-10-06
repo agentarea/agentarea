@@ -25,7 +25,7 @@ def test_catalog_entries_have_required_fields():
         assert entry.get("kind") in {"schedule", "messaging", "event"}, (
             f"catalog entry {entry['id']} has unknown kind {entry.get('kind')!r}"
         )
-        assert entry.get("backend_type") in {"cron", "webhook", "polling"}
+        assert entry.get("backend_type") in {"cron", "webhook", "polling", "stream"}
 
 
 def test_catalog_merges_events_for_webhook_channels():

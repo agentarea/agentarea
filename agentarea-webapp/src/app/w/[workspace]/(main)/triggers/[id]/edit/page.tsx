@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
 import { getTrigger, listAgents } from "@/lib/api";
 import { requireApiData } from "@/lib/server-resource";
 import { CreateTriggerForm } from "../../create/CreateTriggerForm";
+import { loadStreamOptions } from "../../create/streamOptions";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -25,9 +27,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function EditTriggerPage({ params }: Props) {
   const { id } = await params;
 
-  const [triggerResponse, agentsResponse] = await Promise.all([
+  const tCreate = await getTranslations("TriggersPage.create");
+  const [triggerResponse, agentsResponse, streams] = await Promise.all([
     getTrigger(id),
     listAgents(),
+    loadStreamOptions(tCreate("streamsLoadFailed")),
   ]);
 
   const trigger = requireApiData<TriggerResponse>(triggerResponse, "trigger");
@@ -36,7 +40,11 @@ export default async function EditTriggerPage({ params }: Props) {
   return (
     <div className="px-4 py-5">
       <div className="mx-auto w-full max-w-5xl">
-        <CreateTriggerForm agents={agents} initialData={trigger} />
+        <CreateTriggerForm
+          agents={agents}
+          streams={streams}
+          initialData={trigger}
+        />
       </div>
     </div>
   );

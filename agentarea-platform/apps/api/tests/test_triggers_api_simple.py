@@ -39,6 +39,7 @@ def client():
 def mock_trigger_service():
     """Create mock trigger service."""
     service = AsyncMock()
+    service.stream_service.trigger_bindings.return_value = {}
     return service
 
 
@@ -110,6 +111,7 @@ def create_mock_trigger():
     mock_trigger.failure_threshold = 5
     mock_trigger.consecutive_failures = 0
     mock_trigger.last_execution_at = None
+    mock_trigger.needs_new_owner_at = None
     mock_trigger.timezone = "UTC"
     mock_trigger.next_run_time = None
     mock_trigger.webhook_id = None

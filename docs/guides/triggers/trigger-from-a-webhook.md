@@ -7,14 +7,20 @@ prerequisites:
 related:
   - /guides/triggers/schedule-an-agent
   - /concepts/integration/triggers
+  - /concepts/integration/event-streams
   - /guides/tasks/debug-a-failed-task
   - /reference/errors
-last_updated: 2026-09-13
+last_updated: 2026-10-06
 ---
 
 A webhook trigger turns an agent into an endpoint: something posts to a URL, and
 a task starts. This guide creates one, secures it, and shows how to tell a
 rejected delivery from a filtered one.
+
+A delivery is recorded first and answered immediately; the task it produces,
+if any, starts moments later when the dispatcher next reaches that event — not
+inline with the HTTP response. See [Event
+streams](/concepts/integration/event-streams) for what happens in between.
 
 ## Prerequisites
 
@@ -61,11 +67,15 @@ rejected delivery from a filtered one.
     | `validation_rules` | Signature configuration, plus request-shape checks. |
     | `conditions` | Evaluated after validation, before a task is created. Model-evaluated unless you set an explicit `type`. |
 
-    The response carries the `webhook_id`. The URL is:
+    The response carries both `webhook_id` and `webhook_url` — the full
+    address, ready to give the sending system:
 
     ```text
     POST {AGENTAREA_URL}/webhooks/{webhook_id}
     ```
+
+    A request there is recorded in the trigger's own [event
+    stream](/concepts/integration/event-streams) before anything else happens.
   </Step>
 
   <Step title="Turn on signature verification">
@@ -125,13 +135,28 @@ rejected delivery from a filtered one.
       -H "Content-Type: application/json" \
       -d '{"action": "opened", "issue": {"title": "Crash on startup"}}'
     ```
+
+    A request that passes method, signature, and size checks gets `202` back
+    immediately:
+
+    ```json
+    {"status": "accepted", "sequence": 42}
+    ```
+
+    The same request repeated with the same provider delivery id (GitHub's
+    `X-GitHub-Delivery`, Stripe's `id`, a `webhook-id` or `Idempotency-Key`
+    header, and a few others) gets `202` again with `"status": "duplicate"`
+    and the same `sequence`, instead of a second row and a second task. A
+    provider with none of those is never deduplicated — every delivery gets a
+    fresh `sequence`. A burst over `AGENTAREA_EVENT_WRITE_QUOTA` gets `429`; a
+    body over 256 KiB gets `413`.
   </Step>
 </Steps>
 
 ## Verify
 
-The execution history records every delivery that reached the trigger, including
-ones that produced no task:
+The trigger's execution history records every delivery that actually reached
+condition evaluation, including ones that produced no task:
 
 ```bash
 curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/$TRIGGER_ID/executions" \
@@ -145,8 +170,24 @@ declined — the trigger is working and deliberately filtering.
 </Check>
 
 A delivery rejected at the method, signature, or validation stage never becomes
-an execution record with a task. Check the API logs for the rejection reason,
-which is deliberately not returned to the caller in detail.
+an execution record with a task — check the API logs for the rejection reason,
+which is deliberately not returned to the caller in detail. Three other things
+also never become an execution record, because the dispatcher stops them
+before `TriggerService` ever evaluates conditions: an event filtered out by
+`event_types`, a trigger that is paused or disabled, and a configurer who lost
+access to the agent. All three still show up as the stream's own record — read
+`stream_id` off the trigger (`GET .../triggers/$TRIGGER_ID` returns it), then:
+
+```bash
+curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/streams/$STREAM_ID/events?limit=1" \
+  -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '.events[0] | {sequence, kind, outcomes}'
+```
+
+`outcomes` is empty when no subscription's filter matched the event at all;
+otherwise it carries a `verdict` (`reacted`, `skipped`, `error`) and `reason`
+per subscription, independent of whether a task execution record exists. The
+same list, with the trigger's name and a link to any task it created, is on
+the workspace's Events page.
 
 ## Troubleshooting
 
@@ -163,20 +204,49 @@ which is deliberately not returned to the caller in detail.
     validation. A provider that sends `PUT`, or a browser preflight, is rejected
     here.
   </Accordion>
-  <Accordion title="Deliveries return success but nothing happens">
-    Validation passed and the conditions declined to create a task. Conditions
-    with no explicit `type` are evaluated by a model against the payload, so the
-    verdict is a judgement, not a rule mismatch. Read `trigger_data` on the
-    execution record to see exactly what the model was shown.
+  <Accordion title="The delivery was accepted (`202`) but no task appears">
+    Check the stream's events (see [Verify](#verify)) before assuming a bug —
+    three different things look like this and each has a different cause:
+
+    - **The conditions declined.** Conditions with no explicit `type` are
+      evaluated by a model against the payload once the dispatcher reaches the
+      event, so the verdict is a judgement, not a rule mismatch. The
+      execution record exists; read `trigger_data` on it, or `reason` on the
+      stream's outcome, to see exactly what the model was shown.
+    - **`event_types` filtered it out.** The subscription only sees the kinds
+      it names; an event of any other kind gets no outcome at all for this
+      trigger, and no execution record — "nobody listened," not a failure.
+    - **The trigger is paused or disabled.** The event is still recorded and
+      the dispatcher still reaches it, but a trigger whose `is_active` is
+      false is skipped before conditions are ever evaluated — no execution
+      record, only a `skipped` outcome on the stream.
   </Accordion>
-  <Accordion title="The webhook worked and then stopped accepting anything">
-    Crossing `failure_threshold` consecutive failures disables the trigger, and
-    nothing re-enables it automatically:
+  <Accordion title="The webhook keeps answering `202`, but the trigger stopped firing">
+    Crossing `failure_threshold` consecutive failures disables the trigger —
+    but it does not touch the webhook source. Deliveries are still recorded
+    and still answered `202`; only the firing is skipped. Nothing re-enables
+    the trigger automatically:
 
     ```bash
     curl -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/$TRIGGER_ID/enable" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN"
     ```
+
+    Re-enabling does not replay what was skipped while it was off — only
+    events the dispatcher reaches from then on fire.
+  </Accordion>
+  <Accordion title="`429` on a burst of deliveries">
+    The workspace crossed `AGENTAREA_EVENT_WRITE_QUOTA` events in the trailing
+    minute — counted across every stream the workspace owns, not just this
+    one, so a quiet second stream does not help. A provider's own retry
+    handles an occasional `429`; a sustained one means the deployment's
+    `AGENTAREA_EVENT_WRITE_QUOTA` needs raising. See
+    [Configuration](/self-host/configuration).
+  </Accordion>
+  <Accordion title="`413 Payload Too Large`">
+    The request body is over 256 KiB after headers and query parameters that
+    look like credentials are stripped. Send a reference to a workspace file
+    instead of the content itself.
   </Accordion>
   <Accordion title="I set `webhook_type` and assumed it was secured">
     It is not. The type selects *which* verifier runs, not *whether* one runs.
@@ -190,6 +260,9 @@ which is deliberately not returned to the caller in detail.
 <Columns cols={2}>
   <Card title="Triggers and channels" icon="plug" href="/concepts/integration/triggers">
     The model behind this, and what it does not cover.
+  </Card>
+  <Card title="Event streams" icon="plug" href="/concepts/integration/event-streams">
+    The journal a delivery lands in, and who else can read it.
   </Card>
   <Card title="Schedule an agent" icon="plug" href="/guides/triggers/schedule-an-agent">
     The other way a task starts without a person.

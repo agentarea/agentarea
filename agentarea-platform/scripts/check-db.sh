@@ -60,7 +60,25 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     under the workflow's id (the primary key decides); the SSE catch-up reads
 #     keyset batches ordered by (timestamp, id) and resumes after a given event;
 #     a conversation entry rewritten at its position replaces the first write.
-PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL)
+#   task provenance: a task's origin, correlation, causation and parent id are
+#     plain nullable columns the migrated schema must carry; a mocked session
+#     never catches a missing column.
+#   event streams: the journal is partitioned by day and deduplicated by a
+#     separate key table; a webhook id belongs to one source and a trigger
+#     subscription names its trigger -- rules only the migrated schema holds.
+#     Partition maintenance creates and drops real daily partitions and trims
+#     a short-retention stream's rows, which a mocked session cannot exercise.
+#     The webhook backfill runs its own SQL against real trigger rows, JSON
+#     nulls included, and must keep every webhook_id through a roundtrip.
+#     The dispatcher leases subscriptions with FOR UPDATE SKIP LOCKED and commits
+#     each outcome with its cursor move under the lease; only real row locks and
+#     transactions show two dispatchers never serving one subscription twice.
+#     Enabling a trigger stopped for a new owner clears the stamp in the row.
+#     A re-created webhook trigger takes over the stream its predecessor left,
+#     whose name the per-workspace unique constraint would otherwise refuse.
+#     A stream trigger's row stores no webhook type, which the column's default
+#     would fill in, and its run is told the journaled event it fired on.
+PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
   libs/llm/tests/test_provider_secret_lifecycle_db.py
@@ -79,8 +97,22 @@ PY_SUITES=(
   tests/unit/test_tenant_scope_isolation.py
   libs/tasks/tests/test_task_event_idempotency_db.py
   libs/tasks/tests/test_task_conversation_db.py
+  libs/tasks/tests/test_task_provenance_db.py
   libs/execution/tests/unit/test_publish_workflow_events_db.py
   apps/api/tests/test_task_event_feed_db.py
+  libs/streams/tests/test_schema_db.py
+  libs/streams/tests/test_journal_db.py
+  libs/streams/tests/test_stream_isolation_db.py
+  libs/streams/tests/test_stream_service_db.py
+  libs/streams/tests/test_pg_journal_db.py
+  libs/streams/tests/test_partitions_db.py
+  libs/streams/tests/test_backfill_db.py
+  libs/streams/tests/test_dispatcher_db.py
+  apps/api/tests/test_webhook_source_intake_db.py
+  libs/triggers/tests/test_routed_follow_up_once_db.py
+  libs/triggers/tests/test_needs_owner_db.py
+  libs/triggers/tests/test_webhook_stream_reuse_db.py
+  libs/triggers/tests/test_trigger_event_context_db.py
 )
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, the secret

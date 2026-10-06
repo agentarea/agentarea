@@ -1,11 +1,12 @@
 """Trigger domain models."""
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
-from agentarea_common.channel_origin import drop_channel_origin, reject_channel_origin
+from agentarea_common.channel_origin import drop_reserved_parameters, reject_reserved_parameters
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from .enums import ExecutionStatus, TriggerType, WebhookType
@@ -15,6 +16,18 @@ logger = logging.getLogger(__name__)
 # Passed as validation context when rebuilding a trigger from a stored row, so
 # the datetime invariants report instead of raising. See validate_datetime_fields.
 RECONSTITUTING: dict[str, Any] = {"reconstituting": True}
+
+
+class ConditionVerdict(BaseModel):
+    """What a condition decided about one event, and why."""
+
+    verdict: Literal["met", "not_met"]
+    score: float | None = Field(default=None, ge=0.0, le=1.0)
+    reason: str = Field(min_length=1)
+
+    @property
+    def met(self) -> bool:
+        return self.verdict == "met"
 
 
 class Trigger(BaseModel):
@@ -37,6 +50,7 @@ class Trigger(BaseModel):
     failure_threshold: int = Field(default=5, ge=1, le=100)
     consecutive_failures: int = Field(default=0, ge=0)
     last_execution_at: datetime | None = None
+    needs_new_owner_at: datetime | None = None
 
     class Config:
         """Pydantic model configuration."""
@@ -227,6 +241,7 @@ class TriggerCreate(BaseModel):
     conditions: dict[str, Any] = Field(default_factory=dict)
     created_by: str
     workspace_id: str | None = None
+    is_active: bool = True
 
     # Business logic safety
     failure_threshold: int = Field(default=5, ge=1, le=100)
@@ -245,7 +260,11 @@ class TriggerCreate(BaseModel):
     webhook_config: dict[str, Any] | None = None
     event_types: list[str] = Field(default_factory=list)
 
-    _reject_channel_origin = field_validator("task_parameters")(reject_channel_origin)
+    # Stream-specific fields
+    stream_id: UUID | None = None
+    event_filter: dict[str, Any] | None = None
+
+    _reject_reserved_parameters = field_validator("task_parameters")(reject_reserved_parameters)
 
     @model_validator(mode="after")
     def validate_trigger_type_fields(self) -> "TriggerCreate":
@@ -256,6 +275,9 @@ class TriggerCreate(BaseModel):
         elif self.trigger_type == TriggerType.WEBHOOK:
             if not self.webhook_id:
                 raise ValueError("webhook_id is required for WEBHOOK triggers")
+        elif self.trigger_type == TriggerType.STREAM:
+            if not self.stream_id:
+                raise ValueError("stream_id is required for STREAM triggers")
 
         return self
 
@@ -263,7 +285,7 @@ class TriggerCreate(BaseModel):
 class TriggerUpdate(BaseModel):
     """Model for updating an existing trigger."""
 
-    _drop_channel_origin = field_validator("task_parameters")(drop_channel_origin)
+    _drop_reserved_parameters = field_validator("task_parameters")(drop_reserved_parameters)
 
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, max_length=1000)
@@ -287,3 +309,19 @@ class TriggerUpdate(BaseModel):
     validation_rules: dict[str, Any] | None = None
     webhook_config: dict[str, Any] | None = None
     event_types: list[str] | None = None
+    event_filter: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class TriggerFiring:
+    """One firing of a trigger as a subscriber sees it: what happened, and why.
+
+    A dataclass, not a model: ``execution`` is handed back exactly as it was
+    recorded, so ``execute_trigger`` returns what it always returned.
+    """
+
+    outcome: Literal["reacted", "skipped", "error"]
+    reason: str | None = None
+    verdict: ConditionVerdict | None = None
+    task_id: UUID | None = None
+    execution: TriggerExecution | None = None

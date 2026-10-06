@@ -8,15 +8,19 @@ test in ``tests/unit/test_mcp_rest_parity.py`` enforces parity between
 toolset kwargs and DTO fields.
 """
 
+import builtins
 import json
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents_sdk.mcp_server.elicitation import url_elicitation
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
+from agentarea_common.workspaces.lookup import workspace_slug_for
 from agentarea_mcp.schemas.dto import (
     MCPServerCreate,
     MCPServerInstanceCreate,
@@ -24,7 +28,9 @@ from agentarea_mcp.schemas.dto import (
     MCPServerUpdate,
 )
 from fastapi import HTTPException
+from mcp.types import InputRequiredResult
 
+from ..api.v1.mcp_oauth_connect import connect_page_url
 from .base import platform_context, platform_read_context
 
 
@@ -49,6 +55,67 @@ def _serialize_instance(instance: Any) -> dict:
         "description": instance.description,
         "verification": instance.verification,
         "server_spec_id": instance.server_spec_id,
+    }
+
+
+def _tool_safety_hint(tool: dict[str, Any]) -> str | None:
+    """A one-word safety marker from the tool's annotations, if the server set one.
+
+    ``destructiveHint`` and ``readOnlyHint`` are the two annotations worth
+    surfacing without reading the full description; destructive wins if a
+    (malformed) tool somehow sets both, since that's the more cautious read.
+    Rows stored before annotations were kept camelCase spell them snake_case
+    until re-verified, so both spellings are read.
+    """
+    annotations = tool.get("annotations") or {}
+    if annotations.get("destructiveHint") or annotations.get("destructive_hint"):
+        return "destructive"
+    if annotations.get("readOnlyHint") or annotations.get("read_only_hint"):
+        return "read-only"
+    return None
+
+
+def _serialize_tool_name(tool: dict[str, Any]) -> str:
+    """The compact default list entry: the tool's name, nothing else.
+
+    Even full descriptions and annotation dicts are too much at scale — a
+    server like Instantly has 199 tools, and {"name": ..., "description": ...}
+    per entry still ran ~69k chars. A plain string per tool (optionally suffixed
+    with a safety marker) has no per-entry JSON-key overhead, so it's the most
+    compact shape that still lets an agent see every tool name and its safety
+    class at a glance. Full descriptions are available on demand via the
+    ``tools`` parameter.
+    """
+    name = tool.get("name", "")
+    hint = _tool_safety_hint(tool)
+    return f"{name} ({hint})" if hint else name
+
+
+def _serialize_tool_detail(tool: dict[str, Any]) -> dict[str, Any]:
+    """A tool's name, description and annotations — never ``inputSchema``.
+
+    Used by ``get(tools=[...])`` to answer "what does this tool do" for the
+    handful of names an agent picked out of the compact default list.
+    """
+    detail = {"name": tool.get("name"), "description": tool.get("description", "")}
+    annotations = tool.get("annotations")
+    if annotations:
+        detail["annotations"] = annotations
+    return detail
+
+
+async def _connect_action(
+    service: Any, user_ctx: UserContext, instance: Any, *, probe: bool
+) -> dict[str, str] | None:
+    """The link a person opens to connect *instance*, while it waits on a credential."""
+    if not await service.needs_connecting(instance, probe=probe):
+        return None
+    slug = user_ctx.workspace_slug or await workspace_slug_for(user_ctx.workspace_id)
+    url = connect_page_url(slug, str(instance.id))
+    return {
+        "type": "connect",
+        "url": url,
+        "message": f"Open this link to connect {instance.name}: {url}",
     }
 
 
@@ -345,7 +412,7 @@ class MCPServersToolset(Toolset):
 
         async with platform_context() as (
             _session,
-            _user_ctx,
+            user_ctx,
             repo_factory,
             event_broker,
             secret_mgr,
@@ -360,7 +427,11 @@ class MCPServersToolset(Toolset):
             instance = await service.create_instance(payload)
             if not instance:
                 return json.dumps({"error": "Failed to create MCP server instance"})
-            return json.dumps(_serialize_instance(instance), default=str)
+            action = await _connect_action(service, user_ctx, instance, probe=True)
+            result = _serialize_instance(instance)
+            if action is not None:
+                result["action_required"] = action
+            return json.dumps(result, default=str)
 
     @tool_method(effect="write")
     @requires("edit", "mcp_instance", id_param="instance_id")
@@ -387,7 +458,7 @@ class MCPServersToolset(Toolset):
 
         async with platform_context() as (
             _session,
-            _user_ctx,
+            user_ctx,
             repo_factory,
             event_broker,
             secret_mgr,
@@ -402,7 +473,11 @@ class MCPServersToolset(Toolset):
             instance = await service.update_instance(UUID(instance_id), payload)
             if not instance:
                 return json.dumps({"error": "MCP server instance not found"})
-            return json.dumps(_serialize_instance(instance), default=str)
+            action = await _connect_action(service, user_ctx, instance, probe=True)
+            result = _serialize_instance(instance)
+            if action is not None:
+                result["action_required"] = action
+            return json.dumps(result, default=str)
 
     @tool_method(effect="read")
     @unrestricted("instances in the caller's workspace, as the REST listing returns them")
@@ -430,11 +505,23 @@ class MCPServersToolset(Toolset):
 
     @tool_method(effect="read")
     @unrestricted("an instance in the caller's workspace, as the REST detail returns it")
-    async def get(self, instance_id: str) -> str:
-        """Get details of an MCP server instance."""
+    async def get(
+        self, instance_id: str, tools: builtins.list[str] | None = None
+    ) -> str | InputRequiredResult:
+        """Get details of an MCP server instance.
+
+        Args:
+            instance_id: ID of the MCP server instance.
+            tools: Tool names to look up full details for (description and
+                annotations, without ``inputSchema``). Pass names exactly as
+                they appear in this call's own ``tools`` summary list — strip
+                any trailing ``" (read-only)"``/``" (destructive)"`` marker
+                first. Names that don't match any tool are reported under
+                ``unknown_tools`` instead of raising.
+        """
         async with platform_read_context() as (
             _session,
-            _user_ctx,
+            user_ctx,
             repo_factory,
             event_broker,
             secret_mgr,
@@ -451,7 +538,28 @@ class MCPServersToolset(Toolset):
                 return json.dumps({"error": "MCP server instance not found"})
             payload = _serialize_instance(instance)
             payload["last_dispatch"] = instance.last_dispatch
-            payload["tools"] = instance.tools
+            raw_tools = instance.tools or []
+            payload["tools"] = [_serialize_tool_name(t) for t in raw_tools]
+            payload["tool_count"] = len(raw_tools)
+            if tools is not None:
+                by_name = {t.get("name"): t for t in raw_tools if t.get("name")}
+                details = []
+                unknown = []
+                for requested in tools:
+                    found = by_name.get(requested)
+                    if found is None:
+                        unknown.append(requested)
+                    else:
+                        details.append(_serialize_tool_detail(found))
+                payload["tool_details"] = details
+                if unknown:
+                    payload["unknown_tools"] = unknown
+            action = await _connect_action(service, user_ctx, instance, probe=False)
+            if action is not None:
+                elicitation = url_elicitation(action["url"], action["message"])
+                if elicitation is not None:
+                    return elicitation
+                payload["action_required"] = action
             return json.dumps(payload, default=str)
 
     @tool_method(effect="destructive")
@@ -477,15 +585,15 @@ class MCPServersToolset(Toolset):
 
     @tool_method(effect="write")
     @requires("edit", "mcp_instance", id_param="instance_id")
-    async def verify(self, instance_id: str) -> str:
+    async def verify(self, instance_id: str) -> str | InputRequiredResult:
         """Run end-to-end verification on an MCP server instance.
 
         Provisions (if needed), waits for readiness, and lists tools.
         Returns the fresh verification payload.
         """
         async with platform_context() as (
-            _session,
-            _user_ctx,
+            session,
+            user_ctx,
             repo_factory,
             event_broker,
             secret_mgr,
@@ -498,4 +606,15 @@ class MCPServersToolset(Toolset):
                 secret_manager=secret_mgr,
             )
             result = await service.verify_instance(UUID(instance_id))
+            instance = await service.get(UUID(instance_id))
+            if instance is not None:
+                # verify() records the outcome in its own session; read it back.
+                await session.refresh(instance, attribute_names=["verification"])
+                action = await _connect_action(service, user_ctx, instance, probe=True)
+                if action is not None:
+                    elicitation = url_elicitation(action["url"], action["message"])
+                    if elicitation is not None:
+                        return elicitation
+                    # The probe may have recorded a sharper verdict than verify's.
+                    result = {**instance.verification, "action_required": action}
             return json.dumps(result, default=str)

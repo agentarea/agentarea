@@ -13,6 +13,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.permission import require_permission
 from agentarea_common.config.app import get_app_settings
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_secrets.catalog_service import (
@@ -46,6 +47,11 @@ def get_channel_webhook_service() -> ChannelWebhookService:
     settings = get_app_settings()
     base = settings.TELEGRAM_WEBHOOK_URL or settings.API_URL
     return ChannelWebhookService(base)
+
+
+def public_webhook_url(webhook_id: str) -> str:
+    """Where external senders post: the same base the provider registration uses."""
+    return get_channel_webhook_service().webhook_url(webhook_id)
 
 
 async def resolve_channel_credentials(
@@ -230,6 +236,17 @@ async def issue_generic_signing_secret(trigger_id: UUID, secret_manager: BaseSec
     return signing_secret
 
 
+async def require_stream_readable(stream_id: UUID | None, user_id: str) -> None:
+    """Refuse a stream trigger on a stream its creator may not read (403).
+
+    The trigger hands every event of the stream to the agent as task input, so
+    subscribing is reading. Shared by ``POST /triggers``, agent creation and the
+    MCP ``triggers.create_stream`` tool.
+    """
+    if stream_id is not None:
+        await require_permission("read", "stream", str(stream_id), user_id)
+
+
 async def create_trigger_from_spec(
     spec: TriggerSpec,
     *,
@@ -243,10 +260,12 @@ async def create_trigger_from_spec(
     """Create one trigger with its credentials and webhook; return it and whether it has credentials.
 
     ``credentials`` must already be resolved (see ``resolve_channel_credentials``).
-    A spec with ``enabled=False`` is created and then disabled, so a schedule
-    never fires before its owner switches it on. When the provider refuses the
+    A spec with ``enabled=False`` is created inactive with its schedule paused,
+    so it never fires before its owner switches it on. When the provider refuses the
     webhook registration the trigger is deleted again and the 502 propagates.
     """
+    if spec.trigger_type == "stream":
+        await require_stream_readable(spec.stream_id, user_context.user_id)
     trigger = await trigger_service.create_trigger(
         build_domain_trigger(spec, agent_id, user_context, credentials)
     )
@@ -270,10 +289,6 @@ async def create_trigger_from_spec(
         await secret_manager.set_secret(secret_name, json.dumps(credentials))
         has_creds = True
         logger.info(f"Stored channel credentials for trigger {trigger.id}")
-
-    if not spec.enabled:
-        await trigger_service.disable_trigger(trigger.id)
-        trigger.is_active = False
 
     return trigger, has_creds
 

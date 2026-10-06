@@ -116,6 +116,7 @@ class AgentAreaWorker:
         self.delivery_consumer = None
         self.delivery_autoclaimer = None
         self.outbox_relay = None
+        self.stream_runtime = None
         self._broker = None
         self._dedup = None
         self._inbound_dedup = None
@@ -313,6 +314,10 @@ class AgentAreaWorker:
         # Wire outbound channel event subscriber (workflow events → Telegram/Slack/Discord)
         await self._setup_channel_subscribers(dependencies)
 
+        from agentarea_worker.streams import build_stream_runtime
+
+        self.stream_runtime = build_stream_runtime(settings, dependencies)
+
         logger.info("Worker created and configured")
 
     async def _check_database(self) -> None:
@@ -452,6 +457,8 @@ class AgentAreaWorker:
             await self.delivery_autoclaimer.start()
         if self.outbox_relay:
             await self.outbox_relay.start()
+        if self.stream_runtime:
+            await self.stream_runtime.start()
 
         # Start MCP container monitor in background
         from agentarea_mcp.container_monitor import start_container_monitoring
@@ -517,6 +524,9 @@ class AgentAreaWorker:
         if self.container_monitor:
             await self.container_monitor.stop()
             self.container_monitor = None
+        if self.stream_runtime:
+            await self.stream_runtime.stop()
+            self.stream_runtime = None
         if self.outbox_relay:
             await self.outbox_relay.stop()
             self.outbox_relay = None

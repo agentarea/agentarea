@@ -260,12 +260,9 @@ security_optional = HTTPBearer(auto_error=False)
 
 async def _owns_workspace(session: AsyncSession, user_id: str, workspace_id: str) -> bool:
     """Whether ``workspace_id`` is ``user_id``'s personal workspace or one they own."""
-    from agentarea_common.workspaces.repository import WorkspaceRepository
+    from agentarea_common.workspaces.memberships import is_workspace_owner
 
-    if workspace_id == user_id:
-        return True
-    workspace = await WorkspaceRepository(session).get(workspace_id)
-    return workspace is not None and workspace.owner_user_id == user_id
+    return await is_workspace_owner(session, user_id, workspace_id)
 
 
 async def _has_graph_membership(user_id: str, workspace_id: str) -> bool:

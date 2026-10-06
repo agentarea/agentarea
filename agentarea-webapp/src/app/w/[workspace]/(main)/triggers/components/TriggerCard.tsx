@@ -22,8 +22,13 @@ export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {
   const t = useTranslations("TriggersPage");
 
   const entry = findTriggerCatalogEntry(trigger, catalog);
-  const isActive = trigger.is_active;
-  const status = getTriggerStatusPresentation(isActive ? "active" : "inactive");
+  const state =
+    trigger.status === "needs_owner"
+      ? "needs_owner"
+      : trigger.is_active
+        ? "active"
+        : "inactive";
+  const status = getTriggerStatusPresentation(state);
 
   return (
     <LinkedCard
@@ -46,7 +51,7 @@ export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {
             kind={status.kind}
             className="whitespace-nowrap"
           >
-            {isActive ? t("status.active") : t("status.inactive")}
+            {t(`status.${state}`)}
           </StatusIndicator>
         </div>
       }

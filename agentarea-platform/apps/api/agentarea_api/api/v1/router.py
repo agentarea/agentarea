@@ -60,6 +60,7 @@ from . import (
     sandboxes,
     skill_collections,
     skills,
+    streams,
     triggers,
     wallet,
     workspace_config,
@@ -156,6 +157,9 @@ workspace_v1_router.include_router(model_instances.router)
 
 # Triggers management
 workspace_v1_router.include_router(triggers.router)
+
+# Streams: event journals and their subscriptions
+workspace_v1_router.include_router(streams.router)
 
 # Workspace configuration export
 workspace_v1_router.include_router(workspace_config.router)

@@ -17,6 +17,7 @@ from agentarea_agents_sdk.tools.decorator_tool import Toolset
 from .agents_toolset import AgentsToolset
 from .audit_toolset import AuditToolset
 from .clients_toolset import ClientsToolset
+from .connector_tools_toolset import ConnectorToolsToolset
 from .files_toolset import FilesToolset
 from .inbox_toolset import InboxToolset
 from .mcp_servers_toolset import MCPServersToolset
@@ -30,6 +31,7 @@ from .providers_toolset import ProvidersToolset
 from .runs_toolset import RunsToolset
 from .secrets_toolset import SecretsToolset
 from .skills_toolset import SkillsToolset
+from .streams_toolset import StreamsToolset
 from .triggers_toolset import TriggersToolset
 from .workspace_config_toolset import WorkspaceConfigToolset
 from .workspaces_toolset import WorkspacesToolset
@@ -50,10 +52,12 @@ def get_platform_tools() -> list[Toolset]:
         MembersToolset(),
         PoliciesToolset(),
         TriggersToolset(),
+        StreamsToolset(),
         FilesToolset(),
         InboxToolset(),
         OpenAPIConnectionsToolset(),
         MCPServersToolset(),
+        ConnectorToolsToolset(),
         ProvidersToolset(),
         ModelsToolset(),
         SecretsToolset(),

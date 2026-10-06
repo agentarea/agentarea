@@ -5,13 +5,27 @@ from implementation details.
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import UUID
 
 from .models import AgentTask
 
 if TYPE_CHECKING:
     from agentarea_execution.models import AgentExecutionResume
+
+
+class FollowUpClaim(Protocol):
+    """Makes one delivery's follow-up into a running workflow go out at most once.
+
+    A routed follow-up stores no task, so a redelivered event cannot recognise
+    it by task id. ``claim`` durably records, before the signal, that this
+    delivery is going to ``task_id``, and answers False when an earlier attempt
+    already did. ``release`` withdraws a claim whose signal did not go out.
+    """
+
+    async def claim(self, task_id: UUID) -> bool: ...
+
+    async def release(self) -> None: ...
 
 
 class BaseTaskManager(ABC):

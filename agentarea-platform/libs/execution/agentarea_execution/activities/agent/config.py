@@ -1,6 +1,7 @@
 """Agent configuration and tool discovery for a run."""
 
 import hashlib
+import html
 import logging
 from collections.abc import Callable
 from copy import deepcopy
@@ -12,6 +13,8 @@ from agentarea_agents.domain.config_hash import compute_agent_config_hash
 from agentarea_agents_sdk import ToolManager
 from agentarea_common.auth.context import UserContext
 from agentarea_llm.domain.model_kind import ModelKind
+from agentarea_projects.application.service import ProjectService
+from agentarea_projects.infrastructure.repository import ProjectRepository
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
@@ -219,6 +222,100 @@ async def _prepare_task_files(
     return descriptors
 
 
+async def _prepare_trigger_event_file(
+    request: AgentConfigRequest, user_context: UserContext
+) -> list[dict[str, Any]]:
+    """Write the event a trigger fired on into this run's inputs, when it was too large to quote."""
+    from agentarea_common.artifacts import (
+        ArtifactActor,
+        DbArtifactEventRecorder,
+        WorkspaceRepository,
+    )
+    from agentarea_common.trigger_event_file import (
+        TRIGGER_EVENT_FILE_CONTENT_TYPE,
+        TRIGGER_EVENT_FILE_PARAMETER,
+        TRIGGER_EVENT_PARAMETER,
+        event_data_json,
+        is_trigger_event_file_name,
+        trigger_event_file_path,
+    )
+
+    filename = request.task_parameters.get(TRIGGER_EVENT_FILE_PARAMETER)
+    if filename is None:
+        return []
+    data = request.task_parameters.get(TRIGGER_EVENT_PARAMETER)
+    if not is_trigger_event_file_name(filename) or request.task_id is None:
+        raise ApplicationError("Invalid trigger event file", non_retryable=True)
+    if not isinstance(data, dict):
+        raise ApplicationError(
+            "Trigger event file named without the event data to fill it", non_retryable=True
+        )
+
+    workspace_id = user_context.workspace_id
+    task_id = str(request.task_id)
+    target = trigger_event_file_path(filename)
+    repository = WorkspaceRepository(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    )
+    try:
+        # An activity retry finds the file its first attempt committed.
+        content, _ = await repository.get(workspace_id, task_id, target)
+    except FileNotFoundError:
+        content = event_data_json(data).encode()
+        await repository.put_files(
+            workspace_id,
+            task_id,
+            {target: content},
+            content_types={target: TRIGGER_EVENT_FILE_CONTENT_TYPE},
+            provenance={"source": "trigger_event"},
+            owner=f"task-inputs-{task_id}",
+        )
+    return [
+        {
+            "relative_path": target,
+            "filename": filename,
+            "size": len(content),
+            "content_type": TRIGGER_EVENT_FILE_CONTENT_TYPE,
+            "sha256": hashlib.sha256(content).hexdigest(),
+        }
+    ]
+
+
+def _run_project_id(project_id: str | None) -> UUID | None:
+    if project_id is None:
+        return None
+    try:
+        return UUID(str(project_id))
+    except ValueError as exc:
+        raise ApplicationError(
+            f"Run project_id {project_id!r} is not a project id", non_retryable=True
+        ) from exc
+
+
+async def _load_project_instructions(
+    ctx: Any, agent_id: UUID, project_id: str | None
+) -> list[tuple[str, str]]:
+    """Instructions of the run's project and its ancestors, root first."""
+    run_project_id = _run_project_id(project_id)
+    session = ctx.container._database.async_session_factory()
+    ctx._sessions.append(session)
+    service = ProjectService(ProjectRepository(session, ctx.user_context))
+    return await service.run_instructions(agent_id, run_project_id)
+
+
+def _with_project_instructions(
+    instruction: str | None, projects: list[tuple[str, str]]
+) -> str | None:
+    """``instruction`` after a delimited block of the projects' instructions."""
+    if not projects:
+        return instruction
+    blocks = "".join(
+        f'<project name="{html.escape(name)}">\n{text}\n</project>\n' for name, text in projects
+    )
+    return f"<project_instructions>\n{blocks}</project_instructions>\n\n{instruction or ''}"
+
+
 async def _record_task_config_hash(ctx: Any, task_id: UUID, config_hash: str) -> None:
     """Stamp the run with the hash of the agent config it resolved.
 
@@ -325,6 +422,12 @@ def make_config_activities(
                 model_instance.model_spec, "default_context_strategy", None
             )
 
+            instruction = _with_project_instructions(
+                agent.instruction,
+                await _load_project_instructions(
+                    ctx, agent.id, (request.execution_context or {}).get("project_id")
+                ),
+            )
             config_hash = compute_agent_config_hash(
                 {
                     "instruction": agent.instruction,
@@ -340,6 +443,9 @@ def make_config_activities(
 
             execution_context = deepcopy(request.execution_context)
             attachments = await _prepare_task_files(request, user_context)
+            # Named in the run's first message, not in the system prompt's list,
+            # which stays the same from run to run.
+            await _prepare_trigger_event_file(request, user_context)
             if attachments:
                 execution_context = execution_context or {}
                 execution_context["workspace_attachments"] = [
@@ -360,7 +466,7 @@ def make_config_activities(
                 id=str(agent.id),
                 name=agent.name,
                 description=agent.description or "",
-                instruction=(agent.instruction or "")
+                instruction=(instruction or "")
                 + render_runtime_prompt(
                     runtime,
                     has_org_context=any(t.get("name") == "agentarea/context" for t in tools),

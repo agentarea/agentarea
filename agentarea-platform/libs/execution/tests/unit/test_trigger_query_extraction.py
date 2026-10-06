@@ -75,13 +75,13 @@ class TestQueryFromPolledEvents:
         )
         assert query == "Event message 1\nEvent message 2"
 
-    def test_events_outrank_the_task_text(self):
-        """What actually arrived beats the standing instruction."""
+    def test_the_task_text_outranks_the_events_text(self):
+        """The instruction says what to do; the event's text reaches the agent in its data."""
         query = resolve_task_query(
             make_trigger({"text": "Standing instruction"}),
-            {"events": [{"text": "from event"}]},
+            {"events": [{"text": "from event"}], "text": "top level"},
         )
-        assert query == "from event"
+        assert query == "Standing instruction"
 
     def test_events_without_text_are_ignored(self):
         query = resolve_task_query(

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import {
   getTriggerStatusPresentation,
@@ -45,15 +46,16 @@ export function TriggerStatusBadge({
   status: StatusPresentation;
   className?: string;
 }) {
+  const t = useTranslations("TriggersPage.status");
   const { active } = useTriggerDetailStatus();
   const presentation =
-    status.kind === "failed"
+    status.kind === "failed" || status.kind === "attention"
       ? status
       : getTriggerStatusPresentation(active ? "active" : "paused");
 
   return (
     <StatusIndicator kind={presentation.kind} className={className}>
-      {presentation.label}
+      {presentation.labelKey ? t(presentation.labelKey) : presentation.label}
     </StatusIndicator>
   );
 }

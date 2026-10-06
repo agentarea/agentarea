@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
+import type { ReactNode } from "react";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { TriggerResponse } from "@/api/client/types.gen";
-import type { ReactNode } from "react";
 import { ViewerCapabilitiesProvider } from "@/components/ViewerCapabilities";
 import { IntlProvider } from "@/test/intl";
 import { installRadixJsdomStubs } from "@/test/radix-jsdom";
@@ -94,9 +94,16 @@ describe("channel credentials on the trigger form", () => {
     listWorkspaceSecretsAction.mockResolvedValue([fresh]);
 
     const user = userEvent.setup();
-    render(<CreateTriggerForm agents={[]} initialData={telegramTrigger} />, {
-      wrapper: Providers,
-    });
+    render(
+      <CreateTriggerForm
+        agents={[]}
+        streams={{ items: [], error: null }}
+        initialData={telegramTrigger}
+      />,
+      {
+        wrapper: Providers,
+      }
+    );
 
     const picker = await screen.findByRole("combobox", { name: /Bot token/ });
     await user.click(picker);
@@ -124,7 +131,12 @@ describe("channel credentials on the trigger form", () => {
   it("picks a trigger type from the catalog and reveals its credential field", async () => {
     listWorkspaceSecretsAction.mockResolvedValue([]);
     const user = userEvent.setup();
-    render(<CreateTriggerForm agents={[]} />, { wrapper: Providers });
+    render(
+      <CreateTriggerForm agents={[]} streams={{ items: [], error: null }} />,
+      {
+        wrapper: Providers,
+      }
+    );
 
     const typePicker = await screen.findByRole("combobox", {
       name: /Trigger Type/,

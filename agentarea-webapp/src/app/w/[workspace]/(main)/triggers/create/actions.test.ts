@@ -173,6 +173,18 @@ describe("trigger form actions", () => {
     ]);
   });
 
+  it("creates a stream trigger bound to the chosen stream", async () => {
+    const streamId = "44444444-4444-4444-8444-444444444444";
+    const result = await createTriggerAction(
+      { message: "" },
+      form({ trigger_type: "stream", stream_id: streamId })
+    );
+    expect(result.success).toBe(true);
+    expect(createTrigger).toHaveBeenCalledWith(
+      expect.objectContaining({ trigger_type: "stream", stream_id: streamId })
+    );
+  });
+
   it("includes the description when creating through the shared form", async () => {
     const result = await createTriggerAction({ message: "" }, form());
     expect(result.success).toBe(true);

@@ -78,6 +78,30 @@ class ProjectRepository(WorkspaceScopedRepository[Project]):
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
+    async def project_ids_of_agent(self, agent_id: UUID | str) -> list[UUID]:
+        """The projects of this workspace that ``agent_id`` belongs to."""
+        result = await self.session.execute(
+            select(project_agents.c.project_id)
+            .join(Project, Project.id == project_agents.c.project_id)
+            .where(project_agents.c.agent_id == agent_id, self._get_workspace_filter())
+        )
+        return list(result.scalars().all())
+
+    async def get_instructions(
+        self, project_id: UUID | str
+    ) -> tuple[str, str | None, str | None] | None:
+        """Name, instructions and parent of a project in this workspace, or ``None``."""
+        row = (
+            await self.session.execute(
+                select(Project.name, Project.instructions, Project.parent_project_id).where(
+                    Project.id == project_id, self._get_workspace_filter()
+                )
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        return row.name, row.instructions, row.parent_project_id
+
     # --- Skill junction helpers ---
 
     async def add_skill(self, project_id: UUID | str, skill_id: UUID | str) -> None:

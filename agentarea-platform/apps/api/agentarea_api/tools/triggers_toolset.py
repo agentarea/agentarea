@@ -1,7 +1,7 @@
-"""TriggersToolset — manage cron and webhook triggers.
+"""TriggersToolset — manage cron, webhook and stream triggers.
 
 Tool method signatures are explicit kwargs (MCP-idiomatic flat wire schema)
-but the source of truth for ``create_cron``/``create_webhook`` is the
+but the source of truth for ``create_cron``/``create_webhook``/``create_stream`` is the
 Pydantic DTO ``TriggerCreate`` in ``agentarea_triggers.schemas.dto``. The
 contract test in ``tests/unit/test_mcp_rest_parity.py`` enforces parity
 between toolset kwargs and DTO fields.
@@ -16,8 +16,12 @@ from uuid import UUID
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_streams.domain.models import TriggerBinding
 from agentarea_triggers.schemas.dto import TriggerCreate
+from fastapi import HTTPException
 
+from ..api.v1._trigger_creation import public_webhook_url, require_stream_readable
+from ..api.v1.triggers import trigger_status
 from .base import platform_context, platform_read_context
 
 
@@ -47,7 +51,9 @@ async def _build_trigger_service(
     )
 
 
-def _trigger_summary(trigger: Any) -> dict[str, Any]:
+def _trigger_summary(trigger: Any, binding: TriggerBinding | None) -> dict[str, Any]:
+    """A trigger as MCP returns it; the stream fields come from its subscription, as in REST."""
+    status = trigger_status(trigger)
     return {
         "id": str(trigger.id),
         "name": trigger.name,
@@ -57,7 +63,20 @@ def _trigger_summary(trigger: Any) -> dict[str, Any]:
         "is_active": trigger.is_active,
         "cron_expression": getattr(trigger, "cron_expression", None),
         "webhook_id": getattr(trigger, "webhook_id", None),
+        "status": status,
+        "needs_new_owner": status == "needs_owner",
+        "stream_id": binding.stream_id if binding else None,
+        "event_filter": binding.event_filter if binding else None,
+        "webhook_url": (
+            public_webhook_url(binding.webhook_id) if binding and binding.webhook_id else None
+        ),
+        "last_event_at": binding.last_event_at if binding else None,
     }
+
+
+async def _summary(service: Any, trigger: Any) -> dict[str, Any]:
+    bindings = await service.stream_service.trigger_bindings([trigger.id])
+    return _trigger_summary(trigger, bindings.get(trigger.id))
 
 
 @toolset(
@@ -91,7 +110,10 @@ class TriggersToolset(Toolset):
                 active_only=active_only,
                 limit=limit,
             )
-            return json.dumps([_trigger_summary(t) for t in triggers], default=str)
+            bindings = await service.stream_service.trigger_bindings([t.id for t in triggers])
+            return json.dumps(
+                [_trigger_summary(t, bindings.get(t.id)) for t in triggers], default=str
+            )
 
     @tool_method(effect="read")
     @unrestricted("a trigger in the caller's workspace, as GET /v1/triggers/{id} returns it")
@@ -102,7 +124,7 @@ class TriggersToolset(Toolset):
             trigger = await service.get_trigger(UUID(trigger_id))
             if not trigger:
                 return json.dumps({"error": "Trigger not found"})
-            return json.dumps(_trigger_summary(trigger), default=str)
+            return json.dumps(await _summary(service, trigger), default=str)
 
     @tool_method(effect="write")
     @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
@@ -150,7 +172,7 @@ class TriggersToolset(Toolset):
                 created_by=user_ctx.user_id,
                 workspace_id=user_ctx.workspace_id,
             )
-            return json.dumps(_trigger_summary(trigger), default=str)
+            return json.dumps(await _summary(service, trigger), default=str)
 
     @tool_method(effect="write")
     @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
@@ -196,7 +218,52 @@ class TriggersToolset(Toolset):
                 created_by=user_ctx.user_id,
                 workspace_id=user_ctx.workspace_id,
             )
-            return json.dumps(_trigger_summary(trigger), default=str)
+            return json.dumps(await _summary(service, trigger), default=str)
+
+    @tool_method(effect="write")
+    @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
+    async def create_stream(
+        self,
+        name: str,
+        agent_id: str,
+        stream_id: str,
+        description: str = "",
+        event_filter: dict[str, Any] | None = None,
+        task_parameters: dict[str, Any] | None = None,
+        conditions: dict[str, Any] | None = None,
+        enabled: bool = True,
+        failure_threshold: int = 5,
+    ) -> str:
+        """Create a trigger that fires the agent on events of an existing stream.
+
+        ``event_filter`` picks events: {"kinds": ["push"], "fields": {"raw_data.action":
+        "opened"}}; empty fires on every event. Only events that arrive after the
+        trigger is created fire it.
+        """
+        async with platform_context() as (_session, user_ctx, repo_factory, broker, secret):
+            try:
+                await require_stream_readable(UUID(stream_id), user_ctx.user_id)
+            except HTTPException as exc:
+                return json.dumps({"error": exc.detail})
+            service = await _build_trigger_service(repo_factory, broker, secret)
+            payload = TriggerCreate(
+                name=name,
+                description=description,
+                agent_id=UUID(agent_id),
+                trigger_type="stream",
+                stream_id=UUID(stream_id),
+                event_filter=event_filter,
+                task_parameters=task_parameters or {},
+                conditions=conditions or {},
+                enabled=enabled,
+                failure_threshold=failure_threshold,
+            )
+            trigger = await service.create_trigger_from_payload(
+                payload,
+                created_by=user_ctx.user_id,
+                workspace_id=user_ctx.workspace_id,
+            )
+            return json.dumps(await _summary(service, trigger), default=str)
 
     @tool_method(effect="destructive")
     @requires("delete", "trigger", id_param="trigger_id")

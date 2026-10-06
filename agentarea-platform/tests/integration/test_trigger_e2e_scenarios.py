@@ -2,7 +2,9 @@
 
 This module tests complete trigger workflows from creation through execution
 and task creation, including real HTTP requests for webhook triggers and
-full lifecycle management scenarios.
+full lifecycle management scenarios. A webhook request is recorded in the
+trigger's stream and answered ``202``; the dispatcher fires the trigger from
+the recorded event, which these tests do with ``TriggerService.fire``.
 """
 
 import asyncio
@@ -25,7 +27,6 @@ try:
     )
     from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
     from agentarea_triggers.trigger_service import TriggerService
-    from agentarea_triggers.webhook_manager import DefaultWebhookManager
 
     TRIGGERS_AVAILABLE = True
 except ImportError:
@@ -34,11 +35,9 @@ except ImportError:
 
 # Import API components
 from agentarea_api.api.deps.services import (
-    TriggerServiceWebhookCallback,
     get_public_webhook_manager,
     get_secret_manager,
     get_trigger_service,
-    get_webhook_manager,
 )
 from agentarea_api.api.v1.triggers import router as triggers_router
 from agentarea_api.api.v1.webhooks import router as webhooks_router
@@ -50,16 +49,9 @@ from agentarea_common.events.broker import EventBroker
 from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from agentarea_tasks.task_service import TaskService
 
+from tests.integration.webhook_intake_harness import intake, journal  # noqa: F401
+
 pytestmark = pytest.mark.asyncio
-
-
-class _FakeSecretReader:
-    """In-memory SecretReader stand-in for DefaultWebhookManager's required
-    secret_reader. Every test below that needs a signing secret configures
-    it via validation_rules, so this never has to hold real values."""
-
-    async def get_secret(self, name: str) -> str | None:
-        return None
 
 
 class TestTriggerE2EScenarios:
@@ -135,18 +127,7 @@ class TestTriggerE2EScenarios:
         return service
 
     @pytest.fixture
-    async def webhook_manager(self, trigger_service, mock_event_broker):
-        """Create webhook manager for testing."""
-        execution_callback = TriggerServiceWebhookCallback(trigger_service)
-        return DefaultWebhookManager(
-            execution_callback=execution_callback,
-            event_broker=mock_event_broker,
-            trigger_service=trigger_service,
-            secret_reader=_FakeSecretReader(),
-        )
-
-    @pytest.fixture
-    def test_app(self, trigger_service, webhook_manager, monkeypatch):
+    def test_app(self, trigger_service, intake, monkeypatch):
         """Create test FastAPI app with trigger endpoints."""
         # Every route now clears a permission check and every create records
         # ownership in the graph; neither is the subject here.
@@ -157,8 +138,7 @@ class TestTriggerE2EScenarios:
 
         # Override dependencies
         app.dependency_overrides[get_trigger_service] = lambda: trigger_service
-        app.dependency_overrides[get_webhook_manager] = lambda: webhook_manager
-        app.dependency_overrides[get_public_webhook_manager] = lambda: webhook_manager
+        app.dependency_overrides[get_public_webhook_manager] = lambda: intake
         app.dependency_overrides[get_user_context] = lambda: UserContext(
             user_id="test_user", workspace_id="e2e-test-workspace"
         )
@@ -266,9 +246,9 @@ class TestTriggerE2EScenarios:
         mock_temporal_schedule_manager.delete_cron_schedule.assert_called_once()
 
     async def test_complete_webhook_trigger_lifecycle(
-        self, trigger_service, webhook_manager, mock_task_service, sample_agent_id
+        self, trigger_service, intake, journal, mock_task_service, sample_agent_id
     ):
-        """Test complete lifecycle of a webhook trigger from creation to HTTP request handling."""
+        """A webhook trigger from creation to its request recorded and fired."""
         # github has a registered signature scheme, so a real webhook_secret and
         # a matching X-Hub-Signature-256 (over the exact raw body) are required
         # to get past the now fail-closed verification step.
@@ -323,8 +303,8 @@ class TestTriggerE2EScenarios:
             "received_at": datetime.utcnow(),
         }
 
-        # Process webhook request
-        response = await webhook_manager.handle_webhook_request(
+        # Intake verifies, parses and records the request.
+        response = await intake.handle_webhook_request(
             webhook_request_data["webhook_id"],
             webhook_request_data["method"],
             webhook_request_data["headers"],
@@ -333,11 +313,14 @@ class TestTriggerE2EScenarios:
             raw_body=raw_body,
         )
 
-        # Verify webhook was processed successfully
-        assert response["status_code"] == 200
-        assert response["body"]["status"] == "success"
+        assert response["status_code"] == 202
+        assert response["body"]["status"] == "accepted"
+        [(stream_id, event, _)] = journal.events
+        assert event.type == "push"
 
-        # Verify task was created with webhook data
+        # The dispatcher fires the trigger from the recorded event.
+        firing = await trigger_service.fire(created_trigger.id, event.data)
+        assert firing.outcome == "reacted"
         mock_task_service.route_or_submit_task.assert_called_once()
         call_args = mock_task_service.route_or_submit_task.call_args
 
@@ -382,7 +365,6 @@ class TestTriggerE2EScenarios:
             "cron_expression": "0 10 * * *",
             "timezone": "UTC",
             "task_parameters": {"text": "Summarize the open support tickets", "api_test": True},
-            "conditions": {"test_mode": True},
         }
 
         create_response = test_client.post("/v1/workspaces/acme/triggers/", json=create_data, headers=auth_headers)
@@ -451,9 +433,9 @@ class TestTriggerE2EScenarios:
         assert get_deleted_response.status_code == 404
 
     async def test_webhook_http_request_processing(
-        self, test_client, trigger_service, sample_agent_id
+        self, test_client, trigger_service, journal, sample_agent_id
     ):
-        """Test processing real HTTP requests to webhook endpoints."""
+        """Real HTTP requests to the webhook endpoint are recorded and answered 202."""
         # Create webhook trigger
         trigger_data = TriggerCreate(
             name="HTTP Test Webhook",
@@ -478,9 +460,9 @@ class TestTriggerE2EScenarios:
             headers={"Content-Type": "application/json", "X-Test-Header": "test-value"},
         )
 
-        assert post_response.status_code == 200
+        assert post_response.status_code == 202
         post_result = post_response.json()
-        assert post_result["status"] == "success"
+        assert post_result["status"] == "accepted"
 
         # Test PUT request
         put_data = {"action": "update", "data": {"key": "value"}}
@@ -490,9 +472,10 @@ class TestTriggerE2EScenarios:
             headers={"Content-Type": "application/json"},
         )
 
-        assert put_response.status_code == 200
+        assert put_response.status_code == 202
         put_result = put_response.json()
-        assert put_result["status"] == "success"
+        assert put_result["status"] == "accepted"
+        assert [event.data["method"] for _, event, _ in journal.events] == ["POST", "PUT"]
 
         # Test unsupported method (GET). All webhook failures currently
         # collapse to a generic 400 (no distinct 405), so check the message.
@@ -601,6 +584,11 @@ class TestTriggerE2EScenarios:
         value (no `and`/`or`/`operator` boolean-tree support). Event data is
         also flat (no top-level "request" wrapper) -- see
         WebhookManager._parse_webhook_data.
+
+        A bare ``field_matches`` condition is refused at save time now (an
+        untyped condition is an LLM condition and needs its model), so the
+        trigger is saved without one and the condition is evaluated as a
+        stored legacy row would carry it.
         """
         conditions = {
             "field_matches": {
@@ -615,13 +603,13 @@ class TestTriggerE2EScenarios:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
             webhook_id=str(uuid4()),
-            conditions=conditions,
             task_parameters={"text": "Summarize the open support tickets"},
             created_by="test_user",
             workspace_id="e2e-test-workspace",
         )
 
-        trigger = await trigger_service.create_trigger(trigger_data)
+        saved = await trigger_service.create_trigger(trigger_data)
+        trigger = saved.model_copy(update={"conditions": conditions})
 
         # Test matching conditions
         matching_data = {
@@ -715,7 +703,7 @@ class TestTriggerE2EScenarios:
         assert updated_trigger.consecutive_failures == 2  # Last 2 were failures
 
     async def test_webhook_validation_and_parsing(
-        self, webhook_manager, trigger_service, sample_agent_id
+        self, intake, journal, trigger_service, sample_agent_id
     ):
         """Test webhook request validation and parsing for different webhook types."""
         # github has a registered signature scheme, so both requests below need
@@ -759,7 +747,7 @@ class TestTriggerE2EScenarios:
             "query_params": {},
         }
 
-        github_response = await webhook_manager.handle_webhook_request(
+        github_response = await intake.handle_webhook_request(
             github_trigger.webhook_id,
             github_request["method"],
             github_request["headers"],
@@ -768,8 +756,11 @@ class TestTriggerE2EScenarios:
             raw_body=github_raw_body,
         )
 
-        assert github_response["status_code"] == 200
-        assert github_response["body"]["status"] == "success"
+        assert github_response["status_code"] == 202
+        assert github_response["body"]["status"] == "accepted"
+        [(_, recorded, event_key)] = journal.events
+        assert event_key == "x-github-delivery:12345"
+        assert recorded.data["raw_data"]["repository"]["name"] == "test-repo"
 
         # Invalid GitHub request (missing required header, but still signed so
         # the assertion below exercises header validation, not verification).
@@ -788,7 +779,7 @@ class TestTriggerE2EScenarios:
             "query_params": {},
         }
 
-        invalid_response = await webhook_manager.handle_webhook_request(
+        invalid_response = await intake.handle_webhook_request(
             github_trigger.webhook_id,
             invalid_github_request["method"],
             invalid_github_request["headers"],
@@ -799,6 +790,7 @@ class TestTriggerE2EScenarios:
 
         assert invalid_response["status_code"] == 400
         assert "validation failed" in invalid_response["body"]["message"].lower()
+        assert len(journal.events) == 1
 
     # NOTE: test_trigger_system_health_monitoring was removed -- it exercised a
     # `check_health()` API on TriggerService/WebhookManager that doesn't exist

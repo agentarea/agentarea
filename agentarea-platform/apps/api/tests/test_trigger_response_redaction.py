@@ -44,6 +44,7 @@ def harness():
         webhook_config={"bot_token": BOT_TOKEN, "field_map": {"text": "data.object.id"}},
     )
     service = AsyncMock()
+    service.stream_service.trigger_bindings.return_value = {}
     service.get_trigger.return_value = trigger
     service.list_triggers.return_value = [trigger]
     service.create_trigger.return_value = trigger
