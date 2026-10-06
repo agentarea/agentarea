@@ -2477,6 +2477,10 @@
     "taskFailed": "Задача завершилась ошибкой",
     "taskBlocked": "Задача заблокирована",
     "timeAgo": "{time} назад",
+    "relJustNow": "только что",
+    "relMinutes": "{count} мин",
+    "relHours": "{count} ч",
+    "relDays": "{count} д",
     "tasks": "Задачи",
     "allTasks": "Все задачи",
     "runningNow": "Выполняются",
@@ -2980,13 +2984,57 @@
       }
     }
   },
+  "ProjectsPage": {
+    "title": "Проекты",
+    "newProject": "Новый проект",
+    "searchPlaceholder": "Поиск проектов…",
+    "subProject": "Подпроект",
+    "andMore": "и ещё {count}",
+    "sections": {
+      "label": "Разделы проекта",
+      "overview": "Обзор",
+      "files": "Файлы",
+      "settings": "Настройки"
+    },
+    "agentsCount": "{count, plural, one {# агент} few {# агента} many {# агентов} other {# агента}}",
+    "skillsCount": "{count, plural, one {# навык} few {# навыка} many {# навыков} other {# навыка}}",
+    "mcpCount": "{count, plural, one {# подключение} few {# подключения} many {# подключений} other {# подключения}}",
+    "columns": {
+      "project": "Проект",
+      "agents": "Агенты",
+      "skills": "Навыки",
+      "mcp": "MCP",
+      "instructions": "Инструкции"
+    },
+    "hasInstructions": "Есть",
+    "noMatchTitle": "Нет подходящих проектов",
+    "noMatchDescription": "Ни один проект не подходит под «{query}»",
+    "clearSearch": "Сбросить поиск",
+    "empty": {
+      "title": "Проектов пока нет",
+      "description": "Проект выделяет часть воркспейса — своих агентов, навыки и подключения, — чтобы разные направления работы не смешивались.",
+      "hintAgents": "Добавьте агентов, которые над ним работают",
+      "hintSkills": "Дайте ему навыки и подключения, которыми можно пользоваться",
+      "hintFiles": "Его файлы станут общим контекстом для работы внутри проекта",
+      "action": "Создать проект"
+    },
+    "form": {
+      "name": "Название",
+      "namePlaceholder": "Разбор входящих",
+      "nameRequired": "Введите название проекта.",
+      "description": "Описание",
+      "descriptionPlaceholder": "Для чего этот проект",
+      "instructions": "Инструкции",
+      "instructionsPlaceholder": "Постоянные инструкции для агентов в этом проекте",
+      "createFailed": "Не удалось создать проект",
+      "saveFailed": "Не удалось сохранить проект"
+    },
+    "create": {
+      "title": "Новый проект",
+      "submit": "Создать проект"
+    }
+  },
   "ProjectSettingsPage": {
-    "name": "Название",
-    "description": "Описание",
-    "instructions": "Инструкции",
-    "nameRequired": "Введите название проекта.",
-    "loadFailed": "Не удалось загрузить проект",
-    "saveFailed": "Не удалось сохранить проект",
     "deleteTitle": "Удалить проект"
   },
   "ProjectFilesPage": {
@@ -3023,7 +3071,9 @@
   },
   "AttachmentSection": {
     "addFailed": "Не удалось добавить {item}",
-    "removeFailed": "Не удалось убрать {item}"
+    "removeFailed": "Не удалось убрать {item}",
+    "remove": "Убрать {item}",
+    "loading": "Загрузка…"
   },
   "CatalogPage": {
     "title": "Каталог",
@@ -3100,7 +3150,35 @@
   },
   "ProjectOverviewPage": {
     "loadFailed": "Не удалось загрузить проект",
-    "agentsLoadFailed": "Не удалось загрузить агентов воркспейса"
+    "agentsLoadFailed": "Не удалось загрузить агентов воркспейса",
+    "showMore": "Показать ещё",
+    "showLess": "Свернуть",
+    "subProject": "Подпроект",
+    "instructions": "Инструкции",
+    "edit": "Изменить",
+    "noInstructions": "Инструкций пока нет — агенты проекта работают без общих указаний.",
+    "addInstructions": "Добавить инструкции",
+    "agents": "Агенты",
+    "skills": "Навыки",
+    "connections": "Подключения",
+    "add": "Добавить",
+    "files": "Файлы",
+    "allFiles": "Все файлы",
+    "noFiles": "Файлов пока нет.",
+    "uploadFiles": "Загрузить",
+    "filesLoadFailed": "Не удалось загрузить файлы проекта",
+    "agentsSheetDescription": "Добавьте агентов в этот проект",
+    "availableAgents": "Доступные агенты",
+    "noAgents": "В проекте пока нет агентов.",
+    "noAvailableAgents": "Агентов нет. Сначала создайте агента.",
+    "skillsSheetDescription": "Добавьте навыки в этот проект",
+    "availableSkills": "Доступные навыки",
+    "noSkills": "В проекте пока нет навыков.",
+    "noAvailableSkills": "Навыков нет. Сначала создайте навык.",
+    "connectionsSheetDescription": "Добавьте MCP-подключения в этот проект",
+    "availableConnections": "Активные MCP-подключения",
+    "noConnections": "В проекте пока нет подключений.",
+    "noAvailableConnections": "MCP-подключений пока нет. Создайте их в разделе «Подключения»."
   },
   "Approvals": {
     "cardLabel": "Ожидает согласования",

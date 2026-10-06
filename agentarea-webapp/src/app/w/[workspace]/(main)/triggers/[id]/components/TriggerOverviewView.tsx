@@ -15,7 +15,6 @@ import type {
   TriggerExecutionResponse,
   TriggerResponse,
 } from "@/api/client/types.gen";
-import { HeroDescription } from "@/components/Overview/HeroDescription";
 import {
   EmptyRow,
   FactRow,
@@ -27,6 +26,7 @@ import {
   Stat,
   StatStrip,
 } from "@/components/Overview/OverviewCard";
+import { OverviewHero } from "@/components/Overview/OverviewHero";
 import { CopyableText } from "@/components/ui/copyable-text";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { StatusIndicator } from "@/components/ui/status-indicator";
@@ -191,100 +191,86 @@ export async function TriggerOverviewView({
   return (
     <div className="font-inter md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden">
       {/* ===== hero ===== */}
-      <header className="relative overflow-hidden border-b border-border bg-gradient-to-b from-muted/30 to-background md:shrink-0">
-        <span
-          aria-hidden
-          className="bg-hatch-soft pointer-events-none absolute inset-y-0 right-0 w-[300px] opacity-[0.35] [-webkit-mask-image:linear-gradient(90deg,transparent,#000_88%)] [mask-image:linear-gradient(90deg,transparent,#000_88%)]"
-        />
-        <div className="relative w-full px-4 pb-[14px] pt-[13px]">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[5px] border border-border/60 bg-muted/50">
-              {model.iconUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={model.iconUrl}
-                  alt=""
-                  aria-hidden
-                  className="h-[19px] w-[19px] shrink-0"
-                />
-              ) : (
-                <Zap
-                  className="h-[19px] w-[19px] text-foreground/80"
-                  strokeWidth={1.9}
-                />
-              )}
-            </span>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h2 className="m-0 text-[18px] font-semibold tracking-[-0.022em]">
-                  {model.name}
-                </h2>
-                <TriggerStatusBadge
-                  status={model.status}
-                  className="whitespace-nowrap text-[13px] font-medium"
-                />
-              </div>
-
-              {model.description && (
-                <HeroDescription
-                  text={model.description}
-                  showMoreLabel={t("showMore")}
-                  showLessLabel={t("showLess")}
-                />
-              )}
-
-              <div className="mt-1.5 flex flex-wrap items-center gap-y-1.5 text-[12px] text-muted-foreground">
-                <HeroMeta
-                  icon={
-                    model.iconUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={model.iconUrl}
-                        alt=""
-                        aria-hidden
-                        className="h-3.5 w-3.5 shrink-0"
-                      />
-                    ) : (
-                      <Zap />
-                    )
-                  }
+      <OverviewHero
+        mark={
+          <span className="mt-0.5 grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[5px] border border-border/60 bg-muted/50">
+            {model.iconUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={model.iconUrl}
+                alt=""
+                aria-hidden
+                className="h-[19px] w-[19px] shrink-0"
+              />
+            ) : (
+              <Zap
+                className="h-[19px] w-[19px] text-foreground/80"
+                strokeWidth={1.9}
+              />
+            )}
+          </span>
+        }
+        title={model.name}
+        status={
+          <TriggerStatusBadge
+            status={model.status}
+            className="whitespace-nowrap text-[13px] font-medium"
+          />
+        }
+        description={model.description}
+        showMoreLabel={t("showMore")}
+        showLessLabel={t("showLess")}
+        meta={
+          <>
+            <HeroMeta
+              icon={
+                model.iconUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={model.iconUrl}
+                    alt=""
+                    aria-hidden
+                    className="h-3.5 w-3.5 shrink-0"
+                  />
+                ) : (
+                  <Zap />
+                )
+              }
+            >
+              <b className="font-medium text-foreground/80">
+                {model.scheduleText}
+              </b>
+            </HeroMeta>
+            {model.isStream && model.stream?.name && (
+              <HeroMeta icon={<ENTITY_ICONS.stream />}>
+                <Link
+                  href={`/events/${model.stream.id}`}
+                  className="font-medium text-foreground/80 underline-offset-2 hover:underline"
                 >
-                  <b className="font-medium text-foreground/80">
-                    {model.scheduleText}
-                  </b>
-                </HeroMeta>
-                {model.isStream && model.stream?.name && (
-                  <HeroMeta icon={<ENTITY_ICONS.stream />}>
-                    <Link
-                      href={`/events/${model.stream.id}`}
-                      className="font-medium text-foreground/80 underline-offset-2 hover:underline"
-                    >
-                      {model.stream.name}
-                    </Link>
-                  </HeroMeta>
-                )}
-                {model.agent && (
-                  <HeroMeta icon={<ENTITY_ICONS.agent />}>
-                    <Link
-                      href={`/agents/${model.agent.id}`}
-                      className="font-medium text-foreground/80 underline-offset-2 hover:underline"
-                    >
-                      {model.agent.name}
-                    </Link>
-                  </HeroMeta>
-                )}
-                <HeroMeta icon={<Clock />}>
-                  {t("lastRun")}{" "}
-                  <b className="font-medium text-foreground/80">
-                    {relLabel(last, t) ?? t("never")}
-                  </b>
-                </HeroMeta>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+                  {model.stream.name}
+                </Link>
+              </HeroMeta>
+            )}
+            {model.agent && (
+              <HeroMeta icon={<ENTITY_ICONS.agent />}>
+                <Link
+                  href={`/agents/${model.agent.id}`}
+                  className="font-medium text-foreground/80 underline-offset-2 hover:underline"
+                >
+                  {model.agent.name}
+                </Link>
+              </HeroMeta>
+            )}
+            <HeroMeta icon={<Clock />}>
+              {t("lastRun")}{" "}
+              <b className="font-medium text-foreground/80">
+                {relLabel(last, t) ?? t("never")}
+              </b>
+            </HeroMeta>
+          </>
+        }
+      />
+
 
       {model.needsOwner && (
         <div className="mx-4 mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 md:shrink-0 dark:border-amber-700/60 dark:bg-amber-900/20 dark:text-amber-200">

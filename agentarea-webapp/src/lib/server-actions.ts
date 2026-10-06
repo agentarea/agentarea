@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { ZodError } from "zod";
 import type {
   ContinueTaskPayload,
   CreateWalletRequest,
@@ -10,6 +11,8 @@ import type {
   ModelInstanceBulkCreateRequest,
   ModelKind,
   PaginatedResponseSkillResponse,
+  ProjectCreate,
+  ProjectUpdate,
   ProviderConfigCreate,
   ProviderConfigUpdate,
   SecretResponse,
@@ -20,6 +23,8 @@ import type {
 import {
   zCreateWorkspaceDirectoryRequest,
   zListSecretsV1SecretsGetResponse,
+  zProjectCreate,
+  zProjectUpdate,
   zProviderConfigCreate,
   zProviderConfigUpdate,
   zUploadPlanRequest,
@@ -785,23 +790,32 @@ export async function getProjectAction(projectId: string) {
   return await getProject(projectId);
 }
 
-export async function createProjectAction(project: {
-  name: string;
-  description?: string | null;
-  instructions?: string | null;
-}) {
-  return await createProject(project);
+/** A schema failure in the API's own `{ detail: [{ msg }] }` error shape. */
+function invalidInput(error: ZodError) {
+  return {
+    data: undefined,
+    error: {
+      detail: error.issues.map((issue) => ({
+        msg: `${issue.path.join(".")}: ${issue.message}`,
+      })),
+    },
+    status: undefined,
+  };
+}
+
+export async function createProjectAction(project: ProjectCreate) {
+  const parsed = zProjectCreate.safeParse(project);
+  if (!parsed.success) return invalidInput(parsed.error);
+  return await createProject(parsed.data);
 }
 
 export async function updateProjectAction(
   projectId: string,
-  project: {
-    name?: string;
-    description?: string | null;
-    instructions?: string | null;
-  }
+  project: ProjectUpdate
 ) {
-  return await updateProject(projectId, project);
+  const parsed = zProjectUpdate.safeParse(project);
+  if (!parsed.success) return invalidInput(parsed.error);
+  return await updateProject(projectId, parsed.data);
 }
 
 export async function deleteProjectAction(projectId: string) {
