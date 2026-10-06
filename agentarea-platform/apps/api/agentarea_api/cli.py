@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 
 import click
 import uvicorn
@@ -21,6 +22,21 @@ def get_engine():
     """Get database engine for migrations."""
     db = Database(get_db_settings())
     return db.sync_engine
+
+
+def reload_dirs(cli_file: Path) -> list[str]:
+    """The directories ``serve --reload`` watches: the API package and the workspace libs.
+
+    *cli_file* sits at ``<root>/apps/api/agentarea_api/cli.py``, the libs at
+    ``<root>/libs``, both in a checkout and in the image.
+    """
+    package_dir = cli_file.resolve().parent
+    libs_dir = package_dir.parents[2] / "libs"
+    if not libs_dir.is_dir():
+        raise click.UsageError(
+            f"--reload watches the workspace libs, but {libs_dir} does not exist"
+        )
+    return [str(package_dir), str(libs_dir)]
 
 
 @click.group()
@@ -90,6 +106,7 @@ def serve(host: str, port: int, reload: bool, log_level: str, workers: int, shut
         host=host,
         port=port,
         reload=reload,
+        reload_dirs=reload_dirs(Path(__file__)) if reload else None,
         workers=workers if not reload else 1,  # Workers > 1 incompatible with reload
         log_level=log_level,
         # Bounded, always. The API serves SSE, and those connections never end

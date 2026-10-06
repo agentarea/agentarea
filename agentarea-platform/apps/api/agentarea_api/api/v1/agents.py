@@ -42,6 +42,7 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ._access_control_grants import grant_resource_owner
+from ._agent_tools import validate_code_tool_names
 from ._approval_policy_sync import (
     apply_approval_targets,
     approval_targets_for_agents,
@@ -214,30 +215,6 @@ class AgentCreateRequest(AgentCreate):
     )
 
 
-def _validate_code_tool_names(tools: list[ToolConfig] | None) -> None:
-    """Refuse code tool configs that name no registered toolset.
-
-    Such a config builds nothing, but its name would still reach policy as a
-    name of the agent's tools.
-    """
-    if not tools:
-        return
-    available_code_tools = get_code_tools_metadata()
-    invalid_tools = [
-        tool_config.name
-        for tool_config in tools
-        if tool_config.type == "code" and tool_config.name not in available_code_tools
-    ]
-    if invalid_tools:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Invalid code tools: {invalid_tools}. "
-                f"Available tools: {list(available_code_tools.keys())}"
-            ),
-        )
-
-
 @router.post(
     "/",
     response_model=AgentResponse,
@@ -261,7 +238,7 @@ async def create_agent(
     fails, the triggers already made and the agent are removed again, so the
     caller never ends up with an agent that silently lacks a schedule or channel.
     """
-    _validate_code_tool_names(data.tools)
+    validate_code_tool_names(data.tools)
 
     planned: list[tuple[TriggerSpec, dict[str, Any] | None]] = []
     for spec in data.triggers:
@@ -628,7 +605,7 @@ async def update_agent(
     if not resolved_id:
         raise HTTPException(status_code=404, detail="Agent not found")
     await require_permission("edit", "agent", str(resolved_id), user_context.user_id)
-    _validate_code_tool_names(data.tools)
+    validate_code_tool_names(data.tools)
     agent = await agent_service.update_agent(id=resolved_id, payload=data)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")

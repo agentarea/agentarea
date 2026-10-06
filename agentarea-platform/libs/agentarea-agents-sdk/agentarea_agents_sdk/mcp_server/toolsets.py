@@ -18,7 +18,10 @@ from urllib.parse import parse_qs
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.types import CallToolResult, InputRequiredResult, TextContent, Tool
+from starlette.applications import Starlette
 from starlette.types import ASGIApp, Receive, Scope, Send
+
+from .elicitation import mcp_call_context
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +93,14 @@ class ToolsetMCPServer(MCPServer):
             )
         return frozenset(selected)
 
+    def streamable_http_app(self, *, stateless_http: bool = False, **kwargs: Any) -> Starlette:
+        if stateless_http:
+            # A stateless mount holds no connection to push on. The 2026-07-28
+            # capabilities derive listChanged and resources.subscribe from
+            # whether `subscriptions/listen` is served, so stop serving it.
+            self._lowlevel_server._request_handlers.pop("subscriptions/listen", None)  # pyright: ignore[reportPrivateUsage]
+        return super().streamable_http_app(stateless_http=stateless_http, **kwargs)
+
     async def list_tools(self) -> list[Tool]:
         tools = await super().list_tools()
         selection = _selected_tools_var.get()
@@ -106,7 +117,10 @@ class ToolsetMCPServer(MCPServer):
         selection = _selected_tools_var.get()
         if selection is not None and name not in selection:
             raise ToolError(f"Unknown tool: {name}")
-        return await super().call_tool(name, arguments, context)
+        if context is None:
+            return await super().call_tool(name, arguments, context)
+        with mcp_call_context(context):
+            return await super().call_tool(name, arguments, context)
 
     async def call_tool_result(self, name: str, arguments: dict[str, Any]) -> CallToolResult:
         """Call a tool for a caller that is not this server's own transport.

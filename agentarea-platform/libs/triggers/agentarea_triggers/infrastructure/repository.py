@@ -184,6 +184,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             conditions=trigger_data.conditions,
             created_by=trigger_data.created_by,
             workspace_id=getattr(trigger_data, "workspace_id", None),
+            is_active=trigger_data.is_active,
             failure_threshold=trigger_data.failure_threshold,
             # Cron-specific fields
             cron_expression=trigger_data.cron_expression,

@@ -433,6 +433,39 @@ async def verify(
                     await asyncio.sleep(_LIST_TOOLS_RETRY_DELAY)
                     continue
 
+                from agentarea_mcp.application.mcp_client import MCPUpstreamUnauthorizedError
+
+                if isinstance(leaf, MCPUpstreamUnauthorizedError):
+                    sent_credentials = bool(
+                        locked.auth_config_id or locked.get_configured_env_vars() or extra_headers
+                    )
+                    refusal = (
+                        "rejected the credentials"
+                        if sent_credentials
+                        else "requires sign-in or a key"
+                    )
+                    payload = _make_payload(
+                        "failed",
+                        VerificationError(
+                            code="upstream_unauthorized",
+                            message=f"{runtime_instance.name} {refusal} (HTTP {leaf.status})",
+                            detail={"status": leaf.status},
+                        ),
+                    )
+                    await _save_verification(locked.id, payload, db)
+                    logger.warning(
+                        "verify: upstream refused the credentials (HTTP %s)",
+                        leaf.status,
+                        extra={
+                            "instance_id": instance_id,
+                            "type": instance_type,
+                            "stage": "list_tools",
+                            "result": "failed",
+                            "error_code": "upstream_unauthorized",
+                        },
+                    )
+                    return payload
+
                 # MCP protocol-level error — fail fast, no retry.
                 message = f"{type(leaf).__name__}: {leaf}" if str(leaf) else type(leaf).__name__
                 detail = None

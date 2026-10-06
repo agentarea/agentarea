@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from agentarea_agents_sdk.mcp_server import UnknownToolsetError, selected_tools
 from agentarea_agents_sdk.mcp_server.auth import (
@@ -53,6 +53,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 if TYPE_CHECKING:
     from agentarea_common.auth.context import UserContext
+    from agentarea_mcp.application.service import MCPServerInstanceService
     from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -229,50 +230,12 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
             }
 
             instance_service = MCPServerInstanceService(repo_factory, broker, secret)
-            members: list[AggregatedMember] = []
-            instance_urls: dict[str, str] = {}
-            instance_names: dict[str, str] = {}
-            instance_headers: dict[str, dict[str, str]] = {}
-            instance_transports: dict[str, str | None] = {}
-            for order, (iid, inst) in enumerate(instances.items()):
-                full = await instance_service.repository.get_by_id(inst.id)
-                if full is None:
-                    continue
-                try:
-                    url, headers, transport = await instance_service._resolve_mcp_url_and_headers(
-                        full
-                    )
-                except Exception:
-                    logger.exception("Failed to resolve MCP url for instance %s", iid)
-                    continue
-                instance_urls[iid] = url
-                instance_names[iid] = full.name
-                instance_transports[iid] = transport
-                if headers:
-                    instance_headers[iid] = headers
-                link = links.get(iid)
-                members.append(
-                    AggregatedMember(
-                        mcp_instance_id=iid,
-                        order=order,
-                        namespace_prefix=link.namespace_prefix if link else None,
-                        transport=instance_transports[iid],
-                        pinned=full.transport == MCPTransport.URL,
-                        allowed_tools=(
-                            frozenset(link.allowed_tools)
-                            if link and link.allowed_tools is not None
-                            else None
-                        ),
-                    )
-                )
-            proxy = MCPAggregatorProxy(
+            proxy = await _aggregate_instances(
                 client.name,
                 client.description or "",
-                members,
-                instance_urls,
-                instance_names,
-                instance_headers,
-                tool_cache=_tool_cache(),
+                instance_service,
+                list(instances.values()),
+                links,
             )
             return ClientScope(
                 proxy=proxy,
@@ -282,6 +245,62 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
                 tool_policy=await _effective_tool_policy(session, user_ctx),
                 actor_type=_actor_type(principal, client_id),
             )
+
+
+async def _aggregate_instances(
+    name: str,
+    description: str,
+    instance_service: MCPServerInstanceService,
+    instances: list,
+    links: dict,
+) -> MCPAggregatorProxy:
+    """One server over *instances*, each dialed with its resolved url and credentials.
+
+    An instance whose address cannot be resolved is left out, loudly, so the
+    rest keep working.
+    """
+    members: list[AggregatedMember] = []
+    instance_urls: dict[str, str] = {}
+    instance_names: dict[str, str] = {}
+    instance_headers: dict[str, dict[str, str]] = {}
+    for order, inst in enumerate(instances):
+        iid = str(inst.id)
+        full = await instance_service.repository.get_by_id(inst.id)
+        if full is None:
+            continue
+        try:
+            url, headers, transport = await instance_service._resolve_mcp_url_and_headers(full)
+        except Exception:
+            logger.exception("Failed to resolve MCP url for instance %s", iid)
+            continue
+        instance_urls[iid] = url
+        instance_names[iid] = full.name
+        if headers:
+            instance_headers[iid] = headers
+        link = links.get(iid)
+        members.append(
+            AggregatedMember(
+                mcp_instance_id=iid,
+                order=order,
+                namespace_prefix=link.namespace_prefix if link else None,
+                transport=transport,
+                pinned=full.transport == MCPTransport.URL,
+                allowed_tools=(
+                    frozenset(link.allowed_tools)
+                    if link and link.allowed_tools is not None
+                    else None
+                ),
+            )
+        )
+    return MCPAggregatorProxy(
+        name,
+        description,
+        members,
+        instance_urls,
+        instance_names,
+        instance_headers,
+        tool_cache=_tool_cache(),
+    )
 
 
 def _policy_aliases(scope: ClientScope, tool_name: str) -> tuple[str, ...]:
@@ -330,21 +349,23 @@ def _client_tool_decision(scope: ClientScope, tool_name: str) -> ToolAuthorizati
     return decision
 
 
-async def _audit_tool_call(
-    client_id: str,
+def _refusal(text: str) -> CallToolResult:
+    return CallToolResult(
+        content=[TextContent(type="text", text=f"Tool call refused: {text}")], is_error=True
+    )
+
+
+async def _record_tool_call(
+    session: AsyncSession,
     scope: ClientScope,
     tool_name: str,
     arguments: dict,
     decision: ToolAuthorizationDecision,
+    *,
+    resource_type: str,
+    resource_id: str,
 ) -> None:
-    """Record one client tool call's verdict before anything runs.
-
-    Written in its own transaction ahead of the call, so a call that runs is
-    always on record, and a failure to record stops the call. Argument values
-    never reach the trail — only their keys.
-    """
     from agentarea_common.audit import AuditService
-    from agentarea_common.config.database import get_database
 
     owner = None if tool_name in scope.platform_tools else scope.proxy.owner_of(tool_name)
     metadata: dict = {
@@ -355,14 +376,105 @@ async def _audit_tool_call(
     }
     if owner is not None:
         metadata["mcp_instance_id"] = str(owner[0].mcp_instance_id)
+    await AuditService(session, scope.user_context).record(
+        "tool.call.allowed" if decision.allowed else "tool.call.denied",
+        resource_type,
+        resource_id,
+        actor_type=scope.actor_type,
+        event_metadata=metadata,
+    )
+
+
+async def _audit_tool_call(
+    scope: ClientScope,
+    tool_name: str,
+    arguments: dict,
+    decision: ToolAuthorizationDecision,
+    *,
+    resource_type: str,
+    resource_id: str,
+) -> None:
+    """Record one tool call's verdict, against what it was made through, before anything runs.
+
+    Written in its own transaction ahead of the call, so a call that runs is
+    always on record, and a failure to record stops the call. Argument values
+    never reach the trail — only their keys.
+    """
+    from agentarea_common.config.database import get_database
+
     async with get_database().session() as session:
-        await AuditService(session, scope.user_context).record(
-            "tool.call.allowed" if decision.allowed else "tool.call.denied",
-            "client",
-            client_id,
-            actor_type=scope.actor_type,
-            event_metadata=metadata,
+        await _record_tool_call(
+            session,
+            scope,
+            tool_name,
+            arguments,
+            decision,
+            resource_type=resource_type,
+            resource_id=resource_id,
         )
+
+
+async def _authorize_call(
+    scope: ClientScope,
+    tool_name: str,
+    arguments: dict,
+    *,
+    resource_type: str,
+    resource_id: str,
+) -> CallToolResult | None:
+    """Judge and audit one call; ``None`` when it may run, else the refusal."""
+    decision = _client_tool_decision(scope, tool_name)
+    await _audit_tool_call(
+        scope,
+        tool_name,
+        arguments,
+        decision,
+        resource_type=resource_type,
+        resource_id=resource_id,
+    )
+    if decision.allowed:
+        return None
+    return _refusal(decision.reason)
+
+
+async def call_instance_tool(
+    session: AsyncSession,
+    user_ctx: UserContext,
+    instance_service: MCPServerInstanceService,
+    instance: Any,
+    tool_name: str,
+    arguments: dict,
+) -> CallToolResult:
+    """Run one of *instance*'s tools as the caller, the way a client's endpoint runs it.
+
+    The same resolved url and credentials, the same policy verdict and the same
+    audit record, filed against the connection instead of a client.
+    """
+    proxy = await _aggregate_instances(instance.name, "", instance_service, [instance], {})
+    if not proxy.members:
+        return CallToolResult(
+            content=[TextContent(type="text", text=f"{instance.name} is unreachable: no address")],
+            is_error=True,
+        )
+    scope = ClientScope(
+        proxy=proxy,
+        skill_registry={},
+        platform_tools=frozenset(),
+        user_context=user_ctx,
+        tool_policy=await _effective_tool_policy(session, user_ctx),
+        actor_type="client" if user_ctx.client_id else "user",
+    )
+    name = proxy.qualified_name(proxy.members[0], tool_name)
+    refusal = await _authorize_call(
+        scope,
+        name,
+        arguments,
+        resource_type="mcp_instance",
+        resource_id=str(instance.id),
+    )
+    if refusal is not None:
+        return refusal
+    return await proxy.call_namespaced_tool_result(name, arguments)
 
 
 def _activate_skill_tool(skill_registry: dict) -> Tool:
@@ -439,13 +551,15 @@ async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolRes
         # Not a tool of this client: nothing to judge, nothing ran.
         raise ValueError(f"No member owns tool {params.name}")
 
-    decision = _client_tool_decision(scope, params.name)
-    await _audit_tool_call(client_id, scope, params.name, arguments, decision)
-    if not decision.allowed:
-        return CallToolResult(
-            content=[TextContent(type="text", text=f"Tool call refused: {decision.reason}")],
-            is_error=True,
-        )
+    refusal = await _authorize_call(
+        scope,
+        params.name,
+        arguments,
+        resource_type="client",
+        resource_id=client_id,
+    )
+    if refusal is not None:
+        return refusal
 
     if is_platform_tool:
         # Run as the caller in the client's workspace: the tool's own

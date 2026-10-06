@@ -38,6 +38,7 @@ from agentarea_mcp.application.mcp_client import (
     platform_client_factory,
     shared_era_verdict_store,
 )
+from agentarea_mcp.domain.env_schema import normalize_env_schema
 from agentarea_mcp.domain.events import (
     MCPServerCreated,
     MCPServerDeleted,
@@ -873,15 +874,85 @@ class MCPServerInstanceService:
 
     @staticmethod
     def _is_auth_error_payload(payload: Any) -> bool:
-        """True when a verification failure looks like an upstream 401/403.
+        """True when a verification failure is an upstream 401/403.
 
-        The verification payload is a plain (TypedDict) mapping.
+        The verification payload is a plain (TypedDict) mapping. A transport
+        that does not report the status is matched on the message.
         """
         if not isinstance(payload, dict) or payload.get("status") != "failed":
             return False
         error = payload.get("error") or {}
+        if isinstance(error, dict) and error.get("code") == "upstream_unauthorized":
+            return True
         message = (error.get("message") if isinstance(error, dict) else "") or ""
         return any(marker in message for marker in ("401", "403", "Unauthorized", "Forbidden"))
+
+    async def needs_connecting(self, instance: MCPServerInstance, *, probe: bool) -> bool:
+        """True when the connection waits on a credential only a person can give it.
+
+        A connection that verified needs nothing. Otherwise: its upstream refused
+        it, or its spec declares a required secret it has no value for. With
+        *probe*, a URL connection holding no credential at all whose verification
+        is not running is also asked whether it wants authorization (OAuth
+        metadata, or a 401/403) — a network call, so reads pass ``probe=False``.
+        """
+        verification = instance.verification or {}
+        status = verification.get("status")
+        if status == "succeeded" or instance.transport == MCPTransport.BUNDLE:
+            return False
+        error = verification.get("error")
+        if isinstance(error, dict) and error.get("code") == "oauth_reauth_required":
+            return True
+        if self._is_auth_error_payload(verification):
+            return True
+        if instance.auth_config_id:
+            return False
+
+        server_spec = await self.mcp_server_repository.get_server_by_id(instance.server_spec_id)
+        required = sorted(
+            field["name"]
+            for field in normalize_env_schema(getattr(server_spec, "env_schema", None))
+            if field["isSecret"] and field["isRequired"]
+        )
+        if required:
+            configured = await self.env_service.get_configured_env_names(instance.id, required)
+            if set(required) - set(configured):
+                return True
+
+        recorded = isinstance(error, dict) and error.get("code") == "auth_required"
+        if not (probe or recorded) or status == "in_progress":
+            return False
+        if instance.transport != MCPTransport.URL:
+            return False
+        if await self.env_service.get_configured_env_names(
+            instance.id, instance.get_configured_env_vars()
+        ):
+            return False
+        if recorded:
+            return True
+        result = await self.probe_instance_auth(instance.id)
+        if result.get("status") != "auth_required":
+            return False
+        await self._store_auth_required(instance, result.get("methods") or [])
+        return True
+
+    async def _store_auth_required(self, instance: MCPServerInstance, methods: list[str]) -> None:
+        """Record that the upstream wants a sign-in or key, so reads see it without probing."""
+        from agentarea_mcp.domain.verification_types import (
+            VERIFICATION_SCHEMA_VERSION,
+        )
+
+        payload = {
+            "schema_version": VERIFICATION_SCHEMA_VERSION,
+            "status": "failed",
+            "at": datetime.now(UTC).isoformat(),
+            "error": {
+                "code": "auth_required",
+                "message": f"{instance.name} requires sign-in or a key",
+                "detail": {"methods": methods},
+            },
+        }
+        await self.repository.update(instance.id, verification=payload)
 
     async def _store_reauth_required(self, instance_id: UUID) -> dict:
         """Persist and return a verification payload asking the user to reconnect."""

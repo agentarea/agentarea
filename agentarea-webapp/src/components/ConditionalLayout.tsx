@@ -14,6 +14,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { navData } from "@/lib/nav-data";
 import {
   stripWorkspacePrefix,
+  workspaceSection,
   workspaceSlugFromPath,
 } from "@/lib/workspace-routes";
 import type { Workspace } from "@/lib/workspaces";
@@ -27,6 +28,9 @@ interface ConditionalLayoutProps {
 // Everything that used to live under /admin now sits beneath /settings, so the
 // one prefix covers it.
 const SETTINGS_ROUTES = ["/settings"];
+
+// The (focus) route group: pages that stand alone, opened from a link sent to a chat.
+const FOCUS_ROUTES = ["/connect"];
 
 function SkipToContentLink() {
   const t = useTranslations("Common");
@@ -56,7 +60,9 @@ export default function ConditionalLayout({
   // route list, so a flapping session (or a route missing from the list) could
   // unmount the provider and silently reset/disable the sidebar. Only
   // `/w/{slug}` pages get it: outside a workspace its links lead nowhere.
-  const useNoLayout = workspaceSlugFromPath(pathname) === null;
+  const useNoLayout =
+    workspaceSlugFromPath(pathname) === null ||
+    FOCUS_ROUTES.includes(workspaceSection(pathname));
 
   if (useNoLayout) {
     return <>{children}</>;

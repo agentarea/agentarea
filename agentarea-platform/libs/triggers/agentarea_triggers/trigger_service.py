@@ -919,6 +919,7 @@ class TriggerService:
                 trigger_id=trigger.id,
                 cron_expression=trigger.cron_expression,
                 timezone=trigger.timezone,
+                paused=not trigger.is_active,
             )
 
             logger.info(

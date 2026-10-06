@@ -85,6 +85,23 @@ class TestTemporalScheduleManager:
         assert action.task_queue == "trigger-execution-queue"
 
     @pytest.mark.asyncio
+    async def test_a_schedule_is_live_unless_created_paused(
+        self, schedule_manager, mock_temporal_client, sample_cron_trigger
+    ):
+        await schedule_manager.create_cron_schedule(
+            trigger_id=sample_cron_trigger.id, cron_expression="0 9 * * *"
+        )
+        await schedule_manager.create_cron_schedule(
+            trigger_id=sample_cron_trigger.id, cron_expression="0 9 * * *", paused=True
+        )
+
+        live, paused = (
+            call.kwargs["schedule"].state.paused
+            for call in mock_temporal_client.create_schedule.call_args_list
+        )
+        assert (live, paused) == (False, True)
+
+    @pytest.mark.asyncio
     async def test_create_schedule_existing(
         self, schedule_manager, mock_temporal_client, sample_cron_trigger
     ):

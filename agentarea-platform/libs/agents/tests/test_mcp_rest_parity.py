@@ -126,7 +126,6 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
         "skill_ids",
     },
     "agents.update": {
-        "tools",
         "planning",
         "a2ui_enabled",
         "skill_ids",

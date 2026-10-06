@@ -17,6 +17,7 @@ from agentarea_agents_sdk.tools.decorator_tool import Toolset
 from .agents_toolset import AgentsToolset
 from .audit_toolset import AuditToolset
 from .clients_toolset import ClientsToolset
+from .connector_tools_toolset import ConnectorToolsToolset
 from .files_toolset import FilesToolset
 from .inbox_toolset import InboxToolset
 from .mcp_servers_toolset import MCPServersToolset
@@ -56,6 +57,7 @@ def get_platform_tools() -> list[Toolset]:
         InboxToolset(),
         OpenAPIConnectionsToolset(),
         MCPServersToolset(),
+        ConnectorToolsToolset(),
         ProvidersToolset(),
         ModelsToolset(),
         SecretsToolset(),

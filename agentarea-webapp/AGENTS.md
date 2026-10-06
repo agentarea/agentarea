@@ -132,6 +132,9 @@ member of 404s (`w/[workspace]/layout.tsx`).
   where no header can be set (EventSource, download links).
 - A new top-level page directory goes into `WORKSPACE_ROUTES`;
   `workspace-routes.test.ts` fails until it does.
+- `w/[workspace]/(focus)/` holds standalone pages opened from a link in a chat
+  (`/connect/{id}`): one card, no sidebar. The shell is picked by pathname in
+  `ConditionalLayout`, so a new focus route also goes into its `FOCUS_ROUTES`.
 
 Representative — see `src/app/w/[workspace]/(main)/` for the full set (agents,
 tasks, policies, triggers, bundles, projects, connections, models, secrets,

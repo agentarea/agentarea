@@ -100,7 +100,12 @@ class TemporalScheduleManager:
         return count
 
     async def create_cron_schedule(
-        self, trigger_id: UUID, cron_expression: str, timezone: str = "UTC"
+        self,
+        trigger_id: UUID,
+        cron_expression: str,
+        timezone: str = "UTC",
+        *,
+        paused: bool = False,
     ) -> str:
         """Create a Temporal Schedule for a cron trigger.
 
@@ -108,6 +113,7 @@ class TemporalScheduleManager:
             trigger_id: The ID of the trigger
             cron_expression: The cron expression for scheduling
             timezone: The timezone for the cron expression
+            paused: Create the schedule paused, for a trigger that is not active
 
         Returns:
             The schedule ID that was created
@@ -156,7 +162,7 @@ class TemporalScheduleManager:
                 ),
                 spec=ScheduleSpec(cron_expressions=[cron_expression], time_zone_name=timezone),
                 state=ScheduleState(
-                    note=f"Cron trigger schedule for trigger {trigger_id}", paused=False
+                    note=f"Cron trigger schedule for trigger {trigger_id}", paused=paused
                 ),
             )
 

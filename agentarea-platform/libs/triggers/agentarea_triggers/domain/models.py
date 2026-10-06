@@ -241,6 +241,7 @@ class TriggerCreate(BaseModel):
     conditions: dict[str, Any] = Field(default_factory=dict)
     created_by: str
     workspace_id: str | None = None
+    is_active: bool = True
 
     # Business logic safety
     failure_threshold: int = Field(default=5, ge=1, le=100)

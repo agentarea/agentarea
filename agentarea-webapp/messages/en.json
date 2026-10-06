@@ -814,6 +814,29 @@
         "validate": "Validate"
       }
     },
+    "connectLink": {
+      "metaTitle": "Connect {name}",
+      "title": "Connect {provider} to AgentArea",
+      "workspace": "Connecting to {workspace}",
+      "signInTitle": "Sign in to {provider}",
+      "signInButton": "Sign in to {provider}",
+      "signInRefused": "{provider} doesn't support sign-in here — paste an API key instead.",
+      "keyTitle": "Add your key",
+      "keyDetail": "Everything else is already set up. Paste the key to finish.",
+      "replaceKeyTitle": "Replace your key",
+      "replaceKeyDetail": "The server refused the saved key. Paste a new one to reconnect.",
+      "saveAndConnect": "Save and connect",
+      "verifyingTitle": "Checking the connection",
+      "verifyingDetail": "This takes a few seconds.",
+      "connectedTitle": "Connected — you can close this tab and return to the chat",
+      "connectedDetail": "{name} is connected.",
+      "unverifiedTitle": "Not checked yet",
+      "unverifiedDetail": "Check that the connection works.",
+      "check": "Check connection",
+      "failedTitle": "Couldn't connect",
+      "failedDetail": "The server didn't accept the connection.",
+      "openSettings": "Open connection settings"
+    },
     "instanceDetail": {
       "activity": {
         "title": "Activity ({count})",

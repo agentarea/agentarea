@@ -11,6 +11,7 @@ import logging
 from collections.abc import Callable
 from typing import Annotated, Any
 
+from mcp.types import InputRequiredResult
 from pydantic import Field
 
 from ..tools.base_tool import BaseTool
@@ -84,12 +85,12 @@ class MCPToolAdapter:
         """
         is_async = inspect.iscoroutinefunction(method)
 
-        async def handler(**kwargs: Any) -> str:
+        async def handler(**kwargs: Any) -> str | InputRequiredResult:
             if is_async:
                 result = await method(**kwargs)
             else:
                 result = method(**kwargs)
-            if isinstance(result, str):
+            if isinstance(result, str | InputRequiredResult):
                 return result
             return json.dumps(result, default=str)
 

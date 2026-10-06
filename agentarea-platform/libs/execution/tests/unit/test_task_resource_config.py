@@ -181,6 +181,7 @@ def activity_context(monkeypatch):
         AsyncMock(return_value=RuntimeDiscoveryResult()),
     )
     monkeypatch.setattr(config_activities, "_record_task_config_hash", AsyncMock())
+    monkeypatch.setattr(config_activities, "_load_project_instructions", AsyncMock(return_value=[]))
     all_activities = {fn.__name__: fn for fn in activities.make_agent_activities(MagicMock())}
     return ctx, all_activities
 

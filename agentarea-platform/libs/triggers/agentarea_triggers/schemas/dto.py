@@ -221,6 +221,7 @@ class TriggerSpec(BaseModel):
             task_parameters=self.task_parameters,
             conditions=self.conditions,
             created_by=created_by,
+            is_active=self.enabled,
             failure_threshold=self.failure_threshold,
             cron_expression=self.cron_expression,
             timezone=self.timezone,

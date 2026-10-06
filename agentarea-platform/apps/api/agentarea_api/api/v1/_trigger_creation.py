@@ -260,8 +260,8 @@ async def create_trigger_from_spec(
     """Create one trigger with its credentials and webhook; return it and whether it has credentials.
 
     ``credentials`` must already be resolved (see ``resolve_channel_credentials``).
-    A spec with ``enabled=False`` is created and then disabled, so a schedule
-    never fires before its owner switches it on. When the provider refuses the
+    A spec with ``enabled=False`` is created inactive with its schedule paused,
+    so it never fires before its owner switches it on. When the provider refuses the
     webhook registration the trigger is deleted again and the 502 propagates.
     """
     if spec.trigger_type == "stream":
@@ -289,10 +289,6 @@ async def create_trigger_from_spec(
         await secret_manager.set_secret(secret_name, json.dumps(credentials))
         has_creds = True
         logger.info(f"Stored channel credentials for trigger {trigger.id}")
-
-    if not spec.enabled:
-        await trigger_service.disable_trigger(trigger.id)
-        trigger.is_active = False
 
     return trigger, has_creds
 

@@ -50,6 +50,7 @@ from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_database
 from agentarea_common.events.broker import EventBroker
+from agentarea_common.exceptions import AppError
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
 from agentarea_common.workspaces.lookup import workspace_slug_for
 from agentarea_mcp.application.auth_service import MCPAuthService, platform_oauth_app_for
@@ -171,6 +172,10 @@ async def _pop_state(state: str) -> dict | None:
     return json.loads(raw)
 
 
+def _oauth_app_required(message: str, issuer: str) -> AppError:
+    return AppError(message, status_code=422, code="oauth_app_required", extra={"issuer": issuer})
+
+
 def _callback_uri() -> str:
     """Build the absolute callback URI this deployment is reachable at."""
     settings = get_settings()
@@ -246,6 +251,33 @@ def _instance_detail_url(frontend_base: str, workspace_slug: str, instance_id: s
     return f"{frontend_base}/w/{workspace_slug}/connections/{instance_id}"
 
 
+def connect_page_url(workspace_slug: str, instance_id: str) -> str:
+    """The page a person opens to connect one instance: an agent's connect link.
+
+    It carries no secret and authenticates nothing; the page needs the
+    person's own session before it starts any authorization.
+    """
+    frontend_base = get_settings().app.APP_URL.rstrip("/")
+    if not frontend_base:
+        raise RuntimeError("AGENTAREA_APP_URL is not set: a connect link has no page to point at")
+    return f"{frontend_base}/w/{workspace_slug}/connect/{instance_id}"
+
+
+def _oauth_landing_url(return_to: str, workspace_slug: str, instance_id: str) -> str:
+    """The connect page when ``return_to`` is exactly the one for this workspace
+    and instance, else the connection's detail page.
+
+    Its query and fragment are dropped, never carried back.
+    """
+    if return_to:
+        parsed = urllib.parse.urlsplit(return_to)
+        page = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+        connect_page = connect_page_url(workspace_slug, instance_id)
+        if page == connect_page:
+            return connect_page
+    return _instance_detail_url(_safe_frontend_base(return_to), workspace_slug, instance_id)
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -298,10 +330,11 @@ async def oauth_preflight(
 
     capability = await MCPOAuthClientService().assess(mcp_url)
     metadata = capability.metadata
+    status, detail = capability.status, capability.detail
     return MCPOAuthPreflightResponse(
         **target,
-        status=capability.status,
-        detail=capability.detail,
+        status=status,
+        detail=detail,
         issuer=metadata.issuer if metadata else None,
         authorization_endpoint=metadata.authorization_endpoint if metadata else None,
         scopes=list(metadata.scopes_supported) if metadata else [],
@@ -367,13 +400,9 @@ async def oauth_authorize(
         # discovery or the workspace's spec, say where the client secret goes.
         platform_app = find_platform_oauth_app(as_metadata.issuer, mcp_url)
         if platform_app is None:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "code": "oauth_app_required",
-                    "message": oauth_app_required_detail(as_metadata.issuer),
-                    "issuer": as_metadata.issuer,
-                },
+            raise _oauth_app_required(
+                oauth_app_required_detail(as_metadata.issuer),
+                as_metadata.issuer,
             )
         as_metadata = replace(
             as_metadata,
@@ -390,16 +419,10 @@ async def oauth_authorize(
             client_creds = await oauth_client.register_client(as_metadata, redirect_uri)
         except Exception as exc:
             logger.info("DCR failed for %s: %s", as_metadata.issuer, exc, exc_info=True)
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "code": "oauth_app_required",
-                    "message": (
-                        f"Dynamic client registration with {as_metadata.issuer} failed "
-                        f"({exc}). Connect with an OAuth app you registered with this provider."
-                    ),
-                    "issuer": as_metadata.issuer,
-                },
+            raise _oauth_app_required(
+                f"Dynamic client registration with {as_metadata.issuer} failed "
+                f"({exc}). Connect with an OAuth app you registered with this provider.",
+                as_metadata.issuer,
             ) from exc
         resolved = ResolvedOAuthApp(
             client_id=client_creds.client_id,
@@ -486,10 +509,27 @@ async def oauth_callback(
     remote AS). The state token proves the flow was initiated by our /authorize.
     """
     if error:
-        # The state is not read on this branch, so neither the stored return_to
-        # nor the workspace is known: land on the frontend root, which opens the
-        # user's own workspace, with the reason carried as query data.
+        # The provider refused: return to the page the flow started from. Without
+        # a usable state neither it nor the workspace is known, so land on the
+        # frontend root, which opens the user's own workspace. The reason is
+        # carried as query data either way.
         query = urllib.parse.urlencode({"oauth": "error", "reason": error_description or error})
+        refused_state = await _pop_state(state) if state else None
+        if refused_state is not None:
+            try:
+                slug = await workspace_slug_for(refused_state["workspace_id"])
+            except LookupError:
+                logger.warning(
+                    "MCP OAuth refusal for instance %s: workspace %s is gone",
+                    refused_state["instance_id"],
+                    refused_state["workspace_id"],
+                    exc_info=True,
+                )
+            else:
+                landing = _oauth_landing_url(
+                    refused_state.get("return_to", ""), slug, refused_state["instance_id"]
+                )
+                return RedirectResponse(url=f"{landing}?{query}", status_code=302)
         return RedirectResponse(url=f"{_safe_frontend_base('')}/?{query}", status_code=302)
 
     if not code or not state:
@@ -515,7 +555,7 @@ async def oauth_callback(
         )
         query = urllib.parse.urlencode({"oauth": "error", "reason": "workspace_gone"})
         return RedirectResponse(url=f"{frontend_base}/?{query}", status_code=302)
-    detail_url = _instance_detail_url(frontend_base, workspace_slug, instance_id)
+    landing_url = _oauth_landing_url(state_data.get("return_to", ""), workspace_slug, instance_id)
     as_meta_dict = state_data["as_metadata"]
     as_metadata = AuthServerMetadata(
         issuer=as_meta_dict["issuer"],
@@ -559,14 +599,14 @@ async def oauth_callback(
     except Exception as exc:
         logger.error("OAuth token exchange failed: %s", exc, exc_info=True)
         return RedirectResponse(
-            url=f"{detail_url}?oauth=error&reason=token_exchange_failed",
+            url=f"{landing_url}?oauth=error&reason=token_exchange_failed",
             status_code=302,
         )
 
     access_token = tokens.get("access_token", "")
     if not access_token:
         return RedirectResponse(
-            url=f"{detail_url}?oauth=error&reason=no_access_token",
+            url=f"{landing_url}?oauth=error&reason=no_access_token",
             status_code=302,
         )
 
@@ -609,7 +649,7 @@ async def oauth_callback(
     task.add_done_callback(_background_tasks.discard)
 
     return RedirectResponse(
-        url=f"{detail_url}?oauth=success",
+        url=f"{landing_url}?oauth=success",
         status_code=302,
     )
 

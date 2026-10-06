@@ -322,18 +322,19 @@ async def test_full_install_creates_everything():
     assert len(agent.skill_ids) == 1
 
 
-async def test_disabled_automation_is_disabled_after_create():
+async def test_disabled_automation_is_created_inactive():
     inst, deps = _installer()
     await inst.install(parse_bundle(FULL), {"token": "secret"})
     ts = deps["trigger_service"]
-    assert len(ts.created) == 1
-    assert len(ts.disabled) == 1  # disable_trigger called for enabled=false
+    assert [t.is_active for t in ts.created] == [False]
+    assert ts.disabled == []
 
 
-async def test_enabled_automation_not_disabled():
+async def test_enabled_automation_is_created_active():
     pkg = parse_bundle(FULL.replace("enabled: false", "enabled: true"))
     inst, deps = _installer()
     await inst.install(pkg, {"token": "secret"})
+    assert [t.is_active for t in deps["trigger_service"].created] == [True]
     assert deps["trigger_service"].disabled == []
 
 
@@ -368,7 +369,8 @@ async def test_channel_installs_telegram_trigger_and_stores_secret():
     ts = deps["trigger_service"]
     assert len(ts.created) == 1
     assert ts.created[0].name == "tg:inbox"
-    assert len(ts.disabled) == 1
+    assert ts.created[0].is_active is False
+    assert ts.disabled == []
 
     # the resolved bot token is stored under the exact key the outbound delivery
     # adapter reads: channel_cred:{type}:{trigger_id}
@@ -589,7 +591,8 @@ async def test_exported_workspace_bundle_installs_agent_skill_and_disabled_trigg
     assert created["cron"].cron_expression == "0 0 * * *"
     assert created["cron"].timezone == "UTC"
     assert created["webhook"].task_parameters == {"text": "Process the inbound event."}
-    assert len(deps["trigger_service"].disabled) == 2
+    assert [t.is_active for t in deps["trigger_service"].created] == [False, False]
+    assert deps["trigger_service"].disabled == []
 
 
 async def test_exported_workspace_round_trips_a_uuid_referenced_mcp_with_a_credentialed_arg(

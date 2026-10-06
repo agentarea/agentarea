@@ -16,12 +16,16 @@ describe("WORKSPACE_ROUTES", () => {
   it("lists exactly the top-level workspace route directories", () => {
     // A new page directory missing from the list would render its links
     // unprefixed, and those land in whichever workspace was used last.
-    const dir = fileURLToPath(
-      new URL("../app/w/[workspace]/(main)", import.meta.url)
+    const root = fileURLToPath(
+      new URL("../app/w/[workspace]", import.meta.url)
     );
-    const onDisk = readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-      .map((entry) => entry.name)
+    const directories = (dir: string) =>
+      readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+        .map((entry) => entry.name);
+    const onDisk = directories(root)
+      .filter((group) => group.startsWith("("))
+      .flatMap((group) => directories(`${root}/${group}`))
       .sort();
     expect([...WORKSPACE_ROUTES].sort()).toEqual(onDisk);
   });
