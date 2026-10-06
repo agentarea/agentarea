@@ -6,6 +6,7 @@ import {
   loginRedirectPath,
 } from "@/lib/auth-session";
 import { createOryMiddleware } from "@/lib/ory/middleware";
+import { SETTINGS_RETURN_COOKIE, settingsEntryHop } from "@/lib/settings-entry";
 import { workspaceSlugFromPath } from "@/lib/workspace-routes";
 import { WORKSPACE_REFERENCE_HEADER } from "@/lib/workspaces";
 import oryConfig from "@/ory.config";
@@ -29,6 +30,28 @@ function unscoped(request: NextRequest) {
   const headers = new Headers(request.headers);
   headers.delete(WORKSPACE_REFERENCE_HEADER);
   return NextResponse.next({ request: { headers } });
+}
+
+/** A GET of a page — loaded by the browser or fetched by the router — not a server action. */
+function isPageGet(request: NextRequest) {
+  return request.method === "GET";
+}
+
+/**
+ * The router fetching a page's RSC payload, as opposed to the browser loading
+ * it. Next hides its own RSC headers from the proxy; the browser's
+ * Sec-Fetch-Mode still tells a fetch from a navigation.
+ */
+function isRouterFetch(request: NextRequest) {
+  const mode = request.headers.get("sec-fetch-mode");
+  return mode !== null && mode !== "navigate";
+}
+
+/** Where a browser reaches Kratos: its public URL, else our own /self-service. */
+function kratosBrowserUrl(request: NextRequest) {
+  if (env.ORY_BROWSER_URL) return env.ORY_BROWSER_URL;
+  const protocol = request.headers.get("x-forwarded-proto") ?? "http";
+  return `${protocol}://${request.headers.get("host")}`;
 }
 
 // What NextResponse.next() marks a pass-through with, as opposed to a response
@@ -81,9 +104,37 @@ export const proxy = async (request: Request) => {
     }
   }
 
+  // The settings page's trip through Kratos, answered before anything renders;
+  // see settings-entry.ts.
+  const settingsHop = settingsEntryHop(nextReq.nextUrl, {
+    kratosBrowserUrl: kratosBrowserUrl(nextReq),
+    returnWorkspace: nextReq.cookies.get(SETTINGS_RETURN_COOKIE)?.value,
+  });
+  if (settingsHop?.kind === "to-workspace") {
+    return NextResponse.redirect(new URL(settingsHop.location, nextReq.url));
+  }
+
   const slug = workspaceSlugFromPath(pathname);
   if (slug) {
-    return scopeToWorkspace(nextReq, slug);
+    if (settingsHop?.kind !== "to-kratos") {
+      return scopeToWorkspace(nextReq, slug);
+    }
+    // An RSC fetch cannot follow a redirect to Kratos' origin. A response
+    // that is not an RSC payload makes the router load the URL as a page
+    // instead, which then takes the redirect. Either way remember where the
+    // trip started.
+    const response = !isPageGet(nextReq)
+      ? scopeToWorkspace(nextReq, slug)
+      : isRouterFetch(nextReq)
+        ? new NextResponse(null, { status: 204 })
+        : NextResponse.redirect(settingsHop.location);
+    response.cookies.set(SETTINGS_RETURN_COOKIE, settingsHop.workspace, {
+      path: "/settings",
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 60 * 60,
+    });
+    return response;
   }
 
   const response = await createOryMiddleware(oryConfig)(nextReq);

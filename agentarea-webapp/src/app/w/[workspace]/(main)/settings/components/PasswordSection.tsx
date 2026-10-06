@@ -7,8 +7,13 @@ import { useOryFlow } from "@ory/elements-react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
-import { FieldErrors, MethodSubmit } from "./FlowParts";
-import { accepted, errorsOf, findInput } from "./oryNodes";
+import {
+  FieldErrors,
+  FlowSuccess,
+  MethodSubmit,
+  useSavedHere,
+} from "./FlowParts";
+import { errorsOf, findInput } from "./oryNodes";
 import SettingsRow from "./SettingsRow";
 import { SettingsFooter, SettingsSection } from "./SettingsSection";
 
@@ -22,7 +27,7 @@ export default function PasswordSection({ nodes }: { nodes: UiNode[] }) {
   // The flow the editor was opened on. A newer flow in which Kratos took the
   // password folds the editor away.
   const [openedOn, setOpenedOn] = useState<typeof flow | null>(null);
-  const updated = accepted(flow, nodes);
+  const updated = useSavedHere(nodes);
   const editing = openedOn !== null && !(updated && flow !== openedOn);
 
   const close = () => {
@@ -34,7 +39,7 @@ export default function PasswordSection({ nodes }: { nodes: UiNode[] }) {
     <SettingsSection title={t("title")}>
       <SettingsRow
         title={t("password")}
-        description={t("passwordDescription")}
+        description={updated ? <FlowSuccess /> : t("passwordDescription")}
         below={
           editing && (
             <PasswordField

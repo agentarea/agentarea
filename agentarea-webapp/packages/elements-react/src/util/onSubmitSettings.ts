@@ -42,7 +42,18 @@ export async function onSubmitSettings(
     .then(async (res) => {
       const body = await res.value()
 
-      const didContinueWith = handleContinueWith(body.continue_with, {
+      // Kratos answers a save by sending the browser back to the flow it has
+      // just returned. We hold that flow already; following the redirect would
+      // only reload the page.
+      const continueWith = body.continue_with?.filter(
+        (item) =>
+          !(
+            item.action === "redirect_browser_to" &&
+            pointsAtFlow(item.redirect_browser_to, body.id)
+          ),
+      )
+
+      const didContinueWith = handleContinueWith(continueWith, {
         onRedirect,
       })
 
@@ -86,4 +97,13 @@ export async function onSubmitSettings(
         throw err
       }
     })
+}
+
+/** Whether `url` opens the settings flow `flowId` again. */
+function pointsAtFlow(url: string, flowId: string): boolean {
+  try {
+    return new URL(url).searchParams.get("flow") === flowId
+  } catch {
+    return false
+  }
 }

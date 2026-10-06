@@ -1,12 +1,13 @@
 "use client";
 
-import type { UiNodeGroupEnum, UiText } from "@ory/client-fetch";
+import { useEffect, useRef, useState } from "react";
+import type { UiNode, UiNodeGroupEnum, UiText } from "@ory/client-fetch";
 import { useComponents, useOryFlow } from "@ory/elements-react";
 import { useFormContext } from "react-hook-form";
 import FormError from "@/components/FormError";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { errorsOf } from "./oryNodes";
+import { accepted, errorsOf } from "./oryNodes";
 
 /** A Kratos message in the UI language, with its `ory/message/<id>` test id. */
 export function OryText({ message }: { message: UiText }) {
@@ -14,20 +15,27 @@ export function OryText({ message }: { message: UiText }) {
   return <Message.Content message={message} />;
 }
 
+/** Kratos' success line ("Your changes have been saved!") for the current flow. */
+function successMessages(flow: {
+  state: unknown;
+  ui: { messages?: UiText[] };
+}) {
+  const messages = flow.ui.messages ?? [];
+  return flow.state === "success" && errorsOf(messages).length === 0
+    ? messages.filter((message) => message.type !== "error")
+    : [];
+}
+
 /**
- * What Kratos says about the whole flow: its errors, or the success line after
- * a save ("Your changes have been saved!"). A save reloads the page through
- * Kratos' `continue_with` redirect, which lands at the top, so this is where
- * the outcome has to be.
+ * What Kratos says about the whole flow: its errors, and the success line of a
+ * flow the page opened with — after the provider sends you back from linking
+ * an account, say. A save made on the page reports in its own section.
  */
 export function FlowMessages() {
   const { flow } = useOryFlow();
-  const messages = flow.ui.messages ?? [];
-  const errors = errorsOf(messages);
-  const success =
-    errors.length === 0 && flow.state === "success"
-      ? messages.filter((message) => message.type !== "error")
-      : [];
+  const [openedWith] = useState(flow);
+  const errors = errorsOf(flow.ui.messages);
+  const success = flow === openedWith ? successMessages(flow) : [];
   if (errors.length === 0 && success.length === 0) return null;
 
   return (
@@ -49,6 +57,47 @@ export function FlowMessages() {
       ))}
     </div>
   );
+}
+
+/** The same success line inline, where a section reports its own save. */
+export function FlowSuccess() {
+  const { flow } = useOryFlow();
+
+  return (
+    <>
+      {successMessages(flow).map((message, index) => (
+        <span key={`${message.id}-${index}`} role="status">
+          <OryText message={message} />
+        </span>
+      ))}
+    </>
+  );
+}
+
+/**
+ * Whether the flow on screen is the one this section's own last submit came
+ * back with, and Kratos took it. A save in another section replaces the flow,
+ * so this section stops claiming it.
+ */
+export function useSavedHere(nodes: UiNode[]) {
+  const { flow } = useOryFlow();
+  const {
+    formState: { isSubmitting, isSubmitSuccessful },
+  } = useFormContext();
+  const [savedFlow, setSavedFlow] = useState<typeof flow | null>(null);
+  const submitting = useRef(false);
+
+  useEffect(() => {
+    if (isSubmitting) {
+      submitting.current = true;
+      return;
+    }
+    if (!submitting.current) return;
+    submitting.current = false;
+    setSavedFlow(isSubmitSuccessful && accepted(flow, nodes) ? flow : null);
+  }, [isSubmitting, isSubmitSuccessful, flow, nodes]);
+
+  return savedFlow !== null && savedFlow === flow;
 }
 
 /** What Kratos rejected in one field, under that field. */

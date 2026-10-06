@@ -14,7 +14,13 @@ import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
 import { Input } from "@/components/ui/input";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { displayName } from "@/lib/display-name";
-import { FieldErrors, MethodSubmit, OryText } from "./FlowParts";
+import {
+  FieldErrors,
+  FlowSuccess,
+  MethodSubmit,
+  OryText,
+  useSavedHere,
+} from "./FlowParts";
 import { errorsOf, fieldNodes } from "./oryNodes";
 import SettingsRow from "./SettingsRow";
 import { SettingsFooter, SettingsSection } from "./SettingsSection";
@@ -47,6 +53,7 @@ export default function ProfileSection({ nodes }: { nodes: UiNode[] }) {
     reset,
     formState: { isDirty, isSubmitting },
   } = useFormContext();
+  const saved = useSavedHere(nodes);
 
   return (
     <SettingsSection title={t("personalInfo")}>
@@ -93,6 +100,8 @@ export default function ProfileSection({ nodes }: { nodes: UiNode[] }) {
         status={
           isDirty ? (
             <span className="font-medium text-foreground">{t("unsaved")}</span>
+          ) : saved ? (
+            <FlowSuccess />
           ) : (
             t("saved")
           )
