@@ -14,6 +14,8 @@ describe("isProtectedRoute", () => {
     ["/members", true],
     ["/", false],
     ["/auth/login", false],
+    ["/auth/settings", true],
+    ["/auth/settingsfoo", false],
     ["/error", false],
     ["/500/details", false],
     ["/agentsfoo", true],

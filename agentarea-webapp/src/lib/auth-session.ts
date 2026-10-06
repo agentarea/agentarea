@@ -11,6 +11,11 @@
 import { AGENTAREA_AUTH_WHOAMI_TIMEOUT } from "./server-timeouts";
 
 const PUBLIC_ROUTE_PREFIXES = ["/auth", "/error", "/404", "/500"];
+// Under /auth for Kratos, but it forwards into the caller's workspace.
+const SIGNED_IN_AUTH_ROUTES = ["/auth/settings"];
+
+const matchesRoute = (pathname: string, route: string) =>
+  pathname === route || pathname.startsWith(`${route}/`);
 
 /**
  * True when the pathname falls under a protected route prefix.
@@ -20,11 +25,12 @@ const PUBLIC_ROUTE_PREFIXES = ["/auth", "/error", "/404", "/500"];
  * routes from silently bypassing the tokenization gate.
  */
 export function isProtectedRoute(pathname: string): boolean {
+  if (SIGNED_IN_AUTH_ROUTES.some((route) => matchesRoute(pathname, route))) {
+    return true;
+  }
   return (
     pathname !== "/" &&
-    !PUBLIC_ROUTE_PREFIXES.some(
-      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
-    )
+    !PUBLIC_ROUTE_PREFIXES.some((prefix) => matchesRoute(pathname, prefix))
   );
 }
 

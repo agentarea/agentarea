@@ -2,32 +2,26 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { useRouter } from "next/navigation";
 import EmptyState from "@/components/EmptyState/EmptyState";
 
 const NotFound = () => {
   const t = useTranslations("404");
+  const router = useRouter();
 
   return (
-    <ContentBlock
-      showSidebarTrigger={false}
-      header={{
-        breadcrumb: [
-          { label: "Home", href: "/" },
-          { label: t("title") },
-        ],
-      }}
-    >
+    <div className="flex h-full min-h-svh items-center justify-center p-6">
       <EmptyState
-        title={t("404")}
+        title={t("title")}
         description={t("description")}
         iconsType="404"
+        className="max-w-[620px]"
         action={{
           label: t("goHome"),
-          href: "/",
+          onClick: () => router.push("/"),
         }}
       />
-    </ContentBlock>
+    </div>
   );
 };
 
