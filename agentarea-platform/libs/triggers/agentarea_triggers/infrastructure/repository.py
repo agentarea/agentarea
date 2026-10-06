@@ -8,7 +8,7 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import and_, desc, func, literal_column, select, update
+from sqlalchemy import and_, desc, func, literal_column, null, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -193,7 +193,11 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             # Webhook-specific fields
             webhook_id=trigger_data.webhook_id,
             allowed_methods=trigger_data.allowed_methods,
-            webhook_type=(_value(trigger_data.webhook_type)) if trigger_data.webhook_type else None,
+            # A stream trigger has no intake of its own, so no channel type; a bare
+            # None would let the column's "generic" default fill it in.
+            webhook_type=null()
+            if trigger_data.trigger_type == TriggerType.STREAM
+            else (_value(trigger_data.webhook_type) if trigger_data.webhook_type else None),
             validation_rules=trigger_data.validation_rules,
             webhook_config=trigger_data.webhook_config,
             event_types=trigger_data.event_types,

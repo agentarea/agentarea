@@ -101,6 +101,16 @@ def trigger_status(trigger: Any) -> TriggerStatus:
     return "inactive"
 
 
+def serves_a_webhook(trigger: Any) -> bool:
+    """Whether a trigger, as a domain model or a listed row, has webhook fields to show.
+
+    The list hands over ORM rows, which carry every column; a stream trigger has
+    no intake of its own, so its webhook columns describe nothing.
+    """
+    trigger_type = getattr(trigger.trigger_type, "value", trigger.trigger_type)
+    return hasattr(trigger, "webhook_id") and trigger_type != "stream"
+
+
 class TriggerResponse(BaseModel):
     """Response model for trigger data."""
 
@@ -220,7 +230,7 @@ class TriggerResponse(BaseModel):
                 }
             )
 
-        if hasattr(trigger, "webhook_id"):
+        if serves_a_webhook(trigger):
             webhook_type = (
                 trigger.webhook_type.value
                 if hasattr(trigger.webhook_type, "value")
@@ -476,7 +486,7 @@ async def _has_credentials(secret_manager: Any, trigger: Any, trigger_id: UUID) 
     credential had become unreadable.
     """
     channel_type = "generic"
-    if hasattr(trigger, "webhook_type"):
+    if serves_a_webhook(trigger):
         wt = trigger.webhook_type
         channel_type = wt.value if hasattr(wt, "value") else str(wt)
     secret_name = channel_credential_secret_name(channel_type, trigger_id)
@@ -496,7 +506,7 @@ async def _webhook_signing(secret_manager: Any, trigger: Any) -> WebhookSigning 
     read costs the label, not the trigger. The webhook itself refuses requests
     while its secret is unreadable (see ``verify_webhook_signature``).
     """
-    if not hasattr(trigger, "webhook_id"):
+    if not serves_a_webhook(trigger):
         return None
     wt = trigger.webhook_type
     try:
