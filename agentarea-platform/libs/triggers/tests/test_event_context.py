@@ -175,6 +175,38 @@ def test_a_chat_message_with_no_instruction_is_still_the_ask():
     assert task_input is not None
     assert task_input.ask == "where is my parcel?"
     assert task_input.message.startswith("where is my parcel?\n\n")
+    assert task_input.stamp({})["follow_up_message"] == "where is my parcel?"
+
+
+def test_a_webhook_texts_never_displaces_the_trigger_instruction():
+    trigger = WebhookTrigger(
+        name="Incidents",
+        agent_id=uuid4(),
+        created_by="u",
+        workspace_id="w",
+        webhook_id="wh-1234567890abcd",
+        task_parameters={"text": "Open a ticket for this incident"},
+    )
+    data = {"body": {"text": "db is down", "severity": "high"}, "text": "db is down"}
+    task_input = compose_task_input(
+        trigger,
+        data,
+        TriggerEvent.from_journaled(_journaled(data, kind="webhook.generic"), stream_name="in"),
+    )
+    assert task_input is not None
+    assert task_input.ask == "Open a ticket for this incident"
+    assert task_input.message.startswith("Open a ticket for this incident\n\n## What started")
+    assert task_input.message.index("Open a ticket") < task_input.message.index("db is down")
+    assert task_input.stamp({})["follow_up_message"] == "db is down"
+
+
+def test_an_event_without_text_stamps_no_follow_up():
+    data = {"order": {"id": "A-1"}}
+    task_input = compose_task_input(
+        _stream_trigger("go"), data, TriggerEvent.from_journaled(_journaled(data), stream_name="s")
+    )
+    assert task_input is not None
+    assert "follow_up_message" not in task_input.stamp({})
 
 
 def test_an_event_with_nothing_to_ask_starts_nothing():

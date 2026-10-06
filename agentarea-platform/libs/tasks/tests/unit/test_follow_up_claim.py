@@ -130,6 +130,35 @@ async def test_a_signal_that_did_not_go_out_withdraws_its_claim():
     assert len(executor.signals) == 2
 
 
+async def test_a_follow_up_sends_the_persons_message_not_the_first_run_message():
+    running = _running_task()
+    executor = _Executor([True])
+    service = _service(running, executor)
+    delivery = _delivery(running, uuid4())
+    delivery.query = "Answer politely\n\n## What started this run\n..."
+    delivery.task_parameters = {**delivery.task_parameters, "follow_up_message": "hello again"}
+
+    routed = await service._try_route_to_active_workflow(delivery, "c-1")
+
+    assert routed is not None and routed.status == "routed"
+    assert executor.signals == [
+        (running.execution_id, "queue_message", {"message": "hello again"})
+    ]
+
+
+async def test_a_follow_up_whose_text_is_known_routes_even_with_an_event_file():
+    running = _running_task()
+    executor = _Executor([True])
+    service = _service(running, executor)
+    delivery = _delivery(running, uuid4())
+    delivery.task_parameters = {
+        **delivery.task_parameters,
+        "trigger_event_file": "trigger-event-3.json",
+        "follow_up_message": "hello again",
+    }
+    assert await service._try_route_to_active_workflow(delivery, "c-1") is not None
+
+
 async def test_a_message_whose_event_needs_a_file_starts_its_own_run():
     running = _running_task()
     executor = _Executor([True])

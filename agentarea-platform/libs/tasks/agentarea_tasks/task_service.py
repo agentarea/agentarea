@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 from agentarea_common.artifacts.workspace import WorkspaceValidationError, normalize_workspace_path
 from agentarea_common.audit import audited
+from agentarea_common.channel_origin import FOLLOW_UP_MESSAGE_PARAMETER
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.money import Money, serialize_money, to_money
@@ -602,11 +603,13 @@ class TaskService(BaseTaskService):
         task_repository = self.repository_factory.create_repository(TaskRepository)
         candidates = await task_repository.find_active_by_agent_and_chat(task.agent_id, chat_id)
 
-        # An event too large to quote is a file only a new run provisions.
-        if (task.task_parameters or {}).get(TRIGGER_EVENT_FILE_PARAMETER) is not None:
+        parameters = task.task_parameters or {}
+        follow_up = parameters.get(FOLLOW_UP_MESSAGE_PARAMETER)
+        # A message pointing at an event file needs a new run to provision it.
+        if not isinstance(follow_up, str) and parameters.get(TRIGGER_EVENT_FILE_PARAMETER):
             return None
 
-        message_text = task.query or task.description
+        message_text = follow_up if isinstance(follow_up, str) else task.query or task.description
         incoming_resources = _task_resource_selection_key(task.task_parameters)
         if incoming_resources is None:
             return None

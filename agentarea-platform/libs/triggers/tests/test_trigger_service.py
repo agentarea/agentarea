@@ -1217,7 +1217,7 @@ class TestTriggerService:
         assert task.description == task.query
 
     @pytest.mark.asyncio
-    async def test_the_event_that_fired_the_trigger_outranks_its_task_text(
+    async def test_the_task_text_leads_and_the_event_follows_it(
         self,
         trigger_service,
         mock_trigger_repository,
@@ -1225,7 +1225,7 @@ class TestTriggerService:
         mock_task_service,
         sample_webhook_trigger,
     ):
-        """What actually arrived beats the standing instruction."""
+        """The instruction is the ask; the event, its text included, is shown after it."""
         sample_webhook_trigger.task_parameters = {"text": "Standing instruction"}
         mock_trigger_repository.get_trigger.return_value = sample_webhook_trigger
         mock_task_service.route_or_submit_task.return_value = MagicMock(
@@ -1240,8 +1240,9 @@ class TestTriggerService:
         )
 
         task = mock_task_service.route_or_submit_task.call_args.args[0]
-        assert task.description == "PR #12 was opened"
-        assert task.query.startswith("PR #12 was opened\n\n## What started this run")
+        assert task.description == "Standing instruction"
+        assert task.query.startswith("Standing instruction\n\n## What started this run")
+        assert "PR #12 was opened" in task.query
 
     @pytest.mark.asyncio
     async def test_a_manual_run_of_a_trigger_with_nothing_to_say_reports_why(

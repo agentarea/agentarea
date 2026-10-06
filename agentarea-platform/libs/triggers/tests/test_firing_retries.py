@@ -250,3 +250,18 @@ async def test_a_duplicate_task_from_a_concurrent_delivery_is_retried_not_counte
         await service.fire(trigger.id, {"text": "go"}, task_id=uuid4(), raise_retryable=True)
     service.trigger_repository.update_execution_tracking.assert_not_awaited()
     service.disable_trigger.assert_not_awaited()
+
+
+async def test_a_restarted_task_is_told_the_event_again():
+    """The stored row keeps only the ask; the retry composes the full message again."""
+    trigger = _trigger(task_parameters={"text": "Ship the order"})
+    service = _service(trigger)
+    task_id = uuid4()
+    stored = _not_started(task_id)
+    stored.query = "Ship the order"
+    service.task_service.get_task.return_value = stored
+    await service.fire(
+        trigger.id, {"events": [{"order": "A-7"}]}, task_id=task_id, raise_retryable=True
+    )
+    assert stored.query.startswith("Ship the order\n\n## What started this run")
+    assert '"order": "A-7"' in stored.query

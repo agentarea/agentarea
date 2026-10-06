@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from agentarea_common.audit import audited
-from agentarea_common.channel_origin import CHANNEL_ORIGIN_PARAMETER
+from agentarea_common.channel_origin import CHANNEL_ORIGIN_PARAMETER, FOLLOW_UP_MESSAGE_PARAMETER
 from agentarea_common.config import get_settings
 from agentarea_common.events.base_events import EventEnvelope
 from agentarea_common.events.broker import EventBroker
@@ -101,18 +101,11 @@ _ORIGIN_ROUTING_FIELDS = frozenset(
 )
 
 
-def resolve_task_query(trigger: Trigger, trigger_data: dict[str, Any]) -> str | None:
-    """What the agent is being asked to do, or None when nothing says.
+def event_text(trigger_data: dict[str, Any]) -> str | None:
+    """The text the event itself carried -- a chat message, say -- or None.
 
-    What actually arrived outranks the standing instruction: text carried by the
-    events that fired the trigger, then a top-level text, then the task text set
-    on the trigger itself. Events arrive under ``events`` or ``extracted_events``
-    depending on which path fired.
-
-    Returns None rather than inventing an ask. The trigger's description used to
-    stand in, but it explains the automation to whoever reads the list -- running
-    an agent against "every weekday at 06:45 it scores the inbound queue"
-    produces a task about the schedule instead of the work.
+    Text on the events that fired the trigger, else a top-level text. Events
+    arrive under ``events`` or ``extracted_events`` depending on which path fired.
     """
     events = trigger_data.get("events") or trigger_data.get("extracted_events") or []
     texts = [
@@ -120,18 +113,31 @@ def resolve_task_query(trigger: Trigger, trigger_data: dict[str, Any]) -> str | 
         for event in events
         if isinstance(event, dict) and isinstance(event.get("text"), str) and event["text"].strip()
     ]
-
     if not texts:
         top_level_text = trigger_data.get("text")
         if isinstance(top_level_text, str) and top_level_text.strip():
             texts = [top_level_text]
-
-    if not texts:
-        task_text = trigger.task_parameters.get("text")
-        if isinstance(task_text, str) and task_text.strip():
-            texts = [task_text.strip()]
-
     return "\n".join(texts) if texts else None
+
+
+def resolve_task_query(trigger: Trigger, trigger_data: dict[str, Any]) -> str | None:
+    """What the agent is being asked to do, or None when nothing says.
+
+    The trigger's task text is what to do; the event is what to do it with, and
+    reaches the agent whole in the block ``compose_task_input`` appends, its own
+    text included. So a task text always wins. Only a trigger without one -- a
+    chat channel whose every message is the request -- takes the event's text
+    (see ``event_text``) as the ask.
+
+    Returns None rather than inventing an ask. The trigger's description used to
+    stand in, but it explains the automation to whoever reads the list -- running
+    an agent against "every weekday at 06:45 it scores the inbound queue"
+    produces a task about the schedule instead of the work.
+    """
+    task_text = trigger.task_parameters.get("text")
+    if isinstance(task_text, str) and task_text.strip():
+        return task_text.strip()
+    return event_text(trigger_data)
 
 
 @dataclass(frozen=True)
@@ -141,11 +147,15 @@ class TriggerTaskInput:
     ask: str
     message: str
     event_file: str | None = None
+    # The event's own text, which is all a follow-up into a running chat sends.
+    follow_up: str | None = None
 
     def stamp(self, parameters: dict[str, Any]) -> dict[str, Any]:
-        """Name the input file the run must provision, when the event did not fit inline."""
+        """Name the input file the run must provision, and what a follow-up delivers."""
         if self.event_file is not None:
             parameters[TRIGGER_EVENT_FILE_PARAMETER] = self.event_file
+        if self.follow_up is not None:
+            parameters[FOLLOW_UP_MESSAGE_PARAMETER] = self.follow_up
         return parameters
 
 
@@ -173,7 +183,12 @@ def compose_task_input(
     block = render_event_block(
         trigger_name=trigger.name, trigger_type=trigger.trigger_type.value, event=event
     )
-    return TriggerTaskInput(ask=ask, message=f"{ask}\n\n{block.text}", event_file=block.event_file)
+    return TriggerTaskInput(
+        ask=ask,
+        message=f"{ask}\n\n{block.text}",
+        event_file=block.event_file,
+        follow_up=event_text(trigger_data),
+    )
 
 
 class TriggerService:
@@ -1320,6 +1335,11 @@ class TriggerService:
                 if raise_retryable and existing.status == "failed" and not existing.execution_id:
                     # An earlier attempt stored the task but could not start it;
                     # starting it now is the retry. A failure raises and is retried.
+                    # The stored row keeps only the ask, so the message is composed
+                    # again from the same event.
+                    retried_input = compose_task_input(trigger, trigger_data, event)
+                    if retried_input is not None:
+                        existing.query = retried_input.message
                     await self.task_service.restart_undispatched_task(existing)
                     logger.info(f"Started task {task_id} for trigger {trigger_id} on retry")
                     return TriggerFiring(
@@ -1534,10 +1554,11 @@ class TriggerService:
         # Start with trigger's task parameters. A channel_origin stored there
         # predates the create/update check; only _build_channel_origin below
         # may name the trigger replies are sent through. Likewise only
-        # compose_task_input names an event file.
+        # compose_task_input names an event file or a follow-up message.
         params = dict(trigger.task_parameters)
         params.pop(CHANNEL_ORIGIN_PARAMETER, None)
         params.pop(TRIGGER_EVENT_FILE_PARAMETER, None)
+        params.pop(FOLLOW_UP_MESSAGE_PARAMETER, None)
 
         # Add trigger metadata
         params.update(
@@ -1594,6 +1615,7 @@ class TriggerService:
                     "skills",
                     "files",
                     TRIGGER_EVENT_FILE_PARAMETER,
+                    FOLLOW_UP_MESSAGE_PARAMETER,
                 }
                 for key, value in llm_params.items():
                     if key not in params and key not in resource_keys:
