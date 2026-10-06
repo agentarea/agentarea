@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.shared.exceptions import MCPError
 
 from agentarea_agents_sdk.mcp_server import create_mcp_server, mount_mcp_app
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
@@ -123,3 +124,52 @@ async def test_mount_root_is_served_without_a_redirect():
 
     assert without_slash.status_code == 200
     assert with_slash.status_code == 200
+
+
+async def _connect_and_use(mode: str):
+    server = create_mcp_server(toolsets=[_EchoToolset()], name="Test", workspace_argument=False)
+    app = _server_app(server)
+    async with server.session_manager.run():
+        async with httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=app), base_url="http://test"
+        ) as http_client:
+            async with Client(
+                streamable_http_client("http://test/", http_client=http_client), mode=mode
+            ) as client:
+                listed = await client.list_tools()
+                called = await client.call_tool("__echo_echo", {"text": "hi"})
+                return client.protocol_version, client.server_capabilities, listed, called
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("mode", "era"), [("legacy", "2025-11-25"), ("auto", "2026-07-28")])
+async def test_a_stateless_mount_advertises_no_change_notifications(mode, era):
+    """A stateless server can never push, so it must not promise subscriptions or listChanged."""
+    version, capabilities, listed, called = await _connect_and_use(mode)
+
+    assert version == era
+    assert capabilities.tools is not None
+    assert not capabilities.tools.list_changed
+    assert capabilities.resources is None or not (
+        capabilities.resources.subscribe or capabilities.resources.list_changed
+    )
+    assert capabilities.prompts is None or not capabilities.prompts.list_changed
+    assert [tool.name for tool in listed.tools] == ["__echo_echo"]
+    assert not called.is_error
+    assert called.content[0].text == "hi"
+
+
+@pytest.mark.asyncio
+async def test_a_stateless_mount_refuses_a_listen_stream():
+    server = create_mcp_server(toolsets=[_EchoToolset()], name="Test", workspace_argument=False)
+    app = _server_app(server)
+    async with server.session_manager.run():
+        async with httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=app), base_url="http://test"
+        ) as http_client:
+            async with Client(
+                streamable_http_client("http://test/", http_client=http_client)
+            ) as client:
+                with pytest.raises(MCPError):
+                    async with client.listen(tools_list_changed=True):
+                        pass

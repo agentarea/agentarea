@@ -9,9 +9,7 @@ import {
   ExternalLink,
   Github,
   Globe,
-  Key,
   KeyRound,
-  Lock,
   ShieldCheck,
   Tag,
 } from "lucide-react";
@@ -27,6 +25,10 @@ import { StartAgentButton } from "@/components/ui/start-agent-button";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import FormError from "@/components/FormError";
 import { ToolsTable } from "../../components/ToolsTable";
+import {
+  CredentialEncryptionNote,
+  CredentialFields,
+} from "../../components/CredentialFields";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import {
   checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration,
@@ -40,6 +42,11 @@ import {
   type AuthMode,
 } from "./auth-mode";
 import type { MCPServer } from "../../types";
+import {
+  parseFieldSpecs,
+  remoteHeaderFields,
+  type CredentialFieldSpec,
+} from "../../credential-fields";
 import { createMCPServerInstance } from "../../actions";
 import { getConnectionType, MCP_CONSTANTS } from "../../utils";
 import { VerifyingModal } from "../../components/VerifyingModal";
@@ -47,16 +54,6 @@ import { VerifyingModal } from "../../components/VerifyingModal";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-interface FieldSpec {
-  name: string;
-  description?: string;
-  isRequired?: boolean;
-  isSecret?: boolean;
-  default?: string;
-  placeholder?: string;
-  choices?: string[];
-}
 
 /** Shape of `POST /mcp-server-instances/validate-connection`. */
 interface ValidationResult {
@@ -79,48 +76,6 @@ function getSpec(server: MCPServer): Record<string, unknown> {
   return server.json_spec ?? {};
 }
 
-function parseFieldSpecs(value: unknown): FieldSpec[] {
-  if (!Array.isArray(value)) return [];
-
-  const fields: FieldSpec[] = [];
-  for (const candidate of value) {
-    const entry: unknown = candidate;
-    if (
-      typeof entry !== "object" ||
-      entry === null ||
-      Array.isArray(entry) ||
-      !("name" in entry) ||
-      typeof entry.name !== "string"
-    ) {
-      continue;
-    }
-
-    const field: FieldSpec = { name: entry.name };
-    if ("description" in entry && typeof entry.description === "string") {
-      field.description = entry.description;
-    }
-    if ("isRequired" in entry && typeof entry.isRequired === "boolean") {
-      field.isRequired = entry.isRequired;
-    }
-    if ("isSecret" in entry && typeof entry.isSecret === "boolean") { // pragma: allowlist secret
-      field.isSecret = entry.isSecret;
-    }
-    if ("default" in entry && typeof entry.default === "string") {
-      field.default = entry.default;
-    }
-    if ("placeholder" in entry && typeof entry.placeholder === "string") {
-      field.placeholder = entry.placeholder;
-    }
-    if ("choices" in entry && Array.isArray(entry.choices)) {
-      field.choices = entry.choices.filter(
-        (choice: unknown): choice is string => typeof choice === "string"
-      );
-    }
-    fields.push(field);
-  }
-  return fields;
-}
-
 function getIcon(server: MCPServer): string | null {
   const icons = getSpec(server).icons;
   if (!Array.isArray(icons)) return null;
@@ -137,23 +92,6 @@ function getIcon(server: MCPServer): string | null {
 function getTitle(server: MCPServer): string {
   const title = getSpec(server).title;
   return typeof title === "string" && title ? title : server.name;
-}
-
-function getRemoteHeaders(server: MCPServer): FieldSpec[] {
-  const remotes = getSpec(server).remotes;
-  if (Array.isArray(remotes)) {
-    const remote: unknown = remotes[0];
-    if (
-      typeof remote === "object" &&
-      remote !== null &&
-      !Array.isArray(remote) &&
-      "headers" in remote &&
-      Array.isArray(remote.headers)
-    ) {
-      return parseFieldSpecs(remote.headers);
-    }
-  }
-  return parseFieldSpecs(server.env_schema);
 }
 
 function getRepoUrl(server: MCPServer): string | null {
@@ -323,26 +261,17 @@ function SpecHeader({
   );
 }
 
-function EncryptionNote() {
-  const t = useTranslations("MCPServersPage.createInstance.connect");
-  return (
-    <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
-      <Lock className="h-3.5 w-3.5" />
-      {t("encryptionNote")}
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // URL-type connect form (react-hook-form)
 // ---------------------------------------------------------------------------
 
 interface UrlFormValues {
   instanceName: string;
-  fields: Record<string, string>;
+  /** By position in the shown fields: a header name may contain ".". */
+  fields: string[];
 }
 
-const DEFAULT_CREDENTIAL_FIELD: FieldSpec = {
+const DEFAULT_CREDENTIAL_FIELD: CredentialFieldSpec = {
   name: "Authorization",
   isSecret: true,
   placeholder: "Bearer your-token",
@@ -351,7 +280,7 @@ const DEFAULT_CREDENTIAL_FIELD: FieldSpec = {
 // Env vars a spec may declare for manual auth; shown as the credential inputs.
 const CREDENTIAL_ENV_NAMES = new Set(["AUTHORIZATION", "API_KEY", "TOKEN"]);
 
-function credentialFieldsFromSpec(server: MCPServer): FieldSpec[] {
+function credentialFieldsFromSpec(server: MCPServer): CredentialFieldSpec[] {
   const named = parseFieldSpecs(server.env_schema)
     .filter((field) => CREDENTIAL_ENV_NAMES.has(field.name.toUpperCase()))
     .map((field) => ({ ...field, isSecret: true }));
@@ -375,20 +304,15 @@ function apiErrorText(raw: string | null | undefined, fallback: string): string 
 function UrlConnectForm({ server }: { server: MCPServer }) {
   const router = useWorkspaceRouter();
   const t = useTranslations("MCPServersPage.createInstance.connect");
-  const remoteHeaders = getRemoteHeaders(server);
+  const remoteHeaders = remoteHeaderFields(server);
   const hasFields = remoteHeaders.length > 0;
   const endpointUrl = server.remote_url || "";
   const cachedMethods = getAuthMethods(server);
 
-  const defaultFieldValues: Record<string, string> = {};
-  for (const h of remoteHeaders) {
-    defaultFieldValues[h.name] = h.default || "";
-  }
-
   const { register, getValues, watch } = useForm<UrlFormValues>({
     defaultValues: {
       instanceName: getTitle(server),
-      fields: defaultFieldValues,
+      fields: remoteHeaders.map((h) => h.default || ""),
     },
   });
 
@@ -450,11 +374,12 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
 
   // Build headers dict from form field values
   const buildHeaders = (): Record<string, string> => {
-    const vals = getValues("fields") ?? {};
+    const vals = getValues("fields") ?? [];
     const headers: Record<string, string> = {};
-    for (const [key, val] of Object.entries(vals)) {
-      if (val?.trim()) headers[key] = val.trim();
-    }
+    activeFields.forEach((field, index) => {
+      const val = vals[index];
+      if (val?.trim()) headers[field.name] = val.trim();
+    });
     return headers;
   };
 
@@ -708,44 +633,11 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
 
         {/* Header / credential fields (spec-declared or probed) */}
         {showManualFields && !validation && (
-          <div className="mt-6 space-y-4">
-            {activeFields.map((field) => (
-              <div key={field.name} className="flex flex-col gap-2">
-                <FormLabel
-                  htmlFor={`field-${field.name}`}
-                  icon={field.isSecret ? Key : undefined}
-                  required={field.isRequired !== false}
-                >
-                  {field.name}
-                </FormLabel>
-                {field.description && (
-                  <p className="text-xs text-muted-foreground">
-                    {field.description}
-                  </p>
-                )}
-                {field.choices && field.choices.length > 0 ? (
-                  <select
-                    id={`field-${field.name}`}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                    {...register(`fields.${field.name}`)}
-                  >
-                    <option value="">Select...</option>
-                    {field.choices.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <Input
-                    id={`field-${field.name}`}
-                    type={field.isSecret ? "password" : "text"}
-                    placeholder={field.placeholder || ""}
-                    {...register(`fields.${field.name}`)}
-                  />
-                )}
-              </div>
-            ))}
+          <div className="mt-6">
+            <CredentialFields
+              fields={activeFields}
+              bind={(_, index) => register(`fields.${index}`)}
+            />
           </div>
         )}
 
@@ -798,7 +690,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
           </div>
         )}
 
-        <EncryptionNote />
+        <CredentialEncryptionNote className="mt-6" />
       </form>
     </>
   );
