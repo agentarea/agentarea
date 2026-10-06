@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypeVar
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.mcp_app_ui import is_visible_to_model
 from mcp.server.mcpserver import MCPServer
+from mcp.types import CallToolResult
 
 from agentarea_mcp.application.mcp_client import (
     connected_mcp_client,
@@ -27,6 +28,8 @@ from agentarea_mcp.verification import mcp_transport_candidates
 logger = logging.getLogger(__name__)
 
 NS_SEP = "__"
+
+_T = TypeVar("_T")
 
 _JSON_TO_PY = {
     "string": str,
@@ -194,9 +197,9 @@ class MCPAggregatorProxy:
             if is_visible_to_model(tool)
         ]
 
-    async def _call_member_tool(
+    async def _call_member_tool_result(
         self, member: AggregatedMember, tool_name: str, arguments: dict[str, Any]
-    ) -> Any:
+    ) -> CallToolResult:
         instance_id = str(member.mcp_instance_id)
         mcp_url = self.instance_urls.get(instance_id)
         if not mcp_url:
@@ -212,7 +215,12 @@ class MCPAggregatorProxy:
             verdict_store=self._era_verdict_store,
             httpx_client_factory=self._client_factory(member),
         ) as client:
-            result = await client.call_tool(tool_name, arguments)
+            return await client.call_tool(tool_name, arguments)
+
+    async def _call_member_tool(
+        self, member: AggregatedMember, tool_name: str, arguments: dict[str, Any]
+    ) -> Any:
+        result = await self._call_member_tool_result(member, tool_name, arguments)
         if result.content:
             texts = [
                 text
@@ -311,14 +319,32 @@ class MCPAggregatorProxy:
                 return (member, tool_name) if member.serves(tool_name) else None
         return None
 
+    def qualified_name(self, member: AggregatedMember, tool_name: str) -> str:
+        """The name the aggregate serves *member*'s ``tool_name`` under."""
+        return f"{self._get_namespace(member)}{NS_SEP}{tool_name}"
+
     async def call_namespaced_tool(self, namespaced_name: str, arguments: dict[str, Any]) -> Any:
         """Route a namespaced tool call to the owning member instance."""
+        return await self._route_call(namespaced_name, arguments, self._call_member_tool)
+
+    async def call_namespaced_tool_result(
+        self, namespaced_name: str, arguments: dict[str, Any]
+    ) -> CallToolResult:
+        """Route a namespaced tool call and return the member's result unflattened."""
+        return await self._route_call(namespaced_name, arguments, self._call_member_tool_result)
+
+    async def _route_call(
+        self,
+        namespaced_name: str,
+        arguments: dict[str, Any],
+        call: Callable[[AggregatedMember, str, dict[str, Any]], Awaitable[_T]],
+    ) -> _T:
         owner = self.owner_of(namespaced_name)
         if owner is None:
             raise ValueError(f"No member owns tool {namespaced_name}")
         member, tool_name = owner
         try:
-            return await self._call_member_tool(member, tool_name, arguments)
+            return await call(member, tool_name, arguments)
         except Exception:
             if self._tool_cache is not None:
                 instance_id = str(member.mcp_instance_id)
