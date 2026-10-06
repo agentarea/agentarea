@@ -11,7 +11,7 @@ import type { AuditEvent } from "./actions";
 import { auditActorIcon, auditResourceIcon, auditVerbIcon } from "./auditIcons";
 import { auditVerb, auditVerbTone } from "./format";
 
-const LINK = "truncate underline-offset-2 hover:text-primary hover:underline";
+const LINK = "truncate";
 
 /** What happened: a tinted glyph and the verb in words; the raw action on hover. */
 export function AuditAction({ action }: { action: string }) {
@@ -93,13 +93,20 @@ export function AuditActor({ event }: { event: AuditEvent }) {
   );
 }
 
-/** What it happened to: the thing's tile, its name, and its kind with a short id. */
+/**
+ * What it happened to: the thing's tile, its name, and its kind with a short
+ * id. Not a link itself: in the table the whole row leads to the resource.
+ */
 export function AuditResource({ event }: { event: AuditEvent }) {
   const resource = event.resource;
   const label = resource?.label ?? event.resource_type;
   const typeLabel = resource?.type_label ?? event.resource_type;
   const glyph = auditResourceIcon(event.resource_type) ?? Activity;
   const id = event.resource_id;
+  // The second line says only what the name does not: a resource with no
+  // name of its own is already called "<Type> <short id>", or just "<Type>".
+  const showType = !label.startsWith(typeLabel);
+  const showId = Boolean(id) && !label.includes(id?.slice(0, 8) ?? "");
 
   return (
     <span className="flex min-w-0 items-center gap-2.5">
@@ -110,30 +117,23 @@ export function AuditResource({ event }: { event: AuditEvent }) {
         aria-hidden
       />
       <span className="flex min-w-0 flex-col">
-        <span className="min-w-0 truncate text-[13px] font-medium">
-          {resource?.href ? (
-            <Link
-              href={resource.href}
-              className={LINK}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {label}
-            </Link>
-          ) : (
-            label
-          )}
+        <span
+          className="min-w-0 truncate text-[13px] font-medium"
+          title={id ?? undefined}
+        >
+          {label}
         </span>
-        <span className="truncate text-xs text-muted-foreground">
-          {typeLabel}
-          {id && (
-            <>
-              {" · "}
-              <span className="font-mono" title={id}>
-                {resource?.found ? id.slice(0, 8) : id}
+        {(showType || showId) && (
+          <span className="truncate text-xs text-muted-foreground">
+            {showType && typeLabel}
+            {showType && showId && " · "}
+            {showId && (
+              <span className="font-mono">
+                {resource?.found ? id?.slice(0, 8) : id}
               </span>
-            </>
-          )}
-        </span>
+            )}
+          </span>
+        )}
       </span>
     </span>
   );

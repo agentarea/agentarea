@@ -7,11 +7,10 @@ import { endOfDay, isBefore, startOfDay } from "date-fns";
 import {
   Boxes,
   CalendarRange,
+  CheckCheck,
   ChevronDown,
   Clock,
   ListFilter,
-  ShieldCheck,
-  SlidersHorizontal,
   Users,
   Wrench,
   X,
@@ -32,29 +31,23 @@ import {
 } from "@/hooks/useWorkspaceNavigation";
 import type { AuditActorOption } from "./actions";
 import {
-  AUDIT_ACTION_GROUPS,
+  actionsFor,
+  actionSubject,
   AUDIT_FILTER_PARAMS,
   AUDIT_PERIODS,
   AUDIT_RESOURCE_TYPES,
   isFiltered,
   parseAuditFilters,
-  type AuditActionGroup,
   type AuditFilters,
   type AuditPeriod,
 } from "./auditFilters";
 import { auditActorIcon, auditResourceIcon, auditVerbIcon } from "./auditIcons";
-import { auditVerb } from "./format";
+import { auditVerb, auditVerbTone } from "./format";
 
 const ALL = "all";
 const ICON = "h-3.5 w-3.5 text-muted-foreground";
 const icon = (glyph: LucideIcon) =>
   createElement(glyph, { className: ICON, "aria-hidden": true });
-
-const ACTION_GROUP_ICONS: Record<AuditActionGroup, LucideIcon> = {
-  toolCalls: Wrench,
-  access: ShieldCheck,
-  config: SlidersHorizontal,
-};
 
 /** The filters in the URL, and a way to change some of them. */
 function useAuditFilters() {
@@ -125,7 +118,13 @@ function ResourceFilter() {
     <ToolbarSelect
       label={t("filters.resourceType")}
       value={filters.resource ?? ALL}
-      onChange={(value) => update({ resource: value === ALL ? "" : value })}
+      onChange={(value) => {
+        const resource = value === ALL ? "" : value;
+        // An action about another kind of thing would match nothing.
+        const stale =
+          filters.action && !actionsFor(resource).includes(filters.action);
+        update(stale ? { resource, action: "" } : { resource });
+      }}
       groups={[
         [{ value: ALL, label: t("filters.allResources"), icon: icon(Boxes) }],
         AUDIT_RESOURCE_TYPES.map((type) => ({
@@ -138,31 +137,74 @@ function ResourceFilter() {
   );
 }
 
+/** The glyph of what an action is about, heading its group in the menu. */
+function subjectIcon(subject: string): LucideIcon {
+  if (subject === "tool.call") return Wrench;
+  if (subject === "approval") return CheckCheck;
+  if (subject === "access") return auditResourceIcon("access_grant") ?? Boxes;
+  return auditResourceIcon(subject) ?? Boxes;
+}
+
 function ActionFilter() {
-  const t = useTranslations("AuditLogPage.filters");
+  const t = useTranslations("AuditLogPage");
   const { filters, update } = useAuditFilters();
+
+  // The subject an action is about, as the people reading the log name it.
+  const subjectLabel = (subject: string) =>
+    subject === "tool.call"
+      ? t("actionSubjects.toolCall")
+      : subject === "approval"
+        ? t("actionSubjects.approval")
+        : subject === "access"
+          ? t("resourceTypes.access_grant")
+          : t.has(`resourceTypes.${subject}`)
+            ? t(`resourceTypes.${subject}`)
+            : subject;
+
+  const verbLabel = (action: string) => {
+    const verb = auditVerb(action);
+    return t.has(`verbs.${verb}`) ? t(`verbs.${verb}`) : verb;
+  };
+
+  // One group per subject, in the order the trail lists them; a picked
+  // resource leaves only its own.
+  const sections = new Map<string, string[]>();
+  for (const action of actionsFor(filters.resource)) {
+    const subject = actionSubject(action);
+    sections.set(subject, [...(sections.get(subject) ?? []), action]);
+  }
 
   return (
     <ToolbarSelect
-      label={t("action")}
+      collapsible
+      label={t("filters.action")}
       value={filters.action ?? ALL}
       onChange={(value) => update({ action: value === ALL ? "" : value })}
       groups={[
-        [{ value: ALL, label: t("allActions"), icon: icon(ListFilter) }],
-        ...(
-          Object.entries(AUDIT_ACTION_GROUPS) as [
-            AuditActionGroup,
-            readonly string[],
-          ][]
-        ).map(([group, actions]) =>
-          actions.map((action) => ({
+        [
+          {
+            value: ALL,
+            label: t("filters.allActions"),
+            icon: icon(ListFilter),
+          },
+        ],
+        ...[...sections].map(([subject, actions]) => ({
+          label: subjectLabel(subject),
+          icon: icon(subjectIcon(subject)),
+          options: actions.map((action) => ({
             value: action,
-            label: <span className="font-mono text-[12px]">{action}</span>,
-            icon: icon(
-              auditVerbIcon(auditVerb(action)) ?? ACTION_GROUP_ICONS[group]
+            label: verbLabel(action),
+            triggerLabel: `${subjectLabel(subject)} · ${verbLabel(action)}`,
+            icon: createElement(
+              auditVerbIcon(auditVerb(action)) ?? ListFilter,
+              {
+                className: "h-3.5 w-3.5",
+                style: { color: auditVerbTone(action) },
+                "aria-hidden": true,
+              }
             ),
-          }))
-        ),
+          })),
+        })),
       ]}
     />
   );

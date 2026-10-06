@@ -64,7 +64,39 @@ export const AUDIT_ACTION_GROUPS = {
   ],
 } as const;
 
-export type AuditActionGroup = keyof typeof AUDIT_ACTION_GROUPS;
+const ALL_AUDIT_ACTIONS: readonly string[] =
+  Object.values(AUDIT_ACTION_GROUPS).flat();
+
+/** What an action is about: `secret.rotate` → `secret`, `tool.call.denied` → `tool.call`. */
+export const actionSubject = (action: string) =>
+  action.slice(0, action.lastIndexOf("."));
+
+/** The action subject recorded for events about each resource type. */
+const RESOURCE_ACTION_SUBJECT: Record<string, string> = {
+  secret: "secret",
+  api_key: "api_key",
+  member: "member",
+  invitation: "member",
+  access_grant: "access",
+  governance_policy: "governance_policy",
+  agent: "agent",
+  skill: "skill",
+  trigger: "trigger",
+  mcp_server: "mcp_server",
+  mcp_instance: "mcp_instance",
+  task: "task",
+};
+
+/**
+ * The actions worth offering once a resource type is picked: only those about
+ * it. With no resource, or one no action names, every action.
+ */
+export function actionsFor(resource?: string): readonly string[] {
+  const subject = resource ? RESOURCE_ACTION_SUBJECT[resource] : undefined;
+  return subject
+    ? ALL_AUDIT_ACTIONS.filter((action) => actionSubject(action) === subject)
+    : ALL_AUDIT_ACTIONS;
+}
 
 /** Relative periods; the same span in every timezone. */
 export const AUDIT_PERIODS = {
@@ -101,9 +133,6 @@ export const AUDIT_FILTER_PARAMS = [
 
 type Params = URLSearchParams | Record<string, string | string[] | undefined>;
 
-const ALL_ACTIONS: readonly string[] =
-  Object.values(AUDIT_ACTION_GROUPS).flat();
-
 function read(params: Params, name: string): string | undefined {
   const value =
     params instanceof URLSearchParams ? params.get(name) : params[name];
@@ -126,7 +155,7 @@ export function parseAuditFilters(params: Params): AuditFilters {
     )
       ? resource
       : undefined,
-    action: ALL_ACTIONS.includes(action ?? "") ? action : undefined,
+    action: ALL_AUDIT_ACTIONS.includes(action ?? "") ? action : undefined,
     actor: read(params, "actor"),
     period:
       period && Object.hasOwn(AUDIT_PERIODS, period)

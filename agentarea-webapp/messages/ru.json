@@ -2360,11 +2360,6 @@
       "pickStart": "Выберите первый день периода",
       "pickEnd": "С {date} — теперь выберите последний день"
     },
-    "actionGroups": {
-      "toolCalls": "Вызовы инструментов и согласования",
-      "access": "Доступ и учётные данные",
-      "config": "Конфигурация"
-    },
     "resourceTypes": {
       "task": "Задачи",
       "agent": "Агенты",
@@ -2410,7 +2405,13 @@
       "approval_required": "Ждёт одобрения",
       "approved": "Одобрено"
     },
-    "you": "Вы"
+    "you": "Вы",
+    "showChanges": "Показать изменения",
+    "hideChanges": "Скрыть изменения",
+    "actionSubjects": {
+      "toolCall": "Вызовы инструментов",
+      "approval": "Согласования"
+    }
   },
   "AuthConsent": {
     "title": "Разрешить доступ для {clientName}",

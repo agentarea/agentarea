@@ -3,8 +3,8 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Download, Loader2 } from "lucide-react";
+import { ToolbarButton } from "@/components/ui/toolbar";
 import { cn } from "@/lib/utils";
 import { exportAuditLogs } from "./actions";
 import { auditEventsToCsv } from "./auditCsv";
@@ -59,16 +59,14 @@ export default function AuditExportButton() {
           {notice.text}
         </span>
       )}
-      <Button
-        variant="outline"
-        size="xs"
-        className="shrink-0"
-        isLoading={exporting}
-        onClick={exportCsv}
-      >
-        {!exporting && <Download />}
+      <ToolbarButton disabled={exporting} onClick={exportCsv}>
+        {exporting ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+        ) : (
+          <Download className="h-3.5 w-3.5 text-muted-foreground" />
+        )}
         {exporting ? t("working") : t("button")}
-      </Button>
+      </ToolbarButton>
     </div>
   );
 }

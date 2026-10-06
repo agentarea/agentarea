@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  actionsFor,
   auditFiltersKey,
   auditQuery,
   isFiltered,
@@ -76,5 +77,25 @@ describe("isFiltered / auditFiltersKey", () => {
     expect(isFiltered({})).toBe(false);
     expect(isFiltered({ actor: "user-1" })).toBe(true);
     expect(auditFiltersKey({ actor: "user-1" })).not.toBe(auditFiltersKey({}));
+  });
+});
+
+describe("actionsFor", () => {
+  it("offers only the actions about the picked resource", () => {
+    expect(actionsFor("secret")).toEqual([
+      "secret.create",
+      "secret.update",
+      "secret.rotate",
+      "secret.delete",
+    ]);
+    expect(actionsFor("access_grant")).toEqual([
+      "access.grant",
+      "access.revoke",
+    ]);
+  });
+
+  it("offers everything when the resource narrows nothing", () => {
+    expect(actionsFor().length).toBe(actionsFor("client").length);
+    expect(actionsFor().length).toBeGreaterThan(30);
   });
 });

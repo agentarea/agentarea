@@ -130,8 +130,23 @@ export default function AuditLogClient({
       cellClassName: "w-6 pr-0",
       render: (_: unknown, event: AuditEvent) => {
         if (!event.changes?.length) return null;
-        const Chevron = expandedId === event.id ? ChevronDown : ChevronRight;
-        return <Chevron className="h-3.5 w-3.5 text-muted-foreground/70" />;
+        const expanded = expandedId === event.id;
+        const Chevron = expanded ? ChevronDown : ChevronRight;
+        // Its own control: a click on the rest of the row opens the resource.
+        return (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-label={t(expanded ? "hideChanges" : "showChanges")}
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpandedId(expanded ? null : event.id);
+            }}
+            className="-m-1 grid h-6 w-6 place-items-center rounded text-muted-foreground/70 hover:bg-muted hover:text-foreground"
+          >
+            <Chevron className="h-3.5 w-3.5" />
+          </button>
+        );
       },
     },
     {
@@ -143,6 +158,7 @@ export default function AuditLogClient({
     {
       accessor: "resource",
       header: t("table.resource"),
+      rowLink: true,
       render: (_: unknown, event: AuditEvent) => (
         <ResourceCell event={event} expanded={expandedId === event.id} />
       ),
@@ -182,16 +198,10 @@ export default function AuditLogClient({
         />
       ) : (
         <Table
-          data={events.map((event) => ({
-            ...event,
-            // Only a row with changes opens, so only that row says it can.
-            className: event.changes?.length ? undefined : "cursor-default",
-          }))}
+          data={events}
           columns={columns}
-          onRowClick={(event: AuditEvent) => {
-            if (!event.changes?.length) return;
-            setExpandedId(expandedId === event.id ? null : event.id);
-          }}
+          // A row leads to its resource, like a row in any other table.
+          rowHref={(event: AuditEvent) => event.resource?.href ?? ""}
         />
       )}
 

@@ -2360,11 +2360,6 @@
       "pickStart": "Pick the first day of a range",
       "pickEnd": "From {date} — now pick the last day"
     },
-    "actionGroups": {
-      "toolCalls": "Tool calls and approvals",
-      "access": "Access and credentials",
-      "config": "Configuration"
-    },
     "resourceTypes": {
       "task": "Tasks",
       "agent": "Agents",
@@ -2410,7 +2405,13 @@
       "approval_required": "Needs approval",
       "approved": "Approved"
     },
-    "you": "You"
+    "you": "You",
+    "showChanges": "Show changes",
+    "hideChanges": "Hide changes",
+    "actionSubjects": {
+      "toolCall": "Tool calls",
+      "approval": "Approvals"
+    }
   },
   "AuthConsent": {
     "title": "Authorize {clientName}",
