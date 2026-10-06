@@ -916,19 +916,14 @@ function MoneyField({
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-          {currencySymbol}
-        </span>
-        <Input
-          id={id}
-          inputMode="decimal"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={t("budget.moneyPlaceholder")}
-          className="pl-6"
-        />
-      </div>
+      <Input
+        id={id}
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={t("budget.moneyPlaceholder")}
+        leading={currencySymbol}
+      />
     </div>
   );
 }

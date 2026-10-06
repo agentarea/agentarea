@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "@ory/elements-react/client";
+import { displayName } from "@/lib/display-name";
 
 interface User {
   id: string;
@@ -22,9 +23,7 @@ export function useAuth(): AuthState {
   const user = session?.identity
     ? {
         id: session.identity.id,
-        name: session.identity.traits?.name?.first
-          ? `${session.identity.traits.name.first} ${session.identity.traits.name.last || ""}`.trim()
-          : session.identity.traits?.username || session.identity.traits?.email,
+        name: displayName(session.identity.traits),
         email: session.identity.traits?.email,
       }
     : null;

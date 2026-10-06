@@ -127,7 +127,9 @@
     "scrollToLatestMessage": "Scroll to latest message",
     "previousPage": "Previous",
     "nextPage": "Next",
-    "pageNumber": "Page {page}"
+    "pageNumber": "Page {page}",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -418,45 +420,61 @@
   },
   "SettingsPage": {
     "title": "Settings",
-    "description": "Manage your settings and preferences",
     "logout": "Logout",
-    "authProviderManaged": "Auth Provider Managed",
-    "noUserData": "No user data available",
     "profile": {
       "title": "Profile",
-      "description": "Update your personal information",
-      "name": "Full Name",
-      "email": "Email Address",
-      "save": "Save Changes",
-      "accountInfoManaged": "Account information is managed by your authentication provider and cannot be edited here."
+      "email": "Email",
+      "personalInfo": "Personal info",
+      "emailHint": "Used to sign in. Can't be changed here.",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "username": "Username",
+      "saved": "All changes saved",
+      "unsaved": "Unsaved changes",
+      "discard": "Discard"
     },
     "preferences": {
       "title": "Preferences",
-      "description": "Customize your experience",
       "language": "Language",
-      "languageDescription": "Select your preferred language",
-      "switchLanguage": "Switch Language",
+      "languageDescription": "Interface language.",
       "theme": "Theme",
-      "themeDescription": "Change the theme of the application"
+      "themeDescription": "Applies to this device."
     },
     "workspace": {
       "title": "Workspace",
-      "description": "Administer this workspace",
+      "description": "Settings for the {name} workspace, shared with all members.",
       "exportTitle": "Export workspace",
       "exportDescription": "Download agents, MCP connections, skills and triggers as a bundle YAML you can import into another workspace. Credentials are replaced by setup fields the importer fills in.",
       "export": "Export",
       "exportFailed": "Could not export the workspace",
       "logoTitle": "Logo",
-      "logoDescription": "Shown in the workspace switcher for everyone in this workspace. PNG, JPEG or WebP, up to 1 MB.",
+      "logoDescription": "Shown in the workspace switcher for everyone.",
       "logoUpload": "Upload logo",
       "logoRemove": "Remove",
       "logoTooLarge": "The logo must be at most 1 MB",
       "logoUploadFailed": "Could not upload the logo",
-      "logoRemoveFailed": "Could not remove the logo"
+      "logoRemoveFailed": "Could not remove the logo",
+      "logoDrop": "Drop an image or <browse>browse</browse>",
+      "logoFormats": "PNG, JPEG or WebP · up to 1 MB · square works best",
+      "logoUnsupported": "Unsupported format — use PNG, JPEG or WebP."
     },
-    "subscription": {
-      "title": "Subscription",
-      "description": "Manage your subscription and billing"
+    "security": {
+      "title": "Security",
+      "password": "Password",
+      "passwordDescription": "Set a new password for signing in with email.",
+      "changePassword": "Change password",
+      "newPassword": "New password",
+      "passwordHint": "At least {count} characters.",
+      "passwordMissing": "{count, plural, one {# more character needed.} other {# more characters needed.}}",
+      "updatePassword": "Update password"
+    },
+    "accounts": {
+      "title": "Connected accounts",
+      "description": "Linked providers can be used to sign in to your account.",
+      "connected": "Connected",
+      "notConnected": "Not connected",
+      "connect": "Connect",
+      "disconnect": "Disconnect"
     }
   },
   "AgentPaymentsPage": {
