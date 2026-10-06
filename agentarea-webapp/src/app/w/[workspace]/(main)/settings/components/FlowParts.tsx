@@ -5,6 +5,7 @@ import { useComponents, useOryFlow } from "@ory/elements-react";
 import { useFormContext } from "react-hook-form";
 import FormError from "@/components/FormError";
 import { Button, type ButtonProps } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { errorsOf } from "./oryNodes";
 
 /** A Kratos message in the UI language, with its `ory/message/<id>` test id. */
@@ -13,11 +14,21 @@ export function OryText({ message }: { message: UiText }) {
   return <Message.Content message={message} />;
 }
 
-/** Errors Kratos raised for the whole flow rather than for one field. */
-export function FlowErrors() {
+/**
+ * What Kratos says about the whole flow: its errors, or the success line after
+ * a save ("Your changes have been saved!"). A save reloads the page through
+ * Kratos' `continue_with` redirect, which lands at the top, so this is where
+ * the outcome has to be.
+ */
+export function FlowMessages() {
   const { flow } = useOryFlow();
-  const errors = errorsOf(flow.ui.messages);
-  if (errors.length === 0) return null;
+  const messages = flow.ui.messages ?? [];
+  const errors = errorsOf(messages);
+  const success =
+    errors.length === 0 && flow.state === "success"
+      ? messages.filter((message) => message.type !== "error")
+      : [];
+  if (errors.length === 0 && success.length === 0) return null;
 
   return (
     <div className="space-y-2">
@@ -26,24 +37,17 @@ export function FlowErrors() {
           <OryText message={message} />
         </FormError>
       ))}
+      {success.map((message, index) => (
+        <div
+          key={`${message.id}-${index}`}
+          role="status"
+          className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm"
+        >
+          <StatusIndicator kind="done" />
+          <OryText message={message} />
+        </div>
+      ))}
     </div>
-  );
-}
-
-/** Kratos' own success line, e.g. "Your changes have been saved!". */
-export function FlowSuccess() {
-  const { flow } = useOryFlow();
-
-  return (
-    <>
-      {(flow.ui.messages ?? [])
-        .filter((message) => message.type !== "error")
-        .map((message, index) => (
-          <span key={`${message.id}-${index}`} role="status">
-            <OryText message={message} />
-          </span>
-        ))}
-    </>
   );
 }
 

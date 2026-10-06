@@ -7,8 +7,8 @@ import { useOryFlow } from "@ory/elements-react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
-import { FieldErrors, FlowSuccess, MethodSubmit } from "./FlowParts";
-import { errorsOf, findInput, submitAccepted } from "./oryNodes";
+import { FieldErrors, MethodSubmit } from "./FlowParts";
+import { accepted, errorsOf, findInput } from "./oryNodes";
 import SettingsRow from "./SettingsRow";
 import { SettingsFooter, SettingsSection } from "./SettingsSection";
 
@@ -18,31 +18,28 @@ const MIN_PASSWORD_LENGTH = 8;
 export default function PasswordSection({ nodes }: { nodes: UiNode[] }) {
   const t = useTranslations("SettingsPage.security");
   const { flow } = useOryFlow();
-  const {
-    reset,
-    formState: { isSubmitSuccessful },
-  } = useFormContext();
-  const [open, setOpen] = useState(false);
-  const updated = isSubmitSuccessful && submitAccepted(flow, nodes);
-  // The editor folds away once Kratos has taken the new password.
-  const editing = open && !updated;
+  const { reset } = useFormContext();
+  // The flow the editor was opened on. A newer flow in which Kratos took the
+  // password folds the editor away.
+  const [openedOn, setOpenedOn] = useState<typeof flow | null>(null);
+  const updated = accepted(flow, nodes);
+  const editing = openedOn !== null && !(updated && flow !== openedOn);
 
-  // `reset` also clears the last submit, so a new attempt starts unflagged.
-  const toggle = (next: boolean) => {
+  const close = () => {
     reset();
-    setOpen(next);
+    setOpenedOn(null);
   };
 
   return (
     <SettingsSection title={t("title")}>
       <SettingsRow
         title={t("password")}
-        description={updated ? <FlowSuccess /> : t("passwordDescription")}
+        description={t("passwordDescription")}
         below={
           editing && (
             <PasswordField
               messages={findInput(nodes, "password")?.messages}
-              onCancel={() => toggle(false)}
+              onCancel={close}
             />
           )
         }
@@ -52,13 +49,13 @@ export default function PasswordSection({ nodes }: { nodes: UiNode[] }) {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => toggle(true)}
+            onClick={() => setOpenedOn(flow)}
           >
             {t("changePassword")}
           </Button>
         )}
       </SettingsRow>
-      {editing && <PasswordFooter onCancel={() => toggle(false)} />}
+      {editing && <PasswordFooter onCancel={close} />}
     </SettingsSection>
   );
 }

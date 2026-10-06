@@ -7,7 +7,6 @@ import {
   UiNodeGroupEnum,
   type UiNode,
 } from "@ory/client-fetch";
-import { useOryFlow } from "@ory/elements-react";
 import { Lock } from "lucide-react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { Button } from "@/components/ui/button";
@@ -15,8 +14,8 @@ import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
 import { Input } from "@/components/ui/input";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { displayName } from "@/lib/display-name";
-import { FieldErrors, FlowSuccess, MethodSubmit, OryText } from "./FlowParts";
-import { errorsOf, fieldNodes, submitAccepted } from "./oryNodes";
+import { FieldErrors, MethodSubmit, OryText } from "./FlowParts";
+import { errorsOf, fieldNodes } from "./oryNodes";
 import SettingsRow from "./SettingsRow";
 import { SettingsFooter, SettingsSection } from "./SettingsSection";
 
@@ -43,13 +42,11 @@ const FIELD_CLASS =
 export default function ProfileSection({ nodes }: { nodes: UiNode[] }) {
   const t = useTranslations("SettingsPage.profile");
   const tCommon = useTranslations("Common");
-  const { flow } = useOryFlow();
   const {
     register,
     reset,
-    formState: { isDirty, isSubmitting, isSubmitSuccessful },
+    formState: { isDirty, isSubmitting },
   } = useFormContext();
-  const saved = isSubmitSuccessful && submitAccepted(flow, nodes);
 
   return (
     <SettingsSection title={t("personalInfo")}>
@@ -96,8 +93,6 @@ export default function ProfileSection({ nodes }: { nodes: UiNode[] }) {
         status={
           isDirty ? (
             <span className="font-medium text-foreground">{t("unsaved")}</span>
-          ) : saved ? (
-            <FlowSuccess />
           ) : (
             t("saved")
           )

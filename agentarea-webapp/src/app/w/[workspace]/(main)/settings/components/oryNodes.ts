@@ -28,16 +28,16 @@ export const errorsOf = (messages: UiText[] | undefined) =>
   (messages ?? []).filter((message) => message.type === "error");
 
 /**
- * Kratos took the section's last submit: the flow it answered with is in the
- * success state and flags neither the flow nor the section's own nodes.
+ * Kratos took the last submit: the flow is in the success state and flags
+ * neither itself nor the given nodes.
  */
-export const submitAccepted = (
+export const accepted = (
   flow: { state: unknown; ui: { messages?: UiText[] } },
-  sectionNodes: UiNode[]
+  nodes: UiNode[]
 ) =>
   flow.state === "success" &&
   errorsOf(flow.ui.messages).length === 0 &&
-  sectionNodes.every((node) => errorsOf(node.messages).length === 0);
+  nodes.every((node) => errorsOf(node.messages).length === 0);
 
 /**
  * The sign-in providers of the settings flow. Kratos offers one as a `link`

@@ -16,7 +16,7 @@ import {
 import { useSession } from "@ory/elements-react/client";
 import { Settings } from "@ory/elements-react/theme";
 import ConnectedAccountsSection from "./ConnectedAccountsSection";
-import { FlowErrors } from "./FlowParts";
+import { FlowMessages } from "./FlowParts";
 import { groupNodes, hiddenNodes } from "./oryNodes";
 import PasswordSection from "./PasswordSection";
 import ProfileSection from "./ProfileSection";
@@ -67,7 +67,7 @@ function AccountSections() {
 
   return (
     <>
-      <FlowErrors />
+      <FlowMessages />
       {SECTIONS.map(([group, Section]) => {
         const nodes = groupNodes(flow.ui.nodes, group);
         if (nodes.length === 0) return null;
