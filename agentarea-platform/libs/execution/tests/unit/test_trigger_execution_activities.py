@@ -612,6 +612,44 @@ class TestTriggerExecutionActivities:
             mock_task_service.route_or_submit_task.assert_called_once()
 
     @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
+    async def test_polled_events_are_told_to_the_agent_like_any_other_event(
+        self, mock_get_database, trigger_activities, sample_trigger, mock_database_session
+    ):
+        mock_database = MagicMock()
+        mock_database.async_session_factory.return_value = mock_database_session
+        mock_get_database.return_value = mock_database
+
+        with (
+            patch("agentarea_triggers.infrastructure.repository.TriggerRepository"),
+            patch("agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"),
+            patch(
+                "agentarea_triggers.trigger_service.TriggerService"
+            ) as mock_trigger_service_class,
+            patch("agentarea_tasks.infrastructure.repository.TaskRepository"),
+            patch("agentarea_tasks.task_service.TaskService") as mock_task_service_class,
+        ):
+            mock_trigger_service = AsyncMock()
+            mock_task_service = AsyncMock()
+            mock_trigger_service_class.return_value = mock_trigger_service
+            mock_task_service_class.return_value = mock_task_service
+            mock_trigger_service.get_trigger.return_value = sample_trigger
+            mock_trigger_service._build_task_parameters.return_value = {}
+            mock_task_service.route_or_submit_task.return_value = MagicMock(id=uuid4())
+
+            execution_data = {"extracted_events": [{"subject": "Invoice 77", "from": "a@b.c"}]}
+            await trigger_activities[3](
+                CreateTaskFromTriggerRequest(
+                    trigger_id=sample_trigger.id, execution_data=execution_data
+                )
+            )
+
+            task = mock_task_service.route_or_submit_task.call_args.args[0]
+            assert task.description == "Run the daily check"
+            assert task.query.startswith("Run the daily check\n\n## What started this run")
+            assert "- Trigger: Test Trigger (cron)" in task.query
+            assert '"subject": "Invoice 77"' in task.query
+
+    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
     async def test_create_task_from_trigger_activity_trigger_not_found(
         self, mock_get_database, trigger_activities, mock_database_session
     ):

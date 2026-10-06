@@ -98,6 +98,17 @@ the verdict. The point is filtering noise without writing a parser per provider;
 the cost is a model call per candidate event, which the [Limits](#limits)
 section revisits.
 
+**The agent is told what started it.** A task's message is the ask — the text
+an incoming message carried, otherwise the trigger's task text — followed by
+one block, the same for every source: the trigger's name and type, the stream,
+the event's kind, key, received time (UTC) and stream sequence, then the
+event's data as JSON. The data is what the stream recorded, with credential
+headers and query parameters already removed. Data over 16 KiB is never cut:
+the block names a task input file, `inputs/attachments/trigger-event-<sequence>.json`,
+which the run writes into the task's own workspace before the agent starts,
+never into the workspace's shared files. A schedule tick carries no event, so
+its message is the task text alone.
+
 **Every attempt is recorded, whether or not it produced a task.**
 `TriggerExecution` stores `status` (`success`, `failed`, `timeout`,
 `cancelled`), the `task_id` if one was created, `execution_time_ms`, the error,

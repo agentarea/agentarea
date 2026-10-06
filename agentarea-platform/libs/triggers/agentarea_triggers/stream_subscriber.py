@@ -21,6 +21,7 @@ from agentarea_streams.domain.keys import task_id_for
 from agentarea_streams.infrastructure.repository import SubscriptionOutcomeRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .event_context import TriggerEvent
 from .llm_condition_evaluator import build_condition_evaluator
 from .trigger_service import TriggerService
 
@@ -196,9 +197,11 @@ class TriggerSubscriptionHandler:
                     f"{trigger.agent_id}; the trigger needs a new owner"
                 ),
             )
+        stream = await service.stream_service.get_stream(event.stream_id)
         firing = await service.fire(
             trigger.id,
             event.data,
+            event=TriggerEvent.from_journaled(event, stream_name=stream.name),
             task_id=task_id_for(subscription.id, event.sequence),
             provenance=TaskProvenance(
                 origin_type="trigger",

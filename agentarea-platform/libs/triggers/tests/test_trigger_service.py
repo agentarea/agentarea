@@ -1240,7 +1240,8 @@ class TestTriggerService:
         )
 
         task = mock_task_service.route_or_submit_task.call_args.args[0]
-        assert task.query == "PR #12 was opened"
+        assert task.description == "PR #12 was opened"
+        assert task.query.startswith("PR #12 was opened\n\n## What started this run")
 
     @pytest.mark.asyncio
     async def test_a_manual_run_of_a_trigger_with_nothing_to_say_reports_why(

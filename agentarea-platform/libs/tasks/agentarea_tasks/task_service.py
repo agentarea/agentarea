@@ -18,6 +18,7 @@ from agentarea_common.events.broker import EventBroker
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.money import Money, serialize_money, to_money
 from agentarea_common.ports.policy_resolver import PolicyResolverPort
+from agentarea_common.trigger_event_file import TRIGGER_EVENT_FILE_PARAMETER
 from agentarea_execution.models import AgentExecutionResume, ConversationResumeSnapshot
 from agentarea_governance.domain.policies import (
     ApprovalPolicy,
@@ -600,6 +601,10 @@ class TaskService(BaseTaskService):
 
         task_repository = self.repository_factory.create_repository(TaskRepository)
         candidates = await task_repository.find_active_by_agent_and_chat(task.agent_id, chat_id)
+
+        # An event too large to quote is a file only a new run provisions.
+        if (task.task_parameters or {}).get(TRIGGER_EVENT_FILE_PARAMETER) is not None:
+            return None
 
         message_text = task.query or task.description
         incoming_resources = _task_resource_selection_key(task.task_parameters)

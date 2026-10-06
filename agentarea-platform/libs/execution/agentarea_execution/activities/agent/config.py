@@ -219,6 +219,66 @@ async def _prepare_task_files(
     return descriptors
 
 
+async def _prepare_trigger_event_file(
+    request: AgentConfigRequest, user_context: UserContext
+) -> list[dict[str, Any]]:
+    """Write the event a trigger fired on into this run's inputs, when it was too large to quote."""
+    from agentarea_common.artifacts import (
+        ArtifactActor,
+        DbArtifactEventRecorder,
+        WorkspaceRepository,
+    )
+    from agentarea_common.trigger_event_file import (
+        TRIGGER_DATA_PARAMETER,
+        TRIGGER_EVENT_FILE_CONTENT_TYPE,
+        TRIGGER_EVENT_FILE_PARAMETER,
+        event_data_json,
+        is_trigger_event_file_name,
+        trigger_event_file_path,
+    )
+
+    filename = request.task_parameters.get(TRIGGER_EVENT_FILE_PARAMETER)
+    if filename is None:
+        return []
+    data = request.task_parameters.get(TRIGGER_DATA_PARAMETER)
+    if not is_trigger_event_file_name(filename) or request.task_id is None:
+        raise ApplicationError("Invalid trigger event file", non_retryable=True)
+    if not isinstance(data, dict):
+        raise ApplicationError(
+            "Trigger event file named without the trigger data to fill it", non_retryable=True
+        )
+
+    workspace_id = user_context.workspace_id
+    task_id = str(request.task_id)
+    target = trigger_event_file_path(filename)
+    repository = WorkspaceRepository(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    )
+    try:
+        # An activity retry finds the file its first attempt committed.
+        content, _ = await repository.get(workspace_id, task_id, target)
+    except FileNotFoundError:
+        content = event_data_json(data).encode()
+        await repository.put_files(
+            workspace_id,
+            task_id,
+            {target: content},
+            content_types={target: TRIGGER_EVENT_FILE_CONTENT_TYPE},
+            provenance={"source": "trigger_event"},
+            owner=f"task-inputs-{task_id}",
+        )
+    return [
+        {
+            "relative_path": target,
+            "filename": filename,
+            "size": len(content),
+            "content_type": TRIGGER_EVENT_FILE_CONTENT_TYPE,
+            "sha256": hashlib.sha256(content).hexdigest(),
+        }
+    ]
+
+
 async def _record_task_config_hash(ctx: Any, task_id: UUID, config_hash: str) -> None:
     """Stamp the run with the hash of the agent config it resolved.
 
@@ -339,7 +399,10 @@ def make_config_activities(
                 await _record_task_config_hash(ctx, request.task_id, config_hash)
 
             execution_context = deepcopy(request.execution_context)
-            attachments = await _prepare_task_files(request, user_context)
+            attachments = [
+                *await _prepare_task_files(request, user_context),
+                *await _prepare_trigger_event_file(request, user_context),
+            ]
             if attachments:
                 execution_context = execution_context or {}
                 execution_context["workspace_attachments"] = [

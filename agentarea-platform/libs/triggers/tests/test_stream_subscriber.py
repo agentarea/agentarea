@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -56,6 +57,12 @@ def _trigger(**kw):
     )
 
 
+def _service():
+    service = MagicMock()
+    service.stream_service.get_stream = AsyncMock(return_value=SimpleNamespace(name="orders"))
+    return service
+
+
 class _Claim:
     def __init__(self, delivered_to=None):
         self._delivered_to = delivered_to
@@ -80,7 +87,7 @@ def _handler(service, may_run=True, claim=None):
 
 async def test_a_follow_up_already_routed_for_this_event_is_not_fired_again():
     trigger = _trigger()
-    service = MagicMock()
+    service = _service()
     service.get_trigger = AsyncMock(return_value=trigger)
     service.fire = AsyncMock()
     running = uuid4()
@@ -93,7 +100,7 @@ async def test_a_follow_up_already_routed_for_this_event_is_not_fired_again():
 
 async def test_the_stream_path_fires_with_the_claim_and_retries_what_is_not_permanent():
     trigger = _trigger()
-    service = MagicMock()
+    service = _service()
     service.get_trigger = AsyncMock(return_value=trigger)
     service.fire = AsyncMock(return_value=TriggerFiring(outcome="reacted", task_id=uuid4()))
     claim = _Claim()
@@ -105,7 +112,7 @@ async def test_the_stream_path_fires_with_the_claim_and_retries_what_is_not_perm
 
 async def test_a_firing_that_raises_leaves_no_outcome_for_the_dispatcher_to_record():
     trigger = _trigger()
-    service = MagicMock()
+    service = _service()
     service.get_trigger = AsyncMock(return_value=trigger)
     service.fire = AsyncMock(side_effect=ConnectionResetError("temporal went away"))
     with pytest.raises(ConnectionResetError):
@@ -114,7 +121,7 @@ async def test_a_firing_that_raises_leaves_no_outcome_for_the_dispatcher_to_reco
 
 async def test_a_reaction_records_the_task_and_the_verdict_score():
     trigger = _trigger()
-    service = MagicMock()
+    service = _service()
     service.get_trigger = AsyncMock(return_value=trigger)
     task = uuid4()
     service.fire = AsyncMock(
@@ -132,11 +139,19 @@ async def test_a_reaction_records_the_task_and_the_verdict_score():
     assert kwargs["task_id"] == task_id_for(sub.id, event.sequence)
     assert kwargs["provenance"].causation_id == str(event.id)
     assert kwargs["provenance"].origin_id == str(trigger.id)
+    told = kwargs["event"]
+    assert (told.stream_name, told.kind, told.key, told.sequence) == (
+        "orders",
+        "push",
+        "k",
+        event.sequence,
+    )
+    assert told.data == service.fire.await_args.args[1] == event.data
 
 
 async def test_a_configurer_who_lost_access_stops_the_trigger():
     trigger = _trigger()
-    service = MagicMock()
+    service = _service()
     service.get_trigger = AsyncMock(return_value=trigger)
     service.fire = AsyncMock()
     service.trigger_repository.mark_needs_new_owner = AsyncMock(return_value=True)
@@ -149,7 +164,7 @@ async def test_a_configurer_who_lost_access_stops_the_trigger():
 
 async def test_a_stop_that_updated_no_row_is_not_reported_as_a_stop():
     trigger = _trigger()
-    service = MagicMock()
+    service = _service()
     service.get_trigger = AsyncMock(return_value=trigger)
     service.fire = AsyncMock()
     service.trigger_repository.mark_needs_new_owner = AsyncMock(return_value=False)
@@ -160,7 +175,7 @@ async def test_a_stop_that_updated_no_row_is_not_reported_as_a_stop():
 
 async def test_an_inactive_trigger_is_skipped_without_firing():
     trigger = _trigger(is_active=False)
-    service = MagicMock()
+    service = _service()
     service.get_trigger = AsyncMock(return_value=trigger)
     service.fire = AsyncMock()
     result = await _handler(service).handle(_sub(trigger.id), _event(), AsyncMock())

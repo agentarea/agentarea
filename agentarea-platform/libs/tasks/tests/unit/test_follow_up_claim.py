@@ -128,3 +128,18 @@ async def test_a_signal_that_did_not_go_out_withdraws_its_claim():
     )
     assert routed.status == "routed"
     assert len(executor.signals) == 2
+
+
+async def test_a_message_whose_event_needs_a_file_starts_its_own_run():
+    running = _running_task()
+    executor = _Executor([True])
+    service = _service(running, executor)
+    delivery = _delivery(running, uuid4())
+    delivery.task_parameters = {
+        **delivery.task_parameters,
+        "trigger_data": {"text": "hello again"},
+        "trigger_event_file": "trigger-event-3.json",
+    }
+
+    assert await service._try_route_to_active_workflow(delivery, "c-1") is None
+    assert executor.signals == []

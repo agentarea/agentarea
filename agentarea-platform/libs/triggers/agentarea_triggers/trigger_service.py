@@ -10,7 +10,8 @@ High-level service that orchestrates trigger management by:
 """
 
 import time
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
@@ -19,6 +20,7 @@ from agentarea_common.channel_origin import CHANNEL_ORIGIN_PARAMETER
 from agentarea_common.config import get_settings
 from agentarea_common.events.base_events import EventEnvelope
 from agentarea_common.events.broker import EventBroker
+from agentarea_common.trigger_event_file import TRIGGER_EVENT_FILE_PARAMETER
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import EventFilter, StreamNameTakenError, StreamNotFoundError
 from agentarea_streams.infrastructure.repository import find_webhook_source
@@ -36,6 +38,7 @@ from .domain.models import (
     TriggerUpdate,
     WebhookTrigger,
 )
+from .event_context import TriggerEvent, render_event_block
 from .failures import TaskNotStartedError, is_permanent
 from .infrastructure.repository import TriggerExecutionRepository, TriggerRepository
 from .llm_condition_evaluator import (
@@ -129,6 +132,48 @@ def resolve_task_query(trigger: Trigger, trigger_data: dict[str, Any]) -> str | 
             texts = [task_text.strip()]
 
     return "\n".join(texts) if texts else None
+
+
+@dataclass(frozen=True)
+class TriggerTaskInput:
+    """What a trigger's task asks, and the message that tells the agent what started it."""
+
+    ask: str
+    message: str
+    event_file: str | None = None
+
+    def stamp(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        """Name the input file the run must provision, when the event did not fit inline."""
+        if self.event_file is not None:
+            parameters[TRIGGER_EVENT_FILE_PARAMETER] = self.event_file
+        return parameters
+
+
+def compose_task_input(
+    trigger: Trigger, trigger_data: dict[str, Any], event: TriggerEvent | None = None
+) -> TriggerTaskInput | None:
+    """The task a firing starts: its ask, plus the event that fired it. None when nothing asks.
+
+    Every path that fires a trigger comes through here, so the agent sees what
+    started it the same way whatever the source. ``event`` is what a stream
+    delivered; without one the events a channel, poller or replay carried in
+    ``trigger_data`` stand in, and a schedule tick carries none. The event's
+    data must be ``trigger_data``: an event file is written from the task's
+    copy of it.
+    """
+    ask = resolve_task_query(trigger, trigger_data)
+    if ask is None:
+        return None
+    if event is None:
+        event = TriggerEvent.from_trigger_data(trigger_data, received_at=datetime.now(UTC))
+    elif event.data != trigger_data:
+        raise ValueError("the event a trigger fired on must carry the trigger data it was given")
+    if event is None:
+        return TriggerTaskInput(ask=ask, message=ask)
+    block = render_event_block(
+        trigger_name=trigger.name, trigger_type=trigger.trigger_type.value, event=event
+    )
+    return TriggerTaskInput(ask=ask, message=f"{ask}\n\n{block.text}", event_file=block.event_file)
 
 
 class TriggerService:
@@ -1229,11 +1274,14 @@ class TriggerService:
         provenance: "TaskProvenance | None" = None,
         follow_up_claim: "FollowUpClaim | None" = None,
         raise_retryable: bool = False,
+        event: TriggerEvent | None = None,
     ) -> TriggerFiring:
         """Run a trigger once and say what happened.
 
         ``fired_by`` is set only when a person pressed "run now"; the schedule,
-        inbound webhooks and stream subscriptions leave it empty. ``task_id``
+        inbound webhooks and stream subscriptions leave it empty. ``event`` is
+        the stream event that fired it, told to the agent (see
+        ``compose_task_input``). ``task_id``
         makes a retried firing idempotent: when a task with that id already
         exists, the firing reports it instead of starting another run;
         ``follow_up_claim`` does the same for a follow-up routed into a running
@@ -1300,8 +1348,8 @@ class TriggerService:
 
             created_task_id = None
             if self.task_service:
-                query = resolve_task_query(trigger, trigger_data)
-                if query is None:
+                task_input = compose_task_input(trigger, trigger_data, event)
+                if task_input is None:
                     execution = await self._record_execution_failure(
                         trigger_id,
                         NO_TASK_TEXT,
@@ -1313,15 +1361,17 @@ class TriggerService:
                         outcome="error", reason=NO_TASK_TEXT, verdict=verdict, execution=execution
                     )
 
-                task_params = await self._build_task_parameters(trigger, trigger_data, fired_by)
+                task_params = task_input.stamp(
+                    await self._build_task_parameters(trigger, trigger_data, fired_by)
+                )
 
                 from agentarea_tasks.domain.models import AgentTask, TaskProvenance
 
                 task = AgentTask(
                     id=task_id if task_id is not None else uuid4(),
                     title=f"Trigger: {trigger.name}",
-                    description=query,
-                    query=query,
+                    description=task_input.ask,
+                    query=task_input.message,
                     # A manual run belongs to whoever pressed the button, not to
                     # whoever created the trigger months ago.
                     user_id=fired_by if fired_by is not None else str(trigger.created_by),
@@ -1483,9 +1533,11 @@ class TriggerService:
         """
         # Start with trigger's task parameters. A channel_origin stored there
         # predates the create/update check; only _build_channel_origin below
-        # may name the trigger replies are sent through.
+        # may name the trigger replies are sent through. Likewise only
+        # compose_task_input names an event file.
         params = dict(trigger.task_parameters)
         params.pop(CHANNEL_ORIGIN_PARAMETER, None)
+        params.pop(TRIGGER_EVENT_FILE_PARAMETER, None)
 
         # Add trigger metadata
         params.update(
@@ -1535,7 +1587,14 @@ class TriggerService:
                 )
 
                 # Event-derived data cannot grant new capabilities or file access.
-                resource_keys = {"mcps", "mcp", "mcp_servers", "skills", "files"}
+                resource_keys = {
+                    "mcps",
+                    "mcp",
+                    "mcp_servers",
+                    "skills",
+                    "files",
+                    TRIGGER_EVENT_FILE_PARAMETER,
+                }
                 for key, value in llm_params.items():
                     if key not in params and key not in resource_keys:
                         params[key] = value
