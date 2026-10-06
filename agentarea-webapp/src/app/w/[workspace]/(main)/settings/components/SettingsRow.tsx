@@ -40,7 +40,7 @@ export default function SettingsRow({
   return (
     <div className="flex min-h-[58px] flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/60 px-4 py-3 last:border-b-0">
       {tile}
-      <div className="min-w-0 flex-1 basis-48">
+      <div className="min-w-0 flex-1 basis-40">
         <Title htmlFor={htmlFor} className="block text-sm font-medium">
           {title}
         </Title>

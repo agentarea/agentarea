@@ -438,13 +438,15 @@
       "language": "Language",
       "languageDescription": "Interface language.",
       "theme": "Theme",
-      "themeDescription": "Applies to this device."
+      "themeDescription": "Applies to this device.",
+      "themeLight": "Light",
+      "themeDark": "Dark"
     },
     "workspace": {
       "title": "Workspace",
       "description": "Settings for the {name} workspace, shared with all members.",
       "exportTitle": "Export workspace",
-      "exportDescription": "Download agents, MCP connections, skills and triggers as a bundle YAML you can import into another workspace. Credentials are replaced by setup fields the importer fills in.",
+      "exportDescription": "Download agents, connections, skills and triggers as one YAML bundle for another workspace. Secrets stay out — the importer fills them in.",
       "export": "Export",
       "exportFailed": "Could not export the workspace",
       "logoTitle": "Logo",

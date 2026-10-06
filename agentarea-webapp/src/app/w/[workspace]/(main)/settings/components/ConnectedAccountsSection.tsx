@@ -68,13 +68,16 @@ export default function ConnectedAccountsSection({
               />
             }
             title={brand?.name ?? label}
-            description={connected ? undefined : t("notConnected")}
-          >
-            {connected && (
-              <StatusIndicator kind="active" size="sm">
-                {t("connected")}
+            description={
+              <StatusIndicator
+                kind={connected ? "active" : "draft"}
+                size="sm"
+                className="mt-0.5"
+              >
+                {t(connected ? "connected" : "notConnected")}
               </StatusIndicator>
-            )}
+            }
+          >
             <Button
               type="submit"
               variant={connected ? "ghost" : "outline"}

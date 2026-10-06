@@ -5,7 +5,6 @@ import type { SettingsFlow } from "@ory/client-fetch";
 import type { OryClientConfiguration } from "@ory/elements-react";
 import { LogOut } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { ToolbarButton } from "@/components/ui/toolbar";
 import { useAuth } from "@/hooks/useAuth";
 import type { Workspace } from "@/lib/workspaces";
@@ -14,6 +13,7 @@ import LanguageSelect from "./components/LanguageSelect";
 import ProfileForm from "./components/ProfileForm";
 import SettingsRow from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
+import ThemeSelect from "./components/ThemeSelect";
 import WorkspaceLogoRow from "./components/WorkspaceLogoRow";
 
 export default function SettingsClient({
@@ -60,7 +60,7 @@ export default function SettingsClient({
             title={t("preferences.theme")}
             description={t("preferences.themeDescription")}
           >
-            <ThemeToggle />
+            <ThemeSelect />
           </SettingsRow>
         </SettingsSection>
 

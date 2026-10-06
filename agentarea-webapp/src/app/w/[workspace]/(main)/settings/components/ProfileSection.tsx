@@ -8,6 +8,7 @@ import {
   type UiNode,
 } from "@ory/client-fetch";
 import { useOryFlow } from "@ory/elements-react";
+import { Lock } from "lucide-react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
@@ -76,6 +77,13 @@ export default function ProfileSection({ nodes }: { nodes: UiNode[] }) {
               autoComplete={autocomplete}
               readOnly={trait?.readOnly}
               leading={trait?.leading}
+              trailing={
+                trait?.readOnly ? (
+                  <span className="pointer-events-none grid w-9 place-items-center text-muted-foreground">
+                    <Lock className="h-3.5 w-3.5" />
+                  </span>
+                ) : undefined
+              }
               aria-invalid={errorsOf(node.messages).length > 0 || undefined}
               className={FIELD_CLASS}
               {...register(name)}
