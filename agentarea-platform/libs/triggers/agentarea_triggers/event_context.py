@@ -19,7 +19,7 @@ from agentarea_streams.domain import JournaledEvent
 from pydantic import BaseModel
 
 # Above this many UTF-8 bytes of JSON the data goes to a file instead of the
-# message. The message is also the run's goal, which the system prompt repeats.
+# message, which stays pinned in the run's context for its whole life.
 EVENT_INLINE_LIMIT_BYTES = 16 * 1024
 
 

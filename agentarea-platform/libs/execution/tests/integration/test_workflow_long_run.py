@@ -110,6 +110,9 @@ class Scenario:
     continue_as_new_released: asyncio.Event = field(default_factory=asyncio.Event)
     # The task's conversation log, as the activities keep it: seq -> message.
     log: dict[int, dict[str, Any]] = field(default_factory=dict)
+    summaries: set[int] = field(default_factory=set)
+    # What each model call saw: the window's head and tail, as messages.
+    contexts: list[list[dict[str, Any]]] = field(default_factory=list)
 
     def write(self, window: ConversationWindow, pending: list[dict[str, Any]]) -> int:
         for offset, message in enumerate(pending):
@@ -220,6 +223,7 @@ def _activities(scenario: Scenario) -> list[Any]:
             end_seq = scenario.write(request.conversation, request.messages)
             head, tail = scenario.window_messages(request.conversation, end_seq)
             context = [scenario.log[seq] for seq in (*head, *tail)]
+        scenario.contexts.append(list(context))
         prompt_tokens = max(1, sum(len(m.get("content") or "") for m in context) // 4)
         usage = LLMUsage(
             prompt_tokens=prompt_tokens, completion_tokens=20, total_tokens=prompt_tokens + 20
@@ -310,7 +314,9 @@ def _activities(scenario: Scenario) -> list[Any]:
             "role": "user",
             "content": f"[Previous conversation summary]\n{count} earlier entries.",
         }
-        new_head = [head[0], summary_seq]
+        scenario.summaries.add(summary_seq)
+        # As the real activity does: the head keeps everything but an older summary.
+        new_head = [*(seq for seq in head if seq not in scenario.summaries), summary_seq]
         kept = tail[count:]
         return CompactMessagesResult(
             conversation=ConversationWindow(
@@ -356,6 +362,7 @@ def _activities(scenario: Scenario) -> list[Any]:
 def _request(
     scenario: Scenario,
     *,
+    task_query: str = "Work through the whole job.",
     budget_usd: str = "1000",
     max_tokens: int = 1_000_000_000,
     max_tool_calls_per_turn: int = 10,
@@ -366,7 +373,7 @@ def _request(
         agent_id=uuid.uuid4(),
         user_id="long-run-user",
         workspace_id="long-run-workspace",
-        task_query="Work through the whole job.",
+        task_query=task_query,
         effective_policy={
             "budget": {"run_budget_usd": budget_usd},
             "tokens": {"max_tokens": max_tokens, "max_tokens_per_call": 100_000},
@@ -701,3 +708,38 @@ async def test_the_conversation_lives_in_the_log_not_in_payloads(long_run_env):
     assert max(scenario.llm_request_bytes) < 200_000
     assert [scenario.log[seq]["role"] for seq in (0, 1)] == ["system", "user"]
     assert scenario.log[max(scenario.log)].get("name") == "completion"
+
+
+@pytest.mark.asyncio
+async def test_the_run_input_is_one_pinned_user_message_through_compaction(long_run_env):
+    """A trigger's instruction and event are the first user message, never the system prompt.
+
+    The system prompt stays the agent's own, so it is the same from run to run;
+    the first user message sits in the window's head, so neither compaction nor
+    continue-as-new summarizes it away.
+    """
+    task_query = (
+        "Reply naming the order id\n\n## What started this run\n"
+        "- Event kind: order.paid\n\nEvent data:\n```json\n"
+        '{"order": {"id": "A-1003-PAYLOAD"}}\n```'
+    )
+    scenario = Scenario(iterations=24, context_window=20_000, tool_output="x" * 4_000)
+    async with _Run(long_run_env.client, scenario) as run:
+        handle = await run.start(_request(scenario, task_query=task_query))
+        result = await handle.result()
+
+        assert result.success is True
+        assert await run.run_count(handle) >= 2
+    assert scenario.compactions >= 1
+
+    first = scenario.contexts[0]
+    assert [m["role"] for m in first[:2]] == ["system", "user"]
+    assert "A-1003-PAYLOAD" not in first[0]["content"]
+    assert "Reply naming the order id" not in first[0]["content"]
+    assert first[1]["content"] == task_query
+    assert sum((m.get("content") or "").count("A-1003-PAYLOAD") for m in first) == 1
+
+    last = scenario.contexts[-1]
+    assert any("[Previous conversation summary]" in (m.get("content") or "") for m in last)
+    assert last[1]["content"] == task_query
+    assert sum((m.get("content") or "").count("A-1003-PAYLOAD") for m in last) == 1

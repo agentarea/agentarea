@@ -32,9 +32,14 @@ from .patches import (
     COMPACTION_BOUNDS_PAYLOAD_PATCH,
     GOVERNANCE_DENIAL_BLOCKS_RUN_PATCH,
     PAID_CALL_PERSISTED_BEFORE_LIMITS_PATCH,
+    RUN_INPUT_IN_FIRST_MESSAGE_PATCH,
     THINKING_ONLY_REPLY_PATCH,
 )
 from .tool_dispatch import ToolDispatchMixin
+
+FIRST_MESSAGE_IS_THE_TASK = (
+    "The task is the first user message of this conversation. It stays in view for the whole run."
+)
 
 
 def _render_workspace_attachment_prompt(value: Any) -> str:
@@ -254,10 +259,20 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                         "native request_user_input form without surface_id, never A2UI."
                     )
 
+            # The run's input -- for a trigger, the instruction and the event it
+            # fired on -- is the first user message, pinned in the window's head
+            # so compaction never summarizes it away; the system prompt stays the
+            # agent's own and the same from run to run.
+            seeds_system_prompt = iteration == 1 or self._resume_system_prompt_missing
+            input_in_first_message = seeds_system_prompt and workflow.patched(
+                RUN_INPUT_IN_FIRST_MESSAGE_PATCH
+            )
             system_prompt = MessageBuilder.build_system_prompt(
                 agent_name=self.state.agent_config.get("name", "AI Agent"),
                 agent_instruction=agent_instruction,
-                goal_description=self.state.goal.description,
+                goal_description=FIRST_MESSAGE_IS_THE_TASK
+                if input_in_first_message
+                else self.state.goal.description,
                 success_criteria=self.state.goal.success_criteria,
                 available_tools=self.state.available_tools,
                 a2ui_enabled=self._a2ui_available,
@@ -265,11 +280,16 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
 
             # Add system message and user message if first iteration
             if iteration == 1:
-                # Create messages directly using the Message class
+                first_seq = self.state.conversation_next_seq + len(self.state.messages)
                 self.state.messages.append(Message(role="system", content=system_prompt))
                 self.state.messages.append(
                     Message(role="user", content=self.state.goal.description)
                 )
+                if input_in_first_message:
+                    self.state.context_head_seqs = [
+                        *self.state.context_head_seqs,
+                        first_seq + 1,
+                    ]
             elif self._resume_system_prompt_missing:
                 # A resumed log without a system prompt gets this run's at the
                 # head of the window; the conversation before it stays in the tail.
