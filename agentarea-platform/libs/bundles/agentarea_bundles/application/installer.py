@@ -456,9 +456,6 @@ class BundleInstaller:
                 secret_name = f"channel_cred:{channel.type}:{trigger.id}"
                 await self._secret_manager.set_secret(secret_name, json.dumps(credentials))
 
-            if not channel.enabled:
-                await self._trigger_service.disable_trigger(trigger.id)
-
             result.entities.append(
                 InstalledEntity(
                     kind=EntityKind.CHANNEL,
@@ -522,13 +519,6 @@ class BundleInstaller:
                 workspace_id=self._user_context.workspace_id,
             )
             trigger = await self._trigger_service.create_trigger(domain)
-            # TriggerCreate.to_domain does not carry the enabled flag and
-            # create_trigger schedules cron unconditionally. Explicitly disable
-            # so imported automations honour enabled=false: this deactivates the
-            # trigger and pauses its schedule, so the agent never runs before the
-            # user activates it.
-            if not auto.enabled:
-                await self._trigger_service.disable_trigger(trigger.id)
             result.entities.append(
                 InstalledEntity(
                     kind=EntityKind.AUTOMATION,

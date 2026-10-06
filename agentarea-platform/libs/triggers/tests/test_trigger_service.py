@@ -1014,6 +1014,23 @@ class TestTriggerService:
         trigger_service._mock_temporal_schedule_manager.create_cron_schedule.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_a_disabled_cron_trigger_is_scheduled_paused(
+        self,
+        trigger_service,
+        mock_trigger_repository,
+        sample_cron_trigger_data,
+        sample_cron_trigger,
+    ):
+        """A trigger created disabled is never live, not even until a later disable."""
+        sample_cron_trigger.is_active = False
+        mock_trigger_repository.create_from_model.return_value = sample_cron_trigger
+
+        await trigger_service.create_trigger(sample_cron_trigger_data)
+
+        create = trigger_service._mock_temporal_schedule_manager.create_cron_schedule
+        assert create.await_args.kwargs["paused"] is True
+
+    @pytest.mark.asyncio
     async def test_update_cron_trigger_updates_schedule(
         self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):

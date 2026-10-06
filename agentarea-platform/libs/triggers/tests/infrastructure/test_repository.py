@@ -314,6 +314,28 @@ class TestTriggerRepository:
         assert mock_session.add.call_args.args[0].event_types == ["message"]
 
     @pytest.mark.asyncio
+    async def test_create_from_model_persists_a_disabled_trigger_inactive(
+        self, repository, mock_session, sample_trigger_orm, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "agentarea_common.base.workspace_scoped_repository.grant_resource_owner",
+            AsyncMock(),
+        )
+        repository._orm_to_domain = MagicMock(return_value=sample_trigger_orm)
+        trigger_data = TriggerCreate(
+            name="Paused nightly",
+            agent_id=uuid4(),
+            trigger_type=TriggerType.CRON,
+            cron_expression="0 3 * * *",
+            created_by="test_user",
+            is_active=False,
+        )
+
+        await repository.create_from_model(trigger_data)
+
+        assert mock_session.add.call_args.args[0].is_active is False
+
+    @pytest.mark.asyncio
     async def test_create_from_model_grants_creator_ownership(
         self, repository, mock_session, mock_user_context, sample_trigger_orm, monkeypatch
     ):

@@ -87,7 +87,7 @@ def harness(monkeypatch):
             agent_id=trigger_data.agent_id,
             webhook_type=trigger_data.webhook_type,
             webhook_id=trigger_data.webhook_id,
-            is_active=True,
+            is_active=trigger_data.is_active,
         )
         created.append(trigger)
         return trigger
@@ -193,7 +193,7 @@ async def test_a_disabled_trigger_is_created_switched_off(harness):
 
     assert response.status_code == 200, response.text
     (trigger,) = harness.created
-    harness.trigger_service.disable_trigger.assert_awaited_once_with(trigger.id)
+    assert trigger.is_active is False
 
 
 @pytest.mark.parametrize("model_id", [_CHAT_MODEL, _DECISION_MODEL])
