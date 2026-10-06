@@ -1,56 +1,61 @@
-import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-/** One labelled setting: icon, title and description on the left, the control on the right. */
+/** How the control column sizes itself next to the title. */
+const CONTROL_CLASS = {
+  /** A button or a toggle: as wide as it is. */
+  fit: "shrink-0 items-center gap-2",
+  /** A text field and its errors: fixed width, full width on a phone. */
+  field: "w-full flex-col items-stretch gap-1 sm:w-72",
+  /** A wide control, e.g. a drop zone: shares the row with the title. */
+  fill: "min-w-0 flex-1 basis-72 items-stretch gap-4",
+};
+
+/**
+ * One setting inside a {@link SettingsSection} panel: title and description on
+ * the left, the control on the right. On a phone the control drops below.
+ */
 export default function SettingsRow({
-  icon: Icon,
+  tile,
   title,
   description,
+  htmlFor,
+  control = "fit",
+  below,
   children,
 }: {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-  children: React.ReactNode;
+  /** Optional leading mark, e.g. a provider logo. */
+  tile?: ReactNode;
+  title: ReactNode;
+  description?: ReactNode;
+  /** Id of the control, so the title labels it. */
+  htmlFor?: string;
+  control?: keyof typeof CONTROL_CLASS;
+  /** Full-width content under title and control, still inside the row, e.g. an editor it opened. */
+  below?: ReactNode;
+  children?: ReactNode;
 }) {
-  return (
-    <div
-      className={cn(
-        "group relative flex flex-col md:flex-row md:items-start gap-3 w-full p-4",
-        "bg-white dark:bg-zinc-900",
-        "border border-zinc-200/60 dark:border-zinc-800",
-        "rounded-md",
-        "shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)]",
-        "relative overflow-hidden"
-      )}
-    >
-      <div
-        className="absolute inset-0 opacity-[0.015] dark:opacity-[0.03] pointer-events-none"
-        style={{
-          backgroundImage: `repeating-linear-gradient(
-             -45deg,
-             currentColor,
-             currentColor 1px,
-             transparent 1px,
-             transparent 10px
-           )`,
-        }}
-      />
-      <div className="flex items-center gap-3 z-10">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-            {title}
-          </span>
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            {description}
-          </span>
-        </div>
-      </div>
+  const Title = htmlFor ? "label" : "div";
 
-      <div className="z-10 ml-11 md:ml-auto">{children}</div>
+  return (
+    <div className="flex min-h-[58px] flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/60 px-4 py-3 last:border-b-0">
+      {tile}
+      <div className="min-w-0 flex-1 basis-40">
+        <Title htmlFor={htmlFor} className="block text-sm font-medium">
+          {title}
+        </Title>
+        {description != null && (
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            {description}
+          </div>
+        )}
+      </div>
+      {children != null && (
+        <div className={cn("flex", CONTROL_CLASS[control])}>{children}</div>
+      )}
+      {below != null && below !== false && (
+        <div className="basis-full">{below}</div>
+      )}
     </div>
   );
 }

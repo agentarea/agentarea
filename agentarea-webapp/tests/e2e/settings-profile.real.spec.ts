@@ -240,6 +240,10 @@ test.describe("Account profile settings through Kratos", () => {
     await expect(
       profileForm(page).locator('input[name="traits.email"]')
     ).toHaveValue(user.email);
+    // Save stays disabled until something changed.
+    await profileForm(page)
+      .locator('input[name="traits.name.first"]')
+      .fill("Recovered");
     await expect(
       profileForm(page).locator('button[name="method"][value="profile"]')
     ).toBeEnabled();

@@ -1,4 +1,7 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+import ContentBlock from "@/components/ContentBlock";
 import {
   getOryBrowserConfig,
   rewriteFlowForBrowser,
@@ -10,15 +13,38 @@ import {
 } from "@/lib/workspace-context";
 import { workspacePath } from "@/lib/workspace-routes";
 import config from "@/ory.config";
+import LogoutButton from "./components/LogoutButton";
+import SettingsSkeleton from "./components/SettingsSkeleton";
 import SettingsClient from "./SettingsClient";
 
 export const metadata: Metadata = {
   title: "Settings",
 };
 
-export default async function SettingsPage(
-  props: OryPageParams & { params: Promise<{ workspace: string }> }
-) {
+type SettingsPageProps = OryPageParams & {
+  params: Promise<{ workspace: string }>;
+};
+
+export default async function SettingsPage(props: SettingsPageProps) {
+  const t = await getTranslations("SettingsPage");
+
+  return (
+    <ContentBlock
+      header={{
+        breadcrumb: [{ label: t("title") }, { label: t("profile.title") }],
+        controls: <LogoutButton />,
+      }}
+    >
+      <div className="mx-auto max-w-[680px] space-y-8 pb-12 pt-3">
+        <Suspense fallback={<SettingsSkeleton />}>
+          <SettingsContent {...props} />
+        </Suspense>
+      </div>
+    </ContentBlock>
+  );
+}
+
+async function SettingsContent(props: SettingsPageProps) {
   const { workspace } = await props.params;
   // A restarted flow comes back to this workspace, not to Kratos' ui_url.
   const [flow, { canAdminister }, { active }] = await Promise.all([

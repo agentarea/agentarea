@@ -1,6 +1,6 @@
 "use client";
-import { useLocale, useTranslations } from "next-intl";
 
+import { useLocale, useTranslations } from "next-intl";
 import {
   Select,
   SelectContent,
@@ -21,7 +21,7 @@ export default function LanguageSelect() {
 
   return (
     <Select value={locale} onValueChange={onSelectChange}>
-      <SelectTrigger className="w-[140px]" aria-label={t("language")}>
+      <SelectTrigger className="h-8 w-40" aria-label={t("language")}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

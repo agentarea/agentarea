@@ -1,35 +1,21 @@
 "use client";
 
-import { createElement, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
-import { Badge } from "@/components/ui/badge";
+import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { Button } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { useOnVisible } from "@/hooks/use-on-visible";
 import {
-  exportAuditLogs,
   fetchAuditLogs,
-  type AuditActorOption,
   type AuditEvent,
-  type AuditLogFilters as AuditLogFiltersQuery,
+  type AuditLogFilters as AuditQuery,
 } from "./actions";
+import { AuditAction, AuditActor, AuditResource } from "./AuditCells";
 import { AuditChangeList } from "./AuditChangeList";
-import { auditEventsToCsv } from "./auditCsv";
-import {
-  ALL,
-  AuditLogFilters,
-  EMPTY_FILTERS,
-  isFiltered,
-  type AuditFilterState,
-} from "./AuditLogFilters";
-import {
-  auditActorIcon,
-  auditResourceIcon,
-  auditVerbIcon,
-} from "./auditIcons";
-import { auditActionColor, auditVerb, formatAuditTime } from "./format";
 
 /** Metadata keys worth a line under the resource, with their label keys. */
 const DETAIL_KEYS = ["tool", "decision", "reason", "comment"] as const;
@@ -72,85 +58,21 @@ function AuditDetails({ event }: { event: AuditEvent }) {
   );
 }
 
-function ResourceCell({ event }: { event: AuditEvent }) {
-  const resource = event.resource;
-  const label = resource?.label ?? event.resource_type;
-  const typeLabel = resource?.type_label ?? event.resource_type;
-  const icon = auditResourceIcon(event.resource_type);
-
+/** The resource, what the event recorded about it, and its changes when open. */
+function ResourceCell({
+  event,
+  expanded,
+}: {
+  event: AuditEvent;
+  expanded: boolean;
+}) {
   return (
     <div className="min-w-0">
-      <div className="flex min-w-0 items-center gap-2">
-        {icon &&
-          createElement(icon, {
-            "aria-hidden": true,
-            className: "h-4 w-4 shrink-0 text-muted-foreground",
-          })}
-        {resource?.href ? (
-          <Link
-            href={resource.href ?? ""}
-            className="truncate text-sm font-medium text-zinc-800 underline-offset-2 hover:text-primary hover:underline dark:text-zinc-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {label}
-          </Link>
-        ) : (
-          <span className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
-            {label}
-          </span>
-        )}
-        <Badge variant="zinc" size="sm" className="shrink-0 font-normal">
-          {typeLabel}
-        </Badge>
-      </div>
-      {event.resource_id && !resource?.found && (
-        <div className="mt-0.5 font-mono text-xs text-muted-foreground">
-          {event.resource_id}
-        </div>
-      )}
-      {event.resource_id && resource?.found && (
-        <div className="mt-0.5 font-mono text-xs text-muted-foreground">
-          {event.resource_id.slice(0, 8)}
-        </div>
-      )}
-      <AuditDetails event={event} />
-      {event.changes && event.changes.length > 0 && (
-        <AuditChangeList changes={event.changes} className="mt-2 space-y-1" />
-      )}
-    </div>
-  );
-}
-
-function ActorCell({ event }: { event: AuditEvent }) {
-  const actor = event.actor;
-  const label = actor?.label ?? event.actor_id;
-  const description = actor?.description;
-  const icon = auditActorIcon(actor?.actor_type ?? event.actor_type);
-
-  return (
-    <div className="flex min-w-0 items-start gap-2">
-      {createElement(icon, {
-        "aria-hidden": true,
-        className: "mt-0.5 h-4 w-4 shrink-0 text-muted-foreground",
-      })}
-      <div className="min-w-0">
-        {actor?.href ? (
-          <Link
-            href={actor.href ?? ""}
-            className="block truncate text-sm font-medium text-zinc-800 underline-offset-2 hover:text-primary hover:underline dark:text-zinc-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {label}
-          </Link>
-        ) : (
-          <span className="block truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
-            {label}
-          </span>
-        )}
-        {description && (
-          <span className="block truncate text-xs text-muted-foreground">
-            {description}
-          </span>
+      <AuditResource event={event} />
+      <div className="pl-[38px]">
+        <AuditDetails event={event} />
+        {expanded && event.changes && event.changes.length > 0 && (
+          <AuditChangeList changes={event.changes} className="mt-2 space-y-1" />
         )}
       </div>
     </div>
@@ -160,63 +82,30 @@ function ActorCell({ event }: { event: AuditEvent }) {
 interface Props {
   initialEvents: AuditEvent[];
   initialCursor: string | null;
-  actorOptions: AuditActorOption[];
-}
-
-/** The API query a filter state stands for; dates cover whole local days. */
-function toQuery(filters: AuditFilterState): AuditLogFiltersQuery {
-  return {
-    resource_type:
-      filters.resourceType === ALL ? undefined : filters.resourceType,
-    action: filters.action === ALL ? undefined : filters.action,
-    actor_id: filters.actorId === ALL ? undefined : filters.actorId,
-    since: filters.since
-      ? new Date(`${filters.since}T00:00:00`).toISOString()
-      : undefined,
-    until: filters.until
-      ? new Date(`${filters.until}T23:59:59.999`).toISOString()
-      : undefined,
-  };
+  /** The API query the page loaded with, for the next pages. */
+  query: AuditQuery;
+  filtered: boolean;
 }
 
 export default function AuditLogClient({
   initialEvents,
   initialCursor,
-  actorOptions,
+  query,
+  filtered,
 }: Props) {
   const t = useTranslations("AuditLogPage");
+  const tCommon = useTranslations("Common");
   const [events, setEvents] = useState<AuditEvent[]>(initialEvents);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
-  const [filters, setFilters] = useState<AuditFilterState>(EMPTY_FILTERS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
-  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [isExporting, startExport] = useTransition();
-
-  const applyFilters = (next: AuditFilterState) => {
-    setFilters(next);
-    setExpandedId(null);
-    startTransition(async () => {
-      const { data, error } = await fetchAuditLogs({
-        ...toQuery(next),
-        limit: 50,
-      });
-      if (!data) {
-        setLoadMoreError(error);
-        return;
-      }
-      setLoadMoreError(null);
-      setEvents(data.events);
-      setCursor(data.next_cursor ?? null);
-    });
-  };
 
   const loadMore = () => {
-    if (!cursor) return;
+    if (!cursor || isPending) return;
     startTransition(async () => {
       const { data, error } = await fetchAuditLogs({
-        ...toQuery(filters),
+        ...query,
         cursor,
         limit: 50,
       });
@@ -230,168 +119,117 @@ export default function AuditLogClient({
     });
   };
 
-  const exportCsv = () => {
-    setExportNotice(null);
-    startExport(async () => {
-      const { data, error } = await exportAuditLogs(toQuery(filters));
-      if (!data) {
-        setExportNotice(`${t("export.failed")}: ${error}`);
-        return;
-      }
-      const blob = new Blob([auditEventsToCsv(data.events)], {
-        type: "text/csv;charset=utf-8",
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
-      link.click();
-      URL.revokeObjectURL(url);
-      if (data.truncated) {
-        setExportNotice(t("export.truncated", { count: data.events.length }));
-      }
-    });
-  };
-
-  const filterBar = (
-    <AuditLogFilters
-      value={filters}
-      onChange={applyFilters}
-      actorOptions={actorOptions}
-      onExport={exportCsv}
-      exporting={isExporting}
-    />
-  );
+  const sentinelRef = useOnVisible(loadMore, {
+    enabled: Boolean(cursor) && !isPending && !loadMoreError,
+  });
 
   const columns = [
     {
       accessor: "expand",
       header: "",
-      cellClassName: "w-8 pr-0",
+      cellClassName: "w-6 pr-0",
       render: (_: unknown, event: AuditEvent) => {
-        const isExpanded = expandedId === event.id;
-        const hasChanges = event.changes && event.changes.length > 0;
-        return hasChanges ? (
-          isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-          )
-        ) : null;
+        if (!event.changes?.length) return null;
+        const expanded = expandedId === event.id;
+        const Chevron = expanded ? ChevronDown : ChevronRight;
+        // Its own control: a click on the rest of the row opens the resource.
+        return (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-label={t(expanded ? "hideChanges" : "showChanges")}
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpandedId(expanded ? null : event.id);
+            }}
+            className="-m-1 grid h-6 w-6 place-items-center rounded text-muted-foreground/70 hover:bg-muted hover:text-foreground"
+          >
+            <Chevron className="h-3.5 w-3.5" />
+          </button>
+        );
       },
     },
     {
       accessor: "action",
       header: t("table.action"),
-      cellClassName: "w-[140px]",
-      render: (value: string) => {
-        const verb = auditVerb(value);
-        const verbIcon = auditVerbIcon(verb);
-        return (
-          <Badge
-            variant="secondary"
-            className={`gap-1 text-xs font-mono ${auditActionColor(value)}`}
-            title={value}
-          >
-            {verbIcon &&
-              createElement(verbIcon, {
-                "aria-hidden": true,
-                className: "h-3 w-3",
-              })}
-            {verb || value}
-          </Badge>
-        );
-      },
+      cellClassName: "w-[180px]",
+      render: (value: string) => <AuditAction action={value} />,
     },
     {
       accessor: "resource",
       header: t("table.resource"),
-      cellClassName: "",
+      rowLink: true,
       render: (_: unknown, event: AuditEvent) => (
-        <ResourceCell
-          event={{
-            ...event,
-            changes:
-              expandedId === event.id ? (event.changes ?? null) : null,
-          }}
-        />
+        <ResourceCell event={event} expanded={expandedId === event.id} />
       ),
     },
     {
       accessor: "actor_id",
       header: t("table.actor"),
-      cellClassName: "w-[180px] max-w-[220px]",
-      render: (_value: string, event: AuditEvent) => (
-        <ActorCell event={event} />
-      ),
+      cellClassName: "w-[220px] max-w-[240px]",
+      render: (_: unknown, event: AuditEvent) => <AuditActor event={event} />,
     },
     {
       accessor: "source_ip",
       header: t("table.ip"),
-      cellClassName: "w-[100px]",
+      cellClassName: "w-[120px]",
       render: (value: string | null) => (
-        <span className="text-xs text-muted-foreground font-mono">
-          {value || "-"}
+        <span className="font-mono text-xs text-muted-foreground">
+          {value || "—"}
         </span>
       ),
     },
     {
       accessor: "created_at",
       header: t("table.when"),
-      cellClassName: "w-[100px] text-right",
+      cellClassName: "w-[130px]",
       render: (value: string) => (
-        <span className="text-xs text-muted-foreground">
-          {formatAuditTime(value)}
-        </span>
+        <TableDateDisplay dateString={value} relative />
       ),
     },
   ];
 
   return (
     <>
-      {filterBar}
-      {exportNotice && (
-        <p role="status" className="mb-3 text-sm text-muted-foreground">
-          {exportNotice}
-        </p>
-      )}
       {events.length === 0 ? (
         <EmptyState
-          title={isFiltered(filters) ? t("noMatches") : t("noEvents")}
+          title={filtered ? t("noMatches") : t("noEvents")}
           iconsType="audit"
         />
       ) : (
         <Table
-          data={events.map((event) => ({
-            ...event,
-            className: "hover:bg-zinc-50 dark:hover:bg-zinc-800/50",
-          }))}
+          data={events}
           columns={columns}
-          onRowClick={(event: AuditEvent) =>
-            setExpandedId(expandedId === event.id ? null : event.id)
-          }
+          // A row leads to its resource, like a row in any other table.
+          rowHref={(event: AuditEvent) => event.resource?.href ?? ""}
         />
       )}
 
-      {loadMoreError && (
-        <p role="alert" className="mt-4 text-center text-sm text-destructive">
-          {loadMoreError}
-        </p>
-      )}
-
+      {/* The next page loads as the end of the list scrolls into view. After a
+          failure it waits for a retry instead of asking again on every scroll. */}
       {cursor && (
-        <div className="flex justify-center mt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadMore}
-            disabled={isPending}
-          >
-            {isPending ? (
-              <Loader2 className="mr-2 animate-spin" />
-            ) : null}
-            {t("loadMore")}
-          </Button>
+        <div
+          ref={sentinelRef}
+          className="flex min-h-12 flex-col items-center justify-center gap-2 pt-4"
+        >
+          {loadMoreError ? (
+            <>
+              <p role="alert" className="text-sm text-destructive">
+                {loadMoreError}
+              </p>
+              <Button variant="outline" size="sm" onClick={loadMore}>
+                {tCommon("retry")}
+              </Button>
+            </>
+          ) : (
+            isPending && (
+              <StatusIndicator
+                kind="running"
+                aria-label={t("loadingMore")}
+                title={t("loadingMore")}
+              />
+            )
+          )}
         </div>
       )}
     </>

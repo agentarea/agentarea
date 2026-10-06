@@ -1,25 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "@/components/WorkspaceLink";
 import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronRight, ScrollText } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import {
   fetchAuditLogs,
   type AuditEvent,
 } from "@/app/w/[workspace]/(main)/settings/audit/actions";
-import { AuditChangeList } from "@/app/w/[workspace]/(main)/settings/audit/AuditChangeList";
 import {
-  auditActionColor,
-  formatAuditTime,
-} from "@/app/w/[workspace]/(main)/settings/audit/format";
+  AuditAction,
+  AuditActor,
+} from "@/app/w/[workspace]/(main)/settings/audit/AuditCells";
+import { AuditChangeList } from "@/app/w/[workspace]/(main)/settings/audit/AuditChangeList";
+import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 
 // Audit trail scoped to a single MCP connection. Read-only — surfaces the
 // config-change history the audit store already records for this instance
 // (mcp_instance.create / update / delete), so a reviewer can answer
 // "who changed this connection, and when" without leaving the page.
-export function InstanceActivitySection({ instanceId }: { instanceId: string }) {
+export function InstanceActivitySection({
+  instanceId,
+}: {
+  instanceId: string;
+}) {
   const t = useTranslations("MCPServersPage.instanceDetail.activity");
   const [events, setEvents] = useState<AuditEvent[] | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -93,34 +96,23 @@ export function InstanceActivitySection({ instanceId }: { instanceId: string }) 
                       )
                     ) : null}
                   </span>
-                  <Badge
-                    variant="secondary"
-                    className={`shrink-0 font-mono text-xs ${auditActionColor(event.action)}`}
-                  >
-                    {event.action}
-                  </Badge>
-                  <span className="min-w-0 flex-1 truncate text-sm">
-                    {event.actor?.href ? (
-                      <Link
-                        href={event.actor.href}
-                        className="font-medium hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {event.actor.label}
-                      </Link>
-                    ) : (
-                      <span className="font-medium">
-                        {event.actor?.label ?? event.actor_id}
-                      </span>
-                    )}
+                  <span className="w-44 shrink-0">
+                    <AuditAction action={event.action} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <AuditActor event={event} />
                   </span>
                   {event.source_ip && (
                     <span className="hidden shrink-0 font-mono text-xs text-muted-foreground sm:inline">
                       {event.source_ip}
                     </span>
                   )}
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatAuditTime(event.created_at)}
+                  <span className="shrink-0">
+                    <TableDateDisplay
+                      dateString={event.created_at}
+                      oneRow
+                      relative
+                    />
                   </span>
                 </button>
                 {isExpanded && hasChanges && (
