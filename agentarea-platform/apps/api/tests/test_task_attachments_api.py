@@ -26,6 +26,7 @@ from agentarea_common.artifacts import attachment_content_disposition
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_governance.domain.policies import PolicyValidationError
+from agentarea_tasks.domain.models import TaskProvenance
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -65,6 +66,7 @@ def _reserved_task(task_id, payload):
         scheduled_at=None,
         # The creator the response reports as `created_by`.
         user_id="user-1",
+        provenance=TaskProvenance(),
     )
 
 
@@ -503,6 +505,7 @@ async def test_sync_path_attaches_and_deletes_after_dispatch(monkeypatch):
             execution_id="exec-1",
             scheduled_at=None,
             user_id=task.user_id,
+            provenance=task.provenance,
         )
 
     async def dispatch_reserved_run(task):
