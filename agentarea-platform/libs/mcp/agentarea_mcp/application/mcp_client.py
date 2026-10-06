@@ -9,6 +9,7 @@ import logging
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 import httpx2
 import redis.asyncio as redis
@@ -22,7 +23,7 @@ from agentarea_common.utils.url_safety import (
 from mcp import Client, MCPError
 from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamable_http_client
-from mcp_types import DiscoverResult
+from mcp_types import INTERNAL_ERROR, DiscoverResult
 
 from agentarea_mcp.verification import mcp_transport_candidates
 
@@ -166,6 +167,23 @@ class SafeMCPTransport(httpx2.AsyncBaseTransport):
 
     async def aclose(self) -> None:
         await self._sender.aclose()
+
+
+UPSTREAM_REFUSAL_STATUSES = frozenset({401, 403})
+
+
+class MCPUpstreamUnauthorizedError(MCPError):
+    """The upstream MCP server refused the credentials with HTTP 401 or 403.
+
+    The SDK reports such an answer as a generic MCP error without its status.
+    """
+
+    def __init__(self, url: str, status: int) -> None:
+        self.status = status
+        host = urlsplit(url).hostname or url
+        super().__init__(
+            INTERNAL_ERROR, f"{host} rejected the credentials (HTTP {status})", {"status": status}
+        )
 
 
 class MCPGatewayStartupFailureError(RuntimeError):
@@ -337,6 +355,27 @@ class _ConnectedClient:
         self._prior_discover: DiscoverResult | None = None
         self._cached = False
         self._retried = False
+        self._refused_status: int | None = None
+
+    def _observed_client(
+        self,
+        headers: dict[str, str] | None = None,
+        timeout: httpx2.Timeout | None = None,
+        auth: httpx2.Auth | None = None,
+    ) -> httpx2.AsyncClient:
+        """A client from the caller's factory that records an upstream refusal."""
+        client = self._httpx_client_factory(headers=headers, timeout=timeout, auth=auth)
+        hooks = client.event_hooks
+        client.event_hooks = {**hooks, "response": [*hooks["response"], self._observe]}
+        return client
+
+    async def _observe(self, response: httpx2.Response) -> None:
+        if response.status_code in UPSTREAM_REFUSAL_STATUSES:
+            self._refused_status = response.status_code
+
+    def _refusal(self, url: str) -> MCPUpstreamUnauthorizedError | None:
+        status = self._refused_status
+        return None if status is None else MCPUpstreamUnauthorizedError(url, status)
 
     @property
     def session(self):
@@ -372,11 +411,13 @@ class _ConnectedClient:
 
     async def _open(self) -> Client:
         last_error: BaseException | None = None
-        factory = self._httpx_client_factory
+        refused: MCPUpstreamUnauthorizedError | None = None
+        factory = self._observed_client
         timeout = httpx2.Timeout(self._timeout_seconds, read=SSE_READ_TIMEOUT_SECONDS)
 
         for streamable_url in self._streamable_urls:
             stack = AsyncExitStack()
+            self._refused_status = None
             try:
                 http_client = factory(headers=self._headers, timeout=timeout)
                 if not hasattr(http_client, "__aenter__") or not hasattr(http_client, "__aexit__"):
@@ -399,6 +440,7 @@ class _ConnectedClient:
                 return client
             except Exception as exc:
                 last_error = exc
+                refused = self._refusal(streamable_url) or refused
                 await stack.aclose()
                 logger.info(
                     "Streamable HTTP MCP connection failed for %s (%s), trying next transport",
@@ -408,6 +450,7 @@ class _ConnectedClient:
 
         if self._sse_url is not None:
             stack = AsyncExitStack()
+            self._refused_status = None
             try:
                 transport = sse_client(
                     self._sse_url,
@@ -429,17 +472,26 @@ class _ConnectedClient:
                 return client
             except Exception as exc:
                 last_error = exc
+                refused = self._refusal(self._sse_url) or refused
                 await stack.aclose()
 
+        if refused is not None:
+            raise refused from last_error
         raise last_error or RuntimeError(f"No usable MCP transport for {self._url}")
 
     async def _invoke(self, method: str, *args: Any, **kwargs: Any) -> Any:
         client = self._client
         if client is None:
             raise RuntimeError("MCP client is not connected")
+        self._refused_status = None
         try:
             result = await getattr(client, method)(*args, **kwargs)
-        except MCPError as exc:
+        except Exception as exc:
+            refused = self._refusal(self._url)
+            if refused is not None:
+                raise refused from exc
+            if not isinstance(exc, MCPError):
+                raise
             if not self._cached or self._retried or exc.code not in NEGOTIATION_ERROR_CODES:
                 raise
             if self._verdict_key and self._verdict_store is not None:

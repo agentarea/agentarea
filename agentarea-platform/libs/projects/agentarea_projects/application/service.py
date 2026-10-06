@@ -62,6 +62,39 @@ class ProjectService:
             return None
         return await self.repository.get_by_id(project_id)
 
+    async def run_instructions(
+        self, agent_id: UUID | str, project_id: UUID | None
+    ) -> list[tuple[str, str]]:
+        """Name and instructions of a run's project and each one above it, root first.
+
+        The run's project is ``project_id``, else the one project the agent
+        belongs to. An agent in several projects, started in none of them,
+        gets no project's instructions: nothing says which one applies.
+        """
+        current: UUID | str | None = project_id
+        if current is None:
+            memberships = await self.repository.project_ids_of_agent(agent_id)
+            if len(memberships) > 1:
+                logger.info(
+                    "Agent %s is in several projects and the run names none: no project instructions",
+                    agent_id,
+                )
+                return []
+            current = memberships[0] if memberships else None
+
+        chain: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        while current is not None and str(current) not in seen:
+            seen.add(str(current))
+            project = await self.repository.get_instructions(current)
+            if project is None:
+                break
+            name, instructions, parent_project_id = project
+            if instructions and instructions.strip():
+                chain.append((name, instructions.strip()))
+            current = parent_project_id
+        return chain[::-1]
+
     async def get(self, project_id: UUID | str) -> Project | None:
         """Get a project by ID."""
         return await self.repository.get_by_id(project_id)

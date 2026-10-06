@@ -250,3 +250,25 @@ async def test_a_failed_tool_call_drops_the_cached_list(monkeypatch):
         await proxy.call_namespaced_tool("tg__t", {})
 
     assert proxy._cache_key(member, "http://mcp-x:8000", {}) not in cache.store
+
+
+async def test_call_namespaced_tool_result_returns_the_upstream_result_as_is(monkeypatch):
+    from mcp.types import CallToolResult, TextContent
+
+    p = _proxy([AggregatedMember(mcp_instance_id="1", namespace_prefix="gh")])
+    upstream = CallToolResult(content=[TextContent(type="text", text="boom")], is_error=True)
+    calls = []
+
+    async def fake_call(_member, tool_name, arguments):
+        calls.append((tool_name, arguments))
+        return upstream
+
+    monkeypatch.setattr(p, "_call_member_tool_result", fake_call)
+
+    assert await p.call_namespaced_tool_result("gh__create_issue", {"x": 1}) is upstream
+    assert calls == [("create_issue", {"x": 1})]
+
+
+def test_qualified_name_prefixes_the_member_namespace():
+    m = AggregatedMember(mcp_instance_id="1")
+    assert _proxy([m], names={"1": "Deep Wiki"}).qualified_name(m, "ask") == "deep_wiki__ask"

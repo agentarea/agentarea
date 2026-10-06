@@ -37,6 +37,8 @@ import {
   type OAuthConnectState,
 } from "../oauth-connect-state";
 import { ToolsTable } from "../components/ToolsTable";
+import { CredentialFields } from "../components/CredentialFields";
+import { remoteHeaderFields } from "../credential-fields";
 import { ConsumersSection } from "./ConsumersSection";
 import { InstanceActivitySection } from "./InstanceActivitySection";
 import { MCPInstance, MCPServer } from "../types";
@@ -51,15 +53,8 @@ interface Props {
   consumersError: string | null;
 }
 
-interface McpHeaderField {
-  name: string;
-  description?: string;
-  isSecret?: boolean;
-  placeholder?: string;
-}
-
 interface McpServerJsonSpec {
-  remotes?: Array<{ url?: string; headers?: McpHeaderField[] }>;
+  remotes?: Array<{ url?: string }>;
   repository?: { url?: string; source?: string };
   websiteUrl?: string;
   title?: string;
@@ -313,6 +308,7 @@ export default function MCPInstanceDetail({
     string,
     string
   >;
+  const headerFields = remoteHeaderFields(serverSpec);
 
   // The one way in, for every transport: AgentArea's demand gateway, keyed by
   // instance id. It is what gives on-demand start, the request lease and idle
@@ -579,40 +575,31 @@ export default function MCPInstanceDetail({
                   </div>
                   {isEditingConfig ? (
                     <div className="space-y-3">
-                      {Object.entries(editHeaders).map(([key, val]) => {
-                        const fieldMeta = (
-                          (serverSpec?.json_spec as McpServerJsonSpec | undefined)
-                            ?.remotes?.[0]?.headers ||
-                          (serverSpec?.env_schema as McpHeaderField[] | undefined) ||
-                          []
-                        ).find((h) => h.name === key);
-                        return (
-                          <div key={key} className="space-y-1">
-                            <label className="text-xs font-medium">{key}</label>
-                            {fieldMeta?.description && (
-                              <p className="text-xs text-muted-foreground">
-                                {fieldMeta.description}
-                              </p>
-                            )}
-                            <Input
-                              type={
-                                fieldMeta?.isSecret !== false
-                                  ? "password"
-                                  : "text"
-                              }
-                              value={val}
-                              placeholder={fieldMeta?.placeholder || ""}
-                              onChange={(e) => {
-                                setSaveConfigError(null);
-                                setEditHeaders((prev) => ({
-                                  ...prev,
-                                  [key]: e.target.value,
-                                }));
-                              }}
-                            />
-                          </div>
-                        );
-                      })}
+                      <CredentialFields
+                        idPrefix="header"
+                        fields={Object.keys(editHeaders).map((key) => {
+                          const fieldMeta = headerFields.find(
+                            (h) => h.name === key
+                          );
+                          return {
+                            name: key,
+                            description: fieldMeta?.description,
+                            placeholder: fieldMeta?.placeholder,
+                            isSecret: fieldMeta?.isSecret !== false,
+                            isRequired: false,
+                          };
+                        })}
+                        bind={(key) => ({
+                          value: editHeaders[key] ?? "",
+                          onChange: (e) => {
+                            setSaveConfigError(null);
+                            setEditHeaders((prev) => ({
+                              ...prev,
+                              [key]: e.target.value,
+                            }));
+                          },
+                        })}
+                      />
                       {saveConfigError && (
                         <FormError>{saveConfigError}</FormError>
                       )}

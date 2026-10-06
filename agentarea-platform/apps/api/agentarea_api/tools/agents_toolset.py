@@ -20,8 +20,10 @@ from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.di.container import resolve
+from fastapi import HTTPException
 from pydantic import TypeAdapter
 
+from ..api.v1._agent_tools import validate_code_tool_names
 from .base import platform_context, platform_read_context
 
 _TOOL_LIST = TypeAdapter(list[ToolConfig])
@@ -105,6 +107,10 @@ class AgentsToolset(Toolset):
             tools=_TOOL_LIST.validate_python(tools),
             agent_type=agent_type,
         )
+        try:
+            validate_code_tool_names(payload.tools)
+        except HTTPException as exc:
+            return json.dumps({"error": exc.detail})
         async with platform_context() as (_s, _u, repo_factory, event_broker, _):
             service = _build_service(repo_factory, event_broker)
             agent = await service.create_agent(payload)
@@ -119,8 +125,13 @@ class AgentsToolset(Toolset):
         description: str | None = None,
         instruction: str | None = None,
         model_id: str | None = None,
+        tools: builtins.list[dict[str, Any]] | None = None,
     ) -> str:
-        """Update an existing agent."""
+        """Update an existing agent.
+
+        ``tools`` replaces the agent's whole tool list, in the shape ``create``
+        takes; leave it out to keep the tools as they are.
+        """
         patch: dict[str, object] = {}
         if name is not None:
             patch["name"] = name
@@ -130,7 +141,13 @@ class AgentsToolset(Toolset):
             patch["instruction"] = instruction
         if model_id is not None:
             patch["model_id"] = model_id
+        if tools is not None:
+            patch["tools"] = _TOOL_LIST.validate_python(tools)
         payload = AgentUpdate.model_validate(patch)
+        try:
+            validate_code_tool_names(payload.tools)
+        except HTTPException as exc:
+            return json.dumps({"error": exc.detail})
 
         async with platform_context() as (_s, _u, repo_factory, event_broker, _):
             service = _build_service(repo_factory, event_broker)

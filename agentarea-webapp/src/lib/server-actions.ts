@@ -638,9 +638,19 @@ export async function oauthAuthorizeAction(body: {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    return { data: null, error: await readApiError(res) };
+    // The problem's `code` (e.g. `oauth_app_required`) lets the page offer
+    // what does work instead of only showing the failure.
+    const problem = await res
+      .clone()
+      .json()
+      .catch(() => null);
+    return {
+      data: null,
+      error: await readApiError(res),
+      code: typeof problem?.code === "string" ? problem.code : null,
+    };
   }
-  return { data: await res.json(), error: null };
+  return { data: await res.json(), error: null, code: null };
 }
 
 /**

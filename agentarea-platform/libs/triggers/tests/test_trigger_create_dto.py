@@ -23,3 +23,15 @@ def test_a_cron_trigger_with_an_expression_reaches_the_domain():
     )
 
     assert payload.to_domain(created_by="user-1").cron_expression == "0 3 * * *"
+
+
+def test_a_trigger_created_disabled_reaches_the_domain_inactive():
+    payload = TriggerCreate(
+        name="nightly",
+        agent_id=uuid4(),
+        trigger_type="cron",
+        cron_expression="0 3 * * *",
+        enabled=False,
+    )
+
+    assert payload.to_domain(created_by="user-1").is_active is False

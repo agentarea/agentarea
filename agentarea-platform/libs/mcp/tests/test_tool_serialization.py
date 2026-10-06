@@ -4,6 +4,7 @@ path uses to turn an mcp.types.Tool into the plain dict we persist."""
 from types import SimpleNamespace
 
 from agentarea_mcp.tool_serialization import serialize_mcp_tool
+from mcp.types import ToolAnnotations
 
 
 def _tool(**kwargs):
@@ -37,9 +38,14 @@ class TestSerializeMcpTool:
         out = serialize_mcp_tool(_tool(title="Do Thing"))
         assert out["title"] == "Do Thing"
 
+    def test_sdk_annotations_are_stored_under_their_spec_names(self):
+        ann = ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+        out = serialize_mcp_tool(_tool(annotations=ann))
+        assert out["annotations"] == {"readOnlyHint": True, "destructiveHint": False}
+
     def test_captures_annotations_from_pydantic_like_model(self):
         ann = SimpleNamespace(
-            model_dump=lambda exclude_none: {
+            model_dump=lambda exclude_none, by_alias: {
                 "readOnlyHint": True,
                 "destructiveHint": False,
                 "openWorldHint": True,
@@ -64,7 +70,7 @@ class TestSerializeMcpTool:
     def test_result_is_json_serializable(self):
         import json
 
-        ann = SimpleNamespace(model_dump=lambda exclude_none: {"readOnlyHint": True})
+        ann = SimpleNamespace(model_dump=lambda exclude_none, by_alias: {"readOnlyHint": True})
         out = serialize_mcp_tool(_tool(title="T", annotations=ann))
         json.dumps(out)  # must not raise
 

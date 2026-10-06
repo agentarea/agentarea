@@ -813,6 +813,29 @@
         "validate": "Проверить"
       }
     },
+    "connectLink": {
+      "metaTitle": "Подключить {name}",
+      "title": "Подключить {provider} к AgentArea",
+      "workspace": "Рабочее пространство: {workspace}",
+      "signInTitle": "Войти в {provider}",
+      "signInButton": "Войти в {provider}",
+      "signInRefused": "{provider} не поддерживает вход отсюда — вставьте API-ключ.",
+      "keyTitle": "Добавьте ключ",
+      "keyDetail": "Всё остальное уже настроено. Вставьте ключ, чтобы закончить.",
+      "replaceKeyTitle": "Замените ключ",
+      "replaceKeyDetail": "Сервер не принял сохранённый ключ. Вставьте новый, чтобы переподключиться.",
+      "saveAndConnect": "Сохранить и подключить",
+      "verifyingTitle": "Проверяем подключение",
+      "verifyingDetail": "Это займёт несколько секунд.",
+      "connectedTitle": "Готово — можно закрыть вкладку и вернуться в чат",
+      "connectedDetail": "{name}: подключение работает.",
+      "unverifiedTitle": "Ещё не проверено",
+      "unverifiedDetail": "Проверьте, что подключение работает.",
+      "check": "Проверить подключение",
+      "failedTitle": "Не удалось подключиться",
+      "failedDetail": "Сервер не принял подключение.",
+      "openSettings": "Открыть настройки подключения"
+    },
     "instanceDetail": {
       "activity": {
         "title": "Активность ({count})",

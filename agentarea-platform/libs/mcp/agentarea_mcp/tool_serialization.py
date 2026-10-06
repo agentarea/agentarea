@@ -38,7 +38,7 @@ def serialize_mcp_tool(tool: Any) -> dict[str, Any]:
     annotations = getattr(tool, "annotations", None)
     if annotations is not None:
         if hasattr(annotations, "model_dump"):
-            ann = annotations.model_dump(exclude_none=True)
+            ann = annotations.model_dump(exclude_none=True, by_alias=True)
         elif isinstance(annotations, dict):
             ann = {k: v for k, v in annotations.items() if v is not None}
         else:
