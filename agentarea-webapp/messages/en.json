@@ -420,7 +420,7 @@
   },
   "SettingsPage": {
     "title": "Settings",
-    "logout": "Logout",
+    "logout": "Log out",
     "profile": {
       "title": "Profile",
       "email": "Email",

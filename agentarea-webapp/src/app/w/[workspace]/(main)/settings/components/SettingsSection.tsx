@@ -24,7 +24,10 @@ export function SettingsSection({
   );
 }
 
-/** The panel's bottom strip: a status line on the left, its actions on the right. */
+/**
+ * The panel's bottom strip: a status line on the left, its actions on the right.
+ * It always follows a row, whose bottom border is the divider.
+ */
 export function SettingsFooter({
   status,
   children,
@@ -33,7 +36,7 @@ export function SettingsFooter({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/60 bg-muted/20 px-4 py-2.5">
+    <div className="flex flex-wrap items-center justify-end gap-2 bg-muted/20 px-4 py-2.5">
       {status != null && (
         <div className="mr-auto min-w-0 text-xs text-muted-foreground">
           {status}

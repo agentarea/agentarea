@@ -5,8 +5,8 @@ import type { SettingsFlow } from "@ory/client-fetch";
 import type { OryClientConfiguration } from "@ory/elements-react";
 import { LogOut } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
-import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { ToolbarButton } from "@/components/ui/toolbar";
 import { useAuth } from "@/hooks/useAuth";
 import type { Workspace } from "@/lib/workspaces";
 import ExportWorkspaceButton from "./components/ExportWorkspaceButton";
@@ -39,15 +39,10 @@ export default function SettingsClient({
       header={{
         breadcrumb: [{ label: t("title") }, { label: t("profile.title") }],
         controls: (
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            size="sm"
-            className="gap-1"
-          >
-            <LogOut />
+          <ToolbarButton onClick={handleLogout}>
+            <LogOut className="h-3.5 w-3.5 text-muted-foreground" />
             {t("logout")}
-          </Button>
+          </ToolbarButton>
         ),
       }}
     >

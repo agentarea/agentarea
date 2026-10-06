@@ -38,6 +38,14 @@ export default function PasswordSection({ nodes }: { nodes: UiNode[] }) {
       <SettingsRow
         title={t("password")}
         description={updated ? <FlowSuccess /> : t("passwordDescription")}
+        below={
+          editing && (
+            <PasswordField
+              messages={findInput(nodes, "password")?.messages}
+              onCancel={() => toggle(false)}
+            />
+          )
+        }
       >
         {editing ? null : (
           <Button
@@ -50,18 +58,21 @@ export default function PasswordSection({ nodes }: { nodes: UiNode[] }) {
           </Button>
         )}
       </SettingsRow>
-      {editing && (
-        <PasswordEditor
-          messages={findInput(nodes, "password")?.messages}
-          onCancel={() => toggle(false)}
-        />
-      )}
+      {editing && <PasswordFooter onCancel={() => toggle(false)} />}
     </SettingsSection>
   );
 }
 
-/** The new-password field with its length hint; the only part that re-renders as you type. */
-function PasswordEditor({
+const usePasswordShortfall = () => {
+  const password = (useWatch({ name: "password" }) as string | undefined) ?? "";
+  return {
+    typed: password.length > 0,
+    missing: MIN_PASSWORD_LENGTH - password.length,
+  };
+};
+
+/** The new-password field with its length hint; with the footer, the only parts that re-render as you type. */
+function PasswordField({
   messages,
   onCancel,
 }: {
@@ -69,53 +80,58 @@ function PasswordEditor({
   onCancel: () => void;
 }) {
   const t = useTranslations("SettingsPage.security");
-  const tCommon = useTranslations("Common");
-  const {
-    register,
-    formState: { isSubmitting },
-  } = useFormContext();
-  const password = (useWatch({ name: "password" }) as string | undefined) ?? "";
-  const missing = MIN_PASSWORD_LENGTH - password.length;
+  const { register } = useFormContext();
+  const { typed, missing } = usePasswordShortfall();
   const invalid = errorsOf(messages).length > 0;
 
   return (
-    <>
-      <div className="space-y-1.5 border-b border-border/60 px-4 pb-4">
-        <PasswordInput
-          aria-label={t("newPassword")}
-          placeholder={t("newPassword")}
-          autoComplete="new-password"
-          autoFocus
-          aria-invalid={invalid || undefined}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") onCancel();
-          }}
-          {...register("password")}
-        />
-        {invalid ? (
-          <FieldErrors messages={messages} />
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            {password && missing > 0
-              ? t("passwordMissing", { count: missing })
-              : t("passwordHint", { count: MIN_PASSWORD_LENGTH })}
-          </p>
-        )}
-      </div>
-      <SettingsFooter>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={isSubmitting}
-          onClick={onCancel}
-        >
-          {tCommon("cancel")}
-        </Button>
-        <MethodSubmit method={UiNodeGroupEnum.Password} disabled={missing > 0}>
-          {t("updatePassword")}
-        </MethodSubmit>
-      </SettingsFooter>
-    </>
+    <div className="space-y-1.5 pt-1">
+      <PasswordInput
+        aria-label={t("newPassword")}
+        placeholder={t("newPassword")}
+        autoComplete="new-password"
+        autoFocus
+        aria-invalid={invalid || undefined}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onCancel();
+        }}
+        {...register("password")}
+      />
+      {invalid ? (
+        <FieldErrors messages={messages} />
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          {typed && missing > 0
+            ? t("passwordMissing", { count: missing })
+            : t("passwordHint", { count: MIN_PASSWORD_LENGTH })}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function PasswordFooter({ onCancel }: { onCancel: () => void }) {
+  const t = useTranslations("SettingsPage.security");
+  const tCommon = useTranslations("Common");
+  const {
+    formState: { isSubmitting },
+  } = useFormContext();
+  const { missing } = usePasswordShortfall();
+
+  return (
+    <SettingsFooter>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={isSubmitting}
+        onClick={onCancel}
+      >
+        {tCommon("cancel")}
+      </Button>
+      <MethodSubmit method={UiNodeGroupEnum.Password} disabled={missing > 0}>
+        {t("updatePassword")}
+      </MethodSubmit>
+    </SettingsFooter>
   );
 }

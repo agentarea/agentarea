@@ -21,6 +21,7 @@ export default function SettingsRow({
   description,
   htmlFor,
   control = "fit",
+  below,
   children,
 }: {
   /** Optional leading mark, e.g. a provider logo. */
@@ -30,6 +31,8 @@ export default function SettingsRow({
   /** Id of the control, so the title labels it. */
   htmlFor?: string;
   control?: keyof typeof CONTROL_CLASS;
+  /** Full-width content under title and control, still inside the row, e.g. an editor it opened. */
+  below?: ReactNode;
   children?: ReactNode;
 }) {
   const Title = htmlFor ? "label" : "div";
@@ -49,6 +52,9 @@ export default function SettingsRow({
       </div>
       {children != null && (
         <div className={cn("flex", CONTROL_CLASS[control])}>{children}</div>
+      )}
+      {below != null && below !== false && (
+        <div className="basis-full">{below}</div>
       )}
     </div>
   );
