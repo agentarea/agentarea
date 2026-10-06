@@ -2392,7 +2392,25 @@
       "reason": "Причина",
       "comment": "Комментарий",
       "arguments": "Аргументы"
-    }
+    },
+    "verbs": {
+      "create": "Создано",
+      "update": "Изменено",
+      "delete": "Удалено",
+      "rotate": "Перевыпущено",
+      "signing_secret_rotate": "Секрет перевыпущен",
+      "set_enabled": "Переключено",
+      "invite": "Приглашение",
+      "invitation_revoke": "Приглашение отозвано",
+      "remove": "Исключено",
+      "revoke": "Отозвано",
+      "grant": "Доступ выдан",
+      "allowed": "Разрешено",
+      "denied": "Отклонено",
+      "approval_required": "Ждёт одобрения",
+      "approved": "Одобрено"
+    },
+    "you": "Вы"
   },
   "AuthConsent": {
     "title": "Разрешить доступ для {clientName}",

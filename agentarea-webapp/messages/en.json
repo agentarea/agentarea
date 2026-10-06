@@ -2392,7 +2392,25 @@
       "reason": "Reason",
       "comment": "Comment",
       "arguments": "Arguments"
-    }
+    },
+    "verbs": {
+      "create": "Created",
+      "update": "Updated",
+      "delete": "Deleted",
+      "rotate": "Rotated",
+      "signing_secret_rotate": "Secret rotated",
+      "set_enabled": "Switched",
+      "invite": "Invited",
+      "invitation_revoke": "Invite revoked",
+      "remove": "Removed",
+      "revoke": "Revoked",
+      "grant": "Granted",
+      "allowed": "Allowed",
+      "denied": "Denied",
+      "approval_required": "Needs approval",
+      "approved": "Approved"
+    },
+    "you": "You"
   },
   "AuthConsent": {
     "title": "Authorize {clientName}",

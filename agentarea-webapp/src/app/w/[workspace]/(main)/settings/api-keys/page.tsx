@@ -12,12 +12,13 @@ export const metadata: Metadata = {
 
 export default async function APIKeysPage() {
   const t = await getTranslations("APIKeysPage");
+  const tSettings = await getTranslations("SettingsPage");
 
   return (
     <ContentBlock
       header={{
         breadcrumb: [
-          { label: "Settings", href: "/settings" },
+          { label: tSettings("title"), href: "/settings" },
           { label: t("title") },
         ],
         description: t("description"),

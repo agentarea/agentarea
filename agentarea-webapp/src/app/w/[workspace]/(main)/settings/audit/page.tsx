@@ -25,6 +25,7 @@ export default async function AuditLogPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const t = await getTranslations("AuditLogPage");
+  const tSettings = await getTranslations("SettingsPage");
   const [filters, { canAdminister }] = await Promise.all([
     searchParams.then(parseAuditFilters),
     getViewerCapabilities(),
@@ -34,7 +35,7 @@ export default async function AuditLogPage({
     <ContentBlock
       header={{
         breadcrumb: [
-          { label: "Settings", href: "/settings" },
+          { label: tSettings("title"), href: "/settings" },
           { label: t("title") },
         ],
         controls: canAdminister ? <AuditExportButton /> : undefined,
