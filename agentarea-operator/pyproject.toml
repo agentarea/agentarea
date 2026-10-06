@@ -22,6 +22,7 @@ dependencies = [
 [tool.uv]
 constraint-dependencies = [
     "click==8.3.3",
+    "multidict>=6.9.1",
     "oauthlib>=4.0.0",
 ]
 
