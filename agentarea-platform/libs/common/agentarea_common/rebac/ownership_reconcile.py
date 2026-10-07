@@ -8,13 +8,7 @@ table and grants the rows the graph has never seen, plus each member's baseline
 role. Only ever adds; idempotent. The workspace-admin projection has one writer
 (the workspace seed); the reconcile script repairs it on request.
 
-The automatic pass grants only rows with no ``resource:<id>#project`` tuple.
-Every row the repository created has one, so a row that has it but lacks its
-creator's grants had them revoked, and an unattended run must not restore them.
-The manual script re-grants unconditionally, and someone reads its output.
-
-Run after every migration by ``agentarea-api reconcile`` (the chart's
-post-migration Job) and by ``scripts/20260923_reconcile_resource_authz.py``.
+Run by hand through ``scripts/20260923_reconcile_resource_authz.py``.
 """
 
 from __future__ import annotations
@@ -24,8 +18,7 @@ import importlib.util
 import logging
 import pkgutil
 import re
-from collections.abc import Collection, Iterable
-from dataclasses import dataclass
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -184,49 +177,17 @@ async def reconcile_resource_ownership(
     session: AsyncSession,
     writer: TupleWriter,
     workspace_owners: dict[str, str],
-    *,
-    skip: Collection[str] = frozenset(),
 ) -> int:
-    """Grant governed rows their owner and root project, except ``skip``; return rows granted."""
+    """Grant governed rows their owner and root project; return rows walked."""
     models: list[Any] = load_governed_models()
     logger.info("governed tables: %s", ", ".join(m.__tablename__ for m in models))
     walked = 0
     with unscoped("reconcile walks every governed row of every workspace"):
         for model in models:
-            rows = [
-                row
-                for row in (
-                    await session.execute(select(model.id, model.workspace_id, model.created_by))
-                ).all()
-                if str(row.id) not in skip
-            ]
+            rows = (
+                await session.execute(select(model.id, model.workspace_id, model.created_by))
+            ).all()
             await reconcile_resources(writer, rows, workspace_owners)
             walked += len(rows)
             logger.info("reconciled %d %s rows", len(rows), model.__tablename__)
     return walked
-
-
-@dataclass(frozen=True)
-class OwnershipReconcileResult:
-    resources: int
-    workspaces: int
-    memberships: int
-    written: int
-
-
-async def reconcile_graph_ownership(
-    session: AsyncSession, client: TupleGraph, *, dry_run: bool = False
-) -> OwnershipReconcileResult:
-    """Ownership of rows the graph has never seen, and member roles; writes only what is missing."""
-    present = await client.query_all_tuples(RelationQuery())
-    attached = {t.object for t in present if (t.namespace, t.relation) == ("resource", "project")}
-    writer = TupleWriter(client, dry_run, present)
-    owners = await load_workspace_owners(session)
-    resources = await reconcile_resource_ownership(session, writer, owners, skip=attached)
-    memberships = await reconcile_member_roles(writer, client)
-    return OwnershipReconcileResult(
-        resources=resources,
-        workspaces=len(owners),
-        memberships=memberships,
-        written=writer.written,
-    )

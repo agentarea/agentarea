@@ -1,9 +1,7 @@
 """The backfill keeps every webhook URL: same webhook_id, now owned by a source.
 
 Set STREAMS_TEST_DATABASE_URL. Runs the migration's own SQL on rows written
-after the database was migrated; the statements are idempotent. Its streams are
-inserted by SQL, so they carry no graph tuples until the post-migration
-reconcile (``agentarea-api reconcile``) writes them.
+after the database was migrated; the statements are idempotent.
 """
 
 import importlib.util
@@ -13,8 +11,6 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from agentarea_common.rebac.models import RelationQuery, RelationTuple
-from agentarea_common.rebac.ownership_reconcile import reconcile_graph_ownership
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -250,115 +246,5 @@ async def test_a_long_name_and_webhook_id_still_fit_the_stream_name():
         assert rows.webhook_id == webhook_id
         assert len(rows.name) <= 255
         assert rows.name.endswith(f" ({webhook_id})")
-        await session.rollback()
-    await engine.dispose()
-
-
-class _Graph:
-    """In-memory tuple store; ``can_read`` follows the resource/project branches of model.fga."""
-
-    def __init__(self, tuples: list[RelationTuple]) -> None:
-        self.tuples = {str(t): t for t in tuples}
-
-    async def write_tuple(self, tuple_: RelationTuple) -> None:
-        self.tuples[str(tuple_)] = tuple_
-
-    async def delete_tuple(self, tuple_: RelationTuple) -> None:
-        self.tuples.pop(str(tuple_), None)
-
-    async def query_all_tuples(self, query: RelationQuery) -> list[RelationTuple]:
-        return [
-            t
-            for t in self.tuples.values()
-            if (query.namespace is None or t.namespace == query.namespace)
-            and (query.object is None or t.object == query.object)
-            and (query.relation is None or t.relation == query.relation)
-        ]
-
-    def _has(self, namespace: str, obj: str, relation: str, subject: str) -> bool:
-        return f"{namespace}:{obj}#{relation}@{subject}" in self.tuples
-
-    def _subjects(self, namespace: str, obj: str, relation: str) -> list[str]:
-        return [
-            str(t.subject_id)
-            for t in self.tuples.values()
-            if (t.namespace, t.object, t.relation) == (namespace, obj, relation)
-        ]
-
-    def can_read(self, user: str, resource_id: UUID) -> bool:
-        if self._has("resource", str(resource_id), "reader", user):
-            return True
-        for project in self._subjects("resource", str(resource_id), "project"):
-            project_id = project.removeprefix("project:")
-            if self._has("project", project_id, "reader", user):
-                return True
-            for workspace in self._subjects("project", project_id, "workspace"):
-                if self._has("Workspace", workspace.removeprefix("Workspace:"), "admin", user):
-                    return True
-        return False
-
-
-async def test_a_backfilled_stream_is_readable_once_the_post_migration_reconcile_ran():
-    engine = create_async_engine(TEST_DATABASE_URL)
-    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    migration = _migration()
-    ws, webhook_id = str(uuid4()), f"wh{uuid4().hex}"
-    graph = _Graph(
-        [
-            RelationTuple(
-                namespace="Workspace", object=ws, relation="members", subject_id="User:member"
-            )
-        ]
-    )
-    async with maker() as session:
-        trigger_id = await _add_trigger(session, ws=ws, webhook_id=webhook_id)
-        await _run(session, migration.UPGRADE_SQL)
-        stream_id = (await _rows_for(session, trigger_id)).stream_id
-        assert not graph.can_read("User:owner", stream_id)
-        assert not graph.can_read("User:member", stream_id)
-
-        first = await reconcile_graph_ownership(session, graph)
-        second = await reconcile_graph_ownership(session, graph)
-
-        assert graph.can_read("User:owner", stream_id)
-        assert graph.can_read("User:member", stream_id)
-        assert not graph.can_read("User:stranger", stream_id)
-        assert first.written > 0
-        assert second.written == 0
-        await session.rollback()
-    await engine.dispose()
-
-
-async def test_the_automatic_reconcile_never_restores_a_revoked_creator_grant():
-    engine = create_async_engine(TEST_DATABASE_URL)
-    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    migration = _migration()
-    ws = str(uuid4())
-    async with maker() as session:
-        revoked_trigger = await _add_trigger(session, ws=ws, webhook_id=f"wh{uuid4().hex}")
-        inserted_trigger = await _add_trigger(session, ws=ws, webhook_id=f"wh{uuid4().hex}")
-        await _run(session, migration.UPGRADE_SQL)
-        revoked = (await _rows_for(session, revoked_trigger)).stream_id
-        inserted = (await _rows_for(session, inserted_trigger)).stream_id
-        # The repository attached it and granted its creator; an admin then revoked the grants.
-        graph = _Graph(
-            [
-                RelationTuple(
-                    namespace="resource",
-                    object=str(revoked),
-                    relation="project",
-                    subject_id=f"project:{ws}-root",
-                )
-            ]
-        )
-
-        await reconcile_graph_ownership(session, graph)
-
-        assert not graph.can_read("User:owner", revoked)
-        assert not any(
-            t.object == str(revoked) and t.subject_id == "User:owner"
-            for t in graph.tuples.values()
-        )
-        assert graph.can_read("User:owner", inserted)
         await session.rollback()
     await engine.dispose()
