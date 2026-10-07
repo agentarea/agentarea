@@ -136,6 +136,9 @@ import type {
   CreateSkillV1SkillsPostData,
   CreateSkillV1SkillsPostErrors,
   CreateSkillV1SkillsPostResponses,
+  CreateSourceV1StreamsStreamIdSourcesPostData,
+  CreateSourceV1StreamsStreamIdSourcesPostErrors,
+  CreateSourceV1StreamsStreamIdSourcesPostResponses,
   CreateStreamV1StreamsPostData,
   CreateStreamV1StreamsPostErrors,
   CreateStreamV1StreamsPostResponses,
@@ -211,6 +214,9 @@ import type {
   DeleteSkillV1SkillsSkillIdDeleteData,
   DeleteSkillV1SkillsSkillIdDeleteErrors,
   DeleteSkillV1SkillsSkillIdDeleteResponses,
+  DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteData,
+  DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteErrors,
+  DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponses,
   DeleteStreamV1StreamsStreamIdDeleteData,
   DeleteStreamV1StreamsStreamIdDeleteErrors,
   DeleteStreamV1StreamsStreamIdDeleteResponses,
@@ -623,6 +629,9 @@ import type {
   ListSourcesV1StreamsStreamIdSourcesGetData,
   ListSourcesV1StreamsStreamIdSourcesGetErrors,
   ListSourcesV1StreamsStreamIdSourcesGetResponses,
+  ListSourceTypesV1StreamsSourceTypesGetData,
+  ListSourceTypesV1StreamsSourceTypesGetErrors,
+  ListSourceTypesV1StreamsSourceTypesGetResponses,
   ListStreamsV1StreamsGetData,
   ListStreamsV1StreamsGetErrors,
   ListStreamsV1StreamsGetResponses,
@@ -9516,7 +9525,39 @@ export const createStreamV1StreamsPost = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * List Source Types
+ *
+ * Webhook types a source can be, with the credentials and settings each needs.
+ */
+export const listSourceTypesV1StreamsSourceTypesGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListSourceTypesV1StreamsSourceTypesGetData, ThrowOnError>
+): RequestResult<
+  ListSourceTypesV1StreamsSourceTypesGetResponses,
+  ListSourceTypesV1StreamsSourceTypesGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListSourceTypesV1StreamsSourceTypesGetResponses,
+    ListSourceTypesV1StreamsSourceTypesGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/source-types",
+    ...options,
+  });
+
+/**
  * Delete Stream
+ *
+ * Refused (409) while a live webhook trigger's source feeds the stream.
  */
 export const deleteStreamV1StreamsStreamIdDelete = <
   ThrowOnError extends boolean = false,
@@ -9684,6 +9725,76 @@ export const listSourcesV1StreamsStreamIdSourcesGet = <
       },
     ],
     url: "/v1/workspaces/{workspace}/streams/{stream_id}/sources",
+    ...options,
+  });
+
+/**
+ * Create Source
+ *
+ * Add a webhook source to the stream, with no trigger.
+ *
+ * Credentials are write-only and held by reference; the response carries the
+ * public URL to give the sender.
+ */
+export const createSourceV1StreamsStreamIdSourcesPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreateSourceV1StreamsStreamIdSourcesPostData, ThrowOnError>
+): RequestResult<
+  CreateSourceV1StreamsStreamIdSourcesPostResponses,
+  CreateSourceV1StreamsStreamIdSourcesPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateSourceV1StreamsStreamIdSourcesPostResponses,
+    CreateSourceV1StreamsStreamIdSourcesPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/sources",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Source
+ *
+ * Remove a webhook source; one a live trigger owns is refused with 409.
+ */
+export const deleteSourceV1StreamsStreamIdSourcesSourceIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponses,
+  DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponses,
+    DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/sources/{source_id}",
     ...options,
   });
 

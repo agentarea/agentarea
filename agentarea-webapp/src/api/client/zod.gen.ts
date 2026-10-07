@@ -2526,6 +2526,15 @@ export const zSecretOwner = z.object({
 });
 
 /**
+ * SecretRef
+ *
+ * A workspace secret named instead of its value; the value stays where it is.
+ */
+export const zSecretRef = z.object({
+  secret_id: z.string().uuid(),
+});
+
+/**
  * SecretResponse
  *
  * A secret's metadata. The value is never part of this.
@@ -2810,6 +2819,16 @@ export const zDiscoveryResponse = z.object({
 });
 
 /**
+ * SourceField
+ */
+export const zSourceField = z.object({
+  key: z.string(),
+  label: z.string(),
+  placeholder: z.string().optional().default(""),
+  required: z.boolean().optional().default(true),
+});
+
+/**
  * SpecPreviewRequest
  */
 export const zSpecPreviewRequest = z.object({
@@ -2891,16 +2910,18 @@ export const zStreamResponse = z.object({
 });
 
 /**
- * StreamSourceResponse
+ * StreamSourceTypeResponse
  */
-export const zStreamSourceResponse = z.object({
-  allowed_methods: z.array(z.string()).nullable(),
-  created_at: z.string().datetime(),
-  id: z.string().uuid(),
-  kind: z.string(),
-  webhook_id: z.string().nullable(),
-  webhook_type: z.string().nullable(),
-  webhook_url: z.string().nullable(),
+export const zStreamSourceTypeResponse = z.object({
+  config: z.array(zSourceField).optional(),
+  credentials: z.array(zSourceField),
+  description: z.string(),
+  events: z.array(z.string()).optional(),
+  icon: z.string(),
+  icon_url: z.string().nullable(),
+  name: z.string(),
+  verification: z.enum(["signature", "secret_token", "api_lookup"]),
+  webhook_type: z.string(),
 });
 
 /**
@@ -3672,6 +3693,21 @@ export const zWebhookSignatureScheme = z.object({
 });
 
 /**
+ * StreamSourceResponse
+ */
+export const zStreamSourceResponse = z.object({
+  allowed_methods: z.array(z.string()).nullable(),
+  created_at: z.string().datetime(),
+  id: z.string().uuid(),
+  kind: z.string(),
+  signature_scheme: zWebhookSignatureScheme.nullish(),
+  trigger_id: z.string().uuid().nullish(),
+  webhook_id: z.string().nullable(),
+  webhook_type: z.string().nullable(),
+  webhook_url: z.string().nullable(),
+});
+
+/**
  * TriggerResponse
  *
  * Response model for trigger data.
@@ -3711,6 +3747,33 @@ export const zTriggerResponse = z.object({
   webhook_signing: z.enum(["signed", "unsigned", "unsupported"]).nullish(),
   webhook_type: z.string().nullish(),
   webhook_url: z.string().nullish(),
+});
+
+/**
+ * WebhookSourceCreate
+ *
+ * A webhook source on an existing stream, with no trigger.
+ */
+export const zWebhookSourceCreate = z.object({
+  config: z.record(z.string()).optional(),
+  credentials: z.record(z.union([z.string(), zSecretRef])).optional(),
+  webhook_type: z.string().min(1).max(50),
+});
+
+/**
+ * WebhookSourceCreated
+ */
+export const zWebhookSourceCreated = z.object({
+  allowed_methods: z.array(z.string()).nullable(),
+  created_at: z.string().datetime(),
+  id: z.string().uuid(),
+  kind: z.string(),
+  signature_scheme: zWebhookSignatureScheme.nullish(),
+  signing_secret: z.string().nullish(),
+  trigger_id: z.string().uuid().nullish(),
+  webhook_id: z.string().nullable(),
+  webhook_type: z.string().nullable(),
+  webhook_url: z.string().nullable(),
 });
 
 /**
@@ -6328,6 +6391,15 @@ export const zCreateStreamV1StreamsPostBody = zStreamCreate;
  */
 export const zCreateStreamV1StreamsPostResponse = zStreamResponse;
 
+/**
+ * Response List Source Types V1 Streams Source Types Get
+ *
+ * Successful Response
+ */
+export const zListSourceTypesV1StreamsSourceTypesGetResponse = z.array(
+  zStreamSourceTypeResponse
+);
+
 export const zDeleteStreamV1StreamsStreamIdDeletePath = z.object({
   stream_id: z.string().uuid(),
 });
@@ -6396,6 +6468,32 @@ export const zListSourcesV1StreamsStreamIdSourcesGetPath = z.object({
 export const zListSourcesV1StreamsStreamIdSourcesGetResponse = z.array(
   zStreamSourceResponse
 );
+
+export const zCreateSourceV1StreamsStreamIdSourcesPostBody =
+  zWebhookSourceCreate;
+
+export const zCreateSourceV1StreamsStreamIdSourcesPostPath = z.object({
+  stream_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zCreateSourceV1StreamsStreamIdSourcesPostResponse =
+  zWebhookSourceCreated;
+
+export const zDeleteSourceV1StreamsStreamIdSourcesSourceIdDeletePath = z.object(
+  {
+    stream_id: z.string().uuid(),
+    source_id: z.string().uuid(),
+  }
+);
+
+/**
+ * Successful Response
+ */
+export const zDeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponse =
+  z.void();
 
 export const zListSubscriptionsV1StreamsStreamIdSubscriptionsGetPath = z.object(
   {
