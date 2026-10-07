@@ -52,8 +52,11 @@ from mcp.types import (
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from agentarea_common.auth.context import UserContext
     from agentarea_mcp.application.service import MCPServerInstanceService
+    from agentarea_openapi.application.service import OpenAPIConnectionService
     from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -329,7 +332,9 @@ def _policy_aliases(scope: ClientScope, tool_name: str) -> tuple[str, ...]:
     return tuple(names)
 
 
-def _client_tool_decision(scope: ClientScope, tool_name: str) -> ToolAuthorizationDecision:
+def _client_tool_decision(
+    scope: ClientScope, tool_name: str, restricting_aliases: Sequence[str] = ()
+) -> ToolAuthorizationDecision:
     """The PDP's verdict on the client running ``tool_name``, approval folded into deny.
 
     An approval requirement holds an agent's run until a human resolves the
@@ -338,7 +343,10 @@ def _client_tool_decision(scope: ClientScope, tool_name: str) -> ToolAuthorizati
     back on once someone approves, so the call is refused and says why.
     """
     decision = decide_tool_policy(
-        scope.tool_policy, tool_name, aliases=_policy_aliases(scope, tool_name)
+        scope.tool_policy,
+        tool_name,
+        aliases=_policy_aliases(scope, tool_name),
+        restricting_aliases=restricting_aliases,
     )
     if decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL:
         return ToolAuthorizationDecision(
@@ -421,9 +429,10 @@ async def _authorize_call(
     *,
     resource_type: str,
     resource_id: str,
+    restricting_aliases: Sequence[str] = (),
 ) -> CallToolResult | None:
     """Judge and audit one call; ``None`` when it may run, else the refusal."""
-    decision = _client_tool_decision(scope, tool_name)
+    decision = _client_tool_decision(scope, tool_name, restricting_aliases)
     await _audit_tool_call(
         scope,
         tool_name,
@@ -475,6 +484,59 @@ async def call_instance_tool(
     if refusal is not None:
         return refusal
     return await proxy.call_namespaced_tool_result(name, arguments)
+
+
+async def call_openapi_tool(
+    session: AsyncSession,
+    user_ctx: UserContext,
+    connection_service: OpenAPIConnectionService,
+    connection: Any,
+    tool_name: str,
+    arguments: dict,
+) -> CallToolResult:
+    """Run one operation of an OpenAPI *connection* as the caller, the way an agent runs it.
+
+    The request is the agent's ``OpenAPITool``; the policy verdict and the audit
+    record are a connector tool's, filed against the connection. A rule naming
+    the operation, the connection or its id governs the call, as it governs an
+    agent's.
+    """
+    from agentarea_agents_sdk.tools.openapi_tool import OpenAPIToolFactory
+
+    tools = await OpenAPIToolFactory.create_tools_from_connection(
+        connection.id, [tool_name], connection_service
+    )
+    if not tools:
+        return CallToolResult(
+            content=[
+                TextContent(type="text", text=f"{connection.name} has no operation {tool_name}")
+            ],
+            is_error=True,
+        )
+    tool = tools[0]
+    scope = ClientScope(
+        proxy=MCPAggregatorProxy(connection.name, "", [], {}, {}),
+        skill_registry={},
+        platform_tools=frozenset(),
+        user_context=user_ctx,
+        tool_policy=await _effective_tool_policy(session, user_ctx),
+        actor_type="client" if user_ctx.client_id else "user",
+    )
+    refusal = await _authorize_call(
+        scope,
+        tool.name,
+        arguments,
+        resource_type="openapi_connection",
+        resource_id=str(connection.id),
+        restricting_aliases=(tool_name, connection.name, str(connection.id)),
+    )
+    if refusal is not None:
+        return refusal
+    result = await tool.execute(**arguments)
+    text = result["result"] if result["success"] else result["error"]
+    return CallToolResult(
+        content=[TextContent(type="text", text=text or "")], is_error=not result["success"]
+    )
 
 
 def _activate_skill_tool(skill_registry: dict) -> Tool:
