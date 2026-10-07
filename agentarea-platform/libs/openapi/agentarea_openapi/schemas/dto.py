@@ -112,8 +112,59 @@ class UrlVariableInput(BaseModel):
         return v
 
 
+class QueryParamInput(BaseModel):
+    """One query parameter sent with every request of an OpenAPI connection.
+
+    A secret value (an API key the upstream takes as ``?api_key=``) is stored
+    encrypted in the secret manager and never returned. A configured parameter
+    wins over a same-named one the agent passes.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(
+        min_length=1,
+        max_length=256,
+        description="Query parameter name. Allowed characters: letters, digits, '-', '_', '.', '[', ']'.",
+    )
+    secret: bool = Field(
+        default=True,
+        description="Store the value encrypted and never return it. Set false for plain values.",
+    )
+    value: str = Field(
+        default="",
+        max_length=8192,
+        description=(
+            "Parameter value, URL-encoded when sent. On update, an empty value for a "
+            "secret parameter keeps the value already stored under that name."
+        ),
+    )
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, v: str) -> str:
+        if not re.fullmatch(r"[A-Za-z0-9_.\-\[\]]+", v):
+            raise ValueError("Query parameter name contains invalid characters")
+        return v
+
+
+def _unique_query_param_names(v: list[QueryParamInput] | None) -> list[QueryParamInput] | None:
+    names = [p.name for p in v or []]
+    if len(set(names)) != len(names):
+        raise ValueError("Query parameter names must be unique.")
+    return v
+
+
 class HeaderOutput(BaseModel):
     """Header metadata returned in API responses (secret values are masked)."""
+
+    name: str
+    secret: bool
+    value: str | None = None
+
+
+class QueryParamOutput(BaseModel):
+    """Query parameter metadata returned in API responses (secret values are masked)."""
 
     name: str
     secret: bool
@@ -175,6 +226,13 @@ class OpenAPIConnectionCreate(BaseModel):
             "(e.g. Authorization) are stored encrypted in the secret manager."
         ),
     )
+    custom_query_params: list[QueryParamInput] | None = Field(
+        default=None,
+        description=(
+            "Query parameters attached to every request, e.g. an API key the upstream "
+            "takes as '?api_key='. Secret values are stored encrypted in the secret manager."
+        ),
+    )
     url_variables: list[UrlVariableInput] | None = Field(
         default=None,
         description=(
@@ -182,6 +240,13 @@ class OpenAPIConnectionCreate(BaseModel):
             "per placeholder. Stored encrypted in the secret manager."
         ),
     )
+
+    @field_validator("custom_query_params")
+    @classmethod
+    def _validate_query_params(
+        cls, v: list[QueryParamInput] | None
+    ) -> list[QueryParamInput] | None:
+        return _unique_query_param_names(v)
 
     @field_validator("base_url")
     @classmethod
@@ -215,6 +280,13 @@ class OpenAPIConnectionUpdate(BaseModel):
             "values are stored encrypted in the secret manager."
         ),
     )
+    custom_query_params: list[QueryParamInput] | None = Field(
+        default=None,
+        description=(
+            "Replace the full query-parameter set. Pass [] to clear all. An empty value "
+            "for a secret parameter keeps the one already stored under that name."
+        ),
+    )
     url_variables: list[UrlVariableInput] | None = Field(
         default=None,
         description=(
@@ -222,6 +294,13 @@ class OpenAPIConnectionUpdate(BaseModel):
             "placeholders. Pass [] to clear all. Values are stored encrypted."
         ),
     )
+
+    @field_validator("custom_query_params")
+    @classmethod
+    def _validate_query_params(
+        cls, v: list[QueryParamInput] | None
+    ) -> list[QueryParamInput] | None:
+        return _unique_query_param_names(v)
 
     @field_validator("base_url")
     @classmethod

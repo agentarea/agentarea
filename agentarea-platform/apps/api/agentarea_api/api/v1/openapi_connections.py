@@ -18,6 +18,7 @@ from agentarea_openapi.schemas.dto import (
     HeaderOutput,
     OpenAPIConnectionCreate,
     OpenAPIConnectionUpdate,
+    QueryParamOutput,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -44,6 +45,7 @@ class OpenAPIConnectionResponse(BaseModel):
     auth_config_id: UUID | None = None
     registry_item_id: UUID | None = None
     custom_headers: list[HeaderOutput] | None = None
+    custom_query_params: list[QueryParamOutput] | None = None
     url_variables: list[str] | None = None
     available_tools: list[OpenAPIToolResponse]
     status: str
@@ -64,6 +66,20 @@ def _format_headers(raw: list[dict[str, Any]] | None) -> list[HeaderOutput] | No
             value=h.get("value") if not h.get("secret") else None,
         )
         for h in raw
+    ]
+
+
+def _format_query_params(raw: list[dict[str, Any]] | None) -> list[QueryParamOutput] | None:
+    """Convert stored query parameter metadata to response format (mask secret values)."""
+    if not raw:
+        return None
+    return [
+        QueryParamOutput(
+            name=p["name"],
+            secret=p.get("secret", False),
+            value=p.get("value") if not p.get("secret") else None,
+        )
+        for p in raw
     ]
 
 
@@ -166,6 +182,7 @@ async def create_connection(
         conn = await service.create_connection(request)
         resp = OpenAPIConnectionResponse.model_validate(conn)
         resp.custom_headers = _format_headers(conn.custom_headers)
+        resp.custom_query_params = _format_query_params(conn.custom_query_params)
         return resp
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
@@ -204,6 +221,7 @@ async def list_connections(
     for c in connections:
         resp = OpenAPIConnectionResponse.model_validate(c)
         resp.custom_headers = _format_headers(c.custom_headers)
+        resp.custom_query_params = _format_query_params(c.custom_query_params)
         results.append(resp)
     return results
 
@@ -224,6 +242,7 @@ async def get_connection(
         raise HTTPException(status_code=404, detail="Connection not found")
     resp = OpenAPIConnectionResponse.model_validate(conn)
     resp.custom_headers = _format_headers(conn.custom_headers)
+    resp.custom_query_params = _format_query_params(conn.custom_query_params)
     return resp
 
 
@@ -251,6 +270,7 @@ async def update_connection(
         raise HTTPException(status_code=404, detail="Connection not found")
     resp = OpenAPIConnectionResponse.model_validate(conn)
     resp.custom_headers = _format_headers(conn.custom_headers)
+    resp.custom_query_params = _format_query_params(conn.custom_query_params)
     return resp
 
 

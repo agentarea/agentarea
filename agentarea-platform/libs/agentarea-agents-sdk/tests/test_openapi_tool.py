@@ -66,6 +66,7 @@ def _make_service(connection=None, headers=None):
     svc.get_connection = AsyncMock(return_value=connection)
     svc.resolve_headers = AsyncMock(return_value=headers or {})
     svc.resolve_base_url = AsyncMock(side_effect=lambda c: c.base_url)
+    svc.resolve_query_params = AsyncMock(return_value={})
     svc._allow_private_urls = False
     return svc
 
@@ -722,4 +723,126 @@ class TestOpenAPIToolUrlVariables:
 
         assert result["success"] is False
         assert "no stored value for URL variable 'token'" in result["error"]
+        mock_client.request.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Configured query parameters
+# ---------------------------------------------------------------------------
+
+_METRICA_TOKEN = "ms-secret-token-value"
+
+
+async def _metrica_service(token: str | None = _METRICA_TOKEN):
+    from agentarea_common.testing.mocks import TestSecretManager as FakeSecretManager
+    from agentarea_common.utils.url_safety import OutboundPolicy
+    from agentarea_openapi.application.service import OpenAPIConnectionService
+    from agentarea_openapi.domain.models import OpenAPIConnection
+
+    conn = OpenAPIConnection(
+        id=_CONNECTION_ID,
+        name=_CONNECTION_NAME,
+        base_url="https://mc.yandex.ru",
+        custom_query_params=[
+            {"name": "ms", "secret": True},
+            {"name": "tid", "secret": False, "value": "98765"},
+        ],
+    )
+    secrets = FakeSecretManager()
+    if token is not None:
+        await secrets.set_secret(f"openapi:{conn.id}:query:ms", token)
+    svc = OpenAPIConnectionService(
+        repository_factory=MagicMock(),
+        secret_manager=secrets,
+        auth_config_access_checker=AsyncMock(),
+        outbound_policy=OutboundPolicy(),
+    )
+    svc._repo = AsyncMock()
+    svc._repo.get_by_id.return_value = conn
+    return svc
+
+
+def _collect_operation():
+    return _make_operation(
+        name="collect",
+        method="GET",
+        path="/collect",
+        parameters=[
+            {"name": "ms", "in": "query", "required": False, "schema": {"type": "string"}},
+            {"name": "dl", "in": "query", "required": False, "schema": {"type": "string"}},
+        ],
+    )
+
+
+class TestOpenAPIToolConfiguredQueryParams:
+    @pytest.mark.asyncio
+    async def test_configured_params_join_the_agent_params(self, caplog):
+        svc = await _metrica_service()
+        mock_client = _build_mock_client(httpx.Response(200, json={"ok": True}))
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+            caplog.at_level("DEBUG"),
+        ):
+            tool = mod.OpenAPITool(_collect_operation(), _CONNECTION_ID, _CONNECTION_NAME, svc)
+            result = await tool.execute(dl="https://example.com/")
+
+        assert mock_client.request.call_args.kwargs["params"] == {
+            "dl": "https://example.com/",
+            "ms": _METRICA_TOKEN,
+            "tid": "98765",
+        }
+        assert result["success"] is True
+        assert _METRICA_TOKEN not in json.dumps(result)
+        assert _METRICA_TOKEN not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_a_configured_param_wins_over_the_agent_value(self):
+        svc = await _metrica_service()
+        mock_client = _build_mock_client(httpx.Response(200, json={"ok": True}))
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+        ):
+            tool = mod.OpenAPITool(_collect_operation(), _CONNECTION_ID, _CONNECTION_NAME, svc)
+            await tool.execute(ms="agent-chosen")
+
+        assert mock_client.request.call_args.kwargs["params"]["ms"] == _METRICA_TOKEN
+
+    @pytest.mark.asyncio
+    async def test_a_failed_request_does_not_leak_the_secret(self, caplog):
+        svc = await _metrica_service()
+        mock_client = MagicMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.request = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+            caplog.at_level("DEBUG"),
+        ):
+            tool = mod.OpenAPITool(_collect_operation(), _CONNECTION_ID, _CONNECTION_NAME, svc)
+            result = await tool.execute()
+
+        assert result["success"] is False
+        assert _METRICA_TOKEN not in json.dumps(result)
+        assert _METRICA_TOKEN not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_a_missing_stored_value_fails_before_the_request(self):
+        svc = await _metrica_service(token=None)
+        mock_client = _build_mock_client(httpx.Response(200, json={"ok": True}))
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+        ):
+            tool = mod.OpenAPITool(_collect_operation(), _CONNECTION_ID, _CONNECTION_NAME, svc)
+            result = await tool.execute()
+
+        assert result["success"] is False
+        assert "no stored value for query parameter 'ms'" in result["error"]
         mock_client.request.assert_not_awaited()

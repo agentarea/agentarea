@@ -32,6 +32,7 @@ async def test_a_base_url_that_passed_the_precheck_is_still_not_dialed_privately
     service.get_connection = AsyncMock(return_value=connection)
     service.resolve_headers = AsyncMock(return_value={})
     service.resolve_base_url = AsyncMock(side_effect=lambda c: c.base_url)
+    service.resolve_query_params = AsyncMock(return_value={})
     service._allow_private_urls = False
     operation = {
         "name": "listItems",
