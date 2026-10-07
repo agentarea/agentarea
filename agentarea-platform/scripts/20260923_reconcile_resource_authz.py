@@ -39,9 +39,9 @@ With ``--revoke-ended-memberships`` it also goes the other way, and deletes:
    and only its graph revocation is outstanding. Run it, and read its warnings,
    before ``--revoke-ended-memberships``.
 
-Steps 1 and 2 are ``agentarea_common.rebac.ownership_reconcile``, which
-``agentarea-api reconcile`` also runs after every migration; this script adds
-the membership repairs that need a person to read their output first.
+Steps 1 and 2 are ``agentarea_common.rebac.ownership_reconcile``; run this
+after a migration that inserts governed rows by SQL. It also does the
+membership repairs that need a person to read their output first.
 """
 
 from __future__ import annotations

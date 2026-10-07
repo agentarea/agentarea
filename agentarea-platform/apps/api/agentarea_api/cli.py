@@ -346,23 +346,6 @@ async def _register_graph_client() -> OpenFGAClient:
     return client
 
 
-async def _reconcile_graph_ownership(db: Database, client: OpenFGAClient) -> None:
-    """Give every governed row the ownership tuples it lacks.
-
-    Rows a data migration inserts by SQL never pass through the repository that
-    grants ownership, so without this they stay invisible to everyone until
-    someone runs the reconcile script by hand.
-    """
-    from agentarea_common.rebac.ownership_reconcile import reconcile_graph_ownership
-
-    async with db.async_session_factory() as session:
-        result = await reconcile_graph_ownership(session, client)
-    click.echo(
-        f"Graph ownership: wrote {result.written} tuples across {result.resources} resources, "
-        f"{result.workspaces} workspaces and {result.memberships} memberships"
-    )
-
-
 async def _reconcile(
     registries_config: str | None,
     sources: tuple[str, ...],
@@ -419,8 +402,11 @@ async def _reconcile(
         )
         configs.append({"name": name, "source_url": src})
 
-    client = await _register_graph_client()
-    await _reconcile_graph_ownership(db, client)
+    # Catalog reconcile only. Ownership of governed rows is granted by the
+    # repository when a row is created; rows a migration inserts by SQL are
+    # repaired once, by scripts/20260923_reconcile_resource_authz.py -- not on
+    # every hourly run, which read the whole graph into memory each time.
+    await _register_graph_client()
 
     if not configs:
         click.echo("No registry config provided (set REGISTRIES_CONFIG or use --source)")

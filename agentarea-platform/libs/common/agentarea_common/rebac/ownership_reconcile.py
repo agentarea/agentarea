@@ -13,8 +13,9 @@ Every row the repository created has one, so a row that has it but lacks its
 creator's grants had them revoked, and an unattended run must not restore them.
 The manual script re-grants unconditionally, and someone reads its output.
 
-Run after every migration by ``agentarea-api reconcile`` (the chart's
-post-migration Job) and by ``scripts/20260923_reconcile_resource_authz.py``.
+Run by ``scripts/20260923_reconcile_resource_authz.py`` after a migration that
+inserts governed rows by SQL. Not part of ``agentarea-api reconcile``: that runs
+hourly, and repairs nothing the repository did not already grant.
 """
 
 from __future__ import annotations
