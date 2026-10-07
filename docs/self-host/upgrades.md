@@ -120,12 +120,6 @@ Check the Job explicitly.
     The upgrade re-runs the database-creation Jobs (idempotent), the `db-migration`
     Job, and the `registry-reconcile` Job, then rolls the Deployments.
 
-    The upgrade that introduces event streams moves every webhook trigger onto a
-    stream it creates by SQL, so those streams have no authorization-graph tuples
-    and answer 403. Run `scripts/20260923_reconcile_resource_authz.py` once after
-    that migration, from a platform checkout with the deployment's database and
-    OpenFGA settings.
-
     Generated secrets are preserved. The chart looks each one up and reuses the
     existing value, so the database password and the encryption key do not rotate
     under a running deployment.

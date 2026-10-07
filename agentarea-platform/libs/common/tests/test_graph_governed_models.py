@@ -1,10 +1,7 @@
 """The set of graph-governed models is read off the models, not kept by hand.
 
-The reconcile script and ``WorkspaceScopedRepository.create`` both ask
-``graph_governed_models()``, so marking a model governs it in both places at
-once. A hand-kept list in either would drift, and drift here means rows that
-exist in the product and not in the graph -- which is the failure this whole
-mechanism exists to prevent.
+``WorkspaceScopedRepository.create`` grants ownership of every model that
+declares ``__graph_resource__``; this pins which models those are.
 """
 
 from __future__ import annotations
