@@ -58,6 +58,8 @@ def _ensure_all_toolsets_imported() -> None:
         "agentarea_api.tools.workspace_config_toolset",
         "agentarea_api.tools.inbox_toolset",
         "agentarea_api.tools.files_toolset",
+        "agentarea_api.tools.streams_toolset",
+        "agentarea_api.tools.stream_events_toolset",
     ]
     # Cross-package toolsets that don't live under apps/api but still register.
     extension_modules = [
