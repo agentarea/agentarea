@@ -361,6 +361,10 @@ _YOOKASSA_COLLECTIONS = {
     "payment_method": "payment_methods",
 }
 _YOOKASSA_OBJECT_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# succeeded and canceled are terminal, so only an intermediate status can be overtaken.
+_YOOKASSA_LATER_STATUSES: dict[str, frozenset[str]] = {
+    "waiting_for_capture": frozenset({"succeeded", "canceled"}),
+}
 
 
 class YooKassaNotificationVerifier:
@@ -368,7 +372,9 @@ class YooKassaNotificationVerifier:
 
     ``{"event": "payment.succeeded", "object": {"id": ...}}`` is believed only
     when ``GET /payments/{id}`` with the shop's own key answers that object in
-    status ``succeeded``. Anyone can post to the URL; only YooKassa holds the
+    status ``succeeded``, or in a status the object can only reach after it (a
+    ``waiting_for_capture`` notification delivered once the payment was already
+    captured or canceled). Anyone can post to the URL; only YooKassa holds the
     object in that state.
     """
 
@@ -418,11 +424,10 @@ class YooKassaNotificationVerifier:
         except ValueError:
             logger.warning("YooKassa API answered a body that is not JSON", exc_info=True)
             return False
-        return (
-            isinstance(fetched, dict)
-            and fetched.get("id") == object_id
-            and fetched.get("status") == status
-        )
+        if not isinstance(fetched, dict) or fetched.get("id") != object_id:
+            return False
+        current = fetched.get("status")
+        return current == status or current in _YOOKASSA_LATER_STATUSES.get(status, frozenset())
 
 
 def yookassa_verifier() -> YooKassaNotificationVerifier:

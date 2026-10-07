@@ -205,6 +205,21 @@ async def test_yookassa_refuses_a_notification_the_api_contradicts():
     assert await _yookassa(_payment("pending")).verify(YK_BODY, "shop-1", "k") is False
 
 
+@pytest.mark.parametrize("current", ["succeeded", "canceled"])
+async def test_a_late_waiting_for_capture_notification_is_believed_once_the_payment_moved_on(
+    current,
+):
+    body = json.dumps(
+        {"type": "notification", "event": "payment.waiting_for_capture", "object": {"id": PAYMENT_ID}}
+    ).encode()
+    assert await _yookassa(_payment(current)).verify(body, "shop-1", "k") is True
+
+
+@pytest.mark.parametrize("current", ["pending", "waiting_for_capture", "canceled"])
+async def test_a_terminal_notification_must_match_the_api_exactly(current):
+    assert await _yookassa(_payment(current)).verify(YK_BODY, "shop-1", "k") is False
+
+
 async def test_yookassa_refuses_an_object_the_api_does_not_know():
     def missing(_request):
         return httpx.Response(404, json={"type": "error", "code": "not_found"})
