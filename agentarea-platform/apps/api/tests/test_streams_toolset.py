@@ -97,3 +97,61 @@ async def test_list_events_refuses_a_limit_past_the_rest_bound():
         )
     )
     assert "limit must be between 1 and 200" in result["error"]
+
+
+def _write_ctx(session):
+    @asynccontextmanager
+    async def ctx():
+        yield (session, SimpleNamespace(user_id="u", workspace_id="w"), object(), None, object())
+
+    return ctx
+
+
+async def test_create_webhook_source_refuses_a_verifier_without_its_secret(monkeypatch):
+    service = AsyncMock()
+    session = AsyncMock()
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset.platform_context", _write_ctx(session))
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
+    monkeypatch.setattr(
+        "agentarea_api.tools.streams_toolset._secret_ports",
+        lambda *_a: {
+            "secret_manager": AsyncMock(),
+            "secret_catalog": AsyncMock(),
+            "webhook_service": AsyncMock(),
+        },
+    )
+    result = json.loads(
+        await StreamsToolset().create_webhook_source.__wrapped__(
+            StreamsToolset(), stream_id=str(uuid4()), webhook_type="sentry"
+        )
+    )
+    assert "needs client_secret" in result["error"]
+    service.add_webhook_source.assert_not_called()
+    session.rollback.assert_awaited_once()
+
+
+async def test_delete_webhook_source_refuses_a_source_a_live_trigger_owns(monkeypatch):
+    from agentarea_streams.domain import SourceFedByTriggerError
+
+    trigger_id = uuid4()
+    service = AsyncMock()
+    service.delete_source.side_effect = SourceFedByTriggerError("Source s", [trigger_id])
+    released = AsyncMock()
+    monkeypatch.setattr(
+        "agentarea_api.tools.streams_toolset.platform_context", _write_ctx(AsyncMock())
+    )
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset.release_webhook_source", released)
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset._secret_ports", lambda *_a: {})
+    result = json.loads(
+        await StreamsToolset().delete_webhook_source.__wrapped__(
+            StreamsToolset(), stream_id=str(uuid4()), source_id=str(uuid4())
+        )
+    )
+    assert str(trigger_id) in result["error"]
+    released.assert_not_called()
+
+
+async def test_source_types_are_served_to_mcp_callers_too():
+    types = json.loads(await StreamsToolset().list_source_types())
+    assert {"sentry", "yookassa", "github"} <= {t["webhook_type"] for t in types}

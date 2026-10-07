@@ -158,6 +158,8 @@ async def test_a_webhook_source_shows_its_public_url(client, service, graph, mon
             webhook_id="abc",
             webhook_type="github",
             allowed_methods=["POST"],
+            validation_rules={},
+            credential_key=None,
             created_at=NOW,
         )
     ]

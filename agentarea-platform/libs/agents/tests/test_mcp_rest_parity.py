@@ -56,7 +56,7 @@ from agentarea_openapi.schemas.dto import (
     OpenAPIConnectionUpdate,
 )
 from agentarea_projects.schemas.dto import ProjectCreate, ProjectUpdate
-from agentarea_streams.schemas import ForwardCreate, StreamCreate
+from agentarea_streams.schemas import ForwardCreate, StreamCreate, WebhookSourceCreate
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_triggers.schemas.dto import TriggerCreate
 
@@ -111,6 +111,11 @@ PAIRS: list[Pair] = [
     Pair("triggers.create_stream", TriggersToolset.create_stream, TriggerCreate),
     Pair("streams.create", StreamsToolset.create, StreamCreate),
     Pair("streams.create_forward", StreamsToolset.create_forward, ForwardCreate),
+    Pair(
+        "streams.create_webhook_source",
+        StreamsToolset.create_webhook_source,
+        WebhookSourceCreate,
+    ),
 ]
 
 # DTO fields intentionally NOT exposed as toolset kwargs. Per-pair so omissions
@@ -208,6 +213,7 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
     },
     "streams.create": set(),
     "streams.create_forward": set(),
+    "streams.create_webhook_source": set(),
 }
 
 # Path-like kwargs that name an entity ID rather than a body field. Allowed

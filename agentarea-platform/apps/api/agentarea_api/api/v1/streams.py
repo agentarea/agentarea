@@ -4,6 +4,7 @@ import logging
 from typing import Annotated, Any
 from uuid import UUID
 
+from agentarea_api.api.deps.services import BaseSecretManagerDep, SecretCatalogServiceDep
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
@@ -16,14 +17,26 @@ from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import (
     ForwardLoopError,
     JournaledEvent,
+    SourceFedByTriggerError,
     StreamNameTakenError,
     StreamNotFoundError,
+    StreamSourceNotFoundError,
 )
-from agentarea_streams.schemas import ForwardCreate, StreamCreate
+from agentarea_streams.schemas import ForwardCreate, StreamCreate, WebhookSourceCreate
+from agentarea_triggers.channels.webhook_service import ChannelWebhookService
+from agentarea_triggers.domain.source_types import STREAM_SOURCE_TYPES, StreamSourceType
+from agentarea_triggers.webhook_verification import hmac_signature_scheme
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
-from ._trigger_creation import public_webhook_url
+from ._icons import CHANNEL_ICON_NAMESPACE, build_icon_url
+from ._stream_sources import (
+    create_webhook_source,
+    delete_stream_with_sources,
+    release_webhook_source,
+)
+from ._trigger_creation import get_channel_webhook_service, public_webhook_url
+from .triggers import WebhookSignatureScheme
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +71,70 @@ class StreamSourceResponse(BaseModel):
         description="Public URL senders post to; null for non-webhook sources."
     )
     allowed_methods: list[str] | None
+    trigger_id: UUID | None = Field(
+        default=None,
+        description="The webhook trigger that owns this source; null for a source added directly.",
+    )
+    signature_scheme: WebhookSignatureScheme | None = Field(
+        default=None,
+        description="How a sender signs for a type verified by configurable HMAC; null otherwise.",
+    )
     created_at: UtcDatetime
+
+
+class WebhookSourceCreated(StreamSourceResponse):
+    signing_secret: str | None = Field(
+        default=None,
+        description=(
+            "Issued when the type's signing secret is optional and none was given; "
+            "shown this once only."
+        ),
+    )
+
+
+class StreamSourceTypeResponse(StreamSourceType):
+    icon_url: str | None
+
+
+ChannelWebhookServiceDep = Annotated[ChannelWebhookService, Depends(get_channel_webhook_service)]
+
+
+def _signature_scheme(row: Any) -> WebhookSignatureScheme | None:
+    if row.webhook_type is None:
+        return None
+    scheme = hmac_signature_scheme(row.webhook_type, row.validation_rules)
+    if scheme is None:
+        return None
+    return WebhookSignatureScheme(
+        header=scheme.header, algorithm=scheme.algorithm, prefix=scheme.prefix
+    )
+
+
+def source_response(row: Any) -> StreamSourceResponse:
+    return StreamSourceResponse(
+        id=row.id,
+        kind=row.kind,
+        webhook_id=row.webhook_id,
+        webhook_type=row.webhook_type,
+        webhook_url=public_webhook_url(row.webhook_id) if row.webhook_id else None,
+        allowed_methods=row.allowed_methods,
+        trigger_id=(
+            row.credential_key
+            if row.credential_key is not None and row.credential_key != row.id
+            else None
+        ),
+        signature_scheme=_signature_scheme(row),
+        created_at=row.created_at,
+    )
+
+
+def source_types() -> list[StreamSourceTypeResponse]:
+    return [
+        StreamSourceTypeResponse(
+            **t.model_dump(), icon_url=build_icon_url(CHANNEL_ICON_NAMESPACE, t.icon)
+        )
+        for t in STREAM_SOURCE_TYPES
+    ]
 
 
 class SubscriptionResponse(BaseModel):
@@ -210,6 +286,16 @@ async def create_stream(data: StreamCreate, service: StreamServiceDep):
 
 
 @router.get(
+    "/source-types",
+    response_model=list[StreamSourceTypeResponse],
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
+async def list_source_types():
+    """Webhook types a source can be, with the credentials and settings each needs."""
+    return source_types()
+
+
+@router.get(
     "/{stream_id}",
     response_model=StreamResponse,
     dependencies=[requires("read", "stream", id_param="stream_id")],
@@ -226,11 +312,26 @@ async def get_stream(stream_id: UUID, service: StreamServiceDep):
     status_code=204,
     dependencies=[requires("delete", "stream", id_param="stream_id")],
 )
-async def delete_stream(stream_id: UUID, service: StreamServiceDep):
+async def delete_stream(
+    stream_id: UUID,
+    service: StreamServiceDep,
+    secret_manager: BaseSecretManagerDep,
+    secret_catalog: SecretCatalogServiceDep,
+    webhook_service: ChannelWebhookServiceDep,
+):
+    """Refused (409) while a live webhook trigger's source feeds the stream."""
     try:
-        await service.delete_stream(stream_id)
+        await delete_stream_with_sources(
+            stream_id,
+            service=service,
+            secret_manager=secret_manager,
+            secret_catalog=secret_catalog,
+            webhook_service=webhook_service,
+        )
     except StreamNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except SourceFedByTriggerError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     return Response(status_code=204)
 
 
@@ -240,18 +341,69 @@ async def delete_stream(stream_id: UUID, service: StreamServiceDep):
     dependencies=[requires("read", "stream", id_param="stream_id")],
 )
 async def list_sources(stream_id: UUID, service: StreamServiceDep):
-    return [
-        StreamSourceResponse(
-            id=row.id,
-            kind=row.kind,
-            webhook_id=row.webhook_id,
-            webhook_type=row.webhook_type,
-            webhook_url=public_webhook_url(row.webhook_id) if row.webhook_id else None,
-            allowed_methods=row.allowed_methods,
-            created_at=row.created_at,
+    return [source_response(row) for row in await service.list_sources(stream_id)]
+
+
+@router.post(
+    "/{stream_id}/sources",
+    response_model=WebhookSourceCreated,
+    status_code=201,
+    dependencies=[requires("edit", "stream", id_param="stream_id")],
+)
+async def create_source(
+    stream_id: UUID,
+    data: WebhookSourceCreate,
+    service: StreamServiceDep,
+    secret_manager: BaseSecretManagerDep,
+    secret_catalog: SecretCatalogServiceDep,
+    webhook_service: ChannelWebhookServiceDep,
+):
+    """Add a webhook source to the stream, with no trigger.
+
+    Credentials are write-only and held by reference; the response carries the
+    public URL to give the sender.
+    """
+    try:
+        row, issued = await create_webhook_source(
+            stream_id,
+            data,
+            service=service,
+            secret_manager=secret_manager,
+            secret_catalog=secret_catalog,
+            webhook_service=webhook_service,
         )
-        for row in await service.list_sources(stream_id)
-    ]
+    except StreamNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return WebhookSourceCreated(**source_response(row).model_dump(), signing_secret=issued)
+
+
+@router.delete(
+    "/{stream_id}/sources/{source_id}",
+    status_code=204,
+    dependencies=[requires("edit", "stream", id_param="stream_id")],
+)
+async def delete_source(
+    stream_id: UUID,
+    source_id: UUID,
+    service: StreamServiceDep,
+    secret_manager: BaseSecretManagerDep,
+    secret_catalog: SecretCatalogServiceDep,
+    webhook_service: ChannelWebhookServiceDep,
+):
+    """Remove a webhook source; one a live trigger owns is refused with 409."""
+    try:
+        source = await service.delete_source(stream_id, source_id)
+    except StreamSourceNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except SourceFedByTriggerError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    await release_webhook_source(
+        source,
+        secret_manager=secret_manager,
+        secret_catalog=secret_catalog,
+        webhook_service=webhook_service,
+    )
+    return Response(status_code=204)
 
 
 @router.get(
