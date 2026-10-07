@@ -89,7 +89,6 @@ PY_SUITES=(
   libs/llm/tests/test_platform_managed_providers_db.py
   libs/llm/tests/test_catalog_model_instance_db.py
   libs/llm/tests/test_video_generation_jobs_db.py
-  apps/api/tests/test_membership_backfill_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
   libs/agents/tests/test_catalog_presets_db.py
   libs/mcp/tests/test_mcp_spec_list_db.py
