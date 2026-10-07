@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, cast
 from uuid import UUID
 
@@ -10,7 +11,9 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.context import ServicePrincipal, UserContext
-from ..rebac.ownership import grant_resource_owner
+from ..rebac.ownership import grant_resource_owner, revoke_resource
+
+logger = logging.getLogger(__name__)
 
 
 def as_record_ids(ids: set[str]) -> list[Any]:
@@ -241,23 +244,26 @@ class WorkspaceScopedRepository[T]:
             record = self.model_class(**kwargs)
 
             self.session.add(record)
+            await self.session.flush()
+            await self._record_graph_ownership(record)
             await self.session.commit()
             await self.session.refresh(record)
         except Exception:
             await self.session.rollback()
             raise
 
-        await self._record_graph_ownership(record)
         return record
 
     async def _record_graph_ownership(self, record: T) -> None:
         """Grant the creator ownership of a graph-governed row.
 
         Only models that opt in with ``__graph_resource__`` reach the graph; for
-        everything else the workspace column is the whole story. The grant runs
-        after the commit, so a failed insert never leaves a tuple behind -- the
-        reverse, a committed row whose grant failed, raises here and is retried
-        by the caller, because the alternative is a resource nobody can reach.
+        everything else the workspace column is the whole story. The graph cannot
+        join the transaction, so it goes first: the grant runs after the flush and
+        before the commit. A failed grant rolls the insert back, and a failed
+        commit leaves tuples about an id that never existed, which grant nothing.
+        The other order left a committed row nobody could reach, and a retry
+        created a second one.
 
         This lives in the repository rather than at the call sites deliberately:
         an agent created through the platform toolset and one created through
@@ -405,11 +411,30 @@ class WorkspaceScopedRepository[T]:
 
             await self.session.delete(record)
             await self.session.commit()
-
-            return True
         except Exception:
             await self.session.rollback()
             raise
+
+        await self._revoke_graph_ownership(id)
+        return True
+
+    async def _revoke_graph_ownership(self, record_id: UUID | str) -> None:
+        """Drop the graph tuples of a governed row that was just deleted.
+
+        Runs after the commit: the row is gone either way, and tuples left on an
+        id that no longer exists grant nothing, so a graph failure is logged
+        rather than turned into an error for a delete that succeeded.
+        """
+        if not getattr(self.model_class, "__graph_resource__", False):
+            return
+        try:
+            await revoke_resource(record_id)
+        except Exception:
+            logger.exception(
+                "Deleted %s %s but could not remove its graph tuples",
+                self.model_class.__name__,
+                record_id,
+            )
 
     async def delete_or_raise(self, id: UUID | str, creator_scoped: bool = False) -> None:
         """Delete a record by ID or raise NoResultFound.
