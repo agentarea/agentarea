@@ -15,17 +15,29 @@ from .webhook_manager import WebhookExecutionCallback
 logger = logging.getLogger(__name__)
 
 _DELIVERY_HEADERS = ("webhook-id", "x-github-delivery", "linear-delivery", "idempotency-key")
+_TYPE_DELIVERY_HEADERS = {"sentry": "request-id"}
 _BODY_KEYS = {"telegram": "update_id", "stripe": "id", "slack": "event_id", "discord": "id"}
+
+
+def _yookassa_key(raw: dict[str, Any]) -> str | None:
+    """A notification is one object reaching one state: both name it."""
+    obj = raw.get("object")
+    object_id = obj.get("id") if isinstance(obj, dict) else None
+    event = raw.get("event")
+    return f"yookassa:{event}:{object_id}" if event and object_id else None
 
 
 def webhook_event_key(webhook_type: str, parsed: dict[str, Any]) -> str:
     """The provider's own delivery id, or a fresh key: such an event is never a repeat."""
     headers = {str(k).lower(): v for k, v in (parsed.get("headers") or {}).items()}
-    for header in _DELIVERY_HEADERS:
+    type_header = _TYPE_DELIVERY_HEADERS.get(webhook_type)
+    for header in (*_DELIVERY_HEADERS, *([type_header] if type_header else [])):
         if headers.get(header):
             return f"{header}:{headers[header]}"
-    body_key = _BODY_KEYS.get(webhook_type)
     raw = parsed.get("raw_data")
+    if webhook_type == "yookassa" and isinstance(raw, dict) and (key := _yookassa_key(raw)):
+        return key
+    body_key = _BODY_KEYS.get(webhook_type)
     if body_key and isinstance(raw, dict) and raw.get(body_key) is not None:
         return f"{webhook_type}:{raw[body_key]}"
     return f"recv:{uuid4()}"
