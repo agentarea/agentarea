@@ -133,10 +133,8 @@ you install, not after.
 
     The install runs Jobs in this order: create the auxiliary databases, run
     `agentarea-api migrate` (the `db-migration` Job, working directory
-    `/app/apps/api`), then `agentarea-api reconcile` (the `registry-reconcile` Job).
-    It waits for the schema to reach the migration head, writes the
-    authorization-graph ownership of any row a migration inserted by SQL, and seeds
-    the LLM provider, LLM model, and MCP server catalogs from S3. The
+    `/app/apps/api`), then `agentarea-api reconcile` (the `registry-reconcile` Job,
+    which seeds the LLM provider, LLM model, and MCP server catalogs from S3). The
     migration Job has an init container that blocks on a TCP connection to the
     database, so it sits in `Init:0/1` until PostgreSQL accepts connections.
   </Step>

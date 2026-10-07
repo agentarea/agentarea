@@ -1,7 +1,6 @@
 """Membership rows are backfilled against the real migrated schema.
 
-The migration and the reconcile script's ``--backfill-memberships-from-graph``
-write rows with hand-written SQL that relies on the unique (workspace, user)
+The migration writes rows with hand-written SQL that relies on the unique (workspace, user)
 constraint and on the invitation and outbox tables, none of which a mock has.
 
 Set MEMBERSHIP_TEST_DATABASE_URL to a postgresql+asyncpg URL for a disposable,
@@ -17,7 +16,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from agentarea_common.events.outbox_orm import EventOutbox
 from agentarea_common.workspaces.models import (
     INVITATION_STATUS_ACCEPTED,
     INVITATION_STATUS_PENDING,
@@ -26,7 +24,6 @@ from agentarea_common.workspaces.models import (
     WorkspaceInvitation,
     WorkspaceMembership,
 )
-from agentarea_common.workspaces.repository import MEMBERSHIP_ENDED
 from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext
 from sqlalchemy import select
@@ -39,7 +36,6 @@ pytestmark = pytest.mark.skipif(
 
 _API = Path(__file__).resolve().parents[1]
 _MIGRATION = _API / "alembic/versions/20260926_1000_backfill_workspace_memberships.py"
-_SCRIPT = _API.parents[1] / "scripts" / "20260923_reconcile_resource_authz.py"
 
 
 def _load(name: str, path: Path):
@@ -52,7 +48,6 @@ def _load(name: str, path: Path):
 
 
 migration = _load("_membership_backfill_migration", _MIGRATION)
-reconcile = _load("_reconcile_resource_authz_db", _SCRIPT)
 
 CREATED = datetime(2026, 8, 1, 9, 0)
 JOINED = datetime(2026, 9, 5, 12, 30)
@@ -167,107 +162,3 @@ async def test_every_accepted_invitation_gets_the_row_it_should_have_written(ses
     assert rows[member].invitation_id == first.id
     assert rows[invited].created_at == CREATED, "no accepted_at: the workspace's creation"
     assert rows[recorded].created_at == CREATED, "an existing row is left as it was"
-
-
-async def test_graph_backfill_writes_the_row_a_graph_member_is_missing(session):
-    owner, member, invited = (str(uuid4()) for _ in range(3))
-    workspace = _workspace(owner)
-    invitation = _invitation(
-        workspace.id, status=INVITATION_STATUS_ACCEPTED, accepted_by=invited, accepted_at=JOINED
-    )
-    session.add_all([workspace, invitation])
-    await session.flush()
-
-    assert await reconcile.record_membership(session, workspace.id, member, dry_run=False) == (
-        "recorded"
-    )
-    assert await reconcile.record_membership(session, workspace.id, invited, dry_run=False) == (
-        "recorded"
-    )
-    assert await reconcile.record_membership(session, workspace.id, member, dry_run=False) == (
-        "present"
-    )
-
-    rows = await _rows(session, workspace.id)
-    assert rows[member].created_at == CREATED
-    assert rows[member].invitation_id is None
-    assert rows[invited].created_at == JOINED
-    assert rows[invited].invitation_id == invitation.id
-
-
-async def test_graph_backfill_does_not_undo_a_removal_still_in_flight(session):
-    owner, revoked, queued = (str(uuid4()) for _ in range(3))
-    workspace = _workspace(owner)
-    session.add_all(
-        [
-            workspace,
-            _invitation(
-                workspace.id,
-                status=INVITATION_STATUS_REVOKED,
-                accepted_by=revoked,
-                accepted_at=JOINED,
-            ),
-            EventOutbox(
-                event_id=uuid4(),
-                event_type=MEMBERSHIP_ENDED,
-                aggregate_id=queued,
-                aggregate_type="workspace_membership",
-                payload={"workspace_id": workspace.id, "user_id": queued},
-                workspace_id=workspace.id,
-                created_by=owner,
-            ),
-        ]
-    )
-    await session.flush()
-
-    for user_id in (revoked, queued):
-        assert (
-            await reconcile.record_membership(session, workspace.id, user_id, dry_run=False)
-            == "ended"
-        )
-    assert await _rows(session, workspace.id) == {}
-
-
-async def test_a_dry_run_writes_nothing(session):
-    workspace = _workspace(str(uuid4()))
-    session.add(workspace)
-    await session.flush()
-
-    assert await reconcile.record_membership(session, workspace.id, "someone", dry_run=True) == (
-        "recorded"
-    )
-    assert await _rows(session, workspace.id) == {}
-
-
-async def test_the_owner_and_accepted_invitees_without_a_row_are_protected(session):
-    owner, member, recorded = (str(uuid4()) for _ in range(3))
-    workspace = _workspace(owner)
-    session.add_all(
-        [
-            workspace,
-            _invitation(
-                workspace.id,
-                status=INVITATION_STATUS_ACCEPTED,
-                accepted_by=member,
-                accepted_at=JOINED,
-            ),
-            _invitation(
-                workspace.id,
-                status=INVITATION_STATUS_ACCEPTED,
-                accepted_by=recorded,
-                accepted_at=JOINED,
-            ),
-            _invitation(
-                workspace.id,
-                status=INVITATION_STATUS_REVOKED,
-                accepted_by="gone",
-                accepted_at=JOINED,
-            ),
-            WorkspaceMembership(workspace_id=workspace.id, user_id=recorded),
-        ]
-    )
-    await session.flush()
-
-    assert await reconcile.load_protected(session, workspace.id) == {owner, member}
-    personal = str(uuid4())
-    assert await reconcile.load_protected(session, personal) == {personal}
