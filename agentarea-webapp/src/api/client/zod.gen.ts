@@ -1731,25 +1731,6 @@ export const zOpenApiToolResponse = z.object({
 });
 
 /**
- * OpenAPIConnectionResponse
- */
-export const zOpenApiConnectionResponse = z.object({
-  auth_config_id: z.string().uuid().nullish(),
-  available_tools: z.array(zOpenApiToolResponse),
-  base_url: z.string(),
-  created_at: z.string().datetime(),
-  custom_headers: z.array(zHeaderOutput).nullish(),
-  description: z.string().nullish(),
-  id: z.string().uuid(),
-  name: z.string(),
-  registry_item_id: z.string().uuid().nullish(),
-  spec_url: z.string().nullish(),
-  status: z.string(),
-  updated_at: z.string().datetime(),
-  url_variables: z.array(z.string()).nullish(),
-});
-
-/**
  * OpenApiToolSettings
  *
  * Settings for an OpenAPI connection tool.
@@ -2254,6 +2235,52 @@ export const zProviderSpecResponse = z.object({
   provider_key: z.string(),
   provider_type: z.string(),
   updated_at: z.string().datetime(),
+});
+
+/**
+ * QueryParamInput
+ *
+ * One query parameter sent with every request of an OpenAPI connection.
+ *
+ * A secret value (an API key the upstream takes as ``?api_key=``) is stored
+ * encrypted in the secret manager and never returned. A configured parameter
+ * wins over a same-named one the agent passes.
+ */
+export const zQueryParamInput = z.object({
+  name: z.string().min(1).max(256),
+  secret: z.boolean().optional().default(true),
+  value: z.string().max(8192).optional().default(""),
+});
+
+/**
+ * QueryParamOutput
+ *
+ * Query parameter metadata returned in API responses (secret values are masked).
+ */
+export const zQueryParamOutput = z.object({
+  name: z.string(),
+  secret: z.boolean(),
+  value: z.string().nullish(),
+});
+
+/**
+ * OpenAPIConnectionResponse
+ */
+export const zOpenApiConnectionResponse = z.object({
+  auth_config_id: z.string().uuid().nullish(),
+  available_tools: z.array(zOpenApiToolResponse),
+  base_url: z.string(),
+  created_at: z.string().datetime(),
+  custom_headers: z.array(zHeaderOutput).nullish(),
+  custom_query_params: z.array(zQueryParamOutput).nullish(),
+  description: z.string().nullish(),
+  id: z.string().uuid(),
+  name: z.string(),
+  registry_item_id: z.string().uuid().nullish(),
+  spec_url: z.string().nullish(),
+  status: z.string(),
+  updated_at: z.string().datetime(),
+  url_variables: z.array(z.string()).nullish(),
 });
 
 /**
@@ -3562,6 +3589,7 @@ export const zOpenApiConnectionCreate = z.object({
   auth_config_id: z.string().uuid().nullish(),
   base_url: z.string().max(500),
   custom_headers: z.array(zHeaderInput).nullish(),
+  custom_query_params: z.array(zQueryParamInput).nullish(),
   description: z.string().nullish(),
   name: z.string().min(1).max(255),
   spec_content: z.record(z.unknown()).nullish(),
@@ -3578,6 +3606,7 @@ export const zOpenApiConnectionUpdate = z.object({
   auth_config_id: z.string().uuid().nullish(),
   base_url: z.string().max(500).nullish(),
   custom_headers: z.array(zHeaderInput).nullish(),
+  custom_query_params: z.array(zQueryParamInput).nullish(),
   description: z.string().nullish(),
   name: z.string().min(1).max(255).nullish(),
   spec_content: z.record(z.unknown()).nullish(),

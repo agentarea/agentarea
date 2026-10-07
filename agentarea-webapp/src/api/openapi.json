@@ -7692,6 +7692,21 @@
             "description": "Custom HTTP headers attached to every request. Non-safe headers (e.g. Authorization) are stored encrypted in the secret manager.",
             "title": "Custom Headers"
           },
+          "custom_query_params": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/QueryParamInput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Query parameters attached to every request, e.g. an API key the upstream takes as '?api_key='. Secret values are stored encrypted in the secret manager.",
+            "title": "Custom Query Params"
+          },
           "description": {
             "anyOf": [
               {
@@ -7802,6 +7817,20 @@
               }
             ],
             "title": "Custom Headers"
+          },
+          "custom_query_params": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/QueryParamOutput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Query Params"
           },
           "description": {
             "anyOf": [
@@ -7925,6 +7954,21 @@
             ],
             "description": "Replace the full custom-header set. Pass [] to clear all. Secret values are stored encrypted in the secret manager.",
             "title": "Custom Headers"
+          },
+          "custom_query_params": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/QueryParamInput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replace the full query-parameter set. Pass [] to clear all. An empty value for a secret parameter keeps the one already stored under that name.",
+            "title": "Custom Query Params"
           },
           "description": {
             "anyOf": [
@@ -9902,6 +9946,67 @@
           "models"
         ],
         "title": "ProviderSpecWithModelsResponse",
+        "type": "object"
+      },
+      "QueryParamInput": {
+        "additionalProperties": false,
+        "description": "One query parameter sent with every request of an OpenAPI connection.\n\nA secret value (an API key the upstream takes as ``?api_key=``) is stored\nencrypted in the secret manager and never returned. A configured parameter\nwins over a same-named one the agent passes.",
+        "properties": {
+          "name": {
+            "description": "Query parameter name. Allowed characters: letters, digits, '-', '_', '.', '[', ']'.",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "secret": {
+            "default": true,
+            "description": "Store the value encrypted and never return it. Set false for plain values.",
+            "title": "Secret",
+            "type": "boolean"
+          },
+          "value": {
+            "default": "",
+            "description": "Parameter value, URL-encoded when sent. On update, an empty value for a secret parameter keeps the value already stored under that name.",
+            "maxLength": 8192,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "QueryParamInput",
+        "type": "object"
+      },
+      "QueryParamOutput": {
+        "description": "Query parameter metadata returned in API responses (secret values are masked).",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "secret": {
+            "title": "Secret",
+            "type": "boolean"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name",
+          "secret"
+        ],
+        "title": "QueryParamOutput",
         "type": "object"
       },
       "RegistryCreate": {

@@ -1627,6 +1627,8 @@ export type {
   ProxyInstanceV1McpInstanceIdMcpPostError,
   ProxyInstanceV1McpInstanceIdMcpPostErrors,
   ProxyInstanceV1McpInstanceIdMcpPostResponses,
+  QueryParamInput,
+  QueryParamOutput,
   ReadAgentCardV1A2aAgentCardsPostData,
   ReadAgentCardV1A2aAgentCardsPostError,
   ReadAgentCardV1A2aAgentCardsPostErrors,

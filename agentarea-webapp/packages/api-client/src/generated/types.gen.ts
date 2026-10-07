@@ -4461,6 +4461,12 @@ export type OpenApiConnectionCreate = {
      */
     custom_headers?: Array<HeaderInput> | null;
     /**
+     * Custom Query Params
+     *
+     * Query parameters attached to every request, e.g. an API key the upstream takes as '?api_key='. Secret values are stored encrypted in the secret manager.
+     */
+    custom_query_params?: Array<QueryParamInput> | null;
+    /**
      * Description
      *
      * Optional human-readable summary of what this API exposes.
@@ -4519,6 +4525,10 @@ export type OpenApiConnectionResponse = {
      */
     custom_headers?: Array<HeaderOutput> | null;
     /**
+     * Custom Query Params
+     */
+    custom_query_params?: Array<QueryParamOutput> | null;
+    /**
      * Description
      */
     description?: string | null;
@@ -4574,6 +4584,12 @@ export type OpenApiConnectionUpdate = {
      * Replace the full custom-header set. Pass [] to clear all. Secret values are stored encrypted in the secret manager.
      */
     custom_headers?: Array<HeaderInput> | null;
+    /**
+     * Custom Query Params
+     *
+     * Replace the full query-parameter set. Pass [] to clear all. An empty value for a secret parameter keeps the one already stored under that name.
+     */
+    custom_query_params?: Array<QueryParamInput> | null;
     /**
      * Description
      */
@@ -5701,6 +5717,56 @@ export type ProviderSpecWithModelsResponse = {
      * Updated At
      */
     updated_at: string;
+};
+
+/**
+ * QueryParamInput
+ *
+ * One query parameter sent with every request of an OpenAPI connection.
+ *
+ * A secret value (an API key the upstream takes as ``?api_key=``) is stored
+ * encrypted in the secret manager and never returned. A configured parameter
+ * wins over a same-named one the agent passes.
+ */
+export type QueryParamInput = {
+    /**
+     * Name
+     *
+     * Query parameter name. Allowed characters: letters, digits, '-', '_', '.', '[', ']'.
+     */
+    name: string;
+    /**
+     * Secret
+     *
+     * Store the value encrypted and never return it. Set false for plain values.
+     */
+    secret?: boolean;
+    /**
+     * Value
+     *
+     * Parameter value, URL-encoded when sent. On update, an empty value for a secret parameter keeps the value already stored under that name.
+     */
+    value?: string;
+};
+
+/**
+ * QueryParamOutput
+ *
+ * Query parameter metadata returned in API responses (secret values are masked).
+ */
+export type QueryParamOutput = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Secret
+     */
+    secret: boolean;
+    /**
+     * Value
+     */
+    value?: string | null;
 };
 
 /**
