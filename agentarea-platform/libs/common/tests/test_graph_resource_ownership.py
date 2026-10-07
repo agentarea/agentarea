@@ -14,7 +14,7 @@ The grant now hangs off ``WorkspaceScopedRepository.create``, so the question
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -100,3 +100,94 @@ async def test_a_failed_grant_is_raised_not_swallowed(monkeypatch) -> None:
 
     with pytest.raises(ResourceOwnershipError):
         await repo.create(name="anything")
+
+
+@pytest.mark.asyncio
+async def test_the_grant_lands_before_the_commit(monkeypatch) -> None:
+    """A row is committed only once the graph holds its tuples."""
+    events: list[str] = []
+    recorded: list[RelationTuple] = []
+    repo = _repo(_GovernedRow, recorded, monkeypatch)
+    graph = AsyncMock()
+    graph.write_tuple.side_effect = lambda tuple_: events.append("grant")
+    monkeypatch.setattr("agentarea_common.rebac.ownership.resolve_graph_client", lambda: graph)
+    repo.session.commit.side_effect = lambda: events.append("commit")
+
+    await repo.create(name="anything")
+
+    assert events == ["grant"] * 4 + ["commit"]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_grant_commits_nothing(monkeypatch) -> None:
+    """The retry that follows a 503 must not find a first, unreachable copy."""
+    repo = _repo(_GovernedRow, [], monkeypatch)
+    monkeypatch.setattr(
+        "agentarea_common.rebac.ownership.resolve_graph_client",
+        lambda: (_ for _ in ()).throw(ResourceOwnershipError("no client registered")),
+    )
+
+    with pytest.raises(ResourceOwnershipError):
+        await repo.create(name="anything")
+
+    repo.session.commit.assert_not_awaited()
+    repo.session.rollback.assert_awaited_once()
+
+
+def _deletable(repo: WorkspaceScopedRepository, row: _Row, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "agentarea_common.base.workspace_scoped_repository.select", lambda *_: MagicMock()
+    )
+    monkeypatch.setattr(repo, "_get_workspace_filter", lambda: True)
+    monkeypatch.setattr(repo.model_class, "id", MagicMock(), raising=False)
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = row
+    repo.session.execute = AsyncMock(return_value=result)
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_governed_row_removes_its_tuples(monkeypatch) -> None:
+    row = _GovernedRow()
+    held = [
+        RelationTuple(
+            namespace="resource", object=row.id, relation="project", subject_id="project:ws-root"
+        ),
+        RelationTuple(namespace="resource", object=row.id, relation="reader", subject_id="User:u"),
+    ]
+    repo = _repo(_GovernedRow, [], monkeypatch)
+    graph = AsyncMock()
+    graph.query_all_tuples.return_value = held
+    monkeypatch.setattr("agentarea_common.rebac.ownership.resolve_graph_client", lambda: graph)
+    _deletable(repo, row, monkeypatch)
+
+    assert await repo.delete(row.id) is True
+
+    query = graph.query_all_tuples.await_args.args[0]
+    assert (query.namespace, query.object) == ("resource", row.id)
+    assert [c.args[0] for c in graph.delete_tuple.await_args_list] == held
+
+
+@pytest.mark.asyncio
+async def test_a_graph_failure_after_the_delete_is_logged_not_raised(monkeypatch, caplog) -> None:
+    """The row is gone; tuples on an id that no longer exists grant nothing."""
+    row = _GovernedRow()
+    repo = _repo(_GovernedRow, [], monkeypatch)
+    graph = AsyncMock()
+    graph.query_all_tuples.side_effect = RuntimeError("graph unreachable")
+    monkeypatch.setattr("agentarea_common.rebac.ownership.resolve_graph_client", lambda: graph)
+    _deletable(repo, row, monkeypatch)
+
+    assert await repo.delete(row.id) is True
+    repo.session.commit.assert_awaited_once()
+    assert "could not remove its graph tuples" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_plain_row_never_touches_the_graph(monkeypatch) -> None:
+    repo = _repo(_PlainRow, [], monkeypatch)
+    graph = AsyncMock()
+    monkeypatch.setattr("agentarea_common.rebac.ownership.resolve_graph_client", lambda: graph)
+    _deletable(repo, _PlainRow(), monkeypatch)
+
+    assert await repo.delete("any") is True
+    graph.query_all_tuples.assert_not_awaited()
