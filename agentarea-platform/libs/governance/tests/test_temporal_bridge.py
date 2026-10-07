@@ -22,7 +22,6 @@ from agentarea_governance.domain.enums import (
 )
 from agentarea_governance.domain.models import InterceptorContext, InterceptorResult
 from agentarea_governance.interceptors.gates.cost_budget_guard import CostBudgetGuard
-from agentarea_governance.interceptors.gates.semantic_guard import SemanticGuard
 from agentarea_governance.pipeline import InterceptorPipeline
 from agentarea_governance.registry import InterceptorRegistry
 from temporalio import activity
@@ -304,17 +303,36 @@ class TestExecutionStateFromPolicy:
         assert not next_interceptor.called
 
 
-class TestSemanticGuardEscalationAtTheBridge:
-    """The gate escalates; only a recorded human approval of the call satisfies it."""
+class _EscalatingGate:
+    """A gate that escalates every call until a human has approved it."""
+
+    name = "escalating_gate"
+    category = InterceptorCategory.GATE
+
+    async def execute(self, context: InterceptorContext) -> InterceptorResult:
+        if context.execution_state.get("escalation_approved") is True:
+            return InterceptorResult(
+                action=InterceptorAction.ALLOW, interceptor_name=self.name, reason="approved"
+            )
+        return InterceptorResult(
+            action=InterceptorAction.ESCALATE,
+            interceptor_name=self.name,
+            reason="needs a human",
+            metadata={"tool": context.action_name},
+        )
+
+
+class TestEscalationAtTheBridge:
+    """A gate escalates; only a recorded human approval of the call satisfies it."""
 
     @staticmethod
     def _bridge(next_interceptor: "_FakeNextInterceptor") -> GovernanceActivityInterceptor:
         registry = InterceptorRegistry()
-        registry.register(SemanticGuard(), Phase.PRE_TOOL_CALL, priority=400)
+        registry.register(_EscalatingGate(), Phase.PRE_TOOL_CALL, priority=400)
         return GovernanceActivityInterceptor(next_interceptor, InterceptorPipeline(registry))
 
     @pytest.mark.asyncio
-    async def test_unapproved_destructive_call_escalates(self):
+    async def test_unapproved_call_escalates(self):
         next_interceptor = _FakeNextInterceptor()
         request = _FakeMCPToolRequest(tool_name="sql", tool_args={"query": "DELETE FROM orders"})
         input = _FakeActivityInput(fn=_make_fn("execute_mcp_tool_activity"), args=[request])
@@ -323,12 +341,12 @@ class TestSemanticGuardEscalationAtTheBridge:
         error = exc_info.value
         assert error.type == ESCALATED
         assert error.non_retryable is True
-        assert error.message == "semantic_guard: potentially destructive pattern: DELETE FROM"
+        assert error.message == "escalating_gate: needs a human"
         assert list(error.details) == [
             {
-                "interceptor_name": "semantic_guard",
-                "reason": "potentially destructive pattern: DELETE FROM",
-                "metadata": {"patterns": ["DELETE FROM"]},
+                "interceptor_name": "escalating_gate",
+                "reason": "needs a human",
+                "metadata": {"tool": "sql"},
                 "phase": "pre_tool_call",
             }
         ]
@@ -344,20 +362,6 @@ class TestSemanticGuardEscalationAtTheBridge:
         )
         input = _FakeActivityInput(fn=_make_fn("execute_mcp_tool_activity"), args=[request])
         assert await self._bridge(next_interceptor).execute_activity(input) == "deleted"
-
-    @pytest.mark.asyncio
-    async def test_approval_does_not_lift_a_deny(self):
-        next_interceptor = _FakeNextInterceptor()
-        request = _FakeMCPToolRequest(
-            tool_name="sql",
-            tool_args={"query": "DROP TABLE orders"},
-            escalation_approved=True,
-        )
-        input = _FakeActivityInput(fn=_make_fn("execute_mcp_tool_activity"), args=[request])
-        with pytest.raises(ApplicationError) as exc_info:
-            await self._bridge(next_interceptor).execute_activity(input)
-        assert exc_info.value.type == DENIED
-        assert not next_interceptor.called
 
 
 class TestGovernanceActivityInterceptor:

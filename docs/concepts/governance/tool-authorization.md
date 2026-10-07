@@ -101,12 +101,11 @@ governance pipeline around the tool activity:
 |---|---|---|---|
 | `pre_tool_call` | `CostBudgetGuard` | 100 | warn at 80% of run budget, deny when exhausted |
 | `pre_tool_call` | `ServiceBudgetGuard` | 105 | warn at 80% of service budget, deny when exhausted |
-| `pre_tool_call` | `SemanticGuard` | 400 | deny on `DROP TABLE`, `DROP DATABASE`, `rm -rf /`, `TRUNCATE TABLE`, disk format, shutdown; escalate on `DELETE FROM`, `UPDATE ... SET`, `ALTER TABLE`, `rm -rf`, `chmod 777` |
 | `post_tool_call` | `OutputSanitizer` | 300 | rewrite matched content in the result |
-| `tool_discovery` | `MCPToolSecurityScanner` | 300 | scan tool definitions returned by discovery |
 
-These are pattern matchers over the tool arguments, not policy decisions. They
-apply to every task regardless of what the effective policy says.
+These meter spend and rewrite output; none of them looks at a call's arguments to
+decide whether it may run. That decision is the policy's alone, so anything a
+policy permits, including a destructive shell command, is not taken back here.
 
 ## What the policy decision actually does
 
@@ -172,18 +171,10 @@ only the pattern-matching gates.
   user. The policy verdict is computed with the user's snapshot, but the work
   downstream of it is not user-scoped. Anything that depends on the acting user's
   identity inside the tool execution path does not see it.
-- **`SemanticGuard` escalation pauses after the tool call has started.** Its
-  medium-severity patterns return `ESCALATE`, which the Temporal bridge raises as
-  a non-retryable `EscalationRequired`. The workflow catches it and asks a human
-  through the same approval flow as `ApprovalPolicy`; on approval it re-issues
-  the same call with `escalation_approved` set, and the guard accepts that
-  approval. A rejection reaches the model as a denial. The approval never lifts
-  a deny pattern. Because the escalation is only known once the activity runs,
-  `tool.call.started` is emitted before the approval request, not after.
-- **The pattern gates are regular expressions.** `SemanticGuard`'s deny list
-  covers a specific set of literal SQL and shell patterns. It is a guardrail
-  against an obvious accident, not a defence against a model that is trying to get
-  around it. Do not treat it as a sandbox boundary.
+- **Policy matches tool names, not arguments.** A rule can deny a tool or put it
+  behind approval, but cannot single out one kind of call to it, such as
+  `rm -rf` through `shell`. What a permitted command can damage is bounded by the
+  sandbox it runs in and the credentials the agent holds.
 - **A crashing gate fails open.** The pipeline catches exceptions from an
   interceptor, logs the traceback and continues with the next one.
 - **No rate or concurrency limit on tool calls.** Frequency is bounded only by the

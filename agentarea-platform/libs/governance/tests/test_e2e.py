@@ -74,33 +74,25 @@ class TestE2EFullPipeline:
         assert result.interceptor_name == "cost_budget_guard"
 
     @pytest.mark.asyncio
-    async def test_semantic_guard_blocks_destructive(self):
+    async def test_pipeline_does_not_judge_tool_arguments(self):
+        """Whether a call may run is the policy engine's decision, not a pipeline gate's.
+
+        A gate matching the arguments would deny or escalate a call the policy
+        allowed, and no policy could grant it back.
+        """
         pipeline = create_governance_pipeline()
-        ctx = _ctx(
-            action_name="sql_query",
-            action_type="tool_call",
-            execution_state={
-                "budget_usd": 10.0,
-                "cost_used": 1.0,
-            },
-        )
         ctx = InterceptorContext(
-            agent_id=ctx.agent_id,
-            workspace_id=ctx.workspace_id,
-            user_id=ctx.user_id,
+            agent_id=uuid4(),
+            workspace_id="ws-1",
+            user_id="user-1",
             phase=Phase.PRE_TOOL_CALL,
             action_type="tool_call",
-            action_name="sql_query",
-            action_params={"query": "DROP TABLE users"},
-            execution_state={
-                "budget_usd": 10.0,
-                "cost_used": 1.0,
-                "tools_config": {"allowed": ["sql_query"]},
-            },
+            action_name="shell",
+            action_params={"command": "rm -rf build && psql -c 'DROP TABLE users'"},
+            execution_state={"budget_usd": 10.0, "cost_used": 1.0},
         )
         result = await pipeline.run(Phase.PRE_TOOL_CALL, ctx)
-        assert result.action == InterceptorAction.DENY
-        assert result.interceptor_name == "semantic_guard"
+        assert result.action == InterceptorAction.ALLOW
 
     @pytest.mark.asyncio
     async def test_pipeline_does_not_escalate_for_approval(self):
