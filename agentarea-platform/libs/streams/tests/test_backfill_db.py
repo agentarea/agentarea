@@ -3,7 +3,7 @@
 Set STREAMS_TEST_DATABASE_URL. Runs the migration's own SQL on rows written
 after the database was migrated; the statements are idempotent. Its streams are
 inserted by SQL, so they carry no graph tuples until the post-migration
-reconcile (``agentarea-api reconcile``) writes them.
+reconcile (``agentarea-api reconcile --repair-ownership``) writes them.
 """
 
 import importlib.util

@@ -269,20 +269,28 @@ def validate():
     default=None,
     help="Wait up to this long (e.g. 300s) for the database to reach the migration head.",
 )
+@click.option(
+    "--repair-ownership",
+    is_flag=True,
+    default=False,
+    help="First grant ownership to governed rows a migration inserted by SQL. For the "
+    "post-migration run only: it reads the whole authorization graph.",
+)
 def reconcile(
     registries_config: str | None,
     source: tuple[str, ...],
     config_file: str | None,
     wait_for_schema: str | None,
+    repair_ownership: bool,
 ):
-    """Idempotent reconcile — graph ownership of every governed row, then registries."""
+    """Idempotent catalog reconcile; with --repair-ownership, graph ownership first."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
     if wait_for_schema is not None:
         from agentarea_common.config.duration import parse_duration
 
         _wait_for_schema_head(parse_duration(wait_for_schema).total_seconds())
-    asyncio.run(_reconcile(registries_config, source, config_file))
+    asyncio.run(_reconcile(registries_config, source, config_file, repair_ownership))
 
 
 def _wait_for_schema_head(timeout_seconds: float, poll_seconds: float = 5.0) -> None:
@@ -346,10 +354,23 @@ async def _register_graph_client() -> OpenFGAClient:
     return client
 
 
+async def _reconcile_graph_ownership(db: Database, client: OpenFGAClient) -> None:
+    """Grant governed rows a migration inserted by SQL the ownership tuples they lack."""
+    from agentarea_common.rebac.ownership_reconcile import reconcile_graph_ownership
+
+    async with db.async_session_factory() as session:
+        result = await reconcile_graph_ownership(session, client)
+    click.echo(
+        f"Graph ownership: wrote {result.written} tuples across {result.resources} resources, "
+        f"{result.workspaces} workspaces and {result.memberships} memberships"
+    )
+
+
 async def _reconcile(
     registries_config: str | None,
     sources: tuple[str, ...],
     config_file: str | None = None,
+    repair_ownership: bool = False,
 ):
     """Async reconcile implementation."""
     from agentarea_common.auth.context import UserContext
@@ -402,11 +423,13 @@ async def _reconcile(
         )
         configs.append({"name": name, "source_url": src})
 
-    # Catalog reconcile only. Ownership of governed rows is granted by the
-    # repository when a row is created; rows a migration inserts by SQL are
-    # repaired once, by scripts/20260923_reconcile_resource_authz.py -- not on
-    # every hourly run, which read the whole graph into memory each time.
-    await _register_graph_client()
+    # Ownership of governed rows is granted by the repository when a row is
+    # created. Only rows a migration inserts by SQL need repair, so only the
+    # post-migration run asks for it: the hourly catalog run read the whole
+    # graph into memory each time and was OOM-killed.
+    client = await _register_graph_client()
+    if repair_ownership:
+        await _reconcile_graph_ownership(db, client)
 
     if not configs:
         click.echo("No registry config provided (set REGISTRIES_CONFIG or use --source)")
