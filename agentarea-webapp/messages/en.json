@@ -53,6 +53,11 @@
     "openFiles": "Open files",
     "closeTab": "Close {name}",
     "download": "Download",
+    "copyContents": "Copy contents",
+    "copied": "Copied",
+    "emptyFile": "Empty file",
+    "csvRows": "{count, plural, one {# row} other {# rows}}",
+    "csvTruncated": "Showing the first {count} rows",
     "noPreview": "Preview is not available for this file type.",
     "readFileFailed": "Couldn't read the file contents",
     "historyLoading": "Loading history…",
@@ -114,6 +119,7 @@
     "yesterday": "Yesterday",
     "at": "at",
     "deleteDescription": "Are you sure you want to delete \"{itemName}\"? This action cannot be undone.",
+    "refresh": "Refresh",
     "retry": "Try again",
     "loadingMore": "Loading more…",
     "clearSearch": "Clear search",
@@ -1548,6 +1554,17 @@
       "removeFailed": "Couldn't remove the child skill"
     }
   },
+  "TaskArtifactsPage": {
+    "treeLabel": "Artifacts",
+    "count": "{count, plural, one {# artifact} other {# artifacts}}",
+    "durable": "Files the agent published from its sandbox; they outlive it",
+    "unavailable": "Artifacts unavailable",
+    "loadFailed": "Couldn't load artifacts",
+    "empty": "No artifacts yet",
+    "emptyDescription": "Files the agent publishes from its sandbox land here and stay after the sandbox is gone. Its working files are on the Files tab.",
+    "openFiles": "Open files",
+    "taskLoadFailed": "Couldn't load the task"
+  },
   "TaskEventsPage": {
     "searchPlaceholder": "Search events",
     "levelFilter": "Event level",
@@ -1560,7 +1577,6 @@
     },
     "live": "Live",
     "offline": "Offline",
-    "refresh": "Refresh",
     "columns": {
       "index": "#",
       "time": "Time",
@@ -1633,7 +1649,6 @@
     "fileCount": "{count, plural, one {# file} other {# files}}",
     "ephemeral": "Files exist only while the task's sandbox runs",
     "unavailable": "Sandbox unavailable",
-    "refresh": "Refresh",
     "empty": "No files in the sandbox yet",
     "loadFailed": "Couldn't load sandbox files",
     "noSandbox": "No sandbox for this task",

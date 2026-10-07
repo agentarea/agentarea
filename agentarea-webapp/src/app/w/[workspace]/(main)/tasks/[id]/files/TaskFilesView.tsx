@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { RefreshCw } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import EmptyState from "@/components/EmptyState";
 import {
@@ -12,10 +11,9 @@ import {
 } from "@/components/files/file-browser";
 import { FileBrowserSkeleton } from "@/components/files/file-browser-skeleton";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
+import ToolbarRefreshButton from "@/components/ToolbarRefreshButton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { ToolbarButton } from "@/components/ui/toolbar";
 import type { StatusKind } from "@/lib/status";
-import { cn } from "@/lib/utils";
 
 /**
  * Where the task's live sandbox stands. A sandbox that was never started, or
@@ -164,20 +162,10 @@ export default function TaskFilesView({
         <SubheaderToolbar
           categories={<SandboxState listing={listing} />}
           controls={
-            <ToolbarButton
-              onClick={onRefresh}
-              disabled={refreshing}
-              aria-label={t("refresh")}
-              title={t("refresh")}
-              className="justify-center px-0 disabled:hover:bg-transparent"
-            >
-              <RefreshCw
-                className={cn(
-                  "h-3.5 w-3.5 text-muted-foreground",
-                  refreshing && "animate-spin"
-                )}
-              />
-            </ToolbarButton>
+            <ToolbarRefreshButton
+              onRefresh={onRefresh}
+              refreshing={refreshing}
+            />
           }
         />
       }

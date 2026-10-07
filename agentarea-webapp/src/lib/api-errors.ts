@@ -89,3 +89,14 @@ export function apiErrorMessage(result: ApiResultLike, label: string) {
   }
   return `${label}${statusText}: ${detail}`;
 }
+
+/**
+ * Why a call failed, for under a title that already says what failed: the
+ * API's own words when it gave any, else the label with the status.
+ */
+export function apiErrorDetail(result: ApiResultLike, label: string) {
+  const detail = result?.error ? formatApiError(result.error) : "";
+  return detail && detail !== "{}" && detail !== "[]"
+    ? detail
+    : apiErrorMessage(result, label);
+}

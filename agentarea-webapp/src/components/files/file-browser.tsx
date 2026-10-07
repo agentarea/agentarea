@@ -415,7 +415,6 @@ export function FileBrowser({
                       fetchUrl={fetchUrl}
                       fetchHistory={fetchHistory}
                       onDelete={onDelete}
-                      onClose={() => setTabs(closeTab(tabs, path))}
                     />
                   )}
                 </TabsContent>

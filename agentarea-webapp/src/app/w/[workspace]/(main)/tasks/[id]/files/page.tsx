@@ -4,25 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFileBrowserState } from "@/components/files/file-browser";
 import { useWorkspaceSlug } from "@/hooks/useWorkspaceNavigation";
-import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
+import { apiErrorDetail, formatApiError } from "@/lib/api-errors";
 import { listTaskSandboxFilesAction } from "@/lib/server-actions";
 import { taskSandboxFileUrl } from "@/lib/task-files";
 import { useTaskContext } from "../TaskContext";
 import TaskFilesView, { type SandboxListing } from "./TaskFilesView";
-
-/**
- * Why the listing failed, for under the "couldn't load" title: the API's own
- * words when it gave any, else the status line.
- */
-function errorDetail(
-  result: Parameters<typeof apiErrorMessage>[0],
-  label: string
-) {
-  const detail = result?.error ? formatApiError(result.error) : "";
-  return detail && detail !== "{}" && detail !== "[]"
-    ? detail
-    : apiErrorMessage(result, label);
-}
 
 export default function TaskFilesPage() {
   const t = useTranslations("TaskFilesPage");
@@ -49,7 +35,10 @@ export default function TaskFilesPage() {
             ? { kind: "missing" }
             : result.status === 410
               ? { kind: "expired" }
-              : { kind: "error", message: errorDetail(result, t("loadFailed")) }
+              : {
+                  kind: "error",
+                  message: apiErrorDetail(result, t("loadFailed")),
+                }
         );
         return;
       }

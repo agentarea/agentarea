@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import EmptyState from "@/components/EmptyState";
 import FormError from "@/components/FormError";
@@ -11,9 +11,9 @@ import { TableSkeleton } from "@/components/Skeleton";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import Table, { type Column } from "@/components/Table/Table";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
+import ToolbarRefreshButton from "@/components/ToolbarRefreshButton";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { ToolbarButton } from "@/components/ui/toolbar";
 import { cn } from "@/lib/utils";
 import type { DisplayEvent, EventLevel } from "@/types/events";
 import {
@@ -28,7 +28,10 @@ import {
   type EventLevelFilter,
 } from "./taskEventsFilter";
 
-const LEVEL_KINDS: Record<EventLevel, "active" | "attention" | "done" | "failed"> = {
+const LEVEL_KINDS: Record<
+  EventLevel,
+  "active" | "attention" | "done" | "failed"
+> = {
   info: "active",
   success: "done",
   warning: "attention",
@@ -280,20 +283,10 @@ export default function TaskEventsView({
               <StatusIndicator kind={connected ? "active" : "failed"} size="sm">
                 {connected ? t("live") : t("offline")}
               </StatusIndicator>
-              <ToolbarButton
-                onClick={refresh}
-                disabled={refreshing}
-                aria-label={t("refresh")}
-                title={t("refresh")}
-                className="justify-center px-0 disabled:hover:bg-transparent"
-              >
-                <RefreshCw
-                  className={cn(
-                    "h-3.5 w-3.5 text-muted-foreground",
-                    refreshing && "animate-spin"
-                  )}
-                />
-              </ToolbarButton>
+              <ToolbarRefreshButton
+                onRefresh={refresh}
+                refreshing={refreshing}
+              />
             </>
           }
         />
