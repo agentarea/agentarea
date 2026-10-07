@@ -331,9 +331,6 @@ services:
       context: agentarea-mcp-manager
       dockerfile: Dockerfile
       target: dev
-      platforms:
-        - linux/amd64
-        - linux/arm64
     container_name: mcp-manager
     restart: unless-stopped
     ports:
@@ -471,9 +468,6 @@ services:
         # be stated here — "dev" is the honest answer for a local build, and it
         # is now a claim this file makes rather than one the image invents.
         APP_VERSION: ${VERSION:-dev}
-      platforms:
-        - linux/amd64
-        - linux/arm64
     container_name: sandbox-executor
     restart: unless-stopped
     tmpfs:
