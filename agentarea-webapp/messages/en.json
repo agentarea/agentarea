@@ -31,6 +31,7 @@
     "emptyDescription": "Agents read these during a task, so you don't paste content into prompts.",
     "noResults": "No matching files",
     "trySearch": "Try another file or folder name.",
+    "listLoadFailed": "Couldn't load files",
     "loadFailed": "Could not load files. Try again.",
     "retry": "Try again",
     "location": "Location: {path}",
@@ -1625,6 +1626,24 @@
       "cost": "Cost",
       "errorType": "Error type"
     }
+  },
+  "TaskFilesPage": {
+    "treeLabel": "Sandbox",
+    "live": "Live sandbox",
+    "fileCount": "{count, plural, one {# file} other {# files}}",
+    "ephemeral": "Files exist only while the task's sandbox runs",
+    "unavailable": "Sandbox unavailable",
+    "refresh": "Refresh",
+    "empty": "No files in the sandbox yet",
+    "loadFailed": "Couldn't load sandbox files",
+    "noSandbox": "No sandbox for this task",
+    "noSandboxShort": "No sandbox",
+    "noSandboxDescription": "A task gets a sandbox when it needs one to run code or keep files. Anything it published is on the Artifacts tab.",
+    "expired": "The sandbox has expired",
+    "expiredShort": "Sandbox expired",
+    "expiredDescription": "Its files existed only while the task ran. Anything the task published is still on the Artifacts tab.",
+    "openArtifacts": "Open artifacts",
+    "taskLoadFailed": "Couldn't load the task"
   },
   "TaskInfoPanel": {
     "agentTask": "Agent Task",

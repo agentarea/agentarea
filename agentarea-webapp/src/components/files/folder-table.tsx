@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState/EmptyState";
 import { TableSkeleton } from "@/components/Skeleton";
-import Table from "@/components/Table/Table";
+import Table, { type Column } from "@/components/Table/Table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -39,6 +39,8 @@ export function FolderTable({
   showUploadZone,
   isDragging,
   emptyMessage,
+  showModified = true,
+  showSize = true,
 }: {
   entries: FolderEntry[];
   search: string;
@@ -57,6 +59,10 @@ export function FolderTable({
   isDragging: boolean;
   /** Replaces the stock description when the whole browser has no files. */
   emptyMessage?: string;
+  /** Off where no file carries a date: a column of dashes says nothing. */
+  showModified?: boolean;
+  /** Off where no file carries a size, as a live sandbox's listing does. */
+  showSize?: boolean;
 }) {
   const t = useTranslations("FilesPage");
   const tCommon = useTranslations("Common");
@@ -82,6 +88,66 @@ export function FolderTable({
         {entry.name}
       </span>
     </button>
+  );
+
+  // A column switched off is `false` here and filtered out below; typing the
+  // list keeps each render's parameters typed.
+  const allColumns: (Column<FolderEntry> | false | undefined)[] = [
+    {
+      header: t("name"),
+      accessor: "name",
+      render: (_, entry) => entry && entryButton(entry),
+      cellClassName: "w-full",
+      sortable: true,
+    },
+    showModified && {
+      header: t("modified"),
+      accessor: "modified",
+      sortable: true,
+      headerClassName: "hidden lg:table-cell",
+      cellClassName:
+        "hidden whitespace-nowrap text-xs text-muted-foreground lg:table-cell",
+      render: (_, entry) =>
+        entry?.file?.last_modified
+          ? format.dateTime(new Date(entry.file.last_modified), {
+              dateStyle: "medium",
+            })
+          : "—",
+    },
+    showSize && {
+      header: t("size"),
+      accessor: "size",
+      sortable: true,
+      headerClassName: "text-right",
+      cellClassName:
+        "whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground",
+      render: (_, entry) => {
+        if (!entry?.file) return t("folder");
+        const size = entry.file.size;
+        // A live sandbox lists names without sizes; saying "0 B" there
+        // would read as an empty file rather than an unknown one.
+        return typeof size === "number" ? formatFileSize(size) : "—";
+      },
+    },
+    onDelete && {
+      header: "",
+      accessor: "actions",
+      render: (_, entry) =>
+        entry?.file && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+            aria-label={t("deleteFile", { name: entry.name })}
+            onClick={() => entry.file && onDelete(entry.file)}
+          >
+            <Trash2 />
+          </Button>
+        ),
+    },
+  ];
+  const columns = allColumns.filter((column): column is Column<FolderEntry> =>
+    Boolean(column)
   );
 
   return (
@@ -115,19 +181,29 @@ export function FolderTable({
               cellClassName: "w-full",
               barClassName: "h-4 w-56",
             },
-            {
-              header: t("modified"),
-              headerClassName: "hidden lg:table-cell",
-              cellClassName: "hidden lg:table-cell",
-              barClassName: "h-4 w-24",
-            },
-            {
-              header: t("size"),
-              headerClassName: "text-right",
-              cellClassName: "text-right",
-              barClassName: "ml-auto h-4 w-12",
-            },
-            { header: "", barClassName: "h-7 w-7 rounded-md" },
+            ...(showModified
+              ? [
+                  {
+                    header: t("modified"),
+                    headerClassName: "hidden lg:table-cell",
+                    cellClassName: "hidden lg:table-cell",
+                    barClassName: "h-4 w-24",
+                  },
+                ]
+              : []),
+            ...(showSize
+              ? [
+                  {
+                    header: t("size"),
+                    headerClassName: "text-right",
+                    cellClassName: "text-right",
+                    barClassName: "ml-auto h-4 w-12",
+                  },
+                ]
+              : []),
+            ...(onDelete
+              ? [{ header: "", barClassName: "h-7 w-7 rounded-md" }]
+              : []),
           ]}
         />
       ) : entries.length ? (
@@ -138,61 +214,7 @@ export function FolderTable({
           onSortChange={({ accessor, direction }) => {
             if (isEntrySortKey(accessor)) setSort({ accessor, direction });
           }}
-          columns={[
-            {
-              header: t("name"),
-              accessor: "name",
-              render: (_, entry) => entry && entryButton(entry),
-              cellClassName: "w-full",
-              sortable: true,
-            },
-            {
-              header: t("modified"),
-              accessor: "modified",
-              sortable: true,
-              headerClassName: "hidden lg:table-cell",
-              cellClassName:
-                "hidden whitespace-nowrap text-xs text-muted-foreground lg:table-cell",
-              render: (_, entry) =>
-                entry?.file?.last_modified
-                  ? format.dateTime(new Date(entry.file.last_modified), {
-                      dateStyle: "medium",
-                    })
-                  : "—",
-            },
-            {
-              header: t("size"),
-              accessor: "size",
-              sortable: true,
-              headerClassName: "text-right",
-              cellClassName:
-                "whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground",
-              render: (_, entry) => {
-                if (!entry?.file) return t("folder");
-                const size = entry.file.size;
-                // A live sandbox lists names without sizes; saying "0 B" there
-                // would read as an empty file rather than an unknown one.
-                return typeof size === "number" ? formatFileSize(size) : "—";
-              },
-            },
-            {
-              header: "",
-              accessor: "actions",
-              render: (_, entry) =>
-                entry?.file &&
-                onDelete && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                    aria-label={t("deleteFile", { name: entry.name })}
-                    onClick={() => entry.file && onDelete(entry.file)}
-                  >
-                    <Trash2 />
-                  </Button>
-                ),
-            },
-          ]}
+          columns={columns}
         />
       ) : showUploadZone ? (
         <button
