@@ -1322,6 +1322,7 @@
       "scheduled": "Scheduled"
     },
     "tabs": {
+      "label": "Task sections",
       "overview": "Overview",
       "events": "Events",
       "files": "Files",
