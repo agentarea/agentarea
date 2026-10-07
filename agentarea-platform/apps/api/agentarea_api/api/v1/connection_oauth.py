@@ -37,7 +37,7 @@ from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
 from agentarea_common.workspaces.lookup import workspace_slug_for
 from agentarea_mcp.application.auth_resolver import build_auth_config_access_checker
 from agentarea_mcp.application.auth_service import MCPAuthService, MissingCredentialsError
-from agentarea_mcp.application.oauth_client_service import PKCEPair
+from agentarea_mcp.application.oauth_client_service import PKCEPair, checked_authorize_params
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_openapi.application.url_validator import validate_url
@@ -201,7 +201,22 @@ def _oauth_profile(spec: dict[str, Any]) -> dict[str, Any]:
     scopes = oauth.get("scopes") or []
     if not isinstance(scopes, list) or not all(isinstance(scope, str) for scope in scopes):
         raise HTTPException(status_code=500, detail="Invalid OAuth scopes")
-    return {**oauth, "authorization_scheme": scheme, "client_auth_method": method, "scopes": scopes}
+    authorize_params = oauth.get("authorize_params") or {}
+    try:
+        if not isinstance(authorize_params, dict) or not all(
+            isinstance(value, str) for value in authorize_params.values()
+        ):
+            raise ValueError("authorize_params must be an object of strings")
+        authorize_params = checked_authorize_params(authorize_params)
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail="Invalid OAuth authorize params") from exc
+    return {
+        **oauth,
+        "authorization_scheme": scheme,
+        "client_auth_method": method,
+        "scopes": scopes,
+        "authorize_params": authorize_params,
+    }
 
 
 def _managed_secret_manager(db_session: AsyncSession):
@@ -461,6 +476,7 @@ async def connect_catalog_item(
         "state": state,
         "code_challenge": pkce.challenge,
         "code_challenge_method": "S256",
+        **oauth["authorize_params"],
     }
     authorize_url = f"{oauth['authorization_url']}?{urllib.parse.urlencode(query)}"
     return CatalogConnectionResponse(connection_id=connection.id, authorize_url=authorize_url)
