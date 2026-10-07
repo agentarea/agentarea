@@ -2053,6 +2053,38 @@
       "triggersLoadFailed": "Could not load trigger names",
       "subscriptionsLoadFailed": "Could not load forward links",
       "streamsLoadFailed": "Could not load stream names"
+    },
+    "sources": {
+      "title": "Sources",
+      "empty": "No sources yet. Add one to collect events here without a trigger.",
+      "add": "Add source",
+      "signedWith": "Signature",
+      "signedWithHeader": "Signed in {header}",
+      "ownedByTrigger": "Owned by its trigger",
+      "deleteTitle": "Delete source",
+      "deleteDescription": "{name} stops delivering to this stream, and its URL starts answering 400. Events already recorded stay.",
+      "createFailed": "Could not add the source",
+      "dialog": {
+        "title": "Add source",
+        "description": "Events posted to the source's URL are verified and recorded in this stream. No trigger is needed.",
+        "note": "Secrets stay in the workspace secret store; the source only refers to them.",
+        "submit": "Add source",
+        "type": "Type",
+        "typePlaceholder": "Pick a type",
+        "loadingSecrets": "Loading secrets...",
+        "selectSecret": "Select a secret",
+        "noSecrets": "No secrets yet",
+        "newSecret": "New secret",
+        "secretsLoadFailed": "Could not load the workspace secrets"
+      },
+      "created": {
+        "title": "Source added",
+        "description": "Give this URL to the sender. Every request to it is verified before it is recorded.",
+        "done": "Done",
+        "urlLabel": "Webhook URL",
+        "secretLabel": "Signing secret",
+        "secretWarning": "Copy it now: it is not shown again."
+      }
     }
   },
   "NetworkPage": {
