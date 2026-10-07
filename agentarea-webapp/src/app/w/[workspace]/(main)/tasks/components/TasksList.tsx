@@ -1,4 +1,6 @@
-import { getTranslations } from "next-intl/server";
+"use client";
+
+import { useTranslations } from "next-intl";
 import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { AgentLink } from "@/components/AgentIdentity";
@@ -29,14 +31,14 @@ interface TasksListProps {
   showAgent?: boolean;
 }
 
-export default async function TasksList({
+export default function TasksList({
   initialTasks,
   viewMode = "table",
   catalog = [],
   principalNames = {},
   showAgent = true,
 }: TasksListProps) {
-  const t = await getTranslations("TasksPage");
+  const t = useTranslations("TasksPage");
 
   const taskColumns = [
     {
