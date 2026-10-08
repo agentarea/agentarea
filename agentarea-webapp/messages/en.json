@@ -1090,6 +1090,8 @@
       "specUrl": "Spec URL",
       "customHeaders": "Custom headers ({count})",
       "noCustomHeaders": "No custom headers. Click Add to set Authorization or any other request header your provider needs.",
+      "customQueryParams": "Query parameters ({count})",
+      "noCustomQueryParams": "No query parameters. Click Add to send a key the API expects in the URL, such as api_key.",
       "noToolsWithSpec": "No tools discovered yet. Click “Refresh from spec URL” to parse the spec again.",
       "noTools": "No tools were parsed from this spec.",
       "availableTools": "Available tools ({count})",
@@ -1099,6 +1101,7 @@
         "reloadFailed": "Couldn't reload the connection",
         "discoverFailed": "Couldn't refresh tools from the spec",
         "saveHeadersFailed": "Couldn't save the headers",
+        "saveQueryParamsFailed": "Couldn't save the query parameters",
         "deleteFailed": "Couldn't delete the connection"
       }
     }
@@ -2296,7 +2299,13 @@
     "headerName": "Header name",
     "headerValue": "Header value",
     "secretValuePlaceholder": "Secret value (leave blank to keep)",
-    "headersEditorHint": "Add headers like Authorization: Bearer <token>. Non-safe headers are stored encrypted."
+    "headersEditorHint": "Add headers like Authorization: Bearer <token>. Non-safe headers are stored encrypted.",
+    "editQueryParams": "Edit",
+    "saveQueryParams": "Save query parameters",
+    "queryParamName": "Parameter name",
+    "queryParamValue": "Value",
+    "toggleSecret": "Secret: stored encrypted, never shown again",
+    "queryParamsEditorHint": "Add parameters the API expects in every request's query string, such as api_key. Locked values are stored encrypted."
   },
   "OpenAPIForm": {
     "openApiSpec": "OpenAPI Spec",
@@ -2317,6 +2326,9 @@
     "headerName": "Header name",
     "headerValue": "Value",
     "secretHeadersHint": "Secret headers are encrypted and never returned in API responses.",
+    "customQueryParams": "Query Parameters (optional)",
+    "addQueryParam": "Add Parameter",
+    "queryParamsHint": "For APIs that take their key in the URL, such as ?api_key=. Locked values are stored encrypted and never returned.",
     "creating": "Creating...",
     "createConnection": "Create Connection",
     "cancel": "Cancel",
