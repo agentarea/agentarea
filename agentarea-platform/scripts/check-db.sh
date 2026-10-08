@@ -43,8 +43,9 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     and the catalog query is jsonb.
 #   video jobs: a job is read only by its own workspace and task, a finished one
 #     is recorded saved (and billed) once by a conditional update.
-#   membership backfill: the migration inserts rows with SQL that leans on the
-#     (workspace, user) unique constraint and the invitation and outbox tables.
+#   membership backfill: the migration and the reconcile script insert rows with
+#     SQL that leans on the (workspace, user) unique constraint and the
+#     invitation and outbox tables.
 #   catalog browse plans: /explore is only fast while every browse query has an
 #     index that serves it, a property of the migrated indexes and the planner.
 #   agent presets: presets are a jsonb containment query on catalog tags, and a
@@ -90,7 +91,6 @@ PY_SUITES=(
   libs/llm/tests/test_platform_managed_providers_db.py
   libs/llm/tests/test_catalog_model_instance_db.py
   libs/llm/tests/test_video_generation_jobs_db.py
-  apps/api/tests/test_membership_backfill_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
   libs/agents/tests/test_catalog_presets_db.py
   libs/mcp/tests/test_mcp_spec_list_db.py

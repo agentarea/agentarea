@@ -118,7 +118,12 @@ Check the Job explicitly.
     ```
 
     The upgrade re-runs the database-creation Jobs (idempotent), the `db-migration`
-    Job, and the `registry-reconcile` Job, then rolls the Deployments.
+    Job, and the `registry-reconcile` Job, then rolls the Deployments. The reconcile
+    Job waits for the migration to finish, then grants graph ownership of rows the
+    migration inserted by SQL (for example, the event streams backfilled from
+    existing webhook triggers); until it has run, those rows answer 403. With
+    `registryReconcile.enabled=false` the Job is not rendered, so run
+    `agentarea-api reconcile` after each migration yourself.
 
     Generated secrets are preserved. The chart looks each one up and reuses the
     existing value, so the database password and the encryption key do not rotate

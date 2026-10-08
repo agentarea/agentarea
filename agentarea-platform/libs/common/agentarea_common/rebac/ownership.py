@@ -132,9 +132,10 @@ async def revoke_resource(resource_id: UUID | str) -> None:
 def graph_governed_models() -> list[type]:
     """Every mapped model that declares ``__graph_resource__``.
 
-    Derived from the SQLAlchemy registry rather than from a list, so it cannot
-    drift from what the repository actually grants. Callers must import the
-    model modules first -- an unimported model is not mapped.
+    Derived from the SQLAlchemy registry rather than from a list, so the
+    reconcile script below cannot drift from what the repository actually
+    grants: marking a new model governs it in both places at once. Callers must
+    import the model modules first -- an unimported model is not mapped.
     """
     from agentarea_common.base.models import BaseModel
 
