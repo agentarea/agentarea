@@ -15,12 +15,14 @@ export default function TaskInfoTabs({ activeTab, setActiveTab }: TaskInfoTabsPr
   ];
 
   return (
-    <div className="px-3 pt-2.5 pb-1.5">
+    <div className="px-3 pb-1 pt-2">
       <AnimatedTabs
         tabs={tabs}
         activeTab={activeTab}
         onChange={(val) => setActiveTab(val as "overview" | "model")}
-        className="p-0.5"
+        // The compact size, as on the Network page: a narrow panel's switch
+        // should not outweigh the sections under it.
+        size="sm"
       />
     </div>
   );

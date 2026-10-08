@@ -10,6 +10,7 @@ export default function InfoPanelValueBox({
   className,
   mono = false,
   href,
+  newTab = false,
 }: {
   children: ReactNode;
   className?: string;
@@ -19,6 +20,8 @@ export default function InfoPanelValueBox({
    * hover, with the arrow saying it opens another page — not an underline.
    */
   href?: string;
+  /** Open `href` in a new browser tab, leaving the page where it is. */
+  newTab?: boolean;
 }) {
   const boxClassName = cn(
     "truncate rounded-md border border-border/50 bg-muted/30 p-1.5 text-xs text-foreground",
@@ -33,6 +36,7 @@ export default function InfoPanelValueBox({
   return (
     <Link
       href={href}
+      {...(newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
       className={cn(
         boxClassName,
         "group/value flex items-center gap-2 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

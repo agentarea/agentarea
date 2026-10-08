@@ -28,7 +28,7 @@ export default function Metadata({ task }: MetadataProps) {
       </InfoPanelField>
 
       <InfoPanelField label={t("agent")}>
-        <InfoPanelValueBox href={`/agents/${task.agent_id}`}>
+        <InfoPanelValueBox href={`/agents/${task.agent_id}`} newTab>
           <AgentIdentity
             agent={{
               id: task.agent_id,

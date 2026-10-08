@@ -17,7 +17,6 @@ import Metadata from "./components/Metadata";
 import ModelInfo from "./components/ModelInfo";
 import Participants from "./components/Participants";
 import PolicyInfo from "./components/PolicyInfo";
-import QuickActions from "./components/QuickActions";
 import TaskInfoHeader from "./components/TaskInfoHeader";
 import TaskInfoTabs from "./components/TaskInfoTabs";
 import { Task } from "./types";
@@ -88,19 +87,10 @@ export default function TaskInfoPanel({
       <InfoPanelBody className="space-y-1.5">
         {activeTab === "overview" && (
           <>
-            {executionStatus && (
-              <p className="px-1 text-xs text-muted-foreground">
-                Execution:{" "}
-                {executionStatus === "waiting"
-                  ? currentStatus === "completed"
-                    ? "waiting for follow-up"
-                    : "waiting for interaction"
-                  : executionStatus}
-              </p>
-            )}
             {statusError && <FormError>{statusError}</FormError>}
             <KeyMetrics
               currentStatus={currentStatus}
+              executionStatus={executionStatus}
               isActive={isActive}
               executionTime={executionTime}
               formattedStart={formattedStart}
@@ -138,7 +128,6 @@ export default function TaskInfoPanel({
             <Files files={activitySummary?.files} />
             <Documents artifacts={artifacts} />
             <Metadata task={task} />
-            <QuickActions task={task} />
           </>
         )}
 

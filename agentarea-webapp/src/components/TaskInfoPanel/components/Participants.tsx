@@ -33,6 +33,8 @@ interface Participant {
   /** Present for a related resource (the agent, the trigger, the delegating
    * task) — the row links there instead of just sitting flat. */
   href?: string;
+  /** Open `href` in a new browser tab, leaving the task where it is. */
+  newTab?: boolean;
   title?: string;
 }
 
@@ -72,6 +74,9 @@ function ParticipantRow({ participant }: { participant: Participant }) {
     <Link
       href={participant.href}
       title={participant.title}
+      {...(participant.newTab
+        ? { target: "_blank", rel: "noopener noreferrer" }
+        : {})}
       className={cn(
         rowClassName,
         "group/participant transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -210,6 +215,8 @@ export default function Participants({
     name: agentName || t("agent"),
     role: t("rolePrimaryAgent"),
     href: `/agents/${agentId}`,
+    // The agent's page is a detour from the run: the task stays open.
+    newTab: true,
   };
   const delegated: Participant[] = (delegatedAgents || []).map((name) => ({
     avatar: (
