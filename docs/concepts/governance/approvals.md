@@ -165,9 +165,10 @@ request, and that is intentional.
 
 The interceptor pipeline runs at the Temporal *activity* boundary. An activity
 cannot pause and resume — an `ESCALATE` there is converted into an
-`EscalationRequired` exception, which fails the activity. Only the tool path's
-workflow code turns that failure into a pending approval (see the `SemanticGuard`
-limit below); on the LLM and discovery paths it stays a failure, and the
+`EscalationRequired` exception, which fails the activity. No registered gate
+escalates; the tool path's workflow code still turns such a failure into a
+pending approval, so a run that was waiting on one when it was written replays
+unchanged. On the LLM and discovery paths it stays a failure, and the
 conversation state that would let a human judge the request is not available at
 that layer.
 
@@ -189,12 +190,6 @@ agent workflow has no approval flow, only a denial. See the limits below.
   called through `POST /v1/mcp/{instance_id}/mcp` returns HTTP 403 with no
   escalation created and nothing for a human to answer. An external MCP client
   cannot obtain approval.
-- **`SemanticGuard` escalation reuses this flow, but only after the activity
-  starts.** The guard's `ESCALATE` fails the tool activity without retry; the
-  workflow turns that into a pending escalation, and on approval re-issues the
-  call with the approval recorded so the guard lets it through. Approvers are
-  resolved the same way as for `ApprovalPolicy`. Its deny patterns are never
-  escalated.
 - **There is no timeout.** The workflow waits on the escalation with no deadline.
   A task blocked on an approval nobody answers stays in `waiting_for_approval`
   until it is cancelled. There is no auto-deny, no expiry, and no escalation to a

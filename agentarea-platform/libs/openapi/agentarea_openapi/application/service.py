@@ -37,6 +37,10 @@ class MissingUrlVariableSecretError(RuntimeError):
     """A URL variable on this connection has no stored value to substitute."""
 
 
+class MissingQueryParamSecretError(RuntimeError):
+    """A secret query parameter on this connection has no stored value to send."""
+
+
 # Headers that are never sensitive — stored as plaintext.
 _SAFE_HEADERS = frozenset(
     h.lower()
@@ -80,6 +84,11 @@ def _secret_key(connection_id: str | UUID, header_name: str) -> str:
 def _url_variable_key(connection_id: str | UUID, variable_name: str) -> str:
     """Build the secret manager key for a URL variable value."""
     return f"openapi:{connection_id}:url_var:{variable_name}"
+
+
+def _query_param_key(connection_id: str | UUID, param_name: str) -> str:
+    """Build the secret manager key for a query parameter value."""
+    return f"openapi:{connection_id}:query:{param_name}"
 
 
 def _is_safe_header(name: str) -> bool:
@@ -212,6 +221,12 @@ class OpenAPIConnectionService:
             raw_headers = [h.model_dump() for h in payload.custom_headers]
             processed_headers = await self._store_headers(raw_headers, connection_id=conn_id)
 
+        processed_query_params = None
+        if payload.custom_query_params:
+            processed_query_params = await self._store_query_params(
+                [p.model_dump() for p in payload.custom_query_params], conn_id
+            )
+
         url_variable_names = None
         if raw_url_variables:
             url_variable_names = await self._store_url_variables(raw_url_variables, conn_id)
@@ -248,6 +263,7 @@ class OpenAPIConnectionService:
             registry_item_id=registry_item_id,
             allowed_auth_origins=allowed_auth_origins,
             custom_headers=processed_headers,
+            custom_query_params=processed_query_params,
             url_variables=url_variable_names,
             available_tools=available_tools,
             status=status,
@@ -316,6 +332,71 @@ class OpenAPIConnectionService:
                 # Swallowing this leaves the credential in the store with
                 # nothing referring to it — invisible, and never cleaned up.
                 await self._secret_manager.delete_secret(key)
+
+    async def _store_query_params(
+        self,
+        raw_params: list[dict[str, Any]],
+        connection_id: str | UUID,
+        kept_secrets: frozenset[str] = frozenset(),
+    ) -> list[dict[str, Any]]:
+        """Store secret query parameter values and return the row's metadata.
+
+        A secret parameter with an empty value keeps its stored value when its
+        name is in ``kept_secrets``; with nothing stored it is an error rather
+        than a parameter that silently goes missing from every request.
+        """
+        for p in raw_params:
+            if p["secret"] and not p["value"] and p["name"] not in kept_secrets:
+                raise ValueError(f"Secret query parameter '{p['name']}' needs a value.")
+        processed: list[dict[str, Any]] = []
+        for p in raw_params:
+            if p["secret"]:
+                if p["value"]:
+                    await self._secret_manager.set_secret(
+                        _query_param_key(connection_id, p["name"]), p["value"]
+                    )
+                processed.append({"name": p["name"], "secret": True})
+            else:
+                processed.append({"name": p["name"], "secret": False, "value": p["value"]})
+        return processed
+
+    async def _update_query_params(
+        self, conn: OpenAPIConnection, raw_params: list[dict[str, Any]]
+    ) -> None:
+        """Replace the query-parameter set, deleting secrets nothing refers to any more."""
+        stored_secrets = frozenset(
+            p["name"] for p in conn.custom_query_params or [] if p.get("secret")
+        )
+        processed = await self._store_query_params(raw_params, conn.id, stored_secrets)
+        still_secret = {p["name"] for p in processed if p["secret"]}
+        for name in stored_secrets - still_secret:
+            await self._secret_manager.delete_secret(_query_param_key(conn.id, name))
+        await self._repo.update(str(conn.id), custom_query_params=processed)
+
+    async def _delete_query_param_secrets(self, conn: OpenAPIConnection) -> None:
+        for p in conn.custom_query_params or []:
+            if p.get("secret"):
+                await self._secret_manager.delete_secret(_query_param_key(conn.id, p["name"]))
+
+    async def resolve_query_params(self, conn: OpenAPIConnection) -> dict[str, str]:
+        """Return the connection's configured query parameters with their secret values.
+
+        The result carries credentials: never log or report it.
+        """
+        params: dict[str, str] = {}
+        for p in conn.custom_query_params or []:
+            name = p["name"]
+            if not p.get("secret"):
+                params[name] = p.get("value", "")
+                continue
+            value = await self._secret_manager.get_secret(_query_param_key(conn.id, name))
+            if not value:
+                raise MissingQueryParamSecretError(
+                    f"Connection {conn.id} has no stored value for query parameter '{name}'. "
+                    "Re-enter it."
+                )
+            params[name] = value
+        return params
 
     async def _store_url_variables(
         self,
@@ -435,6 +516,16 @@ class OpenAPIConnectionService:
                 else url_variables_conn.url_variables or [],
             )
 
+        # Dumped from the payload, not the patch: exclude_unset would drop each
+        # entry's defaulted ``secret`` flag.
+        if patch.pop("custom_query_params", None) is not None:
+            current_conn = await self._repo.get_by_id(str(connection_id))
+            if not current_conn:
+                return None
+            await self._update_query_params(
+                current_conn, [p.model_dump() for p in payload.custom_query_params or []]
+            )
+
         # custom_headers are routed through update_headers (secret manager).
         if "custom_headers" in patch:
             raw_headers = patch.pop("custom_headers")
@@ -480,6 +571,7 @@ class OpenAPIConnectionService:
         conn = await self._repo.get_by_id(str(connection_id))
         if conn:
             await self._delete_header_secrets(conn)
+            await self._delete_query_param_secrets(conn)
             await self._delete_url_variable_secrets(conn)
         return await self._repo.delete(str(connection_id))
 

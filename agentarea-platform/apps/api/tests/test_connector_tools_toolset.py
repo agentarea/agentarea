@@ -46,6 +46,30 @@ def _tool(name: str, description: str = "", **annotations: Any) -> dict[str, Any
     return tool
 
 
+def _operation(path: str, method: str, operation_id: str) -> dict[str, Any]:
+    return {path: {method: {"operationId": operation_id, "summary": operation_id}}}
+
+
+def _connection(
+    name: str,
+    tools: list[dict],
+    paths: dict | None = None,
+    *,
+    status: str = "active",
+    registry_item_id: Any = None,
+    auth_config_id: Any = None,
+):
+    return SimpleNamespace(
+        id=uuid4(),
+        name=name,
+        status=status,
+        available_tools=tools,
+        spec_content={"openapi": "3.0.0", "paths": paths or {}},
+        registry_item_id=registry_item_id,
+        auth_config_id=auth_config_id,
+    )
+
+
 def _instance(name: str, tools: list[dict], verification: dict | None = None):
     return SimpleNamespace(
         id=uuid4(),
@@ -80,18 +104,37 @@ def harness(monkeypatch):
     async def _list():
         return state.instances
 
+    service.list = _list
+    openapi = MagicMock()
+    openapi.resolve_headers = AsyncMock(return_value={})
+    state.openapi = openapi
+    state.connections = []
+
+    async def _list_connections(**_kwargs):
+        return state.connections, len(state.connections)
+
+    openapi.list_connections = _list_connections
+
+    async def _openapi_service(*_args):
+        return openapi
+
+    monkeypatch.setattr(connector_tools_toolset, "get_openapi_connection_service", _openapi_service)
+
     async def _readable(_user_id):
         if state.readable is None:
-            return {str(i.id) for i in state.instances}
+            return {str(i.id) for i in [*state.instances, *state.connections]}
         return state.readable
 
-    service.list = _list
     monkeypatch.setattr(connector_tools_toolset, "readable_resource_ids", _readable)
     monkeypatch.setattr(connector_tools_toolset, "require_permission", AsyncMock())
     state.dispatch = AsyncMock(
         return_value=CallToolResult(content=[TextContent(type="text", text="ok")])
     )
     monkeypatch.setattr(client_mcp, "call_instance_tool", state.dispatch)
+    state.openapi_dispatch = AsyncMock(
+        return_value=CallToolResult(content=[TextContent(type="text", text="ok")])
+    )
+    monkeypatch.setattr(client_mcp, "call_openapi_tool", state.openapi_dispatch)
     with use_mcp_user_context(CALLER):
         yield state
 
@@ -243,6 +286,71 @@ async def test_search_never_reaches_another_workspace(harness):
 
     assert result["searched_connectors"] == 1
     assert [r["connector_id"] for r in result["results"]] == [str(here.id)]
+
+
+@pytest.mark.asyncio
+async def test_search_covers_openapi_connections_alongside_mcp_connectors(harness):
+    wiki = _instance("DeepWiki", [_tool("read_wiki_structure", "Topics of a wiki")])
+    analytics = _connection(
+        "Google Analytics Admin",
+        [_tool("listAccounts", "List the accounts of the caller")],
+        _operation("/v1/accounts", "get", "listAccounts"),
+    )
+    harness.instances = [wiki]
+    harness.connections = [analytics]
+
+    result = await _search(query="list accounts")
+
+    assert result["searched_connectors"] == 2
+    assert result["results"] == [
+        {
+            "connector_id": str(analytics.id),
+            "connector": "Google Analytics Admin",
+            "tool": "listAccounts",
+            "description": "List the accounts of the caller",
+            "hint": "read-only",
+            "inputSchema": {"type": "object", "properties": {"q": {"type": "string"}}},
+        }
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method", "hint"),
+    [("get", "read-only"), ("delete", "destructive"), ("post", None), ("patch", None)],
+)
+async def test_an_openapi_tool_hint_follows_its_http_method(harness, method, hint):
+    harness.connections = [
+        _connection("Api", [_tool("doThing", "Do a thing")], _operation("/x", method, "doThing"))
+    ]
+
+    result = await _search(query="do thing")
+
+    assert result["results"][0]["hint"] == hint
+
+
+@pytest.mark.asyncio
+async def test_search_skips_openapi_connections_the_caller_may_not_read_or_inactive(harness):
+    mine = _connection("Mine", [_tool("search_docs")])
+    hidden = _connection("Hidden", [_tool("search_docs")])
+    off = _connection("Off", [_tool("search_docs")], status="disabled")
+    harness.connections = [mine, hidden, off]
+    harness.readable = {str(mine.id), str(off.id)}
+
+    result = await _search(query="search")
+
+    assert [r["connector"] for r in result["results"]] == ["Mine"]
+    assert result["searched_connectors"] == 1
+
+
+@pytest.mark.asyncio
+async def test_search_filters_openapi_connections_by_name(harness):
+    harness.instances = [_instance("Alpha", [_tool("search_docs")])]
+    harness.connections = [_connection("Beta", [_tool("search_docs")])]
+
+    result = await _search(query="search", connector="beta")
+
+    assert [r["connector"] for r in result["results"]] == ["Beta"]
 
 
 # --- call ---------------------------------------------------------------------
@@ -408,6 +516,173 @@ async def test_a_connector_is_found_by_id(harness):
     assert result["connector_id"] == str(two.id)
 
 
+@pytest.mark.asyncio
+async def test_call_runs_an_openapi_tool_through_the_openapi_dispatch(harness):
+    analytics = _connection(
+        "Google Analytics Admin",
+        [_tool("listAccounts")],
+        _operation("/v1/accounts", "get", "listAccounts"),
+    )
+    harness.connections = [analytics]
+    harness.openapi_dispatch.return_value = CallToolResult(
+        content=[TextContent(type="text", text='{"accounts": []}')]
+    )
+
+    result = await _call(
+        connector="Google Analytics Admin", tool="listAccounts", arguments={"pageSize": 5}
+    )
+
+    assert result == {
+        "connector_id": str(analytics.id),
+        "connector": "Google Analytics Admin",
+        "tool": "listAccounts",
+        "content": [{"type": "text", "text": '{"accounts": []}'}],
+    }
+    _session, user_ctx, service, connection, tool, arguments = (
+        harness.openapi_dispatch.await_args.args
+    )
+    assert (user_ctx, service, connection, tool, arguments) == (
+        CALLER,
+        harness.openapi,
+        analytics,
+        "listAccounts",
+        {"pageSize": 5},
+    )
+    connector_tools_toolset.require_permission.assert_awaited_once_with(
+        "use", "openapi_connection", str(analytics.id), CALLER.user_id
+    )
+    harness.dispatch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_failed_openapi_call_is_reported_as_an_error(harness):
+    harness.connections = [_connection("Api", [_tool("t")], _operation("/t", "get", "t"))]
+    harness.openapi_dispatch.return_value = CallToolResult(
+        content=[TextContent(type="text", text="HTTP 404: missing")], is_error=True
+    )
+
+    result = await _call(connector="Api", tool="t")
+
+    assert result["is_error"] is True
+    assert result["content"] == [{"type": "text", "text": "HTTP 404: missing"}]
+
+
+@pytest.mark.asyncio
+async def test_a_caller_without_use_on_an_openapi_connection_is_refused(harness):
+    harness.connections = [_connection("Api", [_tool("t")])]
+    connector_tools_toolset.require_permission.side_effect = HTTPException(
+        status_code=403, detail="Permission denied"
+    )
+
+    result = await _call(connector="Api", tool="t")
+
+    assert result == {"error": "Permission denied"}
+    harness.openapi_dispatch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_openapi_delete_waits_for_confirmation(harness):
+    harness.connections = [
+        _connection(
+            "Api", [_tool("deleteAccount")], _operation("/a/{id}", "delete", "deleteAccount")
+        )
+    ]
+
+    result = await _call(connector="Api", tool="deleteAccount", arguments={"id": "1"})
+
+    assert result["confirmation_required"] is True
+    harness.openapi_dispatch.assert_not_awaited()
+
+    confirmed = await _call(connector="Api", tool="deleteAccount", confirm=True)
+
+    assert confirmed["content"] == [{"type": "text", "text": "ok"}]
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_openapi_tool_suggests_close_names(harness):
+    harness.connections = [_connection("Api", [_tool("listAccounts"), _tool("getAccount")])]
+
+    result = await _call(connector="Api", tool="listAccount")
+
+    assert result["suggestions"][0] == "listAccounts"
+    harness.openapi_dispatch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_name_shared_by_an_mcp_and_an_openapi_connector_is_ambiguous(harness):
+    mcp = _instance("Mail", [_tool("t")])
+    api = _connection("mail", [_tool("t")])
+    harness.instances = [mcp]
+    harness.connections = [api]
+
+    result = await _call(connector="Mail", tool="t")
+
+    assert "ambiguous" in result["error"]
+    assert sorted(result["connector_ids"]) == sorted([str(mcp.id), str(api.id)])
+    harness.dispatch.assert_not_awaited()
+    harness.openapi_dispatch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_openapi_connection_is_found_by_id(harness):
+    api = _connection("Api", [_tool("t")])
+    harness.connections = [api]
+
+    result = await _call(connector=str(api.id), tool="t")
+
+    assert result["connector_id"] == str(api.id)
+
+
+@pytest.mark.asyncio
+async def test_a_catalog_connection_whose_sign_in_lapsed_returns_its_connect_link(harness):
+    from agentarea_mcp.application.auth_service import OAuthReauthRequiredError
+
+    item_id = uuid4()
+    api = _connection(
+        "Google Analytics Admin",
+        [_tool("listAccounts")],
+        registry_item_id=item_id,
+        auth_config_id=uuid4(),
+    )
+    harness.connections = [api]
+    harness.openapi.resolve_headers.side_effect = OAuthReauthRequiredError("expired")
+
+    result = await _call(connector="Google Analytics Admin", tool="listAccounts")
+
+    url = f"https://app.example/w/acme/connect/catalog/{item_id}"
+    assert result["action_required"] == {
+        "type": "connect",
+        "url": url,
+        "message": f"Open this link to connect Google Analytics Admin: {url}",
+    }
+    assert result["connector_id"] == str(api.id)
+    harness.openapi_dispatch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_catalog_connection_without_an_auth_config_returns_its_connect_link(harness):
+    item_id = uuid4()
+    harness.connections = [_connection("Api", [_tool("t")], registry_item_id=item_id)]
+
+    result = await _call(connector="Api", tool="t")
+
+    assert result["action_required"]["url"] == (
+        f"https://app.example/w/acme/connect/catalog/{item_id}"
+    )
+    harness.openapi_dispatch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_signed_in_catalog_connection_runs(harness):
+    harness.connections = [
+        _connection("Api", [_tool("t")], registry_item_id=uuid4(), auth_config_id=uuid4())
+    ]
+
+    result = await _call(connector="Api", tool="t")
+
+    assert result["content"] == [{"type": "text", "text": "ok"}]
+
+
 # --- the dispatch itself -------------------------------------------------------
 
 
@@ -508,3 +783,107 @@ async def test_dispatch_refuses_a_tool_held_for_approval_because_a_call_cannot_w
     [event] = env.events
     assert event.action == "tool.call.denied"
     assert event.event_metadata["decision"] == "require_approval"
+
+
+@pytest.fixture
+def openapi_env(dispatch_env, monkeypatch):
+    """The real ``call_openapi_tool`` over the agents' OpenAPI tool, its HTTP call stubbed."""
+    from agentarea_agents_sdk.tools.openapi_tool import OpenAPITool
+
+    executed: list[tuple[str, dict]] = []
+    outcome: dict[str, Any] = {
+        "success": True,
+        "result": '{"accounts": []}',
+        "error": None,
+        "status_code": 200,
+    }
+
+    async def execute(self, **kwargs):
+        executed.append((self.name, kwargs))
+        return {**outcome, "tool_name": self.name}
+
+    monkeypatch.setattr(OpenAPITool, "execute", execute)
+    connection = _connection(
+        "Google Analytics Admin",
+        [_tool("accounts.list")],
+        _operation("/v1/accounts", "get", "accounts.list"),
+    )
+    service = MagicMock()
+    service.get_connection = AsyncMock(return_value=connection)
+    return SimpleNamespace(
+        events=dispatch_env.events,
+        policy=dispatch_env.policy,
+        executed=executed,
+        outcome=outcome,
+        connection=connection,
+        service=service,
+    )
+
+
+@pytest.mark.asyncio
+async def test_openapi_dispatch_runs_the_operation_and_audits_it_against_the_connection(
+    openapi_env,
+):
+    env = openapi_env
+
+    result = await client_mcp.call_openapi_tool(
+        AsyncMock(), CALLER, env.service, env.connection, "accounts.list", {"pageSize": 5}
+    )
+
+    assert result.content == [TextContent(type="text", text='{"accounts": []}')]
+    assert not result.is_error
+    assert env.executed == [("accounts_list", {"pageSize": 5})]
+    [event] = env.events
+    assert event.action == "tool.call.allowed"
+    assert (event.resource_type, event.resource_id) == (
+        "openapi_connection",
+        str(env.connection.id),
+    )
+    assert event.event_metadata["argument_keys"] == ["pageSize"]
+
+
+@pytest.mark.asyncio
+async def test_openapi_dispatch_reports_a_failed_request_as_an_error(openapi_env):
+    env = openapi_env
+    env.outcome.update(success=False, result=None, error="HTTP 403: forbidden", status_code=403)
+
+    result = await client_mcp.call_openapi_tool(
+        AsyncMock(), CALLER, env.service, env.connection, "accounts.list", {}
+    )
+
+    assert result.is_error is True
+    assert result.content == [TextContent(type="text", text="HTTP 403: forbidden")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "rule", ["accounts_list", "accounts.list", "Google Analytics Admin", "connection-id"]
+)
+async def test_openapi_dispatch_refuses_what_the_policy_denies(openapi_env, rule):
+    env = openapi_env
+    if rule == "connection-id":
+        rule = str(env.connection.id)
+    env.policy["tools"] = {"denied": [rule]}
+
+    result = await client_mcp.call_openapi_tool(
+        AsyncMock(), CALLER, env.service, env.connection, "accounts.list", {}
+    )
+
+    assert result.is_error is True
+    assert env.executed == []
+    [event] = env.events
+    assert event.action == "tool.call.denied"
+    assert event.resource_type == "openapi_connection"
+
+
+@pytest.mark.asyncio
+async def test_openapi_dispatch_reports_an_operation_the_spec_lacks(openapi_env):
+    env = openapi_env
+
+    result = await client_mcp.call_openapi_tool(
+        AsyncMock(), CALLER, env.service, env.connection, "nope", {}
+    )
+
+    assert result.is_error is True
+    assert env.executed == []
+    assert env.events == []

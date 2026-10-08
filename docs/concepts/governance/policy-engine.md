@@ -137,8 +137,7 @@ model sees, and an `EscalationRequired` into a human approval request.
 The registered set today is: `CostBudgetGuard` (priority 100, pre-LLM and
 pre-tool), `ServiceBudgetGuard` (105, pre-tool), `TokenBudgetGuard` (110,
 pre-LLM), `PromptInjectionDetector` (300, pre-LLM), `OutputSanitizer` (300,
-post-LLM and post-tool), `MCPToolSecurityScanner` (300, tool discovery),
-`SemanticGuard` (400, pre-tool), and the metrics observer at 800 on every
+post-LLM and post-tool), and the metrics observer at 800 on every
 phase. Enterprise builds can inject an entitlement guard at 120 through the
 extension registry.
 
@@ -190,8 +189,8 @@ precisely because that limit is felt — see below.
   The interceptor list that endpoint returns is a static constant in the API, not
   a reading of the pipeline the worker builds. It advertises `escalation_guard`
   and `content_policy_enforcer`, neither of which exists, and its phase
-  lists disagree with the real registrations for `semantic_guard`,
-  `prompt_injection_detector`, `output_sanitizer` and `mcp_tool_scanner`. Treat
+  lists disagree with the real registrations for `prompt_injection_detector` and
+  `output_sanitizer`. Treat
   it as a diagram, never as evidence that a control is running.
 - **The observer records nothing outside the process.** `MetricsObserver`
   increments an in-memory dictionary that nothing exports. The `SecurityFinding` event type is defined and never emitted by any

@@ -377,7 +377,7 @@ class MCPOAuthClientService:
         ``extra_params`` carries what a provider requires beyond OAuth 2.1, as
         its catalog spec declares it (see ``oauth_authorize_params``).
         """
-        extra = _checked_extra_params(extra_params or {})
+        extra = checked_authorize_params(extra_params or {})
         scope_list = list(scopes or as_metadata.scopes_supported or [])
         # Request offline_access when the AS advertises it, so it issues a
         # refresh_token; without one, providers like Vercel return a ~1h access
@@ -510,12 +510,12 @@ def oauth_authorize_params(json_spec: Mapping[str, Any] | None) -> dict[str, str
     if len(params) != len(entries):
         raise ValueError(f"{OAUTH_AUTHORIZE_PARAMS_KEY} must be an object of strings")
     try:
-        return _checked_extra_params(params)
+        return checked_authorize_params(params)
     except ValueError as exc:
         raise ValueError(f"{OAUTH_AUTHORIZE_PARAMS_KEY}: {exc}") from exc
 
 
-def _checked_extra_params(extra_params: Mapping[str, str]) -> dict[str, str]:
+def checked_authorize_params(extra_params: Mapping[str, str]) -> dict[str, str]:
     reserved = sorted(_PROTOCOL_AUTHORIZE_PARAMS & extra_params.keys())
     if reserved:
         raise ValueError(f"extra authorize params may not replace {', '.join(reserved)}")

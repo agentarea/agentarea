@@ -37,6 +37,23 @@ class StreamNameTakenError(StreamError):
         self.name = name
 
 
+class StreamSourceNotFoundError(StreamError):
+    def __init__(self, source_id: UUID | str):
+        super().__init__(f"Source {source_id} not found in this stream")
+        self.source_id = source_id
+
+
+class SourceFedByTriggerError(StreamError):
+    """A live webhook trigger owns the source; deleting it would silence the trigger."""
+
+    def __init__(self, what: str, trigger_ids: list[UUID]):
+        listed = ", ".join(str(t) for t in trigger_ids)
+        super().__init__(
+            f"{what} is fed by the webhook of trigger {listed}; delete the trigger first"
+        )
+        self.trigger_ids = trigger_ids
+
+
 class TriggerSubscriptionNotFoundError(StreamError):
     def __init__(self, trigger_id: UUID | str):
         super().__init__(f"No stream subscription for trigger {trigger_id}")

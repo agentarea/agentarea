@@ -1,6 +1,6 @@
 """A governance gate that escalates a tool call pauses the run for a human.
 
-The gate (SemanticGuard) decides that a call needs approval; the workflow only
+A governance gate decides that a call needs approval; the workflow only
 carries that question to a human and, on approval, re-issues the same call with
 the approval recorded so the gate can accept it. A gate DENY reaches the model
 as a policy denial instead of an opaque activity failure.

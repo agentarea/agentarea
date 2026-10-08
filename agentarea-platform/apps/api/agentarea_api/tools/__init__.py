@@ -31,6 +31,7 @@ from .providers_toolset import ProvidersToolset
 from .runs_toolset import RunsToolset
 from .secrets_toolset import SecretsToolset
 from .skills_toolset import SkillsToolset
+from .stream_events_toolset import StreamEventsToolset
 from .streams_toolset import StreamsToolset
 from .triggers_toolset import TriggersToolset
 from .workspace_config_toolset import WorkspaceConfigToolset
@@ -53,6 +54,7 @@ def get_platform_tools() -> list[Toolset]:
         PoliciesToolset(),
         TriggersToolset(),
         StreamsToolset(),
+        StreamEventsToolset(),
         FilesToolset(),
         InboxToolset(),
         OpenAPIConnectionsToolset(),

@@ -35,11 +35,12 @@ services:
       - AGENTAREA_SANDBOX_FILE_SECRET=${AGENTAREA_SANDBOX_FILE_SECRET:?AGENTAREA_SANDBOX_FILE_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_SANDBOX_CONTROL_SECRET=${AGENTAREA_SANDBOX_CONTROL_SECRET:?AGENTAREA_SANDBOX_CONTROL_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
+      - AGENTAREA_MCP_OAUTH_APPS=${AGENTAREA_MCP_OAUTH_APPS:-[]}
       # Hydra OAuth2 AS
       - AGENTAREA_AUTH_HYDRA_URL=http://hydra:4444
       - AGENTAREA_AUTH_HYDRA_ADMIN_URL=http://hydra:4445
       - AGENTAREA_AUTH_HYDRA_BROWSER_URL=http://localhost:4444
-      - HYDRA_AUDIENCE=http://localhost:8000
+      - AGENTAREA_AUTH_HYDRA_AUDIENCE=http://localhost:8000
       - AGENTAREA_MCP_OAUTH_SCOPES=openid offline_access offline
       # Public API base URL (used in OAuth AS metadata and WWW-Authenticate)
       - AGENTAREA_API_URL=http://localhost:8000
@@ -331,9 +332,6 @@ services:
       context: agentarea-mcp-manager
       dockerfile: Dockerfile
       target: dev
-      platforms:
-        - linux/amd64
-        - linux/arm64
     container_name: mcp-manager
     restart: unless-stopped
     ports:
@@ -471,9 +469,6 @@ services:
         # be stated here — "dev" is the honest answer for a local build, and it
         # is now a claim this file makes rather than one the image invents.
         APP_VERSION: ${VERSION:-dev}
-      platforms:
-        - linux/amd64
-        - linux/arm64
     container_name: sandbox-executor
     restart: unless-stopped
     tmpfs:
@@ -591,6 +586,7 @@ services:
       - AGENTAREA_SANDBOX_FILE_SECRET=${AGENTAREA_SANDBOX_FILE_SECRET:?AGENTAREA_SANDBOX_FILE_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_SANDBOX_CONTROL_SECRET=${AGENTAREA_SANDBOX_CONTROL_SECRET:?AGENTAREA_SANDBOX_CONTROL_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
+      - AGENTAREA_MCP_OAUTH_APPS=${AGENTAREA_MCP_OAUTH_APPS:-[]}
 
       # Task execution
       - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}

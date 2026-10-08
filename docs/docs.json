@@ -136,7 +136,8 @@
             "group": "Triggers",
             "pages": [
               "guides/triggers/schedule-an-agent",
-              "guides/triggers/trigger-from-a-webhook"
+              "guides/triggers/trigger-from-a-webhook",
+              "guides/triggers/collect-events-into-a-stream"
             ]
           },
           {

@@ -58,6 +58,8 @@ class WebhookType(StrEnum):
     # Mail delivered by an inbound-parse provider. Distinct from GMAIL, which is
     # a Pub/Sub ping carrying no message — this one carries the mail itself.
     EMAIL = "email"
+    SENTRY = "sentry"
+    YOOKASSA = "yookassa"
 
     @classmethod
     def _missing_(cls, value):

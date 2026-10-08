@@ -27,6 +27,7 @@ services:
       - AGENTAREA_REDIS_URL=redis://valkey:6379
       - AGENTAREA_MCP_TIMEOUT=30
       - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
+      - AGENTAREA_MCP_OAUTH_APPS=${AGENTAREA_MCP_OAUTH_APPS:-[]}
       # Server settings
       - PORT=${PORT:-8000}
       - AGENTAREA_LOG_LEVEL=${AGENTAREA_LOG_LEVEL:-info}
@@ -484,6 +485,7 @@ services:
       - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
       - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80
       - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
+      - AGENTAREA_MCP_OAUTH_APPS=${AGENTAREA_MCP_OAUTH_APPS:-[]}
       - AGENTAREA_SANDBOX_CLEANUP_SECRET=${AGENTAREA_SANDBOX_CLEANUP_SECRET:?AGENTAREA_SANDBOX_CLEANUP_SECRET is required; run scripts/gen-dev-secrets.sh}
 
       # Access control: the authorization graph lives in OpenFGA. Bootstrap

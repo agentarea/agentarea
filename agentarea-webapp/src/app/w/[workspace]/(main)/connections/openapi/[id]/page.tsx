@@ -26,6 +26,8 @@ import {
 } from "@/lib/server-actions";
 import { CustomHeadersEditor } from "../../components/CustomHeadersEditor";
 import { CustomHeadersList } from "../../components/CustomHeadersList";
+import { CustomQueryParamsEditor } from "../../components/CustomQueryParamsEditor";
+import type { QueryParamRow } from "../../components/QueryParamRows";
 import { OpenAPIConnectionMark } from "../../components/MCPCard";
 import { ToolsTable } from "../../components/ToolsTable";
 import { OpenAPIConnection } from "../../types";
@@ -48,6 +50,8 @@ export default function OpenAPIConnectionDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [editingHeaders, setEditingHeaders] = useState(false);
   const [savingHeaders, setSavingHeaders] = useState(false);
+  const [editingQueryParams, setEditingQueryParams] = useState(false);
+  const [savingQueryParams, setSavingQueryParams] = useState(false);
   // The callback's query is dropped from the URL right away, so the failure is
   // captured once and stays on the page.
   const [oauthError, setOauthError] = useState<string | null>(null);
@@ -131,6 +135,26 @@ export default function OpenAPIConnectionDetailPage() {
       setError(`${t("errors.saveHeadersFailed")}: ${formatApiError(err)}`);
     } finally {
       setSavingHeaders(false);
+    }
+  };
+
+  const handleSaveQueryParams = async (rows: QueryParamRow[]) => {
+    setSavingQueryParams(true);
+    setError(null);
+    try {
+      const result = await updateOpenAPIConnection(connectionId, {
+        custom_query_params: rows,
+      });
+      if (result.error) {
+        setError(apiErrorMessage(result, t("errors.saveQueryParamsFailed")));
+        return;
+      }
+      if (await reloadConnection()) setEditingQueryParams(false);
+    } catch (err) {
+      console.error("Failed to save query parameters", err);
+      setError(`${t("errors.saveQueryParamsFailed")}: ${formatApiError(err)}`);
+    } finally {
+      setSavingQueryParams(false);
     }
   };
 
@@ -316,6 +340,47 @@ export default function OpenAPIConnectionDetailPage() {
               ) : (
                 <p className="text-xs text-muted-foreground">
                   {t("noCustomHeaders")}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Query parameters */}
+        <div className="space-y-2">
+          {editingQueryParams ? (
+            <CustomQueryParamsEditor
+              initial={connection.custom_query_params || []}
+              saving={savingQueryParams}
+              onSave={handleSaveQueryParams}
+              onCancel={() => setEditingQueryParams(false)}
+            />
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {t("customQueryParams", {
+                    count: connection.custom_query_params?.length ?? 0,
+                  })}
+                </div>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={() => setEditingQueryParams(true)}
+                >
+                  <Pencil className="mr-1" />
+                  {connection.custom_query_params &&
+                  connection.custom_query_params.length > 0
+                    ? tCommon("edit")
+                    : tCommon("add")}
+                </Button>
+              </div>
+              {connection.custom_query_params &&
+              connection.custom_query_params.length > 0 ? (
+                <CustomHeadersList headers={connection.custom_query_params} />
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {t("noCustomQueryParams")}
                 </p>
               )}
             </>

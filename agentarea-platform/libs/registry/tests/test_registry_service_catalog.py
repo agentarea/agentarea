@@ -171,6 +171,55 @@ class TestParseMCPServers:
             }
         ]
 
+    def test_published_openapi_connection_keeps_its_spec_url_template(self):
+        oauth = {
+            "provider_key": "yandex",
+            "authorization_url": "https://oauth.yandex.ru/authorize",
+            "token_url": "https://oauth.yandex.ru/token",
+            "scopes": ["metrika:read"],
+            "authorization_scheme": "OAuth",
+            "allowed_api_origins": ["https://api-metrika.yandex.net"],
+            "managed_credentials_key": "connection_oauth_client:yandex",
+        }
+        items = RegistryService._parse_mcp_servers(
+            {
+                "servers": [
+                    {
+                        "registry_id": "ru.yandex.metrika/api",
+                        "name": "Яндекс Метрика",
+                        "description": "Counters and reports",
+                        "version": "1",
+                        "connection_type": "openapi",
+                        "transport": "",
+                        "package_registry": "openapi",
+                        "requires_auth": True,
+                        "json_spec": {
+                            "base_url": "https://api-metrika.yandex.net",
+                            "spec_url": "https://bucket.example/registry/system/openapi/yandex-metrika.json",
+                            "oauth": oauth,
+                            "raw_spec": {
+                                "name": "ru.yandex.metrika/api",
+                                "title": "Яндекс Метрика",
+                            },
+                        },
+                    }
+                ]
+            }
+        )
+
+        assert len(items) == 1
+        item = items[0]
+        assert item["external_id"] == "ru.yandex.metrika/api/openapi"
+        assert item["name"] == "Яндекс Метрика"
+        assert item["spec"]["connection_type"] == "openapi"
+        assert item["spec"]["base_url"] == "https://api-metrika.yandex.net"
+        assert (
+            item["spec"]["spec_url"]
+            == "https://bucket.example/registry/system/openapi/yandex-metrika.json"
+        )
+        assert "spec_content" not in item["spec"]
+        assert item["spec"]["oauth"] == oauth
+
     @pytest.mark.asyncio
     async def test_openapi_connector_stays_catalog_only(self):
         service = RegistryService(

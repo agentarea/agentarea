@@ -136,6 +136,10 @@ def setup_logging(
                 "handlers": ["console"],
                 "propagate": False,
             },
+            # httpx logs each request URL at INFO, and a connection's secret
+            # query parameter rides in it under a name no redaction knows.
+            "httpx": {"level": "WARNING"},
+            "httpcore": {"level": "WARNING"},
         },
         "root": {"level": level, "handlers": ["console"]},
     }

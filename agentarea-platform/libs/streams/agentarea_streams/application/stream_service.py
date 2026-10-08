@@ -1,8 +1,9 @@
 """Streams, their sources and subscriptions, as one workspace sees them. Never commits."""
 
+import secrets
 from datetime import datetime
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from agentarea_common.auth.permission import PermissionService
 from agentarea_common.base import RepositoryFactory
@@ -12,8 +13,10 @@ from agentarea_common.di.container import resolve
 from ..domain.enums import StreamKind, SubscriptionKind
 from ..domain.errors import (
     ForwardLoopError,
+    SourceFedByTriggerError,
     StreamNameTakenError,
     StreamNotFoundError,
+    StreamSourceNotFoundError,
     TriggerSubscriptionNotFoundError,
 )
 from ..domain.filters import EventFilter
@@ -90,14 +93,73 @@ class StreamService:
             raise StreamNotFoundError(stream_id)
         return stream
 
+    async def find_stream(self, name_or_id: str) -> StreamORM:
+        """A stream of this workspace by its id or, failing that, its name."""
+        try:
+            stream_id = UUID(name_or_id)
+        except ValueError:
+            stream_id = None
+        stream = await self._streams().get_by_id(stream_id) if stream_id else None
+        if stream is None:
+            stream = await self._streams().get_by_name(name_or_id)
+        if stream is None:
+            raise StreamNotFoundError(name_or_id)
+        return stream
+
     async def list_streams(
         self, *, limit: int, offset: int, ids: set[str] | None
     ) -> list[StreamORM]:
         return await self._streams().list_all(limit=limit, offset=offset, ids=ids)
 
     async def delete_stream(self, stream_id: UUID) -> None:
+        """Refused while a live webhook trigger's source feeds the stream."""
+        await self.get_stream(stream_id)
+        if fed := await self.triggers_feeding(stream_id):
+            raise SourceFedByTriggerError(f"Stream {stream_id}", sorted(set(fed.values())))
         if not await self._streams().delete_in_workspace(stream_id):
             raise StreamNotFoundError(stream_id)
+
+    async def add_webhook_source(
+        self, *, stream_id: UUID, webhook_type: str, validation_rules: dict[str, Any]
+    ) -> StreamSourceORM:
+        """A webhook source no trigger owns: its credentials are keyed by its own id."""
+        await self.get_stream(stream_id)
+        source_id = uuid4()
+        return await self._sources().add_webhook_source(
+            source_id=source_id,
+            stream_id=stream_id,
+            webhook_id=secrets.token_urlsafe(16),
+            webhook_type=webhook_type,
+            allowed_methods=["POST"],
+            validation_rules=validation_rules,
+            webhook_config=None,
+            credential_key=source_id,
+        )
+
+    async def get_source(self, stream_id: UUID, source_id: UUID) -> StreamSourceORM:
+        source = await self._sources().get_in_stream(stream_id, source_id)
+        if source is None:
+            raise StreamSourceNotFoundError(source_id)
+        return source
+
+    async def triggers_feeding(self, stream_id: UUID) -> dict[UUID, UUID]:
+        """Each source of the stream that a live webhook trigger owns, to that trigger."""
+        owned = {
+            s.id: s.credential_key
+            for s in await self._sources().list_for_stream(stream_id)
+            if s.credential_key is not None and s.credential_key != s.id
+        }
+        live = await self._subscriptions().live_trigger_ids(list(set(owned.values())))
+        return {source: trigger for source, trigger in owned.items() if trigger in live}
+
+    async def delete_source(self, stream_id: UUID, source_id: UUID) -> StreamSourceORM:
+        """Remove a source; one a live trigger owns goes with its trigger instead."""
+        source = await self.get_source(stream_id, source_id)
+        if trigger_id := (await self.triggers_feeding(stream_id)).get(source.id):
+            raise SourceFedByTriggerError(f"Source {source_id}", [trigger_id])
+        if not await self._sources().delete_in_workspace(source.id):
+            raise StreamSourceNotFoundError(source_id)
+        return source
 
     async def create_webhook_stream_for_trigger(
         self,

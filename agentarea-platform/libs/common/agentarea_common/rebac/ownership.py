@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from .models import RelationTuple
+from .models import RelationQuery, RelationTuple
 from .openfga_client import OpenFGAClient, OpenFGAError
 
 logger = logging.getLogger(__name__)
@@ -113,6 +113,20 @@ async def grant_resource_owner(
                 subject_id=f"User:{user_id}",
             ),
         )
+
+
+async def revoke_resource(resource_id: UUID | str) -> None:
+    """Delete every tuple on ``resource:<id>`` once its row is gone.
+
+    Reads one object, so the cost is that resource's own tuples. Without this
+    the store keeps the grants of every row ever deleted.
+    """
+    client = resolve_graph_client()
+    tuples = await client.query_all_tuples(
+        RelationQuery(namespace="resource", object=str(resource_id))
+    )
+    for relationship in tuples:
+        await client.delete_tuple(relationship)
 
 
 def graph_governed_models() -> list[type]:

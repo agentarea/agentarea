@@ -22,6 +22,7 @@ import {
   resolveOpenAPIServerUrl,
 } from "./openapi-preview";
 import type { PreviewTool } from "./openapi-preview";
+import { QueryParamRows, type QueryParamRow } from "../components/QueryParamRows";
 
 type SpecMode = "url" | "json";
 
@@ -63,6 +64,7 @@ export function AddOpenAPIForm() {
   const [specJson, setSpecJson] = useState("");
   const [description, setDescription] = useState("");
   const [headers, setHeaders] = useState<HeaderRow[]>([]);
+  const [queryParams, setQueryParams] = useState<QueryParamRow[]>([]);
   const [previewTools, setPreviewTools] = useState<PreviewTool[]>([]);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
@@ -222,6 +224,9 @@ export function AddOpenAPIForm() {
     }
 
     const nonEmptyHeaders = headers.filter((h) => h.name.trim());
+    const nonEmptyQueryParams = queryParams
+      .filter((p) => p.name.trim())
+      .map((p) => ({ ...p, name: p.name.trim() }));
 
     try {
       const { error: createError } = await createOpenAPIConnection({
@@ -232,6 +237,8 @@ export function AddOpenAPIForm() {
         spec_content: specContent,
         custom_headers:
           nonEmptyHeaders.length > 0 ? nonEmptyHeaders : undefined,
+        custom_query_params:
+          nonEmptyQueryParams.length > 0 ? nonEmptyQueryParams : undefined,
       });
 
       if (createError) {
@@ -460,6 +467,32 @@ export function AddOpenAPIForm() {
                 {t("secretHeadersHint")}
               </p>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>{t("customQueryParams")}</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() =>
+                  setQueryParams([
+                    ...queryParams,
+                    { name: "", value: "", secret: true },
+                  ])
+                }
+              >
+                <Plus className="mr-1" />
+                {t("addQueryParam")}
+              </Button>
+            </div>
+            {queryParams.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t("queryParamsHint")}
+              </p>
+            )}
+            <QueryParamRows rows={queryParams} onChange={setQueryParams} />
           </div>
 
           {error && (

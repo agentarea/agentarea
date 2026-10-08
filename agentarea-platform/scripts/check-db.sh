@@ -78,6 +78,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     whose name the per-workspace unique constraint would otherwise refuse.
 #     A stream trigger's row stores no webhook type, which the column's default
 #     would fill in, and its run is told the journaled event it fired on.
+#     A source added without a trigger holds a picked workspace secret by a
+#     secret_references row, whose RESTRICT key refuses deleting that secret.
 PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
@@ -108,6 +110,7 @@ PY_SUITES=(
   libs/streams/tests/test_backfill_db.py
   libs/streams/tests/test_dispatcher_db.py
   apps/api/tests/test_webhook_source_intake_db.py
+  apps/api/tests/test_stream_sources_db.py
   libs/triggers/tests/test_routed_follow_up_once_db.py
   libs/triggers/tests/test_needs_owner_db.py
   libs/triggers/tests/test_webhook_stream_reuse_db.py

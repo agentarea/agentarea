@@ -12,6 +12,7 @@ from agentarea_openapi.application import service as service_module
 from agentarea_common.testing.flows import MainFlow
 from agentarea_openapi.application.service import (
     MissingHeaderSecretError,
+    MissingQueryParamSecretError,
     MissingUrlVariableSecretError,
     OpenAPIConnectionService,
     fetch_and_parse_spec,
@@ -20,6 +21,7 @@ from agentarea_openapi.domain.models import OpenAPIConnection
 from agentarea_openapi.schemas.dto import (
     OpenAPIConnectionCreate,
     OpenAPIConnectionUpdate,
+    QueryParamInput,
     UrlVariableInput,
 )
 from pydantic import ValidationError
@@ -728,3 +730,213 @@ class TestUrlVariableDto:
     def test_variable_names_are_identifiers(self, name):
         with pytest.raises(ValidationError):
             UrlVariableInput(name=name, value="secret")
+
+
+METRICA_BASE_URL = "https://mc.yandex.ru"
+
+
+class TestCustomQueryParams:
+    """A credential the API takes as a query parameter is stored like a secret header."""
+
+    def _service(self, secret_manager, current: OpenAPIConnection | None = None):
+        mock_factory = MagicMock()
+        mock_factory.create_repository.return_value = AsyncMock()
+        svc = OpenAPIConnectionService(
+            repository_factory=mock_factory,
+            secret_manager=secret_manager,
+            auth_config_access_checker=AsyncMock(),
+            outbound_policy=OutboundPolicy(),
+        )
+        svc._repo = AsyncMock()
+        svc._repo.get_by_id.return_value = current
+
+        async def _create(**kwargs):
+            return OpenAPIConnection(**kwargs)
+
+        svc._repo.create.side_effect = _create
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_create_stores_secret_values_in_the_secret_manager_and_only_names_in_the_row(
+        self,
+    ):
+        secrets = FakeSecretManager()
+        svc = self._service(secrets)
+        payload = OpenAPIConnectionCreate.model_construct(
+            name="Metrica",
+            base_url=METRICA_BASE_URL,
+            custom_query_params=[
+                QueryParamInput(name="ms", value="tok-123"),
+                QueryParamInput(name="tid", secret=False, value="98765"),
+            ],
+        )
+
+        with patch("agentarea_openapi.application.service.validate_url", return_value=[]):
+            conn = await svc.create_connection(payload)
+
+        stored = svc._repo.create.call_args.kwargs
+        assert stored["custom_query_params"] == [
+            {"name": "ms", "secret": True},
+            {"name": "tid", "secret": False, "value": "98765"},
+        ]
+        assert "tok-123" not in json.dumps(stored, default=str)
+        assert secrets._secrets == {f"openapi:{stored['id']}:query:ms": "tok-123"}
+        assert conn.custom_query_params == stored["custom_query_params"]
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_a_secret_param_without_a_value(self):
+        secrets = FakeSecretManager()
+        svc = self._service(secrets)
+        payload = OpenAPIConnectionCreate.model_construct(
+            name="Metrica",
+            base_url=METRICA_BASE_URL,
+            custom_query_params=[QueryParamInput(name="ms", value="")],
+        )
+
+        with (
+            patch("agentarea_openapi.application.service.validate_url", return_value=[]),
+            pytest.raises(ValueError, match="'ms' needs a value"),
+        ):
+            await svc.create_connection(payload)
+
+        assert secrets._secrets == {}
+        svc._repo.create.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_resolve_query_params_returns_secret_and_plain_values(self):
+        secrets = FakeSecretManager()
+        conn = OpenAPIConnection(
+            id=uuid4(),
+            name="Metrica",
+            base_url=METRICA_BASE_URL,
+            custom_query_params=[
+                {"name": "ms", "secret": True},
+                {"name": "tid", "secret": False, "value": "98765"},
+            ],
+        )
+        await secrets.set_secret(f"openapi:{conn.id}:query:ms", "tok-123")
+        svc = self._service(secrets)
+
+        assert await svc.resolve_query_params(conn) == {"ms": "tok-123", "tid": "98765"}
+
+    @pytest.mark.asyncio
+    async def test_resolve_query_params_fails_loudly_on_a_missing_value(self):
+        conn = OpenAPIConnection(
+            id=uuid4(),
+            name="Metrica",
+            base_url=METRICA_BASE_URL,
+            custom_query_params=[{"name": "ms", "secret": True}],
+        )
+        svc = self._service(FakeSecretManager())
+
+        with pytest.raises(MissingQueryParamSecretError, match="query parameter 'ms'"):
+            await svc.resolve_query_params(conn)
+
+    @pytest.mark.asyncio
+    async def test_update_replaces_the_set_and_drops_secrets_no_longer_configured(self):
+        secrets = FakeSecretManager()
+        current = OpenAPIConnection(
+            id=uuid4(),
+            name="Metrica",
+            base_url=METRICA_BASE_URL,
+            custom_query_params=[{"name": "ms", "secret": True}, {"name": "old", "secret": True}],
+        )
+        await secrets.set_secret(f"openapi:{current.id}:query:ms", "tok-old")
+        await secrets.set_secret(f"openapi:{current.id}:query:old", "gone")
+        svc = self._service(secrets, current=current)
+        payload = OpenAPIConnectionUpdate.model_validate(
+            {"custom_query_params": [{"name": "ms", "value": "tok-new"}]}
+        )
+
+        await svc.update_connection(current.id, payload)
+
+        assert secrets._secrets == {f"openapi:{current.id}:query:ms": "tok-new"}
+        svc._repo.update.assert_awaited_once_with(
+            str(current.id), custom_query_params=[{"name": "ms", "secret": True}]
+        )
+
+    @pytest.mark.asyncio
+    async def test_update_with_a_blank_secret_keeps_the_stored_value(self):
+        secrets = FakeSecretManager()
+        current = OpenAPIConnection(
+            id=uuid4(),
+            name="Metrica",
+            base_url=METRICA_BASE_URL,
+            custom_query_params=[{"name": "ms", "secret": True}],
+        )
+        await secrets.set_secret(f"openapi:{current.id}:query:ms", "tok-123")
+        svc = self._service(secrets, current=current)
+        payload = OpenAPIConnectionUpdate.model_validate(
+            {
+                "custom_query_params": [
+                    {"name": "ms", "value": ""},
+                    {"name": "tid", "secret": False, "value": "1"},
+                ]
+            }
+        )
+
+        await svc.update_connection(current.id, payload)
+
+        assert secrets._secrets == {f"openapi:{current.id}:query:ms": "tok-123"}
+        svc._repo.update.assert_awaited_once_with(
+            str(current.id),
+            custom_query_params=[
+                {"name": "ms", "secret": True},
+                {"name": "tid", "secret": False, "value": "1"},
+            ],
+        )
+
+    @pytest.mark.asyncio
+    async def test_update_rejects_a_blank_secret_with_nothing_stored(self):
+        secrets = FakeSecretManager()
+        current = OpenAPIConnection(
+            id=uuid4(),
+            name="Metrica",
+            base_url=METRICA_BASE_URL,
+            custom_query_params=[{"name": "ms", "secret": False, "value": "plain"}],
+        )
+        svc = self._service(secrets, current=current)
+        payload = OpenAPIConnectionUpdate.model_validate(
+            {"custom_query_params": [{"name": "ms", "value": ""}]}
+        )
+
+        with pytest.raises(ValueError, match="'ms' needs a value"):
+            await svc.update_connection(current.id, payload)
+
+        assert secrets._secrets == {}
+        svc._repo.update.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_delete_removes_the_query_param_secrets(self):
+        secrets = FakeSecretManager()
+        current = OpenAPIConnection(
+            id=uuid4(),
+            name="Metrica",
+            base_url=METRICA_BASE_URL,
+            custom_query_params=[
+                {"name": "ms", "secret": True},
+                {"name": "tid", "secret": False, "value": "1"},
+            ],
+        )
+        await secrets.set_secret(f"openapi:{current.id}:query:ms", "tok-123")
+        svc = self._service(secrets, current=current)
+
+        await svc.delete_connection(current.id)
+
+        assert secrets._secrets == {}
+
+
+class TestQueryParamDto:
+    def test_a_param_is_secret_unless_said_otherwise(self):
+        assert QueryParamInput(name="api_key", value="x").secret is True
+
+    @pytest.mark.parametrize("name", ["", "a b", "a&b", "a=b", "a#b"])
+    def test_names_that_would_break_the_query_string_are_rejected(self, name):
+        with pytest.raises(ValidationError):
+            QueryParamInput(name=name, value="x")
+
+    def test_names_must_be_unique(self):
+        with pytest.raises(ValidationError, match="unique"):
+            OpenAPIConnectionUpdate(
+                custom_query_params=[{"name": "ms", "value": "a"}, {"name": "ms", "value": "b"}]
+            )

@@ -3,6 +3,8 @@
 Set STREAMS_TEST_DATABASE_URL.
 """
 
+import hashlib
+import hmac
 import json
 import os
 from contextlib import asynccontextmanager
@@ -135,6 +137,80 @@ async def test_over_the_workspace_quota_answers_429(setup):
     intake, _ = setup.build(quota=1)
     assert (await _post(intake, setup.webhook_id, "a"))["status_code"] == 202
     assert (await _post(intake, setup.webhook_id, "b"))["status_code"] == 429
+
+
+class _Secrets:
+    def __init__(self, values):
+        self.values = values
+
+    async def get_secret(self, name):
+        return self.values.get(name)
+
+
+async def test_a_standalone_sentry_source_is_verified_and_journaled_like_a_triggers(setup):
+    ws, stream_id, source_id = str(uuid4()), uuid4(), uuid4()
+    webhook_id = f"wh{uuid4().hex}"
+    async with setup.maker() as session:
+        await session.execute(
+            text(
+                "INSERT INTO streams (id, workspace_id, created_by, name, description, kind, "
+                "retention_days, created_at, updated_at) "
+                "VALUES (:id, :ws, 'u', 'sentry', '', 'custom', 30, now(), now())"
+            ),
+            {"id": stream_id, "ws": ws},
+        )
+        await session.execute(
+            text(
+                "INSERT INTO stream_sources (id, workspace_id, created_by, stream_id, kind, "
+                "webhook_id, webhook_type, allowed_methods, validation_rules, credential_key, "
+                "created_at, updated_at) VALUES (:id, :ws, 'u', :s, 'webhook', :wh, 'sentry', "
+                "'[\"POST\"]', '{}', :id, now(), now())"
+            ),
+            {"id": source_id, "ws": ws, "s": stream_id, "wh": webhook_id},
+        )
+        await session.commit()
+    secrets = _Secrets(
+        {
+            f"channel_cred:sentry:{source_id}": json.dumps({"client_secret": {"secret_name": "s"}}),
+            "s": "sentry-secret",
+        }
+    )
+    intake, waker = setup.build()
+    intake._secret_reader_for = lambda _s, _c: secrets
+    raw = json.dumps({"action": "created", "data": {"issue": {"id": "1"}}}).encode()
+
+    async def post(signature: str):
+        return await intake.handle_webhook_request(
+            webhook_id,
+            "POST",
+            {
+                "content-type": "application/json",
+                "sentry-hook-resource": "issue",
+                "sentry-hook-signature": signature,
+                "request-id": "req-1",
+            },
+            json.loads(raw),
+            {},
+            raw_body=raw,
+        )
+
+    signature = hmac.new(b"sentry-secret", raw, hashlib.sha256).hexdigest()
+    forged = await post("0" * 64)
+    first = await post(signature)
+    again = await post(signature)
+    assert forged["status_code"] == 400
+    assert first["status_code"] == 202 and first["body"]["status"] == "accepted"
+    assert again["body"]["status"] == "duplicate"
+    assert waker.woken == [stream_id]
+    async with setup.maker() as session:
+        row = (
+            await session.execute(
+                text("SELECT event_key, kind, source_id, data FROM stream_events WHERE stream_id = :s"),
+                {"s": stream_id},
+            )
+        ).one()
+    assert (row.event_key, row.kind, row.source_id) == ("request-id:req-1", "issue.created", source_id)
+    assert "sentry-hook-signature" not in row.data["headers"]
 
 
 class _JournalThatLosesItsConnection(StreamJournal):

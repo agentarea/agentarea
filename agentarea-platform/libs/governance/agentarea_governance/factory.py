@@ -8,11 +8,9 @@ from agentarea_common.extensions.registry import ExtensionRegistry
 
 from .domain.enums import Phase
 from .engines.regex_engine import RegexDetectionEngine
-from .interceptors.filters.mcp_tool_scanner import MCPToolSecurityScanner
 from .interceptors.filters.output_sanitizer import OutputSanitizer
 from .interceptors.filters.prompt_injection_detector import PromptInjectionDetector
 from .interceptors.gates.cost_budget_guard import CostBudgetGuard
-from .interceptors.gates.semantic_guard import SemanticGuard
 from .interceptors.gates.service_budget_guard import ServiceBudgetGuard
 from .interceptors.gates.token_budget_guard import TokenBudgetGuard
 from .interceptors.observers.metrics_observer import MetricsObserver
@@ -26,7 +24,6 @@ logger = logging.getLogger(__name__)
 #   120  — plan entitlement gate (enterprise only, injected via ExtensionRegistry)
 #   200s — capability gates
 #   300s — security filters
-#   400s — advanced gates (semantic, escalation)
 #   800s — observers (always last)
 
 
@@ -55,7 +52,8 @@ def create_governance_pipeline() -> InterceptorPipeline:
     # at the tool activity via decide_tool_policy (one predicate, two enforcement
     # points — Disclosed subset of Authorized). Do NOT re-add a deny-by-default
     # gate here — a second gate would contradict the single engine (offer a tool,
-    # then reject it), which is why it was removed.
+    # then reject it), which is why it was removed. The same holds for a gate that
+    # judges a call's arguments: no policy could grant back what it denies.
 
     # Security filters — input
     registry.register(PromptInjectionDetector(engine), Phase.PRE_LLM_CALL, priority=300)
@@ -63,16 +61,6 @@ def create_governance_pipeline() -> InterceptorPipeline:
     # Security filters — output
     registry.register(OutputSanitizer(engine), Phase.POST_LLM_CALL, priority=300)
     registry.register(OutputSanitizer(engine), Phase.POST_TOOL_CALL, priority=300)
-
-    # Tool discovery scanner
-    registry.register(MCPToolSecurityScanner(engine), Phase.TOOL_DISCOVERY, priority=300)
-
-    # Advanced gates
-    registry.register(SemanticGuard(), Phase.PRE_TOOL_CALL, priority=400)
-    # An ESCALATE here fails the activity with EscalationRequiredError; the
-    # workflow turns that into the same human approval flow ApprovalPolicy uses
-    # and, once approved, re-issues the call with escalation_approved set so the
-    # escalating gate can accept it.
 
     # Observers (always last)
     metrics = MetricsObserver()
