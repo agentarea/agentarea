@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useNow, useTranslations } from "next-intl";
 import {
   Bot,
   Check,
@@ -170,6 +170,9 @@ function ProvenanceStrip({
 }) {
   const t = useTranslations("FilesPage");
   const format = useFormatter();
+  // An explicit clock for "5 minutes ago": without one next-intl falls back to
+  // the render's own time and warns; ticking each minute keeps it current.
+  const now = useNow({ updateInterval: 60_000 });
   const { events, error, loading } = useProvenance(file, fetchHistory);
   const [expanded, setExpanded] = useState(false);
 
@@ -194,7 +197,7 @@ function ProvenanceStrip({
   };
   const when = (iso: string) => {
     const date = parseUtcTimestamp(iso);
-    return date ? format.relativeTime(date) : iso;
+    return date ? format.relativeTime(date, now) : iso;
   };
 
   if (loading) {
