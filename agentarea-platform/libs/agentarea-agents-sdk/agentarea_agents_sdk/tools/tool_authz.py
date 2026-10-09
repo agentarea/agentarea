@@ -33,6 +33,7 @@ import inspect
 import json
 from collections.abc import Awaitable, Callable
 from typing import Any
+from uuid import UUID
 
 TOOL_AUTHZ_ATTR = "__tool_authz__"
 
@@ -71,14 +72,22 @@ def requires(
 ) -> Callable[[Any], Any]:
     """Demand ``action`` on ``resource_type`` before the tool body runs.
 
-    ``id_param`` names the argument holding the object's id; omit it for a
-    workspace-wide action, which resolves against the caller's workspace.
+    ``id_param`` names the argument holding the object's id, which must be a
+    UUID; omit it for a workspace-wide action, which resolves against the
+    caller's workspace.
     """
 
     async def check(arguments: dict[str, Any], user_context: Any) -> None:
         from agentarea_common.auth.permission import require_permission
+        from fastapi import HTTPException
 
-        resource_id = str(arguments[id_param]) if id_param else str(user_context.workspace_id)
+        if id_param:
+            try:
+                resource_id = str(UUID(str(arguments[id_param])))
+            except ValueError:
+                raise HTTPException(status_code=422, detail=f"{id_param} must be a UUID") from None
+        else:
+            resource_id = str(user_context.workspace_id)
         await require_permission(action, resource_type, resource_id, user_context.user_id)
 
     return _enforcing({"action": action, "resource_type": resource_type}, check)

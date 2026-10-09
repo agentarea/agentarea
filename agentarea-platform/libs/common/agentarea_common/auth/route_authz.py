@@ -15,8 +15,10 @@ endpoint cannot silently ship without an authorization decision.
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 from fastapi import Depends, Request, params
+from fastapi.exceptions import RequestValidationError
 
 from .authorization import assert_workspace_admin
 from .dependencies import UserContextDep
@@ -29,15 +31,29 @@ def requires(action: str, resource_type: str, *, id_param: str | None = None) ->
     """Demand ``action`` on ``resource_type`` before the handler runs.
 
     ``id_param`` names the path parameter holding the object's id. Omit it for
-    workspace-wide actions, which resolve against the caller's workspace.
+    workspace-wide actions, which resolve against the caller's workspace. The
+    id must be a UUID: this runs before FastAPI validates the handler's own path
+    parameters, so a malformed one is refused here with the same 422.
     """
 
     async def _check(request: Request, user_context: UserContextDep) -> None:
-        resource_id = (
-            str(request.path_params.get(id_param, ""))
-            if id_param
-            else str(user_context.workspace_id)
-        )
+        if id_param:
+            raw = request.path_params.get(id_param, "")
+            try:
+                resource_id = str(UUID(str(raw)))
+            except ValueError:
+                raise RequestValidationError(
+                    [
+                        {
+                            "type": "uuid_parsing",
+                            "loc": ("path", id_param),
+                            "msg": "Input should be a valid UUID",
+                            "input": raw,
+                        }
+                    ]
+                ) from None
+        else:
+            resource_id = str(user_context.workspace_id)
         await require_permission(action, resource_type, resource_id, user_context.user_id)
 
     setattr(_check, AUTHZ_ATTR, {"action": action, "resource_type": resource_type})
