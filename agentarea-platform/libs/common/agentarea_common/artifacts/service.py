@@ -19,7 +19,7 @@ from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
-from typing import Any
+from typing import Any, Protocol
 
 from botocore.exceptions import ClientError
 from fastapi import status
@@ -86,6 +86,38 @@ def sha256_hex_from_head(head: Mapping[str, Any]) -> str | None:
         if len(digest) == 32:
             return digest.hex()
     return None
+
+
+class WorkspaceError(RuntimeError):
+    """Base error carrying a stable machine-readable failure code."""
+
+    code = "workspace_error"
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class WorkspaceConflictError(WorkspaceError):
+    code = "workspace_conflict"
+
+
+class _Store(Protocol):
+    async def exists(self, workspace_id: str, path: str) -> bool: ...
+
+    async def list(self, workspace_id: str, prefix: str = "", max_items: int = 1000) -> Any: ...
+
+
+async def ensure_no_file_ancestors(store: _Store, workspace_id: str, path: str) -> None:
+    """Prevent an existing file from also becoming a parent folder."""
+    for parent in PurePosixPath(path).parents:
+        if parent != PurePosixPath(".") and await store.exists(workspace_id, str(parent)):
+            raise WorkspaceConflictError(f"A file already exists at {str(parent)!r}")
+
+
+async def ensure_writable_file(store: _Store, workspace_id: str, path: str) -> None:
+    await ensure_no_file_ancestors(store, workspace_id, path)
+    if await store.list(workspace_id, prefix=f"{path}/", max_items=1):
+        raise WorkspaceConflictError("A folder already exists at this path")
 
 
 class ArtifactIntegrityError(RuntimeError):
@@ -425,10 +457,6 @@ class ArtifactService:
         The file already lived there, so the path is held to the key bound only:
         a file archived before the write bound existed must still come back.
         """
-        # Imported here: both modules import this one.
-        from .workspace import WorkspaceConflictError
-        from .workspace_writes import ensure_no_file_ancestors, ensure_writable_file
-
         clean = archived_path.lstrip("/")
         # .trash/{timestamp}/{original path} — drop the two-segment archive header.
         parts = PurePosixPath(clean).parts if clean.startswith(TRASH_PREFIX) else ()

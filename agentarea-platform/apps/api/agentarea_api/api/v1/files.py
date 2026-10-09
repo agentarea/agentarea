@@ -34,10 +34,10 @@ from agentarea_common.artifacts import (
     normalize_workspace_path,
     secure_download_headers,
 )
+from agentarea_common.artifacts.service import ensure_no_file_ancestors
 from agentarea_common.artifacts.workspace import DEFAULT_MAX_FILE_BYTES
 from agentarea_common.artifacts.workspace_writes import (
     MAX_UPLOADS_PER_PLAN,
-    ensure_no_file_ancestors,
     is_reserved_path,
     plan_uploads,
     resolve_write_path,
