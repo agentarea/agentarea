@@ -390,20 +390,19 @@ async def test_the_upstream_receives_the_connections_stored_secret_header(monkey
         "MCPServerRepository",
         lambda *_: SimpleNamespace(get_server_by_id=AsyncMock(return_value=server)),
     )
-    monkeypatch.setattr(
-        mcp_proxy, "_guard_and_pin_upstream", lambda url, *_args, **_kw: (url, None, None)
-    )
+    monkeypatch.setattr(mcp_proxy, "_guard_upstream", lambda *_args, **_kw: None)
     received: list[httpx.Request] = []
 
     def upstream(request: httpx.Request) -> httpx.Response:
         received.append(request)
         return httpx.Response(200, stream=httpx.ByteStream(b"{}"))
 
-    real_client = httpx.AsyncClient
     monkeypatch.setattr(
-        mcp_proxy.httpx,
-        "AsyncClient",
-        lambda **kwargs: real_client(transport=httpx.MockTransport(upstream), **kwargs),
+        mcp_proxy,
+        "safe_async_client",
+        lambda *, policy, **kwargs: httpx.AsyncClient(
+            transport=httpx.MockTransport(upstream), **kwargs
+        ),
     )
     request = Request(
         {

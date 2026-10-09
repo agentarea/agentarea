@@ -311,6 +311,7 @@ async def get_openapi_connection_service(
     from agentarea_mcp.application.auth_resolver import (
         build_auth_config_access_checker,
         build_auth_header_resolver,
+        build_owned_auth_releaser,
     )
 
     return OpenAPIConnectionService(
@@ -321,6 +322,7 @@ async def get_openapi_connection_service(
             repository_factory,
             secret_manager,
         ),
+        owned_auth_releaser=build_owned_auth_releaser(repository_factory, secret_manager),
         outbound_policy=OutboundPolicy.from_env(),
     )
 

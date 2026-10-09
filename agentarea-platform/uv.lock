@@ -376,6 +376,7 @@ source = { editable = "libs/mcp" }
 dependencies = [
     { name = "agentarea-agents-sdk" },
     { name = "agentarea-common" },
+    { name = "agentarea-secrets" },
     { name = "httpx" },
     { name = "httpx2" },
     { name = "mcp" },
@@ -386,6 +387,7 @@ dependencies = [
 requires-dist = [
     { name = "agentarea-agents-sdk", editable = "libs/agentarea-agents-sdk" },
     { name = "agentarea-common", editable = "libs/common" },
+    { name = "agentarea-secrets", editable = "libs/secrets" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "httpx2", specifier = ">=2.5.0" },
     { name = "mcp", specifier = ">=2.2.0,<3" },

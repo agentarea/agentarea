@@ -9,6 +9,7 @@ from agentarea_common.auth.authorization import is_workspace_admin
 from agentarea_common.config import MCPOAuthApp
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.utils.url_safety import safe_async_client
+from agentarea_secrets.catalog_service import SecretCatalogService
 
 from agentarea_mcp.application.platform_oauth_app import platform_oauth_app, url_origin
 from agentarea_mcp.domain.auth_models import (
@@ -381,8 +382,14 @@ class MCPAuthService:
         description: str | None = None,
         *,
         allow_managed_credentials: bool = False,
+        openapi_connection_id: UUID | None = None,
+        mcp_instance_id: UUID | None = None,
     ) -> MCPAuthConfig:
-        """Create and persist a new auth config, storing creds encrypted."""
+        """Create and persist a new auth config, storing creds encrypted.
+
+        A connect flow names the connection or instance it mints the config for;
+        the config is then deleted with it.
+        """
         if _is_managed(config) and not allow_managed_credentials:
             raise ValueError("Managed OAuth configs can only be created by a catalog connection")
         if _uses_workspace_secret_references(config) and not allow_managed_credentials:
@@ -403,6 +410,8 @@ class MCPAuthService:
             auth_type=auth_config.auth_type,
             config=auth_config.config,
             description=auth_config.description,
+            openapi_connection_id=openapi_connection_id,
+            mcp_instance_id=mcp_instance_id,
         )
 
         # Store credentials using the generated ID as key
@@ -503,6 +512,34 @@ class MCPAuthService:
 
         await self._delete_credentials(existing)
         return await self._repo.delete(config_id)
+
+    async def release_owned(
+        self,
+        *,
+        openapi_connection_id: UUID | None = None,
+        mcp_instance_id: UUID | None = None,
+    ) -> None:
+        """Discard what the configs minted for one owner keep outside their row.
+
+        The rows go with the owner's (ON DELETE CASCADE), in its transaction.
+        Their credentials and secret references live elsewhere and go first, so
+        a failure leaves a delete to retry rather than a credential nothing
+        points at.
+        """
+        if openapi_connection_id is not None and mcp_instance_id is None:
+            owned = await self._repo.list_all(openapi_connection_id=openapi_connection_id)
+        elif mcp_instance_id is not None and openapi_connection_id is None:
+            owned = await self._repo.list_all(mcp_instance_id=mcp_instance_id)
+        else:
+            raise ValueError("Name exactly one owner: an OpenAPI connection or an MCP instance")
+        references = SecretCatalogService(
+            session=self._repo.session,
+            user_context=self._repo.user_context,
+            secret_manager=self._secret_manager,
+        )
+        for config in owned:
+            await self._delete_credentials(config)
+            await references.clear_references("mcp_auth_config", str(config.id))
 
     # ------------------------------------------------------------------
     # Validation
