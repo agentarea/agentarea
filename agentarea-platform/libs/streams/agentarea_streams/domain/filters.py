@@ -9,9 +9,18 @@ def _kind_matches(kind: str, allowed: str) -> bool:
     return kind == allowed or kind.startswith(f"{allowed}.") or allowed.startswith(f"{kind}.")
 
 
-def _value_at(data: dict[str, Any], path: str) -> Any:
+def value_at(data: dict[str, Any], path: str) -> Any:
+    """The value at a dotted ``path`` in event data, or ``None``.
+
+    A generic webhook used to carry its body twice, as ``body`` and
+    ``raw_data``; it now carries ``raw_data`` only. A filter or condition
+    written against ``body.*`` still reads that copy.
+    """
+    parts = path.split(".")
+    if parts[0] == "body" and "body" not in data and "raw_data" in data:
+        parts[0] = "raw_data"
     value: Any = data
-    for part in path.split("."):
+    for part in parts:
         if not isinstance(value, dict) or part not in value:
             return None
         value = value[part]
@@ -29,7 +38,7 @@ class EventFilter(BaseModel):
     def matches(self, kind: str, data: dict[str, Any]) -> bool:
         if self.kinds and not any(_kind_matches(kind, allowed) for allowed in self.kinds):
             return False
-        return all(_value_at(data, path) == expected for path, expected in self.fields.items())
+        return all(value_at(data, path) == expected for path, expected in self.fields.items())
 
     @classmethod
     def from_trigger_event_types(cls, event_types: list[str] | None) -> "EventFilter":

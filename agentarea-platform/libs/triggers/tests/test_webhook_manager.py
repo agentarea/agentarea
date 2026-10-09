@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from agentarea_streams.domain.keys import MAX_EVENT_BYTES, encoded_size
 from agentarea_triggers.domain.enums import ExecutionStatus, WebhookType
 from agentarea_triggers.domain.models import TriggerExecution, WebhookTrigger
 from agentarea_triggers.trigger_service import resolve_task_query
@@ -653,10 +654,29 @@ class TestDefaultWebhookManager:
         )
 
         assert parsed_data["webhook_type"] == "generic"
-        assert parsed_data["body"] == {"custom": "data", "value": 42}
         assert parsed_data["raw_data"] == {"custom": "data", "value": 42}
         assert parsed_data["method"] == "POST"
         assert parsed_data["query_params"] == {"param": "test"}
+
+    @pytest.mark.asyncio
+    async def test_a_generic_body_is_stored_once(self, webhook_manager, sample_webhook_trigger):
+        """A second copy under ``body`` counted against the 256 KiB event limit
+        twice: a 200 KB body was refused as 400 KB of event data."""
+        body = {"blob": "x" * 200_000}
+        request_data = WebhookRequestData(
+            webhook_id=sample_webhook_trigger.webhook_id,
+            method="POST",
+            headers={"content-type": "application/json"},
+            body=body,
+            query_params={},
+        )
+
+        parsed_data = await webhook_manager._parse_webhook_data(
+            sample_webhook_trigger, request_data
+        )
+
+        assert "body" not in parsed_data
+        assert encoded_size(parsed_data) < MAX_EVENT_BYTES
 
     @pytest.mark.asyncio
     async def test_generic_webhook_text_is_the_task(self, webhook_manager, sample_webhook_trigger):

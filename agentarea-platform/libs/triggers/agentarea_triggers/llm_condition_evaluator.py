@@ -19,6 +19,7 @@ from agentarea_llm.domain.media import DecisionQuestionType
 from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_llm.domain.provider_profiles import profile_for
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
+from agentarea_streams.domain import value_at
 from pydantic import ValidationError
 
 from .domain.enums import ConditionType
@@ -596,25 +597,8 @@ class LLMConditionEvaluator:
         return _combined_condition_errors(condition)
 
     def _get_nested_value(self, data: dict[str, Any], field_path: str) -> Any:
-        """Extract nested value from data using dot notation.
-
-        Args:
-            data: Data dictionary to extract from
-            field_path: Dot-separated field path (e.g., "request.body.message")
-
-        Returns:
-            The extracted value or None if not found
-        """
-        try:
-            value = data
-            for part in field_path.split("."):
-                if isinstance(value, dict):
-                    value = value.get(part)
-                else:
-                    return None
-            return value
-        except Exception:
-            return None
+        """The value at a dotted ``field_path`` in ``data``, or ``None``."""
+        return value_at(data, field_path)
 
     def _build_evaluation_prompt(
         self,
