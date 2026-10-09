@@ -65,6 +65,7 @@ def _connection(
         status=status,
         available_tools=tools,
         spec_content={"openapi": "3.0.0", "paths": paths or {}},
+        custom_query_params=[],
         registry_item_id=registry_item_id,
         auth_config_id=auth_config_id,
     )

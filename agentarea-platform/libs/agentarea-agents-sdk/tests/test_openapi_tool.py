@@ -57,6 +57,7 @@ def _make_connection(
         base_url=base_url,
         spec_content=spec_content,
         custom_headers=custom_headers or [],
+        custom_query_params=[],
         auth_config_id=auth_config_id,
     )
 
@@ -846,3 +847,71 @@ class TestOpenAPIToolConfiguredQueryParams:
         assert result["success"] is False
         assert "no stored value for query parameter 'ms'" in result["error"]
         mock_client.request.assert_not_awaited()
+
+
+class TestOpenAPIToolRecordsDispatch:
+    """A successful call stamps its connection; a failed one leaves the stamp alone."""
+
+    @pytest.mark.asyncio
+    async def test_a_successful_call_is_recorded_against_its_connection(self):
+        svc = _make_service(connection=_make_connection())
+        mock_client = _build_mock_client(httpx.Response(200, json={"ok": True}))
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+        ):
+            tool = mod.OpenAPITool(_make_operation(), _CONNECTION_ID, _CONNECTION_NAME, svc)
+            result = await tool.execute()
+
+        assert result["success"] is True
+        svc.record_dispatch.assert_awaited_once_with(_CONNECTION_ID)
+
+    @pytest.mark.asyncio
+    async def test_a_failed_call_is_not_recorded(self):
+        svc = _make_service(connection=_make_connection())
+        mock_client = _build_mock_client(httpx.Response(500, text="boom"))
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+        ):
+            tool = mod.OpenAPITool(_make_operation(), _CONNECTION_ID, _CONNECTION_NAME, svc)
+            result = await tool.execute()
+
+        assert result["success"] is False
+        svc.record_dispatch.assert_not_awaited()
+
+
+class TestFactoryOmitsConfiguredQueryParams:
+    @pytest.mark.asyncio
+    async def test_a_configured_query_param_is_not_in_the_tool_schema(self):
+        spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Metrica", "version": "1.0.0"},
+            "paths": {
+                "/collect": {
+                    "get": {
+                        "operationId": "collect",
+                        "parameters": [
+                            {"name": "ms", "in": "query", "required": True},
+                            {"name": "dl", "in": "query"},
+                        ],
+                    }
+                }
+            },
+        }
+        conn = SimpleNamespace(
+            id=_CONNECTION_ID,
+            name=_CONNECTION_NAME,
+            spec_content=spec,
+            custom_query_params=[{"name": "ms", "secret": True}],
+        )
+        svc = AsyncMock()
+        svc.get_connection = AsyncMock(return_value=conn)
+
+        [tool] = await mod.OpenAPIToolFactory.create_tools_from_connection(conn.id, None, svc)
+
+        parameters = tool.get_schema()["parameters"]
+        assert set(parameters["properties"]) == {"dl"}
+        assert parameters["required"] == []

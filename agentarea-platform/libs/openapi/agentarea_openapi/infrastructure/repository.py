@@ -1,8 +1,11 @@
 """Repository for OpenAPIConnection CRUD operations."""
 
+from typing import Any
+from uuid import UUID
+
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_openapi.domain.models import OpenAPIConnection
@@ -43,3 +46,16 @@ class OpenAPIConnectionRepository(WorkspaceScopedRepository[OpenAPIConnection]):
 
         result = await self.session.execute(query)
         return list(result.scalars().all()), total
+
+    async def record_dispatch(self, connection_id: UUID, dispatch: dict[str, Any]) -> None:
+        """Write ``last_dispatch`` alone; a call is not an edit, so ``updated_at`` stays.
+
+        Runs in a savepoint: a failed write must leave the caller's transaction,
+        which still has the call's own work to commit, usable.
+        """
+        async with self.session.begin_nested():
+            await self.session.execute(
+                update(self.model_class)
+                .where(self.model_class.id == connection_id, self._get_workspace_filter())
+                .values(last_dispatch=dispatch, updated_at=self.model_class.updated_at)
+            )

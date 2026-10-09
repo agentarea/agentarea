@@ -940,3 +940,109 @@ class TestQueryParamDto:
             OpenAPIConnectionUpdate(
                 custom_query_params=[{"name": "ms", "value": "a"}, {"name": "ms", "value": "b"}]
             )
+
+
+METRICA_SPEC = {
+    "openapi": "3.0.0",
+    "info": {"title": "Metrica", "version": "1.0.0"},
+    "paths": {
+        "/collect": {
+            "get": {
+                "operationId": "collect",
+                "parameters": [
+                    {"name": "ms", "in": "query", "required": True, "schema": {"type": "string"}},
+                    {"name": "dl", "in": "query", "schema": {"type": "string"}},
+                ],
+            }
+        }
+    },
+}
+
+
+def _input_properties(tools: list[dict]) -> set[str]:
+    [tool] = tools
+    return set(tool["inputSchema"]["properties"])
+
+
+class TestConfiguredQueryParamsLeaveTheToolSchema:
+    """The configured value always wins, so offering the parameter to an agent only misleads it."""
+
+    _service = TestCustomQueryParams._service
+
+    @pytest.mark.asyncio
+    async def test_create_stores_tools_without_the_configured_params(self):
+        svc = self._service(FakeSecretManager())
+        payload = OpenAPIConnectionCreate.model_construct(
+            name="Metrica",
+            base_url=METRICA_BASE_URL,
+            spec_content=METRICA_SPEC,
+            custom_query_params=[QueryParamInput(name="ms", value="tok-123")],
+        )
+
+        with patch("agentarea_openapi.application.service.validate_url", return_value=[]):
+            await svc.create_connection(payload)
+
+        assert _input_properties(svc._repo.create.call_args.kwargs["available_tools"]) == {"dl"}
+
+    @pytest.mark.asyncio
+    async def test_discover_stores_tools_without_the_configured_params(self):
+        current = OpenAPIConnection(
+            id=uuid4(),
+            name="Metrica",
+            base_url=METRICA_BASE_URL,
+            spec_content=METRICA_SPEC,
+            custom_query_params=[{"name": "ms", "secret": True}],
+        )
+        svc = self._service(FakeSecretManager(), current=current)
+
+        await svc.discover_tools(current.id)
+
+        assert _input_properties(svc._repo.update.call_args.kwargs["available_tools"]) == {"dl"}
+
+    @pytest.mark.asyncio
+    async def test_changing_the_configured_params_rebuilds_the_tools(self):
+        secrets = FakeSecretManager()
+        current = OpenAPIConnection(
+            id=uuid4(),
+            name="Metrica",
+            base_url=METRICA_BASE_URL,
+            spec_content=METRICA_SPEC,
+            custom_query_params=[{"name": "ms", "secret": True}],
+        )
+        await secrets.set_secret(f"openapi:{current.id}:query:ms", "tok-123")
+        svc = self._service(secrets, current=current)
+        payload = OpenAPIConnectionUpdate.model_validate({"custom_query_params": []})
+
+        await svc.update_connection(current.id, payload)
+
+        stored = svc._repo.update.call_args.kwargs
+        assert stored["custom_query_params"] == []
+        assert _input_properties(stored["available_tools"]) == {"ms", "dl"}
+
+
+class TestRecordDispatch:
+    """A successful call stamps the connection, the way an MCP instance's last_dispatch is."""
+
+    _service = TestCustomQueryParams._service
+
+    @pytest.mark.asyncio
+    async def test_a_successful_call_is_recorded(self):
+        svc = self._service(FakeSecretManager())
+        connection_id = uuid4()
+
+        await svc.record_dispatch(connection_id)
+
+        [args] = [call.args for call in svc._repo.record_dispatch.await_args_list]
+        assert args[0] == connection_id
+        assert args[1]["status"] == "succeeded"
+        assert args[1]["error"] is None
+        assert args[1]["at"]
+
+    @pytest.mark.asyncio
+    async def test_a_failed_write_never_fails_the_call(self, caplog):
+        svc = self._service(FakeSecretManager())
+        svc._repo.record_dispatch.side_effect = RuntimeError("db gone")
+
+        await svc.record_dispatch(uuid4())
+
+        assert "db gone" in caplog.text

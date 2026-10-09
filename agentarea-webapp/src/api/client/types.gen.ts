@@ -4555,6 +4555,12 @@ export type OpenApiConnectionResponse = {
    */
   id: string;
   /**
+   * Last Dispatch
+   */
+  last_dispatch?: {
+    [key: string]: unknown;
+  } | null;
+  /**
    * Name
    */
   name: string;
