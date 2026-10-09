@@ -69,6 +69,62 @@ class SkillStorageService:
         """
         return f"{self.SKILLS_PREFIX}/{workspace_id}/{skill_id}/"
 
+    def _package_entries(self, zf: zipfile.ZipFile) -> list[tuple[zipfile.ZipInfo, str]]:
+        """Return the archive's stored entries with their package paths.
+
+        Checks the declared size budget and every path before any entry is
+        read, so a bad archive is refused whole rather than half-uploaded.
+
+        Raises:
+            ValueError: If the archive is over budget or holds a path that is
+                not a plain relative package path.
+        """
+        check_zip_budget(zf)
+        # Detect common root folder (GitHub style)
+        root_folder = self._detect_root_folder(zf.namelist())
+
+        entries: list[tuple[zipfile.ZipInfo, str]] = []
+        for info in zf.infolist():
+            # Skip directories
+            if info.is_dir():
+                continue
+
+            # Skip hidden and system files
+            if self._should_skip_file(info.filename):
+                continue
+
+            # Strip root folder if present
+            relative_path = info.filename
+            if root_folder and relative_path.startswith(root_folder):
+                relative_path = relative_path[len(root_folder) :]
+
+            if not relative_path:
+                continue
+
+            entries.append((info, safe_package_path(relative_path)))
+        return entries
+
+    def validate_package_zip(self, zip_data: bytes | BinaryIO) -> None:
+        """Refuse a package ``store_package_from_zip`` would refuse, storing nothing.
+
+        Lets a caller check the whole package before it creates the row the
+        package belongs to.
+
+        Raises:
+            ValueError: If the data is not a ZIP archive, is over budget, or
+                holds a path that is not a plain relative package path.
+        """
+        if isinstance(zip_data, bytes):
+            zip_data = io.BytesIO(zip_data)
+        zip_data.seek(0)
+        try:
+            with zipfile.ZipFile(zip_data, "r") as zf:
+                self._package_entries(zf)
+        except zipfile.BadZipFile as e:
+            raise ValueError("Skill package is not a valid ZIP archive") from e
+        finally:
+            zip_data.seek(0)
+
     async def store_package_from_zip(
         self,
         skill_id: str,
@@ -76,6 +132,8 @@ class SkillStorageService:
         zip_data: bytes | BinaryIO,
     ) -> str:
         """Store a skill package from a ZIP file.
+
+        Every path and the size budget are checked before the first upload.
 
         Args:
             skill_id: The skill ID.
@@ -90,29 +148,12 @@ class SkillStorageService:
 
         s3_prefix = self._get_s3_prefix(workspace_id, skill_id)
 
-        with zipfile.ZipFile(zip_data, "r") as zf:
-            check_zip_budget(zf)
-            # Detect common root folder (GitHub style)
-            root_folder = self._detect_root_folder(zf.namelist())
-
-            for info in zf.infolist():
-                # Skip directories
-                if info.is_dir():
-                    continue
-
-                # Skip hidden and system files
-                if self._should_skip_file(info.filename):
-                    continue
-
-                # Strip root folder if present
-                relative_path = info.filename
-                if root_folder and relative_path.startswith(root_folder):
-                    relative_path = relative_path[len(root_folder) :]
-
-                if not relative_path:
-                    continue
-
-                relative_path = safe_package_path(relative_path)
+        try:
+            zf = zipfile.ZipFile(zip_data, "r")
+        except zipfile.BadZipFile as e:
+            raise ValueError("Skill package is not a valid ZIP archive") from e
+        with zf:
+            for info, relative_path in self._package_entries(zf):
                 content = read_entry(zf, info)
 
                 # Upload to S3

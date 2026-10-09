@@ -247,35 +247,31 @@ async def test_policies_install_on_workspace_and_agent():
     assert "no email" in deny_entity.detail
 
 
-async def test_unenforceable_policy_is_skipped_not_created():
+def _assert_nothing_written(deps) -> None:
+    assert deps["mcp_server_service"].calls == []
+    assert deps["mcp_instance_service"].calls == []
+    assert deps["skill_service"].calls == []
+    assert deps["skill_service"].github_calls == []
+    assert deps["agent_service"].calls == []
+    assert deps["trigger_service"].created == []
+    assert deps["governance_service"].created == []
+
+
+async def test_unenforceable_policy_refuses_the_whole_install():
     # A spend cap the compiler cannot read (`period: day` — it knows month/run
-    # only) would install as a row that silently never enforces, leaving the UI
-    # advertising a cap that does not exist.
+    # only) would install as a row that silently never enforces. Analyze blocks
+    # it, so install refuses it too, before the agent beside it is created.
     pkg = parse_bundle(
-        'schema_version: "0.1.0"\nname: p\npolicies:\n'
+        'schema_version: "0.1.0"\nname: p\n'
+        "agents: [{key: lead, name: Lead, model: gpt-4o}]\npolicies:\n"
         "  - {key: daily, subject: workspace, target: spend, effect: cap, "
         "params: {amount_usd: 10, period: day}}\n"
     )
     inst, deps = _installer()
-    res = await inst.install(pkg, {})
-    entity = next(e for e in res.entities if e.key == "daily")
-    assert entity.action == InstallAction.SKIPPED
-    assert "period" in entity.detail
-    assert deps["governance_service"].created == []
-
-
-async def test_unenforceable_policy_does_not_block_the_rest_of_the_install():
-    pkg = parse_bundle(
-        'schema_version: "0.1.0"\nname: p\n'
-        "agents: [{key: lead, name: Lead, model: gpt-4o}]\npolicies:\n"
-        "  - {key: dead, subject: workspace, target: spend, effect: cap, params: {}}\n"
-        '  - {key: live, subject: lead, target: "tool:send_email", effect: deny}\n'
-    )
-    inst, deps = _installer()
-    res = await inst.install(pkg, {})
-    actions = {e.key: e.action for e in res.entities if e.kind.value == "policy"}
-    assert actions == {"dead": InstallAction.SKIPPED, "live": InstallAction.CREATED}
-    assert len(deps["governance_service"].created) == 1
+    with pytest.raises(BundleInstallError) as refused:
+        await inst.install(pkg, {})
+    assert any("daily" in issue.message for issue in refused.value.issues)
+    _assert_nothing_written(deps)
 
 
 async def test_policy_idempotent_when_rule_exists():
@@ -288,7 +284,7 @@ async def test_policy_idempotent_when_rule_exists():
     assert deps["governance_service"].created == []  # nothing created
 
 
-async def test_policy_skipped_when_agent_subject_missing():
+async def test_policy_on_a_missing_agent_refuses_the_install():
     pkg = parse_bundle(
         """
 schema_version: "0.1.0"
@@ -297,10 +293,9 @@ policies: [{key: orphan, subject: ghost, target: "*", effect: deny}]
 """
     )
     inst, deps = _installer()
-    res = await inst.install(pkg, {})
-    actions = {(e.kind, e.key): e.action for e in res.entities}
-    assert actions[("policy", "orphan")] == InstallAction.SKIPPED
-    assert deps["governance_service"].created == []
+    with pytest.raises(BundleInstallError):
+        await inst.install(pkg, {})
+    _assert_nothing_written(deps)
 
 
 async def test_missing_required_setup_blocks_install():
@@ -389,7 +384,7 @@ async def test_channel_created_without_secret_manager():
     assert len(deps["trigger_service"].created) == 1
 
 
-async def test_channel_skipped_when_agent_missing():
+async def test_channel_on_a_missing_agent_refuses_the_install():
     pkg = parse_bundle(
         """
 schema_version: "0.1.0"
@@ -399,10 +394,9 @@ channels:
 """
     )
     inst, deps = _installer()
-    res = await inst.install(pkg, {})
-    actions = {(e.kind, e.key): e.action for e in res.entities}
-    assert actions[("channel", "inbox")] == InstallAction.SKIPPED
-    assert deps["trigger_service"].created == []
+    with pytest.raises(BundleInstallError):
+        await inst.install(pkg, {})
+    _assert_nothing_written(deps)
 
 
 async def test_idempotent_reuse_of_existing_entities():
@@ -719,3 +713,40 @@ agents: [{key: a, name: A, model: gpt-4o, skills: [review]}]
     assert call.github_url == "https://github.com/o/r/tree/main/review"
     assert call.name == "Review"
     assert len(deps["agent_service"].calls[0].skill_ids) == 1
+
+
+BLOCKED = """
+schema_version: "0.1.0"
+name: b6
+agents:
+  - {key: a1, name: nomodel, skills: [missing], mcps: [nope]}
+automations:
+  - {key: c, cron: "0 9 * * *", agent: ghost, prompt: x}
+"""
+
+
+async def test_a_bundle_analyze_blocks_is_refused_by_install_before_anything_is_written():
+    pkg = parse_bundle(BLOCKED)
+    preview = await BundleAnalyzer().analyze(pkg)
+    assert preview.installable is False
+
+    inst, deps = _installer()
+    with pytest.raises(BundleInstallError) as refused:
+        await inst.install(pkg, {})
+
+    assert {i.message for i in refused.value.issues} == {i.message for i in preview.block_issues}
+    _assert_nothing_written(deps)
+
+
+async def test_duplicate_entity_keys_are_refused_by_install():
+    pkg = parse_bundle(
+        'schema_version: "0.1.0"\nname: b4\nskills:\n'
+        "  - {key: s1, name: dup, content: hi}\n"
+        "  - {key: s1, name: dup2, content: hi}\n"
+    )
+    inst, deps = _installer()
+    with pytest.raises(BundleInstallError) as refused:
+        await inst.install(pkg, {})
+
+    assert any("duplicate skill key 's1'" in i.message for i in refused.value.issues)
+    _assert_nothing_written(deps)

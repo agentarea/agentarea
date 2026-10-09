@@ -6672,7 +6672,7 @@ export type SkillMemberAddRequest = {
     /**
      * Order
      *
-     * Execution order hint
+     * Execution order hint (a 32-bit integer)
      */
     order?: number;
 };

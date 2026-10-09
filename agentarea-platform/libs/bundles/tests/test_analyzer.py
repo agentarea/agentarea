@@ -197,3 +197,33 @@ async def test_duplicate_policy_key_blocks():
     preview = await BundleAnalyzer().analyze(pkg)
     assert preview.installable is False
     assert any("duplicate policy key 'dup'" in i.message for i in preview.block_issues)
+
+
+@pytest.mark.parametrize(
+    "entity",
+    [
+        "skills: [{key: s, name: NAME, content: hi}]",
+        "agents: [{key: a, name: NAME, model: gpt-4o}]",
+        "mcps: [{key: m, name: NAME, json_spec: {type: url, endpoint_url: 'https://x.test/mcp'}}]",
+    ],
+    ids=["skill", "agent", "mcp"],
+)
+async def test_an_entity_name_longer_than_its_column_is_refused_at_analyze(entity):
+    # The name lands in a String(255) column; past that, install used to fail
+    # halfway through, after earlier entities had committed.
+    source = 'schema_version: "0.1.0"\nname: p\n' + entity + "\n"
+    parse_bundle(source.replace("NAME", "n" * 255))
+    with pytest.raises(BundleParseError, match="255"):
+        parse_bundle(source.replace("NAME", "n" * 256))
+
+
+async def test_an_automation_whose_trigger_name_is_too_long_blocks():
+    pkg = parse_bundle(
+        'schema_version: "0.1.0"\nname: ' + "p" * 250 + "\n"
+        "agents: [{key: lead, name: Lead, model: gpt-4o}]\n"
+        "automations:\n"
+        "  - {key: nightly_run, cron: '0 0 * * *', agent: lead, prompt: go}\n"
+    )
+    preview = await BundleAnalyzer().analyze(pkg)
+    assert preview.installable is False
+    assert any(i.entity_key == "nightly_run" for i in preview.block_issues)
