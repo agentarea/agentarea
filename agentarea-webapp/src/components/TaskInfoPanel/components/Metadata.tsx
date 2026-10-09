@@ -1,7 +1,6 @@
 import { useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
 import { Activity, GitFork, Hash } from "lucide-react";
-import { AgentLink } from "@/components/AgentIdentity";
+import { AgentIdentity } from "@/components/AgentIdentity";
 import {
   InfoPanelField,
   InfoPanelSection,
@@ -29,15 +28,14 @@ export default function Metadata({ task }: MetadataProps) {
       </InfoPanelField>
 
       <InfoPanelField label={t("agent")}>
-        <InfoPanelValueBox className="p-0">
-          <AgentLink
+        <InfoPanelValueBox href={`/agents/${task.agent_id}`} newTab>
+          <AgentIdentity
             agent={{
               id: task.agent_id,
               name: task.agent_name || t("agent"),
             }}
             size="xs"
-            className="w-full p-1.5"
-            nameClassName="text-xs"
+            nameClassName="text-xs font-medium"
           />
         </InfoPanelValueBox>
       </InfoPanelField>
@@ -53,12 +51,14 @@ export default function Metadata({ task }: MetadataProps) {
 
       {isDelegation && parentTaskId && (
         <InfoPanelField label={t("parentTask")} icon={GitFork}>
-          <Link
+          <InfoPanelValueBox
             href={`/tasks/${parentTaskId}`}
-            className="text-xs text-primary hover:underline"
+            mono
+            // Lined up with the copyable ids above it.
+            className="px-3 text-[13px]"
           >
             {parentTaskId.split("-")[0]}
-          </Link>
+          </InfoPanelValueBox>
         </InfoPanelField>
       )}
     </InfoPanelSection>

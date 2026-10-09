@@ -11,6 +11,8 @@ interface TableDateDisplayProps {
   onlyDate?: boolean;
   /** Within the last week, say how long ago ("4 days ago") instead of the date. */
   relative?: boolean;
+  /** Time down to the millisecond, for things that happen moments apart. */
+  precise?: boolean;
 }
 
 /** A table cell's date and time, with icons, in the UI locale. */
@@ -19,6 +21,7 @@ export function TableDateDisplay({
   oneRow,
   onlyDate,
   relative,
+  precise,
 }: TableDateDisplayProps) {
   const format = useFormatter();
   const now = useNow({ updateInterval: relative ? 60_000 : undefined });
@@ -63,7 +66,17 @@ export function TableDateDisplay({
     <div className="flex shrink-0 items-center gap-1.5">
       <Clock className="h-3 w-3 shrink-0" />
       <span className="whitespace-nowrap">
-        {format.dateTime(date, { hour: "2-digit", minute: "2-digit" })}
+        {format.dateTime(
+          date,
+          precise
+            ? {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                fractionalSecondDigits: 3,
+              }
+            : { hour: "2-digit", minute: "2-digit" }
+        )}
       </span>
     </div>
   );

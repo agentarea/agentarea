@@ -15,6 +15,7 @@ import { useTaskContext } from "./TaskContext";
 export default function TaskDetailsPage() {
   const {
     task,
+    requester,
     taskStatus,
     taskSummary,
     policy,
@@ -149,6 +150,7 @@ export default function TaskDetailsPage() {
                 execution_id: task.execution_id || null,
                 result: task.result,
                 provenance: task.provenance,
+                requester,
               }}
               currentStatus={currentStatus}
               executionStatus={executionStatus}

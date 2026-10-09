@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useTranslations } from "next-intl";
 import type { TaskProvenance, TaskSummary } from "@/api/client/types.gen";
+import type { TaskRequester } from "@/components/TaskInfoPanel/types";
 import {
   apiErrorMessage,
   formatApiError,
@@ -62,6 +63,8 @@ interface TaskStatus {
 
 interface TaskContextType {
   task: TaskData | null;
+  /** The person who started the task, resolved on the server. */
+  requester: TaskRequester | null;
   taskStatus: TaskStatus | null;
   taskSummary: TaskSummary | null;
   policy: EffectivePolicy | null;
@@ -113,6 +116,7 @@ interface TaskProviderProps {
   taskId: string;
   initialTask?: unknown;
   initialError?: string | null;
+  requester?: TaskRequester | null;
   children: React.ReactNode;
 }
 
@@ -120,6 +124,7 @@ export function TaskProvider({
   taskId,
   initialTask,
   initialError,
+  requester = null,
   children,
 }: TaskProviderProps) {
   const [task, setTask] = useState<TaskData | null>(() =>
@@ -253,6 +258,7 @@ export function TaskProvider({
     <TaskContext.Provider
       value={{
         task,
+        requester,
         taskStatus,
         taskSummary,
         policy,

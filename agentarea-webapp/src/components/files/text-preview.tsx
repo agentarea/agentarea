@@ -1,15 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { Streamdown } from "streamdown";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import Table, { type Column } from "@/components/Table/Table";
+import { cn } from "@/lib/utils";
+import { indentJson } from "./indent-json";
 
 const CODE_LANGS: Record<string, string> = {
   json: "json",
@@ -39,7 +35,8 @@ type TextVariant =
 
 export function textVariantOf(path: string): TextVariant {
   const ext = path.split(".").pop()?.toLowerCase() || "";
-  if (ext === "md" || ext === "mdx" || ext === "markdown") return { kind: "markdown" };
+  if (ext === "md" || ext === "mdx" || ext === "markdown")
+    return { kind: "markdown" };
   if (ext === "csv") return { kind: "csv", delimiter: "," };
   if (ext === "tsv") return { kind: "csv", delimiter: "\t" };
   const lang = CODE_LANGS[ext];
@@ -94,62 +91,83 @@ function parseDelimited(text: string, delimiter: string): string[][] {
   return rows.filter((r) => !(r.length === 1 && r[0] === ""));
 }
 
+/** One data row of a delimited file; `id` is its line number under the header. */
+type CsvRow = { id: number; cells: string[] };
+
 function CsvPreview({ text, delimiter }: { text: string; delimiter: string }) {
-  const rows = useMemo(() => parseDelimited(text, delimiter), [text, delimiter]);
+  const t = useTranslations("FilesPage");
+  const rows = useMemo(
+    () => parseDelimited(text, delimiter),
+    [text, delimiter]
+  );
 
   if (rows.length === 0) {
-    return <div className="p-4 text-sm text-muted-foreground">Empty file.</div>;
+    return (
+      <div className="p-4 text-sm text-muted-foreground">{t("emptyFile")}</div>
+    );
   }
 
   const [header, ...body] = rows;
   const truncated = body.length > MAX_CSV_ROWS;
   const visible = truncated ? body.slice(0, MAX_CSV_ROWS) : body;
+  const data: CsvRow[] = visible.map((cells, i) => ({ id: i + 1, cells }));
+  // The same table as every list in the app; a row number to find a line by.
+  const columns: Column<CsvRow>[] = [
+    {
+      header: "#",
+      accessor: "id",
+      headerClassName: "w-10",
+      cellClassName: "w-10 text-xs tabular-nums text-muted-foreground",
+    },
+    ...header.map((name, column) => ({
+      header: name,
+      accessor: `column-${column}`,
+      headerClassName: "whitespace-nowrap",
+      cellClassName: "whitespace-nowrap text-xs",
+      render: (_: unknown, row?: CsvRow) => row?.cells[column] ?? "",
+    })),
+  ];
 
   return (
-    <div className="p-2">
-      <div className="overflow-x-auto rounded-md border bg-background">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {header.map((cell, i) => (
-                <TableHead key={i} className="whitespace-nowrap text-xs">
-                  {cell}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visible.map((r, i) => (
-              <TableRow key={i}>
-                {header.map((_, j) => (
-                  <TableCell key={j} className="whitespace-nowrap py-1.5 text-xs">
-                    {r[j] ?? ""}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-      {truncated && (
-        <div className="px-1 py-2 text-xs text-muted-foreground">
-          Showing first {MAX_CSV_ROWS} rows.
-        </div>
-      )}
+    <div className="space-y-2 p-4">
+      <Table<CsvRow> data={data} columns={columns} />
+      <p className="text-xs text-muted-foreground">
+        {truncated
+          ? t("csvTruncated", { count: MAX_CSV_ROWS })
+          : t("csvRows", { count: body.length })}
+      </p>
     </div>
   );
 }
 
 function fenceFor(text: string): string {
-  const longest = text.match(/`+/g)?.reduce((a, b) => (b.length > a.length ? b : a), "") ?? "";
+  const longest =
+    text.match(/`+/g)?.reduce((a, b) => (b.length > a.length ? b : a), "") ??
+    "";
   return "`".repeat(Math.max(4, longest.length + 1));
 }
 
+/**
+ * Streamdown draws a code block as a chat message's: a card with the
+ * language and its own copy and download. A file's viewer already names the
+ * file and carries those actions, so the block is flattened to its body — one
+ * card around the code — and long lines scroll instead of being clipped.
+ */
+const FILE_CODE_BLOCK = cn(
+  "[&_[data-streamdown=code-block]]:my-0 [&_[data-streamdown=code-block]]:gap-0 [&_[data-streamdown=code-block]]:rounded-none [&_[data-streamdown=code-block]]:border-0 [&_[data-streamdown=code-block]]:bg-transparent [&_[data-streamdown=code-block]]:p-0",
+  "[&_[data-streamdown=code-block-header]]:hidden",
+  "[&_[data-streamdown=code-block-body]]:overflow-x-auto [&_[data-streamdown=code-block-body]]:text-xs"
+);
+
 function CodePreview({ text, lang }: { text: string; lang: string }) {
-  const fence = fenceFor(text);
+  const shown = lang === "json" ? indentJson(text) : text;
+  const fence = fenceFor(shown);
   return (
-    <Streamdown className="max-w-none p-4 text-xs [&_pre]:my-0">
-      {`${fence}${lang}\n${text}\n${fence}`}
+    <Streamdown
+      controls={false}
+      className={cn("max-w-none p-4 text-xs [&_pre]:my-0", FILE_CODE_BLOCK)}
+    >
+      {`${fence}${lang}\n${shown}\n${fence}`}
     </Streamdown>
   );
 }
@@ -169,6 +187,10 @@ export function TextPreview({ path, text }: { path: string; text: string }) {
     case "code":
       return <CodePreview text={text} lang={variant.lang} />;
     case "plain":
-      return <pre className="whitespace-pre-wrap break-words p-4 text-xs font-mono">{text}</pre>;
+      return (
+        <pre className="whitespace-pre-wrap break-words p-4 text-xs font-mono">
+          {text}
+        </pre>
+      );
   }
 }

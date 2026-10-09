@@ -15,7 +15,9 @@ export default function InfoPanelHeader({
 }) {
   return (
     <div className={`flex items-start justify-between gap-3 px-3 pb-3 pt-3 ${className || ""}`}>
-      <div className="space-y-1">
+      {/* The title takes what is left and wraps; the badge on the right
+          keeps its one line instead of being squeezed into two. */}
+      <div className="min-w-0 flex-1 space-y-1">
         <div className="text-xs font-normal uppercase tracking-wide text-muted-foreground">
           {label}
         </div>
@@ -23,7 +25,7 @@ export default function InfoPanelHeader({
           {title}
         </h3>
       </div>
-      {right}
+      {right && <div className="shrink-0 whitespace-nowrap">{right}</div>}
     </div>
   );
 }
