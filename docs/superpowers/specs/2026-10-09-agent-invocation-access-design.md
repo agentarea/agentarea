@@ -371,101 +371,116 @@ answer.
   requests from any workspace. Notifying approvers other than the caller is a
   later phase.
 
+## Contracts
+
+The interfaces below are final from the first increment on. What grows later
+is their implementations, never their shape. Callers code against these and
+nothing else.
+
+```python
+# Authentication — who is this external account?
+class ExternalIdentityResolver(Protocol):
+    async def resolve(self, provider: str, external_id: str) -> UserPrincipal | None: ...
+
+# Admission — the one PDP.
+Subject = UserPrincipal | AgentPrincipal          # PublicCaller joins with `public`
+async def authorize_agent_invocation(subject: Subject, agent: AgentRef) -> InvocationDecision
+
+# Doors.
+@dataclass(frozen=True)
+class ChannelRef:
+    id: str
+    owner: WorkspaceOwner | UserOwner
+    provider: str                                  # "telegram"
+    routing: FixedAgent | Selectable
+    admits: Literal["resolved_users", "owner_only"]
+
+async def admit(channel: ChannelRef, message: InboundMessage) -> Admitted | Denied
+#   Admitted(caller: UserPrincipal, agent: AgentRef)
+#   Denied(reason, reply: OutboundMessage | None)
+
+# Run — a session of the agent, opened once per task.
+@dataclass(frozen=True)
+class RunSession:
+    agent: AgentRef
+    workspace_id: str
+    caller: UserPrincipal
+    via: str                                       # "web" | "a2a" | "telegram" | ...
+    scope: RunScope
+async def open_run_session(agent: AgentRef, caller: Subject, via: str) -> RunSession
+
+# Outbound and actions.
+@dataclass(frozen=True)
+class OutboundMessage:
+    text: str
+    actions: tuple[Action, ...] = ()
+    edit_of: str | None = None
+@dataclass(frozen=True)
+class Action:
+    token: str                                     # single-use, opaque
+    label: str
+    style: Literal["primary", "danger", "default"]
+ActionKind = Literal["link_confirm", "approval", "continuation", "input"]
+```
+
 ## Plan of record
 
-**Step 0 — close the open bot, with no throwaway code.** Every piece below is
-part of the target design. It is only the subset needed so that a bot stops
-answering strangers.
+### First increment: every contract, narrow implementations
 
-- **Admission reuses the check that exists.** `ConfigurerAuthority.may_run`
-  (`stream_subscriber.py:91-100`) already answers "may this user run this
-  agent": workspace membership plus `execute` in the graph. The channel calls
-  it with the **sender**, as it already does for the trigger's creator. When
-  step 1 makes `execute` mean `can_invoke`, the channel inherits the stricter
-  rule with no change of its own.
-- **One function, `admit_channel_sender(trigger, event) → caller | denial`**,
-  runs before follow-up routing and before `fire`. It is called from:
-  - the webhook path, in `TriggerSubscriptionHandler.handle`, before the
-    follow-up claim;
-  - the poller path, in `InboundMessageStreamConsumer._execute_trigger`.
+| Contract | Implementation now | Grows into |
+|---|---|---|
+| `ExternalIdentityResolver` | `user_external_identities` table, Telegram only; links written only by the `link_confirm` action (§4) | `idp_sync`, Slack and Discord, workspace-assigned links |
+| `authorize_agent_invocation` | FGA `can_invoke`; creator binding at agent creation; every entry point in §2 calls it; `execute` → `can_invoke` | `public` / `authenticated` levels with the workspace constraint; `PublicCaller` |
+| Agent access PAP | `GET/PUT /agents/{id}/access` and the Access tab: people, agents, workspace members. Non-members are refused (see gaps) | Non-member grants |
+| `ChannelRef` + `admit` | `ChannelRef` derived from today's Telegram trigger: workspace owner, `FixedAgent`, `resolved_users`. `admit` drops groups and bot senders, resolves the sender, then asks the PDP. It is called by the webhook and poller intakes **before** follow-up routing and `fire` | The `channels` table; `Selectable` routing; the personal bot (`UserOwner`, `owner_only`); groups |
+| `RunSession` | `open_run_session` at task creation; the task stores `caller` and `via` apart from ownership; `scope` is the governance snapshot resolved for the caller; thread key `(channel, chat, caller, agent)`; delivery guard by channel owner | Resources inside `scope`; revocation checks per step |
+| `OutboundMessage` + actions | Formatters return `OutboundMessage`; the Telegram adapter renders buttons; the action table; `callback_query` routed to the action handler; one handler, `link_confirm` | `approval`, `continuation`, `input` handlers; other adapters |
 
-  It applies these rules in order:
-  1. **Not a private chat** (`chat_id != from.id`) or a bot sender
-     (`raw_data.message.from.is_bot`) → skipped silently.
-  2. **`from.id` has no link** (§4) → skipped, and the bot replies once per 24
-     hours with the link URL.
-  3. **`may_run(sender)` is false** → skipped, and the bot replies "no access".
-  4. **Otherwise** the caller is the linked user.
-- **The task runs for the caller, not the trigger's creator.**
-  - `fire` gains `caller: str | None`, used for `AgentTask.user_id`.
-    `fired_by` keeps its meaning of "a person pressed run now", which also
-    bypasses `is_active`, so it is not reused.
-  - The trigger service is rebuilt with the caller's `UserContext`, so the
-    governance snapshot (the run scope today) and audit are the caller's.
-  - The creator stays the trigger's owner and is still checked by `may_run` as
-    today.
-- **Linking, minimal (§4).**
-  - The `user_external_identities` table and its migration.
-  - `POST /v1/me/external-identities/telegram/link` mints a nonce in Redis
-    (10 minutes, hashed) and returns `t.me/<bot>?start=link_<nonce>`. The bot's
-    username is public, so it arrives in the link the bot sent and needs no
-    lookup.
-  - The intake handles `/start link_<nonce>` **before** admission. The bot
-    asks "Link this Telegram to a\*\*\*@mail.com? Send /confirm", and
-    `/confirm` writes the link. A text confirmation avoids `callback_query`
-    until step 4 adds buttons.
-  - `GET` / `DELETE /v1/me/external-identities` list and unlink.
-  - The webapp gets one page, `/link/telegram?bot=<username>`, and one section
-    in account settings.
-- **Follow-up routing** gains `trigger_id` in its key, so DMs to two bots of
-  the same agent stay apart.
+After this increment:
 
-Not in step 0: the `invoker` relation, the Access tab, channels as their own
-entity, the personal bot, and buttons. Members of the agent's workspace who
-link Telegram can use the bot; nobody else can.
+- **A bot answers only identified people the agent's bindings admit.** An
+  unlinked sender gets the link flow, and a linked sender without access gets
+  "no access".
+- **Each run belongs to whoever asked.**
+- **Nothing built now is replaced later.** Each later step adds an
+  implementation behind a contract that already exists.
 
-**MVP.** After these four steps a person can attach a bot to an agent and share
-it with colleagues, or attach a personal bot and reach all their agents.
+### Named gaps
 
-1. **PDP.** `invoker` / `can_invoke`; the creator binding; the PDP; every entry
-   point in §2; `execute` → `can_invoke`; the Access tab on the agent (people,
-   agents, workspace members); grants restricted to members.
-2. **Links and channels.**
-   - `user_external_identities` and the pairing flow, which brings
-     `callback_query` and a small action handler;
-   - the `channels` entity, replacing the Telegram trigger;
-   - token uniqueness;
-   - `admit_channel_message`;
-   - the thread key, the delivery guard and the deny replies.
-3. **Personal bot.** `owner_kind = user`, `/agents` and `/use`, routing across
-   workspaces, labelled replies.
-4. **Approvals in the channel.** `OutboundMessage`, the action table, approve
-   and deny buttons, `allow_approvals` for identified callers.
+Each gap is known and lives in exactly one place:
 
-The run session lands with step 1 as naming and data: `caller` on the task,
-and `compute_run_scope` wrapping the governance snapshot.
+- **`RunSession.legacy_user_context()`.** Activities still need a
+  `UserContext`, and `requires(...)` still checks the caller's live graph
+  rights rather than `scope`. The one adapter method is the seam that closing
+  this gap removes.
+- **Grants to members only.** The PAP refuses non-members while the
+  workspace-files toolset is member-level
+  (`tools/workspace_files_toolset.py:78`). The refusal disappears when
+  resources join `scope`.
+- **`ChannelRef` from triggers.** `ChannelRef` is built from the Telegram
+  trigger until the `channels` table exists. Only the factory changes then;
+  `admit` and its callers do not.
 
-**Next.**
+### Next increments
 
-- Activities authorize against the run session instead of the owner's context.
-- Resources join the run scope.
-- Non-member grants.
-- Revocation on each step.
-- `continuation` and `input` actions.
-- Notifying other approvers.
-- Approval expiry: approvals wait forever today.
-
-**Later.**
-
-- `public` / `authenticated` and the workspace constraint.
-- External accounts as principals (`telegram:<id>` granted directly, for people
-  without an account), and pairing-based grants in the style of Hermes.
-- Group chats.
-- Admin-assigned links scoped to a workspace.
-- On-behalf-of mode with personal connections.
-- A platform bot for notifications.
-- Slack, Discord and email.
-- Corporate channels linked automatically from the IdP.
+1. **The `channels` table and the personal bot.** `UserOwner`, `owner_only`,
+   `Selectable` routing with `/agents` and `/use`, routing across workspaces,
+   labelled replies.
+2. **Approvals in the channel.** The `approval` action handler and
+   `allow_approvals` for identified callers.
+3. **Activities on `RunSession`.** Resources inside `scope`, non-member grants,
+   revocation per step.
+4. **`continuation` and `input` actions**, notifying other approvers, approval
+   expiry.
+5. **Later.**
+   - `public` / `authenticated`.
+   - External accounts as principals.
+   - Groups.
+   - Workspace-assigned links.
+   - On-behalf-of mode.
+   - A platform bot.
+   - Slack, Discord and email.
+   - IdP-linked corporate channels.
 
 ## Open questions
 
