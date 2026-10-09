@@ -65,7 +65,7 @@ from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 from sqlalchemy import text
 
 from ._task_authority import requires_task_authority
@@ -119,6 +119,15 @@ class TaskCreate(BaseModel):
     task_policy: PolicyDocument | None = None
     # staging refs from a presigned POST /v1/files/upload-url
     attachments: list[str] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_a_schedule(cls, data: Any) -> Any:
+        # Unknown fields are ignored, so a scheduled_at sent here used to be
+        # dropped and the task started at once. Only /tasks/schedule takes one.
+        if cls is TaskCreate and isinstance(data, dict) and "scheduled_at" in data:
+            raise ValueError("scheduled_at is not accepted here; use POST .../tasks/schedule")
+        return data
 
 
 def _dedupe_attachment_name(name: str, used: set[str]) -> str:
