@@ -263,6 +263,11 @@ def connect_page_url(workspace_slug: str, instance_id: str) -> str:
     return f"{frontend_base}/w/{workspace_slug}/connect/{instance_id}"
 
 
+def catalog_connect_page_url(workspace_slug: str, registry_item_id: str) -> str:
+    """The page a person opens to sign in to a catalog API connection."""
+    return connect_page_url(workspace_slug, f"catalog/{registry_item_id}")
+
+
 def _oauth_landing_url(return_to: str, workspace_slug: str, instance_id: str) -> str:
     """The connect page when ``return_to`` is exactly the one for this workspace
     and instance, else the connection's detail page.

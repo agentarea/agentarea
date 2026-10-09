@@ -152,6 +152,25 @@ class OpenAPITool(BaseTool):
                 "status_code": None,
             }
 
+        # Configured query parameters may be secrets; their values are never
+        # logged or reported.
+        try:
+            configured_query_params = await self._service.resolve_query_params(connection)
+        except Exception as e:
+            logger.error(
+                "Failed to resolve query parameters for connection %s: %s",
+                self._connection_id,
+                e,
+                exc_info=True,
+            )
+            return {
+                "success": False,
+                "error": f"Failed to resolve query parameters: {e}",
+                "result": None,
+                "tool_name": self.name,
+                "status_code": None,
+            }
+
         # Build URL: substitute path params
         path = self._operation["path"]
         parameters: list[dict[str, Any]] = self._operation.get("parameters", [])
@@ -183,6 +202,9 @@ class OpenAPITool(BaseTool):
                 param_name = param_meta["name"]
                 if param_name in kwargs:
                     query_params[param_name] = kwargs[param_name]
+        # The connection's configured parameters win: an agent must not replace
+        # the credential the connection was set up with.
+        query_params.update(configured_query_params)
 
         # Collect header params from kwargs (override connection defaults)
         for param_meta in parameters:

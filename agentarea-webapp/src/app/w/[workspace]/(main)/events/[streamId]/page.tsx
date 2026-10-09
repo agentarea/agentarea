@@ -2,13 +2,17 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
-import { getStream } from "@/lib/api";
+import { getStream, listStreamSourceTypes } from "@/lib/api";
 import { requireApiData } from "@/lib/server-resource";
 import type { DispositionFilter as Filter } from "@/lib/streamOutcome";
+import AddSourceDialog from "./components/AddSourceDialog";
 import DispositionFilter from "./components/DispositionFilter";
 import EventDetail from "./components/EventDetail";
 import EventFeed from "./components/EventFeed";
 import EventFeedSkeleton from "./components/EventFeedSkeleton";
+import StreamSources, {
+  StreamSourcesSkeleton,
+} from "./components/StreamSources";
 
 const FILTERS: Filter[] = ["all", "reacted", "skipped", "error", "unheard"];
 
@@ -30,7 +34,12 @@ export default async function StreamEventsPage({
     searchParams,
     getTranslations("EventsPage"),
   ]);
-  const stream = requireApiData(await getStream(streamId), "stream");
+  const [streamResult, typesResult] = await Promise.all([
+    getStream(streamId),
+    listStreamSourceTypes(),
+  ]);
+  const stream = requireApiData(streamResult, "stream");
+  const sourceTypes = requireApiData(typesResult, "stream source types");
   const outcome = FILTERS.find((f) => f === query.outcome) ?? "all";
   const before = sequenceParam(query.before);
   const selected = sequenceParam(query.event);
@@ -43,11 +52,15 @@ export default async function StreamEventsPage({
           { label: stream.name },
         ],
         description: stream.description || undefined,
+        controls: <AddSourceDialog streamId={streamId} types={sourceTypes} />,
       }}
       subheader={
         <SubheaderToolbar controls={<DispositionFilter current={outcome} />} />
       }
     >
+      <Suspense fallback={<StreamSourcesSkeleton />}>
+        <StreamSources streamId={streamId} types={sourceTypes} />
+      </Suspense>
       <div
         className={
           selected !== undefined

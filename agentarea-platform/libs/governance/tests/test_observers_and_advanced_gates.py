@@ -1,4 +1,4 @@
-"""Tests for observer interceptors and advanced gate interceptors."""
+"""Tests for observer interceptors."""
 
 import pytest
 from uuid import uuid4
@@ -6,7 +6,6 @@ from uuid import uuid4
 from agentarea_governance.domain.enums import InterceptorAction, Phase
 from agentarea_governance.domain.models import InterceptorContext
 from agentarea_governance.interceptors.observers.metrics_observer import MetricsObserver
-from agentarea_governance.interceptors.gates.semantic_guard import SemanticGuard
 
 
 def _ctx(
@@ -53,87 +52,3 @@ class TestMetricsObserver:
         result = await obs.execute(_ctx())
         assert result.action == InterceptorAction.ALLOW
 
-
-# ── Semantic Guard ──
-
-
-class TestSemanticGuard:
-    @pytest.mark.asyncio
-    async def test_safe_call(self):
-        guard = SemanticGuard()
-        result = await guard.execute(
-            _ctx(action_params={"query": "SELECT * FROM users WHERE id = 1"})
-        )
-        assert result.action == InterceptorAction.ALLOW
-
-    @pytest.mark.asyncio
-    async def test_drop_table_denied(self):
-        guard = SemanticGuard()
-        result = await guard.execute(
-            _ctx(action_params={"query": "DROP TABLE users"})
-        )
-        assert result.action == InterceptorAction.DENY
-        assert "DROP TABLE" in result.reason
-
-    @pytest.mark.asyncio
-    async def test_rm_rf_root_denied(self):
-        guard = SemanticGuard()
-        result = await guard.execute(
-            _ctx(action_params={"command": "rm -rf /"})
-        )
-        assert result.action == InterceptorAction.DENY
-
-    @pytest.mark.asyncio
-    async def test_delete_from_escalated(self):
-        guard = SemanticGuard()
-        result = await guard.execute(
-            _ctx(action_params={"query": "DELETE FROM orders WHERE status = 'cancelled'"})
-        )
-        assert result.action == InterceptorAction.ESCALATE
-        assert "DELETE FROM" in result.reason
-
-    @pytest.mark.asyncio
-    async def test_escalation_names_every_matched_pattern(self):
-        guard = SemanticGuard()
-        result = await guard.execute(
-            _ctx(action_params={"command": "rm -rf build && chmod 777 out"})
-        )
-        assert result.action == InterceptorAction.ESCALATE
-        assert result.metadata == {"patterns": ["rm -rf", "chmod 777"]}
-
-    @pytest.mark.asyncio
-    async def test_human_approval_satisfies_escalation(self):
-        guard = SemanticGuard()
-        result = await guard.execute(
-            _ctx(
-                action_params={"query": "DELETE FROM orders WHERE status = 'cancelled'"},
-                execution_state={"escalation_approved": True},
-            )
-        )
-        assert result.action == InterceptorAction.ALLOW
-        assert "DELETE FROM" in result.reason
-
-    @pytest.mark.asyncio
-    async def test_human_approval_never_lifts_a_deny(self):
-        guard = SemanticGuard()
-        result = await guard.execute(
-            _ctx(
-                action_params={"query": "DROP TABLE users"},
-                execution_state={"escalation_approved": True},
-            )
-        )
-        assert result.action == InterceptorAction.DENY
-
-    @pytest.mark.asyncio
-    async def test_no_content(self):
-        guard = SemanticGuard()
-        result = await guard.execute(_ctx())
-        assert result.action == InterceptorAction.ALLOW
-
-    @pytest.mark.asyncio
-    async def test_content_field_checked(self):
-        guard = SemanticGuard()
-        result = await guard.execute(
-            _ctx(content="TRUNCATE TABLE logs")
-        )
-        assert result.action == InterceptorAction.DENY

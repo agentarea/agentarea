@@ -1098,6 +1098,8 @@
       "specUrl": "Spec URL",
       "customHeaders": "Custom headers ({count})",
       "noCustomHeaders": "No custom headers. Click Add to set Authorization or any other request header your provider needs.",
+      "customQueryParams": "Query parameters ({count})",
+      "noCustomQueryParams": "No query parameters. Click Add to send a key the API expects in the URL, such as api_key.",
       "noToolsWithSpec": "No tools discovered yet. Click “Refresh from spec URL” to parse the spec again.",
       "noTools": "No tools were parsed from this spec.",
       "availableTools": "Available tools ({count})",
@@ -1107,6 +1109,7 @@
         "reloadFailed": "Couldn't reload the connection",
         "discoverFailed": "Couldn't refresh tools from the spec",
         "saveHeadersFailed": "Couldn't save the headers",
+        "saveQueryParamsFailed": "Couldn't save the query parameters",
         "deleteFailed": "Couldn't delete the connection"
       }
     }
@@ -2171,6 +2174,38 @@
       "triggersLoadFailed": "Could not load trigger names",
       "subscriptionsLoadFailed": "Could not load forward links",
       "streamsLoadFailed": "Could not load stream names"
+    },
+    "sources": {
+      "title": "Sources",
+      "empty": "No sources yet. Add one to collect events here without a trigger.",
+      "add": "Add source",
+      "signedWith": "Signature",
+      "signedWithHeader": "Signed in {header}",
+      "ownedByTrigger": "Owned by its trigger",
+      "deleteTitle": "Delete source",
+      "deleteDescription": "{name} stops delivering to this stream, and its URL starts answering 400. Events already recorded stay.",
+      "createFailed": "Could not add the source",
+      "dialog": {
+        "title": "Add source",
+        "description": "Events posted to the source's URL are verified and recorded in this stream. No trigger is needed.",
+        "note": "Secrets stay in the workspace secret store; the source only refers to them.",
+        "submit": "Add source",
+        "type": "Type",
+        "typePlaceholder": "Pick a type",
+        "loadingSecrets": "Loading secrets...",
+        "selectSecret": "Select a secret",
+        "noSecrets": "No secrets yet",
+        "newSecret": "New secret",
+        "secretsLoadFailed": "Could not load the workspace secrets"
+      },
+      "created": {
+        "title": "Source added",
+        "description": "Give this URL to the sender. Every request to it is verified before it is recorded.",
+        "done": "Done",
+        "urlLabel": "Webhook URL",
+        "secretLabel": "Signing secret",
+        "secretWarning": "Copy it now: it is not shown again."
+      }
     }
   },
   "NetworkPage": {
@@ -2382,7 +2417,13 @@
     "headerName": "Header name",
     "headerValue": "Header value",
     "secretValuePlaceholder": "Secret value (leave blank to keep)",
-    "headersEditorHint": "Add headers like Authorization: Bearer <token>. Non-safe headers are stored encrypted."
+    "headersEditorHint": "Add headers like Authorization: Bearer <token>. Non-safe headers are stored encrypted.",
+    "editQueryParams": "Edit",
+    "saveQueryParams": "Save query parameters",
+    "queryParamName": "Parameter name",
+    "queryParamValue": "Value",
+    "toggleSecret": "Secret: stored encrypted, never shown again",
+    "queryParamsEditorHint": "Add parameters the API expects in every request's query string, such as api_key. Locked values are stored encrypted."
   },
   "OpenAPIForm": {
     "openApiSpec": "OpenAPI Spec",
@@ -2403,6 +2444,9 @@
     "headerName": "Header name",
     "headerValue": "Value",
     "secretHeadersHint": "Secret headers are encrypted and never returned in API responses.",
+    "customQueryParams": "Query Parameters (optional)",
+    "addQueryParam": "Add Parameter",
+    "queryParamsHint": "For APIs that take their key in the URL, such as ?api_key=. Locked values are stored encrypted and never returned.",
     "creating": "Creating...",
     "createConnection": "Create Connection",
     "cancel": "Cancel",

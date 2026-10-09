@@ -42,16 +42,13 @@ async def test_reconcile_resolves_the_graph_client_without_temporal_settings(
     assert isinstance(resolve_graph_client(), OpenFGAClient)
 
 
-async def test_reconcile_repairs_graph_ownership_even_with_no_registry_configured(
-    monkeypatch,
-) -> None:
+async def test_only_the_post_migration_run_repairs_graph_ownership(monkeypatch) -> None:
     from agentarea_api import cli
 
     calls: list[str] = []
     client = object()
 
     async def register() -> object:
-        calls.append("register")
         return client
 
     async def ownership(db, graph) -> None:
@@ -62,5 +59,6 @@ async def test_reconcile_repairs_graph_ownership_even_with_no_registry_configure
     monkeypatch.setattr(cli, "_reconcile_graph_ownership", ownership)
 
     await cli._reconcile(None, (), None)
-
-    assert calls == ["register", "ownership"]
+    assert calls == []
+    await cli._reconcile(None, (), None, repair_ownership=True)
+    assert calls == ["ownership"]

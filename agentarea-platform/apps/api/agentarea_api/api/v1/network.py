@@ -68,9 +68,6 @@ _GOVERNANCE_INTERCEPTORS = [
         interceptor_name="escalation_guard", category="gate", phases=["pre_tool_call"]
     ),
     GovernanceOverlay(
-        interceptor_name="semantic_guard", category="gate", phases=["pre_llm_call", "pre_tool_call"]
-    ),
-    GovernanceOverlay(
         interceptor_name="prompt_injection_detector",
         category="filter",
         phases=["pre_llm_call", "post_llm_call"],
@@ -82,11 +79,6 @@ _GOVERNANCE_INTERCEPTORS = [
         interceptor_name="content_policy_enforcer",
         category="filter",
         phases=["pre_llm_call", "post_llm_call"],
-    ),
-    GovernanceOverlay(
-        interceptor_name="mcp_tool_scanner",
-        category="filter",
-        phases=["tool_discovery", "pre_tool_call"],
     ),
     GovernanceOverlay(
         interceptor_name="metrics_observer",

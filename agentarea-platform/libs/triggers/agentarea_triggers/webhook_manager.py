@@ -575,6 +575,17 @@ class DefaultWebhookManager(WebhookManager):
             return "message_received"  # Gmail push notifications are always about new messages
         elif webhook_type == "teams":
             return parsed_data.get("raw_data", {}).get("type")
+        elif webhook_type == "sentry":
+            headers = {str(k).lower(): v for k, v in (parsed_data.get("headers") or {}).items()}
+            resource = headers.get("sentry-hook-resource")
+            raw = parsed_data.get("raw_data")
+            action = raw.get("action") if isinstance(raw, dict) else None
+            if not resource:
+                return None
+            return f"{resource}.{action}" if action else str(resource)
+        elif webhook_type == "yookassa":
+            raw = parsed_data.get("raw_data")
+            return raw.get("event") if isinstance(raw, dict) else None
         return None
 
     def _matches_event_filter(self, event_type: str, allowed_events: list[str]) -> bool:

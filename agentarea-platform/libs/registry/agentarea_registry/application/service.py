@@ -720,7 +720,11 @@ class RegistryService:
                 return None
             return await self._create_mcp_server(item, registry_url=registry_url)
         elif registry_type == "skills":
-            return await self._create_skill(item)
+            # Catalog-only, like agents (ADR-003): skills are read through the
+            # catalog projection and forked into a workspace on use. Creating a
+            # platform Skill row per catalog item left 220k unused rows on RU,
+            # each with four ownership tuples in the authorization graph.
+            return None
         elif registry_type == "llm_providers":
             return await self._create_llm_provider(item)
         elif registry_type == "llm_models":
@@ -745,7 +749,8 @@ class RegistryService:
                 return None
             return await self._update_mcp_server(item, registry_url=registry_url)
         elif registry_type == "skills":
-            return await self._update_skill(item)
+            # Rows materialized before skills went catalog-only.
+            return await self._update_skill(item) if item.installed_entity_id else None
         elif registry_type == "llm_providers":
             return await self._update_llm_provider(item)
         elif registry_type == "llm_models":

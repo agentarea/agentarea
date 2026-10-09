@@ -7692,6 +7692,21 @@
             "description": "Custom HTTP headers attached to every request. Non-safe headers (e.g. Authorization) are stored encrypted in the secret manager.",
             "title": "Custom Headers"
           },
+          "custom_query_params": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/QueryParamInput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Query parameters attached to every request, e.g. an API key the upstream takes as '?api_key='. Secret values are stored encrypted in the secret manager.",
+            "title": "Custom Query Params"
+          },
           "description": {
             "anyOf": [
               {
@@ -7802,6 +7817,20 @@
               }
             ],
             "title": "Custom Headers"
+          },
+          "custom_query_params": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/QueryParamOutput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Query Params"
           },
           "description": {
             "anyOf": [
@@ -7925,6 +7954,21 @@
             ],
             "description": "Replace the full custom-header set. Pass [] to clear all. Secret values are stored encrypted in the secret manager.",
             "title": "Custom Headers"
+          },
+          "custom_query_params": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/QueryParamInput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replace the full query-parameter set. Pass [] to clear all. An empty value for a secret parameter keeps the one already stored under that name.",
+            "title": "Custom Query Params"
           },
           "description": {
             "anyOf": [
@@ -9904,6 +9948,67 @@
         "title": "ProviderSpecWithModelsResponse",
         "type": "object"
       },
+      "QueryParamInput": {
+        "additionalProperties": false,
+        "description": "One query parameter sent with every request of an OpenAPI connection.\n\nA secret value (an API key the upstream takes as ``?api_key=``) is stored\nencrypted in the secret manager and never returned. A configured parameter\nwins over a same-named one the agent passes.",
+        "properties": {
+          "name": {
+            "description": "Query parameter name. Allowed characters: letters, digits, '-', '_', '.', '[', ']'.",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "secret": {
+            "default": true,
+            "description": "Store the value encrypted and never return it. Set false for plain values.",
+            "title": "Secret",
+            "type": "boolean"
+          },
+          "value": {
+            "default": "",
+            "description": "Parameter value, URL-encoded when sent. On update, an empty value for a secret parameter keeps the value already stored under that name.",
+            "maxLength": 8192,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "QueryParamInput",
+        "type": "object"
+      },
+      "QueryParamOutput": {
+        "description": "Query parameter metadata returned in API responses (secret values are masked).",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "secret": {
+            "title": "Secret",
+            "type": "boolean"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name",
+          "secret"
+        ],
+        "title": "QueryParamOutput",
+        "type": "object"
+      },
       "RegistryCreate": {
         "properties": {
           "description": {
@@ -10982,6 +11087,22 @@
         "title": "SecretOwner",
         "type": "object"
       },
+      "SecretRef": {
+        "additionalProperties": false,
+        "description": "A workspace secret named instead of its value; the value stays where it is.",
+        "properties": {
+          "secret_id": {
+            "format": "uuid",
+            "title": "Secret Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret_id"
+        ],
+        "title": "SecretRef",
+        "type": "object"
+      },
       "SecretResponse": {
         "description": "A secret's metadata. The value is never part of this.",
         "properties": {
@@ -11573,6 +11694,34 @@
         "title": "SkippedModelResponse",
         "type": "object"
       },
+      "SourceField": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "placeholder": {
+            "default": "",
+            "title": "Placeholder",
+            "type": "string"
+          },
+          "required": {
+            "default": true,
+            "title": "Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "SourceField",
+        "type": "object"
+      },
       "SpecPreviewRequest": {
         "properties": {
           "spec_content": {
@@ -11976,6 +12125,30 @@
             "title": "Kind",
             "type": "string"
           },
+          "signature_scheme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WebhookSignatureScheme"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How a sender signs for a type verified by configurable HMAC; null otherwise."
+          },
+          "trigger_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The webhook trigger that owns this source; null for a source added directly.",
+            "title": "Trigger Id"
+          },
           "webhook_id": {
             "anyOf": [
               {
@@ -12021,6 +12194,82 @@
           "created_at"
         ],
         "title": "StreamSourceResponse",
+        "type": "object"
+      },
+      "StreamSourceTypeResponse": {
+        "properties": {
+          "config": {
+            "description": "Plain settings.",
+            "items": {
+              "$ref": "#/components/schemas/SourceField"
+            },
+            "title": "Config",
+            "type": "array"
+          },
+          "credentials": {
+            "description": "Secret fields: write-only, held by reference, never returned.",
+            "items": {
+              "$ref": "#/components/schemas/SourceField"
+            },
+            "title": "Credentials",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "events": {
+            "description": "Event kinds it can deliver.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "icon": {
+            "title": "Icon",
+            "type": "string"
+          },
+          "icon_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Url"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "verification": {
+            "description": "signature: the body is signed with the secret; secret_token: the sender repeats a token; api_lookup: the notified object is read back from the API.",
+            "enum": [
+              "signature",
+              "secret_token",
+              "api_lookup"
+            ],
+            "title": "Verification",
+            "type": "string"
+          },
+          "webhook_type": {
+            "title": "Webhook Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "webhook_type",
+          "name",
+          "description",
+          "icon",
+          "verification",
+          "credentials",
+          "icon_url"
+        ],
+        "title": "StreamSourceTypeResponse",
         "type": "object"
       },
       "SubjectSetBody": {
@@ -14911,6 +15160,160 @@
           "prefix"
         ],
         "title": "WebhookSignatureScheme",
+        "type": "object"
+      },
+      "WebhookSourceCreate": {
+        "additionalProperties": false,
+        "description": "A webhook source on an existing stream, with no trigger.",
+        "properties": {
+          "config": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The type's plain settings, e.g. shop_id.",
+            "title": "Config",
+            "type": "object"
+          },
+          "credentials": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/SecretRef"
+                }
+              ]
+            },
+            "description": "The type's credential fields, each a value or {secret_id} of a workspace secret. Write-only: never returned.",
+            "title": "Credentials",
+            "type": "object"
+          },
+          "webhook_type": {
+            "description": "One of GET /streams/source-types.",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Webhook Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "webhook_type"
+        ],
+        "title": "WebhookSourceCreate",
+        "type": "object"
+      },
+      "WebhookSourceCreated": {
+        "properties": {
+          "allowed_methods": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Methods"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "signature_scheme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WebhookSignatureScheme"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How a sender signs for a type verified by configurable HMAC; null otherwise."
+          },
+          "signing_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Issued when the type's signing secret is optional and none was given; shown this once only.",
+            "title": "Signing Secret"
+          },
+          "trigger_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The webhook trigger that owns this source; null for a source added directly.",
+            "title": "Trigger Id"
+          },
+          "webhook_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook Id"
+          },
+          "webhook_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook Type"
+          },
+          "webhook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public URL senders post to; null for non-webhook sources.",
+            "title": "Webhook Url"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "webhook_id",
+          "webhook_type",
+          "webhook_url",
+          "allowed_methods",
+          "created_at"
+        ],
+        "title": "WebhookSourceCreated",
         "type": "object"
       },
       "WorkspaceDirectoryResponse": {
@@ -33058,8 +33461,67 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/streams/source-types": {
+      "get": {
+        "description": "Webhook types a source can be, with the credentials and settings each needs.",
+        "operationId": "list_source_types_v1_streams_source_types_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StreamSourceTypeResponse"
+                  },
+                  "title": "Response List Source Types V1 Streams Source Types Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Source Types",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/streams/{stream_id}": {
       "delete": {
+        "description": "Refused (409) while a live webhook trigger's source feeds the stream.",
         "operationId": "delete_stream_v1_streams__stream_id__delete",
         "parameters": [
           {
@@ -33493,6 +33955,145 @@
           }
         ],
         "summary": "List Sources",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      },
+      "post": {
+        "description": "Add a webhook source to the stream, with no trigger.\n\nCredentials are write-only and held by reference; the response carries the\npublic URL to give the sender.",
+        "operationId": "create_source_v1_streams__stream_id__sources_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookSourceCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookSourceCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Source",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/{stream_id}/sources/{source_id}": {
+      "delete": {
+        "description": "Remove a webhook source; one a live trigger owns is refused with 409.",
+        "operationId": "delete_source_v1_streams__stream_id__sources__source_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Source",
         "tags": [
           "v1",
           "protected",

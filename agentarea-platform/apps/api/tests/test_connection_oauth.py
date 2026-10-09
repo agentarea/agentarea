@@ -27,7 +27,21 @@ def _oauth_profile() -> dict:
         "scopes": ["metrika:read"],
         "authorization_scheme": "OAuth",
         "client_auth_method": "client_secret_post",
+        "authorize_params": {"access_type": "offline", "prompt": "consent"},
     }
+
+
+@pytest.mark.parametrize(
+    "authorize_params",
+    [{"scope": "everything"}, {"redirect_uri": "https://evil.test"}, {"access_type": 1}, "x"],
+)
+def test_catalog_oauth_rejects_authorize_params_the_flow_owns(monkeypatch, authorize_params):
+    monkeypatch.setattr(connection_oauth, "validate_url", lambda *_args, **_kwargs: None)
+    profile = _oauth_profile()
+    profile["authorize_params"] = authorize_params
+
+    with pytest.raises(HTTPException, match="Invalid OAuth authorize params"):
+        connection_oauth._oauth_profile({"oauth": profile})
 
 
 def test_catalog_oauth_rejects_unreserved_platform_secret_reference(monkeypatch):
@@ -179,6 +193,8 @@ async def test_connect_uses_requested_credential_source_without_secret_in_state(
     assert query["redirect_uri"] == ["https://api.agentarea.ru/v1/connections/oauth/callback"]
     assert query["scope"] == ["metrika:read"]
     assert query["code_challenge_method"] == ["S256"]
+    assert query["access_type"] == ["offline"]
+    assert query["prompt"] == ["consent"]
 
     auth_kwargs = auth_create.await_args.kwargs
     assert auth_kwargs["allow_managed_credentials"] is True
@@ -422,9 +438,7 @@ async def test_preflight_404s_for_an_unknown_item(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_preflight_rejects_an_item_that_is_not_an_api_connection(monkeypatch):
-    _patch_catalog(
-        monkeypatch, _metrica_item(connection_type="mcp"), _ACTIVE_MCP_REGISTRY, None
-    )
+    _patch_catalog(monkeypatch, _metrica_item(connection_type="mcp"), _ACTIVE_MCP_REGISTRY, None)
 
     with pytest.raises(HTTPException) as exc_info:
         await connection_oauth.preflight_catalog_item(uuid4(), _user(), AsyncMock())

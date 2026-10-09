@@ -4296,6 +4296,12 @@ export type OpenApiConnectionCreate = {
      */
     custom_headers?: Array<HeaderInput> | null;
     /**
+     * Custom Query Params
+     *
+     * Query parameters attached to every request, e.g. an API key the upstream takes as '?api_key='. Secret values are stored encrypted in the secret manager.
+     */
+    custom_query_params?: Array<QueryParamInput> | null;
+    /**
      * Description
      *
      * Optional human-readable summary of what this API exposes.
@@ -4353,6 +4359,10 @@ export type OpenApiConnectionResponse = {
      */
     custom_headers?: Array<HeaderOutput> | null;
     /**
+     * Custom Query Params
+     */
+    custom_query_params?: Array<QueryParamOutput> | null;
+    /**
      * Description
      */
     description?: string | null;
@@ -4407,6 +4417,12 @@ export type OpenApiConnectionUpdate = {
      * Replace the full custom-header set. Pass [] to clear all. Secret values are stored encrypted in the secret manager.
      */
     custom_headers?: Array<HeaderInput> | null;
+    /**
+     * Custom Query Params
+     *
+     * Replace the full query-parameter set. Pass [] to clear all. An empty value for a secret parameter keeps the one already stored under that name.
+     */
+    custom_query_params?: Array<QueryParamInput> | null;
     /**
      * Description
      */
@@ -5495,6 +5511,54 @@ export type ProviderSpecWithModelsResponse = {
     updated_at: string;
 };
 /**
+ * QueryParamInput
+ *
+ * One query parameter sent with every request of an OpenAPI connection.
+ *
+ * A secret value (an API key the upstream takes as ``?api_key=``) is stored
+ * encrypted in the secret manager and never returned. A configured parameter
+ * wins over a same-named one the agent passes.
+ */
+export type QueryParamInput = {
+    /**
+     * Name
+     *
+     * Query parameter name. Allowed characters: letters, digits, '-', '_', '.', '[', ']'.
+     */
+    name: string;
+    /**
+     * Secret
+     *
+     * Store the value encrypted and never return it. Set false for plain values.
+     */
+    secret?: boolean;
+    /**
+     * Value
+     *
+     * Parameter value, URL-encoded when sent. On update, an empty value for a secret parameter keeps the value already stored under that name.
+     */
+    value?: string;
+};
+/**
+ * QueryParamOutput
+ *
+ * Query parameter metadata returned in API responses (secret values are masked).
+ */
+export type QueryParamOutput = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Secret
+     */
+    secret: boolean;
+    /**
+     * Value
+     */
+    value?: string | null;
+};
+/**
  * RegistryCreate
  */
 export type RegistryCreate = {
@@ -6122,6 +6186,17 @@ export type SecretOwner = {
     type: string;
 };
 /**
+ * SecretRef
+ *
+ * A workspace secret named instead of its value; the value stays where it is.
+ */
+export type SecretRef = {
+    /**
+     * Secret Id
+     */
+    secret_id: string;
+};
+/**
  * SecretResponse
  *
  * A secret's metadata. The value is never part of this.
@@ -6496,6 +6571,27 @@ export type SkippedModelResponse = {
     model_name: string;
 };
 /**
+ * SourceField
+ */
+export type SourceField = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Placeholder
+     */
+    placeholder?: string;
+    /**
+     * Required
+     */
+    required?: boolean;
+};
+/**
  * SpecPreviewRequest
  */
 export type SpecPreviewRequest = {
@@ -6723,6 +6819,16 @@ export type StreamSourceResponse = {
      */
     kind: string;
     /**
+     * How a sender signs for a type verified by configurable HMAC; null otherwise.
+     */
+    signature_scheme?: WebhookSignatureScheme | null;
+    /**
+     * Trigger Id
+     *
+     * The webhook trigger that owns this source; null for a source added directly.
+     */
+    trigger_id?: string | null;
+    /**
      * Webhook Id
      */
     webhook_id: string | null;
@@ -6736,6 +6842,55 @@ export type StreamSourceResponse = {
      * Public URL senders post to; null for non-webhook sources.
      */
     webhook_url: string | null;
+};
+/**
+ * StreamSourceTypeResponse
+ */
+export type StreamSourceTypeResponse = {
+    /**
+     * Config
+     *
+     * Plain settings.
+     */
+    config?: Array<SourceField>;
+    /**
+     * Credentials
+     *
+     * Secret fields: write-only, held by reference, never returned.
+     */
+    credentials: Array<SourceField>;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Events
+     *
+     * Event kinds it can deliver.
+     */
+    events?: Array<string>;
+    /**
+     * Icon
+     */
+    icon: string;
+    /**
+     * Icon Url
+     */
+    icon_url: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Verification
+     *
+     * signature: the body is signed with the secret; secret_token: the sender repeats a token; api_lookup: the notified object is read back from the API.
+     */
+    verification: 'signature' | 'secret_token' | 'api_lookup';
+    /**
+     * Webhook Type
+     */
+    webhook_type: string;
 };
 /**
  * SubjectSetBody
@@ -8360,6 +8515,86 @@ export type WebhookSignatureScheme = {
      * Text before the hex digest in the header; often empty.
      */
     prefix: string;
+};
+/**
+ * WebhookSourceCreate
+ *
+ * A webhook source on an existing stream, with no trigger.
+ */
+export type WebhookSourceCreate = {
+    /**
+     * Config
+     *
+     * The type's plain settings, e.g. shop_id.
+     */
+    config?: {
+        [key: string]: string;
+    };
+    /**
+     * Credentials
+     *
+     * The type's credential fields, each a value or {secret_id} of a workspace secret. Write-only: never returned.
+     */
+    credentials?: {
+        [key: string]: string | SecretRef;
+    };
+    /**
+     * Webhook Type
+     *
+     * One of GET /streams/source-types.
+     */
+    webhook_type: string;
+};
+/**
+ * WebhookSourceCreated
+ */
+export type WebhookSourceCreated = {
+    /**
+     * Allowed Methods
+     */
+    allowed_methods: Array<string> | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * How a sender signs for a type verified by configurable HMAC; null otherwise.
+     */
+    signature_scheme?: WebhookSignatureScheme | null;
+    /**
+     * Signing Secret
+     *
+     * Issued when the type's signing secret is optional and none was given; shown this once only.
+     */
+    signing_secret?: string | null;
+    /**
+     * Trigger Id
+     *
+     * The webhook trigger that owns this source; null for a source added directly.
+     */
+    trigger_id?: string | null;
+    /**
+     * Webhook Id
+     */
+    webhook_id: string | null;
+    /**
+     * Webhook Type
+     */
+    webhook_type: string | null;
+    /**
+     * Webhook Url
+     *
+     * Public URL senders post to; null for non-webhook sources.
+     */
+    webhook_url: string | null;
 };
 /**
  * WorkspaceDirectoryResponse
@@ -15316,6 +15551,28 @@ export type CreateStreamV1StreamsPostResponses = {
     201: StreamResponse;
 };
 export type CreateStreamV1StreamsPostResponse = CreateStreamV1StreamsPostResponses[keyof CreateStreamV1StreamsPostResponses];
+export type ListSourceTypesV1StreamsSourceTypesGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/source-types';
+};
+export type ListSourceTypesV1StreamsSourceTypesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListSourceTypesV1StreamsSourceTypesGetError = ListSourceTypesV1StreamsSourceTypesGetErrors[keyof ListSourceTypesV1StreamsSourceTypesGetErrors];
+export type ListSourceTypesV1StreamsSourceTypesGetResponses = {
+    /**
+     * Response List Source Types V1 Streams Source Types Get
+     *
+     * Successful Response
+     */
+    200: Array<StreamSourceTypeResponse>;
+};
+export type ListSourceTypesV1StreamsSourceTypesGetResponse = ListSourceTypesV1StreamsSourceTypesGetResponses[keyof ListSourceTypesV1StreamsSourceTypesGetResponses];
 export type DeleteStreamV1StreamsStreamIdDeleteData = {
     body?: never;
     path: {
@@ -15489,6 +15746,60 @@ export type ListSourcesV1StreamsStreamIdSourcesGetResponses = {
     200: Array<StreamSourceResponse>;
 };
 export type ListSourcesV1StreamsStreamIdSourcesGetResponse = ListSourcesV1StreamsStreamIdSourcesGetResponses[keyof ListSourcesV1StreamsStreamIdSourcesGetResponses];
+export type CreateSourceV1StreamsStreamIdSourcesPostData = {
+    body: WebhookSourceCreate;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/sources';
+};
+export type CreateSourceV1StreamsStreamIdSourcesPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateSourceV1StreamsStreamIdSourcesPostError = CreateSourceV1StreamsStreamIdSourcesPostErrors[keyof CreateSourceV1StreamsStreamIdSourcesPostErrors];
+export type CreateSourceV1StreamsStreamIdSourcesPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: WebhookSourceCreated;
+};
+export type CreateSourceV1StreamsStreamIdSourcesPostResponse = CreateSourceV1StreamsStreamIdSourcesPostResponses[keyof CreateSourceV1StreamsStreamIdSourcesPostResponses];
+export type DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+        /**
+         * Source Id
+         */
+        source_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/sources/{source_id}';
+};
+export type DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteError = DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteErrors[keyof DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteErrors];
+export type DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponse = DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponses[keyof DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteResponses];
 export type ListSubscriptionsV1StreamsStreamIdSubscriptionsGetData = {
     body?: never;
     path: {

@@ -20,6 +20,34 @@ class StreamCreate(BaseModel):
     )
 
 
+class SecretRef(BaseModel):
+    """A workspace secret named instead of its value; the value stays where it is."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    secret_id: UUID
+
+
+class WebhookSourceCreate(BaseModel):
+    """A webhook source on an existing stream, with no trigger."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    webhook_type: str = Field(
+        min_length=1, max_length=50, description="One of GET /streams/source-types."
+    )
+    credentials: dict[str, str | SecretRef] = Field(
+        default_factory=dict,
+        description=(
+            "The type's credential fields, each a value or {secret_id} of a workspace "
+            "secret. Write-only: never returned."
+        ),
+    )
+    config: dict[str, str] = Field(
+        default_factory=dict, description="The type's plain settings, e.g. shop_id."
+    )
+
+
 class ForwardCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

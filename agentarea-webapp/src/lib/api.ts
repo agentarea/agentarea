@@ -64,6 +64,7 @@ import type {
   UpdateWalletRequest,
   UploadPlanRequest,
   ValidateRequest,
+  WebhookSourceCreate,
 } from "@/api/client/types.gen";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { SPEC_IDS_PER_REQUEST, specIdBatches } from "@/lib/mcp/specIds";
@@ -1336,6 +1337,37 @@ export const listStreamSources = async (streamId: string) => {
     path: { stream_id: streamId },
   });
   return { data, error };
+};
+
+export const listStreamSourceTypes = async () => {
+  const result = await sdk.listSourceTypesV1StreamsSourceTypesGet({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
+export const createStreamSource = async (
+  streamId: string,
+  body: WebhookSourceCreate
+) => {
+  const { data, error } = await sdk.createSourceV1StreamsStreamIdSourcesPost({
+    client: serverClient,
+    path: { stream_id: streamId },
+    body,
+  });
+  return { data, error };
+};
+
+export const deleteStreamSource = async (
+  streamId: string,
+  sourceId: string
+) => {
+  const { error } =
+    await sdk.deleteSourceV1StreamsStreamIdSourcesSourceIdDelete({
+      client: serverClient,
+      path: { stream_id: streamId, source_id: sourceId },
+    });
+  return { error };
 };
 
 // Listing workspaces deliberately lives outside this client — see

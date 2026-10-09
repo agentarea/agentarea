@@ -90,8 +90,10 @@ class StreamSourceRepository(WorkspaceScopedRepository[StreamSourceORM]):
         validation_rules: dict[str, Any],
         webhook_config: dict[str, Any] | None,
         credential_key: UUID,
+        source_id: UUID | None = None,
     ) -> StreamSourceORM:
         source = StreamSourceORM(
+            id=source_id or uuid4(),
             stream_id=stream_id,
             kind=SourceKind.WEBHOOK.value,
             webhook_id=webhook_id,
@@ -114,6 +116,24 @@ class StreamSourceRepository(WorkspaceScopedRepository[StreamSourceORM]):
             )
         )
         return list(result.scalars().all())
+
+    async def get_in_stream(self, stream_id: UUID, source_id: UUID) -> StreamSourceORM | None:
+        result = await self.session.execute(
+            select(StreamSourceORM).where(
+                StreamSourceORM.id == source_id,
+                StreamSourceORM.stream_id == stream_id,
+                self._get_workspace_filter(),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def delete_in_workspace(self, source_id: UUID) -> bool:
+        result = await self.session.execute(
+            delete(StreamSourceORM).where(
+                StreamSourceORM.id == source_id, self._get_workspace_filter()
+            )
+        )
+        return cast(CursorResult[Any], result).rowcount == 1
 
     async def find_by_credential_key(self, key: UUID) -> list[StreamSourceORM]:
         result = await self.session.execute(
@@ -188,6 +208,17 @@ class StreamSubscriptionRepository(WorkspaceScopedRepository[StreamSubscriptionO
             )
         )
         return result.scalar_one_or_none()
+
+    async def live_trigger_ids(self, candidates: list[UUID]) -> set[UUID]:
+        """Which of ``candidates`` name a trigger that still has its subscription."""
+        if not candidates:
+            return set()
+        result = await self.session.execute(
+            select(StreamSubscriptionORM.trigger_id).where(
+                StreamSubscriptionORM.trigger_id.in_(candidates), self._get_workspace_filter()
+            )
+        )
+        return {t for t in result.scalars().all() if t is not None}
 
     async def list_for_triggers(self, trigger_ids: list[UUID]) -> list[StreamSubscriptionORM]:
         result = await self.session.execute(

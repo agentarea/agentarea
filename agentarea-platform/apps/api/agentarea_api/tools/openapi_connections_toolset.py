@@ -19,6 +19,7 @@ from agentarea_openapi.schemas.dto import (
     HeaderInput,
     OpenAPIConnectionCreate,
     OpenAPIConnectionUpdate,
+    QueryParamInput,
     UrlVariableInput,
 )
 
@@ -36,6 +37,10 @@ def _serialize(conn: Any) -> dict:
         "custom_headers": [
             {"name": h["name"], "secret": h.get("secret", False)}
             for h in (conn.custom_headers or [])
+        ],
+        "custom_query_params": [
+            {"name": p["name"], "secret": p.get("secret", False)}
+            for p in (conn.custom_query_params or [])
         ],
         "url_variables": conn.url_variables or [],
         "tools_count": len(conn.available_tools or []),
@@ -78,6 +83,7 @@ class OpenAPIConnectionsToolset(Toolset):
         spec_content_json: str = "",
         auth_config_id: str | None = None,
         custom_headers_json: str = "",
+        custom_query_params_json: str = "",
         url_variables_json: str = "",
     ) -> str:
         """Create a new OpenAPI connection.
@@ -97,6 +103,11 @@ class OpenAPIConnectionsToolset(Toolset):
             custom_headers_json: JSON-encoded array of ``{"name", "value"}``
                 header objects. Non-safe headers (e.g. Authorization) are stored
                 encrypted in the secret manager.
+            custom_query_params_json: JSON-encoded array of ``{"name", "value",
+                "secret"}`` objects sent in every request's query string, e.g. an
+                API key the upstream takes as ``?api_key=``. ``secret`` defaults to
+                true: the value is stored encrypted and never returned. A configured
+                parameter wins over a same-named one passed at call time.
             url_variables_json: JSON-encoded array of ``{"name", "value"}`` objects,
                 one per ``{name}`` placeholder in ``base_url``. Values are stored
                 encrypted in the secret manager and never returned.
@@ -105,6 +116,14 @@ class OpenAPIConnectionsToolset(Toolset):
         headers_raw = json.loads(custom_headers_json) if custom_headers_json else None
         custom_headers = (
             [HeaderInput.model_validate(h) for h in headers_raw] if headers_raw else None
+        )
+        query_params_raw = (
+            json.loads(custom_query_params_json) if custom_query_params_json else None
+        )
+        custom_query_params = (
+            [QueryParamInput.model_validate(p) for p in query_params_raw]
+            if query_params_raw
+            else None
         )
         url_variables_raw = json.loads(url_variables_json) if url_variables_json else None
         url_variables = (
@@ -121,6 +140,7 @@ class OpenAPIConnectionsToolset(Toolset):
             spec_content=spec_content,
             auth_config_id=UUID(auth_config_id) if auth_config_id else None,
             custom_headers=custom_headers,
+            custom_query_params=custom_query_params,
             url_variables=url_variables,
         )
 
@@ -192,11 +212,14 @@ class OpenAPIConnectionsToolset(Toolset):
         spec_content_json: str = "",
         auth_config_id: str | None = None,
         custom_headers_json: str = "",
+        custom_query_params_json: str = "",
         url_variables_json: str = "",
     ) -> str:
         """Update fields on an existing OpenAPI connection. Only fields explicitly
         set are written. ``custom_headers_json`` replaces the full header set;
-        pass ``[]`` to clear all. ``url_variables_json`` likewise replaces the
+        pass ``[]`` to clear all. ``custom_query_params_json`` replaces the full
+        ``[{"name", "value", "secret"}]`` query-parameter set the same way; an
+        empty value for a secret parameter keeps the stored one. ``url_variables_json`` likewise replaces the
         full ``[{"name", "value"}]`` set, which must match the ``{name}``
         placeholders in ``base_url``. Secret values are stored encrypted in the
         secret manager. Call ``discover_tools`` afterwards to refresh the
@@ -218,6 +241,11 @@ class OpenAPIConnectionsToolset(Toolset):
         if custom_headers_json:
             raw_headers = json.loads(custom_headers_json)
             patch["custom_headers"] = [HeaderInput.model_validate(h) for h in raw_headers]
+        if custom_query_params_json:
+            raw_query_params = json.loads(custom_query_params_json)
+            patch["custom_query_params"] = [
+                QueryParamInput.model_validate(p) for p in raw_query_params
+            ]
         if url_variables_json:
             raw_url_variables = json.loads(url_variables_json)
             patch["url_variables"] = [UrlVariableInput.model_validate(v) for v in raw_url_variables]
@@ -258,7 +286,7 @@ class OpenAPIConnectionsToolset(Toolset):
     @tool_method(effect="destructive")
     @requires("delete", "openapi_connection", id_param="connection_id")
     async def delete(self, connection_id: str) -> str:
-        """Delete an OpenAPI connection and its stored secret headers and URL variables."""
+        """Delete an OpenAPI connection and its stored secret headers, query params and URL variables."""
         async with platform_context() as (
             _session,
             _user_ctx,

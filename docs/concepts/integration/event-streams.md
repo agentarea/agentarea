@@ -5,10 +5,11 @@ description: "The append-only journal a workspace owns, and how subscriptions tu
 prerequisites:
   - /concepts/integration/triggers
 related:
+  - /guides/triggers/collect-events-into-a-stream
   - /guides/triggers/trigger-from-a-webhook
   - /concepts/execution/tasks
   - /concepts/execution/events
-last_updated: 2026-10-06
+last_updated: 2026-10-07
 ---
 
 An event stream is a named, ordered log that a workspace owns. A webhook
@@ -56,16 +57,36 @@ trigger used to keep on itself. Creating a `webhook` trigger auto-creates a
 stream, a source on it, and a subscription that fires the trigger; the trigger
 API stays the surface you edit, and `TriggerService` mirrors every change onto
 the source in the same request, so nothing about using a webhook trigger
-changed except where the row that remembers its configuration lives. There is
-no endpoint to attach a webhook source to a stream you created yourself — see
-[Limits](#limits).
+changed except where the row that remembers its configuration lives.
+
+**A source can also stand alone, with no trigger.**
+`POST /v1/workspaces/{workspace}/streams/{stream_id}/sources` adds a webhook
+source to any stream you may edit, of a type listed by
+`GET /v1/workspaces/{workspace}/streams/source-types` — `generic`, `github`,
+`sentry`, `yookassa`, `stripe`, `telegram`, `slack`, `email`. Each type
+declares the credentials its verifier needs, and creation without a required
+one is refused rather than accepted unsigned; `generic` and `email` take an
+optional signing secret and are issued one, shown once, when it is left out.
+A credential is held by reference: the source's entry in the secret store
+names the workspace secret you picked, the value is read from that secret at
+each delivery, and a `secret_references` row keeps the secret from being
+deleted while a source uses it. Sentry is verified by the HMAC-SHA256 of the
+body in `Sentry-Hook-Signature`. YooKassa signs nothing, so its notification
+is checked against its API instead: the notified object is read back with the
+shop's id and key, and the event is recorded only when YooKassa answers that
+object in the notified state; an unreachable API is a refusal, not a pass. A
+source a webhook trigger owns cannot be deleted on its own, and neither can a
+stream such a source still feeds — the trigger goes first. See [Collect events
+into a stream](/guides/triggers/collect-events-into-a-stream).
 
 **Appending is idempotent, size-capped, and quota-limited.**
 `StreamJournal.append` requires an `event_key` naming what makes this event
 new. For a webhook, that is the provider's own delivery id when it sends
 one — a header (GitHub's `X-GitHub-Delivery`, Linear's `linear-delivery`, or
 a generic `webhook-id` or `Idempotency-Key`) or, failing that, a body field
-(Stripe's `id`, Telegram's `update_id`, Slack's `event_id`) — and a fresh
+(Stripe's `id`, Telegram's `update_id`, Slack's `event_id`); Sentry's
+`Request-ID` header names its deliveries, and a YooKassa notification is keyed
+by its `event` and object `id` together — and a fresh
 `recv:<uuid4()>` otherwise, which is explicitly never recognized as a repeat. The key is enforced with `INSERT ... ON CONFLICT DO
 NOTHING` on `(stream_id, event_key)`, so a redelivered id lands once: the
 first attempt gets `sequence` and `appended: true`, every later one gets the
@@ -146,6 +167,15 @@ lost access gets the trigger stopped and marked `needs_owner` instead of a
 firing. Enabling it again clears the mark; the next event re-checks access and
 stops it again if that person still cannot run the agent.
 
+**An agent can read a stream instead of being fired by it.** The
+`agentarea/stream_events` toolset has one tool, `read_stream(stream,
+after_sequence, limit)`: events after a sequence, oldest first, with
+`next_after` to pass next time and `has_more` when another page is waiting. It
+resolves the stream by name or id inside the caller's workspace, checks `read`
+on it, strips credential headers from each event's data, and hands the data
+over under the same untrusted-data notice a trigger's event block carries. The
+platform keeps no cursor for it: the reader passes its own `after_sequence`.
+
 **Partitions are maintained ahead of need, not on demand.** `stream_events` is
 partitioned by day on `received_at`. A worker job keeps
 `AGENTAREA_EVENT_PARTITIONS_AHEAD` days created ahead of today, drops whole
@@ -175,11 +205,13 @@ request that is answered before anything has actually reacted to it.
 - **`platform` and `processor_output` streams are declared, not produced.**
   Every stream in this release is `kind: "custom"`. Nothing in stage 1
   publishes a platform-originated event into a stream.
-- **A stream you create yourself cannot get its own webhook.** There is no
-  endpoint to attach a source to an arbitrary stream; the only webhook source
-  stage 1 creates is the one a `webhook` trigger makes for itself. Routing
-  those deliveries into a stream of your own means a `forward` subscription
-  from the trigger's stream into it.
+- **`read_stream` keeps no cursor.** A scheduled agent that wants only what
+  is new must store `next_after` somewhere it can read next run, or read a
+  stream whose retention matches its period from the start.
+- **A YooKassa notification is believed only while the object is still in the
+  notified state.** A delivery that arrives after the object moved on (a
+  `payment.waiting_for_capture` read back as `succeeded`) is refused, and if
+  every retry of it comes that late, that earlier state is never recorded.
 - **Authorization is per stream, not per event or per subscriber.** Anyone who
   can read a stream sees every event in it, including ones no subscription of
   theirs would ever have matched. There is no audience scoping within a

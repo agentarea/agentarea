@@ -13,8 +13,9 @@ Every row the repository created has one, so a row that has it but lacks its
 creator's grants had them revoked, and an unattended run must not restore them.
 The manual script re-grants unconditionally, and someone reads its output.
 
-Run after every migration by ``agentarea-api reconcile`` (the chart's
-post-migration Job) and by ``scripts/20260923_reconcile_resource_authz.py``.
+Run by ``agentarea-api reconcile --repair-ownership``, which the chart's
+post-migration Job passes and the hourly catalog CronJob does not: a migration
+that inserts governed rows by SQL is the only thing that needs it.
 """
 
 from __future__ import annotations

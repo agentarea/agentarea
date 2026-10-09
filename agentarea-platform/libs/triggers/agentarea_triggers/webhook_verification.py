@@ -10,10 +10,13 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
+
+import httpx
 
 if TYPE_CHECKING:
     from .channels.secret_reader import SecretReader
@@ -333,6 +336,104 @@ class TelegramSecretTokenVerifier(SignatureVerifier):
         return ["x-telegram-bot-api-secret-token"]
 
 
+class SentrySignatureVerifier(SignatureVerifier):
+    """Sentry signs with ``Sentry-Hook-Signature: hex(HMAC-SHA256(client_secret, body))``."""
+
+    def verify(self, headers: dict[str, str], body: bytes | str, secret: str) -> bool:
+        signature = headers.get("sentry-hook-signature", "")
+        if not signature:
+            logger.warning("Missing Sentry signature header")
+            return False
+        body_bytes = body if isinstance(body, bytes) else body.encode("utf-8")
+        expected = hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, signature)
+
+    def get_required_headers(self) -> list[str]:
+        return ["sentry-hook-signature"]
+
+
+YOOKASSA_API_URL = "https://api.yookassa.ru/v3"
+_YOOKASSA_COLLECTIONS = {
+    "payment": "payments",
+    "refund": "refunds",
+    "payout": "payouts",
+    "deal": "deals",
+    "payment_method": "payment_methods",
+}
+_YOOKASSA_OBJECT_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# succeeded and canceled are terminal, so only an intermediate status can be overtaken.
+_YOOKASSA_LATER_STATUSES: dict[str, frozenset[str]] = {
+    "waiting_for_capture": frozenset({"succeeded", "canceled"}),
+}
+
+
+class YooKassaNotificationVerifier:
+    """YooKassa does not sign notifications, so the notified object is read back.
+
+    ``{"event": "payment.succeeded", "object": {"id": ...}}`` is believed only
+    when ``GET /payments/{id}`` with the shop's own key answers that object in
+    status ``succeeded``, or in a status the object can only reach after it (a
+    ``waiting_for_capture`` notification delivered once the payment was already
+    captured or canceled). Anyone can post to the URL; only YooKassa holds the
+    object in that state.
+    """
+
+    TIMEOUT_SECONDS = 10.0
+
+    def __init__(self, transport: httpx.AsyncBaseTransport | None = None):
+        self._transport = transport
+
+    async def verify(self, body: bytes | str, shop_id: str, secret_key: str) -> bool:
+        try:
+            notification = json.loads(body)
+        except ValueError:
+            logger.warning("YooKassa notification is not JSON", exc_info=True)
+            return False
+        if not isinstance(notification, dict) or not isinstance(notification.get("object"), dict):
+            logger.warning("YooKassa notification carries no object")
+            return False
+        resource, _, status = str(notification.get("event") or "").partition(".")
+        collection = _YOOKASSA_COLLECTIONS.get(resource)
+        object_id = str(notification["object"].get("id") or "")
+        if not collection or not status or not _YOOKASSA_OBJECT_ID.fullmatch(object_id):
+            logger.warning(
+                "YooKassa notification event=%r cannot be checked against the API",
+                notification.get("event"),
+            )
+            return False
+        try:
+            async with httpx.AsyncClient(
+                base_url=YOOKASSA_API_URL,
+                auth=(shop_id, secret_key),
+                timeout=self.TIMEOUT_SECONDS,
+                transport=self._transport,
+            ) as client:
+                response = await client.get(f"/{collection}/{object_id}")
+        except httpx.HTTPError:
+            logger.warning(
+                "YooKassa API unreachable while checking %s %s", resource, object_id, exc_info=True
+            )
+            return False
+        if response.status_code != 200:
+            logger.warning(
+                "YooKassa API answered %s for %s %s", response.status_code, resource, object_id
+            )
+            return False
+        try:
+            fetched = response.json()
+        except ValueError:
+            logger.warning("YooKassa API answered a body that is not JSON", exc_info=True)
+            return False
+        if not isinstance(fetched, dict) or fetched.get("id") != object_id:
+            return False
+        current = fetched.get("status")
+        return current == status or current in _YOOKASSA_LATER_STATUSES.get(status, frozenset())
+
+
+def yookassa_verifier() -> YooKassaNotificationVerifier:
+    return YooKassaNotificationVerifier()
+
+
 # Registry mapping WebhookType to its signature verifier
 VERIFIER_REGISTRY: dict[str, type[SignatureVerifier]] = {
     "slack": SlackSignatureVerifier,
@@ -341,8 +442,15 @@ VERIFIER_REGISTRY: dict[str, type[SignatureVerifier]] = {
     "linear": LinearSignatureVerifier,
     "stripe": StripeSignatureVerifier,
     "telegram": TelegramSecretTokenVerifier,
+    "sentry": SentrySignatureVerifier,
     # generic uses configurable HMAC
 }
+
+#: Types verified by reading the notified object back from the provider's API.
+FETCH_VERIFIED_TYPES: frozenset[str] = frozenset({"yookassa"})
+
+#: Types refused outright while no secret resolves.
+SECRET_REQUIRED_TYPES: frozenset[str] = frozenset(VERIFIER_REGISTRY) | FETCH_VERIFIED_TYPES
 
 #: Types whose triggers created before verification existed carry no secret.
 #: They keep being accepted (with a warning) instead of going dark on upgrade;
@@ -359,6 +467,8 @@ SIGNING_SECRET_KEYS: dict[str, str] = {
     "generic": "signing_secret",
     "email": "signing_secret",
     "telegram": "secret_token",
+    "sentry": "client_secret",
+    "yookassa": "secret_key",
 }
 
 
@@ -435,6 +545,16 @@ def generic_signature_scheme(validation_rules: dict | None) -> GenericSignatureS
         algorithm=rules.get("signature_algorithm", "sha256"),
         prefix=rules.get("signature_prefix", ""),
     )
+
+
+def hmac_signature_scheme(
+    webhook_type: str, validation_rules: dict | None
+) -> GenericSignatureScheme | None:
+    """The configurable HMAC scheme ``webhook_type`` is verified with; None if it has its own."""
+    wt = webhook_type.lower()
+    if wt not in SIGNING_SECRET_KEYS or wt in VERIFIER_REGISTRY or wt in FETCH_VERIFIED_TYPES:
+        return None
+    return generic_signature_scheme(validation_rules)
 
 
 def get_verifier(webhook_type: str) -> SignatureVerifier | None:
@@ -528,7 +648,45 @@ async def resolve_signing_secret(
         )
         raise SigningSecretUnavailableError(webhook_type)
     value = credentials.get(key)
+    if isinstance(value, dict):
+        return await _referenced_secret(value, webhook_type, secret_reader, trigger_id)
     return str(value) if value else None
+
+
+async def _referenced_secret(
+    reference: dict[str, Any], webhook_type: str, secret_reader: SecretReader, owner_id: Any
+) -> str:
+    """The value of the workspace secret a credential names instead of holding.
+
+    The platform writes ``{"secret_name": ...}`` here when a member picked a
+    workspace secret; the value stays in that secret and is read at use. A
+    reference that no longer resolves is not "no secret": the owner chose one.
+    """
+    name = reference.get("secret_name")
+    if not isinstance(name, str) or not name:
+        logger.warning(
+            "Stored credential reference for webhook_type=%s owner=%s names no secret",
+            webhook_type,
+            owner_id,
+        )
+        raise SigningSecretUnavailableError(webhook_type)
+    try:
+        value = await secret_reader.get_secret(name)
+    except Exception:
+        logger.exception(
+            "Failed to read the referenced secret for webhook_type=%s owner=%s",
+            webhook_type,
+            owner_id,
+        )
+        raise SigningSecretUnavailableError(webhook_type) from None
+    if not value:
+        logger.warning(
+            "The secret referenced by webhook_type=%s owner=%s has no value",
+            webhook_type,
+            owner_id,
+        )
+        raise SigningSecretUnavailableError(webhook_type)
+    return value
 
 
 #: What stands between a trigger's public webhook URL and anyone who learns it.
@@ -557,7 +715,7 @@ async def webhook_signing_status(
     wt = (webhook_type or "generic").lower()
     if wt not in SIGNING_SECRET_KEYS:
         return "unsupported"
-    if wt in VERIFIER_REGISTRY and wt not in LEGACY_UNSIGNED_TYPES:
+    if wt in SECRET_REQUIRED_TYPES and wt not in LEGACY_UNSIGNED_TYPES:
         return "signed"
     secret = await resolve_signing_secret(
         wt, validation_rules, webhook_config, secret_reader, trigger_id
@@ -581,7 +739,7 @@ async def verify_webhook_signature(
         False -- a signing secret is configured but verification failed
                  (bad signature, missing headers, or no raw body to verify),
                  OR the webhook type has a registered signature scheme
-                 (``VERIFIER_REGISTRY``) and no secret resolves at all — such
+                 (``SECRET_REQUIRED_TYPES``) and no secret resolves at all — such
                  a trigger is fail-closed rather than treated as unsigned —
                  OR the stored secret could not be read.
         None  -- no signing secret configured and no verification scheme is
@@ -617,7 +775,7 @@ async def verify_webhook_signature(
                 trigger_id,
             )
             return None
-        if wt in VERIFIER_REGISTRY:
+        if wt in SECRET_REQUIRED_TYPES:
             logger.warning(
                 "webhook_type=%s has a registered signature scheme but no signing "
                 "secret resolved; rejecting request (fail closed)",
@@ -631,6 +789,13 @@ async def verify_webhook_signature(
             "Signing secret configured for webhook_type=%s but no raw body to verify", wt
         )
         return False
+
+    if wt in FETCH_VERIFIED_TYPES:
+        shop_id = (validation_rules or {}).get("shop_id")
+        if not shop_id:
+            logger.warning("webhook_type=%s trigger_id=%s has no shop_id", wt, trigger_id)
+            return False
+        return await yookassa_verifier().verify(body, str(shop_id), secret)
 
     resolved = None if wt == "generic" else get_verifier(wt)
     if resolved is None:
