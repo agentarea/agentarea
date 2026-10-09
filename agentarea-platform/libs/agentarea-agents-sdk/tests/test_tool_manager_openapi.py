@@ -35,6 +35,7 @@ def _make_connection(name="my-api", spec_content=None):
         base_url="https://api.example.com",
         spec_content=spec_content or _MINIMAL_SPEC,
         custom_headers=[],
+        custom_query_params=[],
         auth_config_id=None,
     )
 

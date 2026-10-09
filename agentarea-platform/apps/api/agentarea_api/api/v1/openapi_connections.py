@@ -49,6 +49,7 @@ class OpenAPIConnectionResponse(BaseModel):
     url_variables: list[str] | None = None
     available_tools: list[OpenAPIToolResponse]
     status: str
+    last_dispatch: dict[str, Any] | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime
 

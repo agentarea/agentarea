@@ -2259,6 +2259,7 @@ export const zOpenApiConnectionResponse = z.object({
   custom_query_params: z.array(zQueryParamOutput).nullish(),
   description: z.string().nullish(),
   id: z.string().uuid(),
+  last_dispatch: z.record(z.unknown()).nullish(),
   name: z.string(),
   registry_item_id: z.string().uuid().nullish(),
   spec_url: z.string().nullish(),

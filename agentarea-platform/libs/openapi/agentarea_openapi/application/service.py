@@ -4,6 +4,7 @@ import json
 import logging
 import urllib.parse
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -89,6 +90,10 @@ def _url_variable_key(connection_id: str | UUID, variable_name: str) -> str:
 def _query_param_key(connection_id: str | UUID, param_name: str) -> str:
     """Build the secret manager key for a query parameter value."""
     return f"openapi:{connection_id}:query:{param_name}"
+
+
+def _configured_query_param_names(params: list[dict[str, Any]] | None) -> frozenset[str]:
+    return frozenset(p["name"] for p in params or [])
 
 
 def _is_safe_header(name: str) -> bool:
@@ -250,7 +255,9 @@ class OpenAPIConnectionService:
 
         available_tools: list[dict[str, Any]] = []
         if resolved_spec is not None:
-            available_tools = parse_openapi_spec(resolved_spec)
+            available_tools = parse_openapi_spec(
+                resolved_spec, _configured_query_param_names(processed_query_params)
+            )
 
         conn = await self._repo.create(
             id=conn_id,
@@ -371,7 +378,12 @@ class OpenAPIConnectionService:
         still_secret = {p["name"] for p in processed if p["secret"]}
         for name in stored_secrets - still_secret:
             await self._secret_manager.delete_secret(_query_param_key(conn.id, name))
-        await self._repo.update(str(conn.id), custom_query_params=processed)
+        changes: dict[str, Any] = {"custom_query_params": processed}
+        if conn.spec_content:
+            changes["available_tools"] = parse_openapi_spec(
+                conn.spec_content, _configured_query_param_names(processed)
+            )
+        await self._repo.update(str(conn.id), **changes)
 
     async def _delete_query_param_secrets(self, conn: OpenAPIConnection) -> None:
         for p in conn.custom_query_params or []:
@@ -481,6 +493,23 @@ class OpenAPIConnectionService:
             )
         return headers
 
+    async def record_dispatch(self, connection_id: UUID) -> None:
+        """Stamp the connection with its last successful call.
+
+        The call already happened, so a failed write is logged and never fails it.
+        """
+        try:
+            await self._repo.record_dispatch(
+                connection_id,
+                {"status": "succeeded", "at": datetime.now(UTC).isoformat(), "error": None},
+            )
+        except Exception:
+            logger.error(
+                "Failed to record the last call of OpenAPI connection %s",
+                connection_id,
+                exc_info=True,
+            )
+
     async def get_connection(self, connection_id: UUID) -> OpenAPIConnection | None:
         return await self._repo.get_by_id(str(connection_id))
 
@@ -585,7 +614,7 @@ class OpenAPIConnectionService:
         if not spec:
             spec = await self._fetch_spec(conn)
 
-        tools = parse_openapi_spec(spec)
+        tools = parse_openapi_spec(spec, _configured_query_param_names(conn.custom_query_params))
 
         await self._repo.update(str(conn.id), available_tools=tools, spec_content=spec)
 
