@@ -21,10 +21,7 @@ Dispatch by instance type:
 import asyncio
 import json
 import logging
-import os
 from typing import Any
-from urllib.parse import urlparse
-from urllib.request import getproxies_environment
 from uuid import UUID
 
 import httpx
@@ -46,7 +43,7 @@ from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_read_db_session
-from agentarea_common.utils.url_safety import OutboundPolicy
+from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
 from agentarea_common.workspaces.lookup import workspace_slug_for
 from agentarea_governance.application import GovernancePolicyResolver
 from agentarea_mcp.application.auth_service import MCPAuthService
@@ -62,7 +59,7 @@ from agentarea_mcp.infrastructure.repository import (
     MCPServerRepository,
 )
 from agentarea_mcp.transport_spec import instance_transport_spec
-from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
+from agentarea_openapi.application.url_validator import validate_url
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from mcp.shared.inbound import NAME_BEARING_METHODS, decode_header_value
@@ -304,74 +301,35 @@ async def _resolve_upstream_url(instance, server_spec) -> tuple[str, MCPTranspor
     return "", transport
 
 
-def _no_proxy_bypasses(host: str) -> bool:
-    """Whether ``NO_PROXY`` exempts this host, using the usual suffix rules."""
-    raw = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
-    host = host.lower().rstrip(".")
-    for entry in (e.strip().lower().lstrip(".").rstrip(".") for e in raw.split(",")):
-        if not entry:
-            continue
-        if entry == "*":
-            return True
-        if host == entry or host.endswith(f".{entry}"):
-            return True
-    return False
-
-
-def _egress_is_proxied(upstream_url: str) -> bool:
-    """Whether httpx will tunnel this URL through a forward proxy.
-
-    Mirrors httpx's own environment handling (``*_PROXY`` / ``NO_PROXY``) so the
-    decision matches what the transport will actually do.
-    """
-    parsed = urlparse(upstream_url)
-    proxies = getproxies_environment()
-    if parsed.scheme not in proxies and "all" not in proxies:
-        return False
-    return not _no_proxy_bypasses(parsed.hostname or "")
-
-
-def _guard_and_pin_upstream(
+def _guard_upstream(
     upstream_url: str, instance_type: MCPTransport, *, policy: OutboundPolicy
-) -> tuple[str | httpx.URL, str | None, dict | None]:
-    """SSRF chokepoint for outbound proxy requests.
+) -> None:
+    """SSRF pre-check for outbound proxy requests.
 
     Container/command upstreams are always the manager gateway, an
-    operator-configured address this process builds itself, so they pass through
-    unchanged. URL-type upstreams are user-controlled, so they are validated
-    against private/metadata ranges (unless ``policy`` admits them) and pinned to the
-    resolved IP to defeat DNS rebinding — the Host header and TLS SNI keep the
-    original hostname.
-
-    Pinning is skipped when egress goes through a forward proxy. httpcore sets
-    the TLS ``server_hostname`` of a CONNECT tunnel from the origin host and
-    never consults the ``sni_hostname`` extension, so a pinned IP would make
-    every https upstream fail certificate verification. The pin would also buy
-    nothing there: the proxy resolves the name itself, so it — not this process
-    — is where rebinding has to be contained.
-
-    Returns ``(request_target, host_header, extensions)``.
+    operator-configured address this process builds itself, so they pass
+    unchecked. URL-type upstreams are user-controlled, so they are validated
+    against private/metadata ranges (unless ``policy`` admits them) and answered
+    with a 400 here; ``_upstream_client`` vets the address it dials again.
 
     Raises:
         ValueError: If a URL-type upstream is not safe to fetch.
     """
-    if instance_type != MCPTransport.URL:
-        return upstream_url, None, None
+    if instance_type == MCPTransport.URL:
+        validate_url(upstream_url, policy=policy)
 
-    resolved_ips = validate_url(upstream_url, policy=policy)
-    if _egress_is_proxied(upstream_url):
-        return upstream_url, None, None
 
-    target = build_pinned_target(upstream_url, resolved_ips[0] if resolved_ips else None)
-    request_target = httpx.URL(
-        scheme=target.scheme,
-        host=target.host,
-        port=target.port,
-        path=target.path,
-        query=target.raw_query,
-    )
-    extensions = {"sni_hostname": target.original_host} if target.original_host else None
-    return request_target, target.original_host, extensions
+def _upstream_client(instance_type: MCPTransport, *, policy: OutboundPolicy) -> httpx.AsyncClient:
+    """The client for this upstream: the pinned one for a member's URL.
+
+    It resolves, vets and pins the address for each request, so a name cannot
+    rebind between the check and the connection, and hands a proxied request to
+    the proxy by name.
+    """
+    timeout = httpx.Timeout(connect=10, read=None, write=30, pool=10)
+    if instance_type == MCPTransport.URL:
+        return safe_async_client(policy=policy, timeout=timeout)
+    return httpx.AsyncClient(timeout=timeout)
 
 
 @binds_workspace
@@ -444,12 +402,11 @@ async def proxy_instance(
             detail="Instance has no resolvable upstream MCP URL",
         )
 
-    # SSRF guard: validate + pin user-controlled URL-type upstreams before any
-    # outbound request. Container/command upstreams are internal and pass through.
+    # SSRF guard: validate user-controlled URL-type upstreams before any outbound
+    # request. Container/command upstreams are internal and pass through.
+    policy = OutboundPolicy.from_env()
     try:
-        request_target, pinned_host, extensions = _guard_and_pin_upstream(
-            upstream_url, instance_type, policy=OutboundPolicy.from_env()
-        )
+        _guard_upstream(upstream_url, instance_type, policy=policy)
     except ValueError as exc:
         # Strip CR/LF from the user-controlled path param to prevent log forging.
         safe_instance_id = str(instance_id).replace("\r", "").replace("\n", "")
@@ -461,9 +418,6 @@ async def proxy_instance(
         ) from exc
 
     outbound_headers = _filter_inbound_headers(request.headers)
-    if pinned_host:
-        # Connect to the pinned IP but present the original hostname upstream.
-        outbound_headers.setdefault("Host", pinned_host)
     try:
         outbound_headers.update(await instance_service.outbound_headers(instance))
     except Exception as exc:
@@ -505,15 +459,14 @@ async def proxy_instance(
             return JSONResponse(status_code=400, content=exc.body)
     params = dict(request.query_params)
 
-    client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=None, write=30, pool=10))
+    client = _upstream_client(instance_type, policy=policy)
     try:
         upstream_req = client.build_request(
             request.method,
-            request_target,
+            upstream_url,
             content=body,
             params=params,
             headers=outbound_headers,
-            extensions=extensions or {},
         )
         upstream_resp = await client.send(upstream_req, stream=True)
         if instance_type in CONTAINER_TRANSPORTS:

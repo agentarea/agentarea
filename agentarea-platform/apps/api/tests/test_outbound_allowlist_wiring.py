@@ -7,9 +7,10 @@ was then refused on the tool call.
 
 import httpx
 import pytest
+from agentarea_api.api.v1 import bundles
 from agentarea_api.api.v1.bundles import fetch_bundle_source
-from agentarea_api.api.v1.mcp_proxy import _guard_and_pin_upstream
-from agentarea_common.utils.url_safety import OutboundPolicy
+from agentarea_api.api.v1.mcp_proxy import _guard_upstream
+from agentarea_common.utils.url_safety import OutboundPolicy, SafeOutboundTransport
 from agentarea_openapi.application.url_validator import validate_url
 
 LOCAL = OutboundPolicy(private_allowlist=("127.0.0.0/8",))
@@ -22,19 +23,24 @@ def test_the_openapi_validator_admits_an_allowlisted_private_address():
 
 
 def test_the_mcp_proxy_admits_an_allowlisted_upstream():
-    target, _host, _ext = _guard_and_pin_upstream("http://127.0.0.1:9000/mcp", "url", policy=LOCAL)
-
-    assert isinstance(target, httpx.URL)
-    assert target.host == "127.0.0.1"
+    _guard_upstream("http://127.0.0.1:9000/mcp", "url", policy=LOCAL)
+    with pytest.raises(ValueError, match="private/internal"):
+        _guard_upstream("http://10.0.0.5/mcp", "url", policy=LOCAL)
 
 
 @pytest.mark.asyncio
-async def test_a_bundle_on_an_allowlisted_address_is_fetched():
-    transport = httpx.MockTransport(lambda _req: httpx.Response(200, text="name: demo"))
+async def test_a_bundle_on_an_allowlisted_address_is_fetched(monkeypatch):
+    def client(*, policy, **kwargs):
+        inner = httpx.MockTransport(lambda _req: httpx.Response(200, text="name: demo"))
+        transport = SafeOutboundTransport(policy, inner=lambda proxy=None: inner)
+        return httpx.AsyncClient(transport=transport, **kwargs)
 
-    out = await fetch_bundle_source(
-        "http://127.0.0.1:8000/bundle.yaml", policy=LOCAL, transport=transport
-    )
+    for var in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+        monkeypatch.delenv(var, raising=False)
+        monkeypatch.delenv(var.lower(), raising=False)
+    monkeypatch.setattr(bundles, "safe_async_client", client)
+
+    out = await fetch_bundle_source("http://127.0.0.1:8000/bundle.yaml", policy=LOCAL)
 
     assert out == "name: demo"
 
