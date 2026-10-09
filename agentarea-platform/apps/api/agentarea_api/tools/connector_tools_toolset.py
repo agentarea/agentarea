@@ -333,7 +333,7 @@ class ConnectorToolsToolset(Toolset):
             except HTTPException as exc:
                 return json.dumps({"error": exc.detail})
 
-            action = await _connect_action(service, user_ctx, instance, probe=False)
+            action = await _connect_action(session, service, user_ctx, instance, probe=False)
             if action is not None:
                 return _action_required(instance, action)
 

@@ -100,6 +100,7 @@ def harness(monkeypatch):
     )
     service = MagicMock()
     service.needs_connecting = AsyncMock(return_value=False)
+    service.mcp_server_repository.get_server_by_id = AsyncMock(return_value=None)
     monkeypatch.setattr(mcp_service, "MCPServerInstanceService", lambda **_kwargs: service)
     state = SimpleNamespace(service=service, readable=None, instances=[])
 
