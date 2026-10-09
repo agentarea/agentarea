@@ -270,7 +270,10 @@ def test_a_missing_provider_spec_is_retried_rather_than_abandoned(monkeypatch):
 
     with pytest.raises(kopf.TemporaryError, match="openrouter"):
         handler.sync_provider_config(
-            {"providerKey": "openrouter", "name": "AgentArea"}, API_KEY, "kimi"
+            {"providerKey": "openrouter", "name": "AgentArea"},
+            API_KEY,
+            "kimi",
+            namespace="agentarea",
         )
 
 

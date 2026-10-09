@@ -126,7 +126,10 @@ def test_a_platform_provider_config_is_actually_written(handler, provider_spec):
     success for months while writing nothing.
     """
     config_id, model_count = handler.sync_provider_config(
-        _spec(provider_spec), api_key="gateway-token", cr_name="test-cr"  # pragma: allowlist secret
+        _spec(provider_spec),
+        api_key="gateway-token",  # pragma: allowlist secret
+        cr_name="test-cr",
+        namespace="agentarea",
     )
 
     assert model_count == 1
@@ -178,13 +181,18 @@ def test_reconciling_twice_updates_one_configuration(handler, provider_spec):
     it works once and then stops, long after the change that caused it.
     """
     config_id, _ = handler.sync_provider_config(
-        _spec(provider_spec), api_key="gateway-token", cr_name="test-cr"  # pragma: allowlist secret
+        _spec(provider_spec),
+        api_key="gateway-token",  # pragma: allowlist secret
+        cr_name="test-cr",
+        namespace="agentarea",
     )
 
     renamed = _spec(provider_spec) | {"name": "Renamed"}
     # The update branch writes tags too: taking "default" off in git takes it off.
     renamed["models"] = [renamed["models"][0] | {"tags": []}]
-    again, _ = handler.sync_provider_config(renamed, api_key="rotated-token", cr_name="test-cr")
+    again, _ = handler.sync_provider_config(
+        renamed, api_key="rotated-token", cr_name="test-cr", namespace="agentarea"  # pragma: allowlist secret
+    )
 
     assert again == config_id
     with handler.engine.begin() as conn:
@@ -210,3 +218,53 @@ def test_reconciling_twice_updates_one_configuration(handler, provider_spec):
             {"id": config_id},
         ).scalar()
         assert tags == []
+
+
+def test_reconciling_a_workspace_resource_again_updates_its_rows(handler, provider_spec):
+    """A workspace-scoped resource converges like a platform one (#708).
+
+    Its ids used to be generated, so every reconcile — create, update, the hourly
+    rediscovery timer, a restart — inserted another configuration, secret and model
+    instance. Against the real constraints, the second reconcile has to find and
+    update the first one's rows, rotating the key in place.
+    """
+    workspace_id = f"ws-{uuid.uuid4().hex[:8]}"
+    spec = _spec(provider_spec) | {"workspaceId": workspace_id}
+
+    config_id, _ = handler.sync_provider_config(
+        spec,
+        api_key="gateway-token",  # pragma: allowlist secret
+        cr_name="test-cr",
+        namespace="agentarea",
+    )
+    again, _ = handler.sync_provider_config(
+        spec | {"name": "Renamed"},
+        api_key="rotated-token",  # pragma: allowlist secret
+        cr_name="test-cr",
+        namespace="agentarea",
+    )
+
+    assert again == config_id
+    with handler.engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT name, managed_by, api_key_secret_id FROM provider_configs "
+                "WHERE workspace_id = :ws"
+            ),
+            {"ws": workspace_id},
+        ).fetchall()
+        assert len(rows) == 1, "a second reconcile created a second configuration"
+        assert rows[0].name == "Renamed"
+        assert rows[0].managed_by is None
+        secrets = conn.execute(
+            text("SELECT id FROM encrypted_secrets WHERE workspace_id = :ws"),
+            {"ws": workspace_id},
+        ).fetchall()
+        assert [s.id for s in secrets] == [rows[0].api_key_secret_id]
+        instances = conn.execute(
+            text("SELECT id FROM model_instances WHERE workspace_id = :ws"),
+            {"ws": workspace_id},
+        ).fetchall()
+        assert [str(i.id) for i in instances] == [
+            handler.workspace_instance_id(config_id, "test-model")
+        ]
