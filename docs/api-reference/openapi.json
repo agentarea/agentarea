@@ -1634,6 +1634,16 @@
         "title": "Body_upload_workspace_logo_v1_logo_put",
         "type": "object"
       },
+      "BudgetPeriod": {
+        "description": "Budget reset period.",
+        "enum": [
+          "execution",
+          "daily",
+          "monthly"
+        ],
+        "title": "BudgetPeriod",
+        "type": "string"
+      },
       "BudgetPolicy-Input": {
         "additionalProperties": false,
         "description": "Budget-related ceilings.",
@@ -3390,9 +3400,8 @@
             ]
           },
           "service_budget_period": {
-            "default": "execution",
-            "title": "Service Budget Period",
-            "type": "string"
+            "$ref": "#/components/schemas/BudgetPeriod",
+            "default": "execution"
           },
           "service_budget_usd": {
             "anyOf": [
@@ -3410,8 +3419,7 @@
             "title": "Service Budget Usd"
           },
           "wallet_type": {
-            "title": "Wallet Type",
-            "type": "string"
+            "$ref": "#/components/schemas/WalletType"
           },
           "x402_config": {
             "anyOf": [
@@ -14754,13 +14762,12 @@
           "service_budget_period": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/BudgetPeriod"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Service Budget Period"
+            ]
           },
           "service_budget_usd": {
             "anyOf": [
@@ -14786,24 +14793,22 @@
           "status": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/WalletStatus"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Status"
+            ]
           },
           "wallet_type": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/WalletType"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Wallet Type"
+            ]
           },
           "x402_config": {
             "anyOf": [
@@ -15173,6 +15178,25 @@
         ],
         "title": "WalletResponse",
         "type": "object"
+      },
+      "WalletStatus": {
+        "description": "Wallet operational status.",
+        "enum": [
+          "active",
+          "disabled"
+        ],
+        "title": "WalletStatus",
+        "type": "string"
+      },
+      "WalletType": {
+        "description": "Supported wallet types.",
+        "enum": [
+          "x402",
+          "mpp",
+          "dual"
+        ],
+        "title": "WalletType",
+        "type": "string"
       },
       "WebhookSignatureScheme": {
         "description": "How a sender signs requests to a generic webhook.",

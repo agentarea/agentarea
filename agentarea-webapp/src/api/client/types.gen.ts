@@ -912,6 +912,13 @@ export type BodyUploadWorkspaceLogoV1LogoPut = {
 };
 
 /**
+ * BudgetPeriod
+ *
+ * Budget reset period.
+ */
+export type BudgetPeriod = "execution" | "daily" | "monthly";
+
+/**
  * BudgetPolicy
  *
  * Budget-related ceilings.
@@ -1954,18 +1961,12 @@ export type CreateInvitationBody = {
 export type CreateWalletRequest = {
   credentials?: WalletCredentialsSchema | null;
   mpp_config?: MppConfigSchema | null;
-  /**
-   * Service Budget Period
-   */
-  service_budget_period?: string;
+  service_budget_period?: BudgetPeriod;
   /**
    * Service Budget Usd
    */
   service_budget_usd?: number | string;
-  /**
-   * Wallet Type
-   */
-  wallet_type: string;
+  wallet_type: WalletType;
   x402_config?: X402ConfigSchema | null;
 };
 
@@ -8595,22 +8596,13 @@ export type UpdateAllResponse = {
 export type UpdateWalletRequest = {
   credentials?: WalletCredentialsSchema | null;
   mpp_config?: MppConfigSchema | null;
-  /**
-   * Service Budget Period
-   */
-  service_budget_period?: string | null;
+  service_budget_period?: BudgetPeriod | null;
   /**
    * Service Budget Usd
    */
   service_budget_usd?: number | string | null;
-  /**
-   * Status
-   */
-  status?: string | null;
-  /**
-   * Wallet Type
-   */
-  wallet_type?: string | null;
+  status?: WalletStatus | null;
+  wallet_type?: WalletType | null;
   x402_config?: X402ConfigSchema | null;
 };
 
@@ -8841,6 +8833,20 @@ export type WalletResponse = {
     [key: string]: unknown;
   } | null;
 };
+
+/**
+ * WalletStatus
+ *
+ * Wallet operational status.
+ */
+export type WalletStatus = "active" | "disabled";
+
+/**
+ * WalletType
+ *
+ * Supported wallet types.
+ */
+export type WalletType = "x402" | "mpp" | "dual";
 
 /**
  * WebhookSignatureScheme

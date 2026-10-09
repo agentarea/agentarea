@@ -22,6 +22,7 @@ from agentarea_common.auth.route_authz import (
 from agentarea_common.base.pagination import MAX_PAGE
 from agentarea_common.money import ZERO, Money
 from agentarea_common.utils.types import NaiveUtcDatetime, UtcDatetime
+from agentarea_wallet.domain.enums import BudgetPeriod, WalletStatus, WalletType
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import AfterValidator, BaseModel, Field
 
@@ -80,22 +81,24 @@ class WalletCredentialsSchema(BaseModel):
 
 
 class CreateWalletRequest(BaseModel):
-    wallet_type: str  # "x402", "mpp", "dual"
+    wallet_type: WalletType
     x402_config: X402ConfigSchema | None = None
     mpp_config: MPPConfigSchema | None = None
     credentials: WalletCredentialsSchema | None = None
     service_budget_usd: Budget = Field(default=ZERO, ge=ZERO, lt=_BUDGET_CEILING)
-    service_budget_period: str = "execution"  # "execution", "daily", "monthly"
+    service_budget_period: BudgetPeriod = BudgetPeriod.EXECUTION
 
 
 class UpdateWalletRequest(BaseModel):
-    wallet_type: str | None = None
+    wallet_type: WalletType | None = None
     x402_config: X402ConfigSchema | None = None
     mpp_config: MPPConfigSchema | None = None
     credentials: WalletCredentialsSchema | None = None
     service_budget_usd: Budget | None = Field(default=None, ge=ZERO, lt=_BUDGET_CEILING)
-    service_budget_period: str | None = None
-    status: str | None = None
+    # An unknown period summed spend over all time; an unknown status dropped
+    # the wallet from the budget-exhausted view.
+    service_budget_period: BudgetPeriod | None = None
+    status: WalletStatus | None = None
 
 
 class FundWalletRequest(BaseModel):
