@@ -59,6 +59,22 @@ world, not "my company", and it has leaked data for that reason. Here it means
 any account on this platform installation. It is off by default and should
 read as such in the UI.
 
+## Principles (zero trust)
+
+- **Deny by default.** An agent nobody was granted is runnable by nobody.
+  Creating an agent writes exactly one binding: `invoker@User:<creator>`.
+- **Every right is an explicit, audited tuple.** No role implies invocation:
+  not `can_manage`, not workspace admin, not workspace membership. Each one is
+  a grant somebody wrote, and the PAP records who wrote it.
+- **Every request is decided.** Each message, call and firing goes through the
+  PDP; nothing caches a past allow. A revoked grant or link stops the next
+  message.
+- **Fail closed.** A graph outage, an unknown sender or an unparseable subject
+  is a deny, never a fallback to workspace scope.
+- **The door does not grant.** A channel, A2A or the web UI only identifies
+  the caller. What the caller may do depends on the agent's bindings, never on
+  which door they used.
+
 ## Scope
 
 **In:** the FGA relation for invocation; one PDP; converging the A2A, REST,
@@ -90,7 +106,7 @@ type resource
   relations
     ...
     define invoker: [User, User:*, Anonymous:*, Workspace#members]
-    define can_invoke: invoker or can_manage
+    define can_invoke: invoker
 ```
 
 - `User:<id>` — a specific person (`principals`).
@@ -98,8 +114,10 @@ type resource
 - `User:*` — `authenticated`.
 - `public` writes **both** `User:*` and `Anonymous:*`, so that an authenticated
   caller is never worse off than an anonymous one.
-- `can_manage` implies `can_invoke`: whoever can change the agent can run it,
-  and workspace admins keep their reach through `admin from workspace`.
+- Nothing implies `can_invoke`. Not `can_manage`, not `admin from workspace`.
+  An admin who wants to run an agent grants themselves `invoker`, which is a
+  write the PAP audits. That keeps every right to run an agent an explicit,
+  visible tuple instead of a consequence of another role.
 
 Seeing an agent and running it are separate bits, as with GCP's `viewer` and
 `run.invoker`. A member can list an agent restricted to three people without
@@ -141,7 +159,7 @@ Order:
 4. Deny. A graph outage denies; it never falls back to workspace scope.
 
 The decision carries the matched level (`public`, `authenticated`,
-`workspace`, `principal`, `manager`, `agent-key`) so audit and the deny UX can
+`workspace`, `principal`, `agent-key`) so audit and the deny UX can
 say why.
 
 The verb constants in `A2APermissions` (`a2a_auth.py:48-71`) collapse into the
@@ -331,24 +349,44 @@ member-picker and table components and get no component tests.
 
 ### 10. Migration
 
-**Agents.** Backfill `resource:<agent>#invoker@Workspace:<ws>#members` for every
-agent, and write it at agent creation. This reproduces today's
-`accessible_workspaces` rule exactly, so steps 1–3 of the plan change no
-behaviour. The ownership reconciler (`rebac/ownership_reconcile.py`, add-only)
-gains the binding, so a missed backfill row is repaired on the next
-post-migration Job.
+**New agents** get `invoker@User:<creator>` and nothing else (see
+Principles). Agent creation writes it next to the existing ownership tuples in
+`_record_graph_ownership`, so it shares their rollback-on-failure.
+
+**Existing agents** are runnable by every member today. Deny-by-default
+applied retroactively would break every member who uses an agent they did not
+create. The backfill therefore writes grants that are explicit and visible but
+start from what is actually used:
+
+- **Proposed (least privilege from observed use).** For each agent, write
+  `invoker@User:<id>` for its creator and for every user who started a task on
+  it in the last 90 days (`tasks.user_id`), comparable to AWS IAM Access
+  Analyzer generating a policy from activity. Each tuple is recorded in the
+  audit log as `agent_access.grant` with `granted_by=migration`.
+- **Alternative (preserve exactly).** Write `invoker@Workspace:<ws>#members`
+  for each agent, marked "granted by migration — review" in the Access UI.
+  Nothing breaks, but the whole workspace keeps access until someone removes
+  the binding.
+
+Either way, the ownership reconciler (`rebac/ownership_reconcile.py`, add-only)
+writes the creator's binding where it is missing. It never re-adds a binding
+somebody removed.
 
 **Existing Telegram bots** answer anyone today. Making their agents `public`
 would preserve that, but it would also open those agents to anonymous A2A, which
-nobody chose. Instead:
+nobody chose.
 
-- Each existing channel trigger gets `legacy_open_senders = true`. The channel
-  PEP honours it by treating unknown senders as anonymous and admitting them
-  with the creator as sponsor, which is today's behaviour.
-- The trigger page shows a banner: "This bot answers anyone. Choose who can use
-  the agent." Choosing any level clears the flag.
-- New triggers never get the flag.
-- The flag is removed one minor release later.
+- **Proposed (zero trust).** After the upgrade, an existing bot admits only
+  senders the PDP admits. Unknown senders get the "link your account" reply
+  from §8. Before the release, trigger owners are told in the UI and in the
+  release notes, and the trigger page shows which recent senders would now be
+  refused.
+- **Alternative (grace period).** Each existing channel trigger gets
+  `legacy_open_senders = true` for one minor release. The channel PEP honours
+  it by treating unknown senders as anonymous and admitting them with the
+  creator as sponsor, which is today's behaviour. The trigger page shows "This
+  bot answers anyone. Choose who can use the agent", and choosing any level
+  clears the flag. New triggers never get the flag.
 
 **Alternative considered.** A conditional `Anonymous:*` binding scoped to a
 channel, using an OpenFGA condition. It is cleaner in the graph, but it makes
@@ -357,7 +395,8 @@ away from.
 
 ## Plan of record (phases)
 
-1. **Graph and PDP, no behaviour change.**
+1. **Graph and PDP.** Existing agents keep the access the backfill grants;
+   new agents are creator-only from this phase on.
    - `invoker` / `can_invoke`, the `Anonymous` type and the backfill.
    - `authorize_agent_invocation` backed by FGA.
    - `execute` → `can_invoke`.
@@ -371,15 +410,15 @@ away from.
    - Run-as-sender.
    - The routing key.
    - The deny UX and `is_bot`.
-4. **Legacy bots and the other channels.** The legacy flag and banner; Slack
+4. **Existing bots and the other channels.** The existing-bot cut-over; Slack
    (`team_id` + `user`), Discord and email senders on the same table.
 5. **Later.** Groups, the external-contact principal, the agent run principal,
    and delegation as a PEP.
 
 ## Open questions
 
-1. **Default for new agents:** `workspace` (proposed, today's behaviour) or
-   `principals` with only the creator?
+1. **Backfill for existing agents:** grants from observed use (proposed), or
+   one `workspace#members` binding per agent, marked for review?
 2. **`authenticated` on the hosted service:** offer it behind the constraint,
    or hide it there and offer it only on self-hosted installs?
 3. **Public sponsor:** the trigger creator for phase 1 (proposed), or wait for
@@ -388,8 +427,8 @@ away from.
    default?
 5. **Admin-asserted links:** valid immediately (proposed, audited and revocable)
    or only after the person confirms in the bot?
-6. **Existing bots:** the legacy flag for one release (proposed), or force a
-   choice on upgrade?
+6. **Existing bots:** refuse unknown senders on upgrade (proposed), or a grace
+   flag for one release?
 
 ## Related
 
