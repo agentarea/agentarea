@@ -977,6 +977,41 @@ def _sample_webhook_trigger_data():
     }
 
 
+class TestExecuteTrigger:
+    """POST /v1/workspaces/acme/triggers/{id}/execute -- the answer is the execution's outcome."""
+
+    def test_an_execution_that_failed_is_not_reported_as_success(
+        self, client, mock_trigger_service
+    ):
+        trigger_id = uuid4()
+        mock_trigger_service.execute_trigger.return_value = MagicMock(
+            id=uuid4(),
+            task_id=None,
+            status=ExecutionStatus.FAILED,
+            error_message="Trigger has no task text",
+        )
+
+        response = client.post(f"/v1/workspaces/acme/triggers/{trigger_id}/execute", json={})
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["status"] == "failed"
+        assert body["reason"] == "Trigger has no task text"
+        assert body["task_id"] is None
+
+    def test_an_execution_that_started_a_task_is_success(self, client, mock_trigger_service):
+        task_id = uuid4()
+        mock_trigger_service.execute_trigger.return_value = MagicMock(
+            id=uuid4(), task_id=task_id, status=ExecutionStatus.SUCCESS, error_message=None
+        )
+
+        response = client.post(f"/v1/workspaces/acme/triggers/{uuid4()}/execute", json={})
+
+        body = response.json()
+        assert body["status"] == "success"
+        assert body["task_id"] == str(task_id)
+
+
 class TestRunTriggerNow:
     """POST /v1/workspaces/acme/triggers/{id}/run -- firing a trigger once by hand."""
 
