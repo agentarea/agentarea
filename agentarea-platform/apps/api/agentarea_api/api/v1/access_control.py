@@ -35,7 +35,7 @@ from agentarea_common.auth import (
 from agentarea_common.auth import (
     assert_workspace_admin as _assert_workspace_admin,
 )
-from agentarea_common.auth.route_authz import enforced_in_handler
+from agentarea_common.auth.route_authz import enforced_in_handler, requires_user_session
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
@@ -627,7 +627,8 @@ async def list_relationships(
     "/relationships",
     status_code=201,
     dependencies=[
-        enforced_in_handler("workspace admin, asserted before any graph or database read")
+        requires_user_session("grant access"),
+        enforced_in_handler("workspace admin, asserted before any graph or database read"),
     ],
 )
 async def create_relationship(
@@ -659,7 +660,8 @@ async def create_relationship(
     "/relationships",
     status_code=204,
     dependencies=[
-        enforced_in_handler("workspace admin, asserted before any graph or database read")
+        requires_user_session("revoke access"),
+        enforced_in_handler("workspace admin, asserted before any graph or database read"),
     ],
 )
 async def delete_relationship(

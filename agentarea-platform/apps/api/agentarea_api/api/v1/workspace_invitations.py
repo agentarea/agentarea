@@ -23,6 +23,7 @@ from agentarea_common.auth.identity_directory import (
 )
 from agentarea_common.auth.route_authz import (
     enforced_in_handler,
+    requires_user_session,
     requires_workspace_admin,
     unrestricted,
 )
@@ -307,7 +308,7 @@ principal_router = APIRouter(tags=["workspace-invitations"])
     "/invitations",
     response_model=InvitationCreatedResponse,
     status_code=201,
-    dependencies=[requires_workspace_admin()],
+    dependencies=[requires_user_session("invite members"), requires_workspace_admin()],
 )
 async def create_invitation(
     body: CreateInvitationBody,
@@ -364,7 +365,7 @@ async def list_invitations(
 @router.delete(
     "/invitations/{invitation_id}",
     status_code=204,
-    dependencies=[requires_workspace_admin()],
+    dependencies=[requires_user_session("revoke invitations"), requires_workspace_admin()],
 )
 async def revoke_invitation(
     invitation_id: UUID,
@@ -519,7 +520,10 @@ async def list_members(
             "description": "Membership ended; graph access is still being revoked",
         }
     },
-    dependencies=[enforced_in_handler("owner-only, enforced by MembershipService.remove")],
+    dependencies=[
+        requires_user_session("remove members"),
+        enforced_in_handler("owner-only, enforced by MembershipService.remove"),
+    ],
 )
 async def remove_member(
     user_id: Annotated[str, Path(min_length=1, max_length=255)],

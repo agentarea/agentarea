@@ -21,7 +21,7 @@ from fastapi import Depends, Request, params
 from fastapi.exceptions import RequestValidationError
 
 from .authorization import assert_workspace_admin
-from .dependencies import UserContextDep
+from .dependencies import UserContextDep, ensure_user_session
 from .permission import require_permission
 
 AUTHZ_ATTR = "__route_authz__"
@@ -76,6 +76,21 @@ def requires_workspace_admin() -> params.Depends:
         await assert_workspace_admin(user_context)
 
     setattr(_check, AUTHZ_ATTR, {"action": "administer", "resource_type": "workspace"})
+    return Depends(_check)
+
+
+def requires_user_session(action: str) -> params.Depends:
+    """Refuse an API key; the action needs a signed-in user.
+
+    Not an authorization decision of its own: it narrows the route's marker
+    (``requires_workspace_admin()``, ``enforced_in_handler`` ...) to callers
+    that are not keys, for actions that hand out or take away access. See
+    :func:`~agentarea_common.auth.dependencies.ensure_user_session`.
+    """
+
+    async def _check(user_context: UserContextDep) -> None:
+        ensure_user_session(user_context, action)
+
     return Depends(_check)
 
 
