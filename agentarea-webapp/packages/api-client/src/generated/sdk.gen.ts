@@ -1781,6 +1781,11 @@ export const moveWorkspaceFileV1FilesMovePost = <ThrowOnError extends boolean = 
  * Restore Workspace File
  *
  * Move an archived file back to the path it was archived from.
+ *
+ * A file that has taken that path since is archived first, as a delete would,
+ * and its trash path comes back as ``archived_current`` — a restore never
+ * destroys anything. A path a write could not take (a file among its parents,
+ * a folder at it) is a 409.
  */
 export const restoreWorkspaceFileV1FilesRestoreFilePathPost = <ThrowOnError extends boolean = false>(options: Options<RestoreWorkspaceFileV1FilesRestoreFilePathPostData, ThrowOnError>): RequestResult<RestoreWorkspaceFileV1FilesRestoreFilePathPostResponses, RestoreWorkspaceFileV1FilesRestoreFilePathPostErrors, ThrowOnError> => (options.client ?? client).post<RestoreWorkspaceFileV1FilesRestoreFilePathPostResponses, RestoreWorkspaceFileV1FilesRestoreFilePathPostErrors, ThrowOnError>({
     security: [{

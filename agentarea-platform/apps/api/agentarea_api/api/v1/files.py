@@ -157,6 +157,13 @@ class ArchivedFileResponse(BaseModel):
 class RestoredFileResponse(BaseModel):
     path: str
     restored_from: str
+    archived_current: str | None = Field(
+        default=None,
+        description=(
+            "Trash path of the file that occupied `path` and was archived to make room for "
+            "the restore; null when the path was free."
+        ),
+    )
 
 
 class ArtifactEventResponse(BaseModel):
@@ -472,7 +479,13 @@ async def restore_workspace_file(
     file_path: str,
     user_context: UserContextDep,
 ) -> RestoredFileResponse:
-    """Move an archived file back to the path it was archived from."""
+    """Move an archived file back to the path it was archived from.
+
+    A file that has taken that path since is archived first, as a delete would,
+    and its trash path comes back as ``archived_current`` — a restore never
+    destroys anything. A path a write could not take (a file among its parents,
+    a folder at it) is a 409.
+    """
     clean = file_path.lstrip("/")
     if not clean.startswith(TRASH_PREFIX):
         raise HTTPException(status_code=400, detail="Not an archived file")
@@ -481,10 +494,16 @@ async def restore_workspace_file(
         actor=ArtifactActor(user_id=user_context.user_id),
     )
     try:
-        original = await svc.restore(user_context.workspace_id, clean)
+        restored = await svc.restore(user_context.workspace_id, clean)
     except (FileNotFoundError, InvalidArtifactPathError):
         raise HTTPException(status_code=404, detail="File not found") from None
-    return RestoredFileResponse(path=original, restored_from=clean)
+    except WorkspaceConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return RestoredFileResponse(
+        path=restored.path,
+        restored_from=restored.restored_from,
+        archived_current=restored.archived_current,
+    )
 
 
 @router.get(

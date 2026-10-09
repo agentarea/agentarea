@@ -101,6 +101,16 @@ class ArtifactObject:
 
 
 @dataclass(frozen=True)
+class RestoredArtifact:
+    """Where a restore put a file back, and where the file it displaced went."""
+
+    path: str
+    restored_from: str
+    # Trash path of the file that occupied ``path`` before the restore; ``None`` when it was free.
+    archived_current: str | None = None
+
+
+@dataclass(frozen=True)
 class PresignedPut:
     url: str
     headers: dict[str, str]
@@ -401,23 +411,59 @@ class ArtifactService:
         await self._record(workspace_id, clean, ACTION_ARCHIVED)
         return archived_path
 
-    async def restore(self, workspace_id: str, archived_path: str) -> str:
-        """Move an archived file back to the path it was archived from and return that path.
+    async def restore(self, workspace_id: str, archived_path: str) -> RestoredArtifact:
+        """Move an archived file back to the path it was archived from.
+
+        Restoring never destroys anything. A file that has taken the original
+        path since is archived first, exactly as a delete would archive it, and
+        its trash path is returned as ``archived_current``. The original path
+        must still be one a file can occupy — no file among its parents and no
+        folder at it — or ``WorkspaceConflictError`` is raised before anything
+        moves. A folder marker (``.trash/{timestamp}/dir/``) comes back as a
+        folder marker.
 
         The file already lived there, so the path is held to the key bound only:
         a file archived before the write bound existed must still come back.
         """
+        # Imported here: both modules import this one.
+        from .workspace import WorkspaceConflictError
+        from .workspace_writes import ensure_no_file_ancestors, ensure_writable_file
+
         clean = archived_path.lstrip("/")
         # .trash/{timestamp}/{original path} — drop the two-segment archive header.
         parts = PurePosixPath(clean).parts if clean.startswith(TRASH_PREFIX) else ()
         original = "/".join(parts[2:])
         if not original:
             raise InvalidArtifactPathError(f"not an archived path: {archived_path!r}")
+        if clean.endswith("/"):
+            original = f"{original}/"
         if not await self.exists(workspace_id, clean):
             raise FileNotFoundError(clean)
+
+        if original.endswith("/"):
+            folder = original.removesuffix("/")
+            await ensure_no_file_ancestors(self, workspace_id, folder)
+            if await self.exists(workspace_id, folder):
+                raise WorkspaceConflictError(f"A file already exists at {folder!r}")
+        else:
+            await ensure_writable_file(self, workspace_id, original)
+
+        archived_current: str | None = None
+        if await self.exists(workspace_id, original):
+            archived_current = await self.archive(workspace_id, original)
+            logger.info(
+                "Restore archived the file at %s to %s before restoring %s (workspace=%s)",
+                original,
+                archived_current,
+                clean,
+                workspace_id,
+            )
+
         await self._copy_object(self._key(workspace_id, clean), self._key(workspace_id, original))
         await self.delete(workspace_id, clean)
-        return original
+        return RestoredArtifact(
+            path=original, restored_from=clean, archived_current=archived_current
+        )
 
     async def list(
         self,

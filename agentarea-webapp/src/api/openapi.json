@@ -10703,6 +10703,18 @@
       },
       "RestoredFileResponse": {
         "properties": {
+          "archived_current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Trash path of the file that occupied `path` and was archived to make room for the restore; null when the path was free.",
+            "title": "Archived Current"
+          },
           "path": {
             "title": "Path",
             "type": "string"
@@ -22524,7 +22536,7 @@
     },
     "/v1/workspaces/{workspace}/files/restore/{file_path}": {
       "post": {
-        "description": "Move an archived file back to the path it was archived from.",
+        "description": "Move an archived file back to the path it was archived from.\n\nA file that has taken that path since is archived first, as a delete would,\nand its trash path comes back as ``archived_current`` \u2014 a restore never\ndestroys anything. A path a write could not take (a file among its parents,\na folder at it) is a 409.",
         "operationId": "restore_workspace_file_v1_files_restore__file_path__post",
         "parameters": [
           {
