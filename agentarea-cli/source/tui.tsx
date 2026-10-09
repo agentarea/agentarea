@@ -3,6 +3,7 @@ import {Box, Text} from 'ink';
 import {logger} from './utils/logger.js';
 import {apiClient} from './services/apiClient.js';
 import {tokenStorage} from './utils/storage.js';
+import {getApiBaseUrl} from './services/apiRuntime.js';
 import {AuthToken} from './commands/authToken.js';
 import {InteractiveCLI} from './components/InteractiveCLI.js';
 
@@ -37,8 +38,8 @@ export default function TUI({token: cliToken}: TUIProps) {
 					return;
 				}
 
-				// Try to load from storage
-				const storedToken = await tokenStorage.getToken();
+				// Try to load from storage — only a token issued for this API's host
+				const storedToken = await tokenStorage.getTokenFor(getApiBaseUrl());
 				if (storedToken) {
 					setLoadedToken(storedToken.accessToken);
 					setLoading(false);

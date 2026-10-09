@@ -4,6 +4,7 @@ import {tokenStorage} from '../utils/storage.js';
 import {apiClient} from './apiClient.js';
 import {logger} from '../utils/logger.js';
 import {ConfigError} from '../utils/error.js';
+import {normalizeApiUrl} from '../utils/apiUrl.js';
 
 let overrideToken: string | undefined;
 let overrideWorkspace: string | undefined;
@@ -23,7 +24,7 @@ export async function resolveToken(): Promise<string | undefined> {
 	}
 
 	try {
-		const stored = await tokenStorage.getToken();
+		const stored = await tokenStorage.getTokenFor(getApiBaseUrl());
 		return stored?.accessToken;
 	} catch {
 		return undefined;
@@ -49,8 +50,26 @@ export function requireWorkspace(): string {
 	return slug;
 }
 
+/**
+ * Make `--api-url` the API for this run. It outranks AGENTAREA_API_URL and the
+ * saved `apiBaseUrl`, which apply when the flag is absent.
+ */
+export function applyApiUrlFlag(apiUrl: string | undefined): void {
+	if (!apiUrl) {
+		return;
+	}
+
+	process.env['AGENTAREA_API_URL'] = apiUrl;
+	configManager.reinitialize();
+	apiClient.reinitialize();
+}
+
+/**
+ * The one API URL every command uses: `--api-url` (via applyApiUrlFlag), else
+ * AGENTAREA_API_URL, else the saved config, else http://localhost:8000.
+ */
 export function getApiBaseUrl(): string {
-	return configManager.get().apiBaseUrl;
+	return normalizeApiUrl(configManager.get().apiBaseUrl);
 }
 
 export function initApiClient(): void {

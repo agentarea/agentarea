@@ -1,9 +1,14 @@
 import {logger} from './logger.js';
 import {StorageError} from './error.js';
 import {type AuthToken} from '../types/index.js';
+import {apiOrigin, isSameApiOrigin, normalizeApiUrl} from './apiUrl.js';
 
 const SERVICE_NAME = 'agentarea-cli';
 const TOKEN_KEY = 'auth_token';
+
+// Hosts already told why the stored sign-in was withheld, so one command does
+// not print the hint once per request.
+const warnedHosts = new Set<string>();
 
 // Load the native OS keychain addon lazily on first token operation rather than
 // at module import. The dependency is still required — a broken load throws
@@ -48,6 +53,34 @@ export class TokenStorage {
 				`Failed to retrieve authentication token: ${error}`,
 			);
 		}
+	}
+
+	/**
+	 * The stored token, but only when it was issued for *apiUrl*'s origin. A
+	 * token for another host (or one with no recorded host) is withheld, with a
+	 * hint to sign in to the host the command targets.
+	 */
+	async getTokenFor(apiUrl: string): Promise<AuthToken | null> {
+		const token = await this.getToken();
+		if (!token) {
+			return null;
+		}
+
+		if (isSameApiOrigin(token.apiUrl, apiUrl)) {
+			return token;
+		}
+
+		const target = normalizeApiUrl(apiUrl);
+		if (!warnedHosts.has(target)) {
+			warnedHosts.add(target);
+			logger.warn(
+				`Not sending the stored sign-in to ${target}: it was issued for ${
+					apiOrigin(token.apiUrl) ?? 'an unrecorded host'
+				}. Run \`agentarea login --api-url=${target}\` to sign in to that host.`,
+			);
+		}
+
+		return null;
 	}
 
 	async clearToken(): Promise<void> {

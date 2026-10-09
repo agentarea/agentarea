@@ -35,7 +35,9 @@ const cli = meow(
 
 	Options
 	  --token         Bearer token (or use AGENTAREA_TOKEN env var)
-	  --api-url       API server URL (default: http://localhost:8000)
+	  --api-url       API server URL (default: AGENTAREA_API_URL, else the saved
+	                  config, else http://localhost:8000). A stored sign-in is
+	                  only sent to the host it was issued for
 	  --workspace     Workspace slug for this command (overrides the one saved
 	                  with 'workspace use')
 	  --name          Client name to resolve or create (default: <host>-<harness>)
@@ -67,9 +69,10 @@ const cli = meow(
 			token: {
 				type: 'string',
 			},
+			// No default here: an absent flag falls through to AGENTAREA_API_URL
+			// and the saved config (apiRuntime.getApiBaseUrl).
 			apiUrl: {
 				type: 'string',
-				default: 'http://localhost:8000',
 			},
 			workspace: {
 				type: 'string',
