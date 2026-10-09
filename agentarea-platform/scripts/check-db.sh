@@ -84,7 +84,9 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     secret_references row, whose RESTRICT key refuses deleting that secret.
 #   OpenAPI dispatch: a connection's last call is stamped by a bare UPDATE that
 #     stays in the caller's workspace and leaves updated_at alone.
-PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL OPENAPI_TEST_DATABASE_URL)
+#   MCP dispatch stamps: the stamp writer runs with no workspace bound under the
+#     ENFORCE tenant scope and still stamps every workspace's instances.
+PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL OPENAPI_TEST_DATABASE_URL MCP_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
   libs/llm/tests/test_provider_secret_lifecycle_db.py
@@ -121,6 +123,7 @@ PY_SUITES=(
   libs/triggers/tests/test_webhook_stream_reuse_db.py
   libs/triggers/tests/test_trigger_event_context_db.py
   libs/openapi/tests/test_record_dispatch_db.py
+  libs/mcp/tests/test_dispatch_stamps_db.py
 )
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, the secret

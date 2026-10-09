@@ -10,10 +10,7 @@ This module provides Temporal activities for agent execution:
 6. **LLM Integration**: Uses real LLM services for model resolution and execution
 """
 
-import asyncio
 import logging
-
-from prometheus_client import Counter
 
 from ..interfaces import ActivityDependencies
 from .agent.config import make_config_activities
@@ -25,59 +22,6 @@ from .agent.task_state import make_task_state_activities
 from .agent.tools import make_tools_activities
 
 logger = logging.getLogger(__name__)
-
-
-def _make_counter(name: str, doc: str, labels: list[str] | None = None):
-    return Counter(name, doc, labels or [])
-
-
-# Prometheus counter for MCP dispatch telemetry
-_mcp_last_dispatch_dropped_total = _make_counter(
-    "mcp_last_dispatch_dropped_total",
-    "Number of last_dispatch writes dropped due to full queue",
-)
-
-
-# Bounded queue for fire-and-forget last_dispatch persistence (instance_id, payload)
-_last_dispatch_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
-
-
-async def _flush_last_dispatch_loop(get_session) -> None:
-    """Batch-flush last_dispatch updates every 500ms or 100 entries, whichever first."""
-    from agentarea_common.base.tenant_scope import unscoped
-    from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
-    from sqlalchemy import update
-
-    while True:
-        await asyncio.sleep(0.5)
-        batch: list[tuple[str, dict]] = []
-        try:
-            while len(batch) < 100:
-                batch.append(_last_dispatch_queue.get_nowait())
-        except asyncio.QueueEmpty:
-            pass
-        if not batch:
-            continue
-        try:
-            async with get_session() as session:
-                with unscoped("the batch holds dispatch stamps queued by runs in any workspace"):
-                    for instance_id, payload in batch:
-                        await session.execute(
-                            update(MCPServerInstance)
-                            .where(MCPServerInstance.id == instance_id)
-                            .values(last_dispatch=payload)
-                        )
-                await session.commit()
-        except Exception:
-            logger.error("last_dispatch flush failed", exc_info=True)
-
-
-def _enqueue_last_dispatch(instance_id: str, payload: dict) -> None:
-    """Push a last_dispatch update onto the bounded queue. Never blocks."""
-    try:
-        _last_dispatch_queue.put_nowait((instance_id, payload))
-    except asyncio.QueueFull:
-        _mcp_last_dispatch_dropped_total.inc()
 
 
 def make_agent_activities(dependencies: ActivityDependencies):
