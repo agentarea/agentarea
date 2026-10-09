@@ -47,6 +47,7 @@ from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.base.pagination import MAX_PAGE
 from agentarea_common.config.database import get_db_session
 from agentarea_common.utils.types import NaiveUtcDatetime, UtcDatetime, utc_isoformat
+from agentarea_streams.domain import TriggerSubscriptionNotFoundError
 from agentarea_streams.domain.models import TriggerBinding
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
@@ -880,7 +881,9 @@ async def update_trigger(
         The updated trigger.
 
     Raises:
-        HTTPException: If trigger not found or validation fails.
+        HTTPException: If trigger not found or validation fails; 409 if the
+            update changes the filter of a trigger that has no stream
+            subscription left.
     """
     try:
         credentials = await resolve_channel_credentials(
@@ -961,6 +964,8 @@ async def update_trigger(
     except TriggerValidationError as e:
         logger.warning(f"Trigger validation failed: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except TriggerSubscriptionNotFoundError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except Exception as e:
         logger.exception(f"Failed to update trigger {trigger_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e

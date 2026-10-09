@@ -20,7 +20,11 @@ from agentarea_common.config.database import get_db_session
 from agentarea_common.di.container import get_container
 from agentarea_common.rebac.openfga_client import OpenFGAClient
 from agentarea_secrets.catalog_service import SecretAccessDeniedError
-from agentarea_streams.domain import SourceFedByTriggerError, StreamSourceNotFoundError
+from agentarea_streams.domain import (
+    SourceFedByTriggerError,
+    StreamInUseError,
+    StreamSourceNotFoundError,
+)
 from httpx import ASGITransport, AsyncClient
 
 NOW = datetime(2026, 10, 6, 12, 0, tzinfo=UTC)
@@ -314,16 +318,36 @@ async def test_deleting_an_unknown_source_is_a_404(client, env, graph):
 
 async def test_a_stream_a_live_trigger_feeds_cannot_be_deleted(client, env, graph):
     trigger_id = uuid4()
-    env.service.triggers_feeding.return_value = {uuid4(): trigger_id}
+    env.service.ensure_deletable.side_effect = SourceFedByTriggerError(
+        f"Stream {STREAM}", [trigger_id]
+    )
     response = await client.delete(BASE)
     assert response.status_code == 409
     assert str(trigger_id) in response.json()["detail"]
     env.service.delete_stream.assert_not_called()
 
 
+async def test_a_stream_triggers_or_forwards_depend_on_is_refused_before_anything_is_released(
+    client, env, graph
+):
+    trigger_id, forward_id, source_stream = uuid4(), uuid4(), uuid4()
+    env.service.ensure_deletable.side_effect = StreamInUseError(
+        STREAM, [trigger_id], [(forward_id, source_stream)]
+    )
+    env.service.list_sources.return_value = [_row("github")]
+    response = await client.delete(BASE)
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert str(trigger_id) in detail
+    assert "delete the trigger" in detail
+    assert str(forward_id) in detail
+    assert str(source_stream) in detail
+    assert env.secrets.deleted == []
+    env.service.delete_stream.assert_not_called()
+
+
 async def test_deleting_a_stream_releases_its_standalone_sources(client, env, graph):
     standalone, owned = _row("github"), _row("github", trigger_id=uuid4())
-    env.service.triggers_feeding.return_value = {}
     env.service.list_sources.return_value = [standalone, owned]
     response = await client.delete(BASE)
     assert response.status_code == 204, response.text
