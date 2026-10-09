@@ -506,7 +506,10 @@ async def list_events(
     dependencies=[requires("read", "stream", id_param="stream_id")],
 )
 async def get_event(stream_id: UUID, sequence: int, service: StreamServiceDep):
-    events = await service.list_events(stream_id, after=sequence - 1, before=None, limit=1)
+    try:
+        events = await service.list_events(stream_id, after=sequence - 1, before=None, limit=1)
+    except StreamNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
     if not events or events[0].sequence != sequence:
         raise HTTPException(status_code=404, detail=f"Event {sequence} not found in stream")
     (response,) = await _events_with_outcomes(service, stream_id, events)

@@ -19,6 +19,7 @@ from agentarea_streams.domain import (
     JournaledEvent,
     NotAForwardError,
     StreamNameTakenError,
+    StreamNotFoundError,
     SubscriptionNotFoundError,
 )
 from httpx import ASGITransport, AsyncClient
@@ -208,6 +209,14 @@ async def test_removing_an_unknown_subscription_is_a_404(client, service, graph)
     response = await client.delete(
         f"/v1/workspaces/acme/streams/{stream}/subscriptions/{subscription}"
     )
+    assert response.status_code == 404, response.text
+
+
+@pytest.mark.asyncio
+async def test_an_event_of_a_stream_that_is_gone_is_a_404(client, service, graph):
+    stream = uuid4()
+    service.list_events.side_effect = StreamNotFoundError(stream)
+    response = await client.get(f"/v1/workspaces/acme/streams/{stream}/events/1")
     assert response.status_code == 404, response.text
 
 
