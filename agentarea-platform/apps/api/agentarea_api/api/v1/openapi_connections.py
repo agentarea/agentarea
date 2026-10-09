@@ -12,7 +12,7 @@ from agentarea_common.base.pagination import MAX_OFFSET
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_openapi.application.service import OpenAPIConnectionService, fetch_and_parse_spec
-from agentarea_openapi.application.spec_parser import parse_openapi_spec
+from agentarea_openapi.application.spec_parser import openapi_spec_info, parse_openapi_spec
 from agentarea_openapi.application.url_validator import validate_url
 from agentarea_openapi.schemas.dto import (
     HeaderOutput,
@@ -151,18 +151,12 @@ async def preview_spec(
 
     try:
         tools = parse_openapi_spec(spec)
+        info = openapi_spec_info(spec)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    info = spec.get("info", {})
-    servers = spec.get("servers", [])
-    base_url = servers[0].get("url") if servers else None
-
     return SpecPreviewResponse(
-        title=info.get("title"),
-        description=info.get("description"),
-        base_url=base_url,
-        version=info.get("version"),
+        **info,
         tools=[{"name": t["name"], "description": t.get("description", "")} for t in tools],
     )
 

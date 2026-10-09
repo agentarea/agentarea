@@ -141,6 +141,40 @@ async def test_client_endpoint_binds_context_to_clients_workspace():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("client_id", ["not-a-uuid", "1" * 40, CLIENT_ID + "x"])
+async def test_a_client_id_that_is_not_a_uuid_names_no_client(client_id):
+    """A malformed path segment is an unknown client, never a database error.
+
+    Sent to the database, it failed the uuid cast, and the DataError text -- the
+    SQL and the caller's workspace list -- came back as the JSON-RPC error.
+    """
+    principal = UserPrincipal(user_id="user-1", accessible_workspaces=["ws-1"])
+    repository_class = MagicMock()
+    repository_class.locate_workspace = AsyncMock(side_effect=AssertionError("queried"))
+    database = MagicMock()
+    database.read_session = MagicMock(side_effect=AssertionError("opened a session"))
+
+    with (
+        patch(
+            "agentarea_agents_sdk.mcp_server.auth.get_mcp_user_context",
+            return_value=principal,
+        ),
+        patch("agentarea_common.config.database.get_database", return_value=database),
+        patch(
+            "agentarea_common.infrastructure.connection_manager.get_connection_manager",
+            return_value=MagicMock(get_event_broker=AsyncMock(return_value=MagicMock())),
+        ),
+        patch(
+            "agentarea_mcp.infrastructure.client_repository.ClientRepository",
+            new=repository_class,
+        ),
+    ):
+        assert await _resolve_client_scope(client_id) is None
+
+    repository_class.locate_workspace.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_client_resource_lookup_is_limited_to_accessible_workspaces():
     """The cross-workspace resource lookup must use only the resolved allowlist."""
     import agentarea_agents.domain.skill_models  # noqa: F401
