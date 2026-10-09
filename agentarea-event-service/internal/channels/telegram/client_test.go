@@ -9,7 +9,7 @@ import (
 )
 
 func TestGetUpdatesErrorOmitsBotToken(t *testing.T) {
-	const secret = "SUPERSECRETTOKEN"
+	const secret = "SUPERSECRETTOKEN" // pragma: allowlist secret
 	tests := []struct {
 		name  string
 		token string
