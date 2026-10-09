@@ -51,7 +51,11 @@ async def get_api_key_service(
 
 
 class APIKeyCreateRequest(BaseModel):
-    name: str = Field(description="Human-friendly label for this API key")
+    name: str = Field(
+        min_length=1,
+        max_length=255,
+        description="Human-friendly label for this API key",
+    )
     expires_in_days: int | None = Field(
         default=None,
         ge=1,
@@ -128,7 +132,10 @@ async def create_api_key(
         )
         base = APIKeyResponse.model_validate(record)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to create token: {exc}") from exc
+        # The exception can carry the INSERT and its parameters, token hash
+        # included: it goes to the log, never into the response.
+        logger.exception("Failed to create API key")
+        raise HTTPException(status_code=500, detail="Failed to create API key") from exc
     await audit.record(
         "api_key.create",
         "api_key",

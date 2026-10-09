@@ -1939,6 +1939,8 @@ export type ContinueTaskPayload = {
 export type CreateInvitationBody = {
     /**
      * Email
+     *
+     * Address the invitation is for; omit for an open link anyone can accept
      */
     email?: string | null;
     /**

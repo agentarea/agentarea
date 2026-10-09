@@ -65,6 +65,8 @@
           },
           "name": {
             "description": "Human-friendly label for this API key",
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           }
@@ -3363,12 +3365,15 @@
           "email": {
             "anyOf": [
               {
+                "maxLength": 320,
+                "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
+            "description": "Address the invitation is for; omit for an open link anyone can accept",
             "title": "Email"
           },
           "expires_in_days": {
@@ -17390,7 +17395,7 @@
     },
     "/v1/workspaces/{workspace}/access-control/relationships": {
       "delete": {
-        "description": "Revoke a resource-ownership relation from the configured graph backend.",
+        "description": "Revoke a resource-ownership relation from the configured graph backend.\n\nIdempotent: revoking a grant that is already gone answers 204 without\ntouching the graph or the audit trail.",
         "operationId": "delete_relationship_v1_access_control_relationships_delete",
         "parameters": [
           {
@@ -17513,7 +17518,7 @@
         ]
       },
       "post": {
-        "description": "Grant a resource-ownership relation via the configured graph backend.",
+        "description": "Grant a resource-ownership relation via the configured graph backend.\n\nIdempotent: a grant the subject already holds (also under a legacy alias\nsuch as ``viewers`` for ``reader``) succeeds without changing the graph,\nand is not audited again.",
         "operationId": "create_relationship_v1_access_control_relationships_post",
         "parameters": [
           {
@@ -25863,6 +25868,8 @@
             "name": "user_id",
             "required": true,
             "schema": {
+              "maxLength": 255,
+              "minLength": 1,
               "title": "User Id",
               "type": "string"
             }

@@ -83,6 +83,10 @@ class MembershipRemovalForbidden(MembershipRemovalRejected):
     """Only the owner removes other people; everyone else may only leave."""
 
 
+class MemberNotFound(MembershipRemovalRejected):
+    """The target holds no membership: no row and no graph tuple to remove."""
+
+
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
@@ -321,6 +325,13 @@ class WorkspaceMembershipService:
             raise MembershipRemovalForbidden("Only the workspace owner can remove other members.")
 
         member_ids = await list_workspace_member_ids(self.graph, workspace_id)
+        # Ending a membership that does not exist would still write an audit
+        # event and queue a graph revocation for an id nobody holds.
+        if (
+            target_user_id not in member_ids
+            and await self.membership_repo.get(workspace_id, target_user_id) is None
+        ):
+            raise MemberNotFound("No such member in this workspace.")
         if target_user_id in member_ids and len(member_ids) <= 1:
             raise LastMemberRemovalRejected(
                 "The last member cannot leave; the workspace would be unreachable."
