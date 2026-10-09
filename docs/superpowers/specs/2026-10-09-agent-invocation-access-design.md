@@ -1,4 +1,4 @@
-# Agent invocation access — design
+# Agent invocation access and messaging channels — design
 
 **Date:** 2026-10-09
 **Branch:** docs/agent-invocation-access
@@ -7,12 +7,12 @@
 ## Problem
 
 A Telegram bot attached to an agent answers anyone who finds it. Nothing on the
-inbound path looks at the sender. The Go poller and the Telegram webhook parser
-both carry `from.id` into the event, but no code reads it, and every run
-executes as `trigger.created_by`.
+inbound path looks at the sender: the Go poller and the webhook parser carry
+`from.id` into the event, no code reads it, and every run executes as
+`trigger.created_by`.
 
-That is one symptom of a wider gap: there is no single answer to "may this
-principal run this agent". Today five different things decide it:
+That is one symptom of a wider gap. Five different things decide "may this
+principal run this agent" today:
 
 | Entry point | Who decides | Where |
 |---|---|---|
@@ -22,475 +22,420 @@ principal run this agent". Today five different things decide it:
 | Cron, poller-inbound, IMAP triggers | nobody | `trigger_service.py:1435`, `channels/inbound_subscriber.py:207` |
 | Agent-to-agent delegation | nobody | `agent_delegation_tool.py:101` |
 
-In the graph, "execute" is the same bit as "read", and every workspace member
-inherits it through the root project. So "may see the agent" and "may run it"
-cannot be told apart.
+Two related gaps:
 
-The run identity has the same blur. A run executes as a user — whoever fired it,
-otherwise the trigger's creator. That user is at once the one who asked, the
-identity the run's tools act as, and the subject governance resolves policy
-for. A Telegram stranger therefore runs with the trigger creator's identity and
-policy.
+- **Execute and read are the same bit.** In the graph, "execute" is the same
+  bit as "read", and every workspace member inherits it through the root
+  project.
+- **A run has no identity of its own.** It executes "as" a user, who is at once
+  the requester, the identity tools act as, and the governance subject.
+
+Channels have gaps of their own:
+
+- **Channels can only send strings.** Outbound delivery has no buttons.
+- **Approvals are switched off for channels.** `resolve_interaction_capabilities`
+  sets `allow_approvals=False` for every non-web origin.
+- **Bot tokens are not exclusive.** One token can be attached to several
+  triggers, and the last `setWebhook` silently disconnects the others.
 
 ## Goal
 
-Agent invocation governed like a cloud resource. An agent carries IAM-style
-bindings. One PDP decides every invocation, whether it comes from the web, A2A,
-a trigger, a messaging channel or another agent. A run separates *who asked*
-from *who acts*.
+- Agent invocation governed like a cloud resource: IAM-style bindings on the
+  agent, one PDP, every entry point asking it.
+- Messaging channels as doors that only identify the caller.
+- A run that acts as the agent, scoped by who asked.
+- Both of these work: a team or customer bot per agent, and **one personal bot
+  through which a person reaches every agent they may run, across
+  workspaces**.
 
 There are no deployments to preserve. This design replaces the current
-mechanisms outright and has no compatibility path.
+mechanisms outright, with no compatibility path.
 
 ## Principles (zero trust)
 
 - **Deny by default.** An agent nobody was granted is runnable by nobody.
-- **Every right is an explicit, audited tuple.** No role implies invocation:
-  not `can_manage`, not workspace admin, not workspace membership. Each right
-  is a grant that somebody wrote, and the PAP records who wrote it.
+- **Every right is an explicit, audited grant.** No role implies invocation:
+  not `can_manage`, not workspace admin, not membership.
 - **Every request is decided.** Each message, call and firing goes through the
-  PDP, and nothing caches a past allow. A revoked grant or link stops the very
-  next message.
+  PDP, and nothing caches a past allow.
 - **Fail closed.** A graph outage, an unknown sender or an unparseable subject
   is a deny.
-- **The door does not grant.** A channel, A2A or the web UI only identifies the
-  caller. What the caller may do depends on the agent's bindings, never on the
-  door they came through.
-- **Identity is proven by its owner.** Nobody can assert that an external
-  account belongs to a platform user except that user, by proving control of
-  the account.
+- **The door does not grant.** A channel, A2A or the web UI identifies the
+  caller. The agent's bindings decide.
+- **Identity is proven by its owner.** Only the person can link an external
+  account to their user, by proving control of it.
+
+## Three separate decisions
+
+| Decision | Question | Mechanism |
+|---|---|---|
+| Authentication | Who is this? | Session, API key, or a linked external identity (§4) |
+| Admission | May they run this agent? | The PDP: `can_invoke` on the agent (§2) |
+| Run scope | What may this run do? | The agent's run session, scoped at start (§3) |
+
+A linked Telegram account answers only the first question. Admission does not
+decide what a run may do; scoping does.
 
 ## Principals
 
-There are two kinds of principal, as in GCP (`user:` and `serviceAccount:`).
+| Type | What it is |
+|---|---|
+| `User` | A person (Kratos identity id). Telegram, Slack, and similar are ways we recognise them, not separate principals |
+| `Agent` | An agent's workload identity, the service-account analogue. Runs act as it |
 
-| Type | What it is | Authenticated by |
-|---|---|---|
-| `User` | A person (Kratos identity id) | Any of the person's authenticators: Kratos session, API key, Hydra token, a linked external identity such as Telegram (§5) |
-| `Agent` | An agent's own workload identity — the service-account analogue | The platform, for runs it executes |
-
-Groups are a later addition. The model reserves the slot, and governance's
-`group` subject is still unresolved (#198).
-
-**How a person authenticates is not what kind of principal they are.** A person
-who only ever talks to the platform through Telegram is a `User` whose one
-authenticator is Telegram. If they later add an email login, they are still
-the same principal: there is nothing to merge and no precedence rule. This is
-how GCP treats a federated identity — still `user:`, not a new kind.
-
-**A bot is not a principal.** It is a door. Its token belongs to the trigger,
-and the principal behind it is the agent.
-
-**"Public" is not a principal either.** It is a special binding member, the
-analogue of `allUsers`. Nothing can be granted to an individual anonymous
-caller, owned by one, or governed per one.
-
-**A Telegram sender is never anonymous.** Telegram has already authenticated
-them: the update arrives from Telegram over the bot's webhook, protected by the
-secret token, so `from.id` is genuine. Such a sender is either:
-
-- **registered**, meaning they resolve to a `User`; or
-- **unregistered**, meaning an identity the platform has no principal for.
-
-An unregistered sender is admitted only by `public`. Their external id is
-carried for attribution, threads and rate limits, but it cannot be granted
-anything. Granting them something means inviting them first (§5), after which
-they are a `User`.
-
-The only truly anonymous callers are unauthenticated HTTP requests: A2A without
-a key, or a web widget without a login.
-
-Unregistered senders are **not** provisioned as users just in time. Doing so
-would make `authenticated` mean "anyone on Telegram" and fill the user registry
-with strangers.
+A run is **not** a principal. It is a session of the agent (§3), the way an AWS
+assumed-role session belongs to a role, or a downscoped token belongs to a GCP
+service account. Nothing is ever granted to a run.
 
 ## Design
 
-### 1. Bindings (PAP data, in the graph)
+### 1. Bindings
 
-Agents are already graph objects: `resource:<agent_id>`, written by
-`WorkspaceScopedRepository._record_graph_ownership`. Invocation becomes its own
-relation, independent of `reader`:
+Agents are already graph objects, `resource:<agent_id>`. Invocation becomes
+its own relation, independent of `reader`:
 
 ```fga
-type User
-type Agent
-type Public   # encodes the allUsers binding member; never a principal
-
-type Workspace
-  relations
-    define members: [User, Agent]
-    define admin: [User]
-
 type resource
   relations
     ...
-    define invoker: [User, User:*, Public:*, Agent, Workspace#members]
+    define invoker: [User, Agent, Workspace#members]
     define can_invoke: invoker
 ```
 
-A binding has one of four levels, mirroring GCP's `allUsers` /
-`allAuthenticatedUsers` / `domain:` / `user:`:
+- **Creating an agent** writes exactly `invoker@User:<creator>`, next to the
+  ownership tuples (`WorkspaceScopedRepository._record_graph_ownership`), so it
+  shares their rollback-on-failure.
+- **Levels now:**
+  - specific people (`User:<id>`);
+  - specific agents (`Agent:<id>`);
+  - workspace members (`Workspace:<ws>#members`).
+- **Who may change bindings:** whoever has `can_manage` on the agent. They may
+  grant invocation, including to themselves, and each grant is audited.
+  Managing an agent does not by itself let them run it.
+- **Seeing versus running:** these are separate bits, as with GCP's `viewer`
+  and `run.invoker`.
+- **`OpenFGAPermissionService`** maps `execute` to `can_invoke`
+  (`auth/openfga_permission.py:17-31`).
+- **These files change together:**
+  - `model.fga`
+  - `model.fga.yaml`
+  - both copies of `authorization-model.json` (`config/auth/openfga/`,
+    `charts/agentarea/files/openfga/`)
 
-| Level | Tuples | GCP | AWS |
-|---|---|---|---|
-| `public` | `User:*` and `Public:*` | `allUsers` | `"Principal": "*"` |
-| `authenticated` | `User:*` | `allAuthenticatedUsers` | `"*"` + authenticated condition |
-| `workspace` | `Workspace:<ws>#members` (people and the workspace's agents) | `domain:` | `"*"` + `aws:PrincipalOrgID` |
-| `principals` | `User:<id>`, `Agent:<id>` | `user:` / `serviceAccount:` | principal ARNs |
+**For now, grants go only to workspace members.** The workspace-files toolset
+is `unrestricted` ("member-level", `tools/workspace_files_toolset.py:78`), so
+anyone who can run an agent can read the workspace's files. Granting a
+non-member would leak them. Outside grants arrive once run scope covers
+resources (§3).
 
-How the levels behave:
+**Later levels** follow GCP's special members and are gated by a workspace
+constraint, the analogue of `iam.allowedPolicyMemberDomains`:
 
-- **`public` writes both tuples**, so a registered caller is never worse off
-  than an unregistered one.
-- **`Public` is an encoding, not a principal.** OpenFGA needs a type to express
-  "callers with no principal" separately from `User:*`. The PDP checks
-  unregistered and anonymous callers as the fixed `Public:caller`, and no
-  tuple ever names an individual `Public:<x>`.
-- **`authenticated` means any `User` on this installation.** That includes
-  people invited by Telegram, and excludes unregistered senders. In GCP its
-  namesake means any Google account in the world, and has leaked data for that
-  reason. It is off by default (§6).
-- **`can_invoke` is `invoker` and nothing else.**
-
-**What creating an agent writes:** exactly `invoker@User:<creator>`, next to the
-ownership tuples, so it shares their rollback-on-failure.
-
-**Who may change bindings:** whoever has `can_manage` on the agent. Managing an
-agent lets you grant invocation, including to yourself. You do not get
-invocation by managing. Every grant is audited as `agent_access.grant` /
-`.revoke`, with the writer and the level.
-
-**Seeing versus running:** these are separate bits, as with GCP's `viewer` and
-`run.invoker`. A member can list an agent that only three people may call.
-
-`OpenFGAPermissionService` maps `execute` to `can_invoke`
-(`auth/openfga_permission.py:17-31`). It checks the subject's own type, not
-always `User:`.
-
-These files change together:
-
-- `model.fga`
-- `model.fga.yaml` (the `fga model test` fixtures)
-- both copies of `authorization-model.json` (`config/auth/openfga/` and
-  `charts/agentarea/files/openfga/`)
+- `public` (`allUsers`);
+- `authenticated` (`allAuthenticatedUsers`, meaning any account on this
+  installation).
 
 ### 2. One PDP
 
 ```python
-async def authorize_agent_invocation(caller: Caller, agent: AgentRef) -> InvocationDecision
+async def authorize_agent_invocation(user: UserPrincipal | UserContext, agent: AgentRef) -> Decision
 ```
 
-`Caller` is a tagged union:
+It replaces `authorize_agent_action`. The order:
 
-- `UserCaller(user_id, via)`
-- `AgentCaller(agent_id, run_id)`
-- `PublicCaller(via, external_id | None)`: a caller with no principal. It is
-  either an unregistered sender, with the provider's id, or a truly anonymous
-  request, with none.
+1. An agent-bound key → allowed on its own agent only.
+2. FGA `check(resource:<agent>, can_invoke, User:<id>)`.
+3. Deny. A graph error is a deny.
 
-`via` records the door: `web`, `a2a`, `api_key`, `telegram`, …. It is used for
-audit and never for the decision.
+The decision names the matched grant, for audit and for the deny message.
 
-The decision runs in this order:
+Every entry point calls it, each with a single call:
 
-1. **Agent-bound key.** Allowed only on its own agent.
-2. **Workspace constraint (§6).** Levels the agent's workspace forbids are
-   removed from consideration. Write time enforces this too. Checking here as
-   well means a binding written before the constraint was tightened stays
-   inert.
-3. **Graph check.** FGA `check(resource:<agent>, can_invoke, <caller subject>)`.
-   A `PublicCaller` is checked as `Public:caller`.
-4. **Otherwise deny.** A graph error is a deny.
+- A2A;
+- the three REST task-creation routes;
+- `runs.start`;
+- agent delegation, with the delegating agent as the subject;
+- triggers, through `may_run`, which reaches it via `execute` → `can_invoke`.
+  Cron goes through `may_run` too;
+- every channel (§5).
 
-The decision carries the level that matched: `public`, `authenticated`,
-`workspace`, `principal` or `agent-key`. Audit, the run's provenance and the
-deny UX all read it.
+### 3. Run session
 
-`authorize_agent_action` and the duplicated verb constants in `A2APermissions`
-(`a2a_auth.py:48-71`) are replaced by this function.
+A run acts as its agent, inside a session created once, at task creation:
 
-### 3. Run identity: who asks versus who acts
+```
+run session (per task; not a principal)
+  agent    the principal that acts
+  caller   who asked: User + via (web | a2a | telegram | ...)
+  scope    agent's capabilities ∩ caller's entitlements ∩ policy (tighten-only)
+```
 
-A run carries two principals, as a Cloud Run request does: the invoker checked
-at the edge, and the service account the service runs as.
+- **Scope is computed once** by `compute_run_scope(agent, caller)`. Today that
+  is the governance snapshot, which is already resolved once per task across
+  `workspace → agent → user → task` with the user layer as the caller layer.
+  Later the agent's resources (MCP connections, secrets, collections) join it.
+- **The runtime authorizes against the scope.** It does not use the caller's
+  live context or session tokens, and it does not use the agent's whole
+  configuration. No new code path may run "as the user".
+- **The task records `caller` separately from ownership.** Audit reads "agent
+  X, task T, at the request of Vasya".
+- **Revocation.** On each step boundary, the run checks that the caller may
+  still invoke the agent. A revoked grant or link stops the task.
 
-| Field | Meaning | Used for |
-|---|---|---|
-| `actor` | `Agent:<id>`, always | The identity the run's tools, MCP calls and resource reads act as |
-| `caller` | The `Caller` the PDP admitted | Governance's caller layer, audit, reply routing, thread key |
-| `chain` | Callers above this one when an agent delegates | Audit; each hop's caller layer |
+**What exists and what is missing.** The governance snapshot already exists.
+Activities still build a user context from the task owner
+(`execution/.../activities/dependencies.py:189-217`), and the toolset's
+`requires(...)` checks the owner's live graph rights. Moving these onto the
+session is a later phase. Until then, the snapshot is the scope.
 
-**Governance.** Governance resolution is already tighten-only across
-`workspace → agent → user → task`. The `user` layer becomes the **caller
-layer**: rules can name a user, an agent, or the `public` class.
+**Different people, different rights, same agent.** Each conversation is its
+own task with its own caller, so each person gets:
 
-- An unregistered Telegram sender gets the workspace's and agent's policy,
-  tightened by whatever the workspace writes for `public` (a lower budget, no
-  write tools, mandatory approval). Rate limits for `public` count per
-  `external_id` where there is one.
-- A trusted colleague gets their own user rules.
-- No caller can loosen what the agent's layer sets.
-- A delegated run adds each hop's caller layer, so a chain can only narrow.
+- their own governance user layer: caps, denied tools, required approvals;
+- their own `requires(...)` checks;
+- their own audit trail.
 
-**Resources.** Secrets, MCP connections and tools a run uses are reached as the
-`actor`, so the agent's configuration is the boundary. A caller cannot reach
-anything the agent was not given.
+What is still shared is the agent's MCP connections and secrets. Vasya and
+Petya act with the same GitHub token; governance can deny Petya the
+`github_*` tools. Per-person credentials need an on-behalf-of mode with
+personal connections (the analogue of Graph delegated permissions), which is a
+later phase.
 
-The escalation path is a manager wiring a resource they could not otherwise use
-into an agent they can invoke. That is closed at configuration time: wiring a
-secret or connection into an agent requires use-rights on it. This is today's
-`get_for_use` creator-or-admin rule (`secrets/.../catalog_service.py:158`), the
-analogue of GCP's `iam.serviceAccounts.actAs`.
+### 4. Linked external identities
 
-Checking agent resource grants in the graph at use time (`reader@Agent:<id>`)
-is a follow-up.
+A link records **how we recognise a person in a channel**. It is application
+data, kept in our database, not in the IdP:
 
-**What changes in the code:**
-
-- Activities build their context from `actor` and `caller` instead of a single
-  `user_id`. These sites today take the task owner:
-  - `create_user_context` (`execution/.../activities/dependencies.py:189-217`)
-  - tool discovery (`activities/agent/config.py:526,577`)
-  - the triggers-tool default user (`tools.py:350,377`)
-  - delegation (`tools.py:594`)
-- `AgentTask` stores `caller_type`, `caller_id` and `via` in place of a bare
-  `user_id`.
-- `@audited` records both principals.
-- `create_task_with_policy` resolves the snapshot for the caller, not for the
-  service's `UserContext`.
-
-**Task authority** decides who may follow up on, cancel or read a task. It
-belongs to the caller. A workspace admin also gets it, and only if they hold
-`can_manage` on the agent.
-
-### 4. Who the caller is, per door
-
-| Door | Caller | Notes |
-|---|---|---|
-| Web / REST | `UserCaller` from the session | |
-| API key | `UserCaller` of the key's owner, or the bound agent's rule | |
-| A2A | The key's or token's principal; `PublicCaller` without one | Keyless A2A only reaches `public` agents |
-| Agent delegation | `AgentCaller` of the delegating agent | The target must bind that agent, or `workspace` |
-| Messaging channel | The sender, resolved (below) | |
-| Cron, generic webhook, stream trigger | `UserCaller` of the trigger's owner | Re-checked on every firing; the owner losing `can_invoke` sets `needs_owner` |
-
-A trigger that does not carry a person — a schedule, a signed webhook, a
-stream — fires on its owner's behalf, the way a scheduled job belongs to
-whoever set it up.
-
-Ownership is a transferable field. It is not "whoever created it". Transferring
-requires the new owner's `can_invoke`.
-
-**Resolving a channel sender** is a single lookup:
-`resolve_sender(provider, scope, external_id) -> UserCaller | PublicCaller`.
-
-- If the external identity belongs to a user, the sender is that `UserCaller`.
-- Otherwise the sender is a `PublicCaller` carrying the external id.
-
-The answer does not depend on the workspace, because an external identity
-belongs to at most one person everywhere.
-
-### 5. External identities
-
-An external identity is one of a user's authenticators. It is global to the
-user and not workspace-scoped, following the `WorkspaceMembership` precedent.
+- Kratos stores how a person logs in.
+- Kratos cannot reverse-look-up arbitrary traits.
+- With enterprise SSO, the IdP is the customer's, and we cannot write to it.
 
 ```
 user_external_identities
-  id, user_id                 Kratos identity id
-  provider                    'telegram' | 'slack' | ...
-  provider_scope              '' for Telegram (ids are global); team_id for Slack
-  external_id                 Telegram from.id, as text — never the username
-  display_snapshot            username at link time, for the UI only
-  created_at, revoked_at
-  unique (provider, provider_scope, external_id) where revoked_at is null
+  id, user_id          Kratos identity id
+  provider             'telegram'
+  external_id          from.id — never the username, which can change hands
+  method               'pairing' (later: 'idp_sync', 'admin')
+  linked_at, revoked_at
+  unique (provider, external_id) where revoked_at is null
 ```
 
-An external identity reaches a person in one of two ways. In both, the person
-proves control of the account in Telegram itself, and nobody else can assert
-it for them.
+- **The table is user-scoped, not workspace-scoped.** This is a deliberate
+  exception to the `WorkspaceScopedMixin` rule, following the
+  `WorkspaceMembership` precedent: a link belongs to a person. Say so in the
+  model's docstring.
+- **Links and unlinks are audited.**
+- **Resolution checks that the identity is still active in Kratos**, through
+  `IdentityDirectory` with a short cache.
 
-**An existing user links Telegram.**
+**Linking is proven, never typed.** A typed id proves nothing. If Vasya types
+Petya's id, Petya's messages to any bot on the platform resolve to Vasya:
 
-1. The user goes to Account → Linked accounts → "Link Telegram". The API mints
-   a nonce bound to the user: single-use, stored hashed, valid for 10 minutes.
-2. The UI shows `https://t.me/<bot>?start=link_<nonce>`. Any bot on the
-   platform works, because a Telegram `from.id` is the same across bots.
-3. The bot receives `/start link_<nonce>`. The intake handles it **before** the
-   PDP and before any trigger fires: it binds `from.id` to the nonce's user and
-   replies "Linked to <email>".
+- Petya acts with Vasya's rights;
+- Vasya reads what Petya sends.
 
-**Someone invites a person by Telegram.** This is the same as inviting by
-email, and covers "we wrote them in". Whoever has `can_manage` on an agent can
-grant it to a person who is not on the platform yet. The grant is held by a
-pending invitation until the person accepts.
+The harm lands on third parties, not on Vasya.
 
-There are two ways to address the invitation:
+The flow starts at a bot, so it needs no platform bot:
 
-- **A link.** `t.me/<bot>?start=inv_<code>`, single-use and expiring. This is
-  the usual way, because people do not know their numeric id.
-- **A numeric id.** The invitation waits for that `from.id`.
+1. An unknown sender writes to a bot, and the bot replies with a link to
+   `/link/telegram?via=<channel>`.
+2. The person signs in and presses "Link". They get
+   `t.me/<that bot>?start=link_<nonce>`. The nonce is single-use, kept in
+   Redis with a 10-minute TTL, and stored hashed.
+3. The bot shows a button: "Link this Telegram to a\*\*\*@mail.com?".
+4. Pressing it writes the link.
 
-On acceptance:
+The confirmation button prevents a login-CSRF variant, where someone sends you
+a link carrying their nonce.
 
-1. The bot asks the person to accept ("<inviter> invited you to use <agent>").
-2. Accepting creates a `User` whose one authenticator is this Telegram account.
-3. The pending grant becomes `invoker@User:<id>`.
+Any bot works, because a Telegram `from.id` is the same across bots.
 
-If that Telegram account already belongs to a user, acceptance attaches the
-grant to that user instead, and no second user is created.
+Account settings list a person's links, with an unlink button for each.
 
-Membership in the workspace is not implied. A person can be granted one agent
-without being a member, like an external collaborator granted a single
-resource in GCP.
+### 5. Channels (doors)
 
-**Where the link and the user live.** Kratos cannot look an identity up by an
-arbitrary trait, and Telegram is not an OIDC provider, so the link table lives
-in the platform. The account page's `ConnectedAccountsSection.tsx` (Google and
-GitHub through Kratos) gets a Telegram row with the link flow.
+A channel is one connected bot. It is a resource with an owner and two
+settings:
 
-A Telegram-only user is still a Kratos identity, created through the admin API
-with no password, so there is one user registry. This needs the identity
-schema's `email` trait to become optional (`config/auth/kratos/identity.schema.json`).
-The person can add an email login later and remain the same principal.
+```
+channels
+  id
+  owner_kind, owner_id   'workspace' | 'user'
+  provider               'telegram'
+  bot token              encrypted, as secrets are
+  routing                fixed agent_id | selectable
+  admits                 'resolved_users' | 'owner_only'
+  unique bot token per installation
+```
 
-### 6. Workspace constraint
+| Kind | Owner | Routing | Admits | Use |
+|---|---|---|---|---|
+| Agent bot | workspace | fixed agent | resolved users (PDP decides) | a team or customer bot for one agent |
+| Workspace bot | workspace | selectable among the workspace's agents | resolved users | one company bot for all its agents |
+| **Personal bot** | user | selectable among **every agent the owner may invoke, in any workspace** | owner only | one bot to drive all your agents, projects and workspaces |
 
-The workspace setting `allowed_invocation_levels` defaults to
-`{"workspace", "principals"}`:
+**One responsible party per door.** A channel's owner answers for the door. An
+agent's workspace answers for the agent: it pays, keeps the audit, and decides
+grants. A personal bot opens nothing new. It reaches exactly what its owner
+can already run, and each message is still decided per agent.
 
-- The PAP refuses to write a binding at a level the setting forbids, and the
-  PDP ignores one (§2, step 2).
-- Allowing `public` or `authenticated` is a workspace-admin action and is
-  audited.
+**Per message**, for every kind:
 
-This is the analogue of GCP's `iam.allowedPolicyMemberDomains` or S3 Block
-Public Access. When organisations exist above workspaces, it moves up a level.
+1. Drop non-private chats (groups come later) and bot senders (`from.is_bot`).
+2. Resolve the sender through §4. If `admits = owner_only`, the sender must be
+   the owner; everyone else is ignored.
+3. Pick the target agent:
+   - a fixed agent;
+   - otherwise the chat's current agent, chosen with `/agents`. That command
+     lists, as buttons, the agents the sender may invoke, from FGA
+     `list_objects(can_invoke)` filtered to the channel's reach. `/use`
+     switches between them.
+4. Run the PDP with `(sender, agent)`.
+5. Create or continue the task in **the agent's workspace**, with
+   `caller = sender, via = channel`, and compute the run scope.
 
-### 7. Channel specifics
+Steps 1–5 are one function, `admit_channel_message`. Every intake calls it
+before building any service:
 
-**Where the check runs.** In `TriggerService.fire`, which is where the poller
-(`inbound_subscriber`), webhook (`stream_subscriber`) and IMAP paths converge.
+- the webhook (`stream_subscriber`);
+- the poller (`inbound_subscriber`);
+- the personal-channel webhook.
 
-- `fire` takes a `ChannelSender` that each intake builds from data it already
-  parses:
-  - poller: `events[0].user_id`
-  - webhook: `event.data["user_id"]`
-  - IMAP: `from`
-- `fire` resolves the caller, asks the PDP, and only then evaluates conditions
-  and creates the task.
-- Trigger conditions remain a content filter, never an access control.
+**Threads** are keyed by `(channel, chat, caller, agent)`. Today the key is
+`(workspace, agent, chat)`. With the channel in the key, DMs with two bots no
+longer merge. In a personal bot, each agent has its own thread, and replies
+are labelled "agent · workspace".
 
-**Bot messages.** Messages whose sender is a bot (`from.is_bot`) are dropped
-before resolution, to prevent loops. The Go parser starts carrying `is_bot`.
+**Delivery guard.** `origin_guard` checks today that a trigger and its task
+share a workspace. It becomes a check on whether the channel may receive this
+task:
 
-**Conversation threads.** These are keyed by `(workspace, agent, trigger, chat,
-caller)`. Today the key is `(workspace, agent, chat)`.
+- a workspace channel: same workspace;
+- a personal channel: the task's caller is the channel's owner.
 
-- In a DM nothing changes.
-- In a group, each person has their own thread with the agent, under their own
-  identity.
-- A bot shared by two triggers no longer leaks one conversation into the other.
-
-**Group chats.** A group is a room, not a principal. Every message is decided
-for its sender, so one group can mix granted colleagues and refused strangers.
+Without the second rule, a task in someone else's workspace could post into
+your bot.
 
 **Denied senders.**
 
-- **Execution record.** A `skipped` execution with reason
-  `caller_not_authorized`, the resolved caller and the door. The message text is
-  not stored.
-- **In a DM**, at most one reply per (chat, 24h):
-  - unknown sender: "This bot is private. If you have an account, link
-    Telegram: <url>";
-  - known sender without access: "You don't have access to this agent."
-- **In a group:** silence.
+- In a DM, at most one reply per 24 hours:
+  - an unlinked sender gets the link URL from §4;
+  - a linked sender without access gets "You don't have access to this agent".
+- A `skipped` execution is recorded with reason `caller_not_authorized`. The
+  message text is not stored.
+- Owner-only channels stay silent.
 
-**One bot, one door.** A Telegram bot has a single webhook. Registering the
-same token on a second trigger silently disconnects the first, and deleting
-either one unregisters both (`_trigger_creation.py:256-325`). So a bot token is
-unique per installation, and attaching one that is already in use is refused
-with a pointer to the trigger that holds it. Creating a channel trigger requires
-`can_manage` on the agent, because it opens a new door to it.
+**Today's Telegram trigger becomes an agent bot.** The channel takes over the
+bot token, its uniqueness and the webhook registration from
+`_trigger_creation.py`. Trigger conditions remain a content filter and are
+never used for access control.
 
-### 8. UI
+### 6. Actions and approvals in the channel
 
-**Agent → Settings → Access** (new), for `can_manage`:
+A channel is also where a person learns that a run needs them, and where they
+answer.
 
-- A level radio: Only specific people / Workspace members / Any signed-in user
-  / Public. Levels the workspace forbids are disabled, with the reason.
-- A principal list for `principals`:
-  - add a member through the members page's picker;
-  - add an agent;
-  - invite a person who is not on the platform yet, either "Invite via
-    Telegram" (a link) or by numeric id. They become a user on acceptance (§5).
-- A read-only **Reachable via** list: web, the A2A address, each channel
-  trigger. It is a reminder that one binding covers every door.
+- **Structured outbound messages.** Outbound delivery stops being a bare
+  string:
+  ```
+  OutboundMessage { text, actions: [Action{token, label, style}], edit_of? }
+  ```
+  An adapter that cannot render buttons renders text and an "open in web"
+  link.
+- **The action table.** It maps a single-use opaque token to
+  `(kind, task_id, escalation_id, expires_at)`.
+  - `kind` is `approval` | `continuation` | `input`; `approval` is the first.
+  - `callback_data` carries only the token, because Telegram caps it at 64
+    bytes and the button is not trusted.
+- **Button presses.** `callback_query` joins `allowed_updates`
+  (`channels/telegram.py:32` sets only `message` today). A press is routed to
+  the action handler, never to a trigger. Today a press becomes chat text.
+  The handler:
+  1. resolves the token;
+  2. resolves the presser through §4;
+  3. runs the same path as `POST .../resolve-escalation` (task authority plus
+     `caller_can_approve`);
+  4. calls `answerCallbackQuery`;
+  5. edits the message to "Approved by Vasya".
 
-**Workspace → Settings → Security:** allowed invocation levels. Admin only.
+  An unlinked presser can never approve.
+- **When approvals are offered.** `allow_approvals` becomes true when the
+  channel renders actions **and** the caller is an identified user who may
+  approve. Otherwise today's immediate deny stands.
+- **What the request shows.** The `approval.request` formatter shows the tool
+  name and the sanitized arguments; today it renders only "Approval needed".
+  For sensitive tools it shows the tool name and a web link instead, so
+  arguments do not leave for Telegram.
+- **Personal bot as inbox.** A personal bot is the natural place for approval
+  requests from any workspace. Notifying approvers other than the caller is a
+  later phase.
 
-**Account → Linked accounts:** Telegram link and unlink, next to Google and
-GitHub.
+## Plan of record
 
-**Network → People:** the existing person × agent matrix (`network_people.py`)
-calls the new PDP and gains non-member people granted an agent as rows.
+**MVP.** After these four steps a person can attach a bot to an agent and share
+it with colleagues, or attach a personal bot and reach all their agents.
 
-**Governance → Policies:** subject choices gain `agent` and the `public`
-class for the caller layer.
+1. **PDP.** `invoker` / `can_invoke`; the creator binding; the PDP; every entry
+   point in §2; `execute` → `can_invoke`; the Access tab on the agent (people,
+   agents, workspace members); grants restricted to members.
+2. **Links and channels.**
+   - `user_external_identities` and the pairing flow, which brings
+     `callback_query` and a small action handler;
+   - the `channels` entity, replacing the Telegram trigger;
+   - token uniqueness;
+   - `admit_channel_message`;
+   - the thread key, the delivery guard and the deny replies.
+3. **Personal bot.** `owner_kind = user`, `/agents` and `/use`, routing across
+   workspaces, labelled replies.
+4. **Approvals in the channel.** `OutboundMessage`, the action table, approve
+   and deny buttons, `allow_approvals` for identified callers.
 
-Per `agentarea-webapp/AGENTS.md`, these screens reuse the existing settings,
-member-picker and table components and get no component tests.
+The run session lands with step 1 as naming and data: `caller` on the task,
+and `compute_run_scope` wrapping the governance snapshot.
 
-## Plan of record (phases)
+**Next.**
 
-1. **Graph and PDP.**
-   - The `invoker` / `can_invoke` relation and the new principal types.
-   - Creator-only binding at agent creation.
-   - `authorize_agent_invocation`.
-   - `execute` → `can_invoke`.
-   - Every PEP in §4 calls the PDP, delegation included.
-   - Trigger ownership becomes transferable.
-2. **Access UI, PAP API, workspace constraint.**
-3. **Run identity.**
-   - `actor` / `caller` / `chain` on the task and in activities.
-   - The caller layer in governance.
-   - Task authority by caller.
-4. **Telegram senders.**
-   - Linked identities and invitation by Telegram.
-   - Sender resolution and the PDP in `fire`.
-   - The thread key.
-   - The deny UX and `is_bot`.
-   - Bot-token uniqueness.
-5. **Other channels.** Slack (`team_id` + `user`), Discord and email senders on
-   the same tables.
-6. **Later.**
-   - Groups.
-   - Graph-checked agent resource grants at use time.
-   - Personal OAuth connections used on the caller's behalf.
+- Activities authorize against the run session instead of the owner's context.
+- Resources join the run scope.
+- Non-member grants.
+- Revocation on each step.
+- `continuation` and `input` actions.
+- Notifying other approvers.
+- Approval expiry: approvals wait forever today.
+
+**Later.**
+
+- `public` / `authenticated` and the workspace constraint.
+- External accounts as principals (`telegram:<id>` granted directly, for people
+  without an account), and pairing-based grants in the style of Hermes.
+- Group chats.
+- Admin-assigned links scoped to a workspace.
+- On-behalf-of mode with personal connections.
+- A platform bot for notifications.
+- Slack, Discord and email.
+- Corporate channels linked automatically from the IdP.
 
 ## Open questions
 
-1. **`authenticated` on the hosted service.** Allow it behind the workspace
-   constraint, or not offer it at all there? On a shared installation it means
-   "anyone who signed up".
-2. **Shared group threads.** Should a trigger be able to opt into one
-   conversation per group chat? It would need a rule for whose caller layer
-   governs a task with many speakers. The strictest-of-speakers rule is one
-   candidate.
-3. **Delegation inside a workspace.** Should `workspace` bindings admit the
-   workspace's agents automatically (`Workspace#members` includes them today),
-   or must agents always be bound by name?
+1. **`/agents` scope in a workspace bot.** Every agent of the workspace the
+   sender may invoke (proposed), or an explicit list on the channel?
+2. **Approvals in a personal bot for tasks started elsewhere.** If Vasya
+   starts a task in the web and it needs his approval, should the request also
+   reach his personal bot? Proposed: yes, as the first notification, since the
+   caller is the bot's owner.
+3. **Encrypted token storage for user-owned channels.** Should there be a
+   user-scoped secret store, or should the channel row keep the ciphertext
+   (proposed for now)?
 
 ## Related
 
 - `docs/reference/authorization-model.md`: the enforcement table. It is
-  rewritten with phase 1.
-- `docs/concepts/governance/policy-engine.md`: the governance PDP. It decides
-  what a run may do; this design decides who may start one and as whom. The
-  caller layer is the seam between the two.
+  rewritten with step 1.
+- `docs/concepts/governance/policy-engine.md`: the governance PDP, which
+  decides what a run may do. Its user layer is this design's caller layer.
+- `docs/concepts/governance/approvals.md`: the escalation machinery that §6
+  puts a button on.
 - `docs/superpowers/plans/2026-09-21-authorization-gate-baseline.md`: the
   authorization gate ratchet. The REST routes leaving `unrestricted` count
   against it.
-- `docs/guides/governance/grant-resource-access.md`: the per-resource grants
-  this builds on.
