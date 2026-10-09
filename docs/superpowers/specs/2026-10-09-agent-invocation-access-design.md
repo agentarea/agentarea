@@ -62,22 +62,47 @@ mechanisms outright and has no compatibility path.
 
 ## Principals
 
+There are two kinds of principal, as in GCP (`user:` and `serviceAccount:`).
+
 | Type | What it is | Authenticated by |
 |---|---|---|
-| `User` | A platform account (Kratos identity id) | Kratos session, API key, Hydra token, or a linked external identity (§4) |
+| `User` | A person (Kratos identity id) | Any of the person's authenticators: Kratos session, API key, Hydra token, a linked external identity such as Telegram (§5) |
 | `Agent` | An agent's own workload identity — the service-account analogue | The platform, for runs it executes |
-| `Contact` | An external account known only by its provider id (a Telegram user with no platform account), registered in one workspace | The provider: a Telegram update with that `from.id` |
-| `Anonymous` | An unidentified caller | Nothing |
 
 Groups are a later addition. The model reserves the slot, and governance's
 `group` subject is still unresolved (#198).
 
-`Contact` is what makes "we wrote them in" possible without breaking the last
-principle. An admin does not claim that Telegram 12345 *is* some platform user.
-The admin registers Telegram 12345 as a principal in its own right. The
-Telegram update itself proves the `from.id`: it arrives from Telegram over the
-bot's own webhook, protected by the secret token. So a contact needs no further
-verification.
+**How a person authenticates is not what kind of principal they are.** A person
+who only ever talks to the platform through Telegram is a `User` whose one
+authenticator is Telegram. If they later add an email login, they are still
+the same principal: there is nothing to merge and no precedence rule. This is
+how GCP treats a federated identity — still `user:`, not a new kind.
+
+**A bot is not a principal.** It is a door. Its token belongs to the trigger,
+and the principal behind it is the agent.
+
+**"Public" is not a principal either.** It is a special binding member, the
+analogue of `allUsers`. Nothing can be granted to an individual anonymous
+caller, owned by one, or governed per one.
+
+**A Telegram sender is never anonymous.** Telegram has already authenticated
+them: the update arrives from Telegram over the bot's webhook, protected by the
+secret token, so `from.id` is genuine. Such a sender is either:
+
+- **registered**, meaning they resolve to a `User`; or
+- **unregistered**, meaning an identity the platform has no principal for.
+
+An unregistered sender is admitted only by `public`. Their external id is
+carried for attribution, threads and rate limits, but it cannot be granted
+anything. Granting them something means inviting them first (§5), after which
+they are a `User`.
+
+The only truly anonymous callers are unauthenticated HTTP requests: A2A without
+a key, or a web widget without a login.
+
+Unregistered senders are **not** provisioned as users just in time. Doing so
+would make `authenticated` mean "anyone on Telegram" and fill the user registry
+with strangers.
 
 ## Design
 
@@ -89,11 +114,8 @@ relation, independent of `reader`:
 
 ```fga
 type User
-type Anonymous
 type Agent
-type Contact
-  relations
-    define workspace: [Workspace]
+type Public   # encodes the allUsers binding member; never a principal
 
 type Workspace
   relations
@@ -103,7 +125,7 @@ type Workspace
 type resource
   relations
     ...
-    define invoker: [User, User:*, Anonymous:*, Agent, Contact, Workspace#members]
+    define invoker: [User, User:*, Public:*, Agent, Workspace#members]
     define can_invoke: invoker
 ```
 
@@ -112,19 +134,24 @@ A binding has one of four levels, mirroring GCP's `allUsers` /
 
 | Level | Tuples | GCP | AWS |
 |---|---|---|---|
-| `public` | `User:*` and `Anonymous:*` | `allUsers` | `"Principal": "*"` |
+| `public` | `User:*` and `Public:*` | `allUsers` | `"Principal": "*"` |
 | `authenticated` | `User:*` | `allAuthenticatedUsers` | `"*"` + authenticated condition |
 | `workspace` | `Workspace:<ws>#members` (people and the workspace's agents) | `domain:` | `"*"` + `aws:PrincipalOrgID` |
-| `principals` | `User:<id>`, `Contact:<id>`, `Agent:<id>` | `user:` / `serviceAccount:` | principal ARNs |
+| `principals` | `User:<id>`, `Agent:<id>` | `user:` / `serviceAccount:` | principal ARNs |
 
 How the levels behave:
 
-- `public` writes both tuples, so an authenticated caller is never worse off
-  than an anonymous one.
-- `authenticated` means any account on this installation. In GCP its namesake
-  means any Google account in the world, and has leaked data for that reason.
-  It is off by default (§6).
-- `can_invoke` is `invoker` and nothing else.
+- **`public` writes both tuples**, so a registered caller is never worse off
+  than an unregistered one.
+- **`Public` is an encoding, not a principal.** OpenFGA needs a type to express
+  "callers with no principal" separately from `User:*`. The PDP checks
+  unregistered and anonymous callers as the fixed `Public:caller`, and no
+  tuple ever names an individual `Public:<x>`.
+- **`authenticated` means any `User` on this installation.** That includes
+  people invited by Telegram, and excludes unregistered senders. In GCP its
+  namesake means any Google account in the world, and has leaked data for that
+  reason. It is off by default (§6).
+- **`can_invoke` is `invoker` and nothing else.**
 
 **What creating an agent writes:** exactly `invoker@User:<creator>`, next to the
 ownership tuples, so it shares their rollback-on-failure.
@@ -158,8 +185,9 @@ async def authorize_agent_invocation(caller: Caller, agent: AgentRef) -> Invocat
 
 - `UserCaller(user_id, via)`
 - `AgentCaller(agent_id, run_id)`
-- `ContactCaller(contact_id)`
-- `AnonymousCaller(provider, external_id)`
+- `PublicCaller(via, external_id | None)`: a caller with no principal. It is
+  either an unregistered sender, with the provider's id, or a truly anonymous
+  request, with none.
 
 `via` records the door: `web`, `a2a`, `api_key`, `telegram`, …. It is used for
 audit and never for the decision.
@@ -172,7 +200,7 @@ The decision runs in this order:
    well means a binding written before the constraint was tightened stays
    inert.
 3. **Graph check.** FGA `check(resource:<agent>, can_invoke, <caller subject>)`.
-   An anonymous caller is checked as `Anonymous:anyone`.
+   A `PublicCaller` is checked as `Public:caller`.
 4. **Otherwise deny.** A graph error is a deny.
 
 The decision carries the level that matched: `public`, `authenticated`,
@@ -195,11 +223,12 @@ at the edge, and the service account the service runs as.
 
 **Governance.** Governance resolution is already tighten-only across
 `workspace → agent → user → task`. The `user` layer becomes the **caller
-layer**: rules can name a user, a contact, `anonymous`, or an agent.
+layer**: rules can name a user, an agent, or the `public` class.
 
-- An anonymous Telegram caller gets the workspace's and agent's policy,
-  tightened by whatever the workspace writes for `anonymous` (a lower budget,
-  no write tools, mandatory approval).
+- An unregistered Telegram sender gets the workspace's and agent's policy,
+  tightened by whatever the workspace writes for `public` (a lower budget, no
+  write tools, mandatory approval). Rate limits for `public` count per
+  `external_id` where there is one.
 - A trusted colleague gets their own user rules.
 - No caller can loosen what the agent's layer sets.
 - A delegated run adds each hop's caller layer, so a chain can only narrow.
@@ -241,7 +270,7 @@ belongs to the caller. A workspace admin also gets it, and only if they hold
 |---|---|---|
 | Web / REST | `UserCaller` from the session | |
 | API key | `UserCaller` of the key's owner, or the bound agent's rule | |
-| A2A | The key's or token's principal | Anonymous A2A only reaches `public` agents |
+| A2A | The key's or token's principal; `PublicCaller` without one | Keyless A2A only reaches `public` agents |
 | Agent delegation | `AgentCaller` of the delegating agent | The target must bind that agent, or `workspace` |
 | Messaging channel | The sender, resolved (below) | |
 | Cron, generic webhook, stream trigger | `UserCaller` of the trigger's owner | Re-checked on every firing; the owner losing `can_invoke` sets `needs_owner` |
@@ -253,22 +282,19 @@ whoever set it up.
 Ownership is a transferable field. It is not "whoever created it". Transferring
 requires the new owner's `can_invoke`.
 
-**Resolving a channel sender** is `resolve_sender(provider, scope, external_id,
-workspace) -> Caller`:
+**Resolving a channel sender** is a single lookup:
+`resolve_sender(provider, scope, external_id) -> UserCaller | PublicCaller`.
 
-1. A **linked user identity** (below) → `UserCaller`.
-2. Otherwise a **contact** registered in the agent's workspace →
-   `ContactCaller`.
-3. Otherwise `AnonymousCaller`.
+- If the external identity belongs to a user, the sender is that `UserCaller`.
+- Otherwise the sender is a `PublicCaller` carrying the external id.
 
-The order means that someone who later creates an account and links Telegram is
-treated as themselves from then on. Their contact entry then shows "linked to
-<user>" and can be removed.
+The answer does not depend on the workspace, because an external identity
+belongs to at most one person everywhere.
 
-### 5. External identities and contacts
+### 5. External identities
 
-**Linked user identities.** These are global to the user and not
-workspace-scoped, following the `WorkspaceMembership` precedent.
+An external identity is one of a user's authenticators. It is global to the
+user and not workspace-scoped, following the `WorkspaceMembership` precedent.
 
 ```
 user_external_identities
@@ -281,7 +307,11 @@ user_external_identities
   unique (provider, provider_scope, external_id) where revoked_at is null
 ```
 
-Linking is self-service and proven by deep link:
+An external identity reaches a person in one of two ways. In both, the person
+proves control of the account in Telegram itself, and nobody else can assert
+it for them.
+
+**An existing user links Telegram.**
 
 1. The user goes to Account → Linked accounts → "Link Telegram". The API mints
    a nonce bound to the user: single-use, stored hashed, valid for 10 minutes.
@@ -291,34 +321,39 @@ Linking is self-service and proven by deep link:
    PDP and before any trigger fires: it binds `from.id` to the nonce's user and
    replies "Linked to <email>".
 
-Kratos cannot look an identity up by an arbitrary trait, and Telegram is not an
-OIDC provider. That is why the link lives in the platform. The account page's
-`ConnectedAccountsSection.tsx` (Google and GitHub through Kratos) gets a
-Telegram row with this flow.
+**Someone invites a person by Telegram.** This is the same as inviting by
+email, and covers "we wrote them in". Whoever has `can_manage` on an agent can
+grant it to a person who is not on the platform yet. The grant is held by a
+pending invitation until the person accepts.
 
-**Contacts.** These are workspace-scoped and use the `WorkspaceScopedMixin`.
+There are two ways to address the invitation:
 
-```
-contacts
-  id, workspace_id
-  provider, provider_scope, external_id
-  display_name                set by the admin
-  created_by, created_at
-  unique (workspace_id, provider, provider_scope, external_id)
-```
+- **A link.** `t.me/<bot>?start=inv_<code>`, single-use and expiring. This is
+  the usual way, because people do not know their numeric id.
+- **A numeric id.** The invitation waits for that `from.id`.
 
-Whoever has `can_manage` on an agent may create a contact while granting it,
-and workspace admins may create contacts at any time. There are two ways to
-register one:
+On acceptance:
 
-- **By invite link** (the usual way; people do not know their numeric id). The
-  admin gets `t.me/<bot>?start=inv_<code>`, single-use and expiring. The first
-  `from.id` to open it becomes the contact, and the admin sees the username to
-  confirm.
-- **By id.** The admin pastes the numeric id.
+1. The bot asks the person to accept ("<inviter> invited you to use <agent>").
+2. Accepting creates a `User` whose one authenticator is this Telegram account.
+3. The pending grant becomes `invoker@User:<id>`.
 
-A contact is a graph principal (`Contact:<id>#workspace@Workspace:<ws>`). It is
-granted like a person and named in governance like a person.
+If that Telegram account already belongs to a user, acceptance attaches the
+grant to that user instead, and no second user is created.
+
+Membership in the workspace is not implied. A person can be granted one agent
+without being a member, like an external collaborator granted a single
+resource in GCP.
+
+**Where the link and the user live.** Kratos cannot look an identity up by an
+arbitrary trait, and Telegram is not an OIDC provider, so the link table lives
+in the platform. The account page's `ConnectedAccountsSection.tsx` (Google and
+GitHub through Kratos) gets a Telegram row with the link flow.
+
+A Telegram-only user is still a Kratos identity, created through the admin API
+with no password, so there is one user registry. This needs the identity
+schema's `email` trait to become optional (`config/auth/kratos/identity.schema.json`).
+The person can add an email login later and remain the same principal.
 
 ### 6. Workspace constraint
 
@@ -388,21 +423,21 @@ with a pointer to the trigger that holds it. Creating a channel trigger requires
 - A principal list for `principals`:
   - add a member through the members page's picker;
   - add an agent;
-  - add a contact, either "Invite via Telegram" or "Add by id".
+  - invite a person who is not on the platform yet, either "Invite via
+    Telegram" (a link) or by numeric id. They become a user on acceptance (§5).
 - A read-only **Reachable via** list: web, the A2A address, each channel
   trigger. It is a reminder that one binding covers every door.
 
-**Workspace → Settings → Security:** allowed invocation levels and the contact
-list. Admin only.
+**Workspace → Settings → Security:** allowed invocation levels. Admin only.
 
 **Account → Linked accounts:** Telegram link and unlink, next to Google and
 GitHub.
 
 **Network → People:** the existing person × agent matrix (`network_people.py`)
-calls the new PDP and gains contacts as rows.
+calls the new PDP and gains non-member people granted an agent as rows.
 
-**Governance → Policies:** subject choices gain `contact`, `anonymous` and
-`agent` for the caller layer.
+**Governance → Policies:** subject choices gain `agent` and the `public`
+class for the caller layer.
 
 Per `agentarea-webapp/AGENTS.md`, these screens reuse the existing settings,
 member-picker and table components and get no component tests.
@@ -422,7 +457,7 @@ member-picker and table components and get no component tests.
    - The caller layer in governance.
    - Task authority by caller.
 4. **Telegram senders.**
-   - Linked identities and contacts.
+   - Linked identities and invitation by Telegram.
    - Sender resolution and the PDP in `fire`.
    - The thread key.
    - The deny UX and `is_bot`.
