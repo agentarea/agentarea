@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from agentarea_common.artifacts import ArtifactService, InvalidArtifactPathError
 from agentarea_common.artifacts.service import MAX_WRITE_PATH_BYTES
+from botocore.exceptions import ClientError
 
 
 class UnreachableS3Client:
@@ -19,7 +20,7 @@ def _service() -> ArtifactService:
 
 @pytest.mark.parametrize(
     "path",
-    ["a\rb.txt", "\x1bfile", "dir/\x01name", "tab\there", "del\x7f", "../escape", "a/../b"],
+    ["a\rb.txt", "\x1bfile", "dir/\x01name", "tab\there", "del\x7f", "../escape", "a/../b", "", "/"],
 )
 async def test_an_unrepresentable_path_is_refused_as_a_client_error(path: str) -> None:
     service = _service()
@@ -81,12 +82,22 @@ async def test_a_write_past_the_archivable_bound_is_refused(path: str) -> None:
 
 
 class RecordingS3Client:
-    def __init__(self) -> None:
+    def __init__(self, absent: frozenset[str] = frozenset()) -> None:
         self.copied: list[tuple[str, str]] = []
         self.deleted: list[str] = []
+        self.absent = absent
 
-    def head_object(self, **_):
+    def head_object(self, *, Key, **_):  # noqa: N803
+        if Key in self.absent:
+            raise ClientError({"Error": {"Code": "404"}}, "HeadObject")
         return {}
+
+    def get_paginator(self, _operation):
+        class Paginator:
+            def paginate(self, **_):
+                yield {"Contents": []}
+
+        return Paginator()
 
     def copy_object(self, *, Key, CopySource, **_):
         self.copied.append((CopySource["Key"], Key))
@@ -108,14 +119,14 @@ async def test_a_file_written_at_the_bound_can_still_be_archived() -> None:
 
 
 async def test_a_file_archived_past_the_write_bound_can_still_be_restored() -> None:
-    client = RecordingS3Client()
-    service = ArtifactService(client=client, public_client=client, bucket="b")
     original = "a" * (MAX_WRITE_PATH_BYTES + 20)
     archived = f".trash/20261001T120000.000000Z/{original}"
+    client = RecordingS3Client(absent=frozenset({f"workspaces/{WORKSPACE_ID}/{original}"}))
+    service = ArtifactService(client=client, public_client=client, bucket="b")
 
     restored = await service.restore(WORKSPACE_ID, archived)
 
-    assert restored == original
+    assert restored.path == original
     assert client.copied == [
         (f"workspaces/{WORKSPACE_ID}/{archived}", f"workspaces/{WORKSPACE_ID}/{original}")
     ]

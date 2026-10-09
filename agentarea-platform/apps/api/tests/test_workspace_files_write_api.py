@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from agentarea_api.api.v1 import files
+from agentarea_common.artifacts import RestoredArtifact, WorkspaceConflictError
 from fastapi import HTTPException
 
 WS = SimpleNamespace(workspace_id="ws-1", user_id="user-1")
@@ -17,7 +18,11 @@ def _install_service(monkeypatch, **methods):
         "put": AsyncMock(),
         "archive": AsyncMock(return_value=".trash/20260826T101500.000000Z/notes.md"),
         "copy": AsyncMock(),
-        "restore": AsyncMock(side_effect=lambda _ws, path: path.split("/", 2)[2]),
+        "restore": AsyncMock(
+            side_effect=lambda _ws, path: RestoredArtifact(
+                path=path.split("/", 2)[2], restored_from=path
+            )
+        ),
         "delete": AsyncMock(),
         "move": AsyncMock(),
         "exists": AsyncMock(return_value=False),
@@ -236,6 +241,39 @@ async def test_restore_puts_an_archived_file_back(monkeypatch) -> None:
 
     service.restore.assert_awaited_once_with("ws-1", trash_path)
     assert result.path == "wiki/index.md"
+    assert result.archived_current is None
+
+
+@pytest.mark.asyncio
+async def test_restore_reports_where_the_file_it_displaced_went(monkeypatch) -> None:
+    trash_path = ".trash/20260826T101500.000000Z/notes.md"
+    displaced = ".trash/20260827T090000.000000Z/notes.md"
+    _install_service(
+        monkeypatch,
+        restore=AsyncMock(
+            return_value=RestoredArtifact(
+                path="notes.md", restored_from=trash_path, archived_current=displaced
+            )
+        ),
+    )
+
+    result = await files.restore_workspace_file(trash_path, WS)
+
+    assert result.path == "notes.md"
+    assert result.archived_current == displaced
+
+
+@pytest.mark.asyncio
+async def test_restore_onto_a_path_a_write_could_not_take_is_a_conflict(monkeypatch) -> None:
+    _install_service(
+        monkeypatch,
+        restore=AsyncMock(side_effect=WorkspaceConflictError("A file already exists at 'wiki'")),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await files.restore_workspace_file(".trash/20260826T101500.000000Z/wiki/index.md", WS)
+
+    assert exc.value.status_code == 409
 
 
 @pytest.mark.asyncio

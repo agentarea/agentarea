@@ -6154,6 +6154,12 @@ export type ResolveResponse = {
  */
 export type RestoredFileResponse = {
     /**
+     * Archived Current
+     *
+     * Trash path of the file that occupied `path` and was archived to make room for the restore; null when the path was free.
+     */
+    archived_current?: string | null;
+    /**
      * Path
      */
     path: string;

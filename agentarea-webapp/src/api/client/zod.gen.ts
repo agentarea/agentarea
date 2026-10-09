@@ -2455,6 +2455,7 @@ export const zResolveResponse = z.object({
  * RestoredFileResponse
  */
 export const zRestoredFileResponse = z.object({
+  archived_current: z.string().nullish(),
   path: z.string(),
   restored_from: z.string(),
 });
