@@ -66,16 +66,11 @@ func (s *StreamSubmitter) SubmitEvent(ctx context.Context, triggerID string, eve
 		return fmt.Errorf("marshal channel origin: %w", err)
 	}
 
-	dedupKey := fmt.Sprintf("%s:%s:%d", triggerID, event.Type, event.MessageID)
-	if event.MessageID == 0 {
-		dedupKey = fmt.Sprintf("%s:%s:%x", triggerID, event.Type, data)
-	}
-
 	_, err = s.broker.Submit(ctx, s.stream, map[string]string{
 		"trigger_id":      triggerID,
 		"event":           string(eventJSON),
 		"channel_origin":  string(originJSON),
-		"dedup_key":       dedupKey,
+		"dedup_key":       dedupKey(triggerID, event, data),
 		"received_at":     time.Now().UTC().Format(time.RFC3339Nano),
 		"schema_version":  "1",
 		"inbound_message": string(data),
@@ -85,4 +80,26 @@ func (s *StreamSubmitter) SubmitEvent(ctx context.Context, triggerID string, eve
 	}
 
 	return nil
+}
+
+// dedupKey names one update, so a resubmitted update dedups and no other does.
+// A Telegram message_id counts per chat, so a message is keyed by chat and id.
+// Every press of a button is a callback query with its own id, so a press is
+// keyed by that id rather than by the message the button sits on.
+func dedupKey(triggerID string, event Event, data []byte) string {
+	if event.Type == "callback_query" {
+		if id := callbackQueryID(event.Raw); id != "" {
+			return fmt.Sprintf("%s:%s:%s", triggerID, event.Type, id)
+		}
+	} else if event.MessageID != 0 {
+		return fmt.Sprintf("%s:%s:%d:%d", triggerID, event.Type, event.ChatID, event.MessageID)
+	}
+	return fmt.Sprintf("%s:%s:%x", triggerID, event.Type, data)
+}
+
+// callbackQueryID reads callback_query.id from the raw update, or "".
+func callbackQueryID(raw map[string]any) string {
+	cq, _ := raw["callback_query"].(map[string]any)
+	id, _ := cq["id"].(string)
+	return id
 }
