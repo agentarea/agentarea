@@ -243,6 +243,9 @@ export declare const getGraphV1AccessControlGraphGet: <ThrowOnError extends bool
  * Delete Relationship
  *
  * Revoke a resource-ownership relation from the configured graph backend.
+ *
+ * Idempotent: revoking a grant that is already gone answers 204 without
+ * touching the graph or the audit trail.
  */
 export declare const deleteRelationshipV1AccessControlRelationshipsDelete: <ThrowOnError extends boolean = false>(options: Options<DeleteRelationshipV1AccessControlRelationshipsDeleteData, ThrowOnError>) => RequestResult<DeleteRelationshipV1AccessControlRelationshipsDeleteResponses, DeleteRelationshipV1AccessControlRelationshipsDeleteErrors, ThrowOnError>;
 /**
@@ -259,6 +262,10 @@ export declare const listRelationshipsV1AccessControlRelationshipsGet: <ThrowOnE
  * Create Relationship
  *
  * Grant a resource-ownership relation via the configured graph backend.
+ *
+ * Idempotent: a grant the subject already holds (also under a legacy alias
+ * such as ``viewers`` for ``reader``) succeeds without changing the graph,
+ * and is not audited again.
  */
 export declare const createRelationshipV1AccessControlRelationshipsPost: <ThrowOnError extends boolean = false>(options: Options<CreateRelationshipV1AccessControlRelationshipsPostData, ThrowOnError>) => RequestResult<CreateRelationshipV1AccessControlRelationshipsPostResponses, CreateRelationshipV1AccessControlRelationshipsPostErrors, ThrowOnError>;
 /**

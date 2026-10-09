@@ -20,7 +20,7 @@ export const zA2UiActionPayload = z.object({
 export const zApiKeyCreateRequest = z.object({
   agent_id: z.string().uuid().nullish(),
   expires_in_days: z.number().int().gte(1).lte(3650).nullish(),
-  name: z.string(),
+  name: z.string().min(1).max(255),
 });
 
 /**
@@ -697,7 +697,11 @@ export const zContinueTaskPayload = z.object({
  * CreateInvitationBody
  */
 export const zCreateInvitationBody = z.object({
-  email: z.string().nullish(),
+  email: z
+    .string()
+    .max(320)
+    .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)
+    .nullish(),
   expires_in_days: z.number().int().gte(1).lte(365).nullish(),
 });
 
@@ -5325,7 +5329,7 @@ export const zDeployMcpServerV1McpServersServerIdDeployPostPath = z.object({
 export const zListMembersV1MembersGetResponse = z.array(zMemberResponse);
 
 export const zRemoveMemberV1MembersUserIdDeletePath = z.object({
-  user_id: z.string(),
+  user_id: z.string().min(1).max(255),
 });
 
 export const zRemoveMemberV1MembersUserIdDeleteResponse = z.union([

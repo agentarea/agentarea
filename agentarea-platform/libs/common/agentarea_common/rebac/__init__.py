@@ -16,6 +16,7 @@ from .openfga_client import OpenFGAClient, OpenFGAError, OpenFGAUnavailableError
 from .ownership import (
     OWNER_RELATIONS,
     ResourceOwnershipError,
+    delete_tuple_idempotent,
     grant_resource_owner,
     resolve_graph_client,
     root_project_id,
@@ -33,6 +34,7 @@ __all__ = [
     "ResourceOwnershipError",
     "SubjectSet",
     "bootstrap_openfga",
+    "delete_tuple_idempotent",
     "grant_resource_owner",
     "resolve_graph_client",
     "root_project_id",

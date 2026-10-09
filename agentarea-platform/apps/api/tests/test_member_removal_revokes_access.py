@@ -33,6 +33,7 @@ from agentarea_common.workspaces import (
     INVITATION_STATUS_REVOKED,
     MEMBERSHIP_ENDED,
     InvitationRevoked,
+    MemberNotFound,
     Workspace,
     WorkspaceInvitation,
     WorkspaceInvitationRepository,
@@ -451,15 +452,20 @@ async def test_a_removal_the_graph_accepted_reports_itself_done(session_factory,
     assert _member_tuples(graph) == []
 
 
-async def test_removal_is_idempotent(session_factory, graph):
+async def test_a_second_removal_finds_no_member_and_queues_nothing(session_factory, graph):
+    """Once row and tuple are gone there is no membership left to end (#717)."""
     _grant_member(graph)
-    for _ in range(2):
-        async with session_factory() as session:
-            assert await _memberships(session, graph).remove(
+    async with session_factory() as session:
+        assert await _memberships(session, graph).remove(
+            workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER
+        )
+    async with session_factory() as session:
+        with pytest.raises(MemberNotFound):
+            await _memberships(session, graph).remove(
                 workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER
             )
     relay = _relay(session_factory, graph)
-    assert await relay.process_batch() == 2
+    assert await relay.process_batch() == 1
 
     assert _member_tuples(graph) == []
     assert [t.subject_id for t in graph.tuples] == [f"User:{OWNER}"]
@@ -583,12 +589,12 @@ def _graph_validates_subjects(graph) -> None:
 
 
 @pytest.mark.parametrize(
-    ("user_id", "expected"),
-    [("never-a-member", 204), ("not a user #id", 202), ("\x7f", 202)],
+    "user_id",
+    ["never-a-member", "not a user #id", "\x7f"],
     ids=["well-formed", "malformed", "control-character"],
 )
-async def test_removing_someone_who_was_never_a_member_is_not_a_server_error(
-    session_factory, graph, user_id, expected
+async def test_removing_someone_who_was_never_a_member_is_not_found(
+    session_factory, graph, user_id
 ):
     from unittest.mock import AsyncMock
     from urllib.parse import quote
@@ -615,5 +621,7 @@ async def test_removing_someone_who_was_never_a_member_is_not_a_server_error(
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.delete(f"/v1/workspaces/acme/members/{quote(user_id)}")
 
-    assert response.status_code == expected, response.text
+    assert response.status_code == 404, response.text
     assert [t.subject_id for t in graph.tuples] == [f"User:{OWNER}", f"User:{MEMBER}"]
+    async with session_factory() as session:
+        assert (await session.execute(select(EventOutbox))).scalars().all() == []
