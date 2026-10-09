@@ -171,18 +171,30 @@ class ProviderService:
             await self._register_reference(config)
             return await self.provider_config_repo.create_config(config)
         except Exception:
-            # The key was stored only for this config; without it, it is an
-            # orphan holding a credential nobody can see is unused.
             if payload.api_key and not payload.api_key_secret_id:
-                try:
-                    await self.secret_manager.delete_secret(f"provider_config_{config_id}")
-                except Exception:
-                    logger.warning(
-                        "Could not remove the key stored for failed provider config %s",
-                        config_id,
-                        exc_info=True,
-                    )
+                await self._drop_key_of_unsaved_config(config_id)
             raise
+
+    async def _drop_key_of_unsaved_config(self, config_id: UUID) -> None:
+        """Remove the key stored for a config whose save failed.
+
+        The key was stored only for this config; without it, it is an orphan
+        holding a credential nobody can see is unused. The failed commit leaves
+        the session needing a rollback, and the database secret manager shares
+        that session, so the delete would fail without one. A config that did
+        commit (the reload after it failed) keeps its key.
+        """
+        try:
+            await self.provider_config_repo.session.rollback()
+            if await self.provider_config_repo.get_by_id(config_id) is not None:
+                return
+            await self.secret_manager.delete_secret(f"provider_config_{config_id}")
+        except Exception:
+            logger.warning(
+                "Could not remove the key stored for failed provider config %s",
+                config_id,
+                exc_info=True,
+            )
 
     async def _assert_may_manage_configs(self) -> None:
         """A provider config holds the key every agent in the workspace bills against.
