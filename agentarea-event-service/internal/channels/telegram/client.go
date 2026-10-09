@@ -3,9 +3,11 @@ package telegram
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -70,19 +72,19 @@ func NewClient(botToken string) *Client {
 // GetUpdates calls getUpdates with long-polling (timeout=25s).
 // offset should be the last processed update_id + 1 to acknowledge previous updates.
 func (c *Client) GetUpdates(ctx context.Context, offset int64) ([]Update, error) {
-	url := fmt.Sprintf(
+	endpoint := fmt.Sprintf(
 		"https://api.telegram.org/bot%s/getUpdates?timeout=25&offset=%d",
 		c.botToken, offset,
 	)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
+		return nil, fmt.Errorf("build request: %w", withoutURL(err))
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("getUpdates request: %w", err)
+		return nil, fmt.Errorf("getUpdates request: %w", withoutURL(err))
 	}
 	defer resp.Body.Close()
 
@@ -100,4 +102,14 @@ func (c *Client) GetUpdates(ctx context.Context, offset int64) ([]Update, error)
 	}
 
 	return result.Result, nil
+}
+
+// withoutURL drops the request URL that net/url and net/http put in a
+// *url.Error. A Bot API URL carries the bot token, and these errors are logged.
+func withoutURL(err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return urlErr.Err
+	}
+	return err
 }

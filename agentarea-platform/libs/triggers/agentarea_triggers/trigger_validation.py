@@ -1,6 +1,7 @@
 """A trigger's own configuration rules, independent of the service that stores it."""
 
 from .condition_models import ModelInstances, validate_condition_models
+from .domain.cron import cron_expression_error, timezone_error
 from .domain.enums import TriggerType
 from .domain.models import TriggerCreate
 from .llm_condition_evaluator import condition_syntax_errors
@@ -61,14 +62,15 @@ async def _validate_cron_configuration(trigger_data: TriggerCreate) -> None:
     if not trigger_data.cron_expression:
         raise TriggerValidationError("Cron expression is required for CRON triggers")
 
-    # Basic cron expression validation
-    parts = trigger_data.cron_expression.strip().split()
-    if len(parts) not in [5, 6]:
-        raise TriggerValidationError("Cron expression must have 5 or 6 parts")
+    error = cron_expression_error(trigger_data.cron_expression)
+    if error is not None:
+        raise TriggerValidationError(error)
 
-    # Validate timezone
     if not trigger_data.timezone or not trigger_data.timezone.strip():
         raise TriggerValidationError("Timezone is required for CRON triggers")
+    error = timezone_error(trigger_data.timezone.strip())
+    if error is not None:
+        raise TriggerValidationError(error)
 
     # A schedule coming due carries nothing with it, so the task text is the
     # only thing that can tell the agent what to do. Two exemptions, both

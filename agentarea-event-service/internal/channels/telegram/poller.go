@@ -44,23 +44,24 @@ func (p *Poller) Poll(ctx context.Context, offset int64) (*channels.PollResult, 
 			continue
 		}
 
-		result.Events = append(result.Events, submit.Event{
-			Type:      event.Type,
-			ChatID:    event.ChatID,
-			UserID:    event.UserID,
-			Username:  event.Username,
-			Text:      event.Text,
-			MessageID: event.MessageID,
-			Raw:       event.Raw,
+		result.Events = append(result.Events, channels.PolledEvent{
+			Event: submit.Event{
+				Type:      event.Type,
+				ChatID:    event.ChatID,
+				UserID:    event.UserID,
+				Username:  event.Username,
+				Text:      event.Text,
+				MessageID: event.MessageID,
+				Raw:       event.Raw,
+			},
+			ChannelOrigin: map[string]any{
+				"type":              "telegram",
+				"chat_id":           fmt.Sprintf("%d", event.ChatID),
+				"message_id":        event.MessageID,
+				"user_display_name": event.Username,
+				"presentation":      "concise",
+			},
 		})
-
-		result.ChannelOrigin = map[string]any{
-			"type":              "telegram",
-			"chat_id":           fmt.Sprintf("%d", event.ChatID),
-			"message_id":        event.MessageID,
-			"user_display_name": event.Username,
-			"presentation":      "concise",
-		}
 
 		result.NewOffset = upd.UpdateID + 1
 	}

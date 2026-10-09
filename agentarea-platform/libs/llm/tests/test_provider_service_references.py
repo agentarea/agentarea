@@ -32,20 +32,25 @@ def _authorization():
     container._singletons.update(saved)
 
 
-def _service(*, config=None, spec=None) -> tuple[ProviderService, MagicMock]:
+def _service(
+    *, config=None, spec=None, provider_spec=MagicMock()
+) -> tuple[ProviderService, MagicMock]:
+    provider_spec_repo = MagicMock()
+    provider_spec_repo.get_by_id = AsyncMock(return_value=provider_spec)
     config_repo = MagicMock()
     config_repo.user_context = OWNER
     config_repo.get_by_id = AsyncMock(return_value=config)
     missing_secret = MagicMock()
     missing_secret.scalar_one_or_none.return_value = None
     config_repo.session.execute = AsyncMock(return_value=missing_secret)
+    config_repo.session.rollback = AsyncMock()
     spec_repo = MagicMock()
     spec_repo.get_usable = AsyncMock(return_value=spec)
     spec_repo.get_or_copy_catalog_spec = AsyncMock(return_value=None)
     instance_repo = MagicMock()
     instance_repo.create_instance = AsyncMock()
     service = ProviderService(
-        provider_spec_repo=MagicMock(),
+        provider_spec_repo=provider_spec_repo,
         provider_config_repo=config_repo,
         model_spec_repo=spec_repo,
         model_instance_repo=instance_repo,
@@ -83,3 +88,65 @@ async def test_a_provider_config_cannot_borrow_a_secret_outside_the_workspace() 
             ),
             created_by="user-owner",
         )
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_provider_spec_writes_no_key() -> None:
+    service, _ = _service(provider_spec=None)
+
+    with pytest.raises(NotFoundError):
+        await service.create_provider_config(
+            payload=ProviderConfigCreate(provider_spec_id=uuid4(), name="openai", api_key="sk-1"),
+            created_by="user-owner",
+        )
+
+    service.secret_manager.set_secret.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_failed_insert_removes_the_key_it_stored() -> None:
+    service, _ = _service()
+    service.provider_config_repo.create_config = AsyncMock(side_effect=RuntimeError("insert"))
+
+    with pytest.raises(RuntimeError):
+        await service.create_provider_config(
+            payload=ProviderConfigCreate(provider_spec_id=uuid4(), name="openai", api_key="sk-1"),
+            created_by="user-owner",
+        )
+
+    (stored, _), _ = service.secret_manager.set_secret.call_args
+    service.secret_manager.delete_secret.assert_awaited_once_with(stored)
+
+
+@pytest.mark.asyncio
+async def test_the_session_is_rolled_back_before_the_key_is_removed() -> None:
+    """The database secret manager shares the failed session: without the
+    rollback its delete raised PendingRollbackError and the key stayed."""
+    service, _ = _service()
+    service.provider_config_repo.create_config = AsyncMock(side_effect=RuntimeError("insert"))
+    calls = MagicMock()
+    calls.attach_mock(service.provider_config_repo.session.rollback, "rollback")
+    calls.attach_mock(service.secret_manager.delete_secret, "delete_secret")
+
+    with pytest.raises(RuntimeError):
+        await service.create_provider_config(
+            payload=ProviderConfigCreate(provider_spec_id=uuid4(), name="openai", api_key="sk-1"),
+            created_by="user-owner",
+        )
+
+    assert [name for name, *_ in calls.mock_calls] == ["rollback", "delete_secret"]
+
+
+@pytest.mark.asyncio
+async def test_a_config_that_was_saved_keeps_its_key() -> None:
+    """The insert committed and the reload after it failed: the key is in use."""
+    service, _ = _service(config=MagicMock())
+    service.provider_config_repo.create_config = AsyncMock(side_effect=RuntimeError("reload"))
+
+    with pytest.raises(RuntimeError):
+        await service.create_provider_config(
+            payload=ProviderConfigCreate(provider_spec_id=uuid4(), name="openai", api_key="sk-1"),
+            created_by="user-owner",
+        )
+
+    service.secret_manager.delete_secret.assert_not_called()

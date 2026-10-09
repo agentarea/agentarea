@@ -190,7 +190,7 @@ async def test_execute_tool_dials_a_url_instance_through_the_pinned_transport():
     with (
         patch.object(service, "get_transport_spec_for_instance", new=AsyncMock(return_value=spec)),
         patch("agentarea_mcp.application.service.connected_mcp_client", fake_connected),
-        patch("agentarea_execution.activities.agent_execution_activities._enqueue_last_dispatch"),
+        patch("agentarea_mcp.application.service.record_dispatch"),
     ):
         result = await service.execute_tool(instance.id, "search", {})
 

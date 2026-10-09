@@ -2,24 +2,27 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
-import { apiErrorMessage } from "@/lib/api-errors";
-import MCPSkeleton, { mcpSkeletonColumns } from "./MCPSkeleton";
-import { MyMCPsSection } from "./MyMCPsSection";
 import SectionLoadError from "@/components/SectionLoadError";
+import { apiErrorMessage } from "@/lib/api-errors";
 import type { ListFilter } from "../list-sections";
 import { MCPServer } from "../types";
-import { getConnectionsCached } from "./connectionsData";
+import { getConnectionsFrom } from "./connectionsData";
+import MCPSkeleton, { mcpSkeletonColumns } from "./MCPSkeleton";
+import { MyMCPsSection } from "./MyMCPsSection";
 
 interface MCPServersContentProps {
   searchQuery?: string;
   viewMode?: string;
   filter?: ListFilter;
+  /** A catalog item id: only the connections made from it. */
+  source?: string | null;
 }
 
 export default async function MCPServersContent({
   searchQuery = "",
   viewMode = "grid",
   filter = "all",
+  source = null,
 }: MCPServersContentProps) {
   const t = await getTranslations("MCPServersPage");
 
@@ -35,6 +38,7 @@ export default async function MCPServersContent({
           searchQuery={searchQuery}
           viewMode={viewMode}
           filter={filter}
+          source={source}
         />
       </Suspense>
     </div>
@@ -45,10 +49,12 @@ async function MyConnectionsSectionServer({
   searchQuery,
   viewMode,
   filter,
+  source,
 }: {
   searchQuery: string;
   viewMode: string;
   filter: ListFilter;
+  source: string | null;
 }) {
   const t = await getTranslations("MCPServersPage");
 
@@ -60,13 +66,16 @@ async function MyConnectionsSectionServer({
     instances: mcpInstances,
     openApiConnections,
     usage,
-  } = await getConnectionsCached();
+  } = await getConnectionsFrom(source);
 
   if (instancesResponse.error) {
     return (
       <RetryEmptyState
         title={t("loadErrors.title")}
-        description={apiErrorMessage(instancesResponse, t("loadErrors.instances"))}
+        description={apiErrorMessage(
+          instancesResponse,
+          t("loadErrors.instances")
+        )}
         iconsType="mcp"
       />
     );

@@ -912,6 +912,13 @@ export type BodyUploadWorkspaceLogoV1LogoPut = {
 };
 
 /**
+ * BudgetPeriod
+ *
+ * Budget reset period.
+ */
+export type BudgetPeriod = "execution" | "daily" | "monthly";
+
+/**
  * BudgetPolicy
  *
  * Budget-related ceilings.
@@ -1409,6 +1416,26 @@ export type CatalogBrowseResponse = {
 };
 
 /**
+ * CatalogConnection
+ *
+ * One existing connection made from a catalog item.
+ */
+export type CatalogConnection = {
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Kind
+   */
+  kind: "mcp" | "openapi";
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
  * CatalogConnectionPreflight
  *
  * What the connect form needs to know before it offers Connect.
@@ -1425,6 +1452,10 @@ export type CatalogConnectionPreflight = {
    * Detail
    */
   detail: string;
+  /**
+   * Existing Connections
+   */
+  existing_connections?: Array<CatalogConnection>;
   /**
    * Item Id
    */
@@ -1930,18 +1961,12 @@ export type CreateInvitationBody = {
 export type CreateWalletRequest = {
   credentials?: WalletCredentialsSchema | null;
   mpp_config?: MppConfigSchema | null;
-  /**
-   * Service Budget Period
-   */
-  service_budget_period?: string;
+  service_budget_period?: BudgetPeriod;
   /**
    * Service Budget Usd
    */
   service_budget_usd?: number | string;
-  /**
-   * Wallet Type
-   */
-  wallet_type: string;
+  wallet_type: WalletType;
   x402_config?: X402ConfigSchema | null;
 };
 
@@ -3588,6 +3613,10 @@ export type McpServerResponse = {
    */
   name: string;
   /**
+   * Registry Item Id
+   */
+  registry_item_id?: string | null;
+  /**
    * Registry Url
    */
   registry_url?: string | null;
@@ -4526,6 +4555,12 @@ export type OpenApiConnectionResponse = {
    * Id
    */
   id: string;
+  /**
+   * Last Dispatch
+   */
+  last_dispatch?: {
+    [key: string]: unknown;
+  } | null;
   /**
    * Name
    */
@@ -5881,6 +5916,10 @@ export type RegistryItemResponse = {
    * Version
    */
   version: string | null;
+  /**
+   * Workspace Connections
+   */
+  workspace_connections?: Array<CatalogConnection> | null;
 };
 
 /**
@@ -8557,22 +8596,13 @@ export type UpdateAllResponse = {
 export type UpdateWalletRequest = {
   credentials?: WalletCredentialsSchema | null;
   mpp_config?: MppConfigSchema | null;
-  /**
-   * Service Budget Period
-   */
-  service_budget_period?: string | null;
+  service_budget_period?: BudgetPeriod | null;
   /**
    * Service Budget Usd
    */
   service_budget_usd?: number | string | null;
-  /**
-   * Status
-   */
-  status?: string | null;
-  /**
-   * Wallet Type
-   */
-  wallet_type?: string | null;
+  status?: WalletStatus | null;
+  wallet_type?: WalletType | null;
   x402_config?: X402ConfigSchema | null;
 };
 
@@ -8803,6 +8833,20 @@ export type WalletResponse = {
     [key: string]: unknown;
   } | null;
 };
+
+/**
+ * WalletStatus
+ *
+ * Wallet operational status.
+ */
+export type WalletStatus = "active" | "disabled";
+
+/**
+ * WalletType
+ *
+ * Supported wallet types.
+ */
+export type WalletType = "x402" | "mpp" | "dual";
 
 /**
  * WebhookSignatureScheme

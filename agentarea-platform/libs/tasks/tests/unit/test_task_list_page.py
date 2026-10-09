@@ -7,13 +7,16 @@ were unreachable. These tests round-trip real rows through the query.
 """
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from agentarea_common.auth.context import UserContext
+from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_tasks.infrastructure.repository import TaskRepository
+from agentarea_tasks.task_service import TaskService
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 WORKSPACE = "ws-1"
@@ -138,3 +141,37 @@ async def test_several_statuses_match_any_of_them(session):
     )
 
     assert [task.description for task in page] == ["task 3", "task 1", "task 0"]
+
+
+def _service(session: AsyncSession) -> TaskService:
+    factory = RepositoryFactory(
+        session, UserContext(user_id="user-1", workspace_id=WORKSPACE)
+    )
+    return TaskService(factory, event_broker=MagicMock(), task_manager=MagicMock())
+
+
+@pytest.mark.asyncio
+async def test_an_agents_task_pages_do_not_come_back_empty(session):
+    agent_id = uuid4()
+    session.add_all(_row(i, "completed", agent_id=agent_id) for i in range(5))
+    session.add(_row(9, "completed"))
+    await session.flush()
+    service = _service(session)
+
+    first = await service.list_agent_tasks(agent_id, limit=2, offset=0)
+    last = await service.list_agent_tasks(agent_id, limit=2, offset=4)
+
+    assert [task.description for task in first] == ["task 4", "task 3"]
+    assert [task.description for task in last] == ["task 0"]
+
+
+@pytest.mark.asyncio
+async def test_an_agents_status_filter_reaches_past_the_first_page(session):
+    agent_id = uuid4()
+    session.add(_row(0, "failed", agent_id=agent_id))
+    session.add_all(_row(i, "completed", agent_id=agent_id) for i in range(1, 5))
+    await session.flush()
+
+    failed = await _service(session).list_agent_tasks(agent_id, limit=2, status="failed")
+
+    assert [task.description for task in failed] == ["task 0"]

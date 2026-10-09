@@ -43,14 +43,14 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     and the catalog query is jsonb.
 #   video jobs: a job is read only by its own workspace and task, a finished one
 #     is recorded saved (and billed) once by a conditional update.
-#   membership backfill: the migration inserts rows with SQL that leans on the
-#     (workspace, user) unique constraint and the invitation and outbox tables.
 #   catalog browse plans: /explore is only fast while every browse query has an
 #     index that serves it, a property of the migrated indexes and the planner.
 #   agent presets: presets are a jsonb containment query on catalog tags, and a
 #     preset's skill key is matched against hashed catalog names with LIKE.
 #   MCP spec list: tenant specs and catalog items are paged, filtered and
 #     looked up by id in SQL; the catalog is never materialized per request.
+#   catalog connections: an MCP instance reaches its catalog item through a
+#     text-to-uuid join on its spec, unioned with OpenAPI connections.
 #   skill list: the catalog half, its total and the fork update check are
 #     served by the partial browse indexes and the primary key, never a scan.
 #   tenant scope: every workspace-scoped model stays in its workspace through
@@ -79,7 +79,11 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     would fill in, and its run is told the journaled event it fired on.
 #     A source added without a trigger holds a picked workspace secret by a
 #     secret_references row, whose RESTRICT key refuses deleting that secret.
-PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL)
+#   OpenAPI dispatch: a connection's last call is stamped by a bare UPDATE that
+#     stays in the caller's workspace and leaves updated_at alone.
+#   MCP dispatch stamps: the stamp writer runs with no workspace bound under the
+#     ENFORCE tenant scope and still stamps every workspace's instances.
+PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL OPENAPI_TEST_DATABASE_URL MCP_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
   libs/llm/tests/test_provider_secret_lifecycle_db.py
@@ -90,10 +94,10 @@ PY_SUITES=(
   libs/llm/tests/test_platform_managed_providers_db.py
   libs/llm/tests/test_catalog_model_instance_db.py
   libs/llm/tests/test_video_generation_jobs_db.py
-  apps/api/tests/test_membership_backfill_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
   libs/agents/tests/test_catalog_presets_db.py
   libs/mcp/tests/test_mcp_spec_list_db.py
+  apps/api/tests/test_catalog_connections_db.py
   libs/agents/tests/test_catalog_skill_list_db.py
   tests/unit/test_tenant_scope_isolation.py
   libs/tasks/tests/test_task_event_idempotency_db.py
@@ -115,6 +119,8 @@ PY_SUITES=(
   libs/triggers/tests/test_needs_owner_db.py
   libs/triggers/tests/test_webhook_stream_reuse_db.py
   libs/triggers/tests/test_trigger_event_context_db.py
+  libs/openapi/tests/test_record_dispatch_db.py
+  libs/mcp/tests/test_dispatch_stamps_db.py
 )
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, the secret

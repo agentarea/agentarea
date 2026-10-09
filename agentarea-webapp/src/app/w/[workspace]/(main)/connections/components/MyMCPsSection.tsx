@@ -265,7 +265,8 @@ export function MyMCPsSection({
                   item._connection.status,
                   item._connection.available_tools.length
                 ),
-                item._connection.available_tools.length
+                item._connection.available_tools.length,
+                item._connection.last_dispatch
               )
             : item._instance
               ? getMcpConnectionState({

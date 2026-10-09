@@ -21,12 +21,11 @@ paths:
 
 @pytest.mark.asyncio
 async def test_preview_yaml_spec_with_bare_date_version(monkeypatch):
-    real_client = httpx.AsyncClient
     transport = httpx.MockTransport(lambda _req: httpx.Response(200, text=BARE_DATE_YAML_SPEC))
     monkeypatch.setattr(
-        openapi_service.httpx,
-        "AsyncClient",
-        lambda **kwargs: real_client(transport=transport, **kwargs),
+        openapi_service,
+        "safe_async_client",
+        lambda *, policy, **kwargs: httpx.AsyncClient(transport=transport, **kwargs),
     )
     monkeypatch.setattr(
         openapi_connections.OutboundPolicy,

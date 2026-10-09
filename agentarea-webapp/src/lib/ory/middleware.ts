@@ -4,6 +4,7 @@
 // Derived from @ory/nextjs (Apache-2.0).
 
 import { NextResponse, type NextRequest } from "next/server";
+import { ORY_PROXY_PREFIXES } from "@/lib/auth-session";
 import { serialize, SerializeOptions } from "cookie";
 import { parse, splitCookiesString } from "set-cookie-parser";
 import { guessCookieDomain } from "./cookie";
@@ -86,14 +87,9 @@ export async function proxyRequest(
   request: NextRequest,
   options: OryMiddlewareOptions
 ) {
-  const match = [
-    "/self-service",
-    "/sessions/whoami",
-    "/ui",
-    "/.well-known/ory",
-    "/.ory",
-  ];
-  if (!match.some((m) => request.nextUrl.pathname.startsWith(m))) {
+  if (
+    !ORY_PROXY_PREFIXES.some((m) => request.nextUrl.pathname.startsWith(m))
+  ) {
     return NextResponse.next();
   }
 

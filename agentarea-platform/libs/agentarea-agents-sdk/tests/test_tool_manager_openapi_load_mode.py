@@ -56,6 +56,7 @@ def _make_connection(num_ops: int = 3, name: str = "stripe-api"):
         name=name,
         spec_content={"openapi": "3.0.0", "info": {"title": name, "version": "1"}, "paths": paths},
         available_tools=available_tools,
+        custom_query_params=[],
     )
 
 

@@ -38,6 +38,7 @@ from agentarea_mcp.application.mcp_client import (
     platform_client_factory,
     shared_era_verdict_store,
 )
+from agentarea_mcp.dispatch_stamps import record_dispatch
 from agentarea_mcp.domain.env_schema import normalize_env_schema
 from agentarea_mcp.domain.events import (
     MCPServerCreated,
@@ -1143,20 +1144,9 @@ class MCPServerInstanceService:
         Returns {"success": bool, "result": str, "error": str|None,
                  "tool_name": str, "server_instance_id": str}
         """
-        from agentarea_execution.activities.agent_execution_activities import (
-            _enqueue_last_dispatch,
-        )
 
         def _fail(result_msg: str, error_msg: str) -> dict[str, Any]:
-            _enqueue_last_dispatch(
-                str(server_instance_id),
-                {
-                    "schema_version": VERIFICATION_SCHEMA_VERSION,
-                    "status": "failed",
-                    "at": datetime.now(UTC).isoformat(),
-                    "error": error_msg,
-                },
-            )
+            record_dispatch(server_instance_id, error=error_msg)
             return {
                 "success": False,
                 "result": result_msg,
@@ -1293,15 +1283,7 @@ class MCPServerInstanceService:
             error_msg = result_str or "MCP tool returned error"
             return _fail(error_msg, error_msg)
 
-        _enqueue_last_dispatch(
-            str(server_instance_id),
-            {
-                "schema_version": VERIFICATION_SCHEMA_VERSION,
-                "status": "succeeded",
-                "at": datetime.now(UTC).isoformat(),
-                "error": None,
-            },
-        )
+        record_dispatch(server_instance_id)
         return {
             "success": True,
             "result": result_str,

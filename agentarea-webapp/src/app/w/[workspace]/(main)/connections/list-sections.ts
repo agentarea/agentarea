@@ -76,7 +76,8 @@ export function openApiConnectionListRow(
     name: connection.name,
     _state: getOpenApiConnectionState(
       getOpenApiConnectionDisplayStatus(connection.status, toolCount),
-      toolCount
+      toolCount,
+      connection.last_dispatch
     ),
     _usage: undefined,
   };

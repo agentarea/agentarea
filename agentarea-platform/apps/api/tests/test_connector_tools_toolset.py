@@ -20,7 +20,8 @@ from uuid import uuid4
 import agentarea_mcp.application.service as mcp_service
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
-from agentarea_api.api.v1 import client_mcp, mcp_oauth_connect
+from agentarea_api.api.v1 import _catalog_connections, client_mcp, mcp_oauth_connect
+from agentarea_api.api.v1._catalog_connections import CatalogConnection
 from agentarea_api.tools import connector_tools_toolset
 from agentarea_api.tools.connector_tools_toolset import ConnectorToolsToolset
 from agentarea_common.audit import AuditEventORM
@@ -65,6 +66,7 @@ def _connection(
         status=status,
         available_tools=tools,
         spec_content={"openapi": "3.0.0", "paths": paths or {}},
+        custom_query_params=[],
         registry_item_id=registry_item_id,
         auth_config_id=auth_config_id,
     )
@@ -98,6 +100,7 @@ def harness(monkeypatch):
     )
     service = MagicMock()
     service.needs_connecting = AsyncMock(return_value=False)
+    service.mcp_server_repository.get_server_by_id = AsyncMock(return_value=None)
     monkeypatch.setattr(mcp_service, "MCPServerInstanceService", lambda **_kwargs: service)
     state = SimpleNamespace(service=service, readable=None, instances=[])
 
@@ -127,6 +130,8 @@ def harness(monkeypatch):
 
     monkeypatch.setattr(connector_tools_toolset, "readable_resource_ids", _readable)
     monkeypatch.setattr(connector_tools_toolset, "require_permission", AsyncMock())
+    state.siblings = AsyncMock(return_value=[])
+    monkeypatch.setattr(_catalog_connections, "other_catalog_connections", state.siblings)
     state.dispatch = AsyncMock(
         return_value=CallToolResult(content=[TextContent(type="text", text="ok")])
     )
@@ -657,6 +662,25 @@ async def test_a_catalog_connection_whose_sign_in_lapsed_returns_its_connect_lin
     }
     assert result["connector_id"] == str(api.id)
     harness.openapi_dispatch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_connect_link_names_the_other_connections_from_the_same_item(harness):
+    item_id = uuid4()
+    api = _connection("Api", [_tool("t")], registry_item_id=item_id)
+    harness.connections = [api]
+    working = CatalogConnection(id=uuid4(), kind="openapi", name="Api (team)")
+    harness.siblings.return_value = [working]
+
+    result = await _call(connector="Api", tool="t")
+
+    assert result["action_required"]["existing_connections"] == [
+        {"id": str(working.id), "kind": "openapi", "name": "Api (team)"}
+    ]
+    assert "Api (team)" in result["action_required"]["message"]
+    harness.siblings.assert_awaited_once()
+    _session, user_ctx, requested_item, excluded = harness.siblings.await_args.args
+    assert (user_ctx, requested_item, excluded) == (CALLER, item_id, api.id)
 
 
 @pytest.mark.asyncio

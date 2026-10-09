@@ -117,6 +117,27 @@ def _cap_request(amount: str = "25.00") -> PolicyRuleCreateRequest:
     )
 
 
+@pytest.mark.parametrize("priority", [2**31, -(2**31) - 1])
+def test_a_priority_the_column_cannot_hold_is_refused(priority):
+    """An out-of-range priority used to reach the int4 column and 500."""
+    body = {
+        "subject_type": "workspace",
+        "subject_id": "ws",
+        "target": "spend",
+        "effect": "cap",
+        "priority": priority,
+    }
+    with pytest.raises(ValidationError):
+        PolicyRuleCreateRequest.model_validate(body)
+    with pytest.raises(ValidationError):
+        PolicyRuleUpdateRequest.model_validate({"priority": priority})
+
+
+def test_the_int4_bounds_themselves_are_accepted():
+    for priority in (2**31 - 1, -(2**31)):
+        assert PolicyRuleUpdateRequest.model_validate({"priority": priority}).priority == priority
+
+
 @pytest.mark.flow(MainFlow.GOVERNANCE_POLICIES)
 def test_create_request_rejects_unknown_fields():
     with pytest.raises(ValidationError):

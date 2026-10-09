@@ -29,11 +29,17 @@ from agentarea_common.trigger_event_file import (
     TRIGGER_EVENT_PARAMETER,
 )
 from agentarea_streams.application.stream_service import StreamService
-from agentarea_streams.domain import EventFilter, StreamNameTakenError, StreamNotFoundError
+from agentarea_streams.domain import (
+    EventFilter,
+    StreamNameTakenError,
+    StreamNotFoundError,
+    value_at,
+)
 from agentarea_streams.infrastructure.repository import find_webhook_source
 from pydantic import ValidationError
 
 from .condition_models import validate_condition_models
+from .domain.cron import cron_expression_error, timezone_error
 from .domain.enums import ExecutionStatus, TriggerType
 from .domain.models import (
     ConditionVerdict,
@@ -1166,6 +1172,15 @@ class TriggerService:
         if trigger_update.agent_id is not None:
             await self._validate_agent_exists(trigger_update.agent_id)
 
+        if trigger_update.cron_expression is not None:
+            error = cron_expression_error(trigger_update.cron_expression)
+            if error is not None:
+                raise TriggerValidationError(error)
+        if trigger_update.timezone is not None:
+            error = timezone_error(trigger_update.timezone.strip())
+            if error is not None:
+                raise TriggerValidationError(error)
+
         if trigger_update.conditions is not None:
             await validate_condition_models(
                 trigger_update.conditions, self.model_instance_repository
@@ -1832,25 +1847,8 @@ class TriggerService:
         return (await self.evaluate_trigger_verdict(trigger, event_data)).met
 
     def _get_nested_value(self, data: dict[str, Any], field_path: str) -> Any:
-        """Get nested value from dictionary using dot notation.
-
-        Args:
-            data: Dictionary to search in
-            field_path: Dot-separated path (e.g., "request.body.message_type")
-
-        Returns:
-            The value at the path, or None if not found
-        """
-        try:
-            value = data
-            for key in field_path.split("."):
-                if isinstance(value, dict) and key in value:
-                    value = value[key]
-                else:
-                    return None
-            return value
-        except Exception:
-            return None
+        """The value at a dotted ``field_path`` in ``data``, or ``None``."""
+        return value_at(data, field_path)
 
     async def _evaluate_simple_conditions(
         self, conditions: dict[str, Any], event_data: dict[str, Any]

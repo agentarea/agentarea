@@ -214,7 +214,7 @@ class TestWebhookHTTPIntegration:
 
         event = journal.data()
         assert event["method"] == "POST"
-        assert event["body"]["message"] == "Hello webhook"
+        assert event["raw_data"]["message"] == "Hello webhook"
         assert event["headers"]["x-custom-header"] == "test-value"
 
         # What the dispatcher does with the recorded event.
@@ -225,7 +225,7 @@ class TestWebhookHTTPIntegration:
         assert task_params["trigger_type"] == "webhook"
         assert task_params["webhook_type"] == "generic"
         assert task_params["action"] == "process"
-        assert task_params["trigger_data"]["body"]["message"] == "Hello webhook"
+        assert task_params["trigger_data"]["raw_data"]["message"] == "Hello webhook"
 
     async def test_generic_webhook_multiple_methods(
         self, webhook_client, trigger_service, journal, sample_agent_id
@@ -632,7 +632,7 @@ class TestWebhookHTTPIntegration:
 
         assert response.status_code == 202
         assert response.json()["status"] == "accepted"
-        assert len(journal.data()["body"]["data"]) == 1000
+        assert len(journal.data()["raw_data"]["data"]) == 1000
 
     async def test_concurrent_webhook_requests(
         self, webhook_client, trigger_service, journal, sample_agent_id

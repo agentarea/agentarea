@@ -158,6 +158,7 @@ services:
       [
         "agentarea-api",
         "reconcile",
+        "--repair-ownership",
         "--source",
         "${CATALOG_MCP_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json}",
       ]

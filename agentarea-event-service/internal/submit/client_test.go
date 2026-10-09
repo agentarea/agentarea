@@ -49,7 +49,7 @@ func TestStreamSubmitterWritesInboundStream(t *testing.T) {
 	if b.fields["trigger_id"] != "trigger-1" {
 		t.Fatalf("trigger_id = %q", b.fields["trigger_id"])
 	}
-	if b.fields["dedup_key"] != "trigger-1:message:7" {
+	if b.fields["dedup_key"] != "trigger-1:message:42:7" {
 		t.Fatalf("dedup_key = %q", b.fields["dedup_key"])
 	}
 
@@ -67,5 +67,41 @@ func TestStreamSubmitterWritesInboundStream(t *testing.T) {
 	}
 	if origin["type"] != "telegram" || origin["chat_id"] != "42" {
 		t.Fatalf("origin = %+v", origin)
+	}
+}
+
+func TestDedupKeySeparatesChatsAndButtonPresses(t *testing.T) {
+	dedupKeyOf := func(event Event) string {
+		t.Helper()
+		b := &fakeBroker{}
+		if err := NewStreamSubmitter(b, "").SubmitEvent(context.Background(), "trigger-1", event, nil); err != nil {
+			t.Fatalf("SubmitEvent returned error: %v", err)
+		}
+		return b.fields["dedup_key"]
+	}
+	press := func(callbackID string) Event {
+		return Event{
+			Type:      "callback_query",
+			ChatID:    111,
+			Text:      "approve",
+			MessageID: 9,
+			Raw:       map[string]any{"callback_query": map[string]any{"id": callbackID, "data": "approve"}},
+		}
+	}
+
+	// Telegram numbers messages per chat, so two chats share message_id 5.
+	alice := dedupKeyOf(Event{Type: "message", ChatID: 111, Text: "alice", MessageID: 5})
+	bob := dedupKeyOf(Event{Type: "message", ChatID: 222, Text: "bob", MessageID: 5})
+	if alice == bob {
+		t.Fatalf("messages from different chats share dedup_key %q", alice)
+	}
+
+	// Each press of a button is its own callback query on the same message.
+	first, second := dedupKeyOf(press("cb-1")), dedupKeyOf(press("cb-2"))
+	if first == second {
+		t.Fatalf("different button presses share dedup_key %q", first)
+	}
+	if again := dedupKeyOf(press("cb-1")); again != first {
+		t.Fatalf("resubmitted press dedup_key = %q, want %q", again, first)
 	}
 }

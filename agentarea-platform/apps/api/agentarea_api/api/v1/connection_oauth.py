@@ -19,6 +19,10 @@ from agentarea_api.api.deps.services import (
     SecretCatalogServiceDep,
     get_real_secret_manager,
 )
+from agentarea_api.api.v1._catalog_connections import (
+    CatalogConnection,
+    readable_catalog_connections,
+)
 from agentarea_api.api.v1.oauth_app_credentials import (
     CustomOAuthAppFields,
     resolve_custom_oauth_app,
@@ -96,6 +100,8 @@ class CatalogConnectionPreflight(BaseModel):
     status: Literal["ready", "oauth_app_required"]
     detail: str
     redirect_uri: str
+    # Connections the caller may read that were already made from this item.
+    existing_connections: list[CatalogConnection] = Field(default_factory=list)
 
 
 async def _redis():
@@ -277,6 +283,7 @@ async def preflight_catalog_item(
     else:
         status = "ready"
         detail = f"Sign in to {item.name} and approve access to connect."
+    existing = await readable_catalog_connections(db_session, user_context, [item_id])
     return CatalogConnectionPreflight(
         item_id=item_id,
         name=item.name,
@@ -284,6 +291,7 @@ async def preflight_catalog_item(
         status=status,
         detail=detail,
         redirect_uri=_callback_uri(),
+        existing_connections=existing.get(str(item_id), []),
     )
 
 

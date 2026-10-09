@@ -922,15 +922,8 @@ class TestServiceExecuteTool:
     async def test_result_not_empty_when_instance_not_found(self):
         svc = _make_service()
 
-        import agentarea_execution.activities.agent_execution_activities as mod
-
-        orig = getattr(mod, "_enqueue_last_dispatch", None)
-        mod._enqueue_last_dispatch = lambda *a, **k: None
-        try:
+        with patch("agentarea_mcp.application.service.record_dispatch"):
             result = await svc.execute_tool(uuid.uuid4(), "some_tool", {})
-        finally:
-            if orig is not None:
-                mod._enqueue_last_dispatch = orig
 
         assert result["success"] is False
         assert result["result"]  # must not be empty string
@@ -957,15 +950,8 @@ class TestServiceExecuteTool:
         )
         svc = _make_service({str(inst.id): inst})
 
-        import agentarea_execution.activities.agent_execution_activities as mod
-
-        orig = getattr(mod, "_enqueue_last_dispatch", None)
-        mod._enqueue_last_dispatch = lambda *a, **k: None
-        try:
+        with patch("agentarea_mcp.application.service.record_dispatch"):
             result = await svc.execute_tool(inst.id, "some_tool", {})
-        finally:
-            if orig is not None:
-                mod._enqueue_last_dispatch = orig
 
         assert result["success"] is False
         assert result["result"]
@@ -1001,15 +987,8 @@ class TestServiceExecuteTool:
 
         svc = _make_service({str(m_id): member, str(bundle.id): bundle})
 
-        import agentarea_execution.activities.agent_execution_activities as mod
-
-        orig = getattr(mod, "_enqueue_last_dispatch", None)
-        mod._enqueue_last_dispatch = lambda *a, **k: None
-        try:
+        with patch("agentarea_mcp.application.service.record_dispatch"):
             result = await svc.execute_tool(bundle.id, "bad_member__some_tool", {})
-        finally:
-            if orig is not None:
-                mod._enqueue_last_dispatch = orig
 
         assert result["success"] is False
         assert result["result"]
@@ -1044,20 +1023,13 @@ class TestServiceExecuteTool:
 
         svc._call_tool_via_mcp = fake_call_tool_via_mcp
 
-        import agentarea_execution.activities.agent_execution_activities as mod
-
-        orig = getattr(mod, "_enqueue_last_dispatch", None)
-        mod._enqueue_last_dispatch = lambda *a, **k: None
-        try:
+        with patch("agentarea_mcp.application.service.record_dispatch"):
             result = await svc.execute_tool(
                 inst.id,
                 "paid_tool",
                 {},
                 httpx_client_factory=factory,
             )
-        finally:
-            if orig is not None:
-                mod._enqueue_last_dispatch = orig
 
         assert result["success"] is True
         # A URL-type endpoint is member-chosen: the payment client is kept but

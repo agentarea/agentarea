@@ -55,3 +55,16 @@ def test_fields_compare_dotted_paths_for_equality():
 def test_trigger_event_types_become_a_kind_filter():
     assert EventFilter.from_trigger_event_types(None) == EventFilter()
     assert EventFilter.from_trigger_event_types(["message"]).kinds == ["message"]
+
+
+def test_a_body_field_reads_a_generic_webhook_s_raw_data():
+    """A generic webhook stores its body once, as ``raw_data``; a filter
+    written against the ``body`` copy it used to carry still matches."""
+    f = EventFilter(fields={"body.type": "deployment"})
+    assert f.matches("x", {"raw_data": {"type": "deployment"}})
+    assert not f.matches("x", {"raw_data": {"type": "release"}})
+
+
+def test_a_stored_event_with_its_own_body_is_read_as_stored():
+    f = EventFilter(fields={"body.type": "deployment"})
+    assert f.matches("x", {"body": {"type": "deployment"}, "raw_data": {"type": "other"}})

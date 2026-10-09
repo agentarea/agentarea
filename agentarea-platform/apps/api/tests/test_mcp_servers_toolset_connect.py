@@ -18,7 +18,8 @@ import agentarea_mcp.application.service as mcp_service
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
 from agentarea_agents_sdk.mcp_server.elicitation import mcp_call_context
-from agentarea_api.api.v1 import mcp_oauth_connect
+from agentarea_api.api.v1 import _catalog_connections, mcp_oauth_connect
+from agentarea_api.api.v1._catalog_connections import CatalogConnection
 from agentarea_api.tools import mcp_servers_toolset
 from agentarea_api.tools.mcp_servers_toolset import MCPServersToolset
 from agentarea_common.auth.context import UserContext
@@ -60,6 +61,7 @@ def harness(monkeypatch):
         lambda: SimpleNamespace(app=SimpleNamespace(APP_URL="https://app.example")),
     )
     service = MagicMock()
+    service.mcp_server_repository.get_server_by_id = AsyncMock(return_value=None)
 
     def _build(**_kwargs):
         return service
@@ -105,6 +107,61 @@ async def test_create_returns_the_instance_with_a_connect_link(harness):
         "message": f"Open this link to connect GitHub: {_connect_url(instance)}",
     }
     harness.needs_connecting.assert_awaited_once_with(instance, probe=True)
+
+
+@pytest.mark.asyncio
+async def test_create_from_a_catalog_item_names_the_connections_already_made_from_it(
+    harness, monkeypatch
+):
+    instance = _instance(FAILED)
+    item_id = uuid4()
+    harness.create_instance = AsyncMock(return_value=instance)
+    harness.needs_connecting = AsyncMock(return_value=True)
+    harness.mcp_server_repository.get_server_by_id = AsyncMock(
+        return_value=SimpleNamespace(registry_item_id=item_id)
+    )
+    earlier = CatalogConnection(id=uuid4(), kind="mcp", name="GitHub (work)")
+    lookup = AsyncMock(
+        return_value={
+            str(item_id): [earlier, CatalogConnection(id=instance.id, kind="mcp", name="GitHub")]
+        }
+    )
+    monkeypatch.setattr(_catalog_connections, "readable_catalog_connections", lookup)
+
+    result = json.loads(
+        await MCPServersToolset().create(
+            name="GitHub", json_spec_json="{}", server_spec_id=str(uuid4())
+        )
+    )
+
+    action = result["action_required"]
+    assert action["url"] == _connect_url(instance)
+    assert action["existing_connections"] == [
+        {"id": str(earlier.id), "kind": "mcp", "name": "GitHub (work)"}
+    ]
+    assert "GitHub (work)" in action["message"]
+    harness.mcp_server_repository.get_server_by_id.assert_awaited_once_with(instance.server_spec_id)
+
+
+@pytest.mark.asyncio
+async def test_create_from_a_spec_outside_the_catalog_names_no_connections(harness, monkeypatch):
+    instance = _instance(FAILED)
+    harness.create_instance = AsyncMock(return_value=instance)
+    harness.needs_connecting = AsyncMock(return_value=True)
+    harness.mcp_server_repository.get_server_by_id = AsyncMock(
+        return_value=SimpleNamespace(registry_item_id=None)
+    )
+    lookup = AsyncMock()
+    monkeypatch.setattr(_catalog_connections, "readable_catalog_connections", lookup)
+
+    result = json.loads(
+        await MCPServersToolset().create(
+            name="GitHub", json_spec_json="{}", server_spec_id=str(uuid4())
+        )
+    )
+
+    assert "existing_connections" not in result["action_required"]
+    lookup.assert_not_awaited()
 
 
 @pytest.mark.asyncio

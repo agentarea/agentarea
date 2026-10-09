@@ -283,6 +283,14 @@ class TestTriggerExecutionEngine:
         result = trigger_service._get_nested_value(data, "nonexistent.path")
         assert result is None
 
+    async def test_a_body_condition_reads_a_generic_webhook_s_raw_data(self, trigger_service):
+        """A generic webhook stores its body once, as ``raw_data``; a
+        ``field_matches`` on the ``body`` copy it used to carry still matches."""
+        verdict = await trigger_service._evaluate_simple_conditions(
+            {"field_matches": {"body.branch": "main"}}, {"raw_data": {"branch": "main"}}
+        )
+        assert verdict.met is True
+
     async def test_record_execution_success(
         self, trigger_service, sample_cron_trigger, mock_repositories
     ):

@@ -22,6 +22,7 @@ from agentarea_mcp.application.mcp_client import (
     shared_era_verdict_store,
 )
 from agentarea_mcp.application.tool_list_cache import ToolListCache
+from agentarea_mcp.dispatch_stamps import record_dispatch
 from agentarea_mcp.tool_serialization import serialize_mcp_tool
 from agentarea_mcp.verification import mcp_transport_candidates
 
@@ -39,6 +40,13 @@ _JSON_TO_PY = {
     "array": list,
     "object": dict,
 }
+
+
+def _error_text(result: CallToolResult) -> str:
+    texts = [
+        text for block in result.content if isinstance((text := getattr(block, "text", None)), str)
+    ]
+    return "\n".join(texts) or "MCP tool returned error"
 
 
 @dataclass
@@ -206,16 +214,25 @@ class MCPAggregatorProxy:
             raise ValueError(f"No URL for member instance {instance_id}")
         headers = self.instance_headers.get(instance_id) or {}
         cache_key = self._cache_key(member, mcp_url, headers)
-        async with connected_mcp_client(
-            mcp_url,
-            headers,
-            30.0,
-            transport=member.transport,
-            verdict_key=cache_key,
-            verdict_store=self._era_verdict_store,
-            httpx_client_factory=self._client_factory(member),
-        ) as client:
-            return await client.call_tool(tool_name, arguments)
+        try:
+            async with connected_mcp_client(
+                mcp_url,
+                headers,
+                30.0,
+                transport=member.transport,
+                verdict_key=cache_key,
+                verdict_store=self._era_verdict_store,
+                httpx_client_factory=self._client_factory(member),
+            ) as client:
+                result = await client.call_tool(tool_name, arguments)
+        except Exception as exc:
+            record_dispatch(member.mcp_instance_id, error=str(exc) or type(exc).__name__)
+            raise
+        record_dispatch(
+            member.mcp_instance_id,
+            error=_error_text(result) if result.is_error else None,
+        )
+        return result
 
     async def _call_member_tool(
         self, member: AggregatedMember, tool_name: str, arguments: dict[str, Any]

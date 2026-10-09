@@ -276,6 +276,13 @@ export const zBodyUploadWorkspaceLogoV1LogoPut = z.object({
 });
 
 /**
+ * BudgetPeriod
+ *
+ * Budget reset period.
+ */
+export const zBudgetPeriod = z.enum(["execution", "daily", "monthly"]);
+
+/**
  * BudgetPolicy
  *
  * Budget-related ceilings.
@@ -403,7 +410,13 @@ export const zBundlePolicy = z.object({
   key: z.string().min(1),
   message: z.string().nullish(),
   params: z.record(z.unknown()).optional(),
-  priority: z.number().int().optional().default(0),
+  priority: z
+    .number()
+    .int()
+    .gte(-2147483648)
+    .lte(2147483647)
+    .optional()
+    .default(0),
   subject: z.string().optional().default("workspace"),
   target: z.string().min(1),
 });
@@ -422,6 +435,17 @@ export const zBundleSkill = z.object({
 });
 
 /**
+ * CatalogConnection
+ *
+ * One existing connection made from a catalog item.
+ */
+export const zCatalogConnection = z.object({
+  id: z.string().uuid(),
+  kind: z.enum(["mcp", "openapi"]),
+  name: z.string(),
+});
+
+/**
  * CatalogConnectionPreflight
  *
  * What the connect form needs to know before it offers Connect.
@@ -432,6 +456,7 @@ export const zBundleSkill = z.object({
 export const zCatalogConnectionPreflight = z.object({
   description: z.string().nullish(),
   detail: z.string(),
+  existing_connections: z.array(zCatalogConnection).optional(),
   item_id: z.string().uuid(),
   name: z.string(),
   redirect_uri: z.string(),
@@ -1258,6 +1283,7 @@ export const zMcpServerResponse = z.object({
   is_public: z.boolean(),
   json_spec: z.record(z.unknown()).nullish(),
   name: z.string(),
+  registry_item_id: z.string().uuid().nullish(),
   registry_url: z.string().nullish(),
   remote_url: z.string().nullish(),
   slug: z.string(),
@@ -1945,7 +1971,13 @@ export const zPolicyRuleCreateRequest = z.object({
   effect: zPolicyEffect,
   enabled: z.boolean().optional().default(true),
   params: z.record(z.unknown()).optional(),
-  priority: z.number().int().optional().default(0),
+  priority: z
+    .number()
+    .int()
+    .gte(-2147483648)
+    .lte(2147483647)
+    .optional()
+    .default(0),
   subject_id: z.string(),
   subject_type: zPolicySubjectType,
   target: z.string(),
@@ -1978,7 +2010,7 @@ export const zPolicyRuleUpdateRequest = z.object({
   effect: zPolicyEffect.nullish(),
   enabled: z.boolean().nullish(),
   params: z.record(z.unknown()).nullish(),
-  priority: z.number().int().nullish(),
+  priority: z.number().int().gte(-2147483648).lte(2147483647).nullish(),
   subject_id: z.string().nullish(),
   subject_type: zPolicySubjectType.nullish(),
   target: z.string().nullish(),
@@ -2259,6 +2291,7 @@ export const zOpenApiConnectionResponse = z.object({
   custom_query_params: z.array(zQueryParamOutput).nullish(),
   description: z.string().nullish(),
   id: z.string().uuid(),
+  last_dispatch: z.record(z.unknown()).nullish(),
   name: z.string(),
   registry_item_id: z.string().uuid().nullish(),
   spec_url: z.string().nullish(),
@@ -2300,6 +2333,7 @@ export const zRegistryItemResponse = z.object({
   update_available: z.boolean(),
   updated_at: z.string().datetime(),
   version: z.string().nullable(),
+  workspace_connections: z.array(zCatalogConnection).nullish(),
 });
 
 /**
@@ -3695,6 +3729,20 @@ export const zWalletResponse = z.object({
 });
 
 /**
+ * WalletStatus
+ *
+ * Wallet operational status.
+ */
+export const zWalletStatus = z.enum(["active", "disabled"]);
+
+/**
+ * WalletType
+ *
+ * Supported wallet types.
+ */
+export const zWalletType = z.enum(["x402", "mpp", "dual"]);
+
+/**
  * WebhookSignatureScheme
  *
  * How a sender signs requests to a generic webhook.
@@ -3869,7 +3917,7 @@ export const zX402ConfigSchema = z.object({
 export const zCreateWalletRequest = z.object({
   credentials: zWalletCredentialsSchema.nullish(),
   mpp_config: zMppConfigSchema.nullish(),
-  service_budget_period: z.string().optional().default("execution"),
+  service_budget_period: zBudgetPeriod.optional().default("execution"),
   service_budget_usd: z
     .union([
       z.number().gte(0).lt(1000000000000),
@@ -3877,7 +3925,7 @@ export const zCreateWalletRequest = z.object({
     ])
     .optional()
     .default("0"),
-  wallet_type: z.string(),
+  wallet_type: zWalletType,
   x402_config: zX402ConfigSchema.nullish(),
 });
 
@@ -3887,12 +3935,12 @@ export const zCreateWalletRequest = z.object({
 export const zUpdateWalletRequest = z.object({
   credentials: zWalletCredentialsSchema.nullish(),
   mpp_config: zMppConfigSchema.nullish(),
-  service_budget_period: z.string().nullish(),
+  service_budget_period: zBudgetPeriod.nullish(),
   service_budget_usd: z
     .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
     .nullish(),
-  status: z.string().nullish(),
-  wallet_type: z.string().nullish(),
+  status: zWalletStatus.nullish(),
+  wallet_type: zWalletType.nullish(),
   x402_config: zX402ConfigSchema.nullish(),
 });
 

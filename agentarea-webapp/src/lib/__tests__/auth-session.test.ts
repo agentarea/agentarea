@@ -20,6 +20,13 @@ describe("isProtectedRoute", () => {
     ["/500/details", false],
     ["/agentsfoo", true],
     ["/settings/profile", true],
+    // The Ory proxy starts the login flow; gating it loops back to /auth/login.
+    ["/self-service/login/browser", false],
+    ["/sessions/whoami", false],
+    ["/ui/login", false],
+    ["/.well-known/ory/webauthn.js", false],
+    ["/.ory/ui/login", false],
+    ["/uiwhatever", true],
   ])("marks %s as %s", (pathname, expected) => {
     expect(isProtectedRoute(pathname)).toBe(expected);
   });

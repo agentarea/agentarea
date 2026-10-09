@@ -55,6 +55,9 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
         JSON, nullable=False, default=list
     )
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="active")
+    # The last successful tool call: {"status", "at", "error"}, the shape of an
+    # MCP instance's ``last_dispatch``.
+    last_dispatch: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     def __init__(
         self,

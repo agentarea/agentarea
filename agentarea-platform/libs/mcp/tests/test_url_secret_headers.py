@@ -159,7 +159,7 @@ async def test_a_tool_call_sends_the_stored_credential_upstream():
     instance = await _connect(service, _Upstream())
     upstream = _Upstream()
 
-    with patch("agentarea_execution.activities.agent_execution_activities._enqueue_last_dispatch"):
+    with patch("agentarea_mcp.application.service.record_dispatch"):
         result = await service.execute_tool(
             instance.id, "search", {}, httpx_client_factory=upstream.client_factory
         )

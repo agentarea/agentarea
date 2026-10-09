@@ -45,6 +45,7 @@ def _serialize(conn: Any) -> dict:
         "url_variables": conn.url_variables or [],
         "tools_count": len(conn.available_tools or []),
         "status": conn.status,
+        "last_dispatch": conn.last_dispatch,
     }
 
 

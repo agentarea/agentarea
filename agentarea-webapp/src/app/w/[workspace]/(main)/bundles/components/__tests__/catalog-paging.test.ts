@@ -21,6 +21,7 @@ const entry = (id: string): CatalogEntry => ({
   identity: { kind: "skill", sources: [] },
   featured: false,
   verified: false,
+  connections: [],
   spec: {},
 });
 

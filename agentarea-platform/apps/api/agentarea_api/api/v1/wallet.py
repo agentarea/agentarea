@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
-from decimal import Decimal
-from typing import Any
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
@@ -22,8 +22,9 @@ from agentarea_common.auth.route_authz import (
 from agentarea_common.base.pagination import MAX_PAGE
 from agentarea_common.money import ZERO, Money
 from agentarea_common.utils.types import NaiveUtcDatetime, UtcDatetime
+from agentarea_wallet.domain.enums import BudgetPeriod, WalletStatus, WalletType
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,24 @@ router = APIRouter(prefix="/agents/{agent_id}/wallet", tags=["wallet"])
 
 # agent_wallets.service_budget_usd is NUMERIC(18, 6): at most 12 integer digits.
 _BUDGET_CEILING = Decimal(10) ** 12
+_BUDGET_STEP = Decimal("0.000001")
+
+
+def _as_stored(value: Decimal | None) -> Decimal | None:
+    """The budget as the column stores it, refused if that rounds past the ceiling.
+
+    Postgres rounds to the column's 6 places on insert, so 999999999999.9999995
+    passed the ``lt`` bound here and then overflowed as 10**12 (a 500).
+    """
+    if value is None:
+        return None
+    stored = value.quantize(_BUDGET_STEP, rounding=ROUND_HALF_UP)
+    if stored >= _BUDGET_CEILING:
+        raise ValueError(f"service_budget_usd must be less than {_BUDGET_CEILING}")
+    return stored
+
+
+Budget = Annotated[Money, AfterValidator(_as_stored)]
 
 
 # ---------------------------------------------------------------------------
@@ -62,26 +81,28 @@ class WalletCredentialsSchema(BaseModel):
 
 
 class CreateWalletRequest(BaseModel):
-    wallet_type: str  # "x402", "mpp", "dual"
+    wallet_type: WalletType
     x402_config: X402ConfigSchema | None = None
     mpp_config: MPPConfigSchema | None = None
     credentials: WalletCredentialsSchema | None = None
-    service_budget_usd: Money = Field(default=ZERO, ge=ZERO, lt=_BUDGET_CEILING)
-    service_budget_period: str = "execution"  # "execution", "daily", "monthly"
+    service_budget_usd: Budget = Field(default=ZERO, ge=ZERO, lt=_BUDGET_CEILING)
+    service_budget_period: BudgetPeriod = BudgetPeriod.EXECUTION
 
 
 class UpdateWalletRequest(BaseModel):
-    wallet_type: str | None = None
+    wallet_type: WalletType | None = None
     x402_config: X402ConfigSchema | None = None
     mpp_config: MPPConfigSchema | None = None
     credentials: WalletCredentialsSchema | None = None
-    service_budget_usd: Money | None = Field(default=None, ge=ZERO, lt=_BUDGET_CEILING)
-    service_budget_period: str | None = None
-    status: str | None = None
+    service_budget_usd: Budget | None = Field(default=None, ge=ZERO, lt=_BUDGET_CEILING)
+    # An unknown period summed spend over all time; an unknown status dropped
+    # the wallet from the budget-exhausted view.
+    service_budget_period: BudgetPeriod | None = None
+    status: WalletStatus | None = None
 
 
 class FundWalletRequest(BaseModel):
-    service_budget_usd: Money = Field(ge=ZERO, lt=_BUDGET_CEILING)
+    service_budget_usd: Budget = Field(ge=ZERO, lt=_BUDGET_CEILING)
 
 
 class WalletResponse(BaseModel):

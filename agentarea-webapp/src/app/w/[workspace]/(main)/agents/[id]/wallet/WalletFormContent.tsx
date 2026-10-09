@@ -10,6 +10,7 @@ import {
   Network,
   Wallet,
 } from "lucide-react";
+import type { BudgetPeriod, WalletType } from "@/api/client/types.gen";
 import EmptyState from "@/components/EmptyState";
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
@@ -133,22 +134,23 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
     try {
       if (wallet) {
         await updateWallet({
-          wallet_type: walletType,
+          // The tabs and select only offer the API's own values.
+          wallet_type: walletType as WalletType,
           x402_config: x402Config,
           mpp_config: mppConfig,
           ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
           ...(serviceBudget ? { service_budget_usd: serviceBudget } : {}),
-          service_budget_period: budgetPeriod,
+          service_budget_period: budgetPeriod as BudgetPeriod,
         });
       } else {
         await createWallet({
-          wallet_type: walletType,
+          wallet_type: walletType as WalletType,
           x402_config: x402Config,
           mpp_config: mppConfig,
           credentials:
             Object.keys(credentials).length > 0 ? credentials : undefined,
           ...(serviceBudget ? { service_budget_usd: serviceBudget } : {}),
-          service_budget_period: budgetPeriod,
+          service_budget_period: budgetPeriod as BudgetPeriod,
         });
       }
     } catch (err) {

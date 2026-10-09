@@ -3,6 +3,7 @@
 // (CatalogGallery, infinite-scroll appends). No React/JSX here so it stays
 // importable from a Server Component.
 
+import type { CatalogConnection } from "@/api/client/types.gen";
 import type { EntityKind } from "@/lib/entity-icons";
 import {
   domainInitials,
@@ -33,7 +34,9 @@ export const REGISTRY_TYPE: Record<CatalogType, string> = {
 
 // What the connections tab used to be called. Links to it exist in docs, in
 // the app itself and in bookmarks, so the old value still resolves.
-const LEGACY_TYPES: Record<string, CatalogType> = { mcp_servers: "connections" };
+const LEGACY_TYPES: Record<string, CatalogType> = {
+  mcp_servers: "connections",
+};
 
 // How a connection is reached. Mirrors CATALOG_PROTOCOLS on the backend, which
 // derives it from `spec.connection_type` and rejects anything else.
@@ -102,6 +105,9 @@ export type RegistryItem = {
   category?: string | null;
   featured?: boolean | null;
   hosting?: string | null;
+  // Connections only: the workspace's connections made from this item that
+  // the caller may read.
+  workspace_connections?: CatalogConnection[] | null;
 };
 
 export type Registry = { id: string; name: string; registry_type: string };
@@ -126,6 +132,8 @@ export type CatalogEntry = {
   // the MCP manager runs), as the server derived it. Null when unknown.
   hosting?: string | null;
   verified: boolean; // official vendor connection with confirmed OAuth
+  // Connections only: what the workspace already made from this item.
+  connections: CatalogConnection[];
   spec: RawSpec;
 };
 
@@ -140,11 +148,15 @@ export function toCatalogType(v: unknown): CatalogType | null {
 }
 
 export function isCatalogProtocol(v: unknown): v is CatalogProtocol {
-  return typeof v === "string" && (PROTOCOL_KEYS as readonly string[]).includes(v);
+  return (
+    typeof v === "string" && (PROTOCOL_KEYS as readonly string[]).includes(v)
+  );
 }
 
 export function isCatalogHosting(v: unknown): v is CatalogHosting {
-  return typeof v === "string" && (HOSTING_KEYS as readonly string[]).includes(v);
+  return (
+    typeof v === "string" && (HOSTING_KEYS as readonly string[]).includes(v)
+  );
 }
 
 export function str(v: unknown): string | null {
@@ -255,8 +267,7 @@ export function catalogIdentity(
   // all (a command/docker server has no URL, and falls back to its name).
   const endpoint = entry.type === "connections" ? str(entry.spec.url) : null;
   return {
-    kind:
-      entry.protocol === "api" ? "client" : ENTITY_KIND[entry.type],
+    kind: entry.protocol === "api" ? "client" : ENTITY_KIND[entry.type],
     sources: iconSources(entry.type, entry.spec, endpoint),
     initials: domainInitials(endpoint, entry.title),
   };
@@ -352,6 +363,7 @@ function describe(
     featured: item.featured ?? tags.includes(FEATURED_TAG),
     hosting: str(item.hosting),
     verified: false,
+    connections: item.workspace_connections ?? [],
     spec,
   };
   const serverCategory = str(item.category);

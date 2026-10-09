@@ -121,6 +121,7 @@ class AgentAreaWorker:
         self._dedup = None
         self._inbound_dedup = None
         self.container_monitor = None
+        self.dispatch_stamps = None
         self.worker_shutdown_event = asyncio.Event()
         self.health = WorkerHealth()
         # All interfaces: the kubelet probes the pod IP, not loopback.
@@ -465,6 +466,12 @@ class AgentAreaWorker:
 
         self.container_monitor = await start_container_monitoring()
 
+        from agentarea_common.config.database import get_database
+        from agentarea_mcp.dispatch_stamps import DispatchStampWriter
+
+        self.dispatch_stamps = DispatchStampWriter(get_database().async_session_factory)
+        await self.dispatch_stamps.start()
+
         # Start workers in background
         pollers = {w.task_queue: w for w in (self.worker, self.trigger_worker) if w}
         worker_tasks = {queue: asyncio.create_task(w.run()) for queue, w in pollers.items()}
@@ -521,6 +528,9 @@ class AgentAreaWorker:
         """Shutdown the worker and cleanup resources."""
         logger.info("Shutting down worker...")
 
+        if self.dispatch_stamps:
+            await self.dispatch_stamps.stop()
+            self.dispatch_stamps = None
         if self.container_monitor:
             await self.container_monitor.stop()
             self.container_monitor = None

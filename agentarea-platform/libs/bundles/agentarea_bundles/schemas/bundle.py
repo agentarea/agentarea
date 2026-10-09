@@ -231,7 +231,8 @@ class BundlePolicy(BaseModel):
         description="Effect-specific params, e.g. {amount_usd, period} for cap.",
     )
     condition: str | None = Field(default=None, description="Optional CEL condition.")
-    priority: int = Field(default=0)
+    # Stored in a Postgres integer column.
+    priority: int = Field(default=0, ge=-(2**31), le=2**31 - 1)
     enabled: bool = Field(default=True)
     message: str | None = Field(default=None, description="Human-readable reason.")
 

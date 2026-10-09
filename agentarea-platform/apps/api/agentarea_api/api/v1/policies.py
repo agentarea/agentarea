@@ -23,6 +23,11 @@ router = APIRouter(prefix="/policies", tags=["policies"])
 DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
 
+# The column is a Postgres integer; a value outside it was a 500 from the insert.
+_PRIORITY_MIN = -(2**31)
+_PRIORITY_MAX = 2**31 - 1
+
+
 class PolicyRuleResponse(BaseModel):
     """Serialized policy rule returned to clients."""
 
@@ -49,7 +54,7 @@ class PolicyRuleCreateRequest(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
     condition: str | None = None
     enabled: bool = True
-    priority: int = 0
+    priority: int = Field(default=0, ge=_PRIORITY_MIN, le=_PRIORITY_MAX)
 
 
 class PolicyRuleUpdateRequest(BaseModel):
@@ -64,7 +69,7 @@ class PolicyRuleUpdateRequest(BaseModel):
     params: dict[str, Any] | None = None
     condition: str | None = None
     enabled: bool | None = None
-    priority: int | None = None
+    priority: int | None = Field(default=None, ge=_PRIORITY_MIN, le=_PRIORITY_MAX)
 
 
 def _rule_response(rule: PolicyRule) -> PolicyRuleResponse:

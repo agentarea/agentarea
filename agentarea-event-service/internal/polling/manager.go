@@ -3,7 +3,9 @@ package polling
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
+	"reflect"
 	"sync"
 	"time"
 
@@ -28,7 +30,21 @@ type Manager struct {
 	maxPollers   int
 
 	mu      sync.Mutex
-	pollers map[string]context.CancelFunc // trigger_id -> cancel
+	pollers map[string]*runningPoller // trigger_id -> poller
+}
+
+// runningPoller is a poller goroutine and the trigger config it was started with.
+type runningPoller struct {
+	cancel    context.CancelFunc
+	extractor string
+	config    map[string]any
+	done      chan struct{} // closed once the goroutine has released its claim
+}
+
+// serves reports whether the poller was started with t's current config. A
+// changed config (a rotated bot_token, say) needs a new poller.
+func (p *runningPoller) serves(t trigger.Trigger) bool {
+	return p.extractor == t.DataExtractor && reflect.DeepEqual(p.config, t.DataExtractorConfig)
 }
 
 // NewManager creates a new polling Manager.
@@ -45,7 +61,7 @@ func NewManager(
 		claimer:      claimer,
 		pollInterval: pollInterval,
 		maxPollers:   maxPollers,
-		pollers:      make(map[string]context.CancelFunc),
+		pollers:      make(map[string]*runningPoller),
 	}
 }
 
@@ -86,13 +102,22 @@ func (m *Manager) reconcile(ctx context.Context) {
 		desired[t.ID] = t
 	}
 
-	// Stop pollers for triggers that are no longer active
-	for id, cancel := range m.pollers {
-		if _, ok := desired[id]; !ok {
-			slog.Info("stopping poller for removed/disabled trigger", "trigger_id", id)
-			cancel()
-			delete(m.pollers, id)
+	// Stop pollers for triggers that are no longer active, or whose config
+	// changed; the latter start again below once the old poller has exited.
+	replaced := make(map[string]<-chan struct{})
+	for id, p := range m.pollers {
+		t, ok := desired[id]
+		if ok && p.serves(t) {
+			continue
 		}
+		if ok {
+			slog.Info("restarting poller for changed trigger config", "trigger_id", id)
+			replaced[id] = p.done
+		} else {
+			slog.Info("stopping poller for removed/disabled trigger", "trigger_id", id)
+		}
+		p.cancel()
+		delete(m.pollers, id)
 	}
 
 	// Start pollers for new triggers (respecting maxPollers)
@@ -104,13 +129,15 @@ func (m *Manager) reconcile(ctx context.Context) {
 			slog.Warn("max pollers reached, skipping trigger", "trigger_id", id, "max", m.maxPollers)
 			continue
 		}
-		m.startPoller(ctx, t)
+		m.startPoller(ctx, t, replaced[id])
 	}
 }
 
-// startPoller launches a goroutine for the given trigger.
+// startPoller launches a goroutine for the given trigger. If previous is
+// non-nil, the goroutine waits for it to close (the poller being replaced has
+// released its claim) before claiming the trigger.
 // Must be called with m.mu held.
-func (m *Manager) startPoller(ctx context.Context, t trigger.Trigger) {
+func (m *Manager) startPoller(ctx context.Context, t trigger.Trigger, previous <-chan struct{}) {
 	// Resolve channel poller from registry
 	factory := channels.Get(t.DataExtractor)
 	if factory == nil {
@@ -129,16 +156,34 @@ func (m *Manager) startPoller(ctx context.Context, t trigger.Trigger) {
 	}
 
 	pollerCtx, cancel := context.WithCancel(ctx)
-	m.pollers[t.ID] = cancel
+	running := &runningPoller{
+		cancel:    cancel,
+		extractor: t.DataExtractor,
+		config:    t.DataExtractorConfig,
+		done:      make(chan struct{}),
+	}
+	m.pollers[t.ID] = running
 
 	go func() {
 		defer func() {
 			cancel()
 			m.mu.Lock()
-			delete(m.pollers, t.ID)
+			// A config change may already have put a new poller in this slot.
+			if m.pollers[t.ID] == running {
+				delete(m.pollers, t.ID)
+			}
 			m.mu.Unlock()
+			close(running.done)
 			slog.Info("poller stopped", "trigger_id", t.ID)
 		}()
+
+		if previous != nil {
+			select {
+			case <-previous:
+			case <-pollerCtx.Done():
+				return
+			}
+		}
 
 		// Try to claim this trigger
 		claimed, err := m.claimer.TryClaim(pollerCtx, t.ID)
@@ -168,7 +213,14 @@ func (m *Manager) startPoller(ctx context.Context, t trigger.Trigger) {
 				case <-pollerCtx.Done():
 					return
 				case <-renewTicker.C:
-					if err := m.claimer.Renew(pollerCtx, t.ID); err != nil {
+					err := m.claimer.Renew(pollerCtx, t.ID)
+					if errors.Is(err, claim.ErrClaimLost) {
+						// Another worker may poll this trigger now; stop rather than double-deliver.
+						slog.Warn("claim lost, stopping poller", "trigger_id", t.ID, "error", err)
+						cancel()
+						return
+					}
+					if err != nil {
 						slog.Warn("failed to renew claim", "trigger_id", t.ID, "error", err)
 					}
 				}
@@ -208,15 +260,15 @@ func (m *Manager) runPoller(ctx context.Context, t trigger.Trigger, poller chann
 		slog.Info("received events", "trigger_id", t.ID, "count", len(result.Events))
 
 		// Submit each event individually (don't advance offset on failure)
-		for _, event := range result.Events {
-			origin := result.ChannelOrigin
+		for _, polled := range result.Events {
+			origin := polled.ChannelOrigin
 			if origin == nil {
 				origin = map[string]any{}
 			}
 			// Add trigger_id for credential lookup on response routing
 			origin["trigger_id"] = t.ID
 
-			if err := m.submitter.SubmitEvent(ctx, t.ID, event, origin); err != nil {
+			if err := m.submitter.SubmitEvent(ctx, t.ID, polled.Event, origin); err != nil {
 				slog.Warn("failed to submit event, not advancing offset",
 					"trigger_id", t.ID,
 					"error", err,
@@ -244,9 +296,9 @@ func (m *Manager) runPoller(ctx context.Context, t trigger.Trigger, poller chann
 func (m *Manager) stopAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for id, cancel := range m.pollers {
+	for id, p := range m.pollers {
 		slog.Info("stopping poller on shutdown", "trigger_id", id)
-		cancel()
+		p.cancel()
 	}
-	m.pollers = make(map[string]context.CancelFunc)
+	m.pollers = make(map[string]*runningPoller)
 }

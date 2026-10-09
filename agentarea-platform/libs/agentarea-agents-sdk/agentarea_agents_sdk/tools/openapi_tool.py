@@ -66,10 +66,18 @@ class OpenAPITool(BaseTool):
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
         """Execute the HTTP call described by the operation.
 
+        A successful call is recorded as the connection's last dispatch.
+
         Returns structured dict:
             {"success": bool, "result": str|None, "error": str|None,
              "tool_name": str, "status_code": int|None}
         """
+        result = await self._call(**kwargs)
+        if result["success"]:
+            await self._service.record_dispatch(self._connection_id)
+        return result
+
+    async def _call(self, **kwargs: Any) -> dict[str, Any]:
         # Fetch connection
         try:
             connection = await self._service.get_connection(self._connection_id)
@@ -461,8 +469,9 @@ class OpenAPIToolFactory:
             )
             return []
 
+        configured_query_params = {p["name"] for p in connection.custom_query_params or []}
         try:
-            operations = parse_openapi_operations(connection.spec_content)
+            operations = parse_openapi_operations(connection.spec_content, configured_query_params)
         except Exception as e:
             logger.error(
                 "Failed to parse OpenAPI spec for connection %r: %s",
