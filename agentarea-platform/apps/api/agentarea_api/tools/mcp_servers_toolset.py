@@ -30,6 +30,8 @@ from agentarea_mcp.schemas.dto import (
 from fastapi import HTTPException
 from mcp.types import InputRequiredResult
 
+from ..api.v1 import _catalog_connections
+from ..api.v1._catalog_connections import with_existing_connections
 from ..api.v1.mcp_oauth_connect import connect_page_url
 from .base import platform_context, platform_read_context
 
@@ -106,7 +108,7 @@ def _serialize_tool_detail(tool: dict[str, Any]) -> dict[str, Any]:
 
 async def _connect_action(
     service: Any, user_ctx: UserContext, instance: Any, *, probe: bool
-) -> dict[str, str] | None:
+) -> dict[str, Any] | None:
     """The link a person opens to connect *instance*, while it waits on a credential."""
     if not await service.needs_connecting(instance, probe=probe):
         return None
@@ -411,7 +413,7 @@ class MCPServersToolset(Toolset):
         )
 
         async with platform_context() as (
-            _session,
+            session,
             user_ctx,
             repo_factory,
             event_broker,
@@ -430,6 +432,15 @@ class MCPServersToolset(Toolset):
             action = await _connect_action(service, user_ctx, instance, probe=True)
             result = _serialize_instance(instance)
             if action is not None:
+                spec = await service.mcp_server_repository.get_server_by_id(instance.server_spec_id)
+                registry_item_id = getattr(spec, "registry_item_id", None)
+                if registry_item_id is not None:
+                    action = with_existing_connections(
+                        action,
+                        await _catalog_connections.other_catalog_connections(
+                            session, user_ctx, registry_item_id, instance.id
+                        ),
+                    )
                 result["action_required"] = action
             return json.dumps(result, default=str)
 

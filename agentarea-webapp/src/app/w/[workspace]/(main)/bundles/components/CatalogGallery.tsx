@@ -65,6 +65,7 @@ import {
   formatApiError,
   isApiNotFound,
 } from "@/lib/api-errors";
+import { existingConnectionsHref } from "@/lib/catalog-connections";
 import { getCategoryIcon } from "@/lib/category-icons";
 import type { StatusKind } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -86,15 +87,15 @@ import {
 import { BundlePlan } from "./BundlePlan";
 import {
   ALL,
+  arr,
   DEFAULT_SORT,
   EXPLORE_VIEW_COOKIE,
   FEATURED_TAG,
-  arr,
+  HOSTING_LABELS,
   isCatalogHosting,
   isCatalogProtocol,
   modelNameMatchesPreferred,
   normalize,
-  HOSTING_LABELS,
   PROTOCOL_LABELS,
   SORT_KEYS,
   str,
@@ -701,7 +702,9 @@ export default function CatalogGallery({
   );
   const hostings = useMemo(
     () =>
-      (paging.hostings ?? []).map((h) => [h.value, h.count] as [string, number]),
+      (paging.hostings ?? []).map(
+        (h) => [h.value, h.count] as [string, number]
+      ),
     [paging.hostings]
   );
 
@@ -1027,6 +1030,9 @@ const CATALOG_COLUMNS: Column<CatalogEntry>[] = [
           {e.verified && (
             <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />
           )}
+          {e.connections.length > 0 && (
+            <ConnectedCount count={e.connections.length} />
+          )}
         </div>
       ) : null,
   },
@@ -1191,6 +1197,20 @@ function ProtocolBadge({ protocol }: { protocol: CatalogProtocol }) {
   );
 }
 
+/** How many of the workspace's connections were made from a catalog item. */
+function ConnectedCount({ count }: { count: number }) {
+  const t = useTranslations("CatalogPage.connected");
+  return (
+    <StatusIndicator
+      kind="done"
+      size="sm"
+      className="shrink-0 whitespace-nowrap text-xs text-muted-foreground"
+    >
+      {t("badge", { count })}
+    </StatusIndicator>
+  );
+}
+
 function CatalogCard({
   entry,
   onOpen,
@@ -1250,8 +1270,13 @@ function CatalogCard({
           {entry.category && <CategoryBadge category={entry.category} />}
         </div>
         <p className="table-description line-clamp-2">{entry.description}</p>
-        {(entry.protocol || entry.meta.length > 0) && (
+        {(entry.protocol ||
+          entry.meta.length > 0 ||
+          entry.connections.length > 0) && (
           <div className="mt-auto flex flex-wrap items-center gap-1 pt-1.5">
+            {entry.connections.length > 0 && (
+              <ConnectedCount count={entry.connections.length} />
+            )}
             {entry.protocol && <ProtocolBadge protocol={entry.protocol} />}
             {entry.meta.map((m) => (
               <Badge
@@ -1297,6 +1322,7 @@ function DetailView({
 }) {
   const [state, setState] = useState<InstallState>({ phase: "idle" });
   const tBundle = useTranslations("BundleInstall");
+  const tConnected = useTranslations("CatalogPage.connected");
   // Bundles open an inline configure-then-install step rather than installing on
   // the first click (pick model, skip connections, tune policies, then commit).
   const [configuring, setConfiguring] = useState(false);
@@ -1324,6 +1350,9 @@ function DetailView({
   const connectHref = isCatalogApi
     ? `/connections/catalog/${entry.id}`
     : `/connections/create/${entry.id}`;
+  // Connecting again makes another account, so a connected item opens what
+  // exists and offers another one second.
+  const openHref = existingConnectionsHref(entry.id, entry.connections);
 
   useEffect(() => {
     // Reset only when the selected item changes.
@@ -1389,6 +1418,9 @@ function DetailView({
               )}
               {entry.protocol && <ProtocolBadge protocol={entry.protocol} />}
               {entry.category && <CategoryBadge category={entry.category} />}
+              {entry.connections.length > 0 && (
+                <ConnectedCount count={entry.connections.length} />
+              )}
               {hosting && (
                 <Badge variant="light" size="sm">
                   {hosting === "agentarea"
@@ -1411,9 +1443,18 @@ function DetailView({
             <Button asChild variant="outline">
               <Link href="/agents">Go to Agents</Link>
             </Button>
+          ) : entry.type === "connections" && openHref ? (
+            <div className="flex flex-col gap-2">
+              <StartAgentButton asChild size="xs">
+                <Link href={openHref}>{tConnected("open")}</Link>
+              </StartAgentButton>
+              <Button asChild variant="outline" size="xs">
+                <Link href={connectHref}>{tConnected("addAnother")}</Link>
+              </Button>
+            </div>
           ) : entry.type === "connections" ? (
             <StartAgentButton asChild size="xs">
-              <Link href={connectHref}>Connect</Link>
+              <Link href={connectHref}>{tConnected("connect")}</Link>
             </StartAgentButton>
           ) : isBundle && configuring ? null : (
             <StartAgentButton
@@ -2363,7 +2404,10 @@ function ConnectionFacts({ entry }: { entry: CatalogEntry }) {
   if (website && website !== repo) facts.push(["Website", link(website)]);
   if (entry.category) facts.push(["Category", entry.category]);
   if (license)
-    facts.push(["License", license === "NOASSERTION" ? "Not specified" : license]);
+    facts.push([
+      "License",
+      license === "NOASSERTION" ? "Not specified" : license,
+    ]);
   if (audience.length)
     facts.push([
       "Available in",
@@ -2411,8 +2455,8 @@ function ConnectionHow({ entry }: { entry: CatalogEntry }) {
       <div>
         <SectionLabel>How it connects</SectionLabel>
         <p className="text-sm">
-          Hosted by {hostOf(url) ?? "the vendor"}. AgentArea calls their endpoint
-          — nothing runs on our side.
+          Hosted by {hostOf(url) ?? "the vendor"}. AgentArea calls their
+          endpoint — nothing runs on our side.
         </p>
         {url && (
           <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
@@ -2434,7 +2478,9 @@ function ConnectionHow({ entry }: { entry: CatalogEntry }) {
       <SectionLabel>How it connects</SectionLabel>
       <p className="text-sm">
         Runs on AgentArea: we start the server for your workspace from{" "}
-        {registry ? (PACKAGE_REGISTRY_LABELS[registry] ?? registry) : "its package"}
+        {registry
+          ? (PACKAGE_REGISTRY_LABELS[registry] ?? registry)
+          : "its package"}
         {identifier ? (
           <>
             {" "}
@@ -2564,12 +2610,7 @@ export function CatalogGallerySkeleton({
       <div className="min-w-0 flex-1 space-y-4">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            disabled
-            placeholder={t(type)}
-            aria-hidden
-            className="pl-9"
-          />
+          <Input disabled placeholder={t(type)} aria-hidden className="pl-9" />
         </div>
         <ContentSkeleton view={view} />
       </div>

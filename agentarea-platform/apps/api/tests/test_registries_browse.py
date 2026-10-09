@@ -15,6 +15,10 @@ from uuid import uuid4
 
 import pytest
 from agentarea_api.api.v1 import registries
+from agentarea_api.api.v1._catalog_connections import (
+    CatalogConnection,
+    get_catalog_connections_lookup,
+)
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from fastapi import FastAPI
@@ -24,8 +28,9 @@ from httpx import ASGITransport, AsyncClient
 class _Item:
     """Minimal stand-in for a RegistryItem row."""
 
-    def __init__(self, name, category=None, featured=False):
+    def __init__(self, name, category=None, featured=False, registry_type="skills"):
         self.id = uuid4()
+        self.registry_type = registry_type
         self.registry_id = uuid4()
         self.external_id = name
         self.name = name
@@ -52,19 +57,35 @@ class _Service:
         self.calls.append(kwargs)
         return self._result
 
+    async def get_item(self, item_id):
+        return next((i for i in self._result[0] if i.id == item_id), None)
 
-def _client_for(service: _Service) -> AsyncClient:
+
+class _Lookup:
+    """The workspace's connections per catalog item, as the graph-filtered query returns them."""
+
+    def __init__(self, found=None):
+        self.found = found or {}
+        self.calls: list[list[str]] = []
+
+    async def __call__(self, item_ids):
+        self.calls.append([str(i) for i in item_ids])
+        return self.found
+
+
+def _client_for(service: _Service, lookup: _Lookup | None = None) -> AsyncClient:
     app = FastAPI()
     app.include_router(registries.router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[registries.get_registry_service] = lambda: service
+    app.dependency_overrides[get_catalog_connections_lookup] = lambda: lookup or _Lookup()
     app.dependency_overrides[get_user_context] = lambda: UserContext(
         user_id="u1", workspace_id="ws-1"
     )
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
-async def _browse(service, **params):
-    async with _client_for(service) as client:
+async def _browse(service, lookup=None, **params):
+    async with _client_for(service, lookup) as client:
         return await client.get("/v1/workspaces/acme/registries/catalog/browse", params=params)
 
 
@@ -192,3 +213,46 @@ class TestValidation:
     async def test_rejects_out_of_range_paging(self, params):
         resp = await _browse(_Service(), registry_type="skills", **params)
         assert resp.status_code == 422
+
+
+class TestWorkspaceConnections:
+    """A connections card knows how many of the workspace's connections came from it."""
+
+    async def test_each_connection_item_carries_the_workspace_connections_made_from_it(self):
+        github, stripe = _Item("GitHub"), _Item("Stripe")
+        made = CatalogConnection(id=uuid4(), kind="mcp", name="GitHub (work)")
+        lookup = _Lookup({str(github.id): [made]})
+        body = (
+            await _browse(_Service(items=[github, stripe]), lookup, registry_type="mcp_servers")
+        ).json()
+
+        assert body["items"][0]["workspace_connections"] == [
+            {"id": str(made.id), "kind": "mcp", "name": "GitHub (work)"}
+        ]
+        assert body["items"][1]["workspace_connections"] == []
+
+    async def test_the_whole_page_is_looked_up_at_once(self):
+        items = [_Item(f"c{i}") for i in range(5)]
+        lookup = _Lookup()
+        await _browse(_Service(items=items), lookup, registry_type="mcp_servers")
+
+        assert lookup.calls == [[str(i.id) for i in items]]
+
+    async def test_other_catalog_types_are_not_looked_up(self):
+        lookup = _Lookup()
+        body = (
+            await _browse(_Service(items=[_Item("skill")]), lookup, registry_type="skills")
+        ).json()
+
+        assert lookup.calls == []
+        assert body["items"][0]["workspace_connections"] is None
+
+    async def test_one_item_carries_its_workspace_connections(self):
+        item = _Item("Linear", registry_type="mcp_servers")
+        made = CatalogConnection(id=uuid4(), kind="openapi", name="Linear")
+        async with _client_for(_Service(items=[item]), _Lookup({str(item.id): [made]})) as client:
+            body = (
+                await client.get(f"/v1/workspaces/acme/registries/catalog/items/{item.id}")
+            ).json()
+
+        assert [c["name"] for c in body["workspace_connections"]] == ["Linear"]

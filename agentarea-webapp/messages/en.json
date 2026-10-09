@@ -856,7 +856,11 @@
       "check": "Check connection",
       "failedTitle": "Couldn't connect",
       "failedDetail": "The server didn't accept the connection.",
-      "openSettings": "Open connection settings"
+      "openSettings": "Open connection settings",
+      "alreadyTitle": "{others, plural, =0 {Already connected as {name}} other {Already connected as {name} and # more}}",
+      "alreadyDetail": "{others, plural, =0 {Open it} other {Open them}}, or sign in with another account to add one more connection.",
+      "open": "Open",
+      "connectAnother": "Connect another account"
     },
     "instanceDetail": {
       "activity": {
@@ -1104,7 +1108,8 @@
         "saveQueryParamsFailed": "Couldn't save the query parameters",
         "deleteFailed": "Couldn't delete the connection"
       }
-    }
+    },
+    "sourceFilter": "From the catalog: {name}"
   },
   "Models": {
     "title": "Provider Management",
@@ -3249,6 +3254,12 @@
         "import": "Import a bundle you already have",
         "action": "Import a bundle"
       }
+    },
+    "connected": {
+      "badge": "Connected · {count}",
+      "open": "Open",
+      "addAnother": "Add another",
+      "connect": "Connect"
     }
   },
   "BundleInstall": {

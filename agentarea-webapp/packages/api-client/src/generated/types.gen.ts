@@ -1401,6 +1401,26 @@ export type CatalogBrowseResponse = {
 };
 
 /**
+ * CatalogConnection
+ *
+ * One existing connection made from a catalog item.
+ */
+export type CatalogConnection = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: 'mcp' | 'openapi';
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
  * CatalogConnectionPreflight
  *
  * What the connect form needs to know before it offers Connect.
@@ -1417,6 +1437,10 @@ export type CatalogConnectionPreflight = {
      * Detail
      */
     detail: string;
+    /**
+     * Existing Connections
+     */
+    existing_connections?: Array<CatalogConnection>;
     /**
      * Item Id
      */
@@ -3569,6 +3593,10 @@ export type McpServerResponse = {
      * Name
      */
     name: string;
+    /**
+     * Registry Item Id
+     */
+    registry_item_id?: string | null;
     /**
      * Registry Url
      */
@@ -5863,6 +5891,10 @@ export type RegistryItemResponse = {
      * Version
      */
     version: string | null;
+    /**
+     * Workspace Connections
+     */
+    workspace_connections?: Array<CatalogConnection> | null;
 };
 
 /**

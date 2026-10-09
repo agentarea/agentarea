@@ -34,6 +34,8 @@ class MCPServerResponse(BaseModel):
     remote_url: str | None = None
     json_spec: dict[str, Any] | None = None
     registry_url: str | None = None
+    # The catalog item this spec was copied from; None for a spec made by hand.
+    registry_item_id: UUID | None = None
     status: str
     created_at: UtcDatetime
     updated_at: UtcDatetime
@@ -54,6 +56,7 @@ class MCPServerResponse(BaseModel):
             remote_url=server.remote_url,
             json_spec=server.json_spec,
             registry_url=server.registry_url,
+            registry_item_id=server.registry_item_id,
             status=server.status,
             created_at=server.created_at,
             updated_at=server.updated_at,

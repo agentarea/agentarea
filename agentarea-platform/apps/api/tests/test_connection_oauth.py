@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_api.api.v1 import connection_oauth
+from agentarea_api.api.v1._catalog_connections import CatalogConnection
 from agentarea_api.api.v1.oauth_app_credentials import workspace_secret_value
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
@@ -333,7 +334,7 @@ async def test_workspace_secret_source_allows_the_creator_or_an_admin(user_id, a
     assert value == "member-a-value"
 
 
-def _patch_catalog(monkeypatch, item, registry, platform_apps):
+def _patch_catalog(monkeypatch, item, registry, platform_apps, existing=None):
     class _ItemRepository:
         def __init__(self, *_args, **_kwargs):
             pass
@@ -358,6 +359,11 @@ def _patch_catalog(monkeypatch, item, registry, platform_apps):
         lambda: SimpleNamespace(mcp=MCPSettings(OAUTH_APPS=platform_apps)),
     )
     monkeypatch.setattr(connection_oauth, "validate_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        connection_oauth,
+        "readable_catalog_connections",
+        AsyncMock(return_value=existing or {}),
+    )
     monkeypatch.setattr(
         connection_oauth,
         "_callback_uri",
@@ -409,6 +415,29 @@ async def test_preflight_asks_for_an_oauth_app_when_the_platform_has_none(monkey
     assert result.status == "oauth_app_required"
     assert "redirect URI" in result.detail
     assert result.redirect_uri == "https://api.agentarea.ru/v1/connections/oauth/callback"
+
+
+@pytest.mark.asyncio
+async def test_preflight_names_the_connections_already_made_from_the_item(monkeypatch):
+    item_id = uuid4()
+    made = CatalogConnection(id=uuid4(), kind="openapi", name="Yandex Metrica (shop)")
+    _patch_catalog(monkeypatch, _metrica_item(), _ACTIVE_MCP_REGISTRY, [], {str(item_id): [made]})
+    user = _user()
+    session = AsyncMock()
+
+    result = await connection_oauth.preflight_catalog_item(item_id, user, session)
+
+    assert result.existing_connections == [made]
+    connection_oauth.readable_catalog_connections.assert_awaited_once_with(session, user, [item_id])
+
+
+@pytest.mark.asyncio
+async def test_preflight_for_an_item_never_connected_lists_none(monkeypatch):
+    _patch_catalog(monkeypatch, _metrica_item(), _ACTIVE_MCP_REGISTRY, [])
+
+    result = await connection_oauth.preflight_catalog_item(uuid4(), _user(), AsyncMock())
+
+    assert result.existing_connections == []
 
 
 @pytest.mark.asyncio
