@@ -114,6 +114,12 @@ class ProjectResponse(BaseModel):
     def _none_to_empty(cls, v: Any) -> Any:
         return v if v is not None else []
 
+    @field_validator("parent_project_id", mode="before")
+    @classmethod
+    def _uuid_to_str(cls, v: Any) -> Any:
+        # The column is a UUID; the contract stays a string.
+        return str(v) if isinstance(v, UUID) else v
+
 
 # ---------------------------------------------------------------------------
 # CRUD endpoints
