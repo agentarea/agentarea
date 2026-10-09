@@ -23,6 +23,7 @@ import logging
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from agentarea_agents_sdk.mcp_server import UnknownToolsetError, selected_tools
 from agentarea_agents_sdk.mcp_server.auth import (
@@ -179,6 +180,15 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
 
     The set is exactly the client's own attachments.
     """
+    # The id is a path segment anyone can type. Only a UUID names a client;
+    # anything else would reach the database and fail there, and that error's
+    # text (the SQL and the caller's workspace list) would become the reply.
+    # The canonical spelling is what the database and the ReBAC graph hold.
+    try:
+        client_id = str(UUID(client_id))
+    except ValueError:
+        return None
+
     from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
     from agentarea_agents_sdk.skills.skill_catalog_builder import SkillEntry
     from agentarea_common.base.repository_factory import RepositoryFactory
