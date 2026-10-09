@@ -1,7 +1,7 @@
 # Agent invocation access — design
 
 **Date:** 2026-10-09
-**Branch:** claude/adoring-shannon-2na8q5
+**Branch:** docs/agent-invocation-access
 **Status:** draft for review (brainstorming output; not yet a plan)
 
 ## Problem
