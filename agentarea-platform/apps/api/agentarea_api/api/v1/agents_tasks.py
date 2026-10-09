@@ -1159,32 +1159,19 @@ async def list_agent_tasks(
 
     try:
         # Get tasks from DB only (no Temporal enrichment for list view)
+        # Status and the page are applied in SQL: slicing or filtering after a
+        # LIMIT returned an empty page for every offset past the first.
         agent_tasks = await task_service.list_agent_tasks(
-            agent_id, limit=limit, creator_scoped=False
+            agent_id,
+            limit=limit,
+            offset=offset,
+            status=status.lower() if status else None,
+            creator_scoped=False,
         )
 
-        logger.info(f"Found {len(agent_tasks)} tasks for agent {agent_id} ({agent.name})")
+        logger.info(f"Returning {len(agent_tasks)} tasks for agent {agent_id} ({agent.name})")
 
-        task_responses: list[TaskResponse] = []
-
-        # Convert service tasks to TaskResponse format
-        for task in agent_tasks:
-            # Apply status filtering if specified
-            if status and task.status.lower() != status.lower():
-                continue
-
-            # Create TaskResponse from service task
-            task_responses.append(TaskResponse.from_agent_task(task))
-
-        # Sort by created_at descending (newest first)
-        task_responses.sort(key=lambda x: x.created_at, reverse=True)
-
-        # Apply pagination
-        paginated_tasks = task_responses[offset : offset + limit]
-
-        logger.info(f"Returning {len(paginated_tasks)} tasks for agent {agent_id}")
-
-        return paginated_tasks
+        return [TaskResponse.from_agent_task(task) for task in agent_tasks]
 
     except Exception as e:
         logger.exception(f"Failed to get tasks for agent {agent_id}: {e}")
