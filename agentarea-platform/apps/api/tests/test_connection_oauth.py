@@ -12,6 +12,7 @@ from agentarea_api.api.v1.oauth_app_credentials import workspace_secret_value
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.config.mcp import MCPOAuthApp, MCPSettings
 from agentarea_common.di.container import register_singleton
 from agentarea_secrets.catalog_service import SecretCatalogService
 from fastapi import HTTPException
@@ -22,13 +23,22 @@ def _oauth_profile() -> dict:
         "provider_key": "yandex-metrica",
         "authorization_url": "https://oauth.yandex.ru/authorize",
         "token_url": "https://oauth.yandex.ru/token",
-        "managed_credentials_key": "connection_oauth_client:yandex-metrica",
         "allowed_api_origins": ["https://api-metrika.yandex.net"],
         "scopes": ["metrika:read"],
         "authorization_scheme": "OAuth",
         "client_auth_method": "client_secret_post",
         "authorize_params": {"access_type": "offline", "prompt": "consent"},
     }
+
+
+_YANDEX_APP = {
+    "issuer": "https://oauth.yandex.ru",
+    "client_id": "platform-client-id",
+    "client_secret": "platform-client-secret",  # pragma: allowlist secret
+    "authorization_endpoint": "https://oauth.yandex.ru/authorize",
+    "token_endpoint": "https://oauth.yandex.ru/token",
+    "resource_origins": ["https://api-metrika.yandex.net"],
+}
 
 
 @pytest.mark.parametrize(
@@ -41,15 +51,6 @@ def test_catalog_oauth_rejects_authorize_params_the_flow_owns(monkeypatch, autho
     profile["authorize_params"] = authorize_params
 
     with pytest.raises(HTTPException, match="Invalid OAuth authorize params"):
-        connection_oauth._oauth_profile({"oauth": profile})
-
-
-def test_catalog_oauth_rejects_unreserved_platform_secret_reference(monkeypatch):
-    monkeypatch.setattr(connection_oauth, "validate_url", lambda *_args, **_kwargs: None)
-    profile = _oauth_profile()
-    profile["managed_credentials_key"] = "unrelated-platform-key"
-
-    with pytest.raises(HTTPException, match="Invalid managed OAuth credential reference"):
         connection_oauth._oauth_profile({"oauth": profile})
 
 
@@ -141,11 +142,8 @@ async def test_connect_uses_requested_credential_source_without_secret_in_state(
     monkeypatch.setattr(
         connection_oauth, "get_real_secret_manager", lambda **_kwargs: workspace_manager
     )
-    monkeypatch.setattr(connection_oauth, "_managed_secret_manager", lambda _session: object())
     monkeypatch.setattr(
-        connection_oauth,
-        "_managed_credentials",
-        AsyncMock(return_value=("managed-client-id", "managed-client-secret")),
+        connection_oauth, "_platform_app", lambda _template: MCPOAuthApp(**_YANDEX_APP)
     )
     monkeypatch.setattr(connection_oauth, "_oauth_profile", lambda _spec: _oauth_profile())
     monkeypatch.setattr(connection_oauth, "_store_state", stored_state)
@@ -185,7 +183,7 @@ async def test_connect_uses_requested_credential_source_without_secret_in_state(
     assert connection_create.await_args.kwargs["registry_item_id"] == item_id
     query = urllib.parse.parse_qs(urllib.parse.urlparse(response.authorize_url).query)
     expected_client_id = {
-        "managed": "managed-client-id",
+        "managed": "platform-client-id",
         "inline": "inline-client-id",
         "workspace_secrets": "workspace-client-id",  # pragma: allowlist secret
     }[credential_source]
@@ -200,7 +198,10 @@ async def test_connect_uses_requested_credential_source_without_secret_in_state(
     assert auth_kwargs["allow_managed_credentials"] is True
     if credential_source == "managed":
         assert auth_kwargs["credentials"] == {}
-        assert auth_kwargs["config"]["client_id"] == "managed-client-id"
+        assert auth_kwargs["config"]["credential_mode"] == "managed"
+        assert auth_kwargs["config"]["platform_oauth_issuer"] == "https://oauth.yandex.ru"
+        assert "client_id" not in auth_kwargs["config"]
+        assert "platform-client-secret" not in json.dumps(auth_kwargs["config"])
         secret_catalog.add_reference.assert_not_awaited()
     elif credential_source == "inline":
         assert auth_kwargs["config"]["client_id"] == "inline-client-id"
@@ -332,7 +333,7 @@ async def test_workspace_secret_source_allows_the_creator_or_an_admin(user_id, a
     assert value == "member-a-value"
 
 
-def _patch_catalog(monkeypatch, item, registry, managed_secret):
+def _patch_catalog(monkeypatch, item, registry, platform_apps):
     class _ItemRepository:
         def __init__(self, *_args, **_kwargs):
             pass
@@ -347,11 +348,14 @@ def _patch_catalog(monkeypatch, item, registry, managed_secret):
         async def get_by_id(self, _requested_id):
             return registry
 
-    platform_manager = SimpleNamespace(get_secret=AsyncMock(return_value=managed_secret))
+    import agentarea_mcp.application.platform_oauth_app as platform_oauth_app
+
     monkeypatch.setattr(connection_oauth, "RegistryItemRepository", _ItemRepository)
     monkeypatch.setattr(connection_oauth, "RegistryRepository", _RegistryRepository)
     monkeypatch.setattr(
-        connection_oauth, "_managed_secret_manager", lambda _session: platform_manager
+        platform_oauth_app,
+        "get_settings",
+        lambda: SimpleNamespace(mcp=MCPSettings(OAUTH_APPS=platform_apps)),
     )
     monkeypatch.setattr(connection_oauth, "validate_url", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
@@ -359,7 +363,6 @@ def _patch_catalog(monkeypatch, item, registry, managed_secret):
         "_callback_uri",
         lambda: "https://api.agentarea.ru/v1/connections/oauth/callback",
     )
-    return platform_manager
 
 
 def _metrica_item(**spec_over) -> SimpleNamespace:
@@ -386,12 +389,7 @@ def _user() -> UserContext:
 @pytest.mark.asyncio
 async def test_preflight_is_ready_when_the_platform_holds_an_oauth_app(monkeypatch):
     item_id = uuid4()
-    manager = _patch_catalog(
-        monkeypatch,
-        _metrica_item(),
-        _ACTIVE_MCP_REGISTRY,
-        json.dumps({"client_id": "cid", "client_secret": "shh"}),  # pragma: allowlist secret
-    )
+    _patch_catalog(monkeypatch, _metrica_item(), _ACTIVE_MCP_REGISTRY, [_YANDEX_APP])
 
     result = await connection_oauth.preflight_catalog_item(item_id, _user(), AsyncMock())
 
@@ -399,13 +397,12 @@ async def test_preflight_is_ready_when_the_platform_holds_an_oauth_app(monkeypat
     assert result.item_id == item_id
     assert result.name == "Yandex Metrica"
     assert result.redirect_uri == "https://api.agentarea.ru/v1/connections/oauth/callback"
-    assert "shh" not in result.model_dump_json()
-    manager.get_secret.assert_awaited_once_with("connection_oauth_client:yandex-metrica")
+    assert "platform-client" not in result.model_dump_json()
 
 
 @pytest.mark.asyncio
 async def test_preflight_asks_for_an_oauth_app_when_the_platform_has_none(monkeypatch):
-    _patch_catalog(monkeypatch, _metrica_item(), _ACTIVE_MCP_REGISTRY, None)
+    _patch_catalog(monkeypatch, _metrica_item(), _ACTIVE_MCP_REGISTRY, [])
 
     result = await connection_oauth.preflight_catalog_item(uuid4(), _user(), AsyncMock())
 
@@ -415,20 +412,31 @@ async def test_preflight_asks_for_an_oauth_app_when_the_platform_has_none(monkey
 
 
 @pytest.mark.asyncio
-async def test_preflight_fails_loudly_on_a_malformed_platform_oauth_app(monkeypatch):
+@pytest.mark.parametrize(
+    "mismatch",
+    [
+        # The client secret would go to a token endpoint the operator never named.
+        {"token_endpoint": "https://oauth.example.test/token"},
+        {"authorization_endpoint": "https://oauth.example.test/authorize"},
+        # Tokens minted through the app may not reach the template's API.
+        {"resource_origins": ["https://api.webmaster.yandex.net"]},
+    ],
+)
+async def test_preflight_ignores_a_platform_app_that_does_not_match_the_template(
+    monkeypatch, mismatch
+):
     _patch_catalog(
-        monkeypatch, _metrica_item(), _ACTIVE_MCP_REGISTRY, json.dumps({"client_id": "cid"})
+        monkeypatch, _metrica_item(), _ACTIVE_MCP_REGISTRY, [{**_YANDEX_APP, **mismatch}]
     )
 
-    with pytest.raises(HTTPException) as exc_info:
-        await connection_oauth.preflight_catalog_item(uuid4(), _user(), AsyncMock())
+    result = await connection_oauth.preflight_catalog_item(uuid4(), _user(), AsyncMock())
 
-    assert exc_info.value.status_code == 500
+    assert result.status == "oauth_app_required"
 
 
 @pytest.mark.asyncio
 async def test_preflight_404s_for_an_unknown_item(monkeypatch):
-    _patch_catalog(monkeypatch, None, _ACTIVE_MCP_REGISTRY, None)
+    _patch_catalog(monkeypatch, None, _ACTIVE_MCP_REGISTRY, [])
 
     with pytest.raises(HTTPException) as exc_info:
         await connection_oauth.preflight_catalog_item(uuid4(), _user(), AsyncMock())
@@ -438,7 +446,7 @@ async def test_preflight_404s_for_an_unknown_item(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_preflight_rejects_an_item_that_is_not_an_api_connection(monkeypatch):
-    _patch_catalog(monkeypatch, _metrica_item(connection_type="mcp"), _ACTIVE_MCP_REGISTRY, None)
+    _patch_catalog(monkeypatch, _metrica_item(connection_type="mcp"), _ACTIVE_MCP_REGISTRY, [])
 
     with pytest.raises(HTTPException) as exc_info:
         await connection_oauth.preflight_catalog_item(uuid4(), _user(), AsyncMock())

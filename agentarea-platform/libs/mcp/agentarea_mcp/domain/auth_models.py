@@ -72,6 +72,8 @@ class MCPAuthConfig(BaseModel, WorkspaceScopedMixin):
                 if self.config.get("credential_mode") != "managed":
                     raise ValueError("'platform_oauth_issuer' requires credential_mode 'managed'")
                 return
+            if self.config.get("credential_mode") == "managed":
+                raise ValueError("managed oauth2 auth requires 'platform_oauth_issuer' in config")
             client_id = self.config.get("client_id")
             client_id_secret_name = self.config.get("client_id_secret_name")
             if bool(client_id) == bool(client_id_secret_name):

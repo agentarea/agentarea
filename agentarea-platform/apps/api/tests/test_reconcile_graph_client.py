@@ -62,3 +62,66 @@ async def test_only_the_post_migration_run_repairs_graph_ownership(monkeypatch) 
     assert calls == []
     await cli._reconcile(None, (), None, repair_ownership=True)
     assert calls == ["ownership"]
+
+
+async def test_a_retired_manifest_entry_deactivates_its_registry_without_syncing(
+    monkeypatch,
+) -> None:
+    from contextlib import asynccontextmanager
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    import agentarea_registry.application.service as registry_service
+    import agentarea_registry.infrastructure.repository as registry_repository
+    from agentarea_api import cli
+
+    live = SimpleNamespace(id=uuid4(), name="system-openapi-connections", is_active=True)
+    calls: list[tuple] = []
+
+    class _Session:
+        async def commit(self) -> None:
+            pass
+
+    class _Database:
+        def __init__(self, *_args) -> None:
+            pass
+
+        @asynccontextmanager
+        async def async_session_factory(self):
+            yield _Session()
+
+    class _RegistryRepository:
+        def __init__(self, *_args) -> None:
+            pass
+
+        async def list_all(self):
+            return [live]
+
+    class _RegistryService:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        async def update_registry(self, registry_id, **fields):
+            calls.append(("update", registry_id, fields))
+
+        async def sync_registry(self, registry_id):
+            calls.append(("sync", registry_id))
+            return {}
+
+    async def register() -> object:
+        return object()
+
+    monkeypatch.setattr(cli, "_register_graph_client", register)
+    monkeypatch.setattr(cli, "Database", _Database)
+    monkeypatch.setattr(cli, "get_db_settings", lambda: None)
+    monkeypatch.setattr(registry_repository, "RegistryRepository", _RegistryRepository)
+    monkeypatch.setattr(registry_service, "RegistryService", _RegistryService)
+
+    retired = '[{"name": "system-openapi-connections", "active": false}]'
+    await cli._reconcile(retired, (), None)
+    assert calls == [("update", live.id, {"is_active": False})]
+
+    live.is_active = False
+    calls.clear()
+    await cli._reconcile(retired, (), None)
+    assert calls == []
