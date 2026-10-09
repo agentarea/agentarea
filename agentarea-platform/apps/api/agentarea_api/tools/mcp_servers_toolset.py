@@ -30,6 +30,8 @@ from agentarea_mcp.schemas.dto import (
 from fastapi import HTTPException
 from mcp.types import InputRequiredResult
 
+from ..api.v1 import _catalog_connections
+from ..api.v1._catalog_connections import with_existing_connections
 from ..api.v1.mcp_oauth_connect import connect_page_url
 from .base import platform_context, platform_read_context
 
@@ -105,18 +107,32 @@ def _serialize_tool_detail(tool: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _connect_action(
-    service: Any, user_ctx: UserContext, instance: Any, *, probe: bool
-) -> dict[str, str] | None:
-    """The link a person opens to connect *instance*, while it waits on a credential."""
+    session: Any, service: Any, user_ctx: UserContext, instance: Any, *, probe: bool
+) -> dict[str, Any] | None:
+    """The link a person opens to connect *instance*, while it waits on a credential.
+
+    An instance made from a catalog item also names the caller's other
+    connections from that item, so an agent does not hand out a link blindly.
+    """
     if not await service.needs_connecting(instance, probe=probe):
         return None
     slug = user_ctx.workspace_slug or await workspace_slug_for(user_ctx.workspace_id)
     url = connect_page_url(slug, str(instance.id))
-    return {
+    action = {
         "type": "connect",
         "url": url,
         "message": f"Open this link to connect {instance.name}: {url}",
     }
+    spec = await service.mcp_server_repository.get_server_by_id(instance.server_spec_id)
+    registry_item_id = getattr(spec, "registry_item_id", None)
+    if registry_item_id is None:
+        return action
+    return with_existing_connections(
+        action,
+        await _catalog_connections.other_catalog_connections(
+            session, user_ctx, registry_item_id, instance.id
+        ),
+    )
 
 
 @toolset(
@@ -411,7 +427,7 @@ class MCPServersToolset(Toolset):
         )
 
         async with platform_context() as (
-            _session,
+            session,
             user_ctx,
             repo_factory,
             event_broker,
@@ -427,7 +443,7 @@ class MCPServersToolset(Toolset):
             instance = await service.create_instance(payload)
             if not instance:
                 return json.dumps({"error": "Failed to create MCP server instance"})
-            action = await _connect_action(service, user_ctx, instance, probe=True)
+            action = await _connect_action(session, service, user_ctx, instance, probe=True)
             result = _serialize_instance(instance)
             if action is not None:
                 result["action_required"] = action
@@ -457,7 +473,7 @@ class MCPServersToolset(Toolset):
         payload = MCPServerInstanceUpdate.model_validate(patch)
 
         async with platform_context() as (
-            _session,
+            session,
             user_ctx,
             repo_factory,
             event_broker,
@@ -473,7 +489,7 @@ class MCPServersToolset(Toolset):
             instance = await service.update_instance(UUID(instance_id), payload)
             if not instance:
                 return json.dumps({"error": "MCP server instance not found"})
-            action = await _connect_action(service, user_ctx, instance, probe=True)
+            action = await _connect_action(session, service, user_ctx, instance, probe=True)
             result = _serialize_instance(instance)
             if action is not None:
                 result["action_required"] = action
@@ -520,7 +536,7 @@ class MCPServersToolset(Toolset):
                 ``unknown_tools`` instead of raising.
         """
         async with platform_read_context() as (
-            _session,
+            session,
             user_ctx,
             repo_factory,
             event_broker,
@@ -554,7 +570,7 @@ class MCPServersToolset(Toolset):
                 payload["tool_details"] = details
                 if unknown:
                     payload["unknown_tools"] = unknown
-            action = await _connect_action(service, user_ctx, instance, probe=False)
+            action = await _connect_action(session, service, user_ctx, instance, probe=False)
             if action is not None:
                 elicitation = url_elicitation(action["url"], action["message"])
                 if elicitation is not None:
@@ -610,7 +626,7 @@ class MCPServersToolset(Toolset):
             if instance is not None:
                 # verify() records the outcome in its own session; read it back.
                 await session.refresh(instance, attribute_names=["verification"])
-                action = await _connect_action(service, user_ctx, instance, probe=True)
+                action = await _connect_action(session, service, user_ctx, instance, probe=True)
                 if action is not None:
                     elicitation = url_elicitation(action["url"], action["message"])
                     if elicitation is not None:

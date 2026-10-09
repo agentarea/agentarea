@@ -422,6 +422,17 @@ export const zBundleSkill = z.object({
 });
 
 /**
+ * CatalogConnection
+ *
+ * One existing connection made from a catalog item.
+ */
+export const zCatalogConnection = z.object({
+  id: z.string().uuid(),
+  kind: z.enum(["mcp", "openapi"]),
+  name: z.string(),
+});
+
+/**
  * CatalogConnectionPreflight
  *
  * What the connect form needs to know before it offers Connect.
@@ -432,6 +443,7 @@ export const zBundleSkill = z.object({
 export const zCatalogConnectionPreflight = z.object({
   description: z.string().nullish(),
   detail: z.string(),
+  existing_connections: z.array(zCatalogConnection).optional(),
   item_id: z.string().uuid(),
   name: z.string(),
   redirect_uri: z.string(),
@@ -1258,6 +1270,7 @@ export const zMcpServerResponse = z.object({
   is_public: z.boolean(),
   json_spec: z.record(z.unknown()).nullish(),
   name: z.string(),
+  registry_item_id: z.string().uuid().nullish(),
   registry_url: z.string().nullish(),
   remote_url: z.string().nullish(),
   slug: z.string(),
@@ -2301,6 +2314,7 @@ export const zRegistryItemResponse = z.object({
   update_available: z.boolean(),
   updated_at: z.string().datetime(),
   version: z.string().nullable(),
+  workspace_connections: z.array(zCatalogConnection).nullish(),
 });
 
 /**

@@ -28,7 +28,8 @@ from fastapi import HTTPException
 from mcp.types import CallToolResult, InputRequiredResult
 
 from ..api.deps.services import get_openapi_connection_service
-from ..api.v1 import client_mcp
+from ..api.v1 import _catalog_connections, client_mcp
+from ..api.v1._catalog_connections import with_existing_connections
 from ..api.v1.mcp_oauth_connect import catalog_connect_page_url
 from .base import platform_context, platform_read_context
 from .mcp_servers_toolset import _connect_action, _tool_safety_hint
@@ -94,8 +95,8 @@ async def _openapi_connections(service: Any) -> list[Any]:
 
 
 async def _openapi_connect_action(
-    service: Any, user_ctx: Any, connection: Any
-) -> dict[str, str] | None:
+    session: Any, service: Any, user_ctx: Any, connection: Any
+) -> dict[str, Any] | None:
     """The link a person opens to sign in to a catalog *connection* again, if it needs one."""
     if connection.registry_item_id is None:
         return None
@@ -110,11 +111,17 @@ async def _openapi_connect_action(
             return None
     slug = user_ctx.workspace_slug or await workspace_slug_for(user_ctx.workspace_id)
     url = catalog_connect_page_url(slug, str(connection.registry_item_id))
-    return {
+    action = {
         "type": "connect",
         "url": url,
         "message": f"Open this link to connect {connection.name}: {url}",
     }
+    return with_existing_connections(
+        action,
+        await _catalog_connections.other_catalog_connections(
+            session, user_ctx, connection.registry_item_id, connection.id
+        ),
+    )
 
 
 def _unknown_tool(connector_name: str, tool: str, names: list[str]) -> str:
@@ -137,7 +144,7 @@ def _confirmation(connector_name: str, tool: str) -> str:
     )
 
 
-def _action_required(connector: Any, action: dict[str, str]) -> str | InputRequiredResult:
+def _action_required(connector: Any, action: dict[str, Any]) -> str | InputRequiredResult:
     elicitation = url_elicitation(action["url"], action["message"])
     if elicitation is not None:
         return elicitation
@@ -326,7 +333,7 @@ class ConnectorToolsToolset(Toolset):
             except HTTPException as exc:
                 return json.dumps({"error": exc.detail})
 
-            action = await _connect_action(service, user_ctx, instance, probe=False)
+            action = await _connect_action(session, service, user_ctx, instance, probe=False)
             if action is not None:
                 return _action_required(instance, action)
 
@@ -365,7 +372,7 @@ class ConnectorToolsToolset(Toolset):
         except HTTPException as exc:
             return json.dumps({"error": exc.detail})
 
-        action = await _openapi_connect_action(service, user_ctx, connection)
+        action = await _openapi_connect_action(session, service, user_ctx, connection)
         if action is not None:
             return _action_required(connection, action)
 

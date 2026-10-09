@@ -408,6 +408,7 @@ export type {
   CancelAgentTaskV1AgentsAgentIdTasksTaskIdDeleteErrors,
   CancelAgentTaskV1AgentsAgentIdTasksTaskIdDeleteResponses,
   CatalogBrowseResponse,
+  CatalogConnection,
   CatalogConnectionPreflight,
   CatalogConnectionRequest,
   CatalogConnectionResponse,

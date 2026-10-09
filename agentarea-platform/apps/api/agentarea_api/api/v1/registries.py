@@ -7,6 +7,11 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_api.api.deps.services import get_registry_service
+from agentarea_api.api.v1._catalog_connections import (
+    CatalogConnection,
+    CatalogConnectionsLookup,
+    get_catalog_connections_lookup,
+)
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import AUTHZ_ATTR, unrestricted
 from agentarea_common.base.pagination import MAX_OFFSET
@@ -124,11 +129,18 @@ class RegistryItemResponse(BaseModel):
     featured: bool = False
     # "vendor" (hosted endpoint) or "agentarea" (package we run); MCP connections only.
     hosting: str | None = None
+    # Connections catalog only: the workspace's connections made from this item
+    # that the caller may read. None where it was not looked up.
+    workspace_connections: list[CatalogConnection] | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
     @classmethod
-    def from_domain(cls, item: RegistryItem) -> "RegistryItemResponse":
+    def from_domain(
+        cls,
+        item: RegistryItem,
+        workspace_connections: list[CatalogConnection] | None = None,
+    ) -> "RegistryItemResponse":
         return cls(
             id=item.id,
             registry_id=UUID(str(item.registry_id)),
@@ -146,6 +158,7 @@ class RegistryItemResponse(BaseModel):
             category=item.category,
             featured=item.featured,
             hosting=getattr(item, "hosting", None),
+            workspace_connections=workspace_connections,
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
@@ -300,7 +313,12 @@ class CatalogBrowseResponse(BaseModel):
 @router.get(
     "/catalog/browse",
     response_model=CatalogBrowseResponse,
-    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+    dependencies=[
+        unrestricted(
+            "platform catalogue data; the workspace connections it names are only those "
+            "the graph lets the caller read"
+        )
+    ],
 )
 async def browse_catalog(
     user_context: UserContextDep,
@@ -326,6 +344,7 @@ async def browse_catalog(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0, le=MAX_OFFSET),
     service: RegistryService = Depends(get_registry_service),
+    connections_of: CatalogConnectionsLookup = Depends(get_catalog_connections_lookup),
 ):
     """Browse one catalog type: filtered, sorted and paged server-side.
 
@@ -363,8 +382,16 @@ async def browse_catalog(
         limit=limit,
         offset=offset,
     )
+    found = (
+        await connections_of([i.id for i in items])
+        if registry_type == PROTOCOL_REGISTRY_TYPE and items
+        else None
+    )
     return CatalogBrowseResponse(
-        items=[RegistryItemResponse.from_domain(i) for i in items],
+        items=[
+            RegistryItemResponse.from_domain(i, None if found is None else found.get(str(i.id), []))
+            for i in items
+        ],
         total=total,
         categories=[CategoryFacet(value=v, count=c) for v, c in categories],
         protocols=[CategoryFacet(value=v, count=c) for v, c in protocols],
@@ -522,17 +549,26 @@ async def create_catalog_item(
 @router.get(
     "/catalog/items/{item_id}",
     response_model=RegistryItemResponse,
-    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+    dependencies=[
+        unrestricted(
+            "platform catalogue data; the workspace connections it names are only those "
+            "the graph lets the caller read"
+        )
+    ],
 )
 async def get_catalog_item(
     item_id: UUID,
     user_context: UserContextDep,
     service: RegistryService = Depends(get_registry_service),
+    connections_of: CatalogConnectionsLookup = Depends(get_catalog_connections_lookup),
 ):
     item = await service.get_item(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Catalog item not found")
-    return RegistryItemResponse.from_domain(item)
+    if item.registry_type != PROTOCOL_REGISTRY_TYPE:
+        return RegistryItemResponse.from_domain(item)
+    found = await connections_of([item.id])
+    return RegistryItemResponse.from_domain(item, found.get(str(item.id), []))
 
 
 @router.patch(

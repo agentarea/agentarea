@@ -2407,6 +2407,35 @@
         "title": "CatalogBrowseResponse",
         "type": "object"
       },
+      "CatalogConnection": {
+        "description": "One existing connection made from a catalog item.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "mcp",
+              "openapi"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name"
+        ],
+        "title": "CatalogConnection",
+        "type": "object"
+      },
       "CatalogConnectionPreflight": {
         "description": "What the connect form needs to know before it offers Connect.\n\n``ready`` \u2014 AGENTAREA_MCP_OAUTH_APPS configures an OAuth app for the provider.\n``oauth_app_required`` \u2014 the user must register their own app first.",
         "properties": {
@@ -2424,6 +2453,13 @@
           "detail": {
             "title": "Detail",
             "type": "string"
+          },
+          "existing_connections": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogConnection"
+            },
+            "title": "Existing Connections",
+            "type": "array"
           },
           "item_id": {
             "format": "uuid",
@@ -6052,6 +6088,18 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "registry_item_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Item Id"
           },
           "registry_url": {
             "anyOf": [
@@ -10165,6 +10213,20 @@
               }
             ],
             "title": "Version"
+          },
+          "workspace_connections": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CatalogConnection"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Connections"
           }
         },
         "required": [
