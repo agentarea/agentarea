@@ -20,7 +20,7 @@ def _service() -> ArtifactService:
 
 @pytest.mark.parametrize(
     "path",
-    ["a\rb.txt", "\x1bfile", "dir/\x01name", "tab\there", "del\x7f", "../escape", "a/../b"],
+    ["a\rb.txt", "\x1bfile", "dir/\x01name", "tab\there", "del\x7f", "../escape", "a/../b", "", "/"],
 )
 async def test_an_unrepresentable_path_is_refused_as_a_client_error(path: str) -> None:
     service = _service()

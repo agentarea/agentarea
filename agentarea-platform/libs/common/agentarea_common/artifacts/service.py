@@ -206,6 +206,11 @@ class ArtifactService:
         if not workspace_id:
             raise ValueError("workspace_id is required")
         clean = path.lstrip("/")
+        # An empty path names the workspace root, which no object can be: a
+        # route like ``/files/download/%0A`` arrives here as "" because the
+        # router's ``$`` also matches before a trailing newline.
+        if not clean:
+            raise InvalidArtifactPathError("path is empty")
         if ".." in clean.split("/"):
             raise InvalidArtifactPathError(f"path may not contain '..' segments: {path!r}")
         if any(ord(character) < 0x20 or ord(character) == 0x7F for character in clean):
