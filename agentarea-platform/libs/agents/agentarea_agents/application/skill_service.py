@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
 from uuid import UUID
 
 from agentarea_common.audit import audited
@@ -34,6 +35,23 @@ from agentarea_agents.schemas.skills_dto import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ``skills.name`` is String(255); a longer name read out of SKILL.md is refused
+# before the insert rather than failing it.
+MAX_SKILL_NAME_LENGTH = 255
+
+
+def _checked_skill_name(name: str) -> str:
+    """Return ``name`` if it fits the skills table, else raise ``ValueError``."""
+    if not name.strip():
+        raise ValueError("Skill name cannot be empty")
+    if len(name) > MAX_SKILL_NAME_LENGTH:
+        raise ValueError(
+            f"Skill name is {len(name)} characters; the limit is {MAX_SKILL_NAME_LENGTH}. "
+            "Shorten the 'name' in the SKILL.md frontmatter (or its first heading), "
+            "or pass a shorter name."
+        )
+    return name
 
 
 @dataclass
@@ -166,6 +184,49 @@ class SkillService:
                 return candidate
         raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
 
+    async def _create_with_package(
+        self,
+        store: Callable[[str], Awaitable[str]],
+        **create_kwargs: Any,
+    ) -> Skill:
+        """Create a skill row, store its package, and record where it went.
+
+        The row is created first because the package is keyed by its id. The
+        caller has already validated the package, so a failure here is the
+        store or the database; whatever stored part of it is removed along
+        with the row, so a failed create leaves nothing behind.
+        """
+        repo = self._get_repository()
+        skill = await repo.create(
+            slug=await self._resolve_unique_slug(create_kwargs["name"]),
+            s3_path=None,  # Set once the package is stored
+            **create_kwargs,
+        )
+        skill_id = str(skill.id)
+        try:
+            s3_path = await store(skill_id)
+            updated = await repo.update(skill_id, s3_path=s3_path)
+            if updated is None:
+                raise RuntimeError("Failed to update skill package path")
+        except BaseException:
+            await self._discard_failed_create(skill_id)
+            raise
+        return updated
+
+    async def _discard_failed_create(self, skill_id: str) -> None:
+        """Remove the row and any stored files of a create that failed midway."""
+        prefix = self.storage_service._get_s3_prefix(self.user_context.workspace_id, skill_id)
+        try:
+            await self.storage_service.delete_package(prefix)
+        except Exception:
+            logger.warning(
+                "Failed to remove the stored package of failed skill %s", skill_id, exc_info=True
+            )
+        try:
+            await self._get_repository().delete(skill_id)
+        except Exception:
+            logger.exception("Failed to remove the row of failed skill %s", skill_id)
+
     @audited("skill.create", resource_type="skill")
     async def create_from_content(
         self,
@@ -185,7 +246,7 @@ class SkillService:
         parsed = self._parser.parse_content(payload.content)
 
         # Use provided values or fall back to parsed values
-        skill_name = payload.name or parsed.metadata.name
+        skill_name = _checked_skill_name(payload.name or parsed.metadata.name)
         skill_description = payload.description or parsed.metadata.description
 
         # Create skill
@@ -221,48 +282,43 @@ class SkillService:
             Created Skill entity.
 
         Raises:
-            ValueError: If no skill file is found in the ZIP.
+            ValueError: If the upload is not a ZIP archive, has no skill file,
+                holds a path or size the package limits refuse, or names the
+                skill with a name the skills table cannot hold. Nothing is
+                stored in that case.
         """
-        repo = self._get_repository()
+        if isinstance(zip_data, bytes):
+            import io
+
+            zip_data = io.BytesIO(zip_data)
 
         # Parse and extract from ZIP
         parsed, _manifest = self._parser.extract_main_skill_from_zip(zip_data)
 
         # Use provided values or fall back to parsed values
-        skill_name = name or parsed.metadata.name
+        skill_name = _checked_skill_name(name or parsed.metadata.name)
         skill_description = description or parsed.metadata.description
 
-        # Create skill record first to get ID
-        skill = await repo.create(
+        # Refuse the whole package before its row exists
+        self.storage_service.validate_package_zip(zip_data)
+        package = zip_data
+
+        async def store(skill_id: str) -> str:
+            package.seek(0)
+            return await self.storage_service.store_package_from_zip(
+                skill_id=skill_id,
+                workspace_id=self.user_context.workspace_id,
+                zip_data=package,
+            )
+
+        skill = await self._create_with_package(
+            store,
             name=skill_name,
-            slug=await self._resolve_unique_slug(skill_name),
             description=skill_description,
             source_type=SkillSourceType.ZIP.value,
             content=parsed.raw_content,
             source_url=None,
-            s3_path=None,  # Will be updated after upload
         )
-
-        # Upload package to S3
-        if isinstance(zip_data, bytes):
-            import io
-
-            zip_data = io.BytesIO(zip_data)
-        zip_data.seek(0)
-
-        s3_path = await self.storage_service.store_package_from_zip(
-            skill_id=str(skill.id),
-            workspace_id=self.user_context.workspace_id,
-            zip_data=zip_data,
-        )
-
-        # Update skill with S3 path
-        skill = await repo.update(
-            str(skill.id),
-            s3_path=s3_path,
-        )
-        if skill is None:
-            raise RuntimeError("Failed to update skill package path")
 
         logger.info(f"Created skill '{skill_name}' from ZIP (id={skill.id})")
         return skill
@@ -284,8 +340,6 @@ class SkillService:
             GitHubSkillImporterError: If download fails.
             ValueError: If no skill file is found in the repository.
         """
-        repo = self._get_repository()
-
         # Download repository as ZIP and re-root it on the package the URL points at
         repo_info = self.github_importer.parse_github_url(payload.github_url)
         repo_zip_data = await self.github_importer.download_repo(payload.github_url)
@@ -298,35 +352,28 @@ class SkillService:
         parsed, _manifest = self._parser.extract_main_skill_from_zip(zip_buffer)
 
         # Use provided values or fall back to parsed values
-        skill_name = payload.name or parsed.metadata.name
+        skill_name = _checked_skill_name(payload.name or parsed.metadata.name)
         skill_description = payload.description or parsed.metadata.description
 
-        # Create skill record
-        skill = await repo.create(
+        # Refuse the whole package before its row exists
+        self.storage_service.validate_package_zip(zip_buffer)
+
+        async def store(skill_id: str) -> str:
+            zip_buffer.seek(0)
+            return await self.storage_service.store_package_from_zip(
+                skill_id=skill_id,
+                workspace_id=self.user_context.workspace_id,
+                zip_data=zip_buffer,
+            )
+
+        skill = await self._create_with_package(
+            store,
             name=skill_name,
-            slug=await self._resolve_unique_slug(skill_name),
             description=skill_description,
             source_type=SkillSourceType.GITHUB.value,
             content=parsed.raw_content,
             source_url=payload.github_url,
-            s3_path=None,  # Will be updated after upload
         )
-
-        # Upload to S3
-        zip_buffer.seek(0)
-        s3_path = await self.storage_service.store_package_from_zip(
-            skill_id=str(skill.id),
-            workspace_id=self.user_context.workspace_id,
-            zip_data=zip_buffer,
-        )
-
-        # Update skill with S3 path
-        skill = await repo.update(
-            str(skill.id),
-            s3_path=s3_path,
-        )
-        if skill is None:
-            raise RuntimeError("Failed to update skill package path")
 
         logger.info(
             f"Created skill '{skill_name}' from GitHub: {payload.github_url} (id={skill.id})"
@@ -358,8 +405,6 @@ class SkillService:
             FileNotFoundError: If the path does not exist.
             ValueError: If no skill file is found.
         """
-        repo = self._get_repository()
-
         # Resolve path
         if base_dir:
             full_path = Path(base_dir) / path
@@ -387,34 +432,24 @@ class SkillService:
             parsed = self._parser.parse_content(content)
 
             # Use provided values or fall back to parsed values
-            skill_name = name or parsed.metadata.name
+            skill_name = _checked_skill_name(name or parsed.metadata.name)
             skill_description = description or parsed.metadata.description
 
-            # Create skill record
-            skill = await repo.create(
+            async def store(skill_id: str) -> str:
+                return await self.storage_service.store_package_from_directory(
+                    skill_id=skill_id,
+                    workspace_id=self.user_context.workspace_id,
+                    directory=full_path,
+                )
+
+            skill = await self._create_with_package(
+                store,
                 name=skill_name,
-                slug=await self._resolve_unique_slug(skill_name),
                 description=skill_description,
                 source_type=SkillSourceType.PATH.value,
                 content=content,
                 source_url=None,
-                s3_path=None,
             )
-
-            # Upload to S3
-            s3_path = await self.storage_service.store_package_from_directory(
-                skill_id=str(skill.id),
-                workspace_id=self.user_context.workspace_id,
-                directory=full_path,
-            )
-
-            # Update skill with S3 path
-            skill = await repo.update(
-                str(skill.id),
-                s3_path=s3_path,
-            )
-            if skill is None:
-                raise RuntimeError("Failed to update skill package path")
 
             logger.info(f"Created skill '{skill_name}' from path: {full_path} (id={skill.id})")
             return skill

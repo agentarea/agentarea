@@ -320,7 +320,7 @@ export const zBundleAgent = z.object({
   key: z.string().min(1),
   mcps: z.array(z.string()).optional(),
   model: z.string().nullish(),
-  name: z.string().min(1),
+  name: z.string().min(1).max(255),
   skills: z.array(z.string()).optional(),
   toolsets: z.array(z.string()).optional(),
 });
@@ -375,7 +375,7 @@ export const zBundleMcp = z.object({
   bindings: z.record(z.string()).optional(),
   json_spec: z.record(z.unknown()),
   key: z.string().min(1),
-  name: z.string().min(1),
+  name: z.string().min(1).max(255),
 });
 
 /**
@@ -429,7 +429,7 @@ export const zBundlePolicy = z.object({
 export const zBundleSkill = z.object({
   content: z.string().nullish(),
   key: z.string().min(1),
-  name: z.string().min(1),
+  name: z.string().min(1).max(255),
   source_type: z.enum(["content", "github"]).optional().default("content"),
   source_url: z.string().nullish(),
 });
@@ -632,7 +632,7 @@ export const zCodeToolConfig = z.object({
  */
 export const zCollectionCreateRequest = z.object({
   description: z.string().nullish(),
-  name: z.string(),
+  name: z.string().min(1).max(255),
 });
 
 /**
@@ -650,7 +650,7 @@ export const zCollectionSummaryResponse = z.object({
  */
 export const zCollectionUpdateRequest = z.object({
   description: z.string().nullish(),
-  name: z.string().nullish(),
+  name: z.string().min(1).max(255).nullish(),
 });
 
 /**
@@ -2644,10 +2644,10 @@ export const zBundleInput = z.object({
   automations: z.array(zBundleAutomation).optional(),
   channels: z.array(zBundleChannel).optional(),
   description: z.string().optional().default(""),
-  display_name: z.string().nullish(),
+  display_name: z.string().max(255).nullish(),
   mcps: z.array(zBundleMcp).optional(),
   metadata: zBundleMetadata.optional(),
-  name: z.string().min(1),
+  name: z.string().min(1).max(255),
   policies: z.array(zBundlePolicy).optional(),
   schema_version: z.string().optional().default("0.1.0"),
   setup: z.array(zSetupField).optional(),
@@ -2664,10 +2664,10 @@ export const zBundleOutput = z.object({
   automations: z.array(zBundleAutomation).optional(),
   channels: z.array(zBundleChannel).optional(),
   description: z.string().optional().default(""),
-  display_name: z.string().nullish(),
+  display_name: z.string().max(255).nullish(),
   mcps: z.array(zBundleMcp).optional(),
   metadata: zBundleMetadata.optional(),
-  name: z.string().min(1),
+  name: z.string().min(1).max(255),
   policies: z.array(zBundlePolicy).optional(),
   schema_version: z.string().optional().default("0.1.0"),
   setup: z.array(zSetupField).optional(),
@@ -2715,9 +2715,9 @@ export const zSkillContentResponse = z.object({
  */
 export const zSkillCreateRequest = z.object({
   content: z.string().nullish(),
-  description: z.string().nullish(),
+  description: z.string().max(1000).nullish(),
   github_url: z.string().nullish(),
-  name: z.string().nullish(),
+  name: z.string().max(255).nullish(),
 });
 
 /**
@@ -2750,7 +2750,13 @@ export const zSkillMemberAddRequest = z.object({
   child_skill_id: z.string().uuid(),
   dependencies: z.array(z.string()).optional(),
   is_required: z.boolean().optional().default(true),
-  order: z.number().int().optional().default(0),
+  order: z
+    .number()
+    .int()
+    .gte(-2147483648)
+    .lte(2147483647)
+    .optional()
+    .default(0),
 });
 
 /**
@@ -2823,8 +2829,8 @@ export const zPaginatedResponseSkillResponse = z.object({
  */
 export const zSkillUpdateRequest = z.object({
   content: z.string().nullish(),
-  description: z.string().nullish(),
-  name: z.string().nullish(),
+  description: z.string().max(1000).nullish(),
+  name: z.string().min(1).max(255).nullish(),
 });
 
 /**
@@ -6300,8 +6306,8 @@ export const zUploadSkillV1SkillsUploadPostBody =
   zBodyUploadSkillV1SkillsUploadPost;
 
 export const zUploadSkillV1SkillsUploadPostQuery = z.object({
-  name: z.string().nullish(),
-  description: z.string().nullish(),
+  name: z.string().max(255).nullish(),
+  description: z.string().max(1000).nullish(),
 });
 
 /**

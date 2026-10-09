@@ -1789,6 +1789,7 @@
           "display_name": {
             "anyOf": [
               {
+                "maxLength": 255,
                 "type": "string"
               },
               {
@@ -1809,6 +1810,7 @@
           },
           "name": {
             "description": "Stable package identifier (idempotency key).",
+            "maxLength": 255,
             "minLength": 1,
             "title": "Name",
             "type": "string"
@@ -1879,6 +1881,7 @@
           "display_name": {
             "anyOf": [
               {
+                "maxLength": 255,
                 "type": "string"
               },
               {
@@ -1899,6 +1902,7 @@
           },
           "name": {
             "description": "Stable package identifier (idempotency key).",
+            "maxLength": 255,
             "minLength": 1,
             "title": "Name",
             "type": "string"
@@ -1971,6 +1975,7 @@
             "title": "Model"
           },
           "name": {
+            "maxLength": 255,
             "minLength": 1,
             "title": "Name",
             "type": "string"
@@ -2138,6 +2143,7 @@
           },
           "name": {
             "description": "Instance display name created in the workspace.",
+            "maxLength": 255,
             "minLength": 1,
             "title": "Name",
             "type": "string"
@@ -2340,6 +2346,7 @@
             "type": "string"
           },
           "name": {
+            "maxLength": 255,
             "minLength": 1,
             "title": "Name",
             "type": "string"
@@ -3158,6 +3165,8 @@
             "title": "Description"
           },
           "name": {
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           }
@@ -3257,6 +3266,8 @@
           "name": {
             "anyOf": [
               {
+                "maxLength": 255,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -11385,6 +11396,7 @@
           "description": {
             "anyOf": [
               {
+                "maxLength": 1000,
                 "type": "string"
               },
               {
@@ -11409,6 +11421,7 @@
           "name": {
             "anyOf": [
               {
+                "maxLength": 255,
                 "type": "string"
               },
               {
@@ -11499,7 +11512,9 @@
           },
           "order": {
             "default": 0,
-            "description": "Execution order hint",
+            "description": "Execution order hint (a 32-bit integer)",
+            "maximum": 2147483647.0,
+            "minimum": -2147483648.0,
             "title": "Order",
             "type": "integer"
           }
@@ -11677,6 +11692,7 @@
           "description": {
             "anyOf": [
               {
+                "maxLength": 1000,
                 "type": "string"
               },
               {
@@ -11689,6 +11705,8 @@
           "name": {
             "anyOf": [
               {
+                "maxLength": 255,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -32479,6 +32497,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 255,
                   "type": "string"
                 },
                 {
@@ -32495,6 +32514,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 1000,
                   "type": "string"
                 },
                 {

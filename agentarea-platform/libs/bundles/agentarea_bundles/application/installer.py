@@ -20,6 +20,7 @@ from uuid import UUID
 from agentarea_common.auth.authorization import assert_workspace_admin
 
 from agentarea_bundles.application.analyzer import (
+    BundleAnalyzer,
     mcp_is_unsupported,
     policy_as_rule,
     required_setup_errors,
@@ -31,7 +32,7 @@ from agentarea_bundles.schemas.bundle import (
     resolve_placeholders,
     setup_refs,
 )
-from agentarea_bundles.schemas.preview import EntityKind
+from agentarea_bundles.schemas.preview import EntityKind, IssueSeverity
 from agentarea_bundles.schemas.result import (
     InstallAction,
     InstalledEntity,
@@ -110,12 +111,10 @@ class BundleInstaller:
         self._secret_manager = secret_manager
 
     async def install(self, package: Bundle, setup_values: dict[str, Any]) -> InstallResult:
-        # Block on missing required setup before touching anything.
-        block = required_setup_errors(package, setup_values)
-        if block:
-            raise BundleInstallError(
-                "package is not installable: missing required setup", issues=block
-            )
+        # Refuse whatever analyze refuses, plus missing required setup, before
+        # touching anything: every step below commits on its own, so a bundle
+        # that fails partway leaves a partial install behind.
+        await self._refuse_blocking_issues(package, setup_values)
         # Policies install last, but each step before them commits on its own, so
         # a refusal there would leave a partial install behind. Ask up front.
         if package.policies:
@@ -132,6 +131,26 @@ class BundleInstaller:
         await self._install_automations(package, agent_ids, result)
         await self._install_policies(package, agent_ids, result)
         return result
+
+    async def _refuse_blocking_issues(self, package: Bundle, setup_values: dict[str, Any]) -> None:
+        """Raise :class:`BundleInstallError` if analyze or setup blocks the bundle.
+
+        The analyzer runs without existence checks: whether an entity already
+        exists only decides reuse, never whether the bundle is installable.
+        """
+        preview = await BundleAnalyzer().analyze(package)
+        block = [i for i in preview.issues if i.severity is IssueSeverity.BLOCK]
+        if block:
+            raise BundleInstallError(
+                f"package is not installable: {block[0].message}"
+                + (f" (and {len(block) - 1} more)" if len(block) > 1 else ""),
+                issues=block,
+            )
+        setup_block = required_setup_errors(package, setup_values)
+        if setup_block:
+            raise BundleInstallError(
+                "package is not installable: missing required setup", issues=setup_block
+            )
 
     # -- MCP ----------------------------------------------------------------
 
