@@ -57,23 +57,27 @@ func (c *RedisClaimer) TryClaim(ctx context.Context, triggerID string) (bool, er
 	return false, nil
 }
 
-// Renew refreshes the TTL on our claim.  Fails silently if the key was lost.
+// ErrClaimLost means the claim expired or another worker now holds it.
+var ErrClaimLost = errors.New("claim lost")
+
+// renewLua atomically refreshes the TTL only if the key still belongs to this worker.
+var renewLua = redis.NewScript(`
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+    return redis.call("PEXPIRE", KEYS[1], ARGV[2])
+else
+    return 0
+end
+`)
+
+// Renew refreshes the TTL on our claim. Returns ErrClaimLost if the claim
+// expired or is held by another worker, so the caller stops polling.
 func (c *RedisClaimer) Renew(ctx context.Context, triggerID string) error {
-	key := claimKey(triggerID)
-	val, err := c.client.Get(ctx, key).Result()
-	if errors.Is(err, redis.Nil) {
-		// Key expired; nothing to renew
-		return nil
-	}
+	renewed, err := renewLua.Run(ctx, c.client, []string{claimKey(triggerID)}, c.workerID, c.ttl.Milliseconds()).Int()
 	if err != nil {
-		return fmt.Errorf("redis GET: %w", err)
+		return fmt.Errorf("redis renew: %w", err)
 	}
-	if val != c.workerID {
-		// Claimed by someone else; do not renew
-		return nil
-	}
-	if err := c.client.PExpire(ctx, key, c.ttl).Err(); err != nil {
-		return fmt.Errorf("redis PEXPIRE: %w", err)
+	if renewed == 0 {
+		return fmt.Errorf("renew %s: %w", triggerID, ErrClaimLost)
 	}
 	return nil
 }
