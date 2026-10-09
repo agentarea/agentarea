@@ -7,6 +7,7 @@ issuer and never holds its client credentials.
 """
 
 import logging
+from collections.abc import Sequence
 from urllib.parse import urlparse
 
 from agentarea_common.config import MCPOAuthApp, get_settings
@@ -36,3 +37,26 @@ def find_platform_oauth_app(issuer: str, mcp_url: str) -> MCPOAuthApp | None:
         logger.info("Platform OAuth app for %s does not serve %s", app.issuer, url_origin(mcp_url))
         return None
     return app
+
+
+def platform_oauth_app_for_endpoints(
+    authorization_endpoint: str, token_endpoint: str, api_origins: Sequence[str]
+) -> MCPOAuthApp | None:
+    """The platform app a trusted catalog template may authorize through, if any.
+
+    Matched on both endpoints, so the client secret only ever goes to a token
+    endpoint the operator configured, and only when the app serves every origin
+    the template sends tokens to.
+    """
+    for app in get_settings().mcp.OAUTH_APPS:
+        if (
+            app.authorization_endpoint != authorization_endpoint
+            or app.token_endpoint != token_endpoint
+        ):
+            continue
+        unserved = [origin for origin in api_origins if origin not in app.resource_origins]
+        if unserved:
+            logger.info("Platform OAuth app for %s does not serve %s", app.issuer, unserved)
+            return None
+        return app
+    return None

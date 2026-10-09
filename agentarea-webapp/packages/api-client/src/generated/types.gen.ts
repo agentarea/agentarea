@@ -1405,7 +1405,7 @@ export type CatalogBrowseResponse = {
  *
  * What the connect form needs to know before it offers Connect.
  *
- * ``ready`` — this installation holds an OAuth app for the provider.
+ * ``ready`` — AGENTAREA_MCP_OAUTH_APPS configures an OAuth app for the provider.
  * ``oauth_app_required`` — the user must register their own app first.
  */
 export type CatalogConnectionPreflight = {
@@ -3704,34 +3704,6 @@ export type MppConfigSchema = {
      * Stripe Profile Id
      */
     stripe_profile_id?: string | null;
-};
-
-/**
- * ManagedOAuthAppRequest
- */
-export type ManagedOAuthAppRequest = {
-    /**
-     * Client Id
-     */
-    client_id: string;
-    /**
-     * Client Secret
-     */
-    client_secret: string;
-};
-
-/**
- * ManagedOAuthAppResponse
- */
-export type ManagedOAuthAppResponse = {
-    /**
-     * Configured
-     */
-    configured: boolean;
-    /**
-     * Provider Key
-     */
-    provider_key: string;
 };
 
 /**
@@ -12058,36 +12030,6 @@ export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses 
 };
 
 export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponse = PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses[keyof PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses];
-
-export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutData = {
-    body: ManagedOAuthAppRequest;
-    path: {
-        /**
-         * Provider Key
-         */
-        provider_key: string;
-    };
-    query?: never;
-    url: '/v1/workspaces/{workspace}/connections/oauth/apps/{provider_key}';
-};
-
-export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutError = ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors[keyof ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors];
-
-export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses = {
-    /**
-     * Successful Response
-     */
-    200: ManagedOAuthAppResponse;
-};
-
-export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponse = ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses[keyof ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses];
 
 export type GetDashboardV1DashboardGetData = {
     body?: never;

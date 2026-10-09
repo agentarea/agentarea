@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 # Secret manager key prefix so auth creds are grouped
 _SECRET_PREFIX = "mcp_auth_cred"  # noqa: S105
-_MANAGED_CREDENTIALS_PREFIX = "connection_oauth_client:"
 # Token endpoints such as GitHub's answer form-encoded unless asked for JSON.
 _TOKEN_RESPONSE_HEADERS = {"Accept": "application/json"}
 
@@ -36,19 +35,7 @@ def _platform_oauth_issuer(config: dict[str, Any]) -> str | None:
 
 
 def _is_managed(config: dict[str, Any]) -> bool:
-    return (
-        _platform_oauth_issuer(config) is not None or _managed_credentials_key(config) is not None
-    )
-
-
-def _managed_credentials_key(config: dict[str, Any]) -> str | None:
-    """Return a valid internal managed-app key, if this is a managed config."""
-    if config.get("credential_mode") != "managed" or config.get("platform_oauth_issuer"):
-        return None
-    key = str(config.get("managed_credentials_key") or "")
-    if not key.startswith(_MANAGED_CREDENTIALS_PREFIX):
-        raise ValueError("Invalid managed OAuth credential reference")
-    return key
+    return config.get("credential_mode") == "managed"
 
 
 def _uses_workspace_secret_references(config: dict[str, Any]) -> bool:
@@ -97,10 +84,16 @@ class AuthConfigAccessDeniedError(PermissionError):
 def platform_oauth_app_for(config: MCPAuthConfig) -> MCPOAuthApp | None:
     """The configured platform app a managed MCP config names, or None for other configs.
 
-    Fails loud when the config names one the deployment no longer configures.
+    Fails loud when the config names one the deployment no longer configures, or
+    is managed without naming one.
     """
     issuer = _platform_oauth_issuer(config.config)
     if issuer is None:
+        if _is_managed(config.config):
+            raise MissingCredentialsError(
+                f"Auth config {config.id} is platform-managed but names no platform OAuth app. "
+                "Reconnect it."
+            )
         return None
     app = platform_oauth_app(issuer)
     if app is None:
@@ -127,11 +120,9 @@ class MCPAuthService:
         self,
         repository: MCPAuthConfigRepository,
         secret_manager: BaseSecretManager,
-        managed_secret_manager: BaseSecretManager | None = None,
     ) -> None:
         self._repo = repository
         self._secret_manager = secret_manager
-        self._managed_secret_manager = managed_secret_manager
 
     # ------------------------------------------------------------------
     # Credential helpers
@@ -191,20 +182,6 @@ class MCPAuthService:
         if platform_app is not None:
             client_id = platform_app.client_id
             client_secret = platform_app.client_secret.get_secret_value()
-        managed_key = _managed_credentials_key(config.config)
-        if managed_key is not None:
-            if self._managed_secret_manager is None:
-                raise MissingCredentialsError(
-                    f"Auth config {config.id} has no managed OAuth credential resolver."
-                )
-            raw_managed = await self._managed_secret_manager.get_secret(managed_key)
-            if not raw_managed:
-                raise MissingCredentialsError(
-                    f"Managed OAuth app '{managed_key}' is not configured."
-                )
-            managed = json.loads(raw_managed)
-            client_id = str(managed.get("client_id") or "")
-            client_secret = str(managed.get("client_secret") or "")
 
         if not client_id or (require_secret and not client_secret):
             raise MissingCredentialsError(

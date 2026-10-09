@@ -16,11 +16,10 @@ from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 def build_auth_header_resolver(
     repository_factory,
     secret_manager: BaseSecretManager,
-    managed_secret_manager: BaseSecretManager,
 ) -> Callable[[UUID, str, list[str] | None], Awaitable[dict[str, str]]]:
     """Resolve a workspace auth config, with platform credentials when requested."""
     repository = repository_factory.create_repository(MCPAuthConfigRepository)
-    service = MCPAuthService(repository, secret_manager, managed_secret_manager)
+    service = MCPAuthService(repository, secret_manager)
 
     async def resolve(
         config_id: UUID,
@@ -36,7 +35,7 @@ def build_auth_header_resolver(
                     "Managed OAuth credentials can only be used by their trusted catalog connection"
                 )
             platform_app = platform_oauth_app_for(config)
-            if platform_app is not None and request_origin not in platform_app.resource_origins:
+            if platform_app is None or request_origin not in platform_app.resource_origins:
                 raise ManagedCredentialDestinationError(
                     f"Auth config {config_id} holds platform-managed credentials that may not "
                     f"be sent to {request_origin!r}."

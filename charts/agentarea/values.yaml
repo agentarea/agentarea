@@ -81,6 +81,7 @@ global:
   #    "token_endpoint": "https://github.com/login/oauth/access_token",
   #    "resource_origins": ["https://api.githubcopilot.com"]}
   # Tokens minted through an app are only ever sent to its resource_origins.
+  # One-click catalog API connections use the app whose endpoints equal theirs.
   # A malformed value fails startup.
   mcpOAuthApps:
     existingSecret: ""

@@ -177,8 +177,13 @@ GitHub. It is a JSON list of objects with `issuer`, `client_id`,
 at one of `resource_origins` through `issuer` then authorizes with that app
 without registering its own; tokens minted through it are sent only to
 `resource_origins`. Unset, such providers need the workspace's own OAuth app.
-A malformed value stops the API and the worker at startup. Both read it, the
-worker to refresh tokens.
+The same list serves one-click catalog API connections (Google Search Console,
+Yandex Metrica and the like): a catalog connection uses the app whose
+`authorization_endpoint` and `token_endpoint` equal its own and whose
+`resource_origins` include every API origin it calls. Register
+`<API URL>/v1/connections/oauth/callback` as a redirect URI with the provider
+for those. A malformed value stops the API and the worker at startup. Both read
+it, the worker to refresh tokens.
 
 ### Worker (group `worker`)
 

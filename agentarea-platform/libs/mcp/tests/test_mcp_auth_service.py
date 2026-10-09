@@ -129,14 +129,14 @@ class TestGetAuthHeaders:
     async def test_managed_auth_cannot_be_attached_to_an_untrusted_connection(self):
         repo = AsyncMock()
         repo.get_by_id.return_value = _oauth_config(
+            client_id=None,
             credential_mode="managed",
-            managed_credentials_key="connection_oauth_client:yandex-metrica",
+            platform_oauth_issuer="https://oauth.yandex.ru",
         )
         repo_factory = MagicMock()
         repo_factory.create_repository.return_value = repo
         workspace_sm = AsyncMock()
-        managed_sm = AsyncMock()
-        resolver = build_auth_header_resolver(repo_factory, workspace_sm, managed_sm)
+        resolver = build_auth_header_resolver(repo_factory, workspace_sm)
 
         with pytest.raises(ValueError, match="trusted catalog connection"):
             await resolver(
@@ -146,7 +146,6 @@ class TestGetAuthHeaders:
             )
 
         workspace_sm.get_secret.assert_not_awaited()
-        managed_sm.get_secret.assert_not_awaited()
 
     async def test_api_key_injects_custom_header(self):
         svc, _, sm = _make_service()
@@ -267,33 +266,6 @@ class TestOAuth2Refresh:
             )
         sm.set_secret.assert_not_called()
 
-    async def test_managed_refresh_reads_platform_secret(self):
-        repo = AsyncMock()
-        workspace_sm = AsyncMock()
-        managed_sm = AsyncMock()
-        svc = MCPAuthService(repo, workspace_sm, managed_sm)
-        managed_key = "connection_oauth_client:yandex-metrica"
-        expected_credential = "credential-value"
-        config = _oauth_config(
-            credential_mode="managed",
-            managed_credentials_key=managed_key,
-        )
-        workspace_sm.get_secret.return_value = json.dumps(
-            {"refresh_token": "refresh", "expires_at": 0}
-        )
-        managed_sm.get_secret.return_value = json.dumps(
-            {"client_id": "managed-id", "client_secret": expected_credential}
-        )
-        client = _FakeClient(_FakeResp(200, {"access_token": "fresh", "expires_in": 3600}))
-
-        with patch("httpx.AsyncClient", lambda *a, **k: client):
-            headers = await svc.get_auth_headers(config)
-
-        assert headers == {"Authorization": "Bearer fresh"}
-        assert client.posted["client_id"] == "managed-id"
-        assert client.posted["client_secret"] == expected_credential
-        managed_sm.get_secret.assert_awaited_once_with(managed_key)
-
     async def test_custom_refresh_resolves_workspace_secret_references(self):
         svc, _, workspace_sm = _make_service()
         config = _oauth_config(
@@ -345,7 +317,6 @@ class TestOAuth2Refresh:
             with pytest.raises(OAuthReauthRequiredError):
                 await svc.get_auth_headers(_oauth_config())
 
-
     async def test_refresh_error_answered_with_200_requires_reauth(self):
         """GitHub reports a spent refresh token as HTTP 200 with an error body;
         that is a dead grant like any 4xx, not a missing access_token."""
@@ -359,6 +330,7 @@ class TestOAuth2Refresh:
                 await svc.get_auth_headers(_oauth_config())
         sm.set_secret.assert_not_called()
 
+
 # ---------------------------------------------------------------------------
 # create / delete
 # ---------------------------------------------------------------------------
@@ -366,10 +338,10 @@ class TestOAuth2Refresh:
 
 @pytest.mark.asyncio
 class TestCreateDelete:
-    async def test_managed_create_requires_a_reserved_credentials_reference(self):
+    async def test_managed_create_requires_a_platform_app(self):
         svc, repo, _ = _make_service()
 
-        with pytest.raises(ValueError, match="Invalid managed OAuth credential reference"):
+        with pytest.raises(ValueError, match="requires 'platform_oauth_issuer'"):
             await svc.create(
                 name="Incomplete managed config",
                 auth_type=AUTH_TYPE_OAUTH2,
@@ -396,7 +368,7 @@ class TestCreateDelete:
                     "token_url": "https://attacker.example/token",
                     "client_id": "ignored",
                     "credential_mode": "managed",
-                    "managed_credentials_key": "connection_oauth_client:yandex-metrica",
+                    "platform_oauth_issuer": "https://oauth.yandex.ru",
                 },
                 credentials={"client_secret": placeholder_credential},
             )
@@ -424,8 +396,9 @@ class TestCreateDelete:
         svc, repo, sm = _make_service()
         config_id = uuid4()
         managed = _oauth_config(
+            client_id=None,
             credential_mode="managed",
-            managed_credentials_key="connection_oauth_client:yandex-metrica",
+            platform_oauth_issuer="https://oauth.yandex.ru",
         )
         repo.get.return_value = managed
 
@@ -732,24 +705,23 @@ class TestPlatformManagedMCPAuth:
         svc = MCPAuthService(AsyncMock(), workspace_sm)
 
         with pytest.raises(ManagedCredentialDestinationError):
-            await svc.get_auth_headers_for(
-                _github_managed_config(), "https://attacker.example/mcp"
-            )
+            await svc.get_auth_headers_for(_github_managed_config(), "https://attacker.example/mcp")
 
         workspace_sm.get_secret.assert_not_awaited()
 
-    async def test_a_secret_store_managed_config_reaches_no_mcp_server(self):
-        managed_sm = AsyncMock()
-        svc = MCPAuthService(AsyncMock(), AsyncMock(), managed_sm)
-        openapi_managed = _oauth_config(
+    async def test_a_managed_config_naming_no_platform_app_fails_loud(self):
+        workspace_sm = AsyncMock()
+        svc = MCPAuthService(AsyncMock(), workspace_sm)
+        # The shape a catalog connection had while managed apps lived in DB secrets.
+        orphaned = _oauth_config(
             credential_mode="managed",
             managed_credentials_key="connection_oauth_client:yandex-metrica",
         )
 
-        with pytest.raises(ManagedCredentialDestinationError):
-            await svc.get_auth_headers_for(openapi_managed, "https://api-metrika.yandex.net/mcp")
+        with pytest.raises(MissingCredentialsError, match="Reconnect"):
+            await svc.get_auth_headers_for(orphaned, "https://api-metrika.yandex.net/")
 
-        managed_sm.get_secret.assert_not_awaited()
+        workspace_sm.get_secret.assert_not_awaited()
 
     async def test_client_credentials_come_from_settings_not_the_workspace(self):
         workspace_sm = AsyncMock()
@@ -809,7 +781,7 @@ class TestPlatformManagedMCPAuth:
         repo.get_by_id.return_value = _github_managed_config()
         repo_factory = MagicMock()
         repo_factory.create_repository.return_value = repo
-        resolver = build_auth_header_resolver(repo_factory, AsyncMock(), AsyncMock())
+        resolver = build_auth_header_resolver(repo_factory, AsyncMock())
 
         with pytest.raises(ManagedCredentialDestinationError):
             await resolver(

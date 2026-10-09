@@ -426,7 +426,7 @@ export const zBundleSkill = z.object({
  *
  * What the connect form needs to know before it offers Connect.
  *
- * ``ready`` — this installation holds an OAuth app for the provider.
+ * ``ready`` — AGENTAREA_MCP_OAUTH_APPS configures an OAuth app for the provider.
  * ``oauth_app_required`` — the user must register their own app first.
  */
 export const zCatalogConnectionPreflight = z.object({
@@ -1327,22 +1327,6 @@ export const zMppConfigSchema = z.object({
     z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
   ]),
   stripe_profile_id: z.string().nullish(),
-});
-
-/**
- * ManagedOAuthAppRequest
- */
-export const zManagedOAuthAppRequest = z.object({
-  client_id: z.string().min(1).max(512),
-  client_secret: z.string().min(1).max(4096),
-});
-
-/**
- * ManagedOAuthAppResponse
- */
-export const zManagedOAuthAppResponse = z.object({
-  configured: z.boolean(),
-  provider_key: z.string(),
 });
 
 /**
@@ -4804,20 +4788,6 @@ export const zPreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetPath =
  */
 export const zPreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponse =
   zCatalogConnectionPreflight;
-
-export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutBody =
-  zManagedOAuthAppRequest;
-
-export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutPath =
-  z.object({
-    provider_key: z.string(),
-  });
-
-/**
- * Successful Response
- */
-export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponse =
-  zManagedOAuthAppResponse;
 
 /**
  * Successful Response
