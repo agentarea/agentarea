@@ -403,7 +403,13 @@ export const zBundlePolicy = z.object({
   key: z.string().min(1),
   message: z.string().nullish(),
   params: z.record(z.unknown()).optional(),
-  priority: z.number().int().optional().default(0),
+  priority: z
+    .number()
+    .int()
+    .gte(-2147483648)
+    .lte(2147483647)
+    .optional()
+    .default(0),
   subject: z.string().optional().default("workspace"),
   target: z.string().min(1),
 });
@@ -1958,7 +1964,13 @@ export const zPolicyRuleCreateRequest = z.object({
   effect: zPolicyEffect,
   enabled: z.boolean().optional().default(true),
   params: z.record(z.unknown()).optional(),
-  priority: z.number().int().optional().default(0),
+  priority: z
+    .number()
+    .int()
+    .gte(-2147483648)
+    .lte(2147483647)
+    .optional()
+    .default(0),
   subject_id: z.string(),
   subject_type: zPolicySubjectType,
   target: z.string(),
@@ -1991,7 +2003,7 @@ export const zPolicyRuleUpdateRequest = z.object({
   effect: zPolicyEffect.nullish(),
   enabled: z.boolean().nullish(),
   params: z.record(z.unknown()).nullish(),
-  priority: z.number().int().nullish(),
+  priority: z.number().int().gte(-2147483648).lte(2147483647).nullish(),
   subject_id: z.string().nullish(),
   subject_type: zPolicySubjectType.nullish(),
   target: z.string().nullish(),
