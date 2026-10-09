@@ -250,3 +250,45 @@ async def test_a_stream_name_already_taken_is_a_conflict(client, service, graph)
     response = await client.post("/v1/workspaces/acme/streams/", json={"name": "orders"})
     assert response.status_code == 409, response.text
     assert "orders" in response.json()["detail"]
+
+
+# Sequences live in a Postgres BIGINT. A cursor past it, or a path sequence whose
+# ``sequence - 1`` underflows it, used to reach the database and come back a 500.
+@pytest.mark.parametrize(
+    "query",
+    [
+        "after=9223372036854775808",
+        "before=9223372036854775808",
+        "after=99999999999999999999999",
+        "after=-1",
+        "before=0",
+    ],
+)
+@pytest.mark.asyncio
+async def test_an_event_cursor_outside_a_bigint_is_a_422(client, service, graph, query):
+    stream = _stream()
+    response = await client.get(f"/v1/workspaces/acme/streams/{stream.id}/events?{query}")
+    assert response.status_code == 422, response.text
+    service.list_events.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "sequence",
+    ["-9223372036854775808", "-9223372036854775809", "9223372036854775808", "0", "-5"],
+)
+@pytest.mark.asyncio
+async def test_an_event_sequence_that_cannot_exist_is_a_422(client, service, graph, sequence):
+    stream = _stream()
+    response = await client.get(f"/v1/workspaces/acme/streams/{stream.id}/events/{sequence}")
+    assert response.status_code == 422, response.text
+    service.list_events.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_largest_sequence_is_still_looked_up(client, service, graph):
+    stream = _stream()
+    service.list_events.return_value = []
+    largest = 9223372036854775807
+    response = await client.get(f"/v1/workspaces/acme/streams/{stream.id}/events/{largest}")
+    assert response.status_code == 404, response.text
+    assert service.list_events.await_args.kwargs["after"] == largest - 1

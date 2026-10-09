@@ -15500,6 +15500,12 @@
             },
             "title": "Files",
             "type": "array"
+          },
+          "truncated": {
+            "default": false,
+            "description": "True when the workspace holds more than 10000 objects and only the first 10000 are listed.",
+            "title": "Truncated",
+            "type": "boolean"
           }
         },
         "required": [
@@ -18283,7 +18289,7 @@
     },
     "/v1/workspaces/{workspace}/agents/{agent_id}/overview": {
       "get": {
-        "description": "Aggregate stats + upcoming work for one agent.",
+        "description": "Aggregate stats + upcoming work for one agent; 404 if it is not in the workspace.",
         "operationId": "get_agent_overview_v1_agents__agent_id__overview_get",
         "parameters": [
           {
@@ -33701,6 +33707,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maximum": 9223372036854775807,
                   "minimum": 0,
                   "type": "integer"
                 },
@@ -33720,6 +33727,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maximum": 9223372036854775807,
                   "minimum": 1,
                   "type": "integer"
                 },
@@ -33798,6 +33806,8 @@
             "name": "sequence",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Sequence",
               "type": "integer"
             }

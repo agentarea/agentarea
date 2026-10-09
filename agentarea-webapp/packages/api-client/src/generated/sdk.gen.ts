@@ -819,7 +819,7 @@ export const installAgentV1AgentsAgentIdInstallPost = <ThrowOnError extends bool
 /**
  * Get Agent Overview
  *
- * Aggregate stats + upcoming work for one agent.
+ * Aggregate stats + upcoming work for one agent; 404 if it is not in the workspace.
  */
 export const getAgentOverviewV1AgentsAgentIdOverviewGet = <ThrowOnError extends boolean = false>(options: Options<GetAgentOverviewV1AgentsAgentIdOverviewGetData, ThrowOnError>): RequestResult<GetAgentOverviewV1AgentsAgentIdOverviewGetResponses, GetAgentOverviewV1AgentsAgentIdOverviewGetErrors, ThrowOnError> => (options.client ?? client).get<GetAgentOverviewV1AgentsAgentIdOverviewGetResponses, GetAgentOverviewV1AgentsAgentIdOverviewGetErrors, ThrowOnError>({
     security: [{

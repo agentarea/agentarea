@@ -23,6 +23,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# The digests a generic HMAC signature may be configured with, and the one used
+# when none is. Saving a source or trigger that names any other digest is
+# refused, rather than accepted and then failing every delivery's verification.
+HMAC_SIGNATURE_ALGORITHMS: tuple[str, ...] = ("sha1", "sha256", "sha384", "sha512")
+DEFAULT_SIGNATURE_ALGORITHM = "sha256"
+
 
 class SignatureVerifier(ABC):
     """Abstract base class for webhook signature verification."""
@@ -193,7 +199,10 @@ class GenericHMACVerifier(SignatureVerifier):
     """
 
     def __init__(
-        self, header_name: str = "x-webhook-signature", algorithm: str = "sha256", prefix: str = ""
+        self,
+        header_name: str = "x-webhook-signature",
+        algorithm: str = DEFAULT_SIGNATURE_ALGORITHM,
+        prefix: str = "",
     ):
         self.header_name = header_name.lower()
         self.algorithm = algorithm
@@ -537,13 +546,30 @@ def generic_signature_scheme(validation_rules: dict | None) -> GenericSignatureS
     Header name, digest and prefix are configurable through ``validation_rules``
     because providers that share plain HMAC still disagree on all three; this
     is the one place the defaults live, for the verifier and for the docs the
-    UI shows next to the secret.
+    UI shows next to the secret. The digest's default and the digests allowed
+    are ``DEFAULT_SIGNATURE_ALGORITHM`` and ``HMAC_SIGNATURE_ALGORITHMS``.
     """
     rules = validation_rules or {}
     return GenericSignatureScheme(
         header=rules.get("signature_header", "X-Webhook-Signature"),
-        algorithm=rules.get("signature_algorithm", "sha256"),
+        algorithm=rules.get("signature_algorithm", DEFAULT_SIGNATURE_ALGORITHM),
         prefix=rules.get("signature_prefix", ""),
+    )
+
+
+def signature_algorithm_error(rules: dict[str, Any] | None) -> str | None:
+    """Why ``rules`` names a digest the generic HMAC verifier cannot use; None if it does not.
+
+    Checked when a stream source or webhook trigger is saved, so a typo is a 422
+    there instead of every later delivery failing verification.
+    """
+    if not rules or "signature_algorithm" not in rules:
+        return None
+    algorithm = rules["signature_algorithm"]
+    if isinstance(algorithm, str) and algorithm in HMAC_SIGNATURE_ALGORITHMS:
+        return None
+    return (
+        f"signature_algorithm must be one of {list(HMAC_SIGNATURE_ALGORITHMS)}; got {algorithm!r}"
     )
 
 

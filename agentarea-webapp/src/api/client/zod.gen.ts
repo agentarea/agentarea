@@ -3879,6 +3879,7 @@ export const zWorkspaceFileInfo = z.object({
 export const zWorkspaceFileListResponse = z.object({
   directories: z.array(z.string()).optional(),
   files: z.array(zWorkspaceFileInfo),
+  truncated: z.boolean().optional().default(false),
 });
 
 /**
@@ -6481,8 +6482,8 @@ export const zListEventsV1StreamsStreamIdEventsGetPath = z.object({
 });
 
 export const zListEventsV1StreamsStreamIdEventsGetQuery = z.object({
-  after: z.number().int().gte(0).nullish(),
-  before: z.number().int().gte(1).nullish(),
+  after: z.number().int().gte(0).lte(9223372036854776000).nullish(),
+  before: z.number().int().gte(1).lte(9223372036854776000).nullish(),
   limit: z.number().int().gte(1).lte(200).optional().default(50),
 });
 
@@ -6493,7 +6494,7 @@ export const zListEventsV1StreamsStreamIdEventsGetResponse = zStreamEventPage;
 
 export const zGetEventV1StreamsStreamIdEventsSequenceGetPath = z.object({
   stream_id: z.string().uuid(),
-  sequence: z.number().int(),
+  sequence: z.number().int().gte(1).lte(9223372036854776000),
 });
 
 /**

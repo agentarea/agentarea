@@ -25,8 +25,12 @@ def _app(monkeypatch, stored_paths=(), projects=()):
             path=path, size=len(data), content_type=content_type, last_modified=None
         )
 
-    async def list_objects(workspace_id, prefix="", max_items=1000):
-        return [obj for path, obj in objects.items() if path.startswith(prefix)][:max_items]
+    async def list_objects(workspace_id, prefix="", max_items=1000, exclude_roots=()):
+        return [
+            obj
+            for path, obj in objects.items()
+            if path.startswith(prefix) and path.split("/", 1)[0] not in exclude_roots
+        ][:max_items]
 
     service = SimpleNamespace(
         exists=AsyncMock(side_effect=lambda workspace_id, path: path in objects),
@@ -70,7 +74,11 @@ async def test_create_folder_persists_a_workspace_scoped_marker_and_lists_it(mon
     service.put.assert_awaited_once_with(
         "workspace-a", "docs/Планы/", b"", content_type="application/x-directory"
     )
-    assert listing.json() == {"files": [], "directories": ["docs/Планы/", "projects/p-1/"]}
+    assert listing.json() == {
+        "files": [],
+        "directories": ["docs/Планы/", "projects/p-1/"],
+        "truncated": False,
+    }
     assert all(call.args[0] == "workspace-a" for call in service.list.await_args_list)
     assert all(call.args[0] == "workspace-a" for call in service.exists.await_args_list)
 

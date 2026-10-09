@@ -6,6 +6,7 @@ OpenAPI schema too, which is what the webapp maps its filters against.
 """
 
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -76,3 +77,17 @@ async def test_no_status_asks_for_the_whole_vocabulary(async_client, task_reposi
 
     assert response.status_code == 200, response.text
     assert task_repository.list_by_statuses.await_args.kwargs["statuses"] == list(INBOX_STATUSES)
+
+
+@pytest.mark.asyncio
+async def test_the_total_is_narrowed_to_the_agent_the_items_are(
+    async_client, task_repository
+) -> None:
+    """The total once counted the whole workspace under one agent's items."""
+    agent_id = uuid4()
+
+    response = await async_client.get(f"/v1/workspaces/acme/inbox/?agent_id={agent_id}")
+
+    assert response.status_code == 200, response.text
+    assert task_repository.list_by_statuses.await_args.kwargs["agent_id"] == agent_id
+    assert task_repository.count_by_statuses.await_args.kwargs["agent_id"] == agent_id

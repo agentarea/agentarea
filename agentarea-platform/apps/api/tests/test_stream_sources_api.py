@@ -194,6 +194,16 @@ async def test_a_secret_the_caller_may_not_use_is_refused(client, env, graph):
             "no setting a",
         ),
         ({"webhook_type": "gitlab"}, "Unknown source type"),
+        # Accepted once, then every delivery failed verification on a digest
+        # the verifier has no hashlib function for.
+        (
+            {"webhook_type": "generic", "config": {"signature_algorithm": "sha-256"}},
+            "signature_algorithm must be one of",
+        ),
+        (
+            {"webhook_type": "generic", "config": {"signature_algorithm": "md5"}},
+            "signature_algorithm must be one of",
+        ),
     ],
 )
 async def test_a_source_its_verifier_cannot_run_for_is_refused(client, env, graph, payload, says):
@@ -238,6 +248,18 @@ async def test_a_generic_source_reports_the_scheme_its_settings_choose(client, e
         "prefix": "sha256=",
     }
     assert sentry["signature_scheme"] is None
+
+
+@pytest.mark.parametrize("algorithm", ["sha1", "sha256", "sha384", "sha512"])
+async def test_a_generic_source_takes_every_digest_the_verifier_supports(
+    client, env, graph, algorithm
+):
+    response = await client.post(
+        f"{BASE}/sources",
+        json={"webhook_type": "generic", "config": {"signature_algorithm": algorithm}},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["signature_scheme"]["algorithm"] == algorithm
 
 
 async def test_a_secret_given_for_an_optional_field_is_kept_and_never_returned(client, env, graph):
