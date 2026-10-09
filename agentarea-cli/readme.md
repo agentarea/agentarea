@@ -55,6 +55,12 @@ $ agentarea logout
 # Clears the stored session
 ```
 
+Every command resolves the API the same way: `--api-url`, else
+`AGENTAREA_API_URL`, else the saved config, else `http://localhost:8000`. The
+stored token is bound to the origin (scheme, host, port) it was issued for and
+is never sent to another one; pointing the CLI at a different host prints a hint
+to run `agentarea login --api-url=<that host>`.
+
 ### List Agents
 
 After login, select "List Agents" to:

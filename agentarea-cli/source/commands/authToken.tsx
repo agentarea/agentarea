@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {Box, Text} from 'ink';
 import {tokenStorage} from '../utils/storage.js';
+import {getApiBaseUrl} from '../services/apiRuntime.js';
 import {logger} from '../utils/logger.js';
 import readline from 'readline';
 
@@ -58,6 +59,8 @@ export function AuthToken({onTokenSet}: AuthTokenProps) {
 					accessToken: token.trim(),
 					tokenType: 'Bearer',
 					expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+					// Bound to the API it was pasted for; never sent to another host.
+					apiUrl: getApiBaseUrl(),
 				};
 
 				await tokenStorage.saveToken(authToken);

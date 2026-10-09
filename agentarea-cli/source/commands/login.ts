@@ -14,6 +14,7 @@ import {
 	registerClient,
 } from '../services/oauth.js';
 import {tokenStorage} from '../utils/storage.js';
+import {normalizeApiUrl} from '../utils/apiUrl.js';
 import {logger} from '../utils/logger.js';
 import {type AuthToken} from '../types/index.js';
 
@@ -153,7 +154,7 @@ async function listenOnLoopback(): Promise<Callback> {
 }
 
 export async function runLogin(options: {apiUrl: string}): Promise<boolean> {
-	const apiUrl = options.apiUrl.replace(/\/$/, '');
+	const apiUrl = normalizeApiUrl(options.apiUrl);
 	const metadata = await discoverAuthServer(apiUrl);
 	const callback = await listenOnLoopback();
 	const redirectUri = `http://127.0.0.1:${callback.port}/callback`;
@@ -224,12 +225,13 @@ export async function runLogout(): Promise<boolean> {
 
 /**
  * Return a usable access token for *apiUrl*, refreshing it when it is expiring
- * and a refresh token is available. Returns null when there is nothing stored.
+ * and a refresh token is available. Returns null when there is nothing stored,
+ * or when the stored token was issued for a different origin than *apiUrl*.
  */
 export async function loadAccessToken(apiUrl: string): Promise<string | null> {
 	let stored: AuthToken | null = null;
 	try {
-		stored = await tokenStorage.getToken();
+		stored = await tokenStorage.getTokenFor(apiUrl);
 	} catch (error) {
 		logger.warn(`Could not read the stored token: ${String(error)}`);
 		return null;
@@ -250,7 +252,9 @@ export async function loadAccessToken(apiUrl: string): Promise<string | null> {
 		return stored.accessToken;
 	}
 
-	const metadata = await discoverAuthServer(stored.apiUrl ?? apiUrl);
+	// getTokenFor only returns a token bound to apiUrl's origin, so its
+	// recorded apiUrl is set and is the API it was issued by.
+	const metadata = await discoverAuthServer(stored.apiUrl!);
 	const refreshed = await refreshAccessToken({
 		metadata,
 		clientId: stored.clientId,
@@ -259,7 +263,7 @@ export async function loadAccessToken(apiUrl: string): Promise<string | null> {
 	await tokenStorage.saveToken({
 		...refreshed,
 		clientId: stored.clientId,
-		apiUrl: stored.apiUrl ?? apiUrl,
+		apiUrl: stored.apiUrl,
 	});
 	return refreshed.accessToken;
 }
