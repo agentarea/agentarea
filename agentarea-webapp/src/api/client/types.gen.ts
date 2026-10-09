@@ -18023,6 +18023,45 @@ export type ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponses = {
 export type ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponse =
   ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponses[keyof ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponses];
 
+export type DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteData =
+  {
+    body?: never;
+    path: {
+      /**
+       * Stream Id
+       */
+      stream_id: string;
+      /**
+       * Subscription Id
+       */
+      subscription_id: string;
+    };
+    query?: never;
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions/{subscription_id}";
+  };
+
+export type DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteError =
+  DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors[keyof DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors];
+
+export type DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses =
+  {
+    /**
+     * Successful Response
+     */
+    204: void;
+  };
+
+export type DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponse =
+  DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses[keyof DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses];
+
 export type ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetData =
   {
     body?: never;

@@ -14,7 +14,14 @@ from agentarea_common.auth.permission import PermissionService
 from agentarea_common.config.database import get_db_session
 from agentarea_common.di.container import get_container
 from agentarea_common.rebac.openfga_client import OpenFGAClient
-from agentarea_streams.domain import ForwardLoopError, JournaledEvent, StreamNameTakenError
+from agentarea_streams.domain import (
+    ForwardLoopError,
+    JournaledEvent,
+    NotAForwardError,
+    StreamNameTakenError,
+    StreamNotFoundError,
+    SubscriptionNotFoundError,
+)
 from httpx import ASGITransport, AsyncClient
 
 NOW = datetime(2026, 10, 6, 12, 0, tzinfo=UTC)
@@ -141,6 +148,76 @@ async def test_a_forward_into_itself_is_a_400(client, service, graph):
     )
     assert response.status_code == 400
     assert "own input" in response.json()["detail"]
+
+
+def _forward(stream_id, outputs):
+    return SimpleNamespace(
+        id=uuid4(),
+        stream_id=stream_id,
+        kind="forward",
+        trigger_id=None,
+        output_stream_ids=[str(o) for o in outputs],
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_forward_is_removed_by_whoever_may_edit_its_outputs(client, service, graph):
+    stream, output = uuid4(), uuid4()
+    forward = _forward(stream, [output])
+    service.get_forward.return_value = forward
+    service.existing_outputs.return_value = [output]
+    response = await client.delete(
+        f"/v1/workspaces/acme/streams/{stream}/subscriptions/{forward.id}"
+    )
+    assert response.status_code == 204, response.text
+    service.delete_forward.assert_awaited_once_with(stream, forward.id)
+    checked = {call.kwargs["object"] for call in graph.check.await_args_list}
+    assert {str(stream), str(output)} <= checked
+
+
+@pytest.mark.asyncio
+async def test_a_forward_into_a_stream_the_caller_may_not_edit_stays(client, service, graph):
+    stream, output = uuid4(), uuid4()
+    forward = _forward(stream, [output])
+    service.get_forward.return_value = forward
+    service.existing_outputs.return_value = [output]
+    graph.check.side_effect = lambda **kw: SimpleNamespace(allowed=kw["object"] != str(output))
+    response = await client.delete(
+        f"/v1/workspaces/acme/streams/{stream}/subscriptions/{forward.id}"
+    )
+    assert response.status_code == 403, response.text
+    service.delete_forward.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_triggers_subscription_is_not_removed_as_a_forward(client, service, graph):
+    stream, subscription, trigger = uuid4(), uuid4(), uuid4()
+    service.get_forward.side_effect = NotAForwardError(subscription, trigger)
+    response = await client.delete(
+        f"/v1/workspaces/acme/streams/{stream}/subscriptions/{subscription}"
+    )
+    assert response.status_code == 409, response.text
+    assert str(trigger) in response.json()["detail"]
+    assert "deleting the trigger" in response.json()["detail"]
+    service.delete_forward.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_removing_an_unknown_subscription_is_a_404(client, service, graph):
+    stream, subscription = uuid4(), uuid4()
+    service.get_forward.side_effect = SubscriptionNotFoundError(subscription)
+    response = await client.delete(
+        f"/v1/workspaces/acme/streams/{stream}/subscriptions/{subscription}"
+    )
+    assert response.status_code == 404, response.text
+
+
+@pytest.mark.asyncio
+async def test_an_event_of_a_stream_that_is_gone_is_a_404(client, service, graph):
+    stream = uuid4()
+    service.list_events.side_effect = StreamNotFoundError(stream)
+    response = await client.get(f"/v1/workspaces/acme/streams/{stream}/events/1")
+    assert response.status_code == 404, response.text
 
 
 @pytest.mark.asyncio

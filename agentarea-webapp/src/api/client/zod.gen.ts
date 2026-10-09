@@ -6567,6 +6567,18 @@ export const zListSubscriptionsV1StreamsStreamIdSubscriptionsGetPath = z.object(
 export const zListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponse =
   z.array(zSubscriptionResponse);
 
+export const zDeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeletePath =
+  z.object({
+    stream_id: z.string().uuid(),
+    subscription_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zDeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponse =
+  z.void();
+
 export const zListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetPath =
   z.object({
     stream_id: z.string().uuid(),

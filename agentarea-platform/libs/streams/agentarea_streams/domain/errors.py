@@ -54,9 +54,56 @@ class SourceFedByTriggerError(StreamError):
         self.trigger_ids = trigger_ids
 
 
+class StreamInUseError(StreamError):
+    """Triggers listen to the stream or forwards write into it; deleting it would strand them."""
+
+    def __init__(self, stream_id: UUID, trigger_ids: list[UUID], forwards: list[tuple[UUID, UUID]]):
+        reasons = []
+        if trigger_ids:
+            listed = ", ".join(str(t) for t in trigger_ids)
+            reasons.append(
+                f"trigger {listed} subscribes to it; delete the trigger first"
+                if len(trigger_ids) == 1
+                else f"triggers {listed} subscribe to it; delete those triggers first"
+            )
+        if forwards:
+            listed = ", ".join(f"{sub} on stream {stream}" for sub, stream in forwards)
+            reasons.append(
+                f"forward {listed} writes into it; remove that forward from its stream first"
+                if len(forwards) == 1
+                else f"forwards {listed} write into it; remove each forward from its stream first"
+            )
+        super().__init__(f"Stream {stream_id} is in use: {'; '.join(reasons)}")
+        self.stream_id = stream_id
+        self.trigger_ids = trigger_ids
+        self.forwards = forwards
+
+
 class TriggerSubscriptionNotFoundError(StreamError):
     def __init__(self, trigger_id: UUID | str):
-        super().__init__(f"No stream subscription for trigger {trigger_id}")
+        super().__init__(
+            f"Trigger {trigger_id} has no stream subscription, so its filter cannot be "
+            "changed; its stream may have been deleted. Delete the trigger and create it "
+            "again on a stream that exists"
+        )
+        self.trigger_id = trigger_id
+
+
+class SubscriptionNotFoundError(StreamError):
+    def __init__(self, subscription_id: UUID | str):
+        super().__init__(f"Subscription {subscription_id} not found in this stream")
+        self.subscription_id = subscription_id
+
+
+class NotAForwardError(StreamError):
+    """A trigger's subscription lives and dies with its trigger, never on its own."""
+
+    def __init__(self, subscription_id: UUID, trigger_id: UUID | None):
+        super().__init__(
+            f"Subscription {subscription_id} belongs to trigger {trigger_id}, not a forward; "
+            "it is removed by deleting the trigger"
+        )
+        self.subscription_id = subscription_id
         self.trigger_id = trigger_id
 
 

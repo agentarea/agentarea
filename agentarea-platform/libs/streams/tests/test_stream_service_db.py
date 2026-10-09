@@ -3,6 +3,7 @@
 Set STREAMS_TEST_DATABASE_URL.
 """
 
+import asyncio
 import os
 from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
@@ -16,10 +17,13 @@ from agentarea_common.events.ports import IntegrationEvent
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import (
     EventFilter,
+    NotAForwardError,
     SourceFedByTriggerError,
+    StreamInUseError,
     StreamNameTakenError,
     StreamNotFoundError,
     StreamSourceNotFoundError,
+    SubscriptionNotFoundError,
     TriggerSubscriptionNotFoundError,
 )
 from agentarea_streams.infrastructure.journal_repository import StreamJournal
@@ -44,6 +48,11 @@ async def _trigger_row(session, ws: str) -> UUID:
         {"id": trigger_id, "ws": ws, "agent": uuid4()},
     )
     return trigger_id
+
+
+async def _delete_trigger_row(session, trigger_id: UUID) -> None:
+    """What deleting the trigger does to its subscription: the foreign key cascades."""
+    await session.execute(text("DELETE FROM triggers WHERE id = :id"), {"id": trigger_id})
 
 
 async def test_a_webhook_trigger_gets_a_stream_a_source_and_a_subscription():
@@ -311,8 +320,213 @@ async def test_a_live_triggers_source_and_its_stream_cannot_be_deleted():
             await service.delete_source(stream.id, standalone.id)
             await service.remove_trigger_webhook_sources(trigger_id)
             await session.commit()
+            with pytest.raises(StreamInUseError):
+                await service.delete_stream(stream.id)
+            await _delete_trigger_row(session, trigger_id)
             await service.delete_stream(stream.id)
             await session.commit()
             with pytest.raises(StreamNotFoundError):
                 await service.get_stream(stream.id)
+    await engine.dispose()
+
+
+async def test_a_stream_a_trigger_subscribes_to_cannot_be_deleted():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
+    async with maker() as session:
+        with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
+            service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
+            stream = await service.create_stream(name="orders", description="", retention_days=7)
+            trigger_id = await _trigger_row(session, ctx.workspace_id)
+            await service.subscribe_trigger(
+                stream_id=stream.id, trigger_id=trigger_id, event_filter=EventFilter()
+            )
+            await session.commit()
+
+            with pytest.raises(StreamInUseError) as refused:
+                await service.delete_stream(stream.id)
+            assert refused.value.trigger_ids == [trigger_id]
+            assert str(trigger_id) in str(refused.value)
+            assert "delete the trigger" in str(refused.value)
+            assert (await service.get_stream(stream.id)).id == stream.id
+            assert await service.trigger_subscription(trigger_id) is not None
+
+            await _delete_trigger_row(session, trigger_id)
+            await service.delete_stream(stream.id)
+            await session.commit()
+            with pytest.raises(StreamNotFoundError):
+                await service.get_stream(stream.id)
+    await engine.dispose()
+
+
+async def test_a_stream_a_forward_writes_into_cannot_be_deleted_until_the_forward_goes():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
+    async with maker() as session:
+        with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
+            service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
+            source = await service.create_stream(name="in", description="", retention_days=7)
+            kept = await service.create_stream(name="kept", description="", retention_days=7)
+            target = await service.create_stream(name="target", description="", retention_days=7)
+            forward = await service.create_forward(
+                stream_id=source.id,
+                output_stream_ids=[kept.id, target.id],
+                event_filter=EventFilter(),
+            )
+            await session.commit()
+
+            with pytest.raises(StreamInUseError) as refused:
+                await service.delete_stream(target.id)
+            assert refused.value.forwards == [(forward.id, source.id)]
+            assert str(forward.id) in str(refused.value)
+            assert str(source.id) in str(refused.value)
+
+            await service.delete_forward(source.id, forward.id)
+            await session.commit()
+            assert await service.list_subscriptions(source.id) == []
+            await service.delete_stream(target.id)
+            await session.commit()
+            with pytest.raises(StreamNotFoundError):
+                await service.get_stream(target.id)
+    await engine.dispose()
+
+
+async def test_the_input_of_a_forward_can_be_deleted_and_takes_the_forward_with_it():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
+    async with maker() as session:
+        with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
+            service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
+            source = await service.create_stream(name="in", description="", retention_days=7)
+            output = await service.create_stream(name="out", description="", retention_days=7)
+            await service.create_forward(
+                stream_id=source.id, output_stream_ids=[output.id], event_filter=EventFilter()
+            )
+            await session.commit()
+            await service.delete_stream(source.id)
+            await service.delete_stream(output.id)
+            await session.commit()
+    await engine.dispose()
+
+
+async def test_a_forward_lists_each_output_once():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
+    async with maker() as session:
+        with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
+            service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
+            source = await service.create_stream(name="in", description="", retention_days=7)
+            one = await service.create_stream(name="one", description="", retention_days=7)
+            two = await service.create_stream(name="two", description="", retention_days=7)
+            forward = await service.create_forward(
+                stream_id=source.id,
+                output_stream_ids=[two.id, one.id, two.id, one.id],
+                event_filter=EventFilter(),
+            )
+            await session.commit()
+            assert forward.output_stream_ids == [str(two.id), str(one.id)]
+            with pytest.raises(StreamNotFoundError):
+                await service.create_forward(
+                    stream_id=source.id,
+                    output_stream_ids=[one.id, uuid4()],
+                    event_filter=EventFilter(),
+                )
+    await engine.dispose()
+
+
+async def test_only_a_forward_of_this_stream_is_removed_as_a_forward():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    owner = UserContext(user_id="u", workspace_id=str(uuid4()))
+    other = UserContext(user_id="u", workspace_id=str(uuid4()))
+    async with maker() as session:
+        with workspace_scope(owner.workspace_id), patch(GRANT, new=AsyncMock()):
+            service = StreamService(RepositoryFactory(session, owner), EventStreamSettings())
+            source = await service.create_stream(name="in", description="", retention_days=7)
+            output = await service.create_stream(name="out", description="", retention_days=7)
+            trigger_id = await _trigger_row(session, owner.workspace_id)
+            trigger_sub = await service.subscribe_trigger(
+                stream_id=source.id, trigger_id=trigger_id, event_filter=EventFilter()
+            )
+            forward = await service.create_forward(
+                stream_id=source.id, output_stream_ids=[output.id], event_filter=EventFilter()
+            )
+            await session.commit()
+
+            with pytest.raises(NotAForwardError) as refused:
+                await service.delete_forward(source.id, trigger_sub.id)
+            assert str(trigger_id) in str(refused.value)
+            with pytest.raises(SubscriptionNotFoundError):
+                await service.delete_forward(output.id, forward.id)
+            with pytest.raises(SubscriptionNotFoundError):
+                await service.delete_forward(source.id, uuid4())
+
+        with workspace_scope(other.workspace_id):
+            elsewhere = StreamService(RepositoryFactory(session, other), EventStreamSettings())
+            with pytest.raises(SubscriptionNotFoundError):
+                await elsewhere.delete_forward(source.id, forward.id)
+
+        with workspace_scope(owner.workspace_id):
+            assert {s.id for s in await service.list_subscriptions(source.id)} == {
+                trigger_sub.id,
+                forward.id,
+            }
+    await engine.dispose()
+
+
+async def test_a_forward_whose_output_was_deleted_before_the_guard_can_be_removed():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
+    async with maker() as session:
+        with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
+            service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
+            source = await service.create_stream(name="in", description="", retention_days=7)
+            gone = await service.create_stream(name="gone", description="", retention_days=7)
+            live = await service.create_stream(name="live", description="", retention_days=7)
+            forward = await service.create_forward(
+                stream_id=source.id,
+                output_stream_ids=[gone.id, live.id],
+                event_filter=EventFilter(),
+            )
+            # Deleted the way an older release allowed, past the guard.
+            await session.execute(text("DELETE FROM streams WHERE id = :id"), {"id": gone.id})
+            await session.commit()
+
+            found = await service.get_forward(source.id, forward.id)
+            assert await service.existing_outputs(found) == [live.id]
+            await service.delete_forward(source.id, forward.id)
+            await session.commit()
+            assert await service.list_subscriptions(source.id) == []
+    await engine.dispose()
+
+
+async def test_a_delete_waits_for_a_forward_being_created_into_the_stream_and_is_refused():
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
+    with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
+        async with maker() as creating, maker() as deleting:
+            creator = StreamService(RepositoryFactory(creating, ctx), EventStreamSettings())
+            source = await creator.create_stream(name="in", description="", retention_days=7)
+            target = await creator.create_stream(name="target", description="", retention_days=7)
+            await creating.commit()
+
+            forward = await creator.create_forward(
+                stream_id=source.id, output_stream_ids=[target.id], event_filter=EventFilter()
+            )
+            deleter = StreamService(RepositoryFactory(deleting, ctx), EventStreamSettings())
+            delete = asyncio.create_task(deleter.delete_stream(target.id))
+            await asyncio.sleep(0.3)
+            assert not delete.done()
+            await creating.commit()
+
+            with pytest.raises(StreamInUseError) as refused:
+                await asyncio.wait_for(delete, timeout=10)
+            assert refused.value.forwards == [(forward.id, source.id)]
+            await deleting.rollback()
     await engine.dispose()
