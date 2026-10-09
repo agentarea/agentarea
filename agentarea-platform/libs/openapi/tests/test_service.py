@@ -507,13 +507,49 @@ paths:
 
 
 def _serve(text: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    real_client = httpx.AsyncClient
     transport = httpx.MockTransport(lambda _req: httpx.Response(200, text=text))
     monkeypatch.setattr(
-        service_module.httpx,
-        "AsyncClient",
-        lambda **kwargs: real_client(transport=transport, **kwargs),
+        service_module,
+        "safe_async_client",
+        lambda *, policy, **kwargs: httpx.AsyncClient(transport=transport, **kwargs),
     )
+
+
+@pytest.mark.asyncio
+async def test_spec_fetch_through_a_proxy_names_the_host_not_its_address(monkeypatch):
+    # Pinning the URL to an IP by hand sent CONNECT <ip>:443 through HTTPS_PROXY,
+    # and TLS was then verified against the IP: every catalog spec on S3 failed.
+    from agentarea_common.utils.url_safety import SafeOutboundTransport
+
+    sent: list[tuple[str | None, str]] = []
+
+    def through(proxy: str | None = None) -> httpx.MockTransport:
+        def handle(request: httpx.Request) -> httpx.Response:
+            sent.append((proxy, request.url.host))
+            return httpx.Response(200, text='{"openapi": "3.0.0", "paths": {}}')
+
+        return httpx.MockTransport(handle)
+
+    async def resolve(_host: str, _port: int) -> list[str]:
+        return ["93.184.216.34"]
+
+    monkeypatch.setenv("HTTPS_PROXY", "http://egress-proxy:8888")
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.setattr(service_module, "validate_url", lambda *_a, **_k: ["93.184.216.34"])
+    monkeypatch.setattr(
+        service_module,
+        "safe_async_client",
+        lambda *, policy, **kwargs: httpx.AsyncClient(
+            transport=SafeOutboundTransport(policy, resolve=resolve, inner=through), **kwargs
+        ),
+    )
+
+    spec = await fetch_and_parse_spec(
+        "https://specs.example.com/openapi.json", policy=OutboundPolicy()
+    )
+
+    assert spec["openapi"] == "3.0.0"
+    assert sent == [("http://egress-proxy:8888", "specs.example.com")]
 
 
 class TestYamlSpecWithBareDates:
