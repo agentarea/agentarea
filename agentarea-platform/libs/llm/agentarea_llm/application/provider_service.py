@@ -1,3 +1,4 @@
+import logging
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
@@ -26,6 +27,8 @@ from agentarea_llm.infrastructure.provider_config_repository import (
 )
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
 from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
+
+logger = logging.getLogger(__name__)
 
 
 class PlatformManagedConfigError(PermissionError):
@@ -140,6 +143,10 @@ class ProviderService:
             ProviderConfig: The created provider configuration.
         """
         await self._assert_may_manage_configs()
+        # Checked before any secret is written: an unknown spec used to reach
+        # the insert's foreign key, leaving the key behind as an orphan secret.
+        if await self.provider_spec_repo.get_by_id(payload.provider_spec_id) is None:
+            raise NotFoundError("Provider spec not found")
         config_id = uuid4()
         config = ProviderConfig(
             id=config_id,
@@ -160,8 +167,22 @@ class ProviderService:
             config.api_key = secret_name
             config.api_key_secret_id = await self._secret_id_for(secret_name)
 
-        await self._register_reference(config)
-        return await self.provider_config_repo.create_config(config)
+        try:
+            await self._register_reference(config)
+            return await self.provider_config_repo.create_config(config)
+        except Exception:
+            # The key was stored only for this config; without it, it is an
+            # orphan holding a credential nobody can see is unused.
+            if payload.api_key and not payload.api_key_secret_id:
+                try:
+                    await self.secret_manager.delete_secret(f"provider_config_{config_id}")
+                except Exception:
+                    logger.warning(
+                        "Could not remove the key stored for failed provider config %s",
+                        config_id,
+                        exc_info=True,
+                    )
+            raise
 
     async def _assert_may_manage_configs(self) -> None:
         """A provider config holds the key every agent in the workspace bills against.
