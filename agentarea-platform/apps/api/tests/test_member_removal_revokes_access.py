@@ -456,9 +456,10 @@ async def test_a_second_removal_finds_no_member_and_queues_nothing(session_facto
     """Once row and tuple are gone there is no membership left to end (#717)."""
     _grant_member(graph)
     async with session_factory() as session:
-        assert await _memberships(session, graph).remove(
+        removed = await _memberships(session, graph).remove(
             workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER
         )
+        assert removed
     async with session_factory() as session:
         with pytest.raises(MemberNotFound):
             await _memberships(session, graph).remove(
