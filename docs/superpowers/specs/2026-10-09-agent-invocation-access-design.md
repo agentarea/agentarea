@@ -373,6 +373,57 @@ answer.
 
 ## Plan of record
 
+**Step 0 — close the open bot, with no throwaway code.** Every piece below is
+part of the target design. It is only the subset needed so that a bot stops
+answering strangers.
+
+- **Admission reuses the check that exists.** `ConfigurerAuthority.may_run`
+  (`stream_subscriber.py:91-100`) already answers "may this user run this
+  agent": workspace membership plus `execute` in the graph. The channel calls
+  it with the **sender**, as it already does for the trigger's creator. When
+  step 1 makes `execute` mean `can_invoke`, the channel inherits the stricter
+  rule with no change of its own.
+- **One function, `admit_channel_sender(trigger, event) → caller | denial`**,
+  runs before follow-up routing and before `fire`. It is called from:
+  - the webhook path, in `TriggerSubscriptionHandler.handle`, before the
+    follow-up claim;
+  - the poller path, in `InboundMessageStreamConsumer._execute_trigger`.
+
+  It applies these rules in order:
+  1. **Not a private chat** (`chat_id != from.id`) or a bot sender
+     (`raw_data.message.from.is_bot`) → skipped silently.
+  2. **`from.id` has no link** (§4) → skipped, and the bot replies once per 24
+     hours with the link URL.
+  3. **`may_run(sender)` is false** → skipped, and the bot replies "no access".
+  4. **Otherwise** the caller is the linked user.
+- **The task runs for the caller, not the trigger's creator.**
+  - `fire` gains `caller: str | None`, used for `AgentTask.user_id`.
+    `fired_by` keeps its meaning of "a person pressed run now", which also
+    bypasses `is_active`, so it is not reused.
+  - The trigger service is rebuilt with the caller's `UserContext`, so the
+    governance snapshot (the run scope today) and audit are the caller's.
+  - The creator stays the trigger's owner and is still checked by `may_run` as
+    today.
+- **Linking, minimal (§4).**
+  - The `user_external_identities` table and its migration.
+  - `POST /v1/me/external-identities/telegram/link` mints a nonce in Redis
+    (10 minutes, hashed) and returns `t.me/<bot>?start=link_<nonce>`. The bot's
+    username is public, so it arrives in the link the bot sent and needs no
+    lookup.
+  - The intake handles `/start link_<nonce>` **before** admission. The bot
+    asks "Link this Telegram to a\*\*\*@mail.com? Send /confirm", and
+    `/confirm` writes the link. A text confirmation avoids `callback_query`
+    until step 4 adds buttons.
+  - `GET` / `DELETE /v1/me/external-identities` list and unlink.
+  - The webapp gets one page, `/link/telegram?bot=<username>`, and one section
+    in account settings.
+- **Follow-up routing** gains `trigger_id` in its key, so DMs to two bots of
+  the same agent stay apart.
+
+Not in step 0: the `invoker` relation, the Access tab, channels as their own
+entity, the personal bot, and buttons. Members of the agent's workspace who
+link Telegram can use the bot; nobody else can.
+
 **MVP.** After these four steps a person can attach a bot to an agent and share
 it with colleagues, or attach a personal bot and reach all their agents.
 
