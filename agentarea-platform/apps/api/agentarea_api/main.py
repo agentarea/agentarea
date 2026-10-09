@@ -222,11 +222,19 @@ async def app_lifespan(app: FastAPI):
 
     await start_events_router()
 
+    from agentarea_common.config.database import get_database
+    from agentarea_mcp.dispatch_stamps import DispatchStampWriter
+
+    dispatch_stamps = DispatchStampWriter(get_database().async_session_factory)
+    await dispatch_stamps.start()
+
     logger.info("Application started successfully")
 
     try:
         yield
     finally:
+        await dispatch_stamps.stop()
+
         if metrics_server is not None:
             metrics_server.shutdown()
             metrics_server.server_close()
