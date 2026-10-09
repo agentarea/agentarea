@@ -211,16 +211,14 @@ class ConnectorToolsToolset(Toolset):
             return json.dumps({"error": f"limit must be between 1 and 50, got {limit}"})
         query_tokens = _tokens(query)
         async with platform_read_context() as (
-            session,
+            _session,
             user_ctx,
             repo_factory,
             event_broker,
             secret_mgr,
         ):
             service = _instance_service(repo_factory, event_broker, secret_mgr)
-            openapi_service = await get_openapi_connection_service(
-                repo_factory, secret_mgr, session, user_ctx
-            )
+            openapi_service = await get_openapi_connection_service(repo_factory, secret_mgr)
             readable = await readable_resource_ids(user_ctx.user_id)
             instances = [
                 instance
@@ -302,9 +300,7 @@ class ConnectorToolsToolset(Toolset):
             secret_mgr,
         ):
             service = _instance_service(repo_factory, event_broker, secret_mgr)
-            openapi_service = await get_openapi_connection_service(
-                repo_factory, secret_mgr, session, user_ctx
-            )
+            openapi_service = await get_openapi_connection_service(repo_factory, secret_mgr)
             instances = [i for i in await service.list() if _names(i, connector)]
             connections = [
                 c for c in await _openapi_connections(openapi_service) if _names(c, connector)
