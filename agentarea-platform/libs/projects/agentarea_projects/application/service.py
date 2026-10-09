@@ -9,7 +9,7 @@ from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from agentarea_common.exceptions.errors import NotFoundError
+from agentarea_common.exceptions.errors import BadRequestError, NotFoundError
 from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,10 +54,14 @@ class ProjectService:
         """
         patch = payload.model_dump(exclude_unset=True)
         if "parent_project_id" in patch and patch["parent_project_id"] is not None:
-            await self._in_workspace(
+            parent_id = await self._in_workspace(
                 ProjectRepository, patch["parent_project_id"], "Parent project"
             )
-            patch["parent_project_id"] = str(patch["parent_project_id"])
+            if await self._is_ancestor_or_self(project_id, parent_id):
+                raise BadRequestError(
+                    "A project cannot be nested under itself or its own subproject"
+                )
+            patch["parent_project_id"] = str(parent_id)
         if await self.repository.update(project_id, **patch) is None:
             return None
         return await self.repository.get_by_id(project_id)
@@ -94,6 +98,20 @@ class ProjectService:
                 chain.append((name, instructions.strip()))
             current = parent_project_id
         return chain[::-1]
+
+    async def _is_ancestor_or_self(self, project_id: UUID | str, parent_id: UUID) -> bool:
+        """True when ``project_id`` is ``parent_id`` or one of its ancestors."""
+        current: UUID | str | None = parent_id
+        seen: set[str] = set()
+        while current is not None and str(current) not in seen:
+            if str(current) == str(project_id):
+                return True
+            seen.add(str(current))
+            project = await self.repository.get_instructions(current)
+            if project is None:
+                return False
+            current = project[2]
+        return False
 
     async def get(self, project_id: UUID | str) -> Project | None:
         """Get a project by ID."""
