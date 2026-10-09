@@ -11,7 +11,7 @@ from .errors import (
     StreamSourceNotFoundError,
     TriggerSubscriptionNotFoundError,
 )
-from .filters import EventFilter
+from .filters import EventFilter, value_at
 from .models import (
     AppendResult,
     HandlerResult,
@@ -44,4 +44,5 @@ __all__ = [
     "TriggerSubscriptionNotFoundError",
     "Verdict",
     "WebhookSourceSpec",
+    "value_at",
 ]
