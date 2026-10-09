@@ -904,6 +904,13 @@ export type BodyUploadWorkspaceLogoV1LogoPut = {
 };
 
 /**
+ * BudgetPeriod
+ *
+ * Budget reset period.
+ */
+export type BudgetPeriod = 'execution' | 'daily' | 'monthly';
+
+/**
  * BudgetPolicy
  *
  * Budget-related ceilings.
@@ -1401,11 +1408,31 @@ export type CatalogBrowseResponse = {
 };
 
 /**
+ * CatalogConnection
+ *
+ * One existing connection made from a catalog item.
+ */
+export type CatalogConnection = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: 'mcp' | 'openapi';
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
  * CatalogConnectionPreflight
  *
  * What the connect form needs to know before it offers Connect.
  *
- * ``ready`` — this installation holds an OAuth app for the provider.
+ * ``ready`` — AGENTAREA_MCP_OAUTH_APPS configures an OAuth app for the provider.
  * ``oauth_app_required`` — the user must register their own app first.
  */
 export type CatalogConnectionPreflight = {
@@ -1417,6 +1444,10 @@ export type CatalogConnectionPreflight = {
      * Detail
      */
     detail: string;
+    /**
+     * Existing Connections
+     */
+    existing_connections?: Array<CatalogConnection>;
     /**
      * Item Id
      */
@@ -1922,18 +1953,12 @@ export type CreateInvitationBody = {
 export type CreateWalletRequest = {
     credentials?: WalletCredentialsSchema | null;
     mpp_config?: MppConfigSchema | null;
-    /**
-     * Service Budget Period
-     */
-    service_budget_period?: string;
+    service_budget_period?: BudgetPeriod;
     /**
      * Service Budget Usd
      */
     service_budget_usd?: number | string;
-    /**
-     * Wallet Type
-     */
-    wallet_type: string;
+    wallet_type: WalletType;
     x402_config?: X402ConfigSchema | null;
 };
 
@@ -3570,6 +3595,10 @@ export type McpServerResponse = {
      */
     name: string;
     /**
+     * Registry Item Id
+     */
+    registry_item_id?: string | null;
+    /**
      * Registry Url
      */
     registry_url?: string | null;
@@ -3704,34 +3733,6 @@ export type MppConfigSchema = {
      * Stripe Profile Id
      */
     stripe_profile_id?: string | null;
-};
-
-/**
- * ManagedOAuthAppRequest
- */
-export type ManagedOAuthAppRequest = {
-    /**
-     * Client Id
-     */
-    client_id: string;
-    /**
-     * Client Secret
-     */
-    client_secret: string;
-};
-
-/**
- * ManagedOAuthAppResponse
- */
-export type ManagedOAuthAppResponse = {
-    /**
-     * Configured
-     */
-    configured: boolean;
-    /**
-     * Provider Key
-     */
-    provider_key: string;
 };
 
 /**
@@ -4536,6 +4537,12 @@ export type OpenApiConnectionResponse = {
      * Id
      */
     id: string;
+    /**
+     * Last Dispatch
+     */
+    last_dispatch?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Name
      */
@@ -5885,6 +5892,10 @@ export type RegistryItemResponse = {
      * Version
      */
     version: string | null;
+    /**
+     * Workspace Connections
+     */
+    workspace_connections?: Array<CatalogConnection> | null;
 };
 
 /**
@@ -8543,22 +8554,13 @@ export type UpdateAllResponse = {
 export type UpdateWalletRequest = {
     credentials?: WalletCredentialsSchema | null;
     mpp_config?: MppConfigSchema | null;
-    /**
-     * Service Budget Period
-     */
-    service_budget_period?: string | null;
+    service_budget_period?: BudgetPeriod | null;
     /**
      * Service Budget Usd
      */
     service_budget_usd?: number | string | null;
-    /**
-     * Status
-     */
-    status?: string | null;
-    /**
-     * Wallet Type
-     */
-    wallet_type?: string | null;
+    status?: WalletStatus | null;
+    wallet_type?: WalletType | null;
     x402_config?: X402ConfigSchema | null;
 };
 
@@ -8789,6 +8791,20 @@ export type WalletResponse = {
         [key: string]: unknown;
     } | null;
 };
+
+/**
+ * WalletStatus
+ *
+ * Wallet operational status.
+ */
+export type WalletStatus = 'active' | 'disabled';
+
+/**
+ * WalletType
+ *
+ * Supported wallet types.
+ */
+export type WalletType = 'x402' | 'mpp' | 'dual';
 
 /**
  * WebhookSignatureScheme
@@ -12058,36 +12074,6 @@ export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses 
 };
 
 export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponse = PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses[keyof PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses];
-
-export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutData = {
-    body: ManagedOAuthAppRequest;
-    path: {
-        /**
-         * Provider Key
-         */
-        provider_key: string;
-    };
-    query?: never;
-    url: '/v1/workspaces/{workspace}/connections/oauth/apps/{provider_key}';
-};
-
-export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutError = ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors[keyof ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors];
-
-export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses = {
-    /**
-     * Successful Response
-     */
-    200: ManagedOAuthAppResponse;
-};
-
-export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponse = ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses[keyof ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses];
 
 export type GetDashboardV1DashboardGetData = {
     body?: never;

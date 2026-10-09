@@ -4,8 +4,8 @@ import {
   openApiConnectionListRow,
   type ListFilter,
 } from "../list-sections";
+import { getConnectionsFrom } from "./connectionsData";
 import ConnectionsFilter from "./ConnectionsFilter";
-import { getConnectionsCached } from "./connectionsData";
 
 /**
  * Server wrapper that computes the per-filter counts (shared, request-cached
@@ -14,10 +14,13 @@ import { getConnectionsCached } from "./connectionsData";
  */
 export default async function ConnectionsFilterSection({
   currentFilter,
+  source,
 }: {
   currentFilter: ListFilter;
+  source: string | null;
 }) {
-  const { instances, openApiConnections, usage } = await getConnectionsCached();
+  const { instances, openApiConnections, usage } =
+    await getConnectionsFrom(source);
 
   const { counts } = buildConnectionList(
     [

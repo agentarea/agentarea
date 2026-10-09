@@ -52,9 +52,6 @@ import type {
   CheckPermissionV1AccessControlCheckPostData,
   CheckPermissionV1AccessControlCheckPostErrors,
   CheckPermissionV1AccessControlCheckPostResponses,
-  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutData,
-  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors,
-  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses,
   ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostData,
   ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors,
   ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses,
@@ -4051,43 +4048,6 @@ export const preflightCatalogItemV1ConnectionsCatalogItemIdPreflightGet = <
     ],
     url: "/v1/workspaces/{workspace}/connections/catalog/{item_id}/preflight",
     ...options,
-  });
-
-/**
- * Configure Managed Oauth App
- *
- * Configure one platform-wide OAuth app without exposing it to tenants.
- */
-export const configureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPut = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutData,
-    ThrowOnError
-  >
-): RequestResult<
-  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses,
-  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).put<
-    ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses,
-    ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace}/connections/oauth/apps/{provider_key}",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
   });
 
 /**

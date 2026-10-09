@@ -682,14 +682,22 @@ class TaskService(BaseTaskService):
         return await self.list_tasks(user_id=user_id, limit=limit, offset=offset)
 
     async def get_agent_tasks(
-        self, agent_id: UUID, limit: int = 100, offset: int = 0, creator_scoped: bool = False
+        self,
+        agent_id: UUID,
+        limit: int = 100,
+        offset: int = 0,
+        creator_scoped: bool = False,
+        status: str | None = None,
     ) -> list[AgentTask]:
-        """Get tasks for a specific agent."""
+        """Get tasks for a specific agent, newest first, optionally of one status."""
         # Get Task domain models from repository and convert to AgentTask
         if hasattr(self.task_repository, "list_all"):
+            filters: dict[str, Any] = {"agent_id": agent_id}
+            if status is not None:
+                filters["status"] = status
             # Get raw TaskORM objects from workspace repository
             task_orms = await self.task_repository.list_all(
-                creator_scoped=creator_scoped, limit=limit, offset=offset, agent_id=agent_id
+                creator_scoped=creator_scoped, limit=limit, offset=offset, **filters
             )
             # Convert TaskORM -> Task -> AgentTask
             tasks = [self.task_repository._orm_to_domain(task_orm) for task_orm in task_orms]
@@ -820,7 +828,12 @@ class TaskService(BaseTaskService):
         return await self.update_task(task)
 
     async def list_agent_tasks(
-        self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False
+        self,
+        agent_id: UUID,
+        limit: int = 100,
+        creator_scoped: bool = False,
+        offset: int = 0,
+        status: str | None = None,
     ) -> list[AgentTask]:
         """List tasks for an agent.
 
@@ -828,11 +841,15 @@ class TaskService(BaseTaskService):
             agent_id: The agent ID to get tasks for
             limit: Maximum number of tasks to return
             creator_scoped: If True, only return tasks created by current user
+            offset: Number of tasks to skip, newest first
+            status: Only tasks in this status
 
         Returns:
             List of tasks for the agent
         """
-        return await self.get_agent_tasks(agent_id, limit=limit, creator_scoped=creator_scoped)
+        return await self.get_agent_tasks(
+            agent_id, limit=limit, offset=offset, creator_scoped=creator_scoped, status=status
+        )
 
     async def list_agent_tasks_with_workflow_status(
         self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False

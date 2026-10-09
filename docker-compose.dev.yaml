@@ -175,6 +175,7 @@ services:
       [
         "agentarea-api",
         "reconcile",
+        "--repair-ownership",
         "--source",
         "${CATALOG_PROVIDERS_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json}",
         "--source",

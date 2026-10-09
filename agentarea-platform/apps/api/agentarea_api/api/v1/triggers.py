@@ -1579,11 +1579,14 @@ async def execute_trigger(
                 "trigger_id": str(trigger_id),
             }
 
+        # The execution's own outcome: a run refused before it started (no task
+        # text, no model) is recorded as failed, and used to be reported success.
         return {
-            "status": "success",
+            "status": str(execution.status),
             "trigger_id": str(trigger_id),
-            "execution_id": str(execution.id) if execution else None,
-            "task_id": str(execution.task_id) if execution and execution.task_id else None,
+            "execution_id": str(execution.id),
+            "task_id": str(execution.task_id) if execution.task_id else None,
+            "reason": execution.error_message,
         }
 
     except TriggerNotFoundError as e:

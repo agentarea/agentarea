@@ -6,7 +6,6 @@ templates choose the transport internally; users click Connect and authorize.
 
 import json
 import logging
-import re
 import secrets
 import time
 import urllib.parse
@@ -20,31 +19,38 @@ from agentarea_api.api.deps.services import (
     SecretCatalogServiceDep,
     get_real_secret_manager,
 )
+from agentarea_api.api.v1._catalog_connections import (
+    CatalogConnection,
+    readable_catalog_connections,
+)
 from agentarea_api.api.v1.oauth_app_credentials import (
     CustomOAuthAppFields,
     resolve_custom_oauth_app,
 )
-from agentarea_api.api.v1.registries import require_platform_catalog_write
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.base.tenant_scope import bind_workspace_scope
-from agentarea_common.config import get_settings
-from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
+from agentarea_common.config import MCPOAuthApp, get_settings
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
 from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
 from agentarea_common.workspaces.lookup import workspace_slug_for
 from agentarea_mcp.application.auth_resolver import build_auth_config_access_checker
-from agentarea_mcp.application.auth_service import MCPAuthService, MissingCredentialsError
+from agentarea_mcp.application.auth_service import (
+    MCPAuthService,
+    MissingCredentialsError,
+    platform_oauth_app_for,
+)
 from agentarea_mcp.application.oauth_client_service import PKCEPair, checked_authorize_params
+from agentarea_mcp.application.platform_oauth_app import platform_oauth_app_for_endpoints
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_openapi.application.url_validator import validate_url
 from agentarea_openapi.infrastructure.repository import OpenAPIConnectionRepository
 from agentarea_openapi.schemas.dto import OpenAPIConnectionCreate
 from agentarea_registry.infrastructure.repository import RegistryItemRepository, RegistryRepository
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,7 +62,6 @@ public_router = APIRouter(prefix="/connections", tags=["connections"])
 
 _STATE_PREFIX = "connection_oauth_state"
 _STATE_TTL_SECONDS = 600
-_MANAGED_CREDENTIALS_PREFIX = "connection_oauth_client:"
 
 
 class CatalogConnectionRequest(CustomOAuthAppFields):
@@ -85,7 +90,7 @@ class CatalogConnectionResponse(BaseModel):
 class CatalogConnectionPreflight(BaseModel):
     """What the connect form needs to know before it offers Connect.
 
-    ``ready`` — this installation holds an OAuth app for the provider.
+    ``ready`` — AGENTAREA_MCP_OAUTH_APPS configures an OAuth app for the provider.
     ``oauth_app_required`` — the user must register their own app first.
     """
 
@@ -95,18 +100,8 @@ class CatalogConnectionPreflight(BaseModel):
     status: Literal["ready", "oauth_app_required"]
     detail: str
     redirect_uri: str
-
-
-class ManagedOAuthAppRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    client_id: str = Field(min_length=1, max_length=512)
-    client_secret: str = Field(min_length=1, max_length=4096)
-
-
-class ManagedOAuthAppResponse(BaseModel):
-    provider_key: str
-    configured: bool
+    # Connections the caller may read that were already made from this item.
+    existing_connections: list[CatalogConnection] = Field(default_factory=list)
 
 
 async def _redis():
@@ -166,23 +161,12 @@ def _oauth_profile(spec: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(oauth, dict):
         raise HTTPException(status_code=400, detail="Connection does not support OAuth")
 
-    required = (
-        "provider_key",
-        "authorization_url",
-        "token_url",
-        "managed_credentials_key",
-    )
+    required = ("provider_key", "authorization_url", "token_url")
     missing = [field for field in required if not oauth.get(field)]
     if missing:
         raise HTTPException(
             status_code=500,
             detail=f"Catalog OAuth template is missing: {', '.join(missing)}",
-        )
-    managed_key = str(oauth["managed_credentials_key"])
-    if not managed_key.startswith(_MANAGED_CREDENTIALS_PREFIX):
-        raise HTTPException(
-            status_code=500,
-            detail="Invalid managed OAuth credential reference",
         )
 
     for url_field in ("authorization_url", "token_url"):
@@ -217,42 +201,6 @@ def _oauth_profile(spec: dict[str, Any]) -> dict[str, Any]:
         "scopes": scopes,
         "authorize_params": authorize_params,
     }
-
-
-def _managed_secret_manager(db_session: AsyncSession):
-    return get_real_secret_manager(
-        session=db_session,
-        user_context=UserContext(
-            user_id=PLATFORM_PRINCIPAL_ID,
-            workspace_id=PLATFORM_WORKSPACE_ID,
-        ),
-    )
-
-
-async def _managed_app(manager, key: str) -> tuple[str, str] | None:
-    """The platform OAuth app for a provider, or None when none is configured."""
-    raw = await manager.get_secret(key)
-    if not raw:
-        return None
-    try:
-        value = json.loads(raw)
-        client_id = str(value.get("client_id") or "")
-        client_secret = str(value.get("client_secret") or "")
-    except (json.JSONDecodeError, AttributeError) as exc:
-        raise HTTPException(status_code=500, detail="Managed OAuth app secret is invalid") from exc
-    if not client_id or not client_secret:
-        raise HTTPException(status_code=500, detail="Managed OAuth app secret is incomplete")
-    return client_id, client_secret
-
-
-async def _managed_credentials(manager, key: str) -> tuple[str, str]:
-    app = await _managed_app(manager, key)
-    if app is None:
-        raise HTTPException(
-            status_code=503,
-            detail="This connection is not configured by the AgentArea operator yet.",
-        )
-    return app
 
 
 @dataclass(frozen=True)
@@ -299,25 +247,13 @@ async def _catalog_template(
     )
 
 
-@router.put(
-    "/oauth/apps/{provider_key}",
-    response_model=ManagedOAuthAppResponse,
-    dependencies=[Depends(require_platform_catalog_write)],
-)
-async def configure_managed_oauth_app(
-    provider_key: str,
-    body: ManagedOAuthAppRequest,
-    db_session: DatabaseSessionDep,
-) -> ManagedOAuthAppResponse:
-    """Configure one platform-wide OAuth app without exposing it to tenants."""
-    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,127}", provider_key):
-        raise HTTPException(status_code=400, detail="Invalid provider key")
-    manager = _managed_secret_manager(db_session)
-    await manager.set_secret(
-        f"{_MANAGED_CREDENTIALS_PREFIX}{provider_key}",
-        json.dumps({"client_id": body.client_id, "client_secret": body.client_secret}),
+def _platform_app(template: _CatalogTemplate) -> MCPOAuthApp | None:
+    """The operator's OAuth app (AGENTAREA_MCP_OAUTH_APPS) for this template, if any."""
+    return platform_oauth_app_for_endpoints(
+        str(template.oauth["authorization_url"]),
+        str(template.oauth["token_url"]),
+        template.allowed_origins,
     )
-    return ManagedOAuthAppResponse(provider_key=provider_key, configured=True)
 
 
 @router.get(
@@ -336,11 +272,8 @@ async def preflight_catalog_item(
 ) -> CatalogConnectionPreflight:
     """Report whether a catalog connection can use the platform OAuth app."""
     template = await _catalog_template(item_id, user_context, db_session)
-    managed = await _managed_app(
-        _managed_secret_manager(db_session), str(template.oauth["managed_credentials_key"])
-    )
     item = template.item
-    if managed is None:
+    if _platform_app(template) is None:
         status: Literal["ready", "oauth_app_required"] = "oauth_app_required"
         detail = (
             f"This AgentArea installation has no OAuth app for {item.name}. "
@@ -350,6 +283,7 @@ async def preflight_catalog_item(
     else:
         status = "ready"
         detail = f"Sign in to {item.name} and approve access to connect."
+    existing = await readable_catalog_connections(db_session, user_context, [item_id])
     return CatalogConnectionPreflight(
         item_id=item_id,
         name=item.name,
@@ -357,6 +291,7 @@ async def preflight_catalog_item(
         status=status,
         detail=detail,
         redirect_uri=_callback_uri(),
+        existing_connections=existing.get(str(item_id), []),
     )
 
 
@@ -365,7 +300,7 @@ async def preflight_catalog_item(
     response_model=CatalogConnectionResponse,
     dependencies=[
         unrestricted(
-            "starts an OAuth flow for the caller against a trusted catalog template; the platform app it uses is configured elsewhere and is admin-gated"
+            "starts an OAuth flow for the caller against a trusted catalog template; the platform app it uses is deployment config (AGENTAREA_MCP_OAUTH_APPS), not workspace data"
         )
     ],
 )
@@ -383,15 +318,18 @@ async def connect_catalog_item(
     workspace_secret_manager = get_real_secret_manager(
         session=db_session, user_context=user_context
     )
-    platform_secret_manager = _managed_secret_manager(db_session)
     repository_factory = RepositoryFactory(db_session, user_context)
     credential_config: dict[str, Any] = {}
     credential_references: list[tuple[UUID, str]] = []
     if body.credential_mode == "managed":
-        client_id, _ = await _managed_credentials(
-            platform_secret_manager, str(oauth["managed_credentials_key"])
-        )
-        credential_config["client_id"] = client_id
+        platform_app = _platform_app(template)
+        if platform_app is None:
+            raise HTTPException(
+                status_code=503,
+                detail="This connection is not configured by the AgentArea operator yet.",
+            )
+        client_id = platform_app.client_id
+        credential_config["platform_oauth_issuer"] = platform_app.issuer
         credentials: dict[str, Any] = {}
     else:
         resolved = await resolve_custom_oauth_app(
@@ -428,7 +366,6 @@ async def connect_catalog_item(
     auth_service = MCPAuthService(
         MCPAuthConfigRepository(db_session, user_context),
         workspace_secret_manager,
-        platform_secret_manager,
     )
     auth_config = await auth_service.create(
         name=f"{oauth['provider_key']}-{str(connection.id)[:8]}",
@@ -442,7 +379,6 @@ async def connect_catalog_item(
             "authorization_scheme": oauth["authorization_scheme"],
             "client_auth_method": oauth["client_auth_method"],
             "credential_mode": body.credential_mode,
-            "managed_credentials_key": oauth["managed_credentials_key"],
         },
         credentials=credentials,
         allow_managed_credentials=True,
@@ -530,11 +466,9 @@ async def oauth_callback(
     workspace_secret_manager = get_real_secret_manager(
         session=db_session, user_context=user_context
     )
-    platform_secret_manager = _managed_secret_manager(db_session)
     auth_service = MCPAuthService(
         MCPAuthConfigRepository(db_session, user_context),
         workspace_secret_manager,
-        platform_secret_manager,
     )
     auth_config = await auth_service.get(UUID(state_data["auth_config_id"]))
     if auth_config is None:
@@ -543,6 +477,12 @@ async def oauth_callback(
         client_id, client_secret, credentials = await auth_service.get_oauth_client_credentials(
             auth_config,
             require_secret=True,
+        )
+        platform_app = platform_oauth_app_for(auth_config)
+        token_url = (
+            platform_app.token_endpoint
+            if platform_app is not None
+            else auth_config.config["token_url"]
         )
         payload = {
             "grant_type": "authorization_code",
@@ -554,16 +494,14 @@ async def oauth_callback(
         async with safe_async_client() as client:
             if auth_config.config.get("client_auth_method") == "client_secret_basic":
                 response = await client.post(
-                    auth_config.config["token_url"],
+                    token_url,
                     data=payload,
                     auth=(client_id, client_secret),
                     timeout=15,
                 )
             else:
                 payload["client_secret"] = client_secret
-                response = await client.post(
-                    auth_config.config["token_url"], data=payload, timeout=15
-                )
+                response = await client.post(token_url, data=payload, timeout=15)
             response.raise_for_status()
             tokens = response.json()
     except (httpx.HTTPError, MissingCredentialsError, ValueError) as exc:

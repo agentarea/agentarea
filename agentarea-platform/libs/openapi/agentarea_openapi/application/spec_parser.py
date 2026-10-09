@@ -1,16 +1,21 @@
 """Parse OpenAPI 3.x specs into tool definitions."""
 
 import re
+from collections.abc import Collection
 from typing import Any
 
 from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
 
 
-def parse_openapi_operations(spec: dict[str, Any]) -> list[dict[str, Any]]:
+def parse_openapi_operations(
+    spec: dict[str, Any], configured_query_params: Collection[str] = ()
+) -> list[dict[str, Any]]:
     """Extract enriched per-operation records from an OpenAPI 3.x spec.
 
     Each operation record includes HTTP method, path, parameters with `in`
     location, request body metadata, and the flat input_schema for LLM use.
+    Query parameters named in ``configured_query_params`` are left out: the
+    connection sends its own value for them, so they are not the agent's to fill.
 
     Raises ValueError for non-OpenAPI 3.x specs (same rules as parse_openapi_spec).
     """
@@ -41,7 +46,11 @@ def parse_openapi_operations(spec: dict[str, Any]) -> list[dict[str, Any]]:
 
             # Resolve and merge parameters, preserving `in` location
             op_params = [_resolve_ref(p, spec) for p in operation.get("parameters", [])]
-            merged_params = _merge_parameters(path_params, op_params)
+            merged_params = [
+                p
+                for p in _merge_parameters(path_params, op_params)
+                if not _is_configured(p, configured_query_params)
+            ]
 
             # Build enriched parameter list with `in` location
             parameters: list[dict[str, Any]] = []
@@ -79,7 +88,9 @@ def parse_openapi_operations(spec: dict[str, Any]) -> list[dict[str, Any]]:
                     "schema": body_schema or {},
                 }
 
-            input_schema = _build_input_schema(operation, path_params, spec)
+            input_schema = _build_input_schema(
+                operation, path_params, spec, configured_query_params
+            )
 
             operations.append(
                 {
@@ -96,7 +107,9 @@ def parse_openapi_operations(spec: dict[str, Any]) -> list[dict[str, Any]]:
     return operations
 
 
-def parse_openapi_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
+def parse_openapi_spec(
+    spec: dict[str, Any], configured_query_params: Collection[str] = ()
+) -> list[dict[str, Any]]:
     """Extract operations from an OpenAPI 3.x spec as tool definitions.
 
     Thin projector over parse_openapi_operations — returns the
@@ -105,7 +118,7 @@ def parse_openapi_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
     Raises ValueError for non-OpenAPI 3.x specs and for an operation whose tool
     name a workflow built-in owns: the built-in would shadow it and skip policy.
     """
-    operations = parse_openapi_operations(spec)
+    operations = parse_openapi_operations(spec, configured_query_params)
     for op in operations:
         if re.sub(r"[^a-zA-Z0-9_-]", "_", op["name"]) in CONTROL_FLOW_TOOL_NAMES:
             raise ValueError(
@@ -188,10 +201,15 @@ def _merge_parameters(
     return list(by_key.values())
 
 
+def _is_configured(param: dict[str, Any], configured_query_params: Collection[str]) -> bool:
+    return param.get("in", "query") == "query" and param.get("name") in configured_query_params
+
+
 def _build_input_schema(
     operation: dict[str, Any],
     path_params: list[dict[str, Any]],
     spec: dict[str, Any],
+    configured_query_params: Collection[str] = (),
 ) -> dict[str, Any]:
     """Build a JSON Schema from operation parameters and request body."""
     properties: dict[str, Any] = {}
@@ -202,6 +220,8 @@ def _build_input_schema(
     merged = _merge_parameters(path_params, op_params)
 
     for param in merged:
+        if _is_configured(param, configured_query_params):
+            continue
         param_name = param.get("name", "")
         if not param_name:
             continue

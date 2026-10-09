@@ -82,13 +82,14 @@ export function getMcpConnectionState(instance: {
 }
 
 /**
- * OpenAPI connections carry no dispatch record — their tools are called through
- * the same activity but the outcome is not persisted per connection, so the
- * verdict rests on the connection's own status.
+ * An OpenAPI connection's own status decides while it is importing or broken;
+ * otherwise its last successful call, recorded like an MCP instance's
+ * `last_dispatch`, separates a working connection from one never called.
  */
 export function getOpenApiConnectionState(
   displayStatus: string,
-  toolCount: number
+  toolCount: number,
+  lastDispatch: unknown
 ): ConnectionState {
   switch (displayStatus) {
     case "pending":
@@ -98,7 +99,10 @@ export function getOpenApiConnectionState(
     case "error":
     case "failed":
       return state("broken", null);
-    default:
-      return toolCount > 0 ? state("ready", null) : state("unconfigured", null);
   }
+  const dispatch = readLastDispatch(lastDispatch);
+  if (dispatch) {
+    return state(dispatch.status === "succeeded" ? "working" : "failing", dispatch.at);
+  }
+  return toolCount > 0 ? state("ready", null) : state("unconfigured", null);
 }

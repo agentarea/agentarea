@@ -1634,6 +1634,16 @@
         "title": "Body_upload_workspace_logo_v1_logo_put",
         "type": "object"
       },
+      "BudgetPeriod": {
+        "description": "Budget reset period.",
+        "enum": [
+          "execution",
+          "daily",
+          "monthly"
+        ],
+        "title": "BudgetPeriod",
+        "type": "string"
+      },
       "BudgetPolicy-Input": {
         "additionalProperties": false,
         "description": "Budget-related ceilings.",
@@ -2282,6 +2292,8 @@
           },
           "priority": {
             "default": 0,
+            "maximum": 2147483647.0,
+            "minimum": -2147483648.0,
             "title": "Priority",
             "type": "integer"
           },
@@ -2407,8 +2419,37 @@
         "title": "CatalogBrowseResponse",
         "type": "object"
       },
+      "CatalogConnection": {
+        "description": "One existing connection made from a catalog item.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "mcp",
+              "openapi"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name"
+        ],
+        "title": "CatalogConnection",
+        "type": "object"
+      },
       "CatalogConnectionPreflight": {
-        "description": "What the connect form needs to know before it offers Connect.\n\n``ready`` \u2014 this installation holds an OAuth app for the provider.\n``oauth_app_required`` \u2014 the user must register their own app first.",
+        "description": "What the connect form needs to know before it offers Connect.\n\n``ready`` \u2014 AGENTAREA_MCP_OAUTH_APPS configures an OAuth app for the provider.\n``oauth_app_required`` \u2014 the user must register their own app first.",
         "properties": {
           "description": {
             "anyOf": [
@@ -2424,6 +2465,13 @@
           "detail": {
             "title": "Detail",
             "type": "string"
+          },
+          "existing_connections": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogConnection"
+            },
+            "title": "Existing Connections",
+            "type": "array"
           },
           "item_id": {
             "format": "uuid",
@@ -3352,9 +3400,8 @@
             ]
           },
           "service_budget_period": {
-            "default": "execution",
-            "title": "Service Budget Period",
-            "type": "string"
+            "$ref": "#/components/schemas/BudgetPeriod",
+            "default": "execution"
           },
           "service_budget_usd": {
             "anyOf": [
@@ -3372,8 +3419,7 @@
             "title": "Service Budget Usd"
           },
           "wallet_type": {
-            "title": "Wallet Type",
-            "type": "string"
+            "$ref": "#/components/schemas/WalletType"
           },
           "x402_config": {
             "anyOf": [
@@ -6053,6 +6099,18 @@
             "title": "Name",
             "type": "string"
           },
+          "registry_item_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Item Id"
+          },
           "registry_url": {
             "anyOf": [
               {
@@ -6320,47 +6378,6 @@
           "session_budget_usd"
         ],
         "title": "MPPConfigSchema",
-        "type": "object"
-      },
-      "ManagedOAuthAppRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "client_id": {
-            "maxLength": 512,
-            "minLength": 1,
-            "title": "Client Id",
-            "type": "string"
-          },
-          "client_secret": {
-            "maxLength": 4096,
-            "minLength": 1,
-            "title": "Client Secret",
-            "type": "string"
-          }
-        },
-        "required": [
-          "client_id",
-          "client_secret"
-        ],
-        "title": "ManagedOAuthAppRequest",
-        "type": "object"
-      },
-      "ManagedOAuthAppResponse": {
-        "properties": {
-          "configured": {
-            "title": "Configured",
-            "type": "boolean"
-          },
-          "provider_key": {
-            "title": "Provider Key",
-            "type": "string"
-          }
-        },
-        "required": [
-          "provider_key",
-          "configured"
-        ],
-        "title": "ManagedOAuthAppResponse",
         "type": "object"
       },
       "McpInstanceAssociationBody": {
@@ -7848,6 +7865,18 @@
             "title": "Id",
             "type": "string"
           },
+          "last_dispatch": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Dispatch"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -8764,6 +8793,8 @@
           },
           "priority": {
             "default": 0,
+            "maximum": 2147483647.0,
+            "minimum": -2147483648.0,
             "title": "Priority",
             "type": "integer"
           },
@@ -8898,6 +8929,8 @@
           "priority": {
             "anyOf": [
               {
+                "maximum": 2147483647.0,
+                "minimum": -2147483648.0,
                 "type": "integer"
               },
               {
@@ -10194,6 +10227,20 @@
               }
             ],
             "title": "Version"
+          },
+          "workspace_connections": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CatalogConnection"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Connections"
           }
         },
         "required": [
@@ -14715,13 +14762,12 @@
           "service_budget_period": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/BudgetPeriod"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Service Budget Period"
+            ]
           },
           "service_budget_usd": {
             "anyOf": [
@@ -14747,24 +14793,22 @@
           "status": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/WalletStatus"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Status"
+            ]
           },
           "wallet_type": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/WalletType"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Wallet Type"
+            ]
           },
           "x402_config": {
             "anyOf": [
@@ -15134,6 +15178,25 @@
         ],
         "title": "WalletResponse",
         "type": "object"
+      },
+      "WalletStatus": {
+        "description": "Wallet operational status.",
+        "enum": [
+          "active",
+          "disabled"
+        ],
+        "title": "WalletStatus",
+        "type": "string"
+      },
+      "WalletType": {
+        "description": "Supported wallet types.",
+        "enum": [
+          "x402",
+          "mpp",
+          "dual"
+        ],
+        "title": "WalletType",
+        "type": "string"
       },
       "WebhookSignatureScheme": {
         "description": "How a sender signs requests to a generic webhook.",
@@ -22020,79 +22083,6 @@
           }
         ],
         "summary": "Preflight Catalog Item",
-        "tags": [
-          "v1",
-          "protected",
-          "connections"
-        ]
-      }
-    },
-    "/v1/workspaces/{workspace}/connections/oauth/apps/{provider_key}": {
-      "put": {
-        "description": "Configure one platform-wide OAuth app without exposing it to tenants.",
-        "operationId": "configure_managed_oauth_app_v1_connections_oauth_apps__provider_key__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "provider_key",
-            "required": true,
-            "schema": {
-              "title": "Provider Key",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Slug of the workspace the request acts in",
-            "in": "path",
-            "name": "workspace",
-            "required": true,
-            "schema": {
-              "description": "Slug of the workspace the request acts in",
-              "maxLength": 120,
-              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-              "title": "Workspace",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ManagedOAuthAppRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ManagedOAuthAppResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Configure Managed Oauth App",
         "tags": [
           "v1",
           "protected",

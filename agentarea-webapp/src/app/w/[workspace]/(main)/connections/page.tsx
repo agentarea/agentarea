@@ -3,10 +3,16 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
-import { ViewModeTabs } from "@/components/HeaderTabs";
 import FormError from "@/components/FormError/FormError";
+import { ViewModeTabs } from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
+import { getCatalogItem } from "@/lib/api";
+import { parseCatalogSource } from "@/lib/catalog-connections";
+import {
+  normalize,
+  type RegistryItem,
+} from "../bundles/components/catalog-data";
 import { AddConnectionDropdown } from "./components/AddConnectionDropdown";
 import ConnectionsFilterSection from "./components/ConnectionsFilterSection";
 import MCPServersContent from "./components/MCPServersContent";
@@ -37,6 +43,12 @@ export default async function MCPServersPage({
       ? resolvedSearchParams.search
       : "";
   const filter = parseListFilter(resolvedSearchParams.filter);
+  // Opened from a catalog item with several connections: only those.
+  const source = parseCatalogSource(resolvedSearchParams.source);
+  const sourceItem = source ? (await getCatalogItem(source)).data : null;
+  const sourceName = sourceItem
+    ? normalize("connections", sourceItem as RegistryItem).title
+    : source;
   // An OAuth callback that could not resolve its connection lands here via `/`.
   const oauthError =
     resolvedSearchParams.oauth === "error"
@@ -47,7 +59,14 @@ export default async function MCPServersPage({
   return (
     <ContentBlock
       header={{
-        breadcrumb: [{ label: t("title") }],
+        breadcrumb: source
+          ? [
+              { label: t("title"), href: "/connections" },
+              {
+                label: t("sourceFilter", { name: sourceName ?? "" }),
+              },
+            ]
+          : [{ label: t("title") }],
         description: t("description"),
         controls: <AddConnectionDropdown />,
       }}
@@ -55,7 +74,10 @@ export default async function MCPServersPage({
         <SubheaderToolbar
           categories={
             <Suspense fallback={<div className="h-7" />}>
-              <ConnectionsFilterSection currentFilter={filter} />
+              <ConnectionsFilterSection
+                currentFilter={filter}
+                source={source}
+              />
             </Suspense>
           }
           search={<SearchInput urlParamName="search" urlPath="/connections" />}
@@ -69,7 +91,7 @@ export default async function MCPServersPage({
         </FormError>
       )}
       <Suspense
-        key={`${searchQuery}-${tab}-${filter}`}
+        key={`${searchQuery}-${tab}-${filter}-${source ?? ""}`}
         fallback={
           <div id="my-connections">
             <MCPSkeleton viewMode={tab} columns={mcpSkeletonColumns(t)} />
@@ -80,6 +102,7 @@ export default async function MCPServersPage({
           searchQuery={searchQuery}
           viewMode={tab}
           filter={filter}
+          source={source}
         />
       </Suspense>
     </ContentBlock>

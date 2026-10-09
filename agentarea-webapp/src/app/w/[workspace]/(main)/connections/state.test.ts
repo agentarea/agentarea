@@ -72,10 +72,32 @@ describe("getMcpConnectionState", () => {
 
 describe("getOpenApiConnectionState", () => {
   it("treats a reachable spec with tools as ready, not working", () => {
-    expect(getOpenApiConnectionState("connected", 30).key).toBe("ready");
+    expect(getOpenApiConnectionState("connected", 30, null).key).toBe("ready");
   });
 
   it("treats an errored connection as broken", () => {
-    expect(getOpenApiConnectionState("error", 0).key).toBe("broken");
+    expect(getOpenApiConnectionState("error", 0, null).key).toBe("broken");
+  });
+
+  it("dates a connection by its last successful call", () => {
+    const at = iso(2 * HOUR);
+    const state = getOpenApiConnectionState("connected", 30, {
+      status: "succeeded",
+      at,
+      error: null,
+    });
+
+    expect(state.key).toBe("working");
+    expect(state.at).toBe(at);
+  });
+
+  it("keeps an errored connection broken whatever it last answered", () => {
+    const state = getOpenApiConnectionState("error", 30, {
+      status: "succeeded",
+      at: iso(HOUR),
+      error: null,
+    });
+
+    expect(state.key).toBe("broken");
   });
 });

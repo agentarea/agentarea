@@ -122,3 +122,70 @@ async def test_an_update_that_does_not_touch_conditions_is_unchecked():
     existing_trigger = SimpleNamespace(id=uuid4())
 
     await service._validate_trigger_update(existing_trigger, TriggerUpdate(conditions=None))
+
+
+def _schedule(cron_expression: str, timezone: str = "UTC") -> TriggerCreate:
+    return TriggerCreate(
+        name="Digest",
+        agent_id=uuid4(),
+        trigger_type=TriggerType.CRON,
+        cron_expression=cron_expression,
+        timezone=timezone,
+        task_parameters={"text": "send the digest"},
+        created_by="u-1",
+    )
+
+
+@pytest.mark.parametrize(
+    "cron_expression",
+    [
+        "0 9 * * *",
+        "*/5 * * * *",
+        "0 9 * * 1-5",
+        "0 9 * * MON-FRI",
+        "0 9 1,15 JAN,jul *",
+        "0 9 ? * 7",
+        "30 6 * * * 2027",
+    ],
+)
+async def test_a_schedule_temporal_can_run_is_accepted(cron_expression):
+    await validate_trigger_configuration(_schedule(cron_expression), _NoInstances())
+
+
+@pytest.mark.parametrize(
+    "cron_expression, message",
+    [
+        ("99 9 * * *", "minute"),
+        ("0 24 * * *", "hour"),
+        ("0 9 0 * *", "day of month"),
+        ("0 9 * 13 *", "month"),
+        ("0 9 * * 8", "day of week"),
+        ("a b c d e", "minute"),
+        ("0 9 * * 5-1", "backwards"),
+        ("*/0 * * * *", "step"),
+        ("0 9 *", "5 or 6 parts"),
+    ],
+)
+async def test_a_schedule_that_never_fires_is_refused_at_create(cron_expression, message):
+    with pytest.raises(TriggerValidationError, match=message):
+        await validate_trigger_configuration(_schedule(cron_expression), _NoInstances())
+
+
+@pytest.mark.parametrize("timezone", ["Mars/Olympus", "UTC+3", "../etc/passwd"])
+async def test_an_unknown_time_zone_is_refused_at_create(timezone):
+    with pytest.raises(TriggerValidationError, match="time zone"):
+        await validate_trigger_configuration(_schedule("0 9 * * *", timezone), _NoInstances())
+
+
+async def test_a_bad_schedule_is_refused_at_update():
+    service = _service()
+    existing_trigger = SimpleNamespace(id=uuid4())
+
+    with pytest.raises(TriggerValidationError, match="minute"):
+        await service._validate_trigger_update(
+            existing_trigger, TriggerUpdate(cron_expression="99 9 * * *")
+        )
+    with pytest.raises(TriggerValidationError, match="time zone"):
+        await service._validate_trigger_update(
+            existing_trigger, TriggerUpdate(timezone="Mars/Olympus")
+        )

@@ -25,6 +25,7 @@ import {
   getMCPConnectionIconSrc,
   openApiIdentity,
 } from "@/lib/entity-identity";
+import { getOpenApiConnectionDisplayStatus } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 import {
@@ -34,7 +35,7 @@ import {
   getMCPInstanceToolCount,
   TRANSPORT_LABEL,
 } from "../utils";
-import { getMcpConnectionState } from "../state";
+import { getMcpConnectionState, getOpenApiConnectionState } from "../state";
 import type { ConnectionUsage } from "../usage";
 
 interface MCPServerSpecCardProps {
@@ -182,6 +183,14 @@ interface OpenAPIConnectionCardProps {
 export function OpenAPIConnectionCard({
   connection,
 }: OpenAPIConnectionCardProps) {
+  const tState = useTranslations("MCPServersPage.state");
+  const toolCount = connection.available_tools.length;
+  const connectionState = getOpenApiConnectionState(
+    getOpenApiConnectionDisplayStatus(connection.status, toolCount),
+    toolCount,
+    connection.last_dispatch
+  );
+
   return (
     <LinkedCard
       href={`/connections/openapi/${connection.id}`}
@@ -190,6 +199,13 @@ export function OpenAPIConnectionCard({
       type="view"
       subtitle={
         <div className="flex items-center gap-1.5">
+          <StatusIndicator
+            size="sm"
+            kind={connectionState.kind}
+            className="shrink-0"
+          >
+            {tState(connectionState.key)}
+          </StatusIndicator>
           <Badge
             size="sm"
             variant="outline"

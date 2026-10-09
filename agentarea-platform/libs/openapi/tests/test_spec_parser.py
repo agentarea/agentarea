@@ -311,3 +311,60 @@ def test_an_operation_named_like_a_workflow_builtin_is_refused(operation_id):
 
     with pytest.raises(ValueError, match=f"'{operation_id}'.*reserved"):
         parse_openapi_spec(spec)
+
+
+COLLECT_SPEC = {
+    "openapi": "3.0.0",
+    "info": {"title": "Metrica", "version": "1.0.0"},
+    "paths": {
+        "/collect/{ms}": {
+            "get": {
+                "operationId": "collect",
+                "parameters": [
+                    {"name": "ms", "in": "path", "required": True, "schema": {"type": "string"}},
+                    {"name": "ms", "in": "query", "required": True, "schema": {"type": "string"}},
+                    {"name": "dl", "in": "query", "required": True, "schema": {"type": "string"}},
+                ],
+            }
+        },
+        "/hits": {
+            "get": {
+                "operationId": "hits",
+                "parameters": [
+                    {"name": "ms", "in": "query", "required": True, "schema": {"type": "string"}},
+                    {"name": "dl", "in": "query", "required": True, "schema": {"type": "string"}},
+                ],
+            }
+        },
+    },
+}
+
+
+class TestConfiguredQueryParams:
+    """A query parameter the connection supplies itself is not the agent's to fill."""
+
+    def test_a_configured_query_param_leaves_the_input_schema(self):
+        [_, hits] = parse_openapi_spec(COLLECT_SPEC, configured_query_params={"ms"})
+
+        assert set(hits["inputSchema"]["properties"]) == {"dl"}
+        assert hits["inputSchema"]["required"] == ["dl"]
+
+    def test_a_configured_query_param_leaves_the_operation(self):
+        [_, hits] = parse_openapi_operations(COLLECT_SPEC, configured_query_params={"ms"})
+
+        assert [p["name"] for p in hits["parameters"]] == ["dl"]
+        assert set(hits["input_schema"]["properties"]) == {"dl"}
+
+    def test_a_path_param_of_the_same_name_stays(self):
+        [collect, _] = parse_openapi_operations(COLLECT_SPEC, configured_query_params={"ms"})
+
+        assert [(p["name"], p["in"]) for p in collect["parameters"]] == [
+            ("ms", "path"),
+            ("dl", "query"),
+        ]
+        assert set(collect["input_schema"]["properties"]) == {"ms", "dl"}
+
+    def test_without_configured_params_the_schema_is_the_spec(self):
+        [_, hits] = parse_openapi_spec(COLLECT_SPEC)
+
+        assert set(hits["inputSchema"]["properties"]) == {"ms", "dl"}

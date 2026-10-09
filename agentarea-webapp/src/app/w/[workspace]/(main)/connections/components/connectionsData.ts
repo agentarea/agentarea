@@ -5,7 +5,8 @@ import {
   listMCPServerSpecs,
   listOpenAPIConnections,
 } from "@/lib/api";
-import type { MCPInstance, OpenAPIConnection } from "../types";
+import { fromCatalogItem } from "@/lib/catalog-connections";
+import type { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 import { buildConnectionUsage, type ConnectionUsage } from "../usage";
 
 /**
@@ -57,3 +58,19 @@ export const getConnectionsCached = cache(async () => {
     usage,
   };
 });
+
+/**
+ * The cached connections, narrowed to those made from one catalog item when
+ * `source` names one.
+ */
+export async function getConnectionsFrom(source: string | null) {
+  const connections = await getConnectionsCached();
+  if (!source) return connections;
+  const narrowed = fromCatalogItem(
+    source,
+    connections.instances,
+    (connections.specsResponse?.data ?? []) as MCPServer[],
+    connections.openApiConnections
+  );
+  return { ...connections, ...narrowed };
+}

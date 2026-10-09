@@ -438,7 +438,12 @@ async def _reconcile(
     # Validate up front so a malformed entry reports a clear message instead of
     # failing deep inside the per-registry loop with a bare KeyError.
     for i, config in enumerate(configs):
-        if not isinstance(config, dict) or "name" not in config or "source_url" not in config:
+        retired = isinstance(config, dict) and config.get("active", True) is False
+        if (
+            not isinstance(config, dict)
+            or "name" not in config
+            or ("source_url" not in config and not retired)
+        ):
             click.echo(f"Registry entry {i} must be a mapping with 'name' and 'source_url'")
             sys.exit(1)
 
@@ -506,6 +511,16 @@ async def _reconcile(
 
                     registries = await registry_repo.list_all()
                     existing = next((r for r in registries if r.name == registry_name), None)
+                    if config.get("active", True) is False:
+                        # A source dropped from the manifest is never reconciled
+                        # again, so its registry and items would stay listed.
+                        if existing is not None and existing.is_active:
+                            await service.update_registry(existing.id, is_active=False)
+                            click.echo(f"Retired registry: {existing.id}")
+                        else:
+                            click.echo("Registry already retired or absent")
+                        succeeded.append(registry_name)
+                        continue
                     configured_priority = config.get("recommendation_priority")
                     if existing:
                         registry_id = existing.id

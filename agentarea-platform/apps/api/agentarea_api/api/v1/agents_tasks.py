@@ -65,7 +65,7 @@ from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 from sqlalchemy import text
 
 from ._task_authority import requires_task_authority
@@ -119,6 +119,15 @@ class TaskCreate(BaseModel):
     task_policy: PolicyDocument | None = None
     # staging refs from a presigned POST /v1/files/upload-url
     attachments: list[str] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_a_schedule(cls, data: Any) -> Any:
+        # Unknown fields are ignored, so a scheduled_at sent here used to be
+        # dropped and the task started at once. Only /tasks/schedule takes one.
+        if cls is TaskCreate and isinstance(data, dict) and "scheduled_at" in data:
+            raise ValueError("scheduled_at is not accepted here; use POST .../tasks/schedule")
+        return data
 
 
 def _dedupe_attachment_name(name: str, used: set[str]) -> str:
@@ -1150,32 +1159,19 @@ async def list_agent_tasks(
 
     try:
         # Get tasks from DB only (no Temporal enrichment for list view)
+        # Status and the page are applied in SQL: slicing or filtering after a
+        # LIMIT returned an empty page for every offset past the first.
         agent_tasks = await task_service.list_agent_tasks(
-            agent_id, limit=limit, creator_scoped=False
+            agent_id,
+            limit=limit,
+            offset=offset,
+            status=status.lower() if status else None,
+            creator_scoped=False,
         )
 
-        logger.info(f"Found {len(agent_tasks)} tasks for agent {agent_id} ({agent.name})")
+        logger.info(f"Returning {len(agent_tasks)} tasks for agent {agent_id} ({agent.name})")
 
-        task_responses: list[TaskResponse] = []
-
-        # Convert service tasks to TaskResponse format
-        for task in agent_tasks:
-            # Apply status filtering if specified
-            if status and task.status.lower() != status.lower():
-                continue
-
-            # Create TaskResponse from service task
-            task_responses.append(TaskResponse.from_agent_task(task))
-
-        # Sort by created_at descending (newest first)
-        task_responses.sort(key=lambda x: x.created_at, reverse=True)
-
-        # Apply pagination
-        paginated_tasks = task_responses[offset : offset + limit]
-
-        logger.info(f"Returning {len(paginated_tasks)} tasks for agent {agent_id}")
-
-        return paginated_tasks
+        return [TaskResponse.from_agent_task(task) for task in agent_tasks]
 
     except Exception as e:
         logger.exception(f"Failed to get tasks for agent {agent_id}: {e}")
