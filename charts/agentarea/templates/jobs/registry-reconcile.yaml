@@ -12,10 +12,10 @@ metadata:
   annotations:
     # Standard resource (not a Helm hook) that waits for the database, mirroring
     # the db-migration Job. ttlSecondsAfterFinished clears it so a later upgrade
-    # recreates and re-runs it (reconcile is idempotent). Once the schema reaches
-    # the migration head it also grants graph ownership of rows a migration
-    # inserted by SQL. A deployment that disables it runs `agentarea-api
-    # reconcile` its own way.
+    # recreates and re-runs it (reconcile is idempotent). It waits for the schema
+    # to reach the migration head before reconciling the catalog. Repair graph
+    # ownership manually when a migration inserts governed rows directly by SQL.
+    # A deployment that disables this Job runs `agentarea-api reconcile` its own way.
 spec:
   ttlSecondsAfterFinished: 300
   template:
@@ -68,7 +68,6 @@ spec:
             - reconcile
             - --wait-for-schema
             - {{ .Values.global.database.migrations.initializationTimeout | quote }}
-            - --repair-ownership
           envFrom:
             - configMapRef:
                 name: {{ include "agentarea.fullname" . }}-env-databasejobs
