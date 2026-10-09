@@ -128,8 +128,9 @@ are joined by workspace and timestamp, not by a shared identifier.
   missing.
 - **`actor_type` is effectively always `user`.** The service defaults it and no
   decorated call site overrides it, so an action taken with an API key is recorded
-  with the resolved user id and the type `user`. The distinction the column exists
-  for is not populated.
+  with the resolved user id and the type `user`. The key itself is named in
+  `event_metadata.api_key_id`; the column the distinction was meant for is not
+  populated.
 - **Append-only is a deployment instruction, not a code guarantee.** The
   repository only inserts and reads, and the model documents that only INSERT and
   SELECT should be granted on the table. Nothing in the application enforces that;

@@ -5,6 +5,9 @@ API Key lifecycle (management — JWT-protected):
   GET    /v1/api-keys          → list API keys (no raw token)
   GET    /v1/api-keys/{id}     → get API key
   DELETE /v1/api-keys/{id}     → revoke API key
+
+Creating and revoking keys needs a signed-in user: a key that could mint keys
+would outlive its own revocation through the keys it minted.
 """
 
 import logging
@@ -14,7 +17,11 @@ from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_api.api.deps.services import AuditServiceDep, DatabaseSessionDep
 from agentarea_common.auth.authorization import assert_workspace_admin, is_workspace_admin
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.auth.route_authz import (
+    enforced_in_handler,
+    requires_user_session,
+    unrestricted,
+)
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.access_token_service import APIKeyService
@@ -106,10 +113,11 @@ class APIKeyCreateResponse(APIKeyResponse):
     response_model=APIKeyCreateResponse,
     status_code=201,
     dependencies=[
+        requires_user_session("create API keys"),
         unrestricted(
             "mints a token that authenticates as its creator; grants no authority "
             "the caller does not already have"
-        )
+        ),
     ],
 )
 async def create_api_key(
@@ -203,9 +211,10 @@ async def get_api_key(
     "/{token_id}",
     status_code=204,
     dependencies=[
+        requires_user_session("revoke API keys"),
         enforced_in_handler(
             "the key's creator, or a workspace admin; needs the record loaded first"
-        )
+        ),
     ],
 )
 async def revoke_api_key(
