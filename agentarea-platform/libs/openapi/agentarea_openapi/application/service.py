@@ -8,15 +8,13 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-import httpx
 import yaml
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_common.utils.url_safety import OutboundPolicy
+from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
 
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
 from agentarea_openapi.application.url_validator import (
     _SPEC_MAX_SIZE,
-    build_pinned_target,
     check_url_variables,
     validate_url,
 )
@@ -114,39 +112,15 @@ async def fetch_and_parse_spec(
         ValueError: On validation failure, size limit, or fetch error.
         httpx.HTTPStatusError: On non-2xx response.
     """
-    resolved_ips = validate_url(url, policy=policy)
+    validate_url(url, policy=policy)
 
-    # SSRF defenses: validate_url has confirmed scheme ∈ {http,https} and that
-    # every resolved address is admitted by the policy. build_pinned_target
-    # returns the destination identifiers (scheme/host/port) and the path/query as
-    # separate, validated fields so the HTTP sink never receives a single string
-    # that mixes user-controlled path data into the destination.
-    target = build_pinned_target(url, resolved_ips[0] if resolved_ips else None)
-
-    request_headers = dict(headers or {})
-    if target.original_host:
-        request_headers.setdefault("Host", target.original_host)
-
-    # Construct the request URL from the validated components. scheme/host come
-    # from sanitized values (literal scheme + resolved-and-vetted IP); the path
-    # only addresses a resource on that already-vetted destination.
-    fetch_url = httpx.URL(
-        scheme=target.scheme,
-        host=target.host,
-        port=target.port,
-        path=target.path,
-        query=target.raw_query,
-    )
-
-    # We connect to a pinned IP (anti-DNS-rebinding) but the TLS cert is issued
-    # for the original hostname — pass sni_hostname so SNI + cert validation use
-    # the original host instead of the IP we connect to.
-    extensions = {"sni_hostname": target.original_host} if target.original_host else None
-
-    async with httpx.AsyncClient(
-        timeout=30, headers=request_headers, follow_redirects=False, verify=True
+    # The pinned client resolves, vets and pins every hop itself, and hands a
+    # proxied request to the proxy by name. Pinning by hand here sent CONNECT to
+    # the IP through HTTPS_PROXY, where TLS was then checked against the IP.
+    async with safe_async_client(
+        policy=policy, timeout=30, headers=headers or {}, follow_redirects=False
     ) as client:
-        async with client.stream("GET", fetch_url, extensions=extensions) as resp:
+        async with client.stream("GET", url) as resp:
             resp.raise_for_status()
             chunks: list[bytes] = []
             total = 0
