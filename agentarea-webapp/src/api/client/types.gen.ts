@@ -9022,6 +9022,12 @@ export type WorkspaceFileListResponse = {
    * Files
    */
   files: Array<WorkspaceFileInfo>;
+  /**
+   * Truncated
+   *
+   * True when the workspace holds more than 10000 objects and only the first 10000 are listed.
+   */
+  truncated?: boolean;
 };
 
 /**

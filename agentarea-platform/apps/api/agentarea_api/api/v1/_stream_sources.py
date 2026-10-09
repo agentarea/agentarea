@@ -28,6 +28,7 @@ from agentarea_triggers.domain.source_types import StreamSourceType, get_stream_
 from agentarea_triggers.webhook_verification import (
     SIGNING_SECRET_KEYS,
     channel_credential_secret_name,
+    signature_algorithm_error,
 )
 from fastapi import HTTPException
 
@@ -69,6 +70,8 @@ def _check_fields(source_type: StreamSourceType, payload: WebhookSourceCreate) -
                 )
             if value == "":
                 raise HTTPException(status_code=422, detail=f"{field.key} is empty")
+    if error := signature_algorithm_error(payload.config):
+        raise HTTPException(status_code=422, detail=error)
 
 
 async def _usable_secret(

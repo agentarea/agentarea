@@ -47,6 +47,7 @@ from agentarea_common.events.contract import (
 )
 from agentarea_common.money import ZERO, Money, serialize_money
 from agentarea_common.utils.types import UtcDatetime, utc_isoformat
+from agentarea_common.workflow.executor import WorkflowStatus
 from agentarea_common.workspaces.lookup import workspace_api_prefix
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
@@ -1739,6 +1740,20 @@ async def cancel_agent_task(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+# Workflow states no signal can reach any more: pausing, resuming or answering
+# one is a 400, not a signal that fails inside Temporal. "terminated" is what
+# the executor reports for a workflow killed from outside it.
+_FINISHED_WORKFLOW_STATES = frozenset(
+    status.value
+    for status in (
+        WorkflowStatus.COMPLETED,
+        WorkflowStatus.FAILED,
+        WorkflowStatus.CANCELLED,
+        WorkflowStatus.TERMINATED,
+    )
+)
+
+
 @router.post(
     "/{task_id}/pause",
     dependencies=[requires_task_authority()],
@@ -1770,7 +1785,7 @@ async def pause_agent_task(
 
         # Check if task is in a pausable state
         current_status = status.get("status", "").lower()
-        if current_status in ["completed", "failed", "cancelled"]:
+        if current_status in _FINISHED_WORKFLOW_STATES:
             raise HTTPException(
                 status_code=400, detail=f"Cannot pause task in '{current_status}' state"
             )
@@ -1838,7 +1853,7 @@ async def resume_agent_task(
         # is itself a no-op on workflows that aren't paused, so accepting
         # it from "running" is safe.
         current_status = status.get("status", "").lower()
-        if current_status in ["completed", "failed", "cancelled"]:
+        if current_status in _FINISHED_WORKFLOW_STATES:
             raise HTTPException(
                 status_code=400, detail=f"Cannot resume task in '{current_status}' state"
             )
@@ -1951,7 +1966,7 @@ async def submit_task_input(
             raise HTTPException(status_code=404, detail="Task not found")
 
         current_status = status.get("status", "").lower()
-        if current_status in ["completed", "failed", "cancelled"]:
+        if current_status in _FINISHED_WORKFLOW_STATES:
             raise HTTPException(
                 status_code=400, detail=f"Cannot submit input to task in '{current_status}' state"
             )

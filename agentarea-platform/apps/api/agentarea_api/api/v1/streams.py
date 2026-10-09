@@ -10,7 +10,7 @@ from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
 from agentarea_common.base import RepositoryFactoryDep
-from agentarea_common.base.pagination import MAX_OFFSET
+from agentarea_common.base.pagination import MAX_BIGINT, MAX_OFFSET
 from agentarea_common.config import get_settings
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_streams.application.stream_service import StreamService
@@ -29,7 +29,7 @@ from agentarea_streams.schemas import ForwardCreate, StreamCreate, WebhookSource
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.source_types import STREAM_SOURCE_TYPES, StreamSourceType
 from agentarea_triggers.webhook_verification import hmac_signature_scheme
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from pydantic import BaseModel, Field
 
 from ._icons import CHANNEL_ICON_NAMESPACE, build_icon_url
@@ -482,8 +482,12 @@ async def delete_forward(
 async def list_events(
     stream_id: UUID,
     service: StreamServiceDep,
-    after: int | None = Query(None, ge=0, description="Oldest first, after this sequence."),
-    before: int | None = Query(None, ge=1, description="Newest first, before this sequence."),
+    after: int | None = Query(
+        None, ge=0, le=MAX_BIGINT, description="Oldest first, after this sequence."
+    ),
+    before: int | None = Query(
+        None, ge=1, le=MAX_BIGINT, description="Newest first, before this sequence."
+    ),
     limit: int = Query(50, ge=1, le=200),
 ):
     if after is not None and before is not None:
@@ -505,7 +509,13 @@ async def list_events(
     response_model=StreamEventResponse,
     dependencies=[requires("read", "stream", id_param="stream_id")],
 )
-async def get_event(stream_id: UUID, sequence: int, service: StreamServiceDep):
+async def get_event(
+    stream_id: UUID,
+    service: StreamServiceDep,
+    # Sequences start at 1 and live in a BIGINT: anything outside is a 422, not
+    # an overflow in the database.
+    sequence: int = Path(ge=1, le=MAX_BIGINT),
+):
     try:
         events = await service.list_events(stream_id, after=sequence - 1, before=None, limit=1)
     except StreamNotFoundError as error:
