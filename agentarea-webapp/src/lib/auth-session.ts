@@ -11,6 +11,20 @@
 import { AGENTAREA_AUTH_WHOAMI_TIMEOUT } from "./server-timeouts";
 
 const PUBLIC_ROUTE_PREFIXES = ["/auth", "/error", "/404", "/500"];
+
+/**
+ * Paths the Ory proxy forwards to Kratos on our own origin. They start the
+ * login flow itself, so gating them behind a session sends a logged-out
+ * browser back to /auth/login, which starts the flow again — a loop that
+ * nests return_to on every hop.
+ */
+export const ORY_PROXY_PREFIXES = [
+  "/self-service",
+  "/sessions/whoami",
+  "/ui",
+  "/.well-known/ory",
+  "/.ory",
+];
 // Under /auth for Kratos, but it forwards into the caller's workspace.
 const SIGNED_IN_AUTH_ROUTES = ["/auth/settings"];
 
@@ -30,7 +44,8 @@ export function isProtectedRoute(pathname: string): boolean {
   }
   return (
     pathname !== "/" &&
-    !PUBLIC_ROUTE_PREFIXES.some((prefix) => matchesRoute(pathname, prefix))
+    !PUBLIC_ROUTE_PREFIXES.some((prefix) => matchesRoute(pathname, prefix)) &&
+    !ORY_PROXY_PREFIXES.some((prefix) => matchesRoute(pathname, prefix))
   );
 }
 
