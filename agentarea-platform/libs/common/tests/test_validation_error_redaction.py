@@ -33,7 +33,11 @@ def _client() -> TestClient:
 def test_a_model_level_error_does_not_echo_the_secret() -> None:
     response = _client().post(
         "/credentials",
-        json={"name": "c", "api_key": "PLAINTEXT-KEY-123", "api_key_secret_id": "s"},
+        json={
+            "name": "c",
+            "api_key": "PLAINTEXT-KEY-123",  # pragma: allowlist secret
+            "api_key_secret_id": "s",
+        },
     )
 
     assert response.status_code == 422
