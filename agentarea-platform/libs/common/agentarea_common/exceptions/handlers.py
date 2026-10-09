@@ -134,6 +134,15 @@ async def validation_exception_handler(
         errors = exc.errors()
     except Exception:
         errors = []
+    # A model-level validator reports the whole request body as its ``input``,
+    # api keys and client secrets included. The caller already has what it
+    # sent, so the echo is dropped rather than redacted field by field.
+    errors = [
+        {key: value for key, value in error.items() if key != "input"}
+        if isinstance(error, dict)
+        else error
+        for error in errors
+    ]
     body = problem_dict(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         code="validation_error",
