@@ -276,6 +276,13 @@ export const zBodyUploadWorkspaceLogoV1LogoPut = z.object({
 });
 
 /**
+ * BudgetPeriod
+ *
+ * Budget reset period.
+ */
+export const zBudgetPeriod = z.enum(["execution", "daily", "monthly"]);
+
+/**
  * BudgetPolicy
  *
  * Budget-related ceilings.
@@ -3722,6 +3729,20 @@ export const zWalletResponse = z.object({
 });
 
 /**
+ * WalletStatus
+ *
+ * Wallet operational status.
+ */
+export const zWalletStatus = z.enum(["active", "disabled"]);
+
+/**
+ * WalletType
+ *
+ * Supported wallet types.
+ */
+export const zWalletType = z.enum(["x402", "mpp", "dual"]);
+
+/**
  * WebhookSignatureScheme
  *
  * How a sender signs requests to a generic webhook.
@@ -3896,7 +3917,7 @@ export const zX402ConfigSchema = z.object({
 export const zCreateWalletRequest = z.object({
   credentials: zWalletCredentialsSchema.nullish(),
   mpp_config: zMppConfigSchema.nullish(),
-  service_budget_period: z.string().optional().default("execution"),
+  service_budget_period: zBudgetPeriod.optional().default("execution"),
   service_budget_usd: z
     .union([
       z.number().gte(0).lt(1000000000000),
@@ -3904,7 +3925,7 @@ export const zCreateWalletRequest = z.object({
     ])
     .optional()
     .default("0"),
-  wallet_type: z.string(),
+  wallet_type: zWalletType,
   x402_config: zX402ConfigSchema.nullish(),
 });
 
@@ -3914,12 +3935,12 @@ export const zCreateWalletRequest = z.object({
 export const zUpdateWalletRequest = z.object({
   credentials: zWalletCredentialsSchema.nullish(),
   mpp_config: zMppConfigSchema.nullish(),
-  service_budget_period: z.string().nullish(),
+  service_budget_period: zBudgetPeriod.nullish(),
   service_budget_usd: z
     .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
     .nullish(),
-  status: z.string().nullish(),
-  wallet_type: z.string().nullish(),
+  status: zWalletStatus.nullish(),
+  wallet_type: zWalletType.nullish(),
   x402_config: zX402ConfigSchema.nullish(),
 });
 
