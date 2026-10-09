@@ -30,3 +30,16 @@ def test_the_largest_budget_the_column_holds_is_accepted():
     request = FundWalletRequest(service_budget_usd="999999999999.999999")
 
     assert str(request.service_budget_usd) == "999999999999.999999"
+
+
+@pytest.mark.parametrize("model", [FundWalletRequest, UpdateWalletRequest])
+def test_a_budget_that_rounds_up_to_the_ceiling_is_refused(model):
+    """Postgres rounds to 6 places on insert; this one became 10**12 and overflowed."""
+    with pytest.raises(ValidationError, match="less than"):
+        model(service_budget_usd="999999999999.9999995")
+
+
+def test_a_budget_is_rounded_as_the_column_rounds_it():
+    request = CreateWalletRequest(wallet_type="x402", service_budget_usd="12.3456785")
+
+    assert str(request.service_budget_usd) == "12.345679"
