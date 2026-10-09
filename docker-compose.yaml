@@ -142,8 +142,8 @@ services:
       - AGENTAREA_DB_HOST=db
       - AGENTAREA_DB_PORT=5432
       - AGENTAREA_DB_TENANT_SCOPE=${AGENTAREA_DB_TENANT_SCOPE:?AGENTAREA_DB_TENANT_SCOPE is required (log|enforce)}
-      # Reconcile also writes graph ownership for rows a migration inserted by
-      # SQL; the app has applied the model by the time it is healthy.
+      # Catalog reconcile uses the authorization graph; the app has applied
+      # the model by the time it is healthy.
       - AGENTAREA_AUTHZ_BACKEND=${AGENTAREA_AUTHZ_BACKEND:-openfga}
       - AGENTAREA_AUTHZ_FGA_URL=${AGENTAREA_AUTHZ_FGA_URL:-http://openfga:8080}
       - AGENTAREA_AUTHZ_FGA_STORE_ID=${AGENTAREA_AUTHZ_FGA_STORE_ID:-}
@@ -158,7 +158,6 @@ services:
       [
         "agentarea-api",
         "reconcile",
-        "--repair-ownership",
         "--source",
         "${CATALOG_MCP_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json}",
       ]
