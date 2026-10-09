@@ -68,6 +68,7 @@ spec:
             - reconcile
             - --wait-for-schema
             - {{ .Values.global.database.migrations.initializationTimeout | quote }}
+            - --repair-ownership
           envFrom:
             - configMapRef:
                 name: {{ include "agentarea.fullname" . }}-env-databasejobs
