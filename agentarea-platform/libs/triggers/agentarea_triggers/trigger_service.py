@@ -34,6 +34,7 @@ from agentarea_streams.infrastructure.repository import find_webhook_source
 from pydantic import ValidationError
 
 from .condition_models import validate_condition_models
+from .domain.cron import cron_expression_error, timezone_error
 from .domain.enums import ExecutionStatus, TriggerType
 from .domain.models import (
     ConditionVerdict,
@@ -1165,6 +1166,15 @@ class TriggerService:
 
         if trigger_update.agent_id is not None:
             await self._validate_agent_exists(trigger_update.agent_id)
+
+        if trigger_update.cron_expression is not None:
+            error = cron_expression_error(trigger_update.cron_expression)
+            if error is not None:
+                raise TriggerValidationError(error)
+        if trigger_update.timezone is not None:
+            error = timezone_error(trigger_update.timezone.strip())
+            if error is not None:
+                raise TriggerValidationError(error)
 
         if trigger_update.conditions is not None:
             await validate_condition_models(
