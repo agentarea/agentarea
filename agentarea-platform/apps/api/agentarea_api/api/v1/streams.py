@@ -10,23 +10,26 @@ from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
 from agentarea_common.base import RepositoryFactoryDep
-from agentarea_common.base.pagination import MAX_OFFSET
+from agentarea_common.base.pagination import MAX_BIGINT, MAX_OFFSET
 from agentarea_common.config import get_settings
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import (
     ForwardLoopError,
     JournaledEvent,
+    NotAForwardError,
     SourceFedByTriggerError,
+    StreamInUseError,
     StreamNameTakenError,
     StreamNotFoundError,
     StreamSourceNotFoundError,
+    SubscriptionNotFoundError,
 )
 from agentarea_streams.schemas import ForwardCreate, StreamCreate, WebhookSourceCreate
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.source_types import STREAM_SOURCE_TYPES, StreamSourceType
 from agentarea_triggers.webhook_verification import hmac_signature_scheme
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from pydantic import BaseModel, Field
 
 from ._icons import CHANNEL_ICON_NAMESPACE, build_icon_url
@@ -319,7 +322,12 @@ async def delete_stream(
     secret_catalog: SecretCatalogServiceDep,
     webhook_service: ChannelWebhookServiceDep,
 ):
-    """Refused (409) while a live webhook trigger's source feeds the stream."""
+    """Delete a stream with its events, sources and subscriptions.
+
+    Refused with 409 while a live webhook trigger's source feeds the stream,
+    while a trigger subscribes to it (delete the trigger first), or while a
+    forward of any stream writes into it (remove that forward first).
+    """
     try:
         await delete_stream_with_sources(
             stream_id,
@@ -330,7 +338,7 @@ async def delete_stream(
         )
     except StreamNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    except SourceFedByTriggerError as error:
+    except (SourceFedByTriggerError, StreamInUseError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     return Response(status_code=204)
 
@@ -439,6 +447,33 @@ async def create_forward(
     return _subscription(row)
 
 
+@router.delete(
+    "/{stream_id}/subscriptions/{subscription_id}",
+    status_code=204,
+    dependencies=[requires("edit", "stream", id_param="stream_id")],
+)
+async def delete_forward(
+    stream_id: UUID,
+    subscription_id: UUID,
+    user_context: UserContextDep,
+    service: StreamServiceDep,
+):
+    """Remove a forward. The caller must be able to edit every output stream, as to create it.
+
+    A trigger's subscription is refused with 409: it goes when the trigger is deleted.
+    """
+    try:
+        forward = await service.get_forward(stream_id, subscription_id)
+        for output in await service.existing_outputs(forward):
+            await require_permission("edit", "stream", str(output), user_context.user_id)
+        await service.delete_forward(stream_id, subscription_id)
+    except SubscriptionNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except NotAForwardError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return Response(status_code=204)
+
+
 @router.get(
     "/{stream_id}/events",
     response_model=StreamEventPage,
@@ -447,8 +482,12 @@ async def create_forward(
 async def list_events(
     stream_id: UUID,
     service: StreamServiceDep,
-    after: int | None = Query(None, ge=0, description="Oldest first, after this sequence."),
-    before: int | None = Query(None, ge=1, description="Newest first, before this sequence."),
+    after: int | None = Query(
+        None, ge=0, le=MAX_BIGINT, description="Oldest first, after this sequence."
+    ),
+    before: int | None = Query(
+        None, ge=1, le=MAX_BIGINT, description="Newest first, before this sequence."
+    ),
     limit: int = Query(50, ge=1, le=200),
 ):
     if after is not None and before is not None:
@@ -470,8 +509,17 @@ async def list_events(
     response_model=StreamEventResponse,
     dependencies=[requires("read", "stream", id_param="stream_id")],
 )
-async def get_event(stream_id: UUID, sequence: int, service: StreamServiceDep):
-    events = await service.list_events(stream_id, after=sequence - 1, before=None, limit=1)
+async def get_event(
+    stream_id: UUID,
+    service: StreamServiceDep,
+    # Sequences start at 1 and live in a BIGINT: anything outside is a 422, not
+    # an overflow in the database.
+    sequence: int = Path(ge=1, le=MAX_BIGINT),
+):
+    try:
+        events = await service.list_events(stream_id, after=sequence - 1, before=None, limit=1)
+    except StreamNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
     if not events or events[0].sequence != sequence:
         raise HTTPException(status_code=404, detail=f"Event {sequence} not found in stream")
     (response,) = await _events_with_outcomes(service, stream_id, events)

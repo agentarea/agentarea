@@ -21,7 +21,6 @@ from agentarea_secrets.catalog_service import (
     SecretNotFoundError,
 )
 from agentarea_streams.application.stream_service import StreamService
-from agentarea_streams.domain import SourceFedByTriggerError
 from agentarea_streams.infrastructure.orm import StreamSourceORM
 from agentarea_streams.schemas import SecretRef, WebhookSourceCreate
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
@@ -29,6 +28,7 @@ from agentarea_triggers.domain.source_types import StreamSourceType, get_stream_
 from agentarea_triggers.webhook_verification import (
     SIGNING_SECRET_KEYS,
     channel_credential_secret_name,
+    signature_algorithm_error,
 )
 from fastapi import HTTPException
 
@@ -70,6 +70,8 @@ def _check_fields(source_type: StreamSourceType, payload: WebhookSourceCreate) -
                 )
             if value == "":
                 raise HTTPException(status_code=422, detail=f"{field.key} is empty")
+    if error := signature_algorithm_error(payload.config):
+        raise HTTPException(status_code=422, detail=error)
 
 
 async def _usable_secret(
@@ -215,12 +217,11 @@ async def delete_stream_with_sources(
 ) -> None:
     """Delete a stream and release what its standalone sources hold.
 
-    Refused with ``SourceFedByTriggerError`` before anything is released while a
-    live webhook trigger's source feeds the stream.
+    Refused before anything is released while a live webhook trigger's source
+    feeds the stream (``SourceFedByTriggerError``), or while a trigger
+    subscribes to it or a forward writes into it (``StreamInUseError``).
     """
-    await service.get_stream(stream_id)
-    if fed := await service.triggers_feeding(stream_id):
-        raise SourceFedByTriggerError(f"Stream {stream_id}", sorted(set(fed.values())))
+    await service.ensure_deletable(stream_id)
     for source in await service.list_sources(stream_id):
         if source.credential_key == source.id:
             await release_webhook_source(

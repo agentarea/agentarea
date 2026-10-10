@@ -29,8 +29,15 @@ from agentarea_triggers.domain.models import (
 from agentarea_triggers.domain.models import (
     TriggerUpdate as _DomainTriggerUpdate,
 )
+from agentarea_triggers.webhook_verification import signature_algorithm_error
 
 TriggerTypeLiteral = Literal["cron", "webhook", "polling", "stream"]
+
+
+def _known_signature_algorithm(rules: dict[str, Any] | None) -> dict[str, Any] | None:
+    if error := signature_algorithm_error(rules):
+        raise ValueError(error)
+    return rules
 
 
 class TriggerSpec(BaseModel):
@@ -172,6 +179,8 @@ class TriggerSpec(BaseModel):
             return normalized
         return v
 
+    _check_signature_algorithm = field_validator("validation_rules")(_known_signature_algorithm)
+
     @field_validator("webhook_type")
     @classmethod
     def _validate_webhook_type(cls, v: str) -> str:
@@ -290,6 +299,8 @@ class TriggerUpdate(BaseModel):
         default=None,
         description="Channel credentials to update. Pass to rotate credentials.",
     )
+
+    _check_signature_algorithm = field_validator("validation_rules")(_known_signature_algorithm)
 
     @field_validator("webhook_type")
     @classmethod

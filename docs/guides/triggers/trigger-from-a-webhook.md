@@ -108,7 +108,9 @@ streams](/concepts/integration/event-streams) for what happens in between.
     }
     ```
 
-    Those three values are the defaults. `slack`, `github`, `discord` (Ed25519),
+    Those three values are the defaults. `signature_algorithm` is one of `sha1`,
+    `sha256`, `sha384` or `sha512`; any other value is refused with 422 when the
+    trigger is saved. `slack`, `github`, `discord` (Ed25519),
     `linear` and `stripe` ignore them and use their provider's scheme. Telegram
     is validated by bot token at a different layer.
   </Step>

@@ -296,13 +296,19 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         result = await self.session.execute(stmt)
         return [self._orm_to_domain(t) for t in result.scalars().all()]
 
-    async def count_by_statuses(self, statuses: list[str]) -> int:
-        """Count tasks matching any of the given statuses in the current workspace."""
+    async def count_by_statuses(self, statuses: list[str], agent_id: UUID | None = None) -> int:
+        """Count tasks matching any of the given statuses in the current workspace.
+
+        ``agent_id`` narrows the count the way it narrows ``list_by_statuses``,
+        so a filtered page and its total describe the same rows.
+        """
         stmt = (
             select(func.count(TaskORM.id))
             .where(self._get_workspace_filter())
             .where(TaskORM.status.in_(statuses))
         )
+        if agent_id is not None:
+            stmt = stmt.where(TaskORM.agent_id == agent_id)
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 

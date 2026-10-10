@@ -172,6 +172,9 @@ import type {
   DeleteConnectionV1OpenapiConnectionsConnectionIdDeleteData,
   DeleteConnectionV1OpenapiConnectionsConnectionIdDeleteErrors,
   DeleteConnectionV1OpenapiConnectionsConnectionIdDeleteResponses,
+  DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteData,
+  DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors,
+  DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses,
   DeleteMcpAuthConfigV1McpAuthConfigsConfigIdDeleteData,
   DeleteMcpAuthConfigV1McpAuthConfigsConfigIdDeleteErrors,
   DeleteMcpAuthConfigV1McpAuthConfigsConfigIdDeleteResponses,
@@ -2397,7 +2400,7 @@ export const installAgentV1AgentsAgentIdInstallPost = <
 /**
  * Get Agent Overview
  *
- * Aggregate stats + upcoming work for one agent.
+ * Aggregate stats + upcoming work for one agent; 404 if it is not in the workspace.
  */
 export const getAgentOverviewV1AgentsAgentIdOverviewGet = <
   ThrowOnError extends boolean = false,
@@ -9529,7 +9532,11 @@ export const listSourceTypesV1StreamsSourceTypesGet = <
 /**
  * Delete Stream
  *
- * Refused (409) while a live webhook trigger's source feeds the stream.
+ * Delete a stream with its events, sources and subscriptions.
+ *
+ * Refused with 409 while a live webhook trigger's source feeds the stream,
+ * while a trigger subscribes to it (delete the trigger first), or while a
+ * forward of any stream writes into it (remove that forward first).
  */
 export const deleteStreamV1StreamsStreamIdDelete = <
   ThrowOnError extends boolean = false,
@@ -9798,6 +9805,41 @@ export const listSubscriptionsV1StreamsStreamIdSubscriptionsGet = <
       },
     ],
     url: "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions",
+    ...options,
+  });
+
+/**
+ * Delete Forward
+ *
+ * Remove a forward. The caller must be able to edit every output stream, as to create it.
+ *
+ * A trigger's subscription is refused with 409: it goes when the trigger is deleted.
+ */
+export const deleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses,
+  DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses,
+    DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions/{subscription_id}",
     ...options,
   });
 
@@ -10252,7 +10294,9 @@ export const getTriggerV1TriggersTriggerIdGet = <
  * The updated trigger.
  *
  * Raises:
- * HTTPException: If trigger not found or validation fails.
+ * HTTPException: If trigger not found or validation fails; 409 if the
+ * update changes the filter of a trigger that has no stream
+ * subscription left.
  */
 export const updateTriggerV1TriggersTriggerIdPut = <
   ThrowOnError extends boolean = false,

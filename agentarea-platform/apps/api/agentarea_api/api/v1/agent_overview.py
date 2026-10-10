@@ -13,6 +13,8 @@ from typing import Annotated
 from typing import cast as type_cast
 from uuid import UUID
 
+from agentarea_agents.application.agent_service import AgentService
+from agentarea_api.api.deps.services import get_read_agent_service
 from agentarea_api.api.v1._schedule_preview import cron_runs
 from agentarea_api.api.v1.dashboard import (
     ACTIVE_TASK_STATUSES,
@@ -27,7 +29,7 @@ from agentarea_common.money import ZERO, Money, to_money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.infrastructure.orm import TriggerORM
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import Date, case, cast, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,8 +79,13 @@ async def get_agent_overview(
     agent_id: UUID,
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
+    agent_service: AgentService = Depends(get_read_agent_service),
 ) -> AgentOverviewResponse:
-    """Aggregate stats + upcoming work for one agent."""
+    """Aggregate stats + upcoming work for one agent; 404 if it is not in the workspace."""
+    # Every aggregate below is a filter on agent_id, so an unknown agent would
+    # otherwise read as an idle one.
+    if await agent_service.get(agent_id) is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
     workspace_id = user_context.workspace_id
     now = datetime.now(UTC).replace(tzinfo=None)
     today_start = datetime(now.year, now.month, now.day)

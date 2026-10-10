@@ -57,13 +57,16 @@ class InboxToolset(Toolset):
             statuses = [status] if status else list(INBOX_STATUSES)
             offset = max(page - 1, 0) * page_size
 
+            agent_uuid = UUID(agent_id) if agent_id else None
             tasks = await service.task_repository.list_by_statuses(
                 statuses=statuses,
-                agent_id=UUID(agent_id) if agent_id else None,
+                agent_id=agent_uuid,
                 limit=page_size,
                 offset=offset,
             )
-            total = await service.task_repository.count_by_statuses(statuses=statuses)
+            total = await service.task_repository.count_by_statuses(
+                statuses=statuses, agent_id=agent_uuid
+            )
             items = [
                 {
                     "id": str(t.id),

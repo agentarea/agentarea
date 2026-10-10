@@ -95,6 +95,7 @@ async def get_inbox_items(
         )
         total = await task_service.task_repository.count_by_statuses(
             statuses=query_statuses,
+            agent_id=agent_id,
         )
 
         agent_map = {str(agent.id): agent.name for agent in agents_result}

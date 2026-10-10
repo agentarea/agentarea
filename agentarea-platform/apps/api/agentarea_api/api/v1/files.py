@@ -38,6 +38,7 @@ from agentarea_common.artifacts.service import ensure_no_file_ancestors
 from agentarea_common.artifacts.workspace import DEFAULT_MAX_FILE_BYTES
 from agentarea_common.artifacts.workspace_writes import (
     MAX_UPLOADS_PER_PLAN,
+    RESERVED_PREFIXES,
     is_reserved_path,
     plan_uploads,
     resolve_write_path,
@@ -62,6 +63,9 @@ logger = logging.getLogger(__name__)
 # workspace enforces; size/quota are re-checked at attach time.
 MAX_ATTACHMENT_BYTES = DEFAULT_MAX_FILE_BYTES
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
+# The most objects one workspace listing returns. Past it the response says it
+# was cut short instead of passing a partial workspace off as the whole one.
+MAX_LISTED_FILES = 10_000
 
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -78,6 +82,13 @@ class WorkspaceFileListResponse(BaseModel):
     files: list[WorkspaceFileInfo]
     # Trailing-slash paths keep user-created and project folders visible when empty.
     directories: list[str] = Field(default_factory=list)
+    truncated: bool = Field(
+        default=False,
+        description=(
+            f"True when the workspace holds more than {MAX_LISTED_FILES} objects and "
+            f"only the first {MAX_LISTED_FILES} are listed."
+        ),
+    )
 
 
 class CreateWorkspaceDirectoryRequest(BaseModel):
@@ -248,8 +259,15 @@ async def list_workspace_files(
     even though ``tasks/{id}/workspace/{path}`` remains readable by that name.
     """
     svc = _get_artifact_service()
-    objects = await svc.list(user_context.workspace_id)
-    visible_objects = [obj for obj in objects if not is_reserved_path(obj.path)]
+    # Reserved roots are skipped by the listing itself, so a workspace full of
+    # task output cannot use up the budget before a person's own files are read.
+    objects = await svc.list(
+        user_context.workspace_id,
+        max_items=MAX_LISTED_FILES + 1,
+        exclude_roots=RESERVED_PREFIXES,
+    )
+    truncated = len(objects) > MAX_LISTED_FILES
+    visible_objects = [obj for obj in objects[:MAX_LISTED_FILES] if not is_reserved_path(obj.path)]
     files = [
         WorkspaceFileInfo(
             path=obj.path,
@@ -265,7 +283,7 @@ async def list_workspace_files(
         {obj.path for obj in visible_objects if obj.path.endswith("/")}
         | {f"projects/{p.id}/" for p in projects}
     )
-    return WorkspaceFileListResponse(files=files, directories=directories)
+    return WorkspaceFileListResponse(files=files, directories=directories, truncated=truncated)
 
 
 @router.post(
@@ -417,7 +435,9 @@ async def move_workspace_file(
         await svc.move(workspace_id, source, destination)
         return MovedFileResponse(source=source, destination=destination, moved=1)
 
-    contents = await svc.list(workspace_id, prefix=f"{source}/")
+    # Every key beneath the folder, however many: a capped listing would move
+    # the first page and leave the rest behind at the old path.
+    contents = await svc.list(workspace_id, prefix=f"{source}/", max_items=None)
     if not contents:
         raise HTTPException(status_code=404, detail="File not found")
     # Refuse the whole move before copying anything if one child cannot land.

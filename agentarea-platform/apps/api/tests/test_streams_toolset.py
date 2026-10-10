@@ -152,6 +152,70 @@ async def test_delete_webhook_source_refuses_a_source_a_live_trigger_owns(monkey
     released.assert_not_called()
 
 
+async def test_delete_refuses_a_stream_a_forward_writes_into(monkeypatch):
+    from agentarea_streams.domain import StreamInUseError
+
+    stream, forward, source = uuid4(), uuid4(), uuid4()
+    service = AsyncMock()
+    service.ensure_deletable.side_effect = StreamInUseError(stream, [], [(forward, source)])
+    monkeypatch.setattr(
+        "agentarea_api.tools.streams_toolset.platform_context", _write_ctx(AsyncMock())
+    )
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
+    monkeypatch.setattr(
+        "agentarea_api.tools.streams_toolset._secret_ports",
+        lambda *_a: {
+            "secret_manager": AsyncMock(),
+            "secret_catalog": AsyncMock(),
+            "webhook_service": AsyncMock(),
+        },
+    )
+    result = json.loads(
+        await StreamsToolset().delete.__wrapped__(StreamsToolset(), stream_id=str(stream))
+    )
+    assert str(forward) in result["error"]
+    service.delete_stream.assert_not_called()
+
+
+async def test_delete_forward_checks_every_output_then_removes_it(monkeypatch):
+    stream, output, forward = uuid4(), uuid4(), uuid4()
+    service = AsyncMock()
+    service.existing_outputs.return_value = [output]
+    allowed = AsyncMock()
+    monkeypatch.setattr(
+        "agentarea_api.tools.streams_toolset.platform_context", _write_ctx(AsyncMock())
+    )
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset.require_permission", allowed)
+    result = json.loads(
+        await StreamsToolset().delete_forward.__wrapped__(
+            StreamsToolset(), stream_id=str(stream), subscription_id=str(forward)
+        )
+    )
+    assert result == {"deleted": True}
+    allowed.assert_awaited_once_with("edit", "stream", str(output), "u")
+    service.delete_forward.assert_awaited_once_with(stream, forward)
+
+
+async def test_delete_forward_refuses_a_triggers_subscription(monkeypatch):
+    from agentarea_streams.domain import NotAForwardError
+
+    subscription, trigger = uuid4(), uuid4()
+    service = AsyncMock()
+    service.get_forward.side_effect = NotAForwardError(subscription, trigger)
+    monkeypatch.setattr(
+        "agentarea_api.tools.streams_toolset.platform_context", _write_ctx(AsyncMock())
+    )
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
+    result = json.loads(
+        await StreamsToolset().delete_forward.__wrapped__(
+            StreamsToolset(), stream_id=str(uuid4()), subscription_id=str(subscription)
+        )
+    )
+    assert str(trigger) in result["error"]
+    service.delete_forward.assert_not_called()
+
+
 async def test_source_types_are_served_to_mcp_callers_too():
     types = json.loads(await StreamsToolset().list_source_types())
     assert {"sentry", "yookassa", "github"} <= {t["webhook_type"] for t in types}

@@ -10,6 +10,7 @@ import json
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
@@ -81,3 +82,13 @@ async def test_no_status_asks_for_the_whole_vocabulary(repository) -> None:
     await InboxToolset().list()
 
     assert repository.list_by_statuses.await_args.kwargs["statuses"] == list(INBOX_STATUSES)
+
+
+@pytest.mark.asyncio
+async def test_the_total_is_narrowed_to_the_agent_the_items_are(repository) -> None:
+    agent_id = uuid4()
+
+    await InboxToolset().list(agent_id=str(agent_id))
+
+    assert repository.list_by_statuses.await_args.kwargs["agent_id"] == agent_id
+    assert repository.count_by_statuses.await_args.kwargs["agent_id"] == agent_id

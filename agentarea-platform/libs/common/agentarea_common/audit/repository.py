@@ -3,11 +3,15 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import literal, select, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import AuditEventORM
+
+
+class UnknownAuditCursorError(LookupError):
+    """The cursor names no audit event of the workspace being paged."""
 
 
 class AuditRepository:
@@ -56,11 +60,18 @@ class AuditRepository:
         cursor: UUID | None = None,
         limit: int = 50,
     ) -> list[AuditEventORM]:
-        """Query audit events with workspace scoping and filtering."""
+        """Query audit events with workspace scoping and filtering, newest first.
+
+        ``cursor`` is the id of the last event of the previous page. One that
+        is not an event of this workspace raises ``UnknownAuditCursorError``
+        rather than silently starting over at the first page.
+        """
         stmt = (
             select(AuditEventORM)
             .where(AuditEventORM.workspace_id == workspace_id)
-            .order_by(AuditEventORM.created_at.desc())
+            # The id breaks ties, so events sharing a timestamp are neither
+            # skipped nor repeated across a page boundary.
+            .order_by(AuditEventORM.created_at.desc(), AuditEventORM.id.desc())
             .limit(min(limit, 100))
         )
 
@@ -77,10 +88,16 @@ class AuditRepository:
         if until:
             stmt = stmt.where(AuditEventORM.created_at <= until)
         if cursor:
-            # Cursor-based pagination: fetch events older than cursor
             cursor_event = await self._session.get(AuditEventORM, cursor)
-            if cursor_event:
-                stmt = stmt.where(AuditEventORM.created_at < cursor_event.created_at)
+            if cursor_event is None or cursor_event.workspace_id != workspace_id:
+                raise UnknownAuditCursorError(f"Unknown audit cursor {cursor}")
+            stmt = stmt.where(
+                tuple_(AuditEventORM.created_at, AuditEventORM.id)
+                < tuple_(
+                    literal(cursor_event.created_at, AuditEventORM.created_at.type),
+                    literal(cursor_event.id, AuditEventORM.id.type),
+                )
+            )
 
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
