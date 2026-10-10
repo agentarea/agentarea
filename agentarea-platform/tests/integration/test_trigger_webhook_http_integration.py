@@ -522,14 +522,6 @@ class TestWebhookHTTPIntegration:
             },
         }
 
-        unsigned = webhook_client.post(
-            f"/webhooks/{webhook_id}",
-            json=telegram_payload,
-            headers={"Content-Type": "application/json"},
-        )
-        assert unsigned.status_code == 400
-        assert journal.events == []
-
         response = webhook_client.post(
             f"/webhooks/{webhook_id}",
             json=telegram_payload,
@@ -553,6 +545,33 @@ class TestWebhookHTTPIntegration:
         assert task_params["platform"] == "telegram"
         assert task_params["auto_reply"] is True
         assert task_params["trigger_data"]["text"] == "Hello bot! Can you help me?"
+
+    async def test_telegram_webhook_without_its_secret_token_is_refused(
+        self, webhook_client, trigger_service, journal, sample_agent_id
+    ):
+        """An update without the bot's secret token could name any sender; it is refused."""
+        trigger = await trigger_service.create_trigger(
+            TriggerCreate(
+                name="Telegram Bot Webhook",
+                agent_id=sample_agent_id,
+                trigger_type=TriggerType.WEBHOOK,
+                webhook_id=str(uuid4()),
+                webhook_type=WebhookType.TELEGRAM,
+                allowed_methods=["POST"],
+                validation_rules={"secret_token": "telegram-secret-token"},  # noqa: S106
+                created_by="test_user",
+                workspace_id="webhook-test-workspace",
+            )
+        )
+
+        response = webhook_client.post(
+            f"/webhooks/{trigger.webhook_id}",
+            json={"update_id": 1, "message": {"message_id": 1, "text": "hi"}},
+            headers={"Content-Type": "application/json"},
+        )
+
+        assert response.status_code == 400
+        assert journal.events == []
 
     # Error Handling and Edge Cases
 
