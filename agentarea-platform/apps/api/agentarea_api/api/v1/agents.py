@@ -32,6 +32,7 @@ from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
+from agentarea_common.rebac import owner_relations
 from agentarea_mcp.application.service import MCPServerInstanceService
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.models import Trigger
@@ -158,12 +159,13 @@ async def _grant_agent_owner(agent_id: UUID | str, user_id: str, workspace_id: s
     """Assert that ``user_id`` owns ``agent_id`` in the resource graph.
 
     Attaches the agent artifact to the workspace root project and grants the
-    creator read/write/manage. Writes are idempotent.
+    creator read/write/manage and invoke. Writes are idempotent.
     """
     await grant_resource_owner(
         resource_id=agent_id,
         workspace_id=workspace_id,
         user_id=user_id,
+        relations=owner_relations(Agent),
     )
 
 

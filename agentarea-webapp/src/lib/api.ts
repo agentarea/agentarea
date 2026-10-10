@@ -2367,3 +2367,30 @@ export const exportWorkspaceConfig = async () => {
   });
   return withStatus(result);
 };
+
+// Messenger accounts linked to the caller. They belong to the person, so these
+// calls carry no workspace.
+export const listExternalIdentities = async () => {
+  const result = await sdk.listExternalIdentitiesV1MeExternalIdentitiesGet({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
+export const startTelegramLink = async (bot: string) => {
+  const result =
+    await sdk.startTelegramLinkV1MeExternalIdentitiesTelegramLinkPost({
+      client: serverClient,
+      body: { bot },
+    });
+  return withStatus(result);
+};
+
+export const unlinkExternalIdentity = async (identityId: string) => {
+  const { data, error } =
+    await sdk.unlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDelete({
+      client: serverClient,
+      path: { identity_id: identityId },
+    });
+  return { data, error };
+};

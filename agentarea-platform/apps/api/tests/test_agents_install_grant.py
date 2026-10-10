@@ -109,6 +109,8 @@ async def test_install_agent_grants_owner_tuple(
         resource_id=forked_agent.id,
         workspace_id="test_workspace",
         user_id="test_user",
+        # The creator may run the agent, not only see and change it.
+        relations=("reader", "writer", "manager", "invoker"),
     )
 
 
@@ -133,6 +135,8 @@ async def test_update_agent_grants_owner_tuple(
         resource_id=forked_agent.id,
         workspace_id="test_workspace",
         user_id="test_user",
+        # The creator may run the agent, not only see and change it.
+        relations=("reader", "writer", "manager", "invoker"),
     )
 
 

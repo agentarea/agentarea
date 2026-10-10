@@ -14,6 +14,7 @@ import {
 import { workspacePath } from "@/lib/workspace-routes";
 import config from "@/ory.config";
 import LogoutButton from "./components/LogoutButton";
+import MessengersSection from "./components/MessengersSection";
 import SettingsSkeleton from "./components/SettingsSkeleton";
 import SettingsClient from "./SettingsClient";
 
@@ -66,12 +67,19 @@ async function SettingsContent(props: SettingsPageProps) {
     throw new Error("Settings rendered outside a workspace of the caller");
   }
 
+  const linkBot = (await props.searchParams).link_telegram;
+
   return (
-    <SettingsClient
-      flow={rewriteFlowForBrowser(flow)}
-      config={await getOryBrowserConfig()}
-      canAdminister={canAdminister}
-      workspace={active}
-    />
+    <>
+      <SettingsClient
+        flow={rewriteFlowForBrowser(flow)}
+        config={await getOryBrowserConfig()}
+        canAdminister={canAdminister}
+        workspace={active}
+      />
+      <MessengersSection
+        linkBot={typeof linkBot === "string" ? linkBot : undefined}
+      />
+    </>
   );
 }

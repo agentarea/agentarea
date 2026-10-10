@@ -858,6 +858,16 @@ export const zExecutionTimelineResponse = z.object({
 });
 
 /**
+ * ExternalIdentityResponse
+ */
+export const zExternalIdentityResponse = z.object({
+  external_id: z.string(),
+  id: z.string().uuid(),
+  linked_at: z.string().datetime(),
+  provider: z.string(),
+});
+
+/**
  * FailedTaskBlocker
  */
 export const zFailedTaskBlocker = z.object({
@@ -3187,6 +3197,21 @@ export const zInboxResponse = z.object({
 });
 
 /**
+ * TelegramLinkRequest
+ */
+export const zTelegramLinkRequest = z.object({
+  bot: z.string().regex(/^[A-Za-z0-9_]{5,32}$/),
+});
+
+/**
+ * TelegramLinkResponse
+ */
+export const zTelegramLinkResponse = z.object({
+  expires_in: z.number().int(),
+  url: z.string(),
+});
+
+/**
  * TokenPolicy
  *
  * Token-related ceilings.
@@ -4146,6 +4171,35 @@ export const zProxyInstanceV1McpInstanceIdMcpGetPath = z.object({
 export const zProxyInstanceV1McpInstanceIdMcpPostPath = z.object({
   instance_id: z.string(),
 });
+
+/**
+ * Response List External Identities V1 Me External Identities Get
+ *
+ * Successful Response
+ */
+export const zListExternalIdentitiesV1MeExternalIdentitiesGetResponse = z.array(
+  zExternalIdentityResponse
+);
+
+export const zStartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostBody =
+  zTelegramLinkRequest;
+
+/**
+ * Successful Response
+ */
+export const zStartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponse =
+  zTelegramLinkResponse;
+
+export const zUnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeletePath =
+  z.object({
+    identity_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zUnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponse =
+  z.void();
 
 /**
  * Successful Response

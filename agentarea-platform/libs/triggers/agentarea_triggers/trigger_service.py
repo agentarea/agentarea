@@ -1316,6 +1316,7 @@ class TriggerService:
         follow_up_claim: "FollowUpClaim | None" = None,
         raise_retryable: bool = False,
         event: TriggerEvent | None = None,
+        caller: str | None = None,
     ) -> TriggerFiring:
         """Run a trigger once and say what happened.
 
@@ -1327,7 +1328,8 @@ class TriggerService:
         exists, the firing reports it instead of starting another run;
         ``follow_up_claim`` does the same for a follow-up routed into a running
         workflow, which stores no task. ``provenance`` is stamped on the task
-        it creates.
+        it creates. ``caller`` is the person a messenger event came from, admitted
+        before this call; the task is theirs rather than the trigger owner's.
 
         With ``raise_retryable`` only a permanent failure (see
         ``failures.is_permanent``) becomes an ``error`` outcome; anything else --
@@ -1432,7 +1434,8 @@ class TriggerService:
                     query=task_input.message,
                     # A manual run belongs to whoever pressed the button, not to
                     # whoever created the trigger months ago.
-                    user_id=fired_by if fired_by is not None else str(trigger.created_by),
+                    # A message belongs to whoever sent it.
+                    user_id=fired_by or caller or str(trigger.created_by),
                     workspace_id=str(trigger.workspace_id),
                     agent_id=trigger.agent_id,
                     task_parameters=task_params,

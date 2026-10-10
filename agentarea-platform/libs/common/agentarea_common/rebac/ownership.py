@@ -26,6 +26,20 @@ logger = logging.getLogger(__name__)
 #: roll-up, so ``manager`` alone would confer neither read nor write.
 OWNER_RELATIONS = ("reader", "writer", "manager")
 
+#: Who may run an agent. Nothing implies it -- not managing the agent, not
+#: administering its workspace -- so a creator is granted it explicitly, and
+#: everyone else only when someone with ``can_manage`` grants it.
+INVOKER_RELATION = "invoker"
+
+
+def owner_relations(model: type) -> tuple[str, ...]:
+    """The relations a creator of ``model`` rows is granted.
+
+    A model narrows or widens the default by declaring
+    ``__graph_owner_relations__``; an agent adds ``invoker``.
+    """
+    return tuple(getattr(model, "__graph_owner_relations__", OWNER_RELATIONS))
+
 
 class ResourceOwnershipError(RuntimeError):
     """The graph could not record ownership, so the caller must not proceed.
@@ -109,6 +123,7 @@ async def grant_resource_owner(
     resource_id: UUID | str,
     workspace_id: str,
     user_id: str,
+    relations: tuple[str, ...] = OWNER_RELATIONS,
 ) -> None:
     """Attach a newly created resource to its workspace root project and own it.
 
@@ -129,7 +144,7 @@ async def grant_resource_owner(
             subject_id=f"project:{root_project_id(workspace_id)}",
         ),
     )
-    for relation in OWNER_RELATIONS:
+    for relation in relations:
         await write_tuple_idempotent(
             client,
             RelationTuple(

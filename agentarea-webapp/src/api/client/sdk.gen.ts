@@ -539,6 +539,8 @@ import type {
   ListEventsV1StreamsStreamIdEventsGetData,
   ListEventsV1StreamsStreamIdEventsGetErrors,
   ListEventsV1StreamsStreamIdEventsGetResponses,
+  ListExternalIdentitiesV1MeExternalIdentitiesGetData,
+  ListExternalIdentitiesV1MeExternalIdentitiesGetResponses,
   ListInvitationsV1InvitationsGetData,
   ListInvitationsV1InvitationsGetErrors,
   ListInvitationsV1InvitationsGetResponses,
@@ -791,6 +793,9 @@ import type {
   SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostData,
   SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostErrors,
   SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostResponses,
+  StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostData,
+  StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors,
+  StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses,
   StreamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGetData,
   StreamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGetErrors,
   StreamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGetResponses,
@@ -812,6 +817,9 @@ import type {
   TriggersHealthCheckV1TriggersHealthGetData,
   TriggersHealthCheckV1TriggersHealthGetErrors,
   TriggersHealthCheckV1TriggersHealthGetResponses,
+  UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteData,
+  UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteErrors,
+  UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses,
   UpdateAgentV1AgentsAgentIdPatchData,
   UpdateAgentV1AgentsAgentIdPatchErrors,
   UpdateAgentV1AgentsAgentIdPatchResponses,
@@ -1698,6 +1706,105 @@ export const proxyInstanceV1McpInstanceIdMcpPost = <
       },
     ],
     url: "/v1/mcp/{instance_id}/mcp",
+    ...options,
+  });
+
+/**
+ * List External Identities
+ */
+export const listExternalIdentitiesV1MeExternalIdentitiesGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    ListExternalIdentitiesV1MeExternalIdentitiesGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListExternalIdentitiesV1MeExternalIdentitiesGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListExternalIdentitiesV1MeExternalIdentitiesGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/me/external-identities",
+    ...options,
+  });
+
+/**
+ * Start Telegram Link
+ *
+ * A deep link that offers the caller's account to whoever opens it in Telegram.
+ */
+export const startTelegramLinkV1MeExternalIdentitiesTelegramLinkPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses,
+  StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses,
+    StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/me/external-identities/telegram/link",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Unlink External Identity
+ */
+export const unlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses,
+  UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses,
+    UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/me/external-identities/{identity_id}",
     ...options,
   });
 

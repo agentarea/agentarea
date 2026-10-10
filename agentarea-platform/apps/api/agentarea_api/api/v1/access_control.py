@@ -90,7 +90,7 @@ _VERB_TO_BIT = {
     "read": "can_read",
     "operate": "can_read",
     "connect": "can_read",
-    "execute": "can_read",
+    "execute": "can_invoke",
     "configure": "can_write",
     "edit": "can_write",
     "write": "can_write",
@@ -723,7 +723,7 @@ async def check_permission(
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     await _assert_subject_in_workspace(payload.subject_id, user_context, db_session)
     bit = _VERB_TO_BIT.get(payload.relation, payload.relation)
-    if bit not in {"can_read", "can_write", "can_manage"}:
+    if bit not in {"can_read", "can_write", "can_manage", "can_invoke"}:
         return CheckResponse(allowed=False)
     try:
         result = await graph_client.check(

@@ -37,6 +37,7 @@ from . import (
     clients,
     connection_oauth,
     dashboard,
+    external_identities,
     files,
     governance,
     inbox,
@@ -97,6 +98,8 @@ principal_v1_router = APIRouter(
 
 principal_v1_router.include_router(workspaces.router)
 principal_v1_router.include_router(workspace_invitations.principal_router)
+# The caller's own messenger accounts; they belong to the person, not a workspace.
+principal_v1_router.include_router(external_identities.router)
 # Billing currency of every money amount. Deployment-wide, so it belongs to no
 # workspace: every workspace on a deployment is billed in the same currency.
 principal_v1_router.include_router(pricing.router)
