@@ -151,6 +151,7 @@ class OpenAPIConnectionService:
             Callable[[UUID, str, list[str] | None], Awaitable[dict[str, str]]] | None
         ) = None,
         *,
+        owned_auth_releaser: Callable[[UUID], Awaitable[None]],
         outbound_policy: OutboundPolicy,
     ) -> None:
         self._repo: OpenAPIConnectionRepository = repository_factory.create_repository(
@@ -159,6 +160,8 @@ class OpenAPIConnectionService:
         self._secret_manager = secret_manager
         self._auth_header_resolver = auth_header_resolver
         self._auth_config_access_checker = auth_config_access_checker
+        # Built by ``agentarea_mcp.application.auth_resolver.build_owned_auth_releaser``.
+        self._owned_auth_releaser = owned_auth_releaser
         self._outbound_policy = outbound_policy
 
     async def _assert_may_use_auth_config(self, auth_config_id: UUID) -> None:
@@ -571,11 +574,18 @@ class OpenAPIConnectionService:
         return await self._repo.get_by_id(str(connection_id))
 
     async def delete_connection(self, connection_id: UUID) -> bool:
+        """Delete a connection, its secrets and the auth configs minted for it.
+
+        Those configs' rows go with the connection's (ON DELETE CASCADE). Every
+        secret lives outside the transaction and goes first, so a failure
+        leaves a delete to retry rather than a credential nothing points at.
+        """
         conn = await self._repo.get_by_id(str(connection_id))
         if conn:
             await self._delete_header_secrets(conn)
             await self._delete_query_param_secrets(conn)
             await self._delete_url_variable_secrets(conn)
+            await self._owned_auth_releaser(conn.id)
         return await self._repo.delete(str(connection_id))
 
     async def discover_tools(self, connection_id: UUID) -> dict[str, Any]:

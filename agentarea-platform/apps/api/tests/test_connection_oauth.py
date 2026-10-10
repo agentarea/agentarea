@@ -118,6 +118,9 @@ async def test_connect_uses_requested_credential_source_without_secret_in_state(
         "build_auth_config_access_checker",
         lambda *_args, **_kwargs: AsyncMock(),
     )
+    monkeypatch.setattr(
+        connection_oauth, "build_owned_auth_releaser", lambda *_args, **_kwargs: AsyncMock()
+    )
     client_id_secret = SimpleNamespace(
         id=uuid4(),
         secret_name="metrika_client_id",  # noqa: S106  # pragma: allowlist secret
@@ -197,6 +200,8 @@ async def test_connect_uses_requested_credential_source_without_secret_in_state(
 
     auth_kwargs = auth_create.await_args.kwargs
     assert auth_kwargs["allow_managed_credentials"] is True
+    # Minted for this connection, so it is deleted with it.
+    assert auth_kwargs["openapi_connection_id"] == connection_id
     if credential_source == "managed":
         assert auth_kwargs["credentials"] == {}
         assert auth_kwargs["config"]["credential_mode"] == "managed"

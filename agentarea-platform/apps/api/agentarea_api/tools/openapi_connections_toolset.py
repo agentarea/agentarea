@@ -52,13 +52,17 @@ def _serialize(conn: Any) -> dict:
 def _build_service(repo_factory, secret_mgr):
     """Construct an OpenAPIConnectionService bound to the current request context."""
     from agentarea_common.utils.url_safety import OutboundPolicy
-    from agentarea_mcp.application.auth_resolver import build_auth_config_access_checker
+    from agentarea_mcp.application.auth_resolver import (
+        build_auth_config_access_checker,
+        build_owned_auth_releaser,
+    )
     from agentarea_openapi.application.service import OpenAPIConnectionService
 
     return OpenAPIConnectionService(
         repository_factory=repo_factory,
         secret_manager=secret_mgr,
         auth_config_access_checker=build_auth_config_access_checker(repo_factory, secret_mgr),
+        owned_auth_releaser=build_owned_auth_releaser(repo_factory, secret_mgr),
         outbound_policy=OutboundPolicy.from_env(),
     )
 
@@ -287,7 +291,7 @@ class OpenAPIConnectionsToolset(Toolset):
     @tool_method(effect="destructive")
     @requires("delete", "openapi_connection", id_param="connection_id")
     async def delete(self, connection_id: str) -> str:
-        """Delete an OpenAPI connection and its stored secret headers, query params and URL variables."""
+        """Delete an OpenAPI connection, its stored secrets and the OAuth auth config it connected with."""
         async with platform_context() as (
             _session,
             _user_ctx,

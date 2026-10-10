@@ -458,6 +458,7 @@ async def oauth_authorize(
         credentials=resolved.credentials,
         allow_managed_credentials=bool(resolved.references)
         or resolved.config.get("credential_mode") == "managed",
+        mcp_instance_id=instance.id,
     )
     for secret_id, field_name in resolved.references:
         await secret_catalog.add_reference(

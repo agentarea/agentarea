@@ -20,8 +20,8 @@ from agentarea_bundles.schemas.preview import ImportPreview
 from agentarea_bundles.schemas.result import InstallResult
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base import RepositoryFactoryDep
-from agentarea_common.utils.url_safety import OutboundPolicy
-from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
+from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
+from agentarea_openapi.application.url_validator import validate_url
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
@@ -35,56 +35,28 @@ _MAX_BUNDLE_BYTES = 5 * 1024 * 1024
 _FETCH_TIMEOUT_SECONDS = 10.0
 
 
-async def fetch_bundle_source(
-    url: str,
-    *,
-    policy: OutboundPolicy,
-    transport: httpx.AsyncBaseTransport | None = None,
-) -> str:
+async def fetch_bundle_source(url: str, *, policy: OutboundPolicy) -> str:
     """Fetch raw bundle text from a URL behind the shared SSRF guard.
 
     Mirrors the outbound-fetch discipline of the OpenAPI/MCP endpoints:
     `validate_url` vets the scheme and rejects private/internal targets before
-    any request is made, redirects are not followed (a redirect could bounce to
-    an internal IP that bypasses the up-front check), and the body is size-capped.
+    any request is made, the pinned client vets the address it dials again,
+    redirects are not followed, and the body is size-capped.
 
     Raises:
         ValueError: URL is unsafe (bad scheme / private IP) or body too large.
         httpx.HTTPStatusError: the URL returned a non-2xx (including redirects).
         httpx.RequestError: the request could not be completed.
     """
-    resolved_ips = validate_url(url, policy=policy)
+    validate_url(url, policy=policy)
 
-    # SSRF defenses mirror the OpenAPI fetcher: validate_url confirms the scheme
-    # and rejects private targets, then build_pinned_target pins the request to
-    # the already-vetted IP (anti-DNS-rebinding) and keeps the destination
-    # identifiers (scheme/host/port) separate from the user-controlled path/query
-    # so the HTTP sink never receives a single string that mixes the two.
-    target = build_pinned_target(url, resolved_ips[0] if resolved_ips else None)
-
-    request_headers: dict[str, str] = {}
-    if target.original_host:
-        request_headers["Host"] = target.original_host
-
-    fetch_url = httpx.URL(
-        scheme=target.scheme,
-        host=target.host,
-        port=target.port,
-        path=target.path,
-        query=target.raw_query,
-    )
-    # Connect to the pinned IP, but validate the TLS cert against the original
-    # hostname via SNI.
-    extensions = {"sni_hostname": target.original_host} if target.original_host else None
-
-    async with httpx.AsyncClient(
-        timeout=_FETCH_TIMEOUT_SECONDS,
-        headers=request_headers,
-        follow_redirects=False,
-        verify=True,
-        transport=transport,
+    # The pinned client resolves, vets and pins the address itself, and hands a
+    # proxied request to the proxy by name; pinning by hand sent CONNECT to the
+    # IP through HTTPS_PROXY, where TLS was then checked against the IP.
+    async with safe_async_client(
+        policy=policy, timeout=_FETCH_TIMEOUT_SECONDS, follow_redirects=False
     ) as client:
-        async with client.stream("GET", fetch_url, extensions=extensions) as response:
+        async with client.stream("GET", url) as response:
             response.raise_for_status()
             chunks: list[bytes] = []
             total = 0

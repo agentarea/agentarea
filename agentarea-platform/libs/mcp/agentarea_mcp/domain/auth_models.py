@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -40,6 +40,27 @@ class MCPAuthConfig(BaseModel, WorkspaceScopedMixin):
     config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     # Key under which encrypted credentials are stored in the secret manager
     secret_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # The connection or instance whose connect flow minted this config; it is
+    # deleted with its owner. Null for a config an admin made to share.
+    openapi_connection_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("openapi_connections.id", ondelete="CASCADE", use_alter=True),
+        nullable=True,
+        index=True,
+    )
+    mcp_instance_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("mcp_server_instances.id", ondelete="CASCADE", use_alter=True),
+        nullable=True,
+        index=True,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "openapi_connection_id IS NULL OR mcp_instance_id IS NULL",
+            name="ck_mcp_auth_configs_one_owner",
+        ),
+    )
 
     def __init__(
         self,

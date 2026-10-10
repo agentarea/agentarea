@@ -36,7 +36,10 @@ from agentarea_common.config import MCPOAuthApp, get_settings
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
 from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
 from agentarea_common.workspaces.lookup import workspace_slug_for
-from agentarea_mcp.application.auth_resolver import build_auth_config_access_checker
+from agentarea_mcp.application.auth_resolver import (
+    build_auth_config_access_checker,
+    build_owned_auth_releaser,
+)
 from agentarea_mcp.application.auth_service import (
     MCPAuthService,
     MissingCredentialsError,
@@ -346,6 +349,7 @@ async def connect_catalog_item(
         auth_config_access_checker=build_auth_config_access_checker(
             repository_factory, workspace_secret_manager
         ),
+        owned_auth_releaser=build_owned_auth_releaser(repository_factory, workspace_secret_manager),
         outbound_policy=OutboundPolicy.from_env(),
     )
     # A catalog item is a reusable connection definition, not a singleton.
@@ -382,6 +386,7 @@ async def connect_catalog_item(
         },
         credentials=credentials,
         allow_managed_credentials=True,
+        openapi_connection_id=connection.id,
     )
     for secret_id, field in credential_references:
         await secret_catalog.add_reference(

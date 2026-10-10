@@ -491,6 +491,8 @@ async def test_authorize_with_a_custom_oauth_app_keeps_the_secret_out_of_state(
     assert query["code_challenge_method"] == ["S256"]
 
     auth_kwargs = auth_create.await_args.kwargs
+    # Minted for this instance, so it is deleted with it.
+    assert auth_kwargs["mcp_instance_id"] == instance.id
     if credential_source == "inline":
         assert auth_kwargs["config"]["client_id"] == "inline-client-id"
         assert auth_kwargs["credentials"] == {  # pragma: allowlist secret

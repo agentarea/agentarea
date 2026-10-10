@@ -1085,12 +1085,27 @@ class MCPServerInstanceService:
         if instance.transport in CONTAINER_TRANSPORTS:
             await self._retire_runtime_before_mutation(instance.id)
 
+        # The auth configs minted for the instance go with its row (ON DELETE
+        # CASCADE); what they and the instance keep in the secret store goes
+        # first, so a failure leaves a delete to retry, not an orphan secret.
+        await self.env_service.delete_instance_environment(
+            instance.id, instance.get_configured_env_vars()
+        )
+        await self._release_owned_auth(instance.id)
         deleted = await self.repository.delete(id)
         if deleted:
             # This event is notification only. Runtime deletion has already
             # completed synchronously and never depends on lossy Pub/Sub.
             await self.event_broker.publish(MCPServerInstanceDeleted(instance_id=instance.id))
         return deleted
+
+    async def _release_owned_auth(self, instance_id: UUID) -> None:
+        from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
+
+        auth_repo = MCPAuthConfigRepository(self.repository.session, self.repository.user_context)
+        await MCPAuthService(auth_repo, self.secret_manager).release_owned(
+            mcp_instance_id=instance_id
+        )
 
     async def _retire_runtime_before_mutation(self, instance_id: UUID) -> None:
         from agentarea_mcp.package_import import retire_runtime_before_mutation
