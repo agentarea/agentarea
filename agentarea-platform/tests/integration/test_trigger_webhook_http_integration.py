@@ -478,7 +478,10 @@ class TestWebhookHTTPIntegration:
     async def test_telegram_webhook_message(
         self, webhook_client, trigger_service, mock_task_service, journal, sample_agent_id
     ):
-        """A Telegram update is recorded under its update_id, and fires the trigger."""
+        """A Telegram update carrying the bot's secret token is recorded and fires the trigger."""
+        # Telegram echoes the secret_token given to setWebhook in a header; it is
+        # what tells its updates from a forged one naming any sender.
+        secret = "telegram-secret-token"  # noqa: S105  # pragma: allowlist secret
         trigger_data = TriggerCreate(
             name="Telegram Bot Webhook",
             description="Handle Telegram bot updates",
@@ -488,6 +491,7 @@ class TestWebhookHTTPIntegration:
             webhook_type=WebhookType.TELEGRAM,
             allowed_methods=["POST"],
             task_parameters={"platform": "telegram", "auto_reply": True},
+            validation_rules={"secret_token": secret},
             created_by="test_user",
             workspace_id="webhook-test-workspace",
         )
@@ -518,16 +522,25 @@ class TestWebhookHTTPIntegration:
             },
         }
 
+        unsigned = webhook_client.post(
+            f"/webhooks/{webhook_id}",
+            json=telegram_payload,
+            headers={"Content-Type": "application/json"},
+        )
+        assert unsigned.status_code == 400
+        assert journal.events == []
+
         response = webhook_client.post(
             f"/webhooks/{webhook_id}",
             json=telegram_payload,
             headers={
                 "Content-Type": "application/json",
                 "User-Agent": "TelegramBot (like TwitterBot)",
+                "X-Telegram-Bot-Api-Secret-Token": secret,
             },
         )
 
-        assert response.status_code == 202
+        assert response.status_code == 202, response.text
         assert response.json()["status"] == "accepted"
         [(_, event, event_key)] = journal.events
         assert event_key == "telegram:123456789"
