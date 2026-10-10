@@ -21,6 +21,7 @@ from agentarea_streams.domain.keys import task_id_for
 from agentarea_streams.infrastructure.repository import SubscriptionOutcomeRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .channels.sender_admission import Refused, TelegramSenderAdmission, is_telegram_trigger
 from .event_context import TriggerEvent
 from .llm_condition_evaluator import build_condition_evaluator
 from .trigger_service import TriggerService
@@ -113,6 +114,7 @@ class TriggerSubscriptionHandler:
         follow_up_claim_factory: Callable[
             [AsyncSession, SubscriptionView, JournaledEvent], SubscriptionFollowUpClaim
         ] = SubscriptionFollowUpClaim,
+        sender_admission: TelegramSenderAdmission | None = None,
     ):
         self._event_broker = event_broker
         self._secret_manager_factory = secret_manager_factory
@@ -120,6 +122,7 @@ class TriggerSubscriptionHandler:
         self._authority = authority
         self._trigger_service_factory = trigger_service_factory or self._build_trigger_service
         self._follow_up_claim_factory = follow_up_claim_factory
+        self._sender_admission = sender_admission
 
     def _build_trigger_service(self, session: AsyncSession, context: UserContext) -> TriggerService:
         from agentarea_tasks.infrastructure.repository import TaskRepository
@@ -174,6 +177,19 @@ class TriggerSubscriptionHandler:
             )
         if not trigger.is_active:
             return HandlerResult(verdict=Verdict.SKIPPED, reason="trigger is inactive")
+        # A messenger is a door to the agent, not a grant: whoever wrote must be a
+        # linked user the graph lets run it, and the run is theirs. Without the
+        # admission wired, nobody gets through.
+        caller: str | None = None
+        if is_telegram_trigger(trigger):
+            if self._sender_admission is None:
+                return HandlerResult(
+                    verdict=Verdict.ERROR, reason="no sender admission for a Telegram trigger"
+                )
+            admission = await self._sender_admission.admit(session, trigger, event.data)
+            if isinstance(admission, Refused):
+                return HandlerResult(verdict=Verdict.SKIPPED, reason=admission.reason)
+            caller = admission.user_id
         if not await self._authority.may_run(
             session,
             user_id=trigger.created_by,
@@ -198,6 +214,10 @@ class TriggerSubscriptionHandler:
                 ),
             )
         stream = await service.stream_service.get_stream(event.stream_id)
+        if caller is not None:
+            service = self._trigger_service_factory(
+                session, UserContext(user_id=caller, workspace_id=subscription.workspace_id)
+            )
         firing = await service.fire(
             trigger.id,
             event.data,
@@ -211,6 +231,7 @@ class TriggerSubscriptionHandler:
             ),
             follow_up_claim=follow_up_claim,
             raise_retryable=True,
+            caller=caller,
         )
         return HandlerResult(
             verdict=_VERDICTS[firing.outcome],

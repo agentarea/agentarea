@@ -63,6 +63,15 @@ tuples:
   - user: User:owner1
     relation: writer
     object: resource:agent1
+  - user: User:owner1
+    relation: invoker
+    object: resource:agent1
+  - user: User:u3
+    relation: invoker
+    object: resource:agent2
+  - user: Workspace:ws1#members
+    relation: invoker
+    object: resource:agent3
 
 tests:
   - name: role_assignment with full role grants all three bits on project
@@ -127,3 +136,47 @@ tests:
           can_read: false
           can_write: false
           can_manage: false
+
+  - name: invocation is granted explicitly to the agent's owner
+    check:
+      - user: User:owner1
+        object: resource:agent1
+        assertions:
+          can_invoke: true
+
+  - name: managing an agent or administering its workspace does not imply invoking it
+    check:
+      - user: User:wsadmin
+        object: resource:agent1
+        assertions:
+          can_manage: true
+          can_invoke: false
+
+  - name: a workspace member is not an invoker unless granted
+    check:
+      - user: User:u1
+        object: resource:agent1
+        assertions:
+          can_invoke: false
+
+  - name: a direct invoker grant admits exactly that person
+    check:
+      - user: User:u3
+        object: resource:agent2
+        assertions:
+          can_invoke: true
+      - user: User:u1
+        object: resource:agent2
+        assertions:
+          can_invoke: false
+
+  - name: a workspace members grant admits every member and no one else
+    check:
+      - user: User:u1
+        object: resource:agent3
+        assertions:
+          can_invoke: true
+      - user: User:stranger
+        object: resource:agent3
+        assertions:
+          can_invoke: false

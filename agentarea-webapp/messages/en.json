@@ -487,6 +487,18 @@
       "notConnected": "Not connected",
       "connect": "Connect",
       "disconnect": "Disconnect"
+    },
+    "messengers": {
+      "title": "Messengers",
+      "description": "Bots recognise you by these accounts. A bot answers only linked people who were given access to its agent.",
+      "linkedAs": "Linked · ID {id} · {date}",
+      "unlink": "Unlink",
+      "link": "Link in Telegram",
+      "linkAnother": "Link another Telegram account",
+      "linkThrough": "Opens {bot} in Telegram, which asks you to confirm.",
+      "howTo": "Write to any agent's Telegram bot: it replies with a link that brings you back here to finish.",
+      "linkFailed": "Could not start linking Telegram",
+      "unlinkFailed": "Could not unlink the account"
     }
   },
   "AgentPaymentsPage": {

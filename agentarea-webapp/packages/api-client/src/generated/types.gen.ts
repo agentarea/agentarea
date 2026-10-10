@@ -2512,6 +2512,28 @@ export type ExecutionTimelineResponse = {
 };
 
 /**
+ * ExternalIdentityResponse
+ */
+export type ExternalIdentityResponse = {
+    /**
+     * External Id
+     */
+    external_id: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Linked At
+     */
+    linked_at: string;
+    /**
+     * Provider
+     */
+    provider: string;
+};
+
+/**
  * FailedTaskBlocker
  */
 export type FailedTaskBlocker = {
@@ -7688,6 +7710,32 @@ export type TaskWithAgent = {
 };
 
 /**
+ * TelegramLinkRequest
+ */
+export type TelegramLinkRequest = {
+    /**
+     * Bot
+     *
+     * The bot to open the link in
+     */
+    bot: string;
+};
+
+/**
+ * TelegramLinkResponse
+ */
+export type TelegramLinkResponse = {
+    /**
+     * Expires In
+     */
+    expires_in: number;
+    /**
+     * Url
+     */
+    url: string;
+};
+
+/**
  * TokenPolicy
  *
  * Token-related ceilings.
@@ -9867,6 +9915,79 @@ export type ProxyInstanceV1McpInstanceIdMcpPostResponses = {
      */
     200: unknown;
 };
+
+export type ListExternalIdentitiesV1MeExternalIdentitiesGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/me/external-identities';
+};
+
+export type ListExternalIdentitiesV1MeExternalIdentitiesGetResponses = {
+    /**
+     * Response List External Identities V1 Me External Identities Get
+     *
+     * Successful Response
+     */
+    200: Array<ExternalIdentityResponse>;
+};
+
+export type ListExternalIdentitiesV1MeExternalIdentitiesGetResponse = ListExternalIdentitiesV1MeExternalIdentitiesGetResponses[keyof ListExternalIdentitiesV1MeExternalIdentitiesGetResponses];
+
+export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostData = {
+    body: TelegramLinkRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/me/external-identities/telegram/link';
+};
+
+export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostError = StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors[keyof StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors];
+
+export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: TelegramLinkResponse;
+};
+
+export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponse = StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses[keyof StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses];
+
+export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Identity Id
+         */
+        identity_id: string;
+    };
+    query?: never;
+    url: '/v1/me/external-identities/{identity_id}';
+};
+
+export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteError = UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteErrors[keyof UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteErrors];
+
+export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponse = UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses[keyof UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses];
 
 export type GetPricingCurrencyV1PricingCurrencyGetData = {
     body?: never;

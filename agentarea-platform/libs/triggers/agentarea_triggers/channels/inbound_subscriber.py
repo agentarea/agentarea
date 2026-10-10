@@ -17,6 +17,8 @@ from agentarea_common.broker import BrokerClient, BrokerMessage, DedupCache
 if TYPE_CHECKING:
     from agentarea_common.events.broker import EventBroker
 
+    from .sender_admission import TelegramSenderAdmission
+
     WorkflowExecutor = Any
 
 logger = logging.getLogger(__name__)
@@ -33,6 +35,7 @@ class InboundMessageStreamConsumer:
         event_broker: EventBroker,
         secret_manager_factory: Any,
         workflow_executor: WorkflowExecutor | None = None,
+        sender_admission: TelegramSenderAdmission | None = None,
         stream: str,
         group: str,
         dlq_stream: str,
@@ -46,6 +49,7 @@ class InboundMessageStreamConsumer:
         self._event_broker = event_broker
         self._secret_manager_factory = secret_manager_factory
         self._workflow_executor = workflow_executor
+        self._sender_admission = sender_admission
         self._stream = stream
         self._group = group
         self._dlq_stream = dlq_stream
@@ -195,6 +199,8 @@ class InboundMessageStreamConsumer:
         from agentarea_triggers.llm_condition_evaluator import build_condition_evaluator
         from agentarea_triggers.trigger_service import TriggerService
 
+        from .sender_admission import Refused, is_telegram_trigger
+
         database = get_database()
         async with database.async_session_factory() as session:
             with unscoped(
@@ -204,8 +210,24 @@ class InboundMessageStreamConsumer:
             if not trigger_orm:
                 raise ValueError(f"trigger {trigger_id} not found")
 
+            # The same door as the webhook: only an admitted, linked sender gets
+            # through, and the run is theirs.
+            caller: str | None = None
+            if is_telegram_trigger(trigger_orm):
+                if self._sender_admission is None:
+                    raise ValueError(f"no sender admission for Telegram trigger {trigger_id}")
+                admission = await self._sender_admission.admit(
+                    session, trigger_orm, (trigger_data.get("events") or [{}])[0]
+                )
+                if isinstance(admission, Refused):
+                    logger.info(
+                        "Telegram message for trigger %s refused: %s", trigger_id, admission.reason
+                    )
+                    return
+                caller = admission.user_id
+
             user_context = UserContext(
-                user_id=str(trigger_orm.created_by),
+                user_id=caller or str(trigger_orm.created_by),
                 workspace_id=str(trigger_orm.workspace_id),
             )
 
@@ -238,7 +260,9 @@ class InboundMessageStreamConsumer:
                     ),
                 )
 
-                execution = await trigger_service.execute_trigger(UUID(trigger_id), trigger_data)
+                execution = (
+                    await trigger_service.fire(UUID(trigger_id), trigger_data, caller=caller)
+                ).execution
                 if execution:
                     logger.info(
                         "Trigger %s executed, task_id=%s",

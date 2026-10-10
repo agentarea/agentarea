@@ -617,6 +617,10 @@ class TaskService(BaseTaskService):
         for candidate in candidates:
             if _task_resource_selection_key(candidate.parameters) != incoming_resources:
                 continue
+            # A follow-up joins only its sender's own conversation: routing it
+            # into someone else's would run it with their authority.
+            if candidate.user_id != task.user_id:
+                continue
             # Both columns are NOT NULL in the database; a stored task missing
             # either is corrupt, and a follow-up would carry its owner's
             # authority into a running workflow.

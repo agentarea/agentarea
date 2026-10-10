@@ -7,6 +7,7 @@ from agentarea_common.artifacts import ArtifactEvent  # noqa: F401
 from agentarea_common.base.models import BaseModel
 from agentarea_common.config import get_db_settings
 from agentarea_common.events.outbox_orm import EventOutbox  # noqa: F401
+from agentarea_common.identity import UserExternalIdentity  # noqa: F401
 from alembic import context
 from sqlalchemy import ForeignKeyConstraint, engine_from_config, pool
 from sqlalchemy.sql.schema import SchemaItem

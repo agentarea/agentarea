@@ -461,11 +461,6 @@ FETCH_VERIFIED_TYPES: frozenset[str] = frozenset({"yookassa"})
 #: Types refused outright while no secret resolves.
 SECRET_REQUIRED_TYPES: frozenset[str] = frozenset(VERIFIER_REGISTRY) | FETCH_VERIFIED_TYPES
 
-#: Types whose triggers created before verification existed carry no secret.
-#: They keep being accepted (with a warning) instead of going dark on upgrade;
-#: every trigger created or re-registered now has one and is verified.
-LEGACY_UNSIGNED_TYPES: frozenset[str] = frozenset({"telegram"})
-
 # Credential key names used for each channel's signing secret
 SIGNING_SECRET_KEYS: dict[str, str] = {
     "slack": "signing_secret",
@@ -741,7 +736,7 @@ async def webhook_signing_status(
     wt = (webhook_type or "generic").lower()
     if wt not in SIGNING_SECRET_KEYS:
         return "unsupported"
-    if wt in SECRET_REQUIRED_TYPES and wt not in LEGACY_UNSIGNED_TYPES:
+    if wt in SECRET_REQUIRED_TYPES:
         return "signed"
     secret = await resolve_signing_secret(
         wt, validation_rules, webhook_config, secret_reader, trigger_id
@@ -793,14 +788,6 @@ async def verify_webhook_signature(
         )
         return False
     if not secret:
-        if wt in LEGACY_UNSIGNED_TYPES:
-            logger.warning(
-                "webhook_type=%s trigger_id=%s has no secret token; accepting a legacy "
-                "unsigned webhook. Re-save the trigger to register one.",
-                wt,
-                trigger_id,
-            )
-            return None
         if wt in SECRET_REQUIRED_TYPES:
             logger.warning(
                 "webhook_type=%s has a registered signature scheme but no signing "

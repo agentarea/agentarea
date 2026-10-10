@@ -37,7 +37,13 @@ from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.workspaces.models import Workspace
 
 from .models import RelationQuery, RelationTuple
-from .ownership import OWNER_RELATIONS, graph_governed_models, root_project_id
+from .ownership import (
+    INVOKER_RELATION,
+    OWNER_RELATIONS,
+    graph_governed_models,
+    owner_relations,
+    root_project_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +132,12 @@ class TupleWriter:
 
 
 async def reconcile_resources(
-    writer: TupleWriter, rows: Iterable[Any], workspace_owners: dict[str, str]
+    writer: TupleWriter,
+    rows: Iterable[Any],
+    workspace_owners: dict[str, str],
+    relations: tuple[str, ...] = OWNER_RELATIONS,
+    *,
+    attach: bool = True,
 ) -> None:
     for row in rows:
         resource_id = str(row.id)
@@ -137,15 +148,16 @@ async def reconcile_resources(
         if not owner:
             logger.warning("resource %s has no owner to grant; skipped", resource_id)
             continue
-        await writer.ensure(
-            RelationTuple(
-                namespace="resource",
-                object=resource_id,
-                relation="project",
-                subject_id=f"project:{root_project_id(workspace_id)}",
+        if attach:
+            await writer.ensure(
+                RelationTuple(
+                    namespace="resource",
+                    object=resource_id,
+                    relation="project",
+                    subject_id=f"project:{root_project_id(workspace_id)}",
+                )
             )
-        )
-        for relation in OWNER_RELATIONS:
+        for relation in relations:
             await writer.ensure(
                 RelationTuple(
                     namespace="resource",
@@ -187,22 +199,35 @@ async def reconcile_resource_ownership(
     workspace_owners: dict[str, str],
     *,
     skip: Collection[str] = frozenset(),
+    invoked: Collection[str] = frozenset(),
 ) -> int:
-    """Grant governed rows their owner and root project, except ``skip``; return rows granted."""
+    """Grant governed rows their owner and root project, except ``skip``; return rows granted.
+
+    Invocable rows (agents) additionally get their creator as ``invoker`` when
+    nobody holds it yet. Rows attached before ``invoker`` existed are in
+    ``skip``, so they are looked at separately: a row with any invoker in
+    ``invoked`` is left alone, because someone decided who runs it and
+    re-adding the creator would undo a revocation.
+    """
     models: list[Any] = load_governed_models()
     logger.info("governed tables: %s", ", ".join(m.__tablename__ for m in models))
     walked = 0
     with unscoped("reconcile walks every governed row of every workspace"):
         for model in models:
-            rows = [
-                row
-                for row in (
-                    await session.execute(select(model.id, model.workspace_id, model.created_by))
-                ).all()
-                if str(row.id) not in skip
-            ]
-            await reconcile_resources(writer, rows, workspace_owners)
+            relations = owner_relations(model)
+            all_rows = (
+                await session.execute(select(model.id, model.workspace_id, model.created_by))
+            ).all()
+            rows = [row for row in all_rows if str(row.id) not in skip]
+            await reconcile_resources(writer, rows, workspace_owners, relations)
             walked += len(rows)
+            if INVOKER_RELATION in relations:
+                uninvoked = [
+                    row for row in all_rows if str(row.id) in skip and str(row.id) not in invoked
+                ]
+                await reconcile_resources(
+                    writer, uninvoked, workspace_owners, (INVOKER_RELATION,), attach=False
+                )
             logger.info("reconciled %d %s rows", len(rows), model.__tablename__)
     return walked
 
@@ -223,7 +248,12 @@ async def reconcile_graph_ownership(
     attached = {t.object for t in present if (t.namespace, t.relation) == ("resource", "project")}
     writer = TupleWriter(client, dry_run, present)
     owners = await load_workspace_owners(session)
-    resources = await reconcile_resource_ownership(session, writer, owners, skip=attached)
+    invoked = {
+        t.object for t in present if (t.namespace, t.relation) == ("resource", INVOKER_RELATION)
+    }
+    resources = await reconcile_resource_ownership(
+        session, writer, owners, skip=attached, invoked=invoked
+    )
     memberships = await reconcile_member_roles(writer, client)
     return OwnershipReconcileResult(
         resources=resources,

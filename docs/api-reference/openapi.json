@@ -4383,6 +4383,36 @@
         "title": "ExecutionTimelineResponse",
         "type": "object"
       },
+      "ExternalIdentityResponse": {
+        "properties": {
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "linked_at": {
+            "format": "date-time",
+            "title": "Linked At",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "external_id",
+          "linked_at"
+        ],
+        "title": "ExternalIdentityResponse",
+        "type": "object"
+      },
       "FailedTaskBlocker": {
         "properties": {
           "agent_id": {
@@ -13303,6 +13333,39 @@
         "title": "TaskWithAgent",
         "type": "object"
       },
+      "TelegramLinkRequest": {
+        "properties": {
+          "bot": {
+            "description": "The bot to open the link in",
+            "pattern": "^[A-Za-z0-9_]{5,32}$",
+            "title": "Bot",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bot"
+        ],
+        "title": "TelegramLinkRequest",
+        "type": "object"
+      },
+      "TelegramLinkResponse": {
+        "properties": {
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_in"
+        ],
+        "title": "TelegramLinkResponse",
+        "type": "object"
+      },
       "TokenPolicy": {
         "additionalProperties": false,
         "description": "Token-related ceilings.",
@@ -17105,6 +17168,130 @@
           "v1",
           "protected",
           "mcp-proxy"
+        ]
+      }
+    },
+    "/v1/me/external-identities": {
+      "get": {
+        "operationId": "list_external_identities_v1_me_external_identities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExternalIdentityResponse"
+                  },
+                  "title": "Response List External Identities V1 Me External Identities Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List External Identities",
+        "tags": [
+          "v1",
+          "protected",
+          "external-identities"
+        ]
+      }
+    },
+    "/v1/me/external-identities/telegram/link": {
+      "post": {
+        "description": "A deep link that offers the caller's account to whoever opens it in Telegram.",
+        "operationId": "start_telegram_link_v1_me_external_identities_telegram_link_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelegramLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramLinkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Telegram Link",
+        "tags": [
+          "v1",
+          "protected",
+          "external-identities"
+        ]
+      }
+    },
+    "/v1/me/external-identities/{identity_id}": {
+      "delete": {
+        "operationId": "unlink_external_identity_v1_me_external_identities__identity_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "identity_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Identity Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unlink External Identity",
+        "tags": [
+          "v1",
+          "protected",
+          "external-identities"
         ]
       }
     },
