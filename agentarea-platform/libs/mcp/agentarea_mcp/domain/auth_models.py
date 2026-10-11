@@ -41,18 +41,15 @@ class MCPAuthConfig(BaseModel, WorkspaceScopedMixin):
     # Key under which encrypted credentials are stored in the secret manager
     secret_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # The connection or instance whose connect flow minted this config; it is
-    # deleted with its owner. Null for a config an admin made to share.
+    # deleted with its owner. Null for a config an admin made to share. The
+    # foreign keys (ON DELETE CASCADE) live in the schema only: declaring them
+    # here would make every flush of this model resolve the owners' tables and
+    # everything those reference, in processes that never load them.
     openapi_connection_id: Mapped[UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("openapi_connections.id", ondelete="CASCADE", use_alter=True),
-        nullable=True,
-        index=True,
+        PG_UUID(as_uuid=True), nullable=True, index=True
     )
     mcp_instance_id: Mapped[UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("mcp_server_instances.id", ondelete="CASCADE", use_alter=True),
-        nullable=True,
-        index=True,
+        PG_UUID(as_uuid=True), nullable=True, index=True
     )
 
     __table_args__ = (

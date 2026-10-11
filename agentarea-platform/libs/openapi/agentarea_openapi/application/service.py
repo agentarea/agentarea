@@ -576,9 +576,9 @@ class OpenAPIConnectionService:
     async def delete_connection(self, connection_id: UUID) -> bool:
         """Delete a connection, its secrets and the auth configs minted for it.
 
-        Those configs' rows go with the connection's (ON DELETE CASCADE). Every
-        secret lives outside the transaction and goes first, so a failure
-        leaves a delete to retry rather than a credential nothing points at.
+        Those configs' rows go with the connection's row (ON DELETE CASCADE).
+        Every secret is deleted first, outside that delete, so a failure leaves
+        a delete to retry rather than a credential nothing points at.
         """
         conn = await self._repo.get_by_id(str(connection_id))
         if conn:

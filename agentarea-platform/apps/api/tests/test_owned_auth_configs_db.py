@@ -128,7 +128,7 @@ async def _auth_config(s: AsyncSession, secrets: TestSecretManager, name: str, *
             name=name,
             auth_type="oauth2",
             config=OAUTH,
-            credentials={"client_secret": "shh", "access_token": "tok"},
+            credentials={"client_secret": "shh", "access_token": "tok"},  # pragma: allowlist secret
             allow_managed_credentials=True,
             **owner,
         )
@@ -137,7 +137,7 @@ async def _auth_config(s: AsyncSession, secrets: TestSecretManager, name: str, *
 async def _referenced_secret(s: AsyncSession, secrets: TestSecretManager, config_id) -> None:
     secret = EncryptedSecret(
         workspace_id=WORKSPACE,
-        secret_name="yandex-client-secret",
+        secret_name="yandex-client-secret",  # pragma: allowlist secret
         encrypted_value="ciphertext",
         created_by=USER,
     )

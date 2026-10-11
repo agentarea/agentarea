@@ -521,8 +521,8 @@ class MCPAuthService:
     ) -> None:
         """Discard what the configs minted for one owner keep outside their row.
 
-        The rows go with the owner's (ON DELETE CASCADE), in its transaction.
-        Their credentials and secret references live elsewhere and go first, so
+        The rows go with the owner's row (ON DELETE CASCADE). Their credentials
+        and secret references are deleted first, each committed on its own, so
         a failure leaves a delete to retry rather than a credential nothing
         points at.
         """
