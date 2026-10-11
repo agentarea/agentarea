@@ -32,7 +32,7 @@ from mcp.types import InputRequiredResult
 
 from ..api.v1 import _catalog_connections
 from ..api.v1._catalog_connections import with_existing_connections
-from ..api.v1.mcp_oauth_connect import connect_page_url
+from ..oauth_connect.pages import connect_page_url
 from .base import platform_context, platform_read_context
 
 

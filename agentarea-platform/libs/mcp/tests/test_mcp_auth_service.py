@@ -19,6 +19,7 @@ from agentarea_mcp.application.auth_service import (
     ManagedCredentialDestinationError,
     MCPAuthService,
     MissingCredentialsError,
+    OAuthCodeExchangeError,
     OAuthReauthRequiredError,
 )
 from agentarea_mcp.domain.auth_models import (
@@ -236,6 +237,9 @@ class TestOAuth2Refresh:
         assert client.posted["grant_type"] == "refresh_token"
         # Public client: no secret was sent.
         assert "client_secret" not in client.posted
+        # RFC 6749 §6: a refresh names no redirect URI, so moving the callback
+        # does not strand the tokens connections already hold.
+        assert "redirect_uri" not in client.posted
         sm.set_secret.assert_called()  # persisted the rotated creds
 
     async def test_refresh_asks_the_token_endpoint_for_json(self):
@@ -814,3 +818,114 @@ class TestPlatformManagedConfigModel:
         )
         with pytest.raises(ValueError, match="credential_mode"):
             cfg.validate_config()
+
+
+class _RecordingClient(_FakeClient):
+    def __init__(self, resp: _FakeResp):
+        super().__init__(resp)
+        self.url: str | None = None
+        self.auth = None
+
+    async def post(self, url, data=None, timeout=None, headers=None, auth=None):
+        self.url = url
+        self.auth = auth
+        return await super().post(url, data=data, timeout=timeout, headers=headers, auth=auth)
+
+
+def _stored_credentials(secret_manager) -> dict:
+    return json.loads(secret_manager.set_secret.await_args.args[1])
+
+
+@pytest.mark.asyncio
+class TestAuthorizationCodeExchange:
+    """The callback's half of the flow, the same for every connection kind."""
+
+    async def _exchange(self, config, resp: _FakeResp, stored: dict | None = None):
+        repo = AsyncMock()
+        repo.get.return_value = config
+        svc, _, sm = _make_service(repo=repo)
+        sm.get_secret.return_value = json.dumps(stored or {})
+        client = _RecordingClient(resp)
+        with patch("httpx.AsyncClient", lambda *a, **k: client):
+            await svc.complete_authorization(
+                config,
+                code="the-code",
+                redirect_uri="https://api.agentarea.ru/v1/oauth/callback",
+                code_verifier="the-verifier",
+            )
+        return client, sm
+
+    async def test_the_code_is_exchanged_with_pkce_and_the_tokens_are_stored(self):
+        client, sm = await self._exchange(
+            _oauth_config(),
+            _FakeResp(200, {"access_token": "at", "refresh_token": "rt", "expires_in": 3600}),
+            stored={"client_secret": "dcr-secret"},  # pragma: allowlist secret
+        )
+
+        assert client.url == "https://as/token"
+        assert client.posted == {
+            "grant_type": "authorization_code",
+            "code": "the-code",
+            "redirect_uri": "https://api.agentarea.ru/v1/oauth/callback",
+            "code_verifier": "the-verifier",
+            "client_id": "cid",
+            "client_secret": "dcr-secret",  # pragma: allowlist secret
+        }
+        assert client.headers == {"Accept": "application/json"}
+        stored = _stored_credentials(sm)
+        assert stored["access_token"] == "at"  # noqa: S105
+        assert stored["refresh_token"] == "rt"  # noqa: S105
+        assert stored["client_secret"] == "dcr-secret"  # noqa: S105  # pragma: allowlist secret
+        assert stored["expires_at"] > 0
+
+    async def test_a_public_client_sends_no_secret(self):
+        client, _ = await self._exchange(_oauth_config(), _FakeResp(200, {"access_token": "at"}))
+
+        assert "client_secret" not in client.posted
+
+    async def test_client_secret_basic_authenticates_in_the_header(self):
+        client, _ = await self._exchange(
+            _oauth_config(client_auth_method="client_secret_basic"),
+            _FakeResp(200, {"access_token": "at"}),
+            stored={"client_secret": "custom-secret"},  # pragma: allowlist secret
+        )
+
+        assert client.auth == ("cid", "custom-secret")
+        assert "client_secret" not in client.posted
+
+    async def test_a_token_without_expiry_is_stored_without_one(self):
+        _, sm = await self._exchange(_oauth_config(), _FakeResp(200, {"access_token": "at"}))
+
+        assert "expires_at" not in _stored_credentials(sm)
+
+    @pytest.mark.usefixtures("platform_apps")
+    async def test_a_managed_code_goes_to_the_platform_apps_token_endpoint(self):
+        client, sm = await self._exchange(
+            _github_managed_config(token_url="https://token-thief.example/token"),  # noqa: S106
+            _FakeResp(200, {"access_token": "gho_x", "expires_in": 28800}),
+        )
+
+        assert client.url == "https://github.com/login/oauth/access_token"
+        assert client.posted["client_id"] == "Iv1.platform"
+        assert client.posted["client_secret"] == "platform-secret"  # noqa: S105  # pragma: allowlist secret
+        assert "platform-secret" not in json.dumps(_stored_credentials(sm))
+
+    async def test_an_error_answered_with_200_is_no_access_token(self):
+        with pytest.raises(OAuthCodeExchangeError) as excinfo:
+            await self._exchange(
+                _oauth_config(), _FakeResp(200, {"error": "bad_verification_code"})
+            )
+
+        assert excinfo.value.reason == "no_access_token"
+
+    async def test_a_refused_exchange_is_token_exchange_failed(self):
+        with pytest.raises(OAuthCodeExchangeError) as excinfo:
+            await self._exchange(_oauth_config(), _FakeResp(400, {"error": "invalid_grant"}))
+
+        assert excinfo.value.reason == "token_exchange_failed"
+
+    async def test_a_managed_config_whose_app_is_gone_is_token_exchange_failed(self):
+        with pytest.raises(OAuthCodeExchangeError) as excinfo:
+            await self._exchange(_github_managed_config(), _FakeResp(200, {"access_token": "x"}))
+
+        assert excinfo.value.reason == "token_exchange_failed"

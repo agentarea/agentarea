@@ -10,6 +10,8 @@ import type {
   McpServerInstanceUpdate,
   ModelInstanceBulkCreateRequest,
   ModelKind,
+  OAuthAuthorizeRequest,
+  OAuthPreflightResponse,
   PaginatedResponseSkillResponse,
   ProjectCreate,
   ProjectUpdate,
@@ -23,6 +25,8 @@ import type {
 import {
   zCreateWorkspaceDirectoryRequest,
   zListSecretsV1SecretsGetResponse,
+  zOAuthAuthorizeResponse,
+  zOAuthPreflightResponse,
   zProjectCreate,
   zProjectUpdate,
   zProviderConfigCreate,
@@ -589,48 +593,46 @@ export async function listWorkspaceSecretsAction(): Promise<SecretResponse[]> {
 }
 
 /**
- * Ask how a connection can be authorized: an existing instance, or a catalog
- * spec before any instance is created for it.
+ * Ask how a connection can be authorized: an existing MCP instance, a catalog
+ * MCP spec before any instance exists, or a catalog API before it is connected.
  */
-export async function mcpOAuthPreflightAction(
-  target: { instance_id: string } | { server_id: string }
-) {
-  const [key, id] =
-    "instance_id" in target
-      ? (["instance_id", target.instance_id] as const)
-      : (["server_id", target.server_id] as const);
+export async function oauthPreflightAction(
+  target:
+    | { instance_id: string }
+    | { server_id: string }
+    | { catalog_item_id: string }
+): Promise<{ data: OAuthPreflightResponse | null; error: string | null }> {
+  const [key, id] = Object.entries(target)[0] as [string, string];
   // Validate UUID to prevent SSRF/path injection in downstream fetch URL
   if (!isUUID(id)) {
     return { data: null, error: "Invalid ID" };
   }
 
   const base = new URL(env.AGENTAREA_API_URL);
-  base.pathname = "/v1/workspaces/{workspace}/mcp-oauth/preflight";
+  base.pathname = "/v1/workspaces/{workspace}/oauth/preflight";
   base.search = new URLSearchParams({ [key]: id }).toString();
 
   const res = await workspaceFetch(base.href, { method: "GET" });
   if (!res.ok) {
     return { data: null, error: await readApiError(res) };
   }
-  return { data: await res.json(), error: null };
+  const parsed = zOAuthPreflightResponse.safeParse(await res.json());
+  if (!parsed.success) {
+    return { data: null, error: "Unexpected OAuth preflight response" };
+  }
+  return { data: parsed.data, error: null };
 }
 
-export async function oauthAuthorizeAction(body: {
-  instance_id: string;
-  credential_mode?: "auto" | "custom";
-  client_id?: string;
-  client_secret?: string;
-  client_id_secret_id?: string;
-  client_secret_secret_id?: string;
-  return_to?: string;
-}) {
+/** Start a sign-in for an MCP instance or a catalog API; one flow for both. */
+export async function oauthAuthorizeAction(body: OAuthAuthorizeRequest) {
+  const id = body.instance_id ?? body.catalog_item_id;
   // Validate UUID to prevent SSRF/path injection in downstream fetch URL
-  if (!isUUID(body.instance_id)) {
-    return { data: null, error: "Invalid instance ID" };
+  if (!id || !isUUID(id)) {
+    return { data: null, error: "Invalid ID", code: null };
   }
 
   const base = new URL(env.AGENTAREA_API_URL);
-  base.pathname = "/v1/workspaces/{workspace}/mcp-oauth/authorize";
+  base.pathname = "/v1/workspaces/{workspace}/oauth/authorize";
 
   const res = await workspaceFetch(base.href, {
     method: "POST",
@@ -650,7 +652,15 @@ export async function oauthAuthorizeAction(body: {
       code: typeof problem?.code === "string" ? problem.code : null,
     };
   }
-  return { data: await res.json(), error: null, code: null };
+  const parsed = zOAuthAuthorizeResponse.safeParse(await res.json());
+  if (!parsed.success) {
+    return {
+      data: null,
+      error: "Unexpected OAuth authorize response",
+      code: null,
+    };
+  }
+  return { data: parsed.data, error: null, code: null };
 }
 
 /**

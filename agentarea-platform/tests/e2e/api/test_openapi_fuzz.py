@@ -41,7 +41,7 @@ try:
             r"|^/\.well-known/"
             r"|/a2a/"
             r"|^/oauth2/"
-            r"|/mcp-oauth/"
+            r"|/oauth/"
             r"|/asyncapi"
         ),
     )

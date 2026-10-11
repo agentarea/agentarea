@@ -1,7 +1,7 @@
 """Unit tests for MCPOAuthClientService.
 
 The service is the *client* side of the MCP OAuth spec: discovery,
-Dynamic Client Registration, PKCE auth URL building, and token exchange.
+Dynamic Client Registration and PKCE auth URL building.
 We pin its public surface against the spec (RFC 8414/9728/7591/8707 +
 OAuth 2.1 PKCE) using ``httpx.MockTransport`` so no network calls happen.
 """
@@ -27,6 +27,7 @@ from agentarea_mcp.application.oauth_client_service import (
     _parse_scope_from_www_authenticate,
     oauth_authorize_params,
 )
+from agentarea_mcp.application.oauth_profile import OAuthProfile
 
 
 # ---------------------------------------------------------------------------
@@ -766,14 +767,10 @@ class TestRegisterClient:
 
         _patch_httpx(monkeypatch, handler)
         svc = MCPOAuthClientService()
-        meta = AuthServerMetadata(
-            issuer="https://as.example.com",
-            authorization_endpoint="https://as.example.com/authorize",
-            token_endpoint="https://as.example.com/token",
-            registration_endpoint="https://as.example.com/register",
-        )
 
-        creds = await svc.register_client(meta, "https://app.example.com/callback")
+        creds = await svc.register_client(
+            "https://as.example.com/register", "https://app.example.com/callback"
+        )
 
         assert creds.client_id == "cid-123"
         assert creds.client_secret == "csecret"
@@ -784,14 +781,8 @@ class TestRegisterClient:
 
     async def test_dcr_raises_when_registration_endpoint_missing(self):
         svc = MCPOAuthClientService()
-        meta = AuthServerMetadata(
-            issuer="https://github.com/login/oauth",
-            authorization_endpoint="https://github.com/login/oauth/authorize",
-            token_endpoint="https://github.com/login/oauth/access_token",
-            registration_endpoint=None,
-        )
         with pytest.raises(MCPOAuthDiscoveryError):
-            await svc.register_client(meta, "https://app.example.com/callback")
+            await svc.register_client(None, "https://app.example.com/callback")
 
 
 # ---------------------------------------------------------------------------
@@ -799,14 +790,18 @@ class TestRegisterClient:
 # ---------------------------------------------------------------------------
 
 
+def _profile(**fields) -> OAuthProfile:
+    return OAuthProfile(provider="test", resource_origins=("https://mcp.example.com",), **fields)
+
+
 class TestBuildAuthorizeUrl:
     def test_url_contains_pkce_state_and_resource(self):
         svc = MCPOAuthClientService()
-        meta = AuthServerMetadata(
+        meta = _profile(
             issuer="https://as.example.com",
             authorization_endpoint="https://as.example.com/authorize",
             token_endpoint="https://as.example.com/token",
-            scopes_supported=["read", "write"],
+            scopes=["read", "write"],
             offline_access_supported=True,
             resource="https://mcp.example.com/sse",
         )
@@ -834,7 +829,7 @@ class TestBuildAuthorizeUrl:
 
     def test_offline_access_requested_when_the_server_advertises_it(self):
         svc = MCPOAuthClientService()
-        meta = AuthServerMetadata(
+        meta = _profile(
             issuer="https://as.example.com",
             authorization_endpoint="https://as.example.com/authorize",
             token_endpoint="https://as.example.com/token",
@@ -852,11 +847,11 @@ class TestBuildAuthorizeUrl:
         scope it never claimed to support risks an invalid_scope consent error,
         which costs the whole authorization rather than just its refresh token."""
         svc = MCPOAuthClientService()
-        meta = AuthServerMetadata(
+        meta = _profile(
             issuer="https://accounts.google.com",
             authorization_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
             token_endpoint="https://oauth2.googleapis.com/token",  # noqa: S106
-            scopes_supported=["https://www.googleapis.com/auth/gmail.modify"],
+            scopes=["https://www.googleapis.com/auth/gmail.modify"],
             offline_access_supported=False,
         )
         pkce = PKCEPair(verifier="v", challenge="c")
@@ -871,11 +866,11 @@ class TestBuildAuthorizeUrl:
 
     def test_explicit_scopes_override_metadata_scopes(self):
         svc = MCPOAuthClientService()
-        meta = AuthServerMetadata(
+        meta = _profile(
             issuer="https://as.example.com",
             authorization_endpoint="https://as.example.com/authorize",
             token_endpoint="https://as.example.com/token",
-            scopes_supported=["should-not-be-used"],
+            scopes=["should-not-be-used"],
         )
         pkce = PKCEPair(verifier="v", challenge="c")
 
@@ -889,80 +884,6 @@ class TestBuildAuthorizeUrl:
         )
 
         assert "scope=custom" in url
-
-
-# ---------------------------------------------------------------------------
-# Token exchange
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-class TestExchangeCode:
-    async def test_posts_grant_with_pkce_and_returns_token_response(self, monkeypatch):
-        captured: dict = {}
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            captured["body"] = request.content.decode()
-            captured["url"] = str(request.url)
-            return httpx.Response(
-                200,
-                json={
-                    "access_token": "at-1",
-                    "token_type": "Bearer",
-                    "expires_in": 3600,
-                    "refresh_token": "rt-1",
-                },
-            )
-
-        _patch_httpx(monkeypatch, handler)
-        svc = MCPOAuthClientService()
-        meta = AuthServerMetadata(
-            issuer="https://as.example.com",
-            authorization_endpoint="https://as.example.com/authorize",
-            token_endpoint="https://as.example.com/token",
-        )
-
-        tokens = await svc.exchange_code(
-            meta,
-            code="auth-code",
-            client_id="cid",
-            redirect_uri="https://app.example.com/cb",
-            code_verifier="ver",
-        )
-
-        assert tokens["access_token"] == "at-1"
-        assert tokens["refresh_token"] == "rt-1"
-        body = captured["body"]
-        assert "grant_type=authorization_code" in body
-        assert "code=auth-code" in body
-        assert "code_verifier=ver" in body
-        assert captured["url"] == "https://as.example.com/token"
-
-    async def test_includes_client_secret_when_provided(self, monkeypatch):
-        captured: dict = {}
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            captured["body"] = request.content.decode()
-            return httpx.Response(200, json={"access_token": "t"})
-
-        _patch_httpx(monkeypatch, handler)
-        svc = MCPOAuthClientService()
-        meta = AuthServerMetadata(
-            issuer="https://as.example.com",
-            authorization_endpoint="https://as.example.com/authorize",
-            token_endpoint="https://as.example.com/token",
-        )
-
-        await svc.exchange_code(
-            meta,
-            code="c",
-            client_id="cid",
-            redirect_uri="https://app.example.com/cb",
-            code_verifier="ver",
-            client_secret="shh",
-        )
-
-        assert "client_secret=shh" in captured["body"]
 
 
 # ---------------------------------------------------------------------------
@@ -994,6 +915,7 @@ class TestAssess:
         assert "accounts.google.com" in capability.detail
         assert capability.metadata is not None
         assert capability.advertises_oauth is True
+        assert capability.credential_source is None
 
     async def test_dcr_means_connect_can_run_on_its_own(self, monkeypatch):
         async def discover(_self, _url):
@@ -1005,6 +927,36 @@ class TestAssess:
 
         assert capability.status == "ready"
         assert capability.detail == ""
+        assert capability.credential_source == "dynamic"
+
+    async def test_a_platform_app_for_the_issuer_is_the_source_even_with_dcr(self, monkeypatch):
+        from types import SimpleNamespace
+
+        from agentarea_common.config.mcp import MCPSettings
+        from agentarea_mcp.application import platform_oauth_app
+
+        async def discover(_self, _url):
+            return _google_as(registration_endpoint="https://as.example.com/register")
+
+        monkeypatch.setattr(MCPOAuthClientService, "discover_auth_server", discover)
+        app = {
+            "issuer": "https://accounts.google.com",
+            "client_id": "platform-google",
+            "client_secret": "platform-secret",  # pragma: allowlist secret
+            "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+            "token_endpoint": "https://oauth2.googleapis.com/token",
+            "resource_origins": ["https://mcp.example.com"],
+        }
+        monkeypatch.setattr(
+            platform_oauth_app,
+            "get_settings",
+            lambda: SimpleNamespace(mcp=MCPSettings(OAUTH_APPS=[app])),
+        )
+
+        capability = await MCPOAuthClientService().assess("https://mcp.example.com/mcp")
+
+        assert capability.status == "ready"
+        assert capability.credential_source == "platform"
 
     async def test_no_discovery_is_an_answer_not_an_error(self, monkeypatch):
         async def discover(_self, _url):
@@ -1076,10 +1028,11 @@ class TestExtraAuthorizeParams:
     in its catalog spec, not in this module."""
 
     def _url(self, issuer: str, extra_params=None) -> dict[str, list[str]]:
-        meta = AuthServerMetadata(
+        meta = _profile(
             issuer=issuer,
             authorization_endpoint=f"{issuer.rstrip('/')}/authorize",
             token_endpoint=f"{issuer.rstrip('/')}/token",
+            authorize_params=extra_params or {},
         )
         url = MCPOAuthClientService().build_authorize_url(
             meta,
@@ -1087,7 +1040,6 @@ class TestExtraAuthorizeParams:
             redirect_uri="https://app/cb",
             pkce=PKCEPair(verifier="v", challenge="c"),
             state="s",
-            extra_params=extra_params,
         )
         return parse_qs(urlparse(url).query)
 

@@ -5,11 +5,7 @@ from uuid import UUID
 
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 
-from agentarea_mcp.application.auth_service import (
-    ManagedCredentialDestinationError,
-    MCPAuthService,
-    platform_oauth_app_for,
-)
+from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 
 
@@ -29,18 +25,13 @@ def build_auth_header_resolver(
         config = await service.get(config_id)
         if config is None:
             raise ValueError(f"Auth config {config_id} not found in this workspace")
-        if config.config.get("credential_mode") == "managed":
-            if not allowed_origins or request_origin not in allowed_origins:
-                raise ValueError(
-                    "Managed OAuth credentials can only be used by their trusted catalog connection"
-                )
-            platform_app = platform_oauth_app_for(config)
-            if platform_app is None or request_origin not in platform_app.resource_origins:
-                raise ManagedCredentialDestinationError(
-                    f"Auth config {config_id} holds platform-managed credentials that may not "
-                    f"be sent to {request_origin!r}."
-                )
-        return await service.get_auth_headers(config)
+        if config.config.get("credential_mode") == "managed" and (
+            not allowed_origins or request_origin not in allowed_origins
+        ):
+            raise ValueError(
+                "Managed OAuth credentials can only be used by their trusted catalog connection"
+            )
+        return await service.get_auth_headers_for(config, request_origin)
 
     return resolve
 

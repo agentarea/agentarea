@@ -446,46 +446,6 @@ export const zCatalogConnection = z.object({
 });
 
 /**
- * CatalogConnectionPreflight
- *
- * What the connect form needs to know before it offers Connect.
- *
- * ``ready`` — AGENTAREA_MCP_OAUTH_APPS configures an OAuth app for the provider.
- * ``oauth_app_required`` — the user must register their own app first.
- */
-export const zCatalogConnectionPreflight = z.object({
-  description: z.string().nullish(),
-  detail: z.string(),
-  existing_connections: z.array(zCatalogConnection).optional(),
-  item_id: z.string().uuid(),
-  name: z.string(),
-  redirect_uri: z.string(),
-  status: z.enum(["ready", "oauth_app_required"]),
-});
-
-/**
- * CatalogConnectionRequest
- *
- * Connect with AgentArea credentials, or override them from Advanced.
- */
-export const zCatalogConnectionRequest = z.object({
-  client_id: z.string().min(1).max(512).nullish(),
-  client_id_secret_id: z.string().uuid().nullish(),
-  client_secret: z.string().min(1).max(4096).nullish(),
-  client_secret_secret_id: z.string().uuid().nullish(),
-  credential_mode: z.enum(["managed", "custom"]).optional().default("managed"),
-  return_to: z.string().max(2048).optional().default(""),
-});
-
-/**
- * CatalogConnectionResponse
- */
-export const zCatalogConnectionResponse = z.object({
-  authorize_url: z.string(),
-  connection_id: z.string().uuid(),
-});
-
-/**
  * CatalogItemCreate
  *
  * Definition published directly into a platform-managed catalog.
@@ -1169,47 +1129,6 @@ export const zMcpContainersHealthResponse = z.object({
 });
 
 /**
- * MCPOAuthAuthorizeRequest
- *
- * Start an OAuth flow for one MCP instance.
- *
- * ``auto`` registers AgentArea with the authorization server (RFC 7591), or
- * uses the operator's platform app when the server has no registration.
- * ``custom`` uses an OAuth app the workspace registered with the provider —
- * the only option when the provider has no Dynamic Client Registration.
- */
-export const zMcpoAuthAuthorizeRequest = z.object({
-  client_id: z.string().min(1).max(512).nullish(),
-  client_id_secret_id: z.string().uuid().nullish(),
-  client_secret: z.string().min(1).max(4096).nullish(),
-  client_secret_secret_id: z.string().uuid().nullish(),
-  credential_mode: z.enum(["auto", "custom"]).optional().default("auto"),
-  instance_id: z.string().uuid(),
-  return_to: z.string().max(2048).optional().default(""),
-});
-
-/**
- * MCPOAuthPreflightResponse
- *
- * What the UI needs before it can offer a Connect action.
- *
- * ``ready`` — Connect can run unattended (the server supports DCR, or the
- * operator registered a platform app for it).
- * ``oauth_app_required`` — ask for a client ID/secret first.
- * ``unsupported`` — this server cannot be authorized this way; say why.
- */
-export const zMcpoAuthPreflightResponse = z.object({
-  authorization_endpoint: z.string().nullish(),
-  connected: z.boolean(),
-  detail: z.string().optional().default(""),
-  instance_id: z.string().uuid().nullish(),
-  issuer: z.string().nullish(),
-  scopes: z.array(z.string()).optional(),
-  server_id: z.string().uuid().nullish(),
-  status: z.enum(["ready", "oauth_app_required", "unsupported"]),
-});
-
-/**
  * MCPServerCreate
  *
  * Payload for creating an MCP server spec (catalog template).
@@ -1721,6 +1640,34 @@ export const zNetworkTopologyResponse = z.object({
 });
 
 /**
+ * OAuthAuthorizeRequest
+ *
+ * Start a sign-in for one MCP instance or one catalog API.
+ *
+ * ``auto`` uses the operator's platform app when one serves the provider, else
+ * registers AgentArea with it (RFC 7591). ``custom`` uses an OAuth app the
+ * workspace registered with the provider, and overrides either.
+ */
+export const zOAuthAuthorizeRequest = z.object({
+  catalog_item_id: z.string().uuid().nullish(),
+  client_id: z.string().min(1).max(512).nullish(),
+  client_id_secret_id: z.string().uuid().nullish(),
+  client_secret: z.string().min(1).max(4096).nullish(),
+  client_secret_secret_id: z.string().uuid().nullish(),
+  credential_mode: z.enum(["auto", "custom"]).optional().default("auto"),
+  instance_id: z.string().uuid().nullish(),
+  return_to: z.string().max(2048).optional().default(""),
+});
+
+/**
+ * OAuthAuthorizeResponse
+ */
+export const zOAuthAuthorizeResponse = z.object({
+  authorize_url: z.string(),
+  connection_id: z.string().uuid(),
+});
+
+/**
  * OAuthLinkCreateRequest
  */
 export const zOAuthLinkCreateRequest = z.object({
@@ -1743,6 +1690,27 @@ export const zOAuthLinkResponse = z.object({
   last_accessed_at: z.string().datetime().nullable(),
   mcp_instance_id: z.string().uuid(),
   token: z.string(),
+});
+
+/**
+ * OAuthPreflightResponse
+ *
+ * What the UI needs before it can offer Connect.
+ *
+ * ``ready`` — Connect runs unattended, with the client ``credential_source``
+ * names: the operator's ``platform`` app, or one registered ``dynamic``-ally.
+ * ``oauth_app_required`` — ask for a client ID/secret first.
+ * ``unsupported`` — this cannot be authorized with OAuth; ``detail`` says why.
+ */
+export const zOAuthPreflightResponse = z.object({
+  authorization_endpoint: z.string().nullish(),
+  connected: z.boolean(),
+  credential_source: z.enum(["platform", "dynamic"]).nullish(),
+  detail: z.string().optional().default(""),
+  issuer: z.string().nullish(),
+  redirect_uri: z.string(),
+  scopes: z.array(z.string()).optional(),
+  status: z.enum(["ready", "oauth_app_required", "unsupported"]),
 });
 
 /**
@@ -4128,13 +4096,6 @@ export const zGetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetPath = z.object({
   agent_id: z.string(),
 });
 
-export const zOauthCallbackV1ConnectionsOauthCallbackGetQuery = z.object({
-  code: z.string().nullish(),
-  state: z.string().nullish(),
-  error: z.string().nullish(),
-  error_description: z.string().nullish(),
-});
-
 export const zAcceptInvitationV1InvitationsAcceptPostBody =
   zAcceptInvitationBody;
 
@@ -4152,13 +4113,6 @@ export const zPreviewInvitationV1InvitationsPreviewPostBody =
  */
 export const zPreviewInvitationV1InvitationsPreviewPostResponse =
   zInvitationPreviewResponse;
-
-export const zOauthCallbackV1McpOauthCallbackGetQuery = z.object({
-  code: z.string().optional(),
-  state: z.string().optional(),
-  error: z.string().optional(),
-  error_description: z.string().optional(),
-});
 
 export const zProxyInstanceV1McpInstanceIdMcpDeletePath = z.object({
   instance_id: z.string(),
@@ -4200,6 +4154,13 @@ export const zUnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeletePath =
  */
 export const zUnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponse =
   z.void();
+
+export const zOauthCallbackV1OauthCallbackGetQuery = z.object({
+  code: z.string().nullish(),
+  state: z.string().nullish(),
+  error: z.string().nullish(),
+  error_description: z.string().nullish(),
+});
 
 /**
  * Successful Response
@@ -4878,31 +4839,6 @@ export const zRemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeletePath =
 export const zRemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponse =
   z.void();
 
-export const zConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostBody =
-  zCatalogConnectionRequest;
-
-export const zConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostPath =
-  z.object({
-    item_id: z.string().uuid(),
-  });
-
-/**
- * Successful Response
- */
-export const zConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponse =
-  zCatalogConnectionResponse;
-
-export const zPreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetPath =
-  z.object({
-    item_id: z.string().uuid(),
-  });
-
-/**
- * Successful Response
- */
-export const zPreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponse =
-  zCatalogConnectionPreflight;
-
 /**
  * Successful Response
  */
@@ -5168,29 +5104,6 @@ export const zGetOauthLinkV1McpOauthLinksLinkIdGetPath = z.object({
  * Successful Response
  */
 export const zGetOauthLinkV1McpOauthLinksLinkIdGetResponse = zOAuthLinkResponse;
-
-export const zOauthAuthorizeV1McpOauthAuthorizePostBody =
-  zMcpoAuthAuthorizeRequest;
-
-/**
- * Response Oauth Authorize V1 Mcp Oauth Authorize Post
- *
- * Successful Response
- */
-export const zOauthAuthorizeV1McpOauthAuthorizePostResponse = z.record(
-  z.string()
-);
-
-export const zOauthPreflightV1McpOauthPreflightGetQuery = z.object({
-  instance_id: z.string().uuid().nullish(),
-  server_id: z.string().uuid().nullish(),
-});
-
-/**
- * Successful Response
- */
-export const zOauthPreflightV1McpOauthPreflightGetResponse =
-  zMcpoAuthPreflightResponse;
 
 /**
  * Response List Mcp Server Instances V1 Mcp Server Instances  Get
@@ -5549,6 +5462,26 @@ export const zGetNetworkPeopleAccessV1NetworkPeopleAccessGetResponse =
  */
 export const zGetNetworkTopologyV1NetworkTopologyGetResponse =
   zNetworkTopologyResponse;
+
+export const zOauthAuthorizeV1OauthAuthorizePostBody = zOAuthAuthorizeRequest;
+
+/**
+ * Successful Response
+ */
+export const zOauthAuthorizeV1OauthAuthorizePostResponse =
+  zOAuthAuthorizeResponse;
+
+export const zOauthPreflightV1OauthPreflightGetQuery = z.object({
+  instance_id: z.string().uuid().nullish(),
+  server_id: z.string().uuid().nullish(),
+  catalog_item_id: z.string().uuid().nullish(),
+});
+
+/**
+ * Successful Response
+ */
+export const zOauthPreflightV1OauthPreflightGetResponse =
+  zOAuthPreflightResponse;
 
 export const zListConnectionsV1OpenapiConnectionsGetQuery = z.object({
   status: z.string().nullish(),

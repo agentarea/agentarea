@@ -52,9 +52,6 @@ import type {
   CheckPermissionV1AccessControlCheckPostData,
   CheckPermissionV1AccessControlCheckPostErrors,
   CheckPermissionV1AccessControlCheckPostResponses,
-  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostData,
-  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors,
-  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses,
   ContinueTaskExecutionV1TasksTaskIdContinuePostData,
   ContinueTaskExecutionV1TasksTaskIdContinuePostErrors,
   ContinueTaskExecutionV1TasksTaskIdContinuePostResponses,
@@ -659,18 +656,15 @@ import type {
   MoveWorkspaceFileV1FilesMovePostResponses,
   OauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGetData,
   OauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGetResponses,
-  OauthAuthorizeV1McpOauthAuthorizePostData,
-  OauthAuthorizeV1McpOauthAuthorizePostErrors,
-  OauthAuthorizeV1McpOauthAuthorizePostResponses,
-  OauthCallbackV1ConnectionsOauthCallbackGetData,
-  OauthCallbackV1ConnectionsOauthCallbackGetErrors,
-  OauthCallbackV1ConnectionsOauthCallbackGetResponses,
-  OauthCallbackV1McpOauthCallbackGetData,
-  OauthCallbackV1McpOauthCallbackGetErrors,
-  OauthCallbackV1McpOauthCallbackGetResponses,
-  OauthPreflightV1McpOauthPreflightGetData,
-  OauthPreflightV1McpOauthPreflightGetErrors,
-  OauthPreflightV1McpOauthPreflightGetResponses,
+  OauthAuthorizeV1OauthAuthorizePostData,
+  OauthAuthorizeV1OauthAuthorizePostErrors,
+  OauthAuthorizeV1OauthAuthorizePostResponses,
+  OauthCallbackV1OauthCallbackGetData,
+  OauthCallbackV1OauthCallbackGetErrors,
+  OauthCallbackV1OauthCallbackGetResponses,
+  OauthPreflightV1OauthPreflightGetData,
+  OauthPreflightV1OauthPreflightGetErrors,
+  OauthPreflightV1OauthPreflightGetResponses,
   OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetData,
   OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetErrors,
   OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetResponses,
@@ -688,9 +682,6 @@ import type {
   PlanWorkspaceUploadsV1FilesUploadUrlsPostData,
   PlanWorkspaceUploadsV1FilesUploadUrlsPostErrors,
   PlanWorkspaceUploadsV1FilesUploadUrlsPostResponses,
-  PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetData,
-  PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors,
-  PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses,
   PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostData,
   PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors,
   PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses,
@@ -1476,39 +1467,6 @@ export const getAgentWellKnownV1AgentsAgentIdA2aWellKnownGet = <
   });
 
 /**
- * Oauth Callback
- *
- * Exchange an authorization code and attach tokens to the connection.
- */
-export const oauthCallbackV1ConnectionsOauthCallbackGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<
-    OauthCallbackV1ConnectionsOauthCallbackGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  OauthCallbackV1ConnectionsOauthCallbackGetResponses,
-  OauthCallbackV1ConnectionsOauthCallbackGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    OauthCallbackV1ConnectionsOauthCallbackGetResponses,
-    OauthCallbackV1ConnectionsOauthCallbackGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/connections/oauth/callback",
-    ...options,
-  });
-
-/**
  * Accept Invitation
  *
  * Accept an invitation as the authenticated user.
@@ -1584,39 +1542,6 @@ export const previewInvitationV1InvitationsPreviewPost = <
       "Content-Type": "application/json",
       ...options.headers,
     },
-  });
-
-/**
- * Oauth Callback
- *
- * OAuth callback — exchange code for token and store in MCPAuthConfig.
- *
- * This endpoint does NOT require auth (the user is mid-redirect from the
- * remote AS). The state token proves the flow was initiated by our /authorize.
- */
-export const oauthCallbackV1McpOauthCallbackGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<OauthCallbackV1McpOauthCallbackGetData, ThrowOnError>
-): RequestResult<
-  OauthCallbackV1McpOauthCallbackGetResponses,
-  OauthCallbackV1McpOauthCallbackGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    OauthCallbackV1McpOauthCallbackGetResponses,
-    OauthCallbackV1McpOauthCallbackGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-oauth/callback",
-    ...options,
   });
 
 /**
@@ -1805,6 +1730,39 @@ export const unlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDelete = <
       },
     ],
     url: "/v1/me/external-identities/{identity_id}",
+    ...options,
+  });
+
+/**
+ * Oauth Callback
+ *
+ * The provider's redirect back: exchange the code and attach the credential.
+ *
+ * Requires no session — the user is mid-redirect from the provider. The state
+ * token proves the flow was started by authorize and names its connection.
+ */
+export const oauthCallbackV1OauthCallbackGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<OauthCallbackV1OauthCallbackGetData, ThrowOnError>
+): RequestResult<
+  OauthCallbackV1OauthCallbackGetResponses,
+  OauthCallbackV1OauthCallbackGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    OauthCallbackV1OauthCallbackGetResponses,
+    OauthCallbackV1OauthCallbackGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/oauth/callback",
     ...options,
   });
 
@@ -4098,76 +4056,6 @@ export const removeSkillFromClientV1ClientsClientIdSkillsSkillIdDelete = <
   });
 
 /**
- * Connect Catalog Item
- *
- * Materialize a trusted OpenAPI template and start its OAuth flow.
- */
-export const connectCatalogItemV1ConnectionsCatalogItemIdConnectPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses,
-  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses,
-    ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace}/connections/catalog/{item_id}/connect",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Preflight Catalog Item
- *
- * Report whether a catalog connection can use the platform OAuth app.
- */
-export const preflightCatalogItemV1ConnectionsCatalogItemIdPreflightGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses,
-  PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses,
-    PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace}/connections/catalog/{item_id}/preflight",
-    ...options,
-  });
-
-/**
  * Get Dashboard
  *
  * Aggregate workspace state for the operator dashboard.
@@ -5175,80 +5063,6 @@ export const getOauthLinkV1McpOauthLinksLinkIdGet = <
       },
     ],
     url: "/v1/workspaces/{workspace}/mcp-oauth-links/{link_id}",
-    ...options,
-  });
-
-/**
- * Oauth Authorize
- *
- * Initiate MCP OAuth flow and return the URL to send the user to.
- *
- * 1. Look up the MCP instance's remote URL
- * 2. Discover the authorization server (RFC 9728 → RFC 8414)
- * 3. Register dynamically (RFC 7591), or take the workspace's own OAuth app
- * 4. Persist the client credentials on an auth config
- * 5. Generate PKCE pair and state, and build the authorization URL
- */
-export const oauthAuthorizeV1McpOauthAuthorizePost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<OauthAuthorizeV1McpOauthAuthorizePostData, ThrowOnError>
-): RequestResult<
-  OauthAuthorizeV1McpOauthAuthorizePostResponses,
-  OauthAuthorizeV1McpOauthAuthorizePostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    OauthAuthorizeV1McpOauthAuthorizePostResponses,
-    OauthAuthorizeV1McpOauthAuthorizePostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace}/mcp-oauth/authorize",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Oauth Preflight
- *
- * Report whether a connection can be authorized, and with what.
- *
- * Takes an existing instance, or a catalog spec so the create page can ask
- * before it creates anything. Every outcome is a 200: "this server has no
- * OAuth" is an answer the UI renders, not a failure it has to decode.
- */
-export const oauthPreflightV1McpOauthPreflightGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<OauthPreflightV1McpOauthPreflightGetData, ThrowOnError>
-): RequestResult<
-  OauthPreflightV1McpOauthPreflightGetResponses,
-  OauthPreflightV1McpOauthPreflightGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    OauthPreflightV1McpOauthPreflightGetResponses,
-    OauthPreflightV1McpOauthPreflightGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace}/mcp-oauth/preflight",
     ...options,
   });
 
@@ -6676,6 +6490,73 @@ export const getNetworkTopologyV1NetworkTopologyGet = <
       },
     ],
     url: "/v1/workspaces/{workspace}/network/topology",
+    ...options,
+  });
+
+/**
+ * Oauth Authorize
+ *
+ * Start a sign-in and return the provider's authorization URL to send the user to.
+ */
+export const oauthAuthorizeV1OauthAuthorizePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<OauthAuthorizeV1OauthAuthorizePostData, ThrowOnError>
+): RequestResult<
+  OauthAuthorizeV1OauthAuthorizePostResponses,
+  OauthAuthorizeV1OauthAuthorizePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    OauthAuthorizeV1OauthAuthorizePostResponses,
+    OauthAuthorizeV1OauthAuthorizePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/oauth/authorize",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Oauth Preflight
+ *
+ * Report whether a connection can be authorized, and with what.
+ *
+ * Every outcome is a 200: "this server has no OAuth" is an answer the UI
+ * renders, not a failure it has to decode.
+ */
+export const oauthPreflightV1OauthPreflightGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<OauthPreflightV1OauthPreflightGetData, ThrowOnError>
+): RequestResult<
+  OauthPreflightV1OauthPreflightGetResponses,
+  OauthPreflightV1OauthPreflightGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    OauthPreflightV1OauthPreflightGetResponses,
+    OauthPreflightV1OauthPreflightGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/oauth/preflight",
     ...options,
   });
 

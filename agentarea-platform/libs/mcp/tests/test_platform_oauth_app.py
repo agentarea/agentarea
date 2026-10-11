@@ -1,11 +1,7 @@
 """AGENTAREA_MCP_OAUTH_APPS: the operator's MCP OAuth apps and how one is found."""
 
-from types import SimpleNamespace
-
 import pytest
 from agentarea_common.config.mcp import MCPSettings
-from agentarea_mcp.application import platform_oauth_app
-from agentarea_mcp.application.platform_oauth_app import find_platform_oauth_app
 from pydantic import ValidationError
 
 _GITHUB_APP = {
@@ -62,29 +58,3 @@ def test_a_malformed_app_fails_loud_without_echoing_the_secret(overrides):
 def test_one_app_per_issuer():
     with pytest.raises(ValidationError, match="twice"):
         MCPSettings(OAUTH_APPS=[_GITHUB_APP, _GITHUB_APP])
-
-
-@pytest.mark.parametrize(
-    ("apps", "mcp_url", "found"),
-    [
-        ([_GITHUB_APP], "https://api.githubcopilot.com/mcp/", True),
-        ([_GITHUB_APP], "https://api.githubcopilot.com.evil.example/mcp/", False),
-        (
-            [{**_GITHUB_APP, "issuer": "https://github.com/login-oauth"}],
-            "https://api.githubcopilot.com/mcp/",
-            False,
-        ),
-        ([], "https://api.githubcopilot.com/mcp/", False),
-    ],
-    ids=["serves", "other-origin", "other-issuer", "none-configured"],
-)
-def test_lookup_needs_the_issuer_and_the_mcp_origin_to_match(monkeypatch, apps, mcp_url, found):
-    monkeypatch.setattr(
-        platform_oauth_app,
-        "get_settings",
-        lambda: SimpleNamespace(mcp=MCPSettings(OAUTH_APPS=apps)),
-    )
-
-    app = find_platform_oauth_app("https://github.com/login/oauth", mcp_url)
-
-    assert (app is not None) is found
