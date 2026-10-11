@@ -31,9 +31,9 @@ router = APIRouter(prefix="/tool-call-approvals", tags=["tool-call-approvals"])
 
 def approval_page_url(workspace_slug: str, approval_id: str) -> str:
     """The page a person opens to approve one held call: an approval link."""
-    frontend_base = get_settings().app.FRONTEND_BASE_URL.rstrip("/")
+    frontend_base = get_settings().app.APP_URL.rstrip("/")
     if not frontend_base:
-        raise RuntimeError("FRONTEND_BASE_URL is not set: an approval link has no page to point at")
+        raise RuntimeError("AGENTAREA_APP_URL is not set: an approval link has no page to point at")
     return f"{frontend_base}/w/{workspace_slug}/approve/{approval_id}"
 
 

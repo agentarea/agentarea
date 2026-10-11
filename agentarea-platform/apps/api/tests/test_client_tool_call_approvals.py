@@ -75,7 +75,7 @@ async def db(monkeypatch):
     monkeypatch.setattr(
         tool_call_approvals,
         "get_settings",
-        lambda: SimpleNamespace(app=SimpleNamespace(FRONTEND_BASE_URL="https://app.example/")),
+        lambda: SimpleNamespace(app=SimpleNamespace(APP_URL="https://app.example/")),
     )
     yield session
     await engine.dispose()
