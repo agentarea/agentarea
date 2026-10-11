@@ -7,6 +7,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/mcpbase"
 	"github.com/agentarea/mcp-manager/internal/mcpspec"
+	"github.com/agentarea/mcp-manager/internal/mcpstorage"
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/secrets"
 )
@@ -52,14 +53,16 @@ type BackendProvider struct {
 	backend Backend
 	logger  *slog.Logger
 	secrets secrets.SecretResolver
+	storage *mcpstorage.Issuer
 }
 
 // NewBackendProvider creates a provider over any Backend
-func NewBackendProvider(backend Backend, secretResolver secrets.SecretResolver, logger *slog.Logger) *BackendProvider {
+func NewBackendProvider(backend Backend, secretResolver secrets.SecretResolver, storage *mcpstorage.Issuer, logger *slog.Logger) *BackendProvider {
 	return &BackendProvider{
 		backend: backend,
 		logger:  logger,
 		secrets: secretResolver,
+		storage: storage,
 	}
 }
 
@@ -71,6 +74,19 @@ func (p *BackendProvider) CreateInstance(ctx context.Context, instance *models.M
 	spec, err := BuildBackendInstanceSpec(instance, p.secrets)
 	if err != nil {
 		return err
+	}
+	storageEnvironment, err := p.storage.Environment(instance)
+	if err != nil {
+		p.logger.Error("Failed to issue MCP storage environment",
+			slog.String("instance_id", instance.InstanceID),
+			slog.String("error", err.Error()))
+		return err
+	}
+	if len(storageEnvironment) > 0 && spec.Environment == nil {
+		spec.Environment = make(map[string]string, len(storageEnvironment))
+	}
+	for key, value := range storageEnvironment {
+		spec.Environment[key] = value
 	}
 
 	// Use the backend to create the instance

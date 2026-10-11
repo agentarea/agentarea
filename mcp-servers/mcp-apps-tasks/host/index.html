@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>MCP Apps test host · AgentArea</title>
+  <style>
+    /* The page uses the same MCP Apps variables it hands to the app (host-styles.ts). */
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--color-background-secondary, #fafafa);
+      color: var(--color-text-primary, #0a0a0a);
+      font-family: var(--font-sans, system-ui, sans-serif);
+      font-size: var(--font-text-sm-size, 0.875rem);
+      line-height: var(--font-text-sm-line-height, 1.43);
+      -webkit-font-smoothing: antialiased;
+    }
+    :focus-visible { outline: 2px solid var(--color-ring-primary); outline-offset: 2px; }
+
+    .topbar {
+      position: sticky; top: 0; z-index: 1;
+      display: flex; align-items: center; gap: 10px;
+      height: 52px; padding: 0 24px;
+      background: var(--color-background-primary);
+      border-bottom: 1px solid var(--color-border-primary);
+    }
+    .brand { display: inline-flex; align-items: center; gap: 8px; font-weight: var(--font-weight-semibold); }
+    .mark { width: 18px; height: 18px; border-radius: var(--border-radius-sm); background: var(--color-text-info); }
+    .crumb { color: var(--color-text-secondary); }
+    .theme {
+      display: inline-flex; margin-left: auto; padding: 2px;
+      border: 1px solid var(--color-border-primary); border-radius: var(--border-radius-md);
+      background: var(--color-background-tertiary);
+    }
+    .theme button {
+      height: 26px; padding: 0 10px; border: 0; border-radius: var(--border-radius-sm);
+      background: transparent; color: var(--color-text-secondary);
+      font: inherit; font-size: var(--font-text-xs-size); font-weight: var(--font-weight-medium);
+      cursor: pointer;
+    }
+    .theme button[aria-pressed="true"] {
+      background: var(--color-background-primary); color: var(--color-text-primary); box-shadow: var(--shadow-hairline);
+    }
+
+    main { max-width: 1640px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; }
+    .card {
+      background: var(--color-background-primary);
+      border: 1px solid var(--color-border-primary);
+      border-radius: var(--border-radius-lg);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+    .card-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 14px 20px; border-bottom: 1px solid var(--color-border-primary);
+    }
+    h1 { margin: 0; font-size: var(--font-heading-md-size); line-height: var(--font-heading-md-line-height); font-weight: var(--font-weight-semibold); }
+    .meta { margin: 2px 0 0; color: var(--color-text-secondary); font-size: var(--font-text-xs-size); }
+    .meta code { font-family: var(--font-mono); }
+
+    .state {
+      display: inline-flex; align-items: center; gap: 6px; flex: none;
+      padding: 3px 10px; border-radius: var(--border-radius-full);
+      font-size: var(--font-text-xs-size); font-weight: var(--font-weight-medium);
+      color: var(--color-text-secondary); background: var(--color-background-tertiary);
+    }
+    .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .state[data-state="running"] { color: var(--color-text-success); background: var(--color-background-success); }
+    .state[data-state="failed"] { color: var(--color-text-danger); background: var(--color-background-danger); }
+
+    #app-slot iframe { display: block; width: 100%; height: 240px; border: 0; }
+
+    .log > summary {
+      display: flex; align-items: center; gap: 8px;
+      padding: 14px 20px; cursor: pointer; font-weight: var(--font-weight-semibold);
+    }
+    .log[open] > summary { border-bottom: 1px solid var(--color-border-primary); }
+    .count {
+      padding: 0 8px; border-radius: var(--border-radius-full);
+      background: var(--color-background-tertiary); color: var(--color-text-secondary);
+      font-size: var(--font-text-xs-size); font-weight: var(--font-weight-medium);
+    }
+    #log { margin: 0; padding: 8px 20px 16px; list-style: none; display: grid; }
+    #log li { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--color-border-tertiary); }
+    #log li:last-child { border-bottom: 0; }
+    #log .kind { color: var(--color-text-secondary); font-family: var(--font-mono); font-size: var(--font-text-xs-size); }
+    #log .kind[data-flow="app"] { color: var(--color-text-info); }
+    #log details { grid-column: 2; }
+    #log details summary { padding: 0; color: var(--color-text-secondary); font-size: var(--font-text-xs-size); font-weight: var(--font-weight-normal); }
+    #log pre {
+      margin: 6px 0 0; padding: 10px 12px; max-height: 240px; overflow: auto;
+      background: var(--color-background-secondary); border-radius: var(--border-radius-md);
+      font-family: var(--font-mono); font-size: var(--font-text-xs-size);
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="brand"><span class="mark" aria-hidden="true"></span>AgentArea</span>
+    <span class="crumb">/ MCP Apps test host</span>
+    <div class="theme" role="group" aria-label="Theme">
+      <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+      <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+  <main>
+    <section class="card" aria-labelledby="app-title">
+      <div class="card-head">
+        <div>
+          <h1 id="app-title">MCP App</h1>
+          <p id="app-source" class="meta">Connecting to the MCP server…</p>
+        </div>
+        <span id="status" class="state" data-state="connecting">Connecting</span>
+      </div>
+      <div id="app-slot"></div>
+    </section>
+    <details class="card log">
+      <summary>Protocol log <span id="log-count" class="count">0</span></summary>
+      <ol id="log"></ol>
+    </details>
+  </main>
+  <script type="module" src="./host.ts"></script>
+</body>
+</html>

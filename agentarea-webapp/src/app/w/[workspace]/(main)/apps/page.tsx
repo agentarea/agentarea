@@ -10,7 +10,6 @@ import { ViewModeTabs } from "@/components/HeaderTabs";
 import { CollectionSkeleton, type SkeletonColumn } from "@/components/Skeleton";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusIndicator } from "@/components/ui/status-indicator";
 import type { ApiResultLike } from "@/lib/api-errors";
 import { listMCPServerInstances } from "@/lib/api";
 import { mcpAppEntries, type McpAppEntry } from "@/lib/apps/mcp/tools";
@@ -35,8 +34,6 @@ type AppsLabels = {
   title: string;
   description: string;
   connection: string;
-  open: string;
-  needsInput: string;
   emptyTitle: string;
   emptyDescription: string;
   connectAction: string;
@@ -91,10 +88,12 @@ async function AppsList({
   const result = await instancesPromise;
   if ("exception" in result) throw result.exception;
   const instances = requireApiData(result.apiResult, "MCP connections");
-  const items: AppListItem[] = mcpAppEntries(instances).map((app) => ({
-    ...app,
-    id: `${app.instanceId}:${app.toolName}`,
-  }));
+  const items: AppListItem[] = mcpAppEntries(instances)
+    .filter((app) => !app.requiresInput)
+    .map((app) => ({
+      ...app,
+      id: `${app.instanceId}:${app.toolName}`,
+    }));
 
   const appLink = (app: AppListItem) =>
     `/apps/${encodeURIComponent(app.instanceId)}/${encodeURIComponent(app.toolName)}`;
@@ -122,16 +121,6 @@ async function AppsList({
       render: (value: unknown) => (
         <span className="text-sm text-muted-foreground">{String(value)}</span>
       ),
-    },
-    {
-      header: labels.open,
-      accessor: "requiresInput",
-      render: (value: unknown) =>
-        value ? (
-          <StatusIndicator kind="attention" size="sm">
-            {labels.needsInput}
-          </StatusIndicator>
-        ) : null,
     },
   ];
 
@@ -166,11 +155,6 @@ async function AppsList({
           <p className="line-clamp-4 text-sm text-muted-foreground">
             {app.description}
           </p>
-          {app.requiresInput && (
-            <StatusIndicator kind="attention" size="sm" className="mt-auto">
-              {labels.needsInput}
-            </StatusIndicator>
-          )}
         </div>
       )}
     />
@@ -200,8 +184,6 @@ export default async function AppsPage({
     title: t("title"),
     description: t("description"),
     connection: t("connection"),
-    open: t("open"),
-    needsInput: t("needsInput"),
     emptyTitle: t("emptyTitle"),
     emptyDescription: t("emptyDescription"),
     connectAction: t("connectAction"),
@@ -215,7 +197,6 @@ export default async function AppsPage({
       header: labels.connection,
       barClassName: "w-28 motion-reduce:animate-none",
     },
-    { header: labels.open, barClassName: "w-20 motion-reduce:animate-none" },
   ];
 
   return (

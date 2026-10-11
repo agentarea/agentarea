@@ -22,14 +22,31 @@ const (
 	ScopeWriteback = "writeback"
 	ScopeFiles     = "files"
 	ScopeCleanup   = "cleanup"
-	DefaultTTL     = 5 * time.Minute
+	// ScopeStorage grants one MCP instance its storage prefix. Its identity
+	// carries WorkspaceID and InstanceID only.
+	ScopeStorage = "storage"
+	DefaultTTL   = 5 * time.Minute
 )
+
+// ErrClaimsMismatch is a correctly signed token presented for a request it
+// does not grant.
+var ErrClaimsMismatch = errors.New("activation auth claims do not match request")
 
 type Identity struct {
 	WorkspaceID  string
 	TaskID       string
+	InstanceID   string
 	Generation   int64
 	FencingToken int64
+}
+
+func (identity Identity) completeFor(scope string) bool {
+	if scope == ScopeStorage {
+		return identity.WorkspaceID != "" && identity.InstanceID != "" &&
+			identity.TaskID == "" && identity.Generation == 0 && identity.FencingToken == 0
+	}
+	return identity.WorkspaceID != "" && identity.TaskID != "" && identity.InstanceID == "" &&
+		identity.Generation >= 0 && identity.FencingToken > 0
 }
 
 type claims struct {
@@ -37,6 +54,7 @@ type claims struct {
 	Scope        string `json:"scope"`
 	WorkspaceID  string `json:"workspace_id"`
 	TaskID       string `json:"task_id"`
+	InstanceID   string `json:"instance_id,omitempty"`
 	Generation   int64  `json:"generation"`
 	FencingToken int64  `json:"fencing_token"`
 	BodySHA256   string `json:"body_sha256"`
@@ -86,10 +104,10 @@ func Sign(secret []byte, scope string, identity Identity, bodySHA256 string, now
 	if len(secret) < 32 {
 		return "", errors.New("activation auth secret must contain at least 32 bytes")
 	}
-	if scope != ScopeActivate && scope != ScopeExecute && scope != ScopeWriteback && scope != ScopeFiles && scope != ScopeCleanup {
+	if scope != ScopeActivate && scope != ScopeExecute && scope != ScopeWriteback && scope != ScopeFiles && scope != ScopeCleanup && scope != ScopeStorage {
 		return "", fmt.Errorf("unsupported activation auth scope %q", scope)
 	}
-	if identity.WorkspaceID == "" || identity.TaskID == "" || identity.Generation < 0 || identity.FencingToken <= 0 {
+	if !identity.completeFor(scope) {
 		return "", errors.New("activation auth identity is incomplete")
 	}
 	if ttl <= 0 {
@@ -107,6 +125,7 @@ func Sign(secret []byte, scope string, identity Identity, bodySHA256 string, now
 		Scope:        scope,
 		WorkspaceID:  identity.WorkspaceID,
 		TaskID:       identity.TaskID,
+		InstanceID:   identity.InstanceID,
 		Generation:   identity.Generation,
 		FencingToken: identity.FencingToken,
 		BodySHA256:   bodySHA256,
@@ -149,10 +168,10 @@ func Verify(token string, secret []byte, scope string, identity Identity, bodySH
 		return errors.New("malformed activation auth claims")
 	}
 	if value.Version != 2 || value.Scope != scope || value.WorkspaceID != identity.WorkspaceID ||
-		value.TaskID != identity.TaskID || value.Generation != identity.Generation ||
+		value.TaskID != identity.TaskID || value.InstanceID != identity.InstanceID || value.Generation != identity.Generation ||
 		value.FencingToken != identity.FencingToken || !validSHA256(bodySHA256) ||
 		subtle.ConstantTimeCompare([]byte(value.BodySHA256), []byte(bodySHA256)) != 1 {
-		return errors.New("activation auth claims do not match request")
+		return ErrClaimsMismatch
 	}
 	if value.ExpiresAt <= now.Unix() {
 		return errors.New("activation auth token expired")

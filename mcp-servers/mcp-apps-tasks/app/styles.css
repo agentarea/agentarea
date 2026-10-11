@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../../mcp-apps-kit/theme.css";
+@source "../../mcp-apps-kit";
+
+/* Workflow colors. Hosts have no palette for these, so they are the app's own,
+   anchored on the kit's semantic colors where one fits. */
+:root {
+  --status-backlog: var(--subtle-foreground);
+  --status-todo: var(--muted-foreground);
+  --status-in_progress: var(--progress);
+  --status-in_review: var(--success);
+  --status-done: var(--complete);
+  --status-canceled: var(--subtle-foreground);
+}

@@ -25,6 +25,16 @@ MAX_UPLOADS_PER_PLAN = 100
 # archived files that only the restore endpoint may resurrect.
 RESERVED_PREFIXES = frozenset({"tasks", "staging", TRASH_PREFIX.rstrip("/")})
 
+# ``apps/{instance_id}/`` is written only by the MCP app that owns it, through
+# the manager's app storage API and its conditional writes. It stays listed and
+# downloadable, but no surface here may upload, move, rename or delete in it: a
+# manual write would land outside the app's compare-and-swap.
+READ_ONLY_PREFIXES = frozenset({"apps"})
+
+
+class WorkspaceReadOnlyError(WorkspaceValidationError):
+    code = "workspace_path_read_only"
+
 
 class _Store(Protocol):
     async def exists(self, workspace_id: str, path: str) -> bool: ...
@@ -45,6 +55,19 @@ def is_reserved_path(path: str) -> bool:
     return bool(parts and parts[0] in RESERVED_PREFIXES)
 
 
+def is_read_only_path(path: str) -> bool:
+    parts = PurePosixPath(path.lstrip("/")).parts
+    return bool(parts and parts[0] in READ_ONLY_PREFIXES)
+
+
+def ensure_not_read_only(path: str) -> None:
+    if is_read_only_path(path):
+        raise WorkspaceReadOnlyError(
+            f"{path.lstrip('/')!r} belongs to an MCP app and is read-only; "
+            "only the app itself can change it"
+        )
+
+
 def resolve_write_path(path: str, filename: str = "") -> str:
     """Canonical path for a write, or ``WorkspaceValidationError``.
 
@@ -62,6 +85,7 @@ def resolve_write_path(path: str, filename: str = "") -> str:
         raise WorkspaceValidationError(
             f"{resolved!r} is a reserved prefix and cannot be written directly"
         )
+    ensure_not_read_only(resolved)
     return resolved
 
 

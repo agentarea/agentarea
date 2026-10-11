@@ -1,0 +1,12 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../../mcp-apps-kit/theme.css";
+@source "../../mcp-apps-kit";
+
+/* Chart series. Hosts have no chart palette, so these are the app's own,
+   anchored on the kit's colors so the charts read like the rest of the family. */
+:root {
+  --chart-income: var(--complete);
+  --chart-expense: light-dark(#c4c4cb, #45454d);
+  --chart-cash: var(--complete);
+}
